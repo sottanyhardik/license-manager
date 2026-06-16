@@ -150,9 +150,9 @@ export default function NestedFieldArray({
             const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
             return (
                 <div className="form-control form-control-sm d-flex align-items-center justify-content-between"
-                    style={{ background: '#eff6ff', color: '#1d4ed8', fontWeight: '600', borderColor: '#bfdbfe', cursor: 'default' }}>
+                    style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand-hover)', fontWeight: '600', borderColor: 'var(--tb-brand-200)', cursor: 'default' }}>
                     <span>{displayVal}</span>
-                    <i className="bi bi-lock-fill" style={{ fontSize: '0.7rem', opacity: 0.5, color: '#3b82f6' }}></i>
+                    <i className="bi bi-lock-fill" style={{ fontSize: 11, opacity: 0.5, color: 'var(--tb-info)' }}></i>
                 </div>
             );
         }
@@ -290,9 +290,9 @@ export default function NestedFieldArray({
             const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
             return (
                 <div className="form-control form-control-sm d-flex align-items-center justify-content-between"
-                    style={{ background: '#f0fdf4', color: '#065f46', fontWeight: '600', borderColor: '#a7f3d0', cursor: 'default' }}>
+                    style={{ background: 'var(--tb-success-soft)', color: 'var(--tb-success-text)', fontWeight: '600', borderColor: 'var(--tb-success-border)', cursor: 'default' }}>
                     <span>{displayVal}</span>
-                    <i className="bi bi-calculator text-success" style={{ fontSize: '0.7rem', opacity: 0.6 }}></i>
+                    <i className="bi bi-calculator text-success" style={{ fontSize: 11, opacity: 0.6 }}></i>
                 </div>
             );
         }
@@ -582,11 +582,11 @@ export default function NestedFieldArray({
         <div className="mb-4">
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <div>
-                    <h6 className="mb-0 fw-semibold" style={{ color: 'var(--text-dark)' }}>
-                        <i className="bi bi-table me-2" style={{ color: '#6366F1' }}></i>
+                    <h6 className="mb-0 fw-semibold" style={{ color: 'var(--tb-text)' }}>
+                        <i className="bi bi-table me-2" style={{ color: 'var(--tb-brand)' }}></i>
                         {sectionLabel}
                         {value.length > 0 && (
-                            <span className="badge ms-2" style={{ backgroundColor: '#e0e7ff', color: '#4F46E5', fontSize: '0.7rem' }}>
+                            <span className="badge ms-2" style={{ backgroundColor: 'var(--tb-brand-100)', color: 'var(--tb-brand)', fontSize: 11 }}>
                                 {value.length}
                             </span>
                         )}
@@ -596,14 +596,14 @@ export default function NestedFieldArray({
                     type="button"
                     className="btn btn-sm btn-outline-success"
                     onClick={handleAdd}
-                    style={{ borderRadius: '8px' }}
+                    style={{ borderRadius: 'var(--tb-r-md)' }}
                 >
                     <i className="bi bi-plus-lg me-1"></i>Add Item
                 </button>
             </div>
 
             {value.length === 0 ? (
-                <div className="text-center py-4" style={{ border: '2px dashed #d1d5db', borderRadius: '10px', color: 'var(--text-secondary)' }}>
+                <div className="text-center py-4" style={{ border: '2px dashed #d1d5db', borderRadius: 'var(--tb-r-md)', color: 'var(--text-secondary)' }}>
                     <i className="bi bi-inbox d-block mb-1" style={{ fontSize: '1.5rem', opacity: 0.5 }}></i>
                     <small>No items yet — click <strong>Add Item</strong> to add the first one</small>
                 </div>
@@ -612,13 +612,13 @@ export default function NestedFieldArray({
                     {value.map((item, index) => {
                         const isFrozen = fieldKey === 'item_details' && item.is_frozen;
                         return (
-                        <div key={index} className="card border-0 shadow-sm" style={{ borderRadius: '10px', opacity: isFrozen ? 0.92 : 1 }}>
-                            <div className="card-header border-bottom d-flex justify-content-between align-items-center py-2 px-3" style={{ borderRadius: '10px 10px 0 0', background: isFrozen ? '#f0f4ff' : 'white' }}>
-                                <span className="fw-semibold small d-flex align-items-center gap-2" style={{ color: '#6366F1', minWidth: 0 }}>
+                        <div key={index} className="card" style={{ borderRadius: 'var(--tb-r-md)', opacity: isFrozen ? 0.92 : 1 }}>
+                            <div className="card-header border-bottom d-flex justify-content-between align-items-center py-2 px-3" style={{ borderRadius: '10px 10px 0 0', background: isFrozen ? 'var(--tb-brand-50)' : 'white' }}>
+                                <span className="fw-semibold small d-flex align-items-center gap-2" style={{ color: 'var(--tb-brand)', minWidth: 0 }}>
                                     <i className="bi bi-hash flex-shrink-0"></i>
                                     <span className="flex-shrink-0">Item {index + 1}</span>
                                     {isFrozen && (
-                                        <span className="badge" style={{ background: '#e0e7ff', color: '#4338CA', fontSize: '0.68rem', fontWeight: 600 }}>
+                                        <span className="badge" style={{ background: 'var(--tb-brand-100)', color: 'var(--tb-brand-hover)', fontSize: 10.5, fontWeight: 600 }}>
                                             <i className="bi bi-lock-fill me-1"></i>Ledger
                                         </span>
                                     )}
@@ -627,7 +627,7 @@ export default function NestedFieldArray({
                                         <ConditionBadge type={item.condition_type || itemConditionsBySerial?.[item.serial_number]} />
                                     )}
                                     {getItemTitle(item) && (
-                                        <span className="fw-normal text-muted text-truncate" style={{ fontSize: '0.78rem', maxWidth: 300 }}>
+                                        <span className="fw-normal text-muted text-truncate" style={{ fontSize: 12, maxWidth: 300 }}>
                                             — {getItemTitle(item)}
                                         </span>
                                     )}
@@ -642,7 +642,7 @@ export default function NestedFieldArray({
                                                 onClick={() => onFetchImports(index, item)}
                                                 disabled={!canFetch}
                                                 title={!canFetch ? "Fill Norm Class, Net Quantity and Start Serial first" : "Auto-fill import items from SION norm"}
-                                                style={{ borderRadius: '6px', fontSize: '0.78rem' }}
+                                                style={{ borderRadius: 'var(--tb-r-sm)', fontSize: 12 }}
                                             >
                                                 <i className="bi bi-magic me-1"></i>Fetch Imports
                                             </button>
@@ -654,7 +654,7 @@ export default function NestedFieldArray({
                                         onClick={() => handleRemove(index)}
                                         disabled={isFrozen}
                                         title={isFrozen ? "Ledger rows cannot be deleted" : "Remove item"}
-                                        style={{ borderRadius: '6px' }}
+                                        style={{ borderRadius: 'var(--tb-r-sm)' }}
                                     >
                                         <i className={`bi ${isFrozen ? 'bi-lock' : 'bi-trash'}`}></i>
                                     </button>
@@ -662,7 +662,7 @@ export default function NestedFieldArray({
                             </div>
                             <div className="card-body p-3">
                                 {isFrozen && (
-                                    <div className="alert d-flex align-items-center gap-2 py-2 mb-3" style={{ background: '#e0e7ff', border: '1px solid #c7d2fe', borderRadius: '8px', color: '#4338CA' }}>
+                                    <div className="alert d-flex align-items-center gap-2 py-2 mb-3" style={{ background: 'var(--tb-brand-100)', border: '1px solid #c7d2fe', borderRadius: 'var(--tb-r-md)', color: 'var(--tb-brand-hover)' }}>
                                         <i className="bi bi-lock-fill flex-shrink-0"></i>
                                         <small>This row was imported from the ledger and is read-only.</small>
                                     </div>
@@ -686,13 +686,13 @@ export default function NestedFieldArray({
                                                 || (isTextarea ? "col-12" : "col-md-4");
                                             return (
                                                 <div key={field.name} className={colClass} style={{ pointerEvents: isFrozen ? 'none' : undefined, opacity: isFrozen ? 0.7 : undefined }}>
-                                                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                                                    <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 4 }}>
                                                         {field.label || field.name.replace(/_/g, ' ')}
                                                         {field.required && <span className="text-danger ms-1">*</span>}
                                                     </label>
                                                     {renderNestedField(field, item, index, isFrozen)}
                                                     {errors[index]?.[field.name] && (
-                                                        <div className="invalid-feedback d-block" style={{ fontSize: '0.75rem' }}>
+                                                        <div className="invalid-feedback d-block" style={{ fontSize: 12 }}>
                                                             <i className="bi bi-exclamation-circle me-1"></i>
                                                             {Array.isArray(errors[index][field.name])
                                                                 ? errors[index][field.name].join(', ')
@@ -717,11 +717,11 @@ export default function NestedFieldArray({
                 const totAmt = value.reduce((s, i) => s + (parseFloat(i.amount_inr) || 0), 0);
                 return (
                     <div className="d-flex gap-4 justify-content-end align-items-center mt-2 px-2 py-2"
-                        style={{ background: 'var(--bs-gray-50)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #e5e7eb' }}>
+                        style={{ background: 'var(--tb-sunken)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #e5e7eb' }}>
                         <span className="text-muted">Totals:</span>
                         <span><span className="text-muted me-1">Qty</span><strong>{totQty.toFixed(3)} kg</strong></span>
                         <span><span className="text-muted me-1">CIF INR</span><strong>₹{totCif.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
-                        <span style={{ color: '#065f46' }}><span className="text-muted me-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                        <span style={{ color: 'var(--tb-success-text)' }}><span className="text-muted me-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
                     </div>
                 );
             })()}
@@ -729,9 +729,9 @@ export default function NestedFieldArray({
                 const totAmt = value.reduce((s, i) => s + (parseFloat(i.amount_inr) || 0), 0);
                 return (
                     <div className="d-flex gap-4 justify-content-end align-items-center mt-2 px-2 py-2"
-                        style={{ background: 'var(--bs-gray-50)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #e5e7eb' }}>
+                        style={{ background: 'var(--tb-sunken)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #e5e7eb' }}>
                         <span className="text-muted">Total:</span>
-                        <span style={{ color: '#065f46' }}><span className="text-muted me-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                        <span style={{ color: 'var(--tb-success-text)' }}><span className="text-muted me-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
                     </div>
                 );
             })()}
@@ -739,9 +739,9 @@ export default function NestedFieldArray({
                 const totPaid = value.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
                 return (
                     <div className="d-flex gap-4 justify-content-end align-items-center mt-2 px-2 py-2"
-                        style={{ background: '#f0fdf4', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #a7f3d0' }}>
+                        style={{ background: 'var(--tb-success-soft)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #a7f3d0' }}>
                         <span className="text-muted">Total Paid:</span>
-                        <span style={{ color: '#065f46', fontWeight: '700' }}>₹{totPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span style={{ color: 'var(--tb-success-text)', fontWeight: '700' }}>₹{totPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                 );
             })()}

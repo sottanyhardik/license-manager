@@ -1,206 +1,126 @@
 /**
- * LoadingFallback Component
- *
- * Provides various loading states for lazy-loaded components.
- * Uses skeleton screens and spinners for better UX.
+ * Premium loading fallbacks — skeleton-first, no spinners for page loads.
  */
 
-/**
- * Simple page-level loading spinner
- */
 export function PageLoader() {
     return (
-        <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-            <div className="text-center">
-                <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
-                    <span className="visually-hidden">Loading...</span>
-                </div>
-                <p className="mt-3 text-muted">Loading page...</p>
-            </div>
+        <div
+            style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 360,
+                flexDirection: "column",
+                gap: 12,
+            }}
+        >
+            <div
+                className="spinner-border"
+                role="status"
+                aria-label="Loading"
+                style={{ width: 28, height: 28 }}
+            />
+            <span style={{ fontSize: 13, color: "var(--tb-text-tertiary)" }}>Loading…</span>
         </div>
     );
 }
 
-/**
- * Full-screen loading overlay for route transitions
- */
 export function FullPageLoader() {
     return (
-        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
-             style={{
-                 backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                 zIndex: 9999,
-                 backdropFilter: 'blur(5px)'
-             }}>
-            <div className="text-center">
-                <div className="spinner-grow text-primary mb-3" role="status" style={{ width: '4rem', height: '4rem' }}>
-                    <span className="visually-hidden">Loading...</span>
-                </div>
-                <h5 className="text-primary">Loading...</h5>
-                <p className="text-muted">Please wait</p>
+        <div
+            style={{
+                position: "fixed",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "var(--tb-body-bg)",
+                zIndex: 9999,
+                flexDirection: "column",
+                gap: 14,
+            }}
+        >
+            <div
+                style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: "linear-gradient(135deg, var(--tb-brand) 0%, var(--tb-brand-hover) 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fff",
+                    fontSize: 20,
+                    boxShadow: "0 4px 12px rgba(37,99,235,0.35)",
+                }}
+            >
+                <i className="bi bi-shield-check" />
             </div>
+            <span style={{ fontSize: 13, color: "var(--tb-text-tertiary)" }}>Loading…</span>
         </div>
     );
 }
 
-/**
- * Skeleton loader for table/list views
- */
-export function TableSkeletonLoader({ rows = 5, columns = 5 }) {
+export function TableSkeletonLoader({ rows = 6, columns = 5 }) {
     return (
-        <div className="card">
-            <div className="card-body">
-                {/* Header skeleton */}
-                <div className="d-flex justify-content-between mb-4">
-                    <div className="placeholder-glow" style={{ width: '200px' }}>
-                        <span className="placeholder col-12" style={{ height: '38px' }}></span>
-                    </div>
-                    <div className="placeholder-glow" style={{ width: '120px' }}>
-                        <span className="placeholder col-12" style={{ height: '38px' }}></span>
-                    </div>
-                </div>
-
-                {/* Table skeleton */}
-                <div className="table-responsive">
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                {Array.from({ length: columns }).map((_, i) => (
-                                    <th key={i}>
-                                        <div className="placeholder-glow">
-                                            <span className="placeholder col-8"></span>
-                                        </div>
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {Array.from({ length: rows }).map((_, rowIndex) => (
-                                <tr key={rowIndex}>
-                                    {Array.from({ length: columns }).map((_, colIndex) => (
-                                        <td key={colIndex}>
-                                            <div className="placeholder-glow">
-                                                <span className="placeholder col-10"></span>
-                                            </div>
-                                        </td>
-                                    ))}
-                                </tr>
+        <div className="table-responsive">
+            <table className="table mb-0" aria-busy="true">
+                <thead>
+                    <tr>
+                        {Array.from({ length: columns }).map((_, i) => (
+                            <th key={i}>
+                                <div className="skeleton" style={{ height: 10, width: "60%", borderRadius: 4 }} />
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {Array.from({ length: rows }).map((_, ri) => (
+                        <tr key={ri}>
+                            {Array.from({ length: columns }).map((_, ci) => (
+                                <td key={ci}>
+                                    <div className="skeleton" style={{ height: 13, width: `${45 + ci * 10}%`, borderRadius: 4 }} />
+                                </td>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }
 
-/**
- * Skeleton loader for form views
- */
 export function FormSkeletonLoader({ fields = 6 }) {
     return (
         <div className="card">
             <div className="card-body">
-                {/* Title skeleton */}
-                <div className="placeholder-glow mb-4">
-                    <span className="placeholder col-4" style={{ height: '32px' }}></span>
-                </div>
-
-                {/* Form fields skeleton */}
+                <div className="skeleton" style={{ height: 22, width: "30%", borderRadius: 6, marginBottom: 20 }} />
                 <div className="row g-3">
                     {Array.from({ length: fields }).map((_, i) => (
                         <div key={i} className="col-md-6">
-                            <div className="placeholder-glow mb-2">
-                                <span className="placeholder col-4"></span>
-                            </div>
-                            <div className="placeholder-glow">
-                                <span className="placeholder col-12" style={{ height: '38px' }}></span>
-                            </div>
+                            <div className="skeleton" style={{ height: 10, width: "40%", borderRadius: 4, marginBottom: 6 }} />
+                            <div className="skeleton" style={{ height: 36, width: "100%", borderRadius: 6 }} />
                         </div>
                     ))}
                 </div>
-
-                {/* Button skeleton */}
-                <div className="mt-4 placeholder-glow">
-                    <span className="placeholder col-2" style={{ height: '38px' }}></span>
-                </div>
+                <div className="skeleton" style={{ height: 36, width: 100, borderRadius: 6, marginTop: 20 }} />
             </div>
         </div>
     );
 }
 
-/**
- * Skeleton loader for dashboard/report views
- */
-export function DashboardSkeletonLoader() {
+export function InlineLoader({ text = "Loading…" }) {
     return (
-        <div>
-            {/* Stats cards skeleton */}
-            <div className="row g-3 mb-4">
-                {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="col-md-3">
-                        <div className="card">
-                            <div className="card-body">
-                                <div className="placeholder-glow mb-2">
-                                    <span className="placeholder col-8"></span>
-                                </div>
-                                <div className="placeholder-glow">
-                                    <span className="placeholder col-6" style={{ height: '40px' }}></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Chart/Table skeleton */}
-            <div className="card">
-                <div className="card-body">
-                    <div className="placeholder-glow mb-3">
-                        <span className="placeholder col-3"></span>
-                    </div>
-                    <div className="placeholder-glow">
-                        <span className="placeholder col-12" style={{ height: '300px' }}></span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--tb-text-secondary)", fontSize: 13 }}>
+            <span
+                className="spinner-border spinner-border-sm"
+                role="status"
+                aria-hidden="true"
+                style={{ width: 13, height: 13 }}
+            />
+            {text}
+        </span>
     );
 }
 
-/**
- * Minimal inline loader for small components
- */
-export function InlineLoader({ text = "Loading..." }) {
-    return (
-        <div className="d-flex align-items-center gap-2 text-muted">
-            <span className="spinner-border spinner-border-sm" role="status">
-                <span className="visually-hidden">Loading...</span>
-            </span>
-            <span>{text}</span>
-        </div>
-    );
-}
-
-/**
- * Loading bar that appears at the top of the page
- */
-export function LoadingBar() {
-    return (
-        <div className="position-fixed top-0 start-0 w-100" style={{ zIndex: 10000 }}>
-            <div className="progress" style={{ height: '3px', borderRadius: 0 }}>
-                <div
-                    className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                    role="progressbar"
-                    style={{ width: '100%' }}
-                >
-                </div>
-            </div>
-        </div>
-    );
-}
-
-/**
- * Default export - simple page loader
- */
 export default PageLoader;

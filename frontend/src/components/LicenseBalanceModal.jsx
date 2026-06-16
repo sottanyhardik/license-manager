@@ -61,7 +61,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                         onChange={(e) => setTextValue(e.target.value)}
                         placeholder={`Enter ${label.toLowerCase()} here...`}
                         style={{
-                            fontSize: '0.875rem',
+                            fontSize: 14,
                             borderColor: 'var(--primary-color)',
                             backgroundColor: 'var(--row-yellow-bg)'
                         }}
@@ -72,7 +72,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                             onClick={handleSave}
                             disabled={saving}
                             style={{
-                                background: 'linear-gradient(135deg, #4F46E5, #4338CA)',
+                                background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))',
                                 border: 'none'
                             }}
                         >
@@ -94,24 +94,24 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                     style={{
                         minHeight: '80px',
                         padding: '0.75rem',
-                        backgroundColor: textValue ? 'var(--row-yellow-bg)' : 'var(--bs-gray-50)',
-                        border: '1px solid #dee2e6',
-                        borderRadius: '4px',
+                        backgroundColor: textValue ? 'var(--row-yellow-bg)' : 'var(--tb-sunken)',
+                        border: '1px solid var(--tb-border)',
+                        borderRadius: 'var(--tb-r-sm)',
                         cursor: 'pointer',
-                        fontSize: '0.875rem',
+                        fontSize: 14,
                         whiteSpace: 'pre-wrap',
                         transition: 'all 0.2s'
                     }}
                     onMouseOver={(e) => {
                         e.currentTarget.style.borderColor = 'var(--primary-color)';
-                        e.currentTarget.style.backgroundColor = textValue ? 'var(--row-yellow-bg)' : 'var(--bs-gray-100)';
+                        e.currentTarget.style.backgroundColor = textValue ? 'var(--row-yellow-bg)' : 'var(--tb-gray-100)';
                     }}
                     onMouseOut={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--bs-gray-200)';
-                        e.currentTarget.style.backgroundColor = textValue ? 'var(--row-yellow-bg)' : 'var(--bs-gray-50)';
+                        e.currentTarget.style.borderColor = 'var(--tb-border)';
+                        e.currentTarget.style.backgroundColor = textValue ? 'var(--row-yellow-bg)' : 'var(--tb-sunken)';
                     }}
                 >
-                    {textValue || <span style={{ color: 'var(--bs-gray-500)', fontStyle: 'italic' }}>Click to add {label.toLowerCase()}...</span>}
+                    {textValue || <span style={{ color: 'var(--tb-text-secondary)', fontStyle: 'italic' }}>Click to add {label.toLowerCase()}...</span>}
                 </div>
             )}
         </div>
@@ -346,13 +346,13 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-xl" style={{ maxWidth: '95%' }}>
                 <div className="modal-content" style={{
-                    borderRadius: '12px',
+                    borderRadius: 'var(--tb-r-md)',
                     boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
                     border: 'none'
                 }}>
                     <div className="modal-header" style={{
-                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                        color: 'white',
+                        background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))',
+                        color: '#fff',
                         borderTopLeftRadius: '12px',
                         borderTopRightRadius: '12px',
                         padding: '1.5rem',
@@ -376,12 +376,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                         onClick={handleDownloadPDF}
                                         disabled={loading}
                                         style={{
-                                            backgroundColor: 'white',
+                                            backgroundColor: 'var(--tb-card-bg)',
                                             color: 'var(--primary-color)',
                                             border: 'none',
                                             fontWeight: '500',
                                             padding: '0.5rem 1rem',
-                                            borderRadius: '6px',
+                                            borderRadius: 'var(--tb-r-sm)',
                                             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                                             transition: 'all 0.3s'
                                         }}
@@ -403,12 +403,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                         onClick={handleDownloadExcel}
                                         disabled={loading}
                                         style={{
-                                            backgroundColor: 'white',
+                                            backgroundColor: 'var(--tb-card-bg)',
                                             color: 'var(--success-color)',
                                             border: 'none',
                                             fontWeight: '500',
                                             padding: '0.5rem 1rem',
-                                            borderRadius: '6px',
+                                            borderRadius: 'var(--tb-r-sm)',
                                             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                                             transition: 'all 0.3s'
                                         }}
@@ -430,45 +430,45 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 type="button"
                                 className="btn-close btn-close-white"
                                 onClick={onHide}
-                                style={{ fontSize: '0.875rem' }}
+                                style={{ fontSize: 14 }}
                             ></button>
                         </div>
                     </div>
                     <div className="modal-body" style={{
                         padding: '2rem',
-                        backgroundColor: 'var(--bs-gray-50)'
+                        backgroundColor: 'var(--tb-sunken)'
                     }}>
                         {loading || !licenseData ? (
                             <div className="text-center py-5">
                                 <div className="spinner-border" style={{ color: 'var(--primary-color)' }}></div>
-                                <p className="mt-2" style={{ color: 'var(--bs-gray-500)' }}>Loading...</p>
+                                <p className="mt-2" style={{ color: 'var(--tb-text-secondary)' }}>Loading...</p>
                             </div>
                         ) : (
                             <>
                                 {/* License Header Details */}
                                 <div style={{
-                                    backgroundColor: 'white',
-                                    borderRadius: '8px',
+                                    backgroundColor: 'var(--tb-card-bg)',
+                                    borderRadius: 'var(--tb-r-md)',
                                     padding: '1.5rem',
                                     marginBottom: '1.5rem',
                                     boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                                 }}>
                                     <div className="table-responsive">
                                         <table className="table table-sm" style={{ marginBottom: '0', border: 'none' }}>
-                                            <thead style={{ backgroundColor: 'var(--primary-color)', color: 'white' }}>
+                                            <thead style={{ backgroundColor: 'var(--primary-color)', color: '#fff' }}>
                                                 <tr>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Number</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Date</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Expiry Date</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Exporter Name</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Port Name</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>License Number</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>License Date</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>License Expiry Date</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Exporter Name</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Port Name</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr style={{ backgroundColor: 'var(--bs-gray-50)' }}>
-                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef', fontWeight: '500' }}>
+                                                <tr style={{ backgroundColor: 'var(--tb-sunken)' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)', fontWeight: '500' }}>
                                                         <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
-                                                            <span style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
+                                                            <span style={{ fontWeight: '600', color: 'var(--tb-text)' }}>
                                                                 {licenseData.license_number || '-'}
                                                             </span>
                                                             {(licenseData.has_tl || licenseData.has_copy) && (
@@ -489,7 +489,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         }
                                                                     }}
                                                                     style={{
-                                                                        fontSize: '0.75rem',
+                                                                        fontSize: 12,
                                                                         color: 'var(--success-color)',
                                                                         textDecoration: 'none',
                                                                         padding: '2px 6px',
@@ -513,42 +513,42 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.license_date ? formatDate(licenseData.license_date) : '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.license_expiry_date ? formatDate(licenseData.license_expiry_date) : '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.exporter_name || '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.port_name || '-'}
                                                     </td>
                                                 </tr>
                                             </tbody>
                                         </table>
                                         <table className="table table-sm" style={{ marginBottom: '0', border: 'none', marginTop: '0.5rem' }}>
-                                            <thead style={{ backgroundColor: 'var(--primary-color)', color: 'white' }}>
+                                            <thead style={{ backgroundColor: 'var(--primary-color)', color: '#fff' }}>
                                                 <tr>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Purchase Status</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Balance CIF</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Get Norm Class</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem', minWidth: '300px' }}>Latest Transfer</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Purchase Status</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Balance CIF</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Get Norm Class</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14, minWidth: '300px' }}>Latest Transfer</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr style={{ backgroundColor: 'var(--bs-gray-50)' }}>
-                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                <tr style={{ backgroundColor: 'var(--tb-sunken)' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.purchase_status || '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {parseFloat(licenseData.balance_cif || 0).toFixed(2)}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.get_norm_class || '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.latest_transfer || '-'}
                                                     </td>
                                                 </tr>
@@ -559,16 +559,16 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
                                 {/* Condition Sheet Section */}
                                 <div className="mb-4" style={{
-                                    backgroundColor: 'white',
-                                    borderRadius: '8px',
+                                    backgroundColor: 'var(--tb-card-bg)',
+                                    borderRadius: 'var(--tb-r-md)',
                                     padding: '1.5rem',
                                     boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                                 }}>
                                     <div className="d-flex justify-content-between align-items-center mb-3">
                                         <h5 style={{
-                                            color: 'var(--text-dark)',
+                                            color: 'var(--tb-text)',
                                             fontWeight: '600',
-                                            borderBottom: '2px solid #4F46E5',
+                                            borderBottom: '2px solid var(--tb-brand)',
                                             paddingBottom: '0.5rem',
                                             marginBottom: '0',
                                             flex: 1
@@ -590,16 +590,16 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
                                 {/* Notes Section */}
                                 <div className="mb-4" style={{
-                                    backgroundColor: 'white',
-                                    borderRadius: '8px',
+                                    backgroundColor: 'var(--tb-card-bg)',
+                                    borderRadius: 'var(--tb-r-md)',
                                     padding: '1.5rem',
                                     boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                                 }}>
                                     <div className="d-flex justify-content-between align-items-center mb-3">
                                         <h5 style={{
-                                            color: 'var(--text-dark)',
+                                            color: 'var(--tb-text)',
                                             fontWeight: '600',
-                                            borderBottom: '2px solid #4F46E5',
+                                            borderBottom: '2px solid var(--tb-brand)',
                                             paddingBottom: '0.5rem',
                                             marginBottom: '0',
                                             flex: 1
@@ -622,15 +622,15 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 {/* Export Items */}
                                 {licenseData.export_license && licenseData.export_license.length > 0 && (
                                     <div className="mb-4" style={{
-                                        backgroundColor: 'white',
-                                        borderRadius: '8px',
+                                        backgroundColor: 'var(--tb-card-bg)',
+                                        borderRadius: 'var(--tb-r-md)',
                                         padding: '1.5rem',
                                         boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                                     }}>
                                         <h5 className="mb-3" style={{
-                                            color: 'var(--text-dark)',
+                                            color: 'var(--tb-text)',
                                             fontWeight: '600',
-                                            borderBottom: '2px solid #4F46E5',
+                                            borderBottom: '2px solid var(--tb-brand)',
                                             paddingBottom: '0.5rem'
                                         }}>
                                             <i className="bi bi-box-seam me-2"></i>
@@ -642,7 +642,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                         }}>
                                             <thead style={{
                                                 backgroundColor: 'var(--primary-color)',
-                                                color: 'white'
+                                                color: '#fff'
                                             }}>
                                                 <tr>
                                                     <th style={{ border: 'none', padding: '0.75rem' }}>Item</th>
@@ -658,7 +658,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             onClick={() => handleRowClick(item, 'export')}
                                                             style={{
                                                                 cursor: 'pointer',
-                                                                backgroundColor: expandedItem?.id === item.id ? 'var(--indigo-50)' : index % 2 === 0 ? '#ffffff' : 'var(--bs-gray-50)',
+                                                                backgroundColor: expandedItem?.id === item.id ? 'var(--indigo-50)' : index % 2 === 0 ? 'var(--tb-card-bg)' : 'var(--tb-sunken)',
                                                                 transition: 'all 0.2s'
                                                             }}
                                                             onMouseOver={(e) => {
@@ -668,17 +668,17 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             }}
                                                             onMouseOut={(e) => {
                                                                 if (expandedItem?.id !== item.id) {
-                                                                    e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : 'var(--bs-gray-50)';
+                                                                    e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'var(--tb-card-bg)' : 'var(--tb-sunken)';
                                                                 }
                                                             }}
                                                         >
-                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                 {item.description || item.norm_class_label || 'None'}
                                                             </td>
-                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                 {parseFloat(item.cif_fc || item.fob_fc || 0).toFixed(2)}
                                                             </td>
-                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                 {parseFloat(licenseData.balance_cif || 0).toFixed(2)}
                                                             </td>
                                                         </tr>
@@ -763,15 +763,15 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 {/* Import Items */}
                                 {licenseData.import_license && licenseData.import_license.length > 0 && (
                                     <div style={{
-                                        backgroundColor: 'white',
-                                        borderRadius: '8px',
+                                        backgroundColor: 'var(--tb-card-bg)',
+                                        borderRadius: 'var(--tb-r-md)',
                                         padding: '1.5rem',
                                         boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                                     }}>
                                         <h5 className="mb-3" style={{
-                                            color: 'var(--text-dark)',
+                                            color: 'var(--tb-text)',
                                             fontWeight: '600',
-                                            borderBottom: '2px solid #4338CA',
+                                            borderBottom: '2px solid var(--tb-brand)',
                                             paddingBottom: '0.5rem'
                                         }}>
                                             <i className="bi bi-inbox me-2"></i>
@@ -784,20 +784,20 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             }}>
                                                 <thead style={{
                                                     backgroundColor: 'var(--primary-dark)',
-                                                    color: 'white'
+                                                    color: '#fff'
                                                 }}>
                                                     <tr>
-                                                        <th style={{ minWidth: '50px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Sr No</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>HS Code</th>
-                                                        <th style={{ minWidth: '200px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Description</th>
-                                                        <th style={{ minWidth: '250px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Item</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Total Quantity</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Allotted Qty</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Debited Qty</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Available Qty</th>
-                                                        <th style={{ minWidth: '120px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Marking</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>CIF FC</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Balance CIF FC</th>
+                                                        <th style={{ minWidth: '50px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Sr No</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>HS Code</th>
+                                                        <th style={{ minWidth: '200px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Description</th>
+                                                        <th style={{ minWidth: '250px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Item</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Total Quantity</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Allotted Qty</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Debited Qty</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Available Qty</th>
+                                                        <th style={{ minWidth: '120px', border: 'none', padding: '0.75rem', fontSize: 14 }}>License Marking</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>CIF FC</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Balance CIF FC</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -808,7 +808,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                 onClick={() => handleRowClick(item, 'import')}
                                                                 style={{
                                                                     cursor: editingItemId ? 'default' : 'pointer',
-                                                                    backgroundColor: expandedItem?.id === item.id ? 'var(--indigo-50)' : index % 2 === 0 ? '#ffffff' : 'var(--bs-gray-50)',
+                                                                    backgroundColor: expandedItem?.id === item.id ? 'var(--indigo-50)' : index % 2 === 0 ? 'var(--tb-card-bg)' : 'var(--tb-sunken)',
                                                                     transition: 'all 0.2s'
                                                                 }}
                                                                 onMouseOver={(e) => {
@@ -818,21 +818,21 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                 }}
                                                                 onMouseOut={(e) => {
                                                                     if (expandedItem?.id !== item.id) {
-                                                                        e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : 'var(--bs-gray-50)';
+                                                                        e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'var(--tb-card-bg)' : 'var(--tb-sunken)';
                                                                     }
                                                                 }}
                                                             >
-                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {item.serial_number || index + 1}
                                                                     <ConditionBadge type={item.condition_type} size="xs" />
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {item.hs_code_label || item.hs_code || '-'}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {item.description || '-'}
                                                                 </td>
-                                                                <td onClick={(e) => e.stopPropagation()} style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td onClick={(e) => e.stopPropagation()} style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {editingItemId === item.id ? (
                                                                         <div className="d-flex align-items-center gap-1">
                                                                             <AsyncSelect
@@ -850,7 +850,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                     control: (base) => ({
                                                                                         ...base,
                                                                                         minHeight: '32px',
-                                                                                        fontSize: '0.875rem',
+                                                                                        fontSize: 14,
                                                                                         minWidth: '400px'
                                                                                     }),
                                                                                     valueContainer: (base) => ({
@@ -913,26 +913,26 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                             <i
                                                                                 className="bi bi-pencil text-muted ms-2"
                                                                                 onClick={(e) => handleEditClick(e, item)}
-                                                                                style={{ fontSize: '0.8rem' }}
+                                                                                style={{ fontSize: 12.5 }}
                                                                             ></i>
                                                                         </div>
                                                                     )}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {parseFloat(item.quantity || 0).toFixed(2)}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {parseFloat(item.allotted_quantity || 0).toFixed(2)}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {parseFloat(item.debited_quantity || 0).toFixed(2)}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {parseFloat(item.available_quantity || 0).toFixed(2)}
                                                                 </td>
                                                                 <td
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef', textAlign: 'center' }}
+                                                                    style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)', textAlign: 'center' }}
                                                                 >
                                                                     {/* Editable license marking — writes to backend `condition_type`. */}
                                                                     <Select
@@ -946,7 +946,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                             control: (base) => ({
                                                                                 ...base,
                                                                                 minHeight: '32px',
-                                                                                fontSize: '0.8rem',
+                                                                                fontSize: 12.5,
                                                                                 minWidth: '110px',
                                                                             }),
                                                                             valueContainer: (base) => ({
@@ -963,15 +963,15 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                             }),
                                                                             menu: (base) => ({
                                                                                 ...base,
-                                                                                fontSize: '0.8rem',
+                                                                                fontSize: 12.5,
                                                                             }),
                                                                         }}
                                                                     />
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {parseFloat(item.cif_fc || 0).toFixed(2)}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {parseFloat(item.balance_cif_fc || 0).toFixed(2)}
                                                                 </td>
                                                             </tr>
@@ -1082,8 +1082,8 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                         )}
                     </div>
                     <div className="modal-footer" style={{
-                        backgroundColor: 'var(--bs-gray-50)',
-                        borderTop: '1px solid #dee2e6',
+                        backgroundColor: 'var(--tb-sunken)',
+                        borderTop: '1px solid var(--tb-border)',
                         padding: '1rem 2rem',
                         borderBottomLeftRadius: '12px',
                         borderBottomRightRadius: '12px'
@@ -1093,21 +1093,21 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                             className="btn"
                             onClick={onHide}
                             style={{
-                                backgroundColor: 'var(--bs-gray-500)',
-                                color: 'white',
-                                borderRadius: '6px',
+                                backgroundColor: 'var(--tb-text-secondary)',
+                                color: '#fff',
+                                borderRadius: 'var(--tb-r-sm)',
                                 padding: '0.5rem 1.5rem',
                                 fontWeight: '500',
                                 border: 'none',
                                 transition: 'all 0.3s'
                             }}
                             onMouseOver={(e) => {
-                                e.target.style.backgroundColor = 'var(--bs-gray-600)';
+                                e.target.style.backgroundColor = 'var(--tb-text-secondary)';
                                 e.target.style.transform = 'translateY(-2px)';
                                 e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
                             }}
                             onMouseOut={(e) => {
-                                e.target.style.backgroundColor = 'var(--bs-gray-500)';
+                                e.target.style.backgroundColor = 'var(--tb-text-secondary)';
                                 e.target.style.transform = 'translateY(0)';
                                 e.target.style.boxShadow = 'none';
                             }}

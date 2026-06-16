@@ -1,9 +1,11 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-oxc'
+import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   base: '/',  // Ensures assets are loaded from root, not port 8000
   server: {
     proxy: {
@@ -112,6 +114,8 @@ export default defineConfig({
 
   resolve: {
     alias: {
+      // shadcn/ui convention — `@/components/ui/button` → src/components/ui/button
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
       // Use the pre-built browser bundle to avoid Node.js fs/stream polyfill issues
       'exceljs': 'exceljs/dist/exceljs.min.js',
     },

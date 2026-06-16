@@ -11,11 +11,11 @@ function fmtDateTime(iso) {
 }
 
 function CompanyLabel({ iec, name }) {
-    if (!iec && !name) return <span style={{ color: '#9ca3af' }}>—</span>;
+    if (!iec && !name) return <span style={{ color: 'var(--tb-text-tertiary)' }}>—</span>;
     return (
         <span>
             <span style={{ fontFamily: 'monospace' }}>{iec || '—'}</span>
-            {name ? <span style={{ color: '#475569' }}> ({name})</span> : null}
+            {name ? <span style={{ color: 'var(--tb-text-secondary)' }}> ({name})</span> : null}
         </span>
     );
 }
@@ -56,24 +56,24 @@ export default function OwnershipDetailsModal({ show, onHide, licenseId, license
     return (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={onHide}>
             <div className="modal-dialog modal-xl" style={{ maxWidth: '95%' }} onClick={(e) => e.stopPropagation()}>
-                <div className="modal-content" style={{ borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', border: 'none' }}>
+                <div className="modal-content" style={{ borderRadius: 'var(--tb-r-md)', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', border: 'none' }}>
                     <div className="modal-header" style={{
-                        background: 'linear-gradient(135deg, #3730a3 0%, #1e1b4b 100%)',
-                        color: 'white', borderTopLeftRadius: '12px', borderTopRightRadius: '12px',
+                        background: 'linear-gradient(135deg, var(--tb-brand-hover), var(--tb-brand-active))',
+                        color: '#fff', borderTopLeftRadius: '12px', borderTopRightRadius: '12px',
                         padding: '1rem 1.5rem', borderBottom: 'none',
                     }}>
                         <h5 className="modal-title" style={{ fontWeight: 600, fontSize: '1.1rem', flex: 1 }}>
                             <i className="bi bi-diagram-3 me-2"></i>
                             Ownership Details{licenseNumber ? ` — ${licenseNumber}` : ''}
                         </h5>
-                        <button type="button" onClick={onHide} aria-label="Close" style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '1.25rem', cursor: 'pointer' }}>
+                        <button type="button" onClick={onHide} aria-label="Close" style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.25rem', cursor: 'pointer' }}>
                             <i className="bi bi-x-lg"></i>
                         </button>
                     </div>
 
                     <div className="modal-body" style={{ padding: '1.5rem', maxHeight: '75vh', overflowY: 'auto' }}>
                         {loading && (
-                            <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
+                            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--tb-text-secondary)' }}>
                                 <i className="bi bi-arrow-repeat spinner-border spinner-border-sm me-2"></i>
                                 Loading ownership data…
                             </div>
@@ -88,32 +88,32 @@ export default function OwnershipDetailsModal({ show, onHide, licenseId, license
                                 {/* Current Owner */}
                                 <div style={{ marginBottom: '1.5rem' }}>
                                     <div style={{
-                                        background: 'linear-gradient(135deg, #3730a3 0%, #1e1b4b 100%)',
-                                        color: 'white', padding: '0.75rem 1rem', borderRadius: '8px 8px 0 0',
-                                        fontWeight: 600, fontSize: '0.95rem',
+                                        background: 'linear-gradient(135deg, var(--tb-brand-hover), var(--tb-brand-active))',
+                                        color: '#fff', padding: '0.75rem 1rem', borderRadius: '8px 8px 0 0',
+                                        fontWeight: 600, fontSize: 15,
                                     }}>
                                         Current Owner&apos;s Details
                                     </div>
-                                    <div style={{ border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '1rem', background: '#fff' }}>
+                                    <div style={{ border: '1px solid var(--tb-border-soft)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '1rem', background: 'var(--tb-card-bg)' }}>
                                         {owner ? (
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
                                                 <div>
-                                                    <div style={{ color: '#6b7280', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>IEC</div>
+                                                    <div style={{ color: 'var(--tb-text-secondary)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>IEC</div>
                                                     <div style={{ fontFamily: 'monospace', marginTop: '0.25rem' }}>{owner.iec || '—'}</div>
                                                 </div>
                                                 <div>
-                                                    <div style={{ color: '#6b7280', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Firm / Company</div>
+                                                    <div style={{ color: 'var(--tb-text-secondary)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Firm / Company</div>
                                                     <div style={{ marginTop: '0.25rem' }}>{owner.name || '—'}</div>
                                                 </div>
                                                 <div style={{ gridColumn: 'span 2' }}>
-                                                    <div style={{ color: '#6b7280', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Address</div>
+                                                    <div style={{ color: 'var(--tb-text-secondary)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Address</div>
                                                     <div style={{ marginTop: '0.25rem' }}>{owner.address || '—'}</div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div style={{ color: '#9ca3af' }}>No current owner recorded.</div>
+                                            <div style={{ color: 'var(--tb-text-tertiary)' }}>No current owner recorded.</div>
                                         )}
-                                        <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px dashed #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#6b7280' }}>
+                                        <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px dashed #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
                                             <span>Last fetched: {fmtDateTime(data.last_ownership_fetch)}</span>
                                             {data.file_transfer_status && (
                                                 <span><strong>File transfer:</strong> {data.file_transfer_status}</span>
@@ -125,18 +125,18 @@ export default function OwnershipDetailsModal({ show, onHide, licenseId, license
                                 {/* Transfer Details */}
                                 <div>
                                     <div style={{
-                                        background: 'linear-gradient(135deg, #3730a3 0%, #1e1b4b 100%)',
-                                        color: 'white', padding: '0.75rem 1rem', borderRadius: '8px 8px 0 0',
-                                        fontWeight: 600, fontSize: '0.95rem',
+                                        background: 'linear-gradient(135deg, var(--tb-brand-hover), var(--tb-brand-active))',
+                                        color: '#fff', padding: '0.75rem 1rem', borderRadius: '8px 8px 0 0',
+                                        fontWeight: 600, fontSize: 15,
                                     }}>
                                         Transfer Details {transfers.length > 0 && <span style={{ fontWeight: 400, opacity: 0.85 }}>({transfers.length})</span>}
                                     </div>
-                                    <div style={{ border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#fff', overflowX: 'auto' }}>
+                                    <div style={{ border: '1px solid var(--tb-border-soft)', borderTop: 'none', borderRadius: '0 0 8px 8px', background: 'var(--tb-card-bg)', overflowX: 'auto' }}>
                                         {transfers.length === 0 ? (
-                                            <div style={{ padding: '1rem', color: '#9ca3af' }}>No transfers recorded.</div>
+                                            <div style={{ padding: '1rem', color: 'var(--tb-text-tertiary)' }}>No transfers recorded.</div>
                                         ) : (
-                                            <table className="table table-sm mb-0" style={{ fontSize: '0.85rem' }}>
-                                                <thead style={{ background: '#fef2f2' }}>
+                                            <table className="table table-sm mb-0" style={{ fontSize: 13.5 }}>
+                                                <thead style={{ background: 'var(--tb-danger-soft)' }}>
                                                     <tr>
                                                         <th style={{ padding: '0.75rem' }}>Initiation Date</th>
                                                         <th style={{ padding: '0.75rem' }}>Acceptance Date</th>
@@ -154,9 +154,9 @@ export default function OwnershipDetailsModal({ show, onHide, licenseId, license
                                                             <td style={{ padding: '0.65rem 0.75rem' }}><CompanyLabel iec={t.to_iec} name={t.to_name} /></td>
                                                             <td style={{ padding: '0.65rem 0.75rem' }}>
                                                                 <span style={{
-                                                                    display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600,
-                                                                    background: (t.transfer_status || '').toLowerCase() === 'approved' ? '#dcfce7' : '#fef3c7',
-                                                                    color: (t.transfer_status || '').toLowerCase() === 'approved' ? '#166534' : '#92400e',
+                                                                    display: 'inline-block', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontSize: 12, fontWeight: 600,
+                                                                    background: (t.transfer_status || '').toLowerCase() === 'approved' ? 'var(--tb-success-soft)' : 'var(--tb-warning-soft)',
+                                                                    color: (t.transfer_status || '').toLowerCase() === 'approved' ? 'var(--tb-success-text)' : 'var(--tb-warning-text)',
                                                                 }}>
                                                                     {t.transfer_status || '—'}
                                                                 </span>
@@ -172,7 +172,7 @@ export default function OwnershipDetailsModal({ show, onHide, licenseId, license
                         )}
                     </div>
 
-                    <div className="modal-footer" style={{ borderTop: '1px solid #e5e7eb', padding: '0.75rem 1.5rem' }}>
+                    <div className="modal-footer" style={{ borderTop: '1px solid var(--tb-border-soft)', padding: '0.75rem 1.5rem' }}>
                         <button type="button" className="btn btn-secondary" onClick={onHide}>Close</button>
                     </div>
                 </div>

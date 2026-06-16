@@ -1,26 +1,15 @@
-import { Link } from "react-router-dom";
-import { Button, EmptyState } from "../components/ui";
+import { ShieldX, House } from "lucide-react";
+import ErrorScreen from "../components/ErrorScreen";
 
 export default function Forbidden() {
     return (
-        <div
-            className="d-flex align-items-center justify-content-center"
-            style={{ minHeight: "100vh", background: "var(--tb-body-bg)", padding: 20 }}
-        >
-            <div className="card" style={{ maxWidth: 480, width: "100%" }}>
-                <div className="card-body">
-                    <EmptyState
-                        icon="lock"
-                        title="Access denied"
-                        description="You don't have permission to view this page. Contact your administrator if you believe this is an error."
-                        action={
-                            <Link to="/dashboard">
-                                <Button variant="primary" size="sm" icon="house">Back to Dashboard</Button>
-                            </Link>
-                        }
-                    />
-                </div>
-            </div>
-        </div>
+        <ErrorScreen
+            code="403"
+            icon={ShieldX}
+            tone="destructive"
+            title="Access denied"
+            description="You don’t have permission to view this page. Contact your administrator if you believe this is an error."
+            action={{ to: "/dashboard", label: "Back to Dashboard", icon: House }}
+        />
     );
 }

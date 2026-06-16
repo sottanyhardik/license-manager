@@ -14,6 +14,11 @@ import { ValidationRules } from "../../utils/formValidation";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import {navigateToList} from "../../utils/navigationUtils";
 import {useBackButton} from "../../hooks/useBackButton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { ArrowLeft, Check, Eye, Loader2, X } from "lucide-react";
 
 /**
  * Generic Master Form for Create/Edit
@@ -28,35 +33,35 @@ const ENTITY_SECTIONS = {
         {
             title: 'Document Info',
             icon: 'receipt-cutoff',
-            color: '#6366F1',
+            color: 'var(--tb-brand)',
             fields: ['bill_of_entry_number', 'bill_of_entry_date', 'appraisement', 'ooc_date'],
             cols: { bill_of_entry_number: 'col-md-4', bill_of_entry_date: 'col-md-4', appraisement: 'col-md-4', ooc_date: 'col-md-4' },
         },
         {
             title: 'Parties & Location',
             icon: 'building',
-            color: '#4F46E5',
+            color: 'var(--tb-brand)',
             fields: ['company', 'allotment', 'port', 'cha'],
             cols: { company: 'col-md-4', allotment: 'col-md-4', port: 'col-md-4', cha: 'col-md-4' },
         },
         {
             title: 'Financial',
             icon: 'currency-dollar',
-            color: '#10b981',
+            color: 'var(--tb-success)',
             fields: ['exchange_rate'],
             cols: { exchange_rate: 'col-md-4' },
         },
         {
             title: 'Invoice Details',
             icon: 'file-earmark-text',
-            color: '#f59e0b',
+            color: 'var(--tb-warning)',
             fields: ['product_name', 'invoice_no', 'invoice_date'],
             cols: { product_name: 'col-md-4', invoice_no: 'col-md-4', invoice_date: 'col-md-4' },
         },
         {
             title: 'Notes',
             icon: 'chat-left-text',
-            color: '#6b7280',
+            color: 'var(--tb-text-secondary)',
             fields: ['comments'],
             cols: { comments: 'col-12' },
         },
@@ -65,28 +70,28 @@ const ENTITY_SECTIONS = {
         {
             title: 'License Identification',
             icon: 'file-earmark-text',
-            color: '#4F46E5',
+            color: 'var(--tb-brand)',
             fields: ['license_number', 'license_date', 'license_expiry_date', 'port', 'iec', 'scheme_code', 'advance_auth_number'],
             cols: { license_number: 'col-md-4', license_date: 'col-md-4', license_expiry_date: 'col-md-4', port: 'col-md-4', iec: 'col-md-4', scheme_code: 'col-md-4', advance_auth_number: 'col-md-4' },
         },
         {
             title: 'Financial Details',
             icon: 'currency-dollar',
-            color: '#10b981',
+            color: 'var(--tb-success)',
             fields: ['total_cif_fc', 'total_cif_inr', 'total_duty_amount', 'exchange_rate', 'duty_rate'],
             cols: { total_cif_fc: 'col-md-4', total_cif_inr: 'col-md-4', total_duty_amount: 'col-md-4', exchange_rate: 'col-md-4', duty_rate: 'col-md-4' },
         },
         {
             title: 'Status Flags',
             icon: 'toggle-on',
-            color: '#6366F1',
+            color: 'var(--tb-brand)',
             fields: ['is_expired', 'is_null_dfia', 'is_incentive'],
             cols: { is_expired: 'col-md-4', is_null_dfia: 'col-md-4', is_incentive: 'col-md-4' },
         },
         {
             title: 'Conditions & Notes',
             icon: 'chat-left-text',
-            color: '#6b7280',
+            color: 'var(--tb-text-secondary)',
             fields: ['conditions', 'restrictions', 'comments', 'description', 'notes'],
             cols: {},
         },
@@ -95,28 +100,28 @@ const ENTITY_SECTIONS = {
         {
             title: 'License Details',
             icon: 'award',
-            color: '#f59e0b',
+            color: 'var(--tb-warning)',
             fields: ['license_type', 'license_number', 'license_date', 'license_expiry_date'],
             cols: { license_type: 'col-md-3', license_number: 'col-md-3', license_date: 'col-md-3', license_expiry_date: 'col-md-3' },
         },
         {
             title: 'Party & Port',
             icon: 'building',
-            color: '#4F46E5',
+            color: 'var(--tb-brand)',
             fields: ['exporter', 'port_code'],
             cols: { exporter: 'col-md-6', port_code: 'col-md-6' },
         },
         {
             title: 'Financial',
             icon: 'currency-rupee',
-            color: '#10b981',
+            color: 'var(--tb-success)',
             fields: ['license_value'],
             cols: { license_value: 'col-md-4' },
         },
         {
             title: 'Status & Notes',
             icon: 'toggle-on',
-            color: '#6b7280',
+            color: 'var(--tb-text-secondary)',
             fields: ['is_active', 'notes'],
             cols: { is_active: 'col-md-4' },
         },
@@ -125,28 +130,28 @@ const ENTITY_SECTIONS = {
         {
             title: 'Trade Details',
             icon: 'arrow-left-right',
-            color: '#10b981',
+            color: 'var(--tb-success)',
             fields: ['direction', 'license_type', 'invoice_number', 'invoice_date'],
             cols: { direction: 'col-md-3', license_type: 'col-md-3', invoice_number: 'col-md-3', invoice_date: 'col-md-3' },
         },
         {
             title: 'Parties',
             icon: 'building',
-            color: '#4F46E5',
+            color: 'var(--tb-brand)',
             fields: ['from_company', 'to_company'],
             cols: { from_company: 'col-md-6', to_company: 'col-md-6' },
         },
         {
             title: 'References',
             icon: 'link-45deg',
-            color: '#6366F1',
+            color: 'var(--tb-brand)',
             fields: ['incentive_license', 'boe'],
             cols: { incentive_license: 'col-md-6', boe: 'col-md-6' },
         },
         {
             title: 'Documents & Notes',
             icon: 'file-earmark-arrow-up',
-            color: '#6b7280',
+            color: 'var(--tb-text-secondary)',
             fields: ['purchase_invoice_copy', 'remarks'],
             cols: { purchase_invoice_copy: 'col-md-6' },
         },
@@ -1654,7 +1659,7 @@ export default function MasterForm({
                                         maxWidth: '100px',
                                         objectFit: 'contain',
                                         border: '1px solid #ddd',
-                                        borderRadius: '4px',
+                                        borderRadius: 'var(--tb-r-sm)',
                                         padding: '4px'
                                     }}
                                 />
@@ -1677,28 +1682,24 @@ export default function MasterForm({
         if (typeof value === "boolean" || fieldName.startsWith("is_") || fieldName.startsWith("has_")) {
             const boolValue = typeof value === "boolean" ? value : false;
             return (
-                <div className="form-check form-switch">
-                    <input
-                        type="checkbox"
-                        className="form-check-input"
-                        role="switch"
+                <label className="flex h-9 cursor-pointer items-center gap-2.5 text-sm" htmlFor={`switch-${fieldName}`}>
+                    <Switch
                         id={`switch-${fieldName}`}
                         checked={boolValue}
-                        onChange={(e) => handleChange(fieldName, e.target.checked)}
+                        onCheckedChange={(checked) => handleChange(fieldName, checked)}
                     />
-                    <label className="form-check-label" htmlFor={`switch-${fieldName}`}>
-                        {boolValue ? "Yes" : "No"}
-                    </label>
-                </div>
+                    <span className="text-muted-foreground">{boolValue ? "Yes" : "No"}</span>
+                </label>
             );
         }
 
         // Handle textarea for long text fields
         if (fieldName.includes("address") || fieldName.includes("description") || fieldName.includes("note")) {
             return (
-                <textarea
-                    className={`form-control ${errorClass}`}
-                    rows="3"
+                <Textarea
+                    className={errorClass}
+                    aria-invalid={hasError || undefined}
+                    rows={3}
                     value={value}
                     onChange={(e) => handleChange(fieldName, e.target.value)}
                 />
@@ -1708,10 +1709,11 @@ export default function MasterForm({
         // Handle decimal/number fields
         if (fieldMeta.type === "number" || fieldName.includes("price") || fieldName.includes("rate") || fieldName.includes("quantity") || fieldName.includes("duty")) {
             return (
-                <input
+                <Input
                     type="number"
                     step={fieldMeta.step || "0.01"}
-                    className={`form-control ${errorClass}`}
+                    className={errorClass}
+                    aria-invalid={hasError || undefined}
                     value={value}
                     onChange={(e) => handleChange(fieldName, e.target.value)}
                 />
@@ -1720,9 +1722,10 @@ export default function MasterForm({
 
         // Default text input
         return (
-            <input
+            <Input
                 type="text"
-                className={`form-control ${errorClass}`}
+                className={errorClass}
+                aria-invalid={hasError || undefined}
                 value={value}
                 onChange={(e) => handleChange(fieldName, e.target.value)}
             />
@@ -1746,25 +1749,25 @@ export default function MasterForm({
         'incentive-licenses': 'award',
     };
     const entityColorMap = {
-        licenses: '#4F46E5',
-        allotments: '#06b6d4',
-        'bill-of-entries': '#6366F1',
-        trades: '#10b981',
-        'incentive-licenses': '#f59e0b',
+        licenses: 'var(--tb-brand)',
+        allotments: 'var(--tb-info)',
+        'bill-of-entries': 'var(--tb-brand)',
+        trades: 'var(--tb-success)',
+        'incentive-licenses': 'var(--tb-warning)',
     };
     const entityIcon = entityIconMap[entityName] || 'file-earmark';
-    const entityColor = entityColorMap[entityName] || '#4F46E5';
+    const entityColor = entityColorMap[entityName] || 'var(--tb-brand)';
 
     if (loading) {
         return (
-            <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+            <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
                 <div className="d-flex justify-content-between align-items-center mb-4">
                     <div>
                         <div className="placeholder-glow mb-1"><span className="placeholder col-3 rounded" style={{ height: 24 }}></span></div>
                         <div className="placeholder-glow"><span className="placeholder col-5 rounded" style={{ height: 14 }}></span></div>
                     </div>
                 </div>
-                <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                <div className="card" style={{ borderRadius: 'var(--tb-r-md)' }}>
                     <div className="card-body p-4">
                         <div className="row g-3">
                             {[...Array(6)].map((_, i) => (
@@ -1781,11 +1784,11 @@ export default function MasterForm({
     }
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+        <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
             {/* Compact Header */}
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
+                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--tb-text)' }}>
                         <i className={`bi bi-${entityIcon} me-2`} style={{ color: entityColor }}></i>
                         {isEdit ? 'Edit' : 'New'} {entityTitle}
                         {/* Clickable BOE number → opens saved BOE copy PDF */}
@@ -1800,14 +1803,14 @@ export default function MasterForm({
                                     rel="noopener noreferrer"
                                     className="ms-2"
                                     title="View BOE copy PDF"
-                                    style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-color)', textDecoration: 'none' }}
+                                    style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--primary-color)', textDecoration: 'none' }}
                                 >
                                     <i className="bi bi-file-earmark-pdf me-1"></i>
                                     {formData.bill_of_entry_number}
-                                    <i className="bi bi-box-arrow-up-right ms-1" style={{ fontSize: '0.7rem' }}></i>
+                                    <i className="bi bi-box-arrow-up-right ms-1" style={{ fontSize: 11 }}></i>
                                 </a>
                             ) : (
-                                <span className="ms-2" style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                                <span className="ms-2" style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text-secondary)' }}>
                                     {formData.bill_of_entry_number}
                                 </span>
                             );
@@ -1815,39 +1818,40 @@ export default function MasterForm({
                     </h4>
                     <small className="text-muted">{isEdit ? 'Update existing record' : 'Create a new record'}</small>
                 </div>
-                <button
+                <Button
                     type="button"
-                    className="btn btn-sm btn-outline-secondary"
+                    variant="outline"
+                    size="sm"
                     onClick={() => {
                         if (isModal && onClose) { onClose(); return; }
                         navigateToList(navigate, entityName, { preserveFilters: true });
                     }}
                 >
-                    <i className="bi bi-arrow-left me-1"></i>Back to List
-                </button>
+                    <ArrowLeft className="size-4" />Back to List
+                </Button>
             </div>
 
-            <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+            <div className="card" style={{ borderRadius: 'var(--tb-r-md)' }}>
+                <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
                     <div className="d-flex align-items-center justify-content-between">
                         <h6 className="mb-0 fw-semibold">
                             <i className={`bi bi-${entityIcon} me-2`} style={{ color: entityColor }}></i>
                             {entityTitle} Details
                         </h6>
                         {entityName === 'trades' && formData.direction && (() => {
-                            const dirColors = { PURCHASE: '#4F46E5', SALE: '#10b981', COMMISSION_PURCHASE: '#f59e0b', COMMISSION_SALE: '#6366F1' };
+                            const dirColors = { PURCHASE: 'var(--tb-brand)', SALE: 'var(--tb-success)', COMMISSION_PURCHASE: 'var(--tb-warning)', COMMISSION_SALE: 'var(--tb-brand)' };
                             const dirLabels = { PURCHASE: 'Purchase', SALE: 'Sale', COMMISSION_PURCHASE: 'Commission Purchase', COMMISSION_SALE: 'Commission Sale' };
                             const dirIcons = { PURCHASE: 'cart-check', SALE: 'shop', COMMISSION_PURCHASE: 'percent', COMMISSION_SALE: 'percent' };
-                            const ltColors = { DFIA: '#0ea5e9', INCENTIVE: '#f59e0b' };
+                            const ltColors = { DFIA: 'var(--tb-info)', INCENTIVE: 'var(--tb-warning)' };
                             const ltLabels = { DFIA: 'DFIA License', INCENTIVE: 'Incentive License' };
                             return (
                                 <div className="d-flex gap-2">
-                                    <span className="badge d-flex align-items-center gap-1" style={{ background: `${dirColors[formData.direction]}20`, color: dirColors[formData.direction], fontWeight: '600', fontSize: '0.78rem', padding: '5px 10px', borderRadius: 6 }}>
+                                    <span className="badge d-flex align-items-center gap-1" style={{ background: `${dirColors[formData.direction]}20`, color: dirColors[formData.direction], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
                                         <i className={`bi bi-${dirIcons[formData.direction]}`}></i>
                                         {dirLabels[formData.direction]}
                                     </span>
                                     {formData.license_type && (
-                                        <span className="badge d-flex align-items-center gap-1" style={{ background: `${ltColors[formData.license_type]}20`, color: ltColors[formData.license_type], fontWeight: '600', fontSize: '0.78rem', padding: '5px 10px', borderRadius: 6 }}>
+                                        <span className="badge d-flex align-items-center gap-1" style={{ background: `${ltColors[formData.license_type]}20`, color: ltColors[formData.license_type], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
                                             <i className="bi bi-file-earmark-text"></i>
                                             {ltLabels[formData.license_type]}
                                         </span>
@@ -1863,7 +1867,7 @@ export default function MasterForm({
                             <i className="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
                             <div>
                                 <strong>Validation Error</strong>
-                                <div className="mt-1" style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}>{error}</div>
+                                <div className="mt-1" style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{error}</div>
                             </div>
                         </div>
                     )}
@@ -1893,22 +1897,22 @@ export default function MasterForm({
                                                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                             }}
                                         >
-                                            <i className="bi bi-file-earmark-pdf" style={{ fontSize: '1rem' }}></i>
+                                            <i className="bi bi-file-earmark-pdf" style={{ fontSize: 16 }}></i>
                                         </span>
                                         <div>
-                                            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>BOE Copy</div>
+                                            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>BOE Copy</div>
                                             {pdfUrl ? (
                                                 <a
                                                     href={pdfUrl}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    style={{ fontSize: '0.8rem', color: 'var(--primary-color)' }}
+                                                    style={{ fontSize: 12.5, color: 'var(--primary-color)' }}
                                                 >
-                                                    <i className="bi bi-box-arrow-up-right me-1" style={{ fontSize: '0.7rem' }}></i>
+                                                    <i className="bi bi-box-arrow-up-right me-1" style={{ fontSize: 11 }}></i>
                                                     View saved BOE PDF
                                                 </a>
                                             ) : (
-                                                <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>No PDF saved yet</span>
+                                                <span style={{ fontSize: 12.5, color: 'var(--text-tertiary)' }}>No PDF saved yet</span>
                                             )}
                                         </div>
                                     </div>
@@ -1958,7 +1962,7 @@ export default function MasterForm({
                                     <i className="bi bi-file-earmark-pdf" style={{ fontSize: '1.15rem' }}></i>
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                                         Import from BOE PDF
                                     </div>
                                     <div className="mt-1" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
@@ -2009,7 +2013,7 @@ export default function MasterForm({
                                         <span style={{ color: 'var(--text-tertiary)' }}> · </span>1 {boeParseSummary.currency || 'USD'} = ₹{boeParseSummary.exchange_rate}
                                     </div>
                                     {boeParseSummary.company_created && (
-                                        <div className="mt-1" style={{ color: '#065F46' }}>
+                                        <div className="mt-1" style={{ color: 'var(--tb-success-text)' }}>
                                             <i className="bi bi-check-circle-fill me-1"></i>
                                             New company created from buyer details ({boeParseSummary.buyer_name}).
                                         </div>
@@ -2034,11 +2038,11 @@ export default function MasterForm({
                                             <ul className="mb-0 mt-2" style={{ paddingLeft: '1.1rem', color: 'var(--text-secondary)' }}>
                                                 {boeParseSummary.licences.map((l, i) => {
                                                     const badge = l.match_status === 'matched'
-                                                        ? <span style={{ color: '#065F46', marginLeft: 6 }}>✓ prefill item</span>
+                                                        ? <span style={{ color: 'var(--tb-success-text)', marginLeft: 6 }}>✓ prefill item</span>
                                                         : l.match_status === 'license_only'
-                                                            ? <span style={{ color: '#92400E', marginLeft: 6 }}>⚠ license found, sl#{l.licence_slno} missing</span>
+                                                            ? <span style={{ color: 'var(--tb-warning-text)', marginLeft: 6 }}>⚠ license found, sl#{l.licence_slno} missing</span>
                                                             : l.match_status === 'license_missing'
-                                                                ? <span style={{ color: '#991B1B', marginLeft: 6 }}>✗ license not in DB</span>
+                                                                ? <span style={{ color: 'var(--tb-danger-text)', marginLeft: 6 }}>✗ license not in DB</span>
                                                                 : <span style={{ color: 'var(--text-tertiary)', marginLeft: 6 }}>— no data</span>;
                                                     return (
                                                         <li key={i} style={{ padding: '2px 0' }}>
@@ -2070,7 +2074,7 @@ export default function MasterForm({
                                     <i className="bi bi-file-earmark-pdf" style={{ fontSize: '1.15rem' }}></i>
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                                         Import from Licence Copy
                                     </div>
                                     <div className="mt-1" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
@@ -2164,19 +2168,19 @@ export default function MasterForm({
                                         <span style={{ color: 'var(--text-tertiary)' }}> · </span>file <code>{licenseParseSummary.file_number}</code>
                                     </div>
                                     {licenseParseSummary.source_kind === 'dgft_qr' && (
-                                        <div className="mt-1" style={{ color: '#065F46' }}>
+                                        <div className="mt-1" style={{ color: 'var(--tb-success-text)' }}>
                                             <i className="bi bi-qr-code-scan me-1"></i>
                                             Fetched fresh digital copy from DGFT via QR code on uploaded scan.
                                         </div>
                                     )}
                                     {licenseParseSummary.source_kind === 'ocr' && (
-                                        <div className="mt-1" style={{ color: '#92400E' }}>
+                                        <div className="mt-1" style={{ color: 'var(--tb-warning-text)' }}>
                                             <i className="bi bi-exclamation-triangle me-1"></i>
                                             Scanned PDF — header fields recovered via OCR. Items table is unreliable; please review/add manually.
                                         </div>
                                     )}
                                     {licenseParseSummary.company_created && (
-                                        <div className="mt-1" style={{ color: '#065F46' }}>
+                                        <div className="mt-1" style={{ color: 'var(--tb-success-text)' }}>
                                             <i className="bi bi-check-circle-fill me-1"></i>
                                             New company created ({licenseParseSummary.company_name}).
                                         </div>
@@ -2188,7 +2192,7 @@ export default function MasterForm({
                                         </div>
                                     )}
                                     {!licenseParseSummary.matched_port_id && licenseParseSummary.port_code && (
-                                        <div className="mt-1" style={{ color: '#92400E' }}>
+                                        <div className="mt-1" style={{ color: 'var(--tb-warning-text)' }}>
                                             <i className="bi bi-exclamation-triangle me-1"></i>
                                             Port code <code>{licenseParseSummary.port_code}</code> not found in master — please add and re-select.
                                         </div>
@@ -2203,8 +2207,8 @@ export default function MasterForm({
                                                     <li key={i} style={{ padding: '2px 0' }}>
                                                         sl#{it.serial_number} · HSN <code>{it.hsn}</code> · qty {it.quantity} {it.uom} · CIF ₹{it.cif_inr} / ${it.cif_fc}
                                                         {it.matched_hs_code_id
-                                                            ? <span style={{ color: '#065F46', marginLeft: 6 }}>✓ HSN matched</span>
-                                                            : <span style={{ color: '#92400E', marginLeft: 6 }}>⚠ HSN not in master</span>}
+                                                            ? <span style={{ color: 'var(--tb-success-text)', marginLeft: 6 }}>✓ HSN matched</span>
+                                                            : <span style={{ color: 'var(--tb-warning-text)', marginLeft: 6 }}>⚠ HSN not in master</span>}
                                                     </li>
                                                 ))}
                                             </ul>
@@ -2232,12 +2236,12 @@ export default function MasterForm({
                                 const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
                                 return (
                                     <div key={field} className={col}>
-                                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                                        <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>
                                             {label}{fieldMeta.required && <span className="text-danger ms-1">*</span>}
                                         </label>
                                         {renderField(field)}
                                         {hasError && (
-                                            <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem', marginTop: 4 }}>
+                                            <div className="invalid-feedback d-block" style={{ fontSize: 12, marginTop: 4 }}>
                                                 <i className="bi bi-exclamation-circle me-1"></i>
                                                 {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
                                             </div>
@@ -2262,8 +2266,8 @@ export default function MasterForm({
                                             const visibleFields = section.fields.filter(f => activeFields.includes(f));
                                             if (visibleFields.length === 0) return null;
                                             return (
-                                                <div key={section.title} style={{ background: 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: `3px solid ${section.color}` }}>
-                                                    <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: section.color, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <div key={section.title} style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: `3px solid ${section.color}` }}>
+                                                    <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: section.color, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                                                         <i className={`bi bi-${section.icon}`}></i> {section.title}
                                                     </div>
                                                     <div className="row g-3">
@@ -2273,8 +2277,8 @@ export default function MasterForm({
                                             );
                                         })}
                                         {remainingFields.length > 0 && (
-                                            <div style={{ background: 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #9ca3af' }}>
-                                                <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', marginBottom: '14px' }}>
+                                            <div style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid #9ca3af' }}>
+                                                <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-text-secondary)', marginBottom: '14px' }}>
                                                     <i className="bi bi-three-dots me-1"></i> Other Fields
                                                 </div>
                                                 <div className="row g-3">
@@ -2342,22 +2346,22 @@ export default function MasterForm({
                                                                 type="button"
                                                                 className={`nav-link d-flex align-items-center gap-2 ${isActive ? 'active' : ''}`}
                                                                 onClick={() => setActiveNestedTab(nestedKey)}
-                                                                style={{ fontSize: '0.83rem', fontWeight: isActive ? '600' : '500', padding: '8px 16px', color: isActive ? entityColor : '#6b7280', borderColor: isActive ? `${entityColor} ${entityColor} white` : 'transparent', borderRadius: '8px 8px 0 0' }}
+                                                                style={{ fontSize: '0.83rem', fontWeight: isActive ? '600' : '500', padding: '8px 16px', color: isActive ? entityColor : 'var(--tb-text-secondary)', borderColor: isActive ? `${entityColor} ${entityColor} white` : 'transparent', borderRadius: '8px 8px 0 0' }}
                                                             >
                                                                 <i className={`bi bi-${tabIcons[nestedKey] || 'table'}`}></i>
                                                                 {label}
                                                                 {count > 0 && (
-                                                                    <span className="badge rounded-pill" style={{ backgroundColor: isActive ? entityColor : '#e5e7eb', color: isActive ? 'white' : '#6b7280', fontSize: '0.7rem', padding: '2px 7px' }}>
+                                                                    <span className="badge rounded-pill" style={{ backgroundColor: isActive ? entityColor : 'var(--tb-border-soft)', color: isActive ? 'white' : 'var(--tb-text-secondary)', fontSize: 11, padding: '2px 7px' }}>
                                                                         {count}
                                                                     </span>
                                                                 )}
-                                                                {hasErrors && <i className="bi bi-exclamation-circle-fill text-danger" style={{ fontSize: '0.75rem' }}></i>}
+                                                                {hasErrors && <i className="bi bi-exclamation-circle-fill text-danger" style={{ fontSize: 12 }}></i>}
                                                             </button>
                                                         </li>
                                                     );
                                                 })}
                                             </ul>
-                                            <div style={{ border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '20px 16px', background: 'white' }}>
+                                            <div style={{ border: '1px solid var(--tb-border-soft)', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '20px 16px', background: 'var(--tb-card-bg)' }}>
                                                 {nestedEntries.map(([nestedKey, nestedDef]) => activeTab === nestedKey ? (
                                                     <NestedFieldArray
                                                         key={nestedKey}
@@ -2397,48 +2401,41 @@ export default function MasterForm({
                         )}
 
                         {/* Action Buttons */}
-                        <div className="d-flex align-items-center gap-2 mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
-                            <button
+                        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/70 pt-4">
+                            <Button
                                 type="submit"
-                                className="btn btn-primary"
+                                size="lg"
                                 disabled={saving}
-                                style={{
-                                    padding: '10px 28px', fontWeight: '600',
-                                    background: `linear-gradient(135deg, ${entityColor}, ${entityColor}cc)`,
-                                    border: 'none', borderRadius: '8px'
-                                }}
+                                style={{ background: `linear-gradient(135deg, ${entityColor}, ${entityColor}cc)`, border: "none", color: "#fff" }}
                             >
-                                {saving ? (
-                                    <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>
-                                ) : (
-                                    <><i className="bi bi-check-circle me-2"></i>{isEdit ? 'Update' : 'Create'}</>
-                                )}
-                            </button>
+                                {saving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                                {saving ? "Saving…" : isEdit ? "Update" : "Create"}
+                            </Button>
 
-                            {entityName === 'licenses' && isEdit && (
-                                <button
+                            {entityName === "licenses" && isEdit && (
+                                <Button
                                     type="button"
-                                    className="btn btn-outline-info"
+                                    variant="outline"
+                                    size="lg"
                                     onClick={() => { setSavedLicenseId(id); setShowBalanceModal(true); }}
                                     disabled={saving}
-                                    style={{ padding: '10px 20px', fontWeight: '500', borderRadius: '8px' }}
                                 >
-                                    <i className="bi bi-eye me-2"></i>View Balance
-                                </button>
+                                    <Eye className="size-4" />View Balance
+                                </Button>
                             )}
 
-                            <button
+                            <Button
                                 type="button"
-                                className="btn btn-outline-secondary"
+                                variant="outline"
+                                size="lg"
                                 onClick={() => {
                                     if (isModal && onClose) { onClose(); return; }
                                     navigateToList(navigate, entityName, { preserveFilters: true });
                                 }}
                                 disabled={saving}
-                                style={{ padding: '10px 20px', fontWeight: '500', borderRadius: '8px' }}
                             >
-                                <i className="bi bi-x-lg me-2"></i>Cancel
-                            </button>
+                                <X className="size-4" />Cancel
+                            </Button>
                         </div>
                     </form>
                 </div>

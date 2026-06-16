@@ -15,6 +15,8 @@ import { EntityCard, DetailTable } from "../../components/ui";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
 import {openPdfPreview} from "../../utils/pdfPreview";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
+import { Button } from "@/components/ui/button";
+import { FileSpreadsheet, FileText, RefreshCw, Plus, Loader2, X } from "lucide-react";
 
 /**
  * Generic Master List Page
@@ -677,7 +679,7 @@ export default function MasterList() {
         .join(" ");
 
     return (
-        <div style={{ minHeight: '100vh' }}>
+        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
             {/* Tabler-style page header */}
             <div className="page-header">
                 <div style={{ minWidth: 0 }}>
@@ -695,49 +697,25 @@ export default function MasterList() {
                     <h1>{entityTitle}</h1>
                 </div>
                 <div className="page-actions">
-                    <button
-                        type="button"
-                        className="btn btn-outline-secondary btn-sm"
-                        onClick={() => handleExport('xlsx')}
-                        title="Export to Excel"
-                    >
-                        <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
+                    <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel">
+                        <FileSpreadsheet className="size-3.5" />
                         Excel
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-outline-secondary btn-sm"
-                        onClick={() => handleExport('pdf')}
-                        title="Export to PDF"
-                        disabled={pdfLoading}
-                    >
-                        {pdfLoading ? (
-                            <>
-                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style={{ width: 12, height: 12 }} />
-                                Generating…
-                            </>
-                        ) : (
-                            <>
-                                <i className="bi bi-file-earmark-pdf me-1" aria-hidden="true" />
-                                PDF
-                            </>
-                        )}
-                    </button>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} title="Export to PDF" disabled={pdfLoading}>
+                        {pdfLoading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                        {pdfLoading ? "Generating…" : "PDF"}
+                    </Button>
                     {entityName === 'bill-of-entries' && (
-                        <button
-                            type="button"
-                            className="btn btn-outline-secondary btn-sm"
-                            onClick={handlePortExcelExport}
-                            title="Download port-wise BOE Excel"
-                        >
-                            <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
+                        <Button variant="outline" size="sm" onClick={handlePortExcelExport} title="Download port-wise BOE Excel">
+                            <FileSpreadsheet className="size-3.5" />
                             Port Excel
-                        </button>
+                        </Button>
                     )}
                     {entityName === 'bill-of-entries' && (
-                        <button
-                            type="button"
-                            className="btn btn-outline-secondary btn-sm"
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            title="Update all empty product names in entire database"
                             onClick={async () => {
                                 const confirmed = await confirmDangerousAction(
                                     'Bulk Update Product Names',
@@ -760,43 +738,41 @@ export default function MasterList() {
                                     toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
                                 }
                             }}
-                            title="Update all empty product names in entire database"
                         >
-                            <i className="bi bi-arrow-repeat me-1"></i>
+                            <RefreshCw className="size-3.5" />
                             Fetch All Products
-                        </button>
+                        </Button>
                     )}
                     {canWrite && (
-                        <Link
-                            to={entityName === 'licenses' ? '/licenses/create' :
-                                entityName === 'allotments' ? '/allotments/create' :
-                                entityName === 'trades' ? '/trades/create' :
-                                `/masters/${entityName}/create`}
-                            className="btn btn-primary btn-sm"
-                            onClick={() => {
-                                saveFilterState(entityName, {
-                                    filters: filterParams,
-                                    pagination: { currentPage, pageSize },
-                                    search: ''
-                                });
-                            }}
-                        >
-                            <i className="bi bi-plus-lg me-1"></i>
-                            Add New
-                        </Link>
+                        <Button asChild size="sm">
+                            <Link
+                                to={entityName === 'licenses' ? '/licenses/create' :
+                                    entityName === 'allotments' ? '/allotments/create' :
+                                    entityName === 'trades' ? '/trades/create' :
+                                    `/masters/${entityName}/create`}
+                                onClick={() => {
+                                    saveFilterState(entityName, {
+                                        filters: filterParams,
+                                        pagination: { currentPage, pageSize },
+                                        search: ''
+                                    });
+                                }}
+                            >
+                                <Plus className="size-3.5" />
+                                Add New
+                            </Link>
+                        </Button>
                     )}
                 </div>
             </div>
 
             {/* Error Display */}
             {error && (
-                <div className="alert alert-danger alert-dismissible fade show">
-                    {error}
-                    <button
-                        type="button"
-                        className="btn-close"
-                        onClick={() => setError("")}
-                    ></button>
+                <div className="mb-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive">
+                    <span className="flex-1">{error}</span>
+                    <button type="button" aria-label="Dismiss" onClick={() => setError("")} className="cursor-pointer opacity-70 hover:opacity-100">
+                        <X className="size-4" />
+                    </button>
                 </div>
             )}
 
@@ -846,10 +822,10 @@ export default function MasterList() {
                                                         placeholder="Invoice number"
                                                         style={{ fontSize: '0.82rem', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--success-color)', width: 160, outline: 'none' }}
                                                     />
-                                                    <button type="button" onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: 6, background: 'var(--success-color)', color: 'white', border: 'none', cursor: 'pointer' }}>
+                                                    <button type="button" onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, background: 'var(--success-color)', color: '#fff', border: 'none', cursor: 'pointer' }}>
                                                         {invoiceSaving ? '…' : 'Save'}
                                                     </button>
-                                                    <button type="button" onClick={cancelInvoiceEdit} style={{ fontSize: '0.75rem', padding: '3px 7px', borderRadius: 6, background: 'var(--surface-sunken)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', cursor: 'pointer' }}>✕</button>
+                                                    <button type="button" onClick={cancelInvoiceEdit} style={{ fontSize: 12, padding: '3px 7px', borderRadius: 6, background: 'var(--surface-sunken)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', cursor: 'pointer' }}>✕</button>
                                                 </span>
                                             )
                                             : (
@@ -860,8 +836,8 @@ export default function MasterList() {
                                                     style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.82rem', color: 'var(--success-text)', background: 'var(--success-bg)', border: '1px solid var(--success-border)', padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}
                                                 >
                                                     {item.invoice_no
-                                                        ? (<><i className="bi bi-receipt" style={{ fontSize: '0.78rem' }}></i> {item.invoice_no}</>)
-                                                        : (<><i className="bi bi-plus-circle" style={{ fontSize: '0.78rem' }}></i> Add Invoice No</>)
+                                                        ? (<><i className="bi bi-receipt" style={{ fontSize: 12 }}></i> {item.invoice_no}</>)
+                                                        : (<><i className="bi bi-plus-circle" style={{ fontSize: 12 }}></i> Add Invoice No</>)
                                                     }
                                                     <i className="bi bi-pencil-fill" style={{ fontSize: '0.6rem', opacity: 0.6 }}></i>
                                                 </button>
@@ -933,7 +909,7 @@ export default function MasterList() {
                                                     columns={[
                                                         { key: 'is_dispute', label: '', nowrap: true, width: 28,
                                                             render: (v, row) => row.is_dispute
-                                                                ? <span title="Not found in latest ledger upload — dispute" style={{ color: 'var(--tb-danger)', fontSize: '0.9rem' }}><i className="bi bi-exclamation-triangle-fill" /></span>
+                                                                ? <span title="Not found in latest ledger upload — dispute" style={{ color: 'var(--tb-danger)', fontSize: 14.5 }}><i className="bi bi-exclamation-triangle-fill" /></span>
                                                                 : null },
                                                         { key: 'license_number',   label: 'License',   bold: true, nowrap: true,
                                                             render: (v, row) => v
@@ -957,14 +933,14 @@ export default function MasterList() {
                                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
                                                 <div style={{ flex: 1, minWidth: 200 }}>
                                                     <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Product</div>
-                                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                                                    <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>
                                                         {item.product_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No product name</span>}
                                                     </div>
                                                 </div>
                                                 {item.licenses && (
                                                     <div style={{ flex: 1, minWidth: 140 }}>
                                                         <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
-                                                        <div style={{ fontSize: '0.85rem', color: 'var(--primary-color)', fontWeight: 500 }}>{item.licenses}</div>
+                                                        <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.licenses}</div>
                                                     </div>
                                                 )}
                                                 {invoiceChip && (
@@ -1080,14 +1056,14 @@ export default function MasterList() {
                                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
                                                     <div style={{ flex: 1, minWidth: 200 }}>
                                                         <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Item</div>
-                                                        <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                                                        <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>
                                                             {item.item_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No item name</span>}
                                                         </div>
                                                     </div>
                                                     {item.dfia_list && (
                                                         <div style={{ flex: 1, minWidth: 140 }}>
                                                             <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
-                                                            <div style={{ fontSize: '0.85rem', color: 'var(--primary-color)', fontWeight: 500 }}>{item.dfia_list}</div>
+                                                            <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.dfia_list}</div>
                                                         </div>
                                                     )}
                                                 </div>
@@ -1117,57 +1093,57 @@ export default function MasterList() {
                                     const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
                                     const parseIndianDate = (s) => { if (!s) return null; const p = s.split('-'); return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null; };
                                     const isExpired = item.license_expiry_date && parseIndianDate(item.license_expiry_date) < new Date();
-                                    const statusColor = item.purchase_status_code === 'E1' ? { bg: '#dbeafe', text: '#1d4ed8' }
-                                        : item.purchase_status_code === 'E5' ? { bg: '#dcfce7', text: '#166534' }
-                                        : { bg: '#f1f5f9', text: '#475569' };
+                                    const statusColor = item.purchase_status_code === 'E1' ? { bg: 'var(--tb-brand-100)', text: 'var(--tb-brand-hover)' }
+                                        : item.purchase_status_code === 'E5' ? { bg: 'var(--tb-success-soft)', text: 'var(--tb-success-text)' }
+                                        : { bg: 'var(--tb-gray-100)', text: 'var(--tb-text-secondary)' };
                                     return (
                                         <div key={item.id} style={{
                                             display: 'block',
-                                            background: '#ffffff',
-                                            border: `1px solid ${isExpired ? '#fca5a5' : '#e2e8f0'}`,
-                                            borderLeft: `4px solid ${isExpired ? '#ef4444' : '#4f46e5'}`,
-                                            borderRadius: '10px',
+                                            background: 'var(--tb-card-bg)',
+                                            border: `1px solid ${isExpired ? 'var(--tb-danger-border)' : 'var(--tb-border-soft)'}`,
+                                            borderLeft: `4px solid ${isExpired ? 'var(--tb-danger)' : 'var(--tb-brand)'}`,
+                                            borderRadius: 'var(--tb-r-md)',
                                             marginBottom: '10px',
                                             overflow: 'hidden',
                                             boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                                         }}>
                                             {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: '700', fontSize: 16, color: 'var(--tb-brand-active)', marginRight: '4px' }}>
                                                     {item.license_number || '-'}
                                                 </span>
                                                 {item.license_date && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
                                                         <i className="bi bi-calendar3 me-1"></i>{item.license_date}
                                                     </span>
                                                 )}
                                                 {item.license_expiry_date && (
-                                                    <span style={{ fontSize: '0.8rem', color: isExpired ? '#b91c1c' : '#64748b', background: isExpired ? '#fff1f2' : '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    <span style={{ fontSize: 12.5, color: isExpired ? 'var(--tb-danger-text)' : 'var(--tb-text-secondary)', background: isExpired ? 'var(--tb-danger-soft)' : 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
                                                         <i className="bi bi-calendar-x me-1"></i>Exp: {item.license_expiry_date}
                                                     </span>
                                                 )}
                                                 {item.ledger_date && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#0f766e', background: '#ccfbf1', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
                                                         <i className="bi bi-journal-check me-1"></i>Ledger: {item.ledger_date}
                                                     </span>
                                                 )}
                                                 {item.port_name && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
                                                         <i className="bi bi-geo-alt me-1"></i>{item.port_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_name && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--accent-color)', background: 'var(--tb-sunken)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
                                                         <i className="bi bi-building me-1"></i>{item.exporter_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_iec && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
                                                         <i className="bi bi-fingerprint me-1"></i>IEC: {item.exporter_iec}
                                                     </span>
                                                 )}
                                                 {item.purchase_status_label && (
-                                                    <span style={{ fontSize: '0.75rem', color: statusColor.text, background: statusColor.bg, padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                                                    <span style={{ fontSize: 12, color: statusColor.text, background: statusColor.bg, padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
                                                         {item.purchase_status_label}
                                                     </span>
                                                 )}
@@ -1184,57 +1160,57 @@ export default function MasterList() {
                                                                 toast.error(err.response?.data ? String(err.response.data).slice(0, 200) : 'Failed to load documents');
                                                             }
                                                         }
-                                                    }} style={{ fontSize: '0.72rem', color: '#059669', background: '#d1fae5', padding: '2px 6px', borderRadius: '4px', fontWeight: '500', border: 'none', cursor: 'pointer' }}>
+                                                    }} style={{ fontSize: 11, color: 'var(--tb-success)', background: 'var(--tb-success-soft)', padding: '2px 6px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500', border: 'none', cursor: 'pointer' }}>
                                                         Copy
                                                     </button>
                                                 )}
                                                 {item.has_condition_sheet && (
-                                                    <span title="Condition sheet parsed from license copy" style={{ fontSize: '0.72rem', color: '#4338ca', background: '#e0e7ff', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                                                    <span title="Condition sheet parsed from license copy" style={{ fontSize: 11, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
                                                         <i className="bi bi-file-earmark-text me-1"></i>Cond. Sheet
                                                     </span>
                                                 )}
                                             </div>
 
                                             {/* Row 2: Norm class + Transfer */}
-                                            <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+                                            <div style={{ padding: '10px 14px', background: 'var(--tb-card-bg)', borderBottom: '1px solid #e2e8f0' }}>
                                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
                                                     {item.get_norm_class && (
                                                         <div style={{ minWidth: '120px' }}>
-                                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Norm Class</div>
-                                                            <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.get_norm_class}</div>
+                                                            <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Norm Class</div>
+                                                            <div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '500' }}>{item.get_norm_class}</div>
                                                         </div>
                                                     )}
                                                     {item.latest_transfer && (
                                                         <div style={{ flex: 1, minWidth: '160px' }}>
-                                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Latest Transfer</div>
-                                                            <div style={{ fontSize: '0.82rem', color: '#334155' }}>{item.latest_transfer}</div>
+                                                            <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Latest Transfer</div>
+                                                            <div style={{ fontSize: '0.82rem', color: 'var(--tb-gray-700)' }}>{item.latest_transfer}</div>
                                                         </div>
                                                     )}
                                                     {!item.get_norm_class && !item.latest_transfer && (
-                                                        <div style={{ fontSize: '0.82rem', color: '#94a3b8', fontStyle: 'italic' }}>No additional details</div>
+                                                        <div style={{ fontSize: '0.82rem', color: 'var(--tb-text-tertiary)', fontStyle: 'italic' }}>No additional details</div>
                                                     )}
                                                 </div>
                                             </div>
 
                                             {/* Row 3: Stats + Actions */}
-                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: 'var(--tb-sunken)', gap: '8px', flexWrap: 'wrap' }}>
                                                 <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
                                                     <div>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Balance CIF</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.get_balance_cif)}</div>
+                                                        <div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Balance CIF</div>
+                                                        <div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '700' }}>{fmtInr(item.get_balance_cif)}</div>
                                                     </div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-pencil"></i>
                                                     </button>}
-                                                    <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-eye"></i>
                                                     </button>
                                                     <button
                                                         onClick={() => { setOwnershipLicense({ id: item.id, number: item.license_number }); setShowOwnershipModal(true); }}
                                                         title="View ownership & transfers"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#4338ca', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-50)', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-diagram-3"></i>
                                                     </button>
                                                     {canWrite && <button
@@ -1253,7 +1229,7 @@ export default function MasterList() {
                                                             }
                                                         }}
                                                         title="Fetch ownership from DGFT"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#6d28d9', background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: '5px', padding: '4px 9px', cursor: fetchingOwnershipIds.has(item.id) ? 'wait' : 'pointer', opacity: fetchingOwnershipIds.has(item.id) ? 0.6 : 1 }}>
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--accent-color)', background: 'var(--tb-sunken)', border: '1px solid #c4b5fd', borderRadius: '5px', padding: '4px 9px', cursor: fetchingOwnershipIds.has(item.id) ? 'wait' : 'pointer', opacity: fetchingOwnershipIds.has(item.id) ? 0.6 : 1 }}>
                                                         <i className={fetchingOwnershipIds.has(item.id) ? 'bi bi-arrow-repeat spinner-border spinner-border-sm' : 'bi bi-cloud-download'}></i>
                                                     </button>}
                                                     <button onClick={async () => {
@@ -1261,7 +1237,7 @@ export default function MasterList() {
                                                             const r = await api.get(`licenses/${item.id}/balance-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
                                                             openPdfPreview(r.data, `${item.license_number || item.id}-balance.pdf`);
                                                         } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate PDF'); }
-                                                    }} title="Download PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    }} title="Download PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', border: '1px solid var(--tb-warning-border)', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-file-pdf"></i>
                                                     </button>
                                                     <button onClick={async () => {
@@ -1272,10 +1248,10 @@ export default function MasterList() {
                                                             const a = document.createElement('a'); a.href = url; a.download = `${item.license_number || item.id}-balance.xlsx`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
                                                             setTimeout(() => window.URL.revokeObjectURL(url), 10000);
                                                         } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate Excel'); }
-                                                    }} title="Download Excel" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    }} title="Download Excel" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-file-earmark-excel"></i>
                                                     </button>
-                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-trash"></i>
                                                     </button>}
                                                 </div>
@@ -1398,24 +1374,24 @@ export default function MasterList() {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 220 }}>
                                                 <div>
                                                     <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>From</div>
-                                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 500 }}>{item.from_company_label || '—'}</div>
+                                                    <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>{item.from_company_label || '—'}</div>
                                                 </div>
-                                                <i className="bi bi-arrow-right" style={{ color: 'var(--text-tertiary)', fontSize: '1rem' }}></i>
+                                                <i className="bi bi-arrow-right" style={{ color: 'var(--text-tertiary)', fontSize: 16 }}></i>
                                                 <div>
                                                     <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>To</div>
-                                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 500 }}>{item.to_company_label || '—'}</div>
+                                                    <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>{item.to_company_label || '—'}</div>
                                                 </div>
                                             </div>
                                             {item.boe_label && (
                                                 <div style={{ minWidth: 100 }}>
                                                     <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>BOE</div>
-                                                    <div style={{ fontSize: '0.85rem', color: 'var(--primary-color)', fontWeight: 500 }}>{item.boe_label}</div>
+                                                    <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.boe_label}</div>
                                                 </div>
                                             )}
                                             {item.incentive_license && (
                                                 <div style={{ minWidth: 100 }}>
                                                     <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Incentive Lic</div>
-                                                    <div style={{ fontSize: '0.85rem', color: 'var(--success-text)', fontWeight: 500 }}>{item.incentive_license}</div>
+                                                    <div style={{ fontSize: 13.5, color: 'var(--success-text)', fontWeight: 500 }}>{item.incentive_license}</div>
                                                 </div>
                                             )}
                                         </div>
@@ -1454,25 +1430,25 @@ export default function MasterList() {
                                         const isExpanded = expandedPairs.has(pairKey);
                                         const companies = `${sale.from_company_label || '-'} ↔ ${sale.to_company_label || '-'}`;
                                         return (
-                                            <div key={pairKey} style={{ border: '1px solid #a5b4fc', borderLeft: '4px solid #6366f1', borderRadius: '10px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                                            <div key={pairKey} style={{ border: '1px solid #a5b4fc', borderLeft: '4px solid #6366f1', borderRadius: 'var(--tb-r-md)', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                                                 <div
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#eef2ff', cursor: 'pointer', flexWrap: 'wrap' }}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-brand-50)', cursor: 'pointer', flexWrap: 'wrap' }}
                                                     onClick={() => togglePair(pairKey)}
                                                 >
-                                                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#166534', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px' }}>Sale</span>
-                                                    <i className="bi bi-link-45deg" style={{ color: '#6366f1', fontSize: '1rem' }}></i>
-                                                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#1d4ed8', background: '#dbeafe', padding: '2px 8px', borderRadius: '4px' }}>Purchase</span>
-                                                    <span style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '600', flex: 1 }}>{companies}</span>
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                                    <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Sale</span>
+                                                    <i className="bi bi-link-45deg" style={{ color: 'var(--tb-brand)', fontSize: 16 }}></i>
+                                                    <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Purchase</span>
+                                                    <span style={{ fontSize: '0.82rem', color: 'var(--tb-brand)', fontWeight: '600', flex: 1 }}>{companies}</span>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
                                                         {sale.invoice_date || ''}
                                                     </span>
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
                                                         Sale: {fmtInr(sale.total_amount)} · Purchase: {fmtInr(purchase.total_amount)}
                                                     </span>
-                                                    <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'}`} style={{ color: '#6366f1' }}></i>
+                                                    <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'}`} style={{ color: 'var(--tb-brand)' }}></i>
                                                 </div>
                                                 {isExpanded && (
-                                                    <div style={{ padding: '8px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    <div style={{ padding: '8px', background: 'var(--tb-sunken)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                         {renderTradeCard(sale)}
                                                         {renderTradeCard(purchase)}
                                                     </div>
@@ -1497,62 +1473,62 @@ export default function MasterList() {
                                     const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
                                     const parseIndianDate = (s) => { if (!s) return null; const p = s.split('-'); return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null; };
                                     const isExpired = item.license_expiry_date && parseIndianDate(item.license_expiry_date) < new Date();
-                                    const soldStyle = item.sold_status === 'YES' ? { border: '#fca5a5', left: '#ef4444', badge: '#fff1f2', badgeText: '#b91c1c', label: 'Sold' }
-                                        : item.sold_status === 'PARTIAL' ? { border: '#fde68a', left: '#f59e0b', badge: '#fef3c7', badgeText: '#92400e', label: 'Partial' }
-                                        : { border: '#86efac', left: '#22c55e', badge: '#dcfce7', badgeText: '#166534', label: 'Available' };
+                                    const soldStyle = item.sold_status === 'YES' ? { border: 'var(--tb-danger-border)', left: 'var(--tb-danger)', badge: 'var(--tb-danger-soft)', badgeText: 'var(--tb-danger-text)', label: 'Sold' }
+                                        : item.sold_status === 'PARTIAL' ? { border: 'var(--tb-warning-border)', left: 'var(--tb-warning)', badge: 'var(--tb-warning-soft)', badgeText: 'var(--tb-warning-text)', label: 'Partial' }
+                                        : { border: 'var(--tb-success-border)', left: 'var(--tb-success)', badge: 'var(--tb-success-soft)', badgeText: 'var(--tb-success-text)', label: 'Available' };
                                     return (
-                                        <div key={item.id} style={{ display: 'block', background: '#ffffff', border: `1px solid ${soldStyle.border}`, borderLeft: `4px solid ${soldStyle.left}`, borderRadius: '10px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                                        <div key={item.id} style={{ display: 'block', background: 'var(--tb-card-bg)', border: `1px solid ${soldStyle.border}`, borderLeft: `4px solid ${soldStyle.left}`, borderRadius: 'var(--tb-r-md)', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                                             {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>{item.license_number || '-'}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: '700', fontSize: 16, color: 'var(--tb-brand-active)', marginRight: '4px' }}>{item.license_number || '-'}</span>
                                                 {item.license_type && (
-                                                    <span style={{ fontSize: '0.78rem', color: '#475569', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>{item.license_type}</span>
+                                                    <span style={{ fontSize: 12, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>{item.license_type}</span>
                                                 )}
                                                 {item.license_date && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
                                                         <i className="bi bi-calendar3 me-1"></i>{item.license_date}
                                                     </span>
                                                 )}
                                                 {item.license_expiry_date && (
-                                                    <span style={{ fontSize: '0.8rem', color: isExpired ? '#b91c1c' : '#64748b', background: isExpired ? '#fff1f2' : '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    <span style={{ fontSize: 12.5, color: isExpired ? 'var(--tb-danger-text)' : 'var(--tb-text-secondary)', background: isExpired ? 'var(--tb-danger-soft)' : 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
                                                         <i className="bi bi-calendar-x me-1"></i>Exp: {item.license_expiry_date}
                                                     </span>
                                                 )}
                                                 {item.port_name && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
                                                         <i className="bi bi-geo-alt me-1"></i>{item.port_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_name && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--accent-color)', background: 'var(--tb-sunken)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
                                                         <i className="bi bi-building me-1"></i>{item.exporter_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_iec && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
                                                         <i className="bi bi-fingerprint me-1"></i>IEC: {item.exporter_iec}
                                                     </span>
                                                 )}
-                                                <span style={{ fontSize: '0.75rem', color: soldStyle.badgeText, background: soldStyle.badge, padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                                                <span style={{ fontSize: 12, color: soldStyle.badgeText, background: soldStyle.badge, padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
                                                     {soldStyle.label}
                                                 </span>
                                                 {!item.is_active && (
-                                                    <span style={{ fontSize: '0.72rem', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>Inactive</span>
+                                                    <span style={{ fontSize: 11, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 6px', borderRadius: 'var(--tb-r-sm)' }}>Inactive</span>
                                                 )}
                                             </div>
 
                                             {/* Row 3: Stats + Actions */}
-                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: 'var(--tb-sunken)', gap: '8px', flexWrap: 'wrap' }}>
                                                 <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>License Value</div><div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.license_value)}</div></div>
-                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Sold Value</div><div style={{ fontSize: '0.875rem', color: '#b91c1c', fontWeight: '600' }}>{fmtInr(item.sold_value)}</div></div>
-                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Balance</div><div style={{ fontSize: '0.875rem', color: item.balance_value > 0 ? '#059669' : '#94a3b8', fontWeight: '600' }}>{fmtInr(item.balance_value)}</div></div>
+                                                    <div><div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>License Value</div><div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '700' }}>{fmtInr(item.license_value)}</div></div>
+                                                    <div><div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Sold Value</div><div style={{ fontSize: 14, color: 'var(--tb-danger-text)', fontWeight: '600' }}>{fmtInr(item.sold_value)}</div></div>
+                                                    <div><div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Balance</div><div style={{ fontSize: 14, color: item.balance_value > 0 ? 'var(--tb-success)' : 'var(--tb-text-tertiary)', fontWeight: '600' }}>{fmtInr(item.balance_value)}</div></div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/incentive-licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/incentive-licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-pencil"></i>
                                                     </button>}
-                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-trash"></i>
                                                     </button>}
                                                 </div>
@@ -1922,10 +1898,10 @@ export default function MasterList() {
                                         <div key={item.id} style={{
                                             display: 'flex',
                                             alignItems: 'center',
-                                            background: '#ffffff',
+                                            background: 'var(--tb-card-bg)',
                                             border: '1px solid #e2e8f0',
                                             borderLeft: '4px solid #4f46e5',
-                                            borderRadius: '8px',
+                                            borderRadius: 'var(--tb-r-md)',
                                             marginBottom: '6px',
                                             padding: '10px 14px',
                                             gap: '12px',
@@ -1937,16 +1913,16 @@ export default function MasterList() {
                                                     const v = getVal(col);
                                                     return (
                                                         <div key={col} style={{ flex: '1 1 0', minWidth: 0 }}>
-                                                            <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            <div style={{ fontSize: 10, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                 {fmtLabel(col)}
                                                             </div>
                                                             <div style={{
-                                                                fontSize: '0.875rem',
-                                                                color: idx === 0 ? '#1e1b4b' : '#334155',
+                                                                fontSize: 14,
+                                                                color: idx === 0 ? 'var(--tb-brand-active)' : 'var(--tb-gray-700)',
                                                                 fontWeight: idx === 0 ? '600' : '400',
                                                                 wordBreak: 'break-word',
                                                             }}>
-                                                                {v ?? <span style={{ color: '#cbd5e1' }}>—</span>}
+                                                                {v ?? <span style={{ color: 'var(--tb-border-strong)' }}>—</span>}
                                                             </div>
                                                         </div>
                                                     );
@@ -1958,14 +1934,14 @@ export default function MasterList() {
                                                 <button
                                                     onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/masters/${entityName}/${item.id}/edit`); }}
                                                     title="Edit"
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 10px', cursor: 'pointer' }}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 10px', cursor: 'pointer' }}
                                                 >
                                                     <i className="bi bi-pencil"></i> Edit
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(item)}
                                                     title="Delete"
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
                                                 >
                                                     <i className="bi bi-trash"></i>
                                                 </button>
@@ -2027,13 +2003,13 @@ export default function MasterList() {
             {/* Link Trade Modal */}
             {linkModalTrade && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1060, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeLinkModal}>
-                    <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', width: '480px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '24px', width: '480px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                            <h6 style={{ margin: 0, fontWeight: '700', color: '#1e1b4b' }}>
-                                <i className="bi bi-link-45deg me-2" style={{ color: '#6366f1' }}></i>
-                                Link Trade: <span style={{ color: '#6366f1' }}>{linkModalTrade.invoice_number || 'No Invoice'}</span>
+                            <h6 style={{ margin: 0, fontWeight: '700', color: 'var(--tb-brand-active)' }}>
+                                <i className="bi bi-link-45deg me-2" style={{ color: 'var(--tb-brand)' }}></i>
+                                Link Trade: <span style={{ color: 'var(--tb-brand)' }}>{linkModalTrade.invoice_number || 'No Invoice'}</span>
                             </h6>
-                            <button onClick={closeLinkModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#94a3b8' }}>
+                            <button onClick={closeLinkModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--tb-text-tertiary)' }}>
                                 <i className="bi bi-x-lg"></i>
                             </button>
                         </div>
@@ -2046,30 +2022,30 @@ export default function MasterList() {
                             onChange={e => setLinkSearch(e.target.value)}
                             style={{ marginBottom: '12px' }}
                         />
-                        {linkSearching && <div style={{ textAlign: 'center', color: '#94a3b8', padding: '12px' }}><div className="spinner-border spinner-border-sm text-primary me-2"></div>Searching...</div>}
+                        {linkSearching && <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px' }}><div className="spinner-border spinner-border-sm text-primary me-2"></div>Searching...</div>}
                         {!linkSearching && linkSearch && linkResults.length === 0 && (
-                            <div style={{ textAlign: 'center', color: '#94a3b8', padding: '12px', fontSize: '0.875rem' }}>No unlinked trades found for "{linkSearch}"</div>
+                            <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px', fontSize: 14 }}>No unlinked trades found for "{linkSearch}"</div>
                         )}
                         {linkResults.map(t => (
-                            <div key={t.id} onClick={() => confirmLink(t)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '8px', cursor: 'pointer', transition: 'background 0.15s' }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#f0f9ff'}
+                            <div key={t.id} onClick={() => confirmLink(t)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 'var(--tb-r-md)', marginBottom: '8px', cursor: 'pointer', transition: 'background 0.15s' }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--tb-info-soft)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                 <div>
-                                    <div style={{ fontWeight: '600', fontSize: '0.9rem', color: '#1e293b' }}>{t.invoice_number || 'No Invoice'}</div>
-                                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{t.from_company_label} → {t.to_company_label}</div>
+                                    <div style={{ fontWeight: '600', fontSize: 14.5, color: 'var(--tb-text)' }}>{t.invoice_number || 'No Invoice'}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--tb-text-secondary)' }}>{t.from_company_label} → {t.to_company_label}</div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: '700', color: t.direction.includes('SALE') ? '#166534' : '#1d4ed8', background: t.direction.includes('SALE') ? '#dcfce7' : '#dbeafe', padding: '2px 8px', borderRadius: '4px' }}>
+                                    <span style={{ fontSize: 12, fontWeight: '700', color: t.direction.includes('SALE') ? 'var(--tb-success-text)' : 'var(--tb-brand-hover)', background: t.direction.includes('SALE') ? 'var(--tb-success-soft)' : 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
                                         {t.direction_label || t.direction}
                                     </span>
-                                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px' }}>
+                                    <div style={{ fontSize: 12, color: 'var(--tb-text-secondary)', marginTop: '4px' }}>
                                         ₹{Number(t.total_amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                     </div>
                                 </div>
                             </div>
                         ))}
                         {!linkSearch && (
-                            <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem', padding: '8px' }}>Type an invoice number to search</div>
+                            <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', fontSize: 14, padding: '8px' }}>Type an invoice number to search</div>
                         )}
                     </div>
                 </div>
@@ -2078,38 +2054,38 @@ export default function MasterList() {
             {/* BOE Merge Modal */}
             {showMergeModal && mergeBoeTarget && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1060, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeMergeModal}>
-                    <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', width: '560px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '24px', width: '560px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                            <h6 style={{ margin: 0, fontWeight: '700', color: '#1e1b4b' }}>
-                                <i className="bi bi-intersect me-2" style={{ color: '#7c3aed' }}></i>
-                                Merge BOE: <span style={{ color: '#7c3aed' }}>{mergeBoeTarget.bill_of_entry_number}</span>
+                            <h6 style={{ margin: 0, fontWeight: '700', color: 'var(--tb-brand-active)' }}>
+                                <i className="bi bi-intersect me-2" style={{ color: 'var(--accent-color)' }}></i>
+                                Merge BOE: <span style={{ color: 'var(--accent-color)' }}>{mergeBoeTarget.bill_of_entry_number}</span>
                             </h6>
-                            <button onClick={closeMergeModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#94a3b8' }}>
+                            <button onClick={closeMergeModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--tb-text-tertiary)' }}>
                                 <i className="bi bi-x-lg"></i>
                             </button>
                         </div>
 
                         {/* Target BOE info */}
-                        <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>
-                            <div style={{ fontWeight: '600', color: '#166534', marginBottom: '4px' }}>Target BOE (will be kept &amp; updated)</div>
+                        <div style={{ background: 'var(--tb-success-soft)', border: '1px solid #86efac', borderRadius: 'var(--tb-r-md)', padding: '10px 14px', marginBottom: '16px', fontSize: 13.5 }}>
+                            <div style={{ fontWeight: '600', color: 'var(--tb-success-text)', marginBottom: '4px' }}>Target BOE (will be kept &amp; updated)</div>
                             <div><i className="bi bi-geo-alt me-1"></i>{mergeBoeTarget.port_name}</div>
-                            <div style={{ color: '#475569', fontSize: '0.78rem' }}>
+                            <div style={{ color: 'var(--tb-text-secondary)', fontSize: 12 }}>
                                 {mergeBoeTarget.item_details?.length || 0} item(s) · {mergeBoeTarget.licenses || 'No licenses'}
                             </div>
                         </div>
 
-                        <div style={{ fontWeight: '600', fontSize: '0.78rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                        <div style={{ fontWeight: '600', fontSize: 12, color: 'var(--tb-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
                             Select source BOE to merge from (port replaces target, items moved, source deleted):
                         </div>
 
                         {mergeCandidatesLoading && (
-                            <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
+                            <div style={{ textAlign: 'center', padding: '20px', color: 'var(--tb-text-tertiary)' }}>
                                 <div className="spinner-border spinner-border-sm text-primary me-2"></div>Loading candidates...
                             </div>
                         )}
 
                         {!mergeCandidatesLoading && mergeCandidates.length === 0 && (
-                            <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '0.875rem' }}>
+                            <div style={{ textAlign: 'center', padding: '20px', color: 'var(--tb-text-tertiary)', fontSize: 14 }}>
                                 No other BOEs found with number {mergeBoeTarget.bill_of_entry_number}
                             </div>
                         )}
@@ -2120,35 +2096,35 @@ export default function MasterList() {
                                 onClick={() => setMergeBoeSource(prev => prev?.id === candidate.id ? null : candidate)}
                                 style={{
                                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    padding: '10px 14px', border: `2px solid ${mergeBoeSource?.id === candidate.id ? '#7c3aed' : '#e2e8f0'}`,
-                                    borderRadius: '8px', marginBottom: '8px', cursor: 'pointer',
-                                    background: mergeBoeSource?.id === candidate.id ? '#faf5ff' : '#ffffff',
+                                    padding: '10px 14px', border: `2px solid ${mergeBoeSource?.id === candidate.id ? 'var(--accent-color)' : 'var(--tb-border-soft)'}`,
+                                    borderRadius: 'var(--tb-r-md)', marginBottom: '8px', cursor: 'pointer',
+                                    background: mergeBoeSource?.id === candidate.id ? 'var(--tb-sunken)' : 'var(--tb-card-bg)',
                                     transition: 'all 0.15s'
                                 }}
                             >
                                 <div>
-                                    <div style={{ fontWeight: '600', fontSize: '0.875rem', color: '#1e293b' }}>
-                                        <i className="bi bi-geo-alt me-1" style={{ color: '#0369a1' }}></i>{candidate.port_name}
+                                    <div style={{ fontWeight: '600', fontSize: 14, color: 'var(--tb-text)' }}>
+                                        <i className="bi bi-geo-alt me-1" style={{ color: 'var(--tb-info-text)' }}></i>{candidate.port_name}
                                     </div>
-                                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                                    <div style={{ fontSize: 12, color: 'var(--tb-text-secondary)' }}>
                                         {candidate.item_details?.length || 0} item(s) · {candidate.licenses || 'No licenses'}
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     {candidate.total_inr && (
-                                        <div style={{ fontWeight: '700', fontSize: '0.875rem', color: '#1e293b' }}>
+                                        <div style={{ fontWeight: '700', fontSize: 14, color: 'var(--tb-text)' }}>
                                             ₹{Number(candidate.total_inr).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                         </div>
                                     )}
                                     {mergeBoeSource?.id === candidate.id && (
-                                        <span style={{ fontSize: '0.72rem', color: '#7c3aed', fontWeight: '700' }}>✓ Selected</span>
+                                        <span style={{ fontSize: 11, color: 'var(--accent-color)', fontWeight: '700' }}>✓ Selected</span>
                                     )}
                                 </div>
                             </div>
                         ))}
 
                         {mergeBoeSource && (
-                            <div style={{ background: '#faf5ff', border: '1px solid #c4b5fd', borderRadius: '8px', padding: '10px 14px', margin: '12px 0', fontSize: '0.82rem', color: '#4c1d95' }}>
+                            <div style={{ background: 'var(--tb-sunken)', border: '1px solid #c4b5fd', borderRadius: 'var(--tb-r-md)', padding: '10px 14px', margin: '12px 0', fontSize: '0.82rem', color: 'var(--accent-color)' }}>
                                 <strong>What will happen:</strong>
                                 <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
                                     <li>Target port will change to <strong>{mergeBoeSource.port_name}</strong></li>
@@ -2159,13 +2135,13 @@ export default function MasterList() {
                         )}
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
-                            <button onClick={closeMergeModal} style={{ padding: '6px 16px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', fontSize: '0.875rem' }}>
+                            <button onClick={closeMergeModal} style={{ padding: '6px 16px', borderRadius: 'var(--tb-r-sm)', border: '1px solid #e2e8f0', background: 'var(--tb-sunken)', cursor: 'pointer', fontSize: 14 }}>
                                 Cancel
                             </button>
                             <button
                                 onClick={doMerge}
                                 disabled={!mergeBoeSource || mergeBoeLoading}
-                                style={{ padding: '6px 16px', borderRadius: '6px', border: 'none', background: mergeBoeSource && !mergeBoeLoading ? '#7c3aed' : '#c4b5fd', color: 'white', cursor: mergeBoeSource && !mergeBoeLoading ? 'pointer' : 'not-allowed', fontSize: '0.875rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                style={{ padding: '6px 16px', borderRadius: 'var(--tb-r-sm)', border: 'none', background: mergeBoeSource && !mergeBoeLoading ? 'var(--accent-color)' : 'var(--accent-light)', color: '#fff', cursor: mergeBoeSource && !mergeBoeLoading ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}
                             >
                                 {mergeBoeLoading
                                     ? <><div className="spinner-border spinner-border-sm" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>Merging...</>

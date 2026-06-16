@@ -119,7 +119,27 @@ html, body, #root {
 }
 
 
-/* ─── React Select tweaks (Material → Tabler) ───────────── */
+/* ─── React Select tweaks ───────────────────────────────── */
+.react-select__value-container { padding: 0 8px !important; }
+.react-select__single-value { color: var(--tb-text) !important; }
+.react-select__placeholder { color: var(--tb-text-tertiary) !important; }
+.react-select__input-container { color: var(--tb-text) !important; }
+.react-select__menu-list { background: var(--tb-card-bg) !important; }
+.react-select__option { color: var(--tb-text) !important; background: var(--tb-card-bg) !important; }
+.react-select__option:hover,
+.react-select__option--is-focused { background: var(--tb-sunken) !important; color: var(--tb-text) !important; }
+.react-select__multi-value {
+    background: var(--tb-brand-50) !important;
+    border: 1px solid var(--tb-brand-100) !important;
+    border-radius: var(--tb-r-sm) !important;
+}
+.react-select__multi-value__label { color: var(--tb-brand-active) !important; font-size: 12px !important; }
+.react-select__multi-value__remove:hover { background: var(--tb-danger-soft) !important; color: var(--tb-danger-text) !important; }
+.react-select__dropdown-indicator { color: var(--tb-text-tertiary) !important; }
+.react-select__dropdown-indicator:hover { color: var(--tb-text-secondary) !important; }
+.react-select__clear-indicator:hover { color: var(--tb-danger-text) !important; }
+.react-select__indicator-separator { background: var(--tb-border) !important; }
+
 .react-select__control {
     border-radius: var(--tb-r-sm) !important;
     border-color: var(--tb-border) !important;

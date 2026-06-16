@@ -1,15 +1,3 @@
-/**
- * Reusable DataPagination Component
- *
- * Props:
- * - currentPage: current page number
- * - totalPages: total number of pages
- * - pageSize: items per page
- * - hasNext: boolean
- * - hasPrevious: boolean
- * - onPageChange: callback function(page)
- * - onPageSizeChange: callback function(pageSize)
- */
 export default function DataPagination({
     currentPage = 1,
     totalPages = 1,
@@ -17,165 +5,91 @@ export default function DataPagination({
     hasNext = false,
     hasPrevious = false,
     onPageChange,
-    onPageSizeChange
+    onPageSizeChange,
 }) {
     const pageSizeOptions = [10, 25, 50, 100, 200];
 
     const handlePageChange = (page) => {
-        if (page >= 1 && page <= totalPages) {
-            onPageChange(page);
-        }
+        if (page >= 1 && page <= totalPages) onPageChange(page);
     };
 
-    const handlePageSizeChange = (e) => {
-        const newSize = parseInt(e.target.value);
-        onPageSizeChange(newSize);
-    };
-
-    // Generate page numbers to show
     const getPageNumbers = () => {
         const pages = [];
         const maxVisible = 5;
-
         if (totalPages <= maxVisible) {
-            // Show all pages
-            for (let i = 1; i <= totalPages; i++) {
-                pages.push(i);
-            }
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
         } else {
-            // Show current page with 2 pages on each side
             let start = Math.max(1, currentPage - 2);
             let end = Math.min(totalPages, currentPage + 2);
-
-            // Adjust if we're near the beginning or end
-            if (currentPage <= 3) {
-                end = maxVisible;
-            } else if (currentPage >= totalPages - 2) {
-                start = totalPages - maxVisible + 1;
-            }
-
-            // Add first page and ellipsis if needed
-            if (start > 1) {
-                pages.push(1);
-                if (start > 2) pages.push("...");
-            }
-
-            // Add visible pages
-            for (let i = start; i <= end; i++) {
-                pages.push(i);
-            }
-
-            // Add ellipsis and last page if needed
-            if (end < totalPages) {
-                if (end < totalPages - 1) pages.push("...");
-                pages.push(totalPages);
-            }
+            if (currentPage <= 3) end = maxVisible;
+            else if (currentPage >= totalPages - 2) start = totalPages - maxVisible + 1;
+            if (start > 1) { pages.push(1); if (start > 2) pages.push("..."); }
+            for (let i = start; i <= end; i++) pages.push(i);
+            if (end < totalPages) { if (end < totalPages - 1) pages.push("..."); pages.push(totalPages); }
         }
-
         return pages;
     };
 
     return (
-        <div className="d-flex justify-content-between align-items-center mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
-            {/* Page Size Selector */}
-            <div className="d-flex align-items-center">
-                <label className="me-2 mb-0" style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-secondary)' }}>Show:</label>
+        <div
+            style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 12,
+                marginTop: 16,
+                paddingTop: 14,
+                borderTop: "1px solid var(--tb-border-soft)",
+            }}
+        >
+            {/* Page size selector */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <label htmlFor="page-size-select" style={{ fontSize: 12.5, fontWeight: 500, color: "var(--tb-text-secondary)", margin: 0 }}>
+                    Show
+                </label>
                 <select
+                    id="page-size-select"
                     className="form-select form-select-sm"
-                    style={{
-                        width: "auto",
-                        borderRadius: '8px',
-                        border: '1px solid #d1d5db',
-                        padding: '6px 12px',
-                        fontWeight: '500'
-                    }}
+                    style={{ width: "auto" }}
                     value={pageSize}
-                    onChange={handlePageSizeChange}
+                    onChange={e => onPageSizeChange(parseInt(e.target.value))}
                 >
-                    {pageSizeOptions.map(size => (
-                        <option key={size} value={size}>{size}</option>
-                    ))}
+                    {pageSizeOptions.map(size => <option key={size} value={size}>{size}</option>)}
                 </select>
-                <span className="ms-2" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>per page</span>
+                <span style={{ fontSize: 12.5, color: "var(--tb-text-secondary)" }}>per page</span>
             </div>
 
-            {/* Pagination Controls */}
-            <nav>
-                <ul className="pagination mb-0">
-                    {/* Previous Button */}
+            {/* Page number buttons */}
+            <nav aria-label="Pagination">
+                <ul className="pagination mb-0" style={{ gap: 2 }}>
                     <li className={`page-item ${!hasPrevious ? "disabled" : ""}`}>
-                        <button
-                            className="page-link"
-                            onClick={() => handlePageChange(currentPage - 1)}
-                            disabled={!hasPrevious}
-                            style={{
-                                borderRadius: '8px 0 0 8px',
-                                fontWeight: '500',
-                                padding: '8px 12px',
-                                border: '1px solid #d1d5db'
-                            }}
-                        >
-                            <i className="bi bi-chevron-left"></i>
+                        <button className="page-link" onClick={() => handlePageChange(currentPage - 1)} disabled={!hasPrevious} aria-label="Previous page" style={{ borderRadius: "var(--tb-r-sm)" }}>
+                            <i className="bi bi-chevron-left" aria-hidden="true" />
                         </button>
                     </li>
-
-                    {/* Page Numbers */}
-                    {getPageNumbers().map((page, index) => {
+                    {getPageNumbers().map((page, idx) => {
                         if (page === "...") {
-                            return (
-                                <li key={`ellipsis-${index}`} className="page-item disabled">
-                                    <span className="page-link" style={{ border: '1px solid #d1d5db', padding: '8px 12px' }}>...</span>
-                                </li>
-                            );
+                            return <li key={`e${idx}`} className="page-item disabled"><span className="page-link">…</span></li>;
                         }
-
                         const isActive = currentPage === page;
                         return (
-                            <li
-                                key={page}
-                                className={`page-item ${isActive ? "active" : ""}`}
-                            >
-                                <button
-                                    className="page-link"
-                                    onClick={() => handlePageChange(page)}
-                                    style={{
-                                        fontWeight: '500',
-                                        padding: '8px 12px',
-                                        border: '1px solid #d1d5db',
-                                        ...(isActive && {
-                                            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                                            borderColor: 'var(--primary-color)',
-                                            color: 'white'
-                                        })
-                                    }}
-                                >
+                            <li key={page} className={`page-item ${isActive ? "active" : ""}`}>
+                                <button className="page-link" onClick={() => handlePageChange(page)} aria-label={`Page ${page}`} aria-current={isActive ? "page" : undefined} style={{ borderRadius: "var(--tb-r-sm)", minWidth: 34 }}>
                                     {page}
                                 </button>
                             </li>
                         );
                     })}
-
-                    {/* Next Button */}
                     <li className={`page-item ${!hasNext ? "disabled" : ""}`}>
-                        <button
-                            className="page-link"
-                            onClick={() => handlePageChange(currentPage + 1)}
-                            disabled={!hasNext}
-                            style={{
-                                borderRadius: '0 8px 8px 0',
-                                fontWeight: '500',
-                                padding: '8px 12px',
-                                border: '1px solid #d1d5db'
-                            }}
-                        >
-                            <i className="bi bi-chevron-right"></i>
+                        <button className="page-link" onClick={() => handlePageChange(currentPage + 1)} disabled={!hasNext} aria-label="Next page" style={{ borderRadius: "var(--tb-r-sm)" }}>
+                            <i className="bi bi-chevron-right" aria-hidden="true" />
                         </button>
                     </li>
                 </ul>
             </nav>
 
-            {/* Page Info */}
-            <div style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: 12.5, color: "var(--tb-text-tertiary)", whiteSpace: "nowrap" }}>
                 Page {currentPage} of {totalPages}
             </div>
         </div>

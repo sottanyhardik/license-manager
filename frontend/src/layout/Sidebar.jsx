@@ -19,11 +19,11 @@ export default function Sidebar() {
         fontSize: sub ? '0.85rem' : '0.9rem',
         transition: 'all 0.2s ease',
         backgroundColor: active ? 'var(--primary-color)' : 'transparent',
-        color: 'white',
+        color: '#fff',
     });
 
     const handleMouseEnter = (active) => (e) => {
-        if (!active) e.currentTarget.style.backgroundColor = 'rgba(79, 70, 229, 0.12)';
+        if (!active) e.currentTarget.style.backgroundColor = 'var(--tb-brand-50)';
     };
 
     const handleMouseLeave = (active) => (e) => {
@@ -34,7 +34,7 @@ export default function Sidebar() {
         <div className="text-white sidebar p-3" style={{
             width: "260px",
             minHeight: "100vh",
-            background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+            background: 'var(--tb-card-bg)',
             boxShadow: '2px 0 8px rgba(0, 0, 0, 0.1)'
         }}>
             <div className="d-flex align-items-center justify-content-center mb-4 mt-2">
@@ -73,7 +73,7 @@ export default function Sidebar() {
                             <i className="bi bi-file-earmark-bar-graph me-2" style={{fontSize: '1.1rem'}}/>
                             <span>Reports</span>
                         </div>
-                        <i className={`bi bi-chevron-${reportsOpen ? "up" : "down"}`} style={{fontSize: '0.8rem'}}/>
+                        <i className={`bi bi-chevron-${reportsOpen ? "up" : "down"}`} style={{fontSize: 12.5}}/>
                     </button>
 
                     {reportsOpen && (
@@ -87,7 +87,7 @@ export default function Sidebar() {
                                         onMouseEnter={handleMouseEnter(isActive(report.path))}
                                         onMouseLeave={handleMouseLeave(isActive(report.path))}
                                     >
-                                        <i className={`bi bi-${report.icon} me-2`} style={{fontSize: '0.9rem'}}/>
+                                        <i className={`bi bi-${report.icon} me-2`} style={{fontSize: 14.5}}/>
                                         {report.label}
                                     </Link>
                                 </li>
@@ -125,7 +125,7 @@ export default function Sidebar() {
                             <i className="bi bi-database me-2" style={{fontSize: '1.1rem'}}/>
                             <span>Masters</span>
                         </div>
-                        <i className={`bi bi-chevron-${mastersOpen ? "up" : "down"}`} style={{fontSize: '0.8rem'}}/>
+                        <i className={`bi bi-chevron-${mastersOpen ? "up" : "down"}`} style={{fontSize: 12.5}}/>
                     </button>
 
                     {mastersOpen && (
@@ -139,7 +139,7 @@ export default function Sidebar() {
                                         onMouseEnter={handleMouseEnter(isActive(master.path))}
                                         onMouseLeave={handleMouseLeave(isActive(master.path))}
                                     >
-                                        <i className={`bi bi-${master.icon} me-2`} style={{fontSize: '0.9rem'}}/>
+                                        <i className={`bi bi-${master.icon} me-2`} style={{fontSize: 14.5}}/>
                                         {master.label}
                                     </Link>
                                 </li>

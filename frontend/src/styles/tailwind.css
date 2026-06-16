@@ -1,0 +1,113 @@
+/*
+ * ============================================================
+ *  Tailwind v4 + shadcn/ui entry  ·  License Manager
+ *
+ *  COEXISTENCE STRATEGY (migration phase):
+ *  - Preflight (Tailwind's CSS reset) is intentionally NOT
+ *    imported. It would reset Bootstrap's base styles and
+ *    break every not-yet-migrated page. We only pull in the
+ *    `theme` (token → utility generation) and `utilities`
+ *    layers. Preflight gets re-enabled in Phase 4 once
+ *    Bootstrap is removed.
+ *  - shadcn semantic variables (--background, --primary, …)
+ *    are bridged onto the existing --tb-* design tokens so
+ *    both styling systems render pixel-identical, and dark
+ *    mode (driven by [data-theme="dark"]) flips both at once.
+ * ============================================================
+ */
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+/* Dark mode is driven by [data-theme="dark"] on <html>, not the
+   default `.dark` class — point Tailwind's `dark:` variant at it. */
+@custom-variant dark (&:is([data-theme="dark"] *));
+
+
+/* ── Minimal preflight substitute (coexistence) ────────────────
+   Full preflight is skipped so Bootstrap's reset stays intact.
+   But Tailwind's `border-*` utilities only set border-WIDTH and
+   assume preflight has set `border-style: solid` globally. We
+   replicate just that one rule in @layer base. Because Bootstrap
+   is unlayered it always wins on the elements it targets, so this
+   only affects shadcn-rendered nodes. Removed in Phase 4. */
+@layer base {
+    *,
+    ::before,
+    ::after,
+    ::backdrop,
+    ::file-selector-button {
+        box-sizing: border-box;
+        border-width: 0;
+        border-style: solid;
+        border-color: var(--color-border, currentColor);
+    }
+}
+
+
+/* ── shadcn semantic tokens → bridged onto --tb-* ──────────── */
+:root {
+    --background:            var(--tb-body-bg);
+    --foreground:            var(--tb-text);
+    --card:                  var(--tb-card-bg);
+    --card-foreground:       var(--tb-text);
+    --popover:               var(--tb-card-bg);
+    --popover-foreground:    var(--tb-text);
+    --primary:               var(--tb-brand);
+    --primary-foreground:    #ffffff;
+    --secondary:             var(--tb-sunken);
+    --secondary-foreground:  var(--tb-text);
+    --muted:                 var(--tb-sunken);
+    --muted-foreground:      var(--tb-text-secondary);
+    --accent:                var(--tb-brand-50);
+    --accent-foreground:     var(--tb-brand-active);
+    --destructive:           var(--tb-danger);
+    --destructive-foreground:#ffffff;
+    --success:               var(--tb-success);
+    --warning:               var(--tb-warning);
+    --info:                  var(--tb-info);
+    --border:                var(--tb-border);
+    --input:                 var(--tb-border);
+    --ring:                  var(--tb-brand);
+
+    --radius:                10px;
+}
+
+
+/* ── Map bridged vars into Tailwind's theme so utilities like
+      bg-background / text-foreground / border-border exist ──── */
+@theme inline {
+    --color-background:            var(--background);
+    --color-foreground:            var(--foreground);
+    --color-card:                  var(--card);
+    --color-card-foreground:       var(--card-foreground);
+    --color-popover:               var(--popover);
+    --color-popover-foreground:    var(--popover-foreground);
+    --color-primary:               var(--primary);
+    --color-primary-foreground:    var(--primary-foreground);
+    --color-secondary:             var(--secondary);
+    --color-secondary-foreground:  var(--secondary-foreground);
+    --color-muted:                 var(--muted);
+    --color-muted-foreground:      var(--muted-foreground);
+    --color-accent:                var(--accent);
+    --color-accent-foreground:     var(--accent-foreground);
+    --color-destructive:           var(--destructive);
+    --color-destructive-foreground:var(--destructive-foreground);
+    --color-success:               var(--success);
+    --color-warning:               var(--warning);
+    --color-info:                  var(--info);
+    --color-border:                var(--border);
+    --color-input:                 var(--input);
+    --color-ring:                  var(--ring);
+
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+
+    --font-sans: var(--tb-font);
+    --font-mono: var(--tb-font-mono);
+}

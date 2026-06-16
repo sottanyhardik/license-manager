@@ -1,14 +1,14 @@
-import TopNav from "../components/TopNav";
-import TaskFAB from "../components/TaskFAB";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
+import TopNav from "../components/TopNav";
+import TaskFAB from "../components/TaskFAB";
 
 const QUICK_ACTIONS = [
-    { to: "/licenses/create",        label: "New License",   icon: "bi-plus-circle",         primary: true },
-    { to: "/allotments/create",      label: "New Allotment", icon: "bi-plus-circle" },
-    { to: "/bill-of-entries/create", label: "New BOE",       icon: "bi-plus-circle" },
-    { to: "/reports/item-pivot",     label: "Reports",       icon: "bi-graph-up-arrow" },
+    { to: "/licenses/create",        label: "New License",   icon: "plus-circle-fill",   primary: true },
+    { to: "/allotments/create",      label: "New Allotment", icon: "box-seam" },
+    { to: "/bill-of-entries/create", label: "New BOE",       icon: "receipt" },
+    { to: "/reports/item-pivot",     label: "Reports",       icon: "graph-up-arrow" },
 ];
 
 export default function AdminLayout({ children }) {
@@ -20,16 +20,16 @@ export default function AdminLayout({ children }) {
     usePageTitle();
 
     return (
-        <div className="d-flex flex-column" style={{ minHeight: "100vh", background: "var(--tb-body-bg)" }}>
+        <div style={{ minHeight: "100vh", background: "var(--tb-body-bg)", display: "flex", flexDirection: "column" }}>
             {!isInIframe && <TopNav />}
 
-            <main id="main-content" className="flex-grow-1" style={{ overflowY: "auto" }}>
+            <main id="main-content" style={{ flex: "1 1 auto", overflowY: "auto" }}>
                 <div
-                    className="container-fluid"
+                    className="container-fluid page-enter"
                     style={{
-                        padding: isInIframe ? "1rem 1.5rem" : undefined,
+                        padding: isInIframe ? "16px 20px" : undefined,
                         maxWidth: "100%",
-                        paddingBottom: isInIframe ? "1rem" : undefined,
+                        paddingBottom: isInIframe ? "16px" : undefined,
                     }}
                 >
                     {/* ARIA live region for form validation announcements */}
@@ -54,8 +54,9 @@ export default function AdminLayout({ children }) {
                                     type="button"
                                     onClick={() => navigate(a.to)}
                                     className={a.primary ? "btn btn-primary btn-sm" : "btn btn-outline-secondary btn-sm"}
+                                    style={{ fontSize: 12, height: 30, display: "inline-flex", alignItems: "center", gap: 5 }}
                                 >
-                                    <i className={`bi ${a.icon} me-1`} aria-hidden="true" />
+                                    <i className={`bi bi-${a.icon}`} aria-hidden="true" style={{ fontSize: 12 }} />
                                     <span className="footer-action-label">{a.label}</span>
                                 </button>
                             ))}
@@ -65,7 +66,7 @@ export default function AdminLayout({ children }) {
                 </footer>
             )}
 
-            {!isInIframe && <TaskFAB bottomOffset={84} />}
+            {!isInIframe && <TaskFAB bottomOffset={44} />}
         </div>
     );
 }

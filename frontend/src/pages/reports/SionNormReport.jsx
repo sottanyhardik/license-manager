@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import api from "../../api/axios";
-import {toast} from "react-toastify";
-import {formatDate as formatDateUtil} from "../../utils/dateFormatter";
+import { toast } from "react-toastify";
+import { formatDate as formatDateUtil } from "../../utils/dateFormatter";
+import PageHeader from "@/components/PageHeader";
+import { Card, CardContent } from "@/components/ui/card";
 
 /**
- * Reusable SION Norm Report Component
- * Displays licenses for a specific SION norm, grouped by notification
+ * Reusable SION Norm Report — licenses for a specific SION norm, grouped by
+ * notification. Pure presentation of API data; only markup chrome migrated to
+ * Tailwind/shadcn. The dense table render helpers keep their exact data
+ * bindings (Bootstrap text-end/text-center utilities remain until Phase 4).
  */
 export default function SionNormReport({ sionNorm, title }) {
     const [data, setData] = useState(null);
@@ -24,28 +29,20 @@ export default function SionNormReport({ sionNorm, title }) {
                 const response = await api.get(`licenses/active-dfia-report/?${params}`);
                 setData(response.data);
             } catch (error) {
-                toast.error('Failed to load report data. Please try again.');
+                toast.error("Failed to load report data. Please try again.");
             } finally {
                 setLoading(false);
             }
         };
-
         fetchReport();
     }, [filters]);
 
-    const handleFilterChange = (filterName, value) => {
-        setFilters(prev => ({
-            ...prev,
-            [filterName]: value
-        }));
-    };
+    const handleFilterChange = (filterName, value) =>
+        setFilters((prev) => ({ ...prev, [filterName]: value }));
 
     const formatNumber = (num, decimals = 2) => {
         if (num === null || num === undefined) return "—";
-        return Number(num).toLocaleString('en-IN', {
-            minimumFractionDigits: decimals,
-            maximumFractionDigits: decimals
-        });
+        return Number(num).toLocaleString("en-IN", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
     };
 
     const formatDate = (dateStr) => {
@@ -53,8 +50,9 @@ export default function SionNormReport({ sionNorm, title }) {
         return formatDateUtil(dateStr) || "—";
     };
 
+    // Tailwind/token-styled header (replaces Bootstrap table-primary)
     const renderTableHeaders = () => (
-        <thead className="table-primary" style={{fontSize: '10px', position: 'sticky', top: 0, zIndex: 10}}>
+        <thead className="sticky top-0 z-10 bg-primary/10 text-[10px] text-foreground [&_th]:border [&_th]:border-border [&_th]:px-1.5 [&_th]:py-1 [&_th]:font-semibold">
             <tr>
                 <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '40px'}}>Sr</th>
                 <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '120px'}}>DFIA No</th>
@@ -114,11 +112,11 @@ export default function SionNormReport({ sionNorm, title }) {
     );
 
     const renderLicenseRow = (license, index) => (
-        <tr key={license.id} style={{fontSize: '9px'}}>
+        <tr key={license.id} className="border-b border-border/60 [&_td]:border [&_td]:border-border/50 [&_td]:px-1.5 [&_td]:py-1" style={{fontSize: '9px'}}>
             <td>{index + 1}</td>
             <td>
                 <a href={`/licenses/${license.id}`} target="_blank" rel="noopener noreferrer"
-                   style={{fontSize: '9px', textDecoration: 'none'}}>
+                   className="text-primary no-underline" style={{fontSize: '9px'}}>
                     {license.license_number}
                 </a>
             </td>
@@ -168,7 +166,7 @@ export default function SionNormReport({ sionNorm, title }) {
     );
 
     const renderTotalsRow = (totals, label) => (
-        <tr className="table-warning fw-bold" style={{fontSize: '9px'}}>
+        <tr className="bg-warning/15 font-bold text-warning [&_td]:border [&_td]:border-border/50 [&_td]:px-1.5 [&_td]:py-1" style={{fontSize: '9px'}}>
             <td colSpan="5" className="text-end">{label}:</td>
             <td className="text-end">{formatNumber(totals.total_cif)}</td>
             <td className="text-end">{formatNumber(totals.balance_cif)}</td>
@@ -208,166 +206,92 @@ export default function SionNormReport({ sionNorm, title }) {
         </tr>
     );
 
-    if (loading) {
-        return (
-            <div className="container-fluid p-4">
-                <h2>{title}</h2>
-                <div className="spinner-border mt-4" role="status">
-                    <span className="visually-hidden">Loading...</span>
+    // Radio filter group
+    const FilterRadios = () => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+                <div className="mb-1.5 text-xs font-medium text-muted-foreground">Active / Expired</div>
+                <div className="flex gap-4">
+                    {[["False", "Active"], ["True", "Expired"]].map(([val, lbl]) => (
+                        <label key={val} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                            <input type="radio" className="accent-primary" checked={filters.is_expired === val} onChange={() => handleFilterChange("is_expired", val)} />
+                            {lbl}
+                        </label>
+                    ))}
                 </div>
             </div>
+            <div>
+                <div className="mb-1.5 text-xs font-medium text-muted-foreground">Balance CIF</div>
+                <div className="flex gap-4">
+                    {[["False", "> 200"], ["True", "< 200"]].map(([val, lbl]) => (
+                        <label key={val} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                            <input type="radio" className="accent-primary" checked={filters.is_null === val} onChange={() => handleFilterChange("is_null", val)} />
+                            {lbl}
+                        </label>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+
+    if (loading) {
+        return (
+            <>
+                <PageHeader pretitle="Reports" title={title} />
+                <div className="flex items-center gap-2 p-6 text-muted-foreground">
+                    <Loader2 className="size-5 animate-spin text-primary" /> Loading…
+                </div>
+            </>
         );
     }
 
     if (!data || !data.groups || data.groups.length === 0) {
         return (
-            <div className="container-fluid p-4">
-                <h2 className="mb-4">{title}</h2>
-                <div className="card mb-4">
-                    <div className="card-body">
-                        <div className="row">
-                            <div className="col-md-6">
-                                <label className="form-label">Active/Expired</label>
-                                <div>
-                                    <div className="form-check form-check-inline">
-                                        <input className="form-check-input" type="radio"
-                                            checked={filters.is_expired === "False"}
-                                            onChange={() => handleFilterChange("is_expired", "False")}
-                                        />
-                                        <label className="form-check-label">Active</label>
-                                    </div>
-                                    <div className="form-check form-check-inline">
-                                        <input className="form-check-input" type="radio"
-                                            checked={filters.is_expired === "True"}
-                                            onChange={() => handleFilterChange("is_expired", "True")}
-                                        />
-                                        <label className="form-check-label">Expired</label>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-md-6">
-                                <label className="form-label">Balance CIF</label>
-                                <div>
-                                    <div className="form-check form-check-inline">
-                                        <input className="form-check-input" type="radio"
-                                            checked={filters.is_null === "False"}
-                                            onChange={() => handleFilterChange("is_null", "False")}
-                                        />
-                                        <label className="form-check-label">&gt; 200</label>
-                                    </div>
-                                    <div className="form-check form-check-inline">
-                                        <input className="form-check-input" type="radio"
-                                            checked={filters.is_null === "True"}
-                                            onChange={() => handleFilterChange("is_null", "True")}
-                                        />
-                                        <label className="form-check-label">&lt; 200</label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <p>No records found for SION Norm {sionNorm}</p>
-            </div>
+            <>
+                <PageHeader pretitle="Reports" title={title} />
+                <Card className="mb-4"><CardContent className="pt-5"><FilterRadios /></CardContent></Card>
+                <p className="text-sm text-muted-foreground">No records found for SION Norm {sionNorm}</p>
+            </>
         );
     }
 
-    // Get the first (and should be only) SION group since we're filtering by specific norm
     const sionGroup = data.groups[0];
     let globalSrNo = 0;
 
     return (
-        <div className="container-fluid p-4">
-            <h2 className="mb-4">{title}</h2>
+        <>
+            <PageHeader pretitle="Reports" title={title} />
 
             {/* Filters */}
-            <div className="card mb-4">
-                <div className="card-body">
-                    <div className="row">
-                        <div className="col-md-6">
-                            <label className="form-label">Active/Expired</label>
-                            <div>
-                                <div className="form-check form-check-inline">
-                                    <input className="form-check-input" type="radio"
-                                        checked={filters.is_expired === "False"}
-                                        onChange={() => handleFilterChange("is_expired", "False")}
-                                    />
-                                    <label className="form-check-label">Active</label>
-                                </div>
-                                <div className="form-check form-check-inline">
-                                    <input className="form-check-input" type="radio"
-                                        checked={filters.is_expired === "True"}
-                                        onChange={() => handleFilterChange("is_expired", "True")}
-                                    />
-                                    <label className="form-check-label">Expired</label>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-md-6">
-                            <label className="form-label">Balance CIF</label>
-                            <div>
-                                <div className="form-check form-check-inline">
-                                    <input className="form-check-input" type="radio"
-                                        checked={filters.is_null === "False"}
-                                        onChange={() => handleFilterChange("is_null", "False")}
-                                    />
-                                    <label className="form-check-label">&gt; 200</label>
-                                </div>
-                                <div className="form-check form-check-inline">
-                                    <input className="form-check-input" type="radio"
-                                        checked={filters.is_null === "True"}
-                                        onChange={() => handleFilterChange("is_null", "True")}
-                                    />
-                                    <label className="form-check-label">&lt; 200</label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <Card className="mb-4"><CardContent className="pt-5"><FilterRadios /></CardContent></Card>
+
+            {/* Summary cards */}
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                    ["Total Licenses", sionGroup.license_count],
+                    ["Total CIF", formatNumber(sionGroup.totals.total_cif)],
+                    ["Balance CIF", formatNumber(sionGroup.totals.balance_cif)],
+                ].map(([label, value]) => (
+                    <Card key={label}>
+                        <CardContent className="pt-5">
+                            <div className="text-xs font-medium text-muted-foreground">{label}</div>
+                            <div className="mt-1 text-2xl font-semibold tracking-tight text-foreground tabular-nums">{value}</div>
+                        </CardContent>
+                    </Card>
+                ))}
             </div>
 
-            {/* Summary Cards */}
-            <div className="row mb-4">
-                <div className="col-md-4">
-                    <div className="card">
-                        <div className="card-body">
-                            <h6 className="card-subtitle mb-2 text-muted">Total Licenses</h6>
-                            <h3 className="card-title">{sionGroup.license_count}</h3>
-                        </div>
-                    </div>
-                </div>
-                <div className="col-md-4">
-                    <div className="card">
-                        <div className="card-body">
-                            <h6 className="card-subtitle mb-2 text-muted">Total CIF</h6>
-                            <h3 className="card-title">{formatNumber(sionGroup.totals.total_cif)}</h3>
-                        </div>
-                    </div>
-                </div>
-                <div className="col-md-4">
-                    <div className="card">
-                        <div className="card-body">
-                            <h6 className="card-subtitle mb-2 text-muted">Balance CIF</h6>
-                            <h3 className="card-title">{formatNumber(sionGroup.totals.balance_cif)}</h3>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Tables by Notification */}
+            {/* Tables by notification */}
             {sionGroup.notifications.map((notifGroup, notifIndex) => (
                 <div key={notifIndex} className="mb-4">
-                    <h5 className="mb-3 bg-secondary text-white p-2 rounded">
-                        Notification: {notifGroup.notification_number}
-                        <span className="ms-3 badge bg-light text-dark">
-                            {notifGroup.license_count} licenses
-                        </span>
-                    </h5>
-
-                    <div className="card">
-                        <div className="card-body p-0">
-                            <div className="table-responsive" style={{maxHeight: '600px', overflowY: 'auto'}}>
-                                <table className="table table-bordered table-sm table-hover mb-0">
+                    <div className="mb-3 flex items-center gap-3 rounded-md bg-muted px-3 py-2">
+                        <span className="text-sm font-semibold text-foreground">Notification: {notifGroup.notification_number}</span>
+                        <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{notifGroup.license_count} licenses</span>
+                    </div>
+                    <Card>
+                        <CardContent className="p-0">
+                            <div className="overflow-auto" style={{maxHeight: '600px'}}>
+                                <table className="w-full border-collapse">
                                     {renderTableHeaders()}
                                     <tbody>
                                         {notifGroup.licenses.map((license) => {
@@ -378,27 +302,25 @@ export default function SionNormReport({ sionNorm, title }) {
                                     </tbody>
                                 </table>
                             </div>
-                        </div>
-                    </div>
+                        </CardContent>
+                    </Card>
                 </div>
             ))}
 
-            {/* SION Norm Grand Total */}
-            <div className="card border-success mt-4">
-                <div className="card-header bg-success text-white">
-                    <h5 className="mb-0">Grand Total - SION Norm {sionNorm}</h5>
+            {/* Grand total */}
+            <Card className="mt-4 border-success/40">
+                <div className="rounded-t-xl border-b border-success/30 bg-success/10 px-4 py-2.5 text-sm font-semibold text-success">
+                    Grand Total — SION Norm {sionNorm}
                 </div>
-                <div className="card-body p-0">
-                    <div className="table-responsive">
-                        <table className="table table-bordered table-sm mb-0">
+                <CardContent className="p-0">
+                    <div className="overflow-auto">
+                        <table className="w-full border-collapse">
                             {renderTableHeaders()}
-                            <tbody>
-                                {renderTotalsRow(sionGroup.totals, "Grand Total")}
-                            </tbody>
+                            <tbody>{renderTotalsRow(sionGroup.totals, "Grand Total")}</tbody>
                         </table>
                     </div>
-                </div>
-            </div>
-        </div>
+                </CardContent>
+            </Card>
+        </>
     );
 }

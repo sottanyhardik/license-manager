@@ -465,7 +465,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                 <span>
                                                     {value || "-"}
                                                     {isEditableField && (
-                                                        <i className="bi bi-pencil ms-2 text-muted" style={{fontSize: '0.8rem'}}></i>
+                                                        <i className="bi bi-pencil ms-2 text-muted" style={{fontSize: 12.5}}></i>
                                                     )}
                                                 </span>
                                             )}

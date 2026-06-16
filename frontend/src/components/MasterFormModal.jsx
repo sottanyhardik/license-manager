@@ -22,8 +22,8 @@ export default function MasterFormModal({ show, onHide, entityName, recordId, mo
                     <div
                         className="modal-header"
                         style={{
-                            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                            color: 'white',
+                            background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))',
+                            color: '#fff',
                             padding: '1rem 1.5rem',
                             borderBottom: 'none'
                         }}
@@ -52,7 +52,7 @@ export default function MasterFormModal({ show, onHide, entityName, recordId, mo
                             padding: 0,
                             overflow: 'auto',
                             height: 'calc(100vh - 65px)',
-                            backgroundColor: 'var(--bs-gray-50)'
+                            backgroundColor: 'var(--tb-sunken)'
                         }}
                     >
                         <MasterForm

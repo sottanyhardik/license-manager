@@ -5,31 +5,33 @@ import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
 import { generatePDF, generateExcel } from '../utils/ledgerExport';
 import AsyncSelectField from '../components/AsyncSelectField';
+import { Button } from "@/components/ui/button";
+import { FileText, FileSpreadsheet, Loader2 } from "lucide-react";
 
 function LicenseWiseLedger({ data, navigate }) {
     const { licenses } = data;
     const fmt = (v) => `₹${formatIndianNumber(v, 2)}`;
-    const plColor = (v) => v >= 0 ? '#10b981' : '#ef4444';
+    const plColor = (v) => v >= 0 ? 'var(--tb-success)' : 'var(--tb-danger)';
 
     return (
         <div style={{ padding: '8px' }}>
             {licenses.map((lic) => (
-                <div key={lic.license_id} style={{ marginBottom: '24px', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                <div key={lic.license_id} style={{ marginBottom: '24px', border: '1px solid var(--tb-border)', borderRadius: 'var(--tb-r-md)', overflow: 'hidden' }}>
                     {/* License Header */}
-                    <div style={{ background: '#1e3a5f', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '24px' }}>
-                        <span style={{ fontWeight: '700', fontSize: '0.95rem' }}>
+                    <div style={{ background: 'var(--tb-brand-active)', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '24px' }}>
+                        <span style={{ fontWeight: '700', fontSize: 15 }}>
                             <i className="bi bi-file-earmark-text me-2"></i>{lic.license_number}
                         </span>
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                        <span style={{ fontSize: 12.5, color: 'var(--tb-text-tertiary)' }}>
                             <i className="bi bi-calendar3 me-1"></i>{lic.license_date}
                         </span>
-                        <span style={{ background: lic.license_type === 'DFIA' ? '#3b82f6' : '#8b5cf6', color: '#fff', borderRadius: '4px', padding: '2px 8px', fontSize: '0.72rem', fontWeight: '700' }}>
+                        <span style={{ background: lic.license_type === 'DFIA' ? 'var(--tb-info)' : 'var(--accent-color)', color: '#fff', borderRadius: 'var(--tb-r-sm)', padding: '2px 8px', fontSize: 11, fontWeight: '700' }}>
                             {lic.license_type}
                         </span>
                         {navigate && (
                             <button
                                 onClick={() => navigate(`/license-ledger/${lic.license_id}`)}
-                                style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: '4px', padding: '3px 10px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
+                                style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 'var(--tb-r-sm)', padding: '3px 10px', fontSize: 12, fontWeight: '600', cursor: 'pointer' }}
                             >
                                 <i className="bi bi-journal-text me-1"></i>View Ledger
                             </button>
@@ -37,14 +39,14 @@ function LicenseWiseLedger({ data, navigate }) {
                     </div>
 
                     {/* Companies table */}
-                    <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+                    <table style={{ width: '100%', fontSize: 12.5, borderCollapse: 'collapse' }}>
                         <thead>
-                            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#374151', width: '30%' }}>Company</th>
-                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#374151', width: '15%' }}>Type</th>
-                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#374151', width: '15%' }}>Date</th>
-                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#065f46', textAlign: 'right', width: '20%' }}>Purchase (₹)</th>
-                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#991b1b', textAlign: 'right', width: '20%' }}>Sale (₹)</th>
+                            <tr style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: 'var(--tb-text)', width: '30%' }}>Company</th>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: 'var(--tb-text)', width: '15%' }}>Type</th>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: 'var(--tb-text)', width: '15%' }}>Date</th>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: 'var(--tb-success-text)', textAlign: 'right', width: '20%' }}>Purchase (₹)</th>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: 'var(--tb-danger-text)', textAlign: 'right', width: '20%' }}>Sale (₹)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -52,44 +54,44 @@ function LicenseWiseLedger({ data, navigate }) {
                                 return (
                                     <React.Fragment key={company.company_id}>
                                         {/* Company name row */}
-                                        <tr style={{ background: ci % 2 === 0 ? '#f0f4ff' : '#f5f0ff', borderTop: ci > 0 ? '2px solid #e2e8f0' : 'none' }}>
-                                            <td colSpan="5" style={{ padding: '5px 12px', fontWeight: '700', color: '#1e3a5f', fontSize: '0.82rem' }}>
+                                        <tr style={{ background: ci % 2 === 0 ? 'var(--tb-brand-50)' : 'var(--tb-sunken)', borderTop: ci > 0 ? '2px solid var(--tb-border)' : 'none' }}>
+                                            <td colSpan="5" style={{ padding: '5px 12px', fontWeight: '700', color: 'var(--tb-text)', fontSize: '0.82rem' }}>
                                                 <i className="bi bi-building me-2"></i>{company.company_name}
                                             </td>
                                         </tr>
                                         {/* Purchase rows */}
                                         {company.purchases.map((row) => (
-                                            <tr key={`p-${row.trade_id}`} style={{ background: '#f0fdf4', borderBottom: '1px solid #d1fae5' }}>
-                                                <td style={{ padding: '4px 12px 4px 24px', color: '#374151' }}>
+                                            <tr key={`p-${row.trade_id}`} style={{ background: 'var(--tb-success-soft)', borderBottom: '1px solid var(--tb-success-border)' }}>
+                                                <td style={{ padding: '4px 12px 4px 24px', color: 'var(--tb-text)' }}>
                                                     <i className="bi bi-arrow-down-circle text-success me-1"></i>Purchase
                                                 </td>
-                                                <td style={{ padding: '4px 12px', color: '#6b7280' }}>{lic.license_type}</td>
-                                                <td style={{ padding: '4px 12px', color: '#6b7280' }}>{row.invoice_date}</td>
-                                                <td style={{ padding: '4px 12px', textAlign: 'right', fontWeight: '600', color: '#065f46' }}>{fmt(row.amount)}</td>
+                                                <td style={{ padding: '4px 12px', color: 'var(--tb-text-secondary)' }}>{lic.license_type}</td>
+                                                <td style={{ padding: '4px 12px', color: 'var(--tb-text-secondary)' }}>{row.invoice_date}</td>
+                                                <td style={{ padding: '4px 12px', textAlign: 'right', fontWeight: '600', color: 'var(--tb-success-text)' }}>{fmt(row.amount)}</td>
                                                 <td style={{ padding: '4px 12px' }}></td>
                                             </tr>
                                         ))}
                                         {/* Sale rows */}
                                         {company.sales.map((row) => (
-                                            <tr key={`s-${row.trade_id}`} style={{ background: '#fef2f2', borderBottom: '1px solid #fecaca' }}>
-                                                <td style={{ padding: '4px 12px 4px 24px', color: '#374151' }}>
+                                            <tr key={`s-${row.trade_id}`} style={{ background: 'var(--tb-danger-soft)', borderBottom: '1px solid var(--tb-danger-border)' }}>
+                                                <td style={{ padding: '4px 12px 4px 24px', color: 'var(--tb-text)' }}>
                                                     <i className="bi bi-arrow-up-circle text-danger me-1"></i>Sale
                                                 </td>
-                                                <td style={{ padding: '4px 12px', color: '#6b7280' }}>{lic.license_type}</td>
-                                                <td style={{ padding: '4px 12px', color: '#6b7280' }}>{row.invoice_date}</td>
+                                                <td style={{ padding: '4px 12px', color: 'var(--tb-text-secondary)' }}>{lic.license_type}</td>
+                                                <td style={{ padding: '4px 12px', color: 'var(--tb-text-secondary)' }}>{row.invoice_date}</td>
                                                 <td style={{ padding: '4px 12px' }}></td>
-                                                <td style={{ padding: '4px 12px', textAlign: 'right', fontWeight: '600', color: '#991b1b' }}>{fmt(row.amount)}</td>
+                                                <td style={{ padding: '4px 12px', textAlign: 'right', fontWeight: '600', color: 'var(--tb-danger-text)' }}>{fmt(row.amount)}</td>
                                             </tr>
                                         ))}
                                         {/* Company total row */}
-                                        <tr style={{ background: '#1e3a5f', color: '#fff', fontWeight: '700' }}>
-                                            <td colSpan="3" style={{ padding: '5px 12px', textAlign: 'right', fontSize: '0.78rem' }}>
+                                        <tr style={{ background: 'var(--tb-brand-active)', color: '#fff', fontWeight: '700' }}>
+                                            <td colSpan="3" style={{ padding: '5px 12px', textAlign: 'right', fontSize: 12 }}>
                                                 Total — {company.company_name}
                                             </td>
-                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: '#6ee7b7' }}>{fmt(company.purchase_total)}</td>
-                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: '#fca5a5' }}>
+                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--tb-success-soft)' }}>{fmt(company.purchase_total)}</td>
+                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--tb-danger-border)' }}>
                                                 {fmt(company.sale_total)}
-                                                <span style={{ marginLeft: '8px', color: plColor(company.profit_loss), fontSize: '0.72rem' }}>
+                                                <span style={{ marginLeft: '8px', color: plColor(company.profit_loss), fontSize: 11 }}>
                                                     P/L: {company.profit_loss >= 0 ? '+' : ''}{fmt(company.profit_loss)}
                                                 </span>
                                             </td>
@@ -103,7 +105,7 @@ function LicenseWiseLedger({ data, navigate }) {
             ))}
             {licenses.length === 0 && (
                 <div className="text-center py-5">
-                    <i className="bi bi-inbox" style={{ fontSize: '2.5rem', color: '#cbd5e0' }}></i>
+                    <i className="bi bi-inbox" style={{ fontSize: '2.5rem', color: 'var(--tb-border-strong)' }}></i>
                     <p className="mt-3 text-muted mb-0">No trades found</p>
                 </div>
             )}
@@ -363,12 +365,12 @@ export default function LicenseLedger() {
     };
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+        <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
             {/* Header */}
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
-                        <i className="bi bi-journal-text me-2" style={{ color: '#4F46E5' }}></i>
+                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--tb-text)' }}>
+                        <i className="bi bi-journal-text me-2" style={{ color: 'var(--tb-brand)' }}></i>
                         License Ledger
                     </h4>
                     <small className="text-muted">Track available balance for DFIA and Incentive licenses</small>
@@ -376,24 +378,14 @@ export default function LicenseLedger() {
                 <div className="d-flex gap-2">
                     {companyWiseData?.licenses?.length > 0 && (
                         <>
-                            <button
-                                type="button"
-                                className="btn btn-sm btn-outline-secondary"
-                                onClick={handleBulkExportPDF}
-                                disabled={bulkExporting}
-                            >
-                                {bulkExporting ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-file-earmark-pdf me-1"></i>}
+                            <Button variant="outline" size="sm" onClick={handleBulkExportPDF} disabled={bulkExporting}>
+                                {bulkExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
                                 Export PDF
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-sm btn-outline-secondary"
-                                onClick={handleBulkExportExcel}
-                                disabled={bulkExporting}
-                            >
-                                {bulkExporting ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-file-earmark-excel me-1"></i>}
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleBulkExportExcel} disabled={bulkExporting}>
+                                {bulkExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
                                 Export Excel
-                            </button>
+                            </Button>
                         </>
                     )}
                 </div>
@@ -403,29 +395,29 @@ export default function LicenseLedger() {
             {summary && (
                 <div className="row g-3 mb-4">
                     <div className="col-lg-6">
-                        <div className="card border-0 shadow-sm" style={{ borderLeft: '3px solid #4F46E5' }}>
-                            <div className="card-header bg-white border-bottom py-2 px-3 d-flex align-items-center gap-2">
-                                <i className="bi bi-globe" style={{ color: '#4F46E5', fontSize: '0.95rem' }}></i>
+                        <div className="card" style={{ borderLeft: '3px solid var(--tb-brand)' }}>
+                            <div className="card-header border-bottom py-2 px-3 d-flex align-items-center gap-2">
+                                <i className="bi bi-globe" style={{ color: 'var(--tb-brand)', fontSize: 15 }}></i>
                                 <span className="fw-semibold small">DFIA Licenses</span>
-                                <span className="badge ms-auto" style={{ background: '#4F46E5', fontSize: '0.7rem' }}>{summary.dfia.total_licenses} active</span>
+                                <span className="badge ms-auto" style={{ background: 'var(--tb-brand)', fontSize: 11 }}>{summary.dfia.total_licenses} active</span>
                             </div>
                             <div className="card-body py-2 px-3">
                                 <div className="row g-0 text-center">
                                     <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Total Value</div>
-                                        <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#4F46E5' }}>$ {formatIndianNumber(summary.dfia.total_value_usd, 2)}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Total Value</div>
+                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-brand)' }}>$ {formatIndianNumber(summary.dfia.total_value_usd, 2)}</div>
                                     </div>
                                     <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Balance</div>
-                                        <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#10b981' }}>$ {formatIndianNumber(summary.dfia.balance_value_usd, 2)}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Balance</div>
+                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-success)' }}>$ {formatIndianNumber(summary.dfia.balance_value_usd, 2)}</div>
                                     </div>
                                     <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Purchase</div>
-                                        <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#f59e0b' }}>₹{formatIndianNumber(summary.dfia.purchase_amount_inr, 0)}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Purchase</div>
+                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-warning)' }}>₹{formatIndianNumber(summary.dfia.purchase_amount_inr, 0)}</div>
                                     </div>
                                     <div className="col-3 py-2">
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>P / L</div>
-                                        <div style={{ fontSize: '0.88rem', fontWeight: '700', color: summary.dfia.profit_loss_inr >= 0 ? '#10b981' : '#ef4444' }}>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>P / L</div>
+                                        <div style={{ fontSize: 14, fontWeight: '700', color: summary.dfia.profit_loss_inr >= 0 ? 'var(--tb-success)' : 'var(--tb-danger)' }}>
                                             {summary.dfia.profit_loss_inr >= 0 ? '+' : ''}₹{formatIndianNumber(Math.abs(summary.dfia.profit_loss_inr), 0)}
                                         </div>
                                     </div>
@@ -434,29 +426,29 @@ export default function LicenseLedger() {
                         </div>
                     </div>
                     <div className="col-lg-6">
-                        <div className="card border-0 shadow-sm" style={{ borderLeft: '3px solid #06b6d4' }}>
-                            <div className="card-header bg-white border-bottom py-2 px-3 d-flex align-items-center gap-2">
-                                <i className="bi bi-trophy" style={{ color: '#06b6d4', fontSize: '0.95rem' }}></i>
+                        <div className="card" style={{ borderLeft: '3px solid var(--tb-info)' }}>
+                            <div className="card-header border-bottom py-2 px-3 d-flex align-items-center gap-2">
+                                <i className="bi bi-trophy" style={{ color: 'var(--tb-info)', fontSize: 15 }}></i>
                                 <span className="fw-semibold small">Incentive Licenses</span>
-                                <span className="badge ms-auto" style={{ background: '#06b6d4', fontSize: '0.7rem' }}>{summary.incentive.total_licenses} active</span>
+                                <span className="badge ms-auto" style={{ background: 'var(--tb-info)', fontSize: 11 }}>{summary.incentive.total_licenses} active</span>
                             </div>
                             <div className="card-body py-2 px-3">
                                 <div className="row g-0 text-center">
                                     <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Total Value</div>
-                                        <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#4F46E5' }}>₹{formatIndianNumber(summary.incentive.total_value_inr, 2)}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Total Value</div>
+                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-brand)' }}>₹{formatIndianNumber(summary.incentive.total_value_inr, 2)}</div>
                                     </div>
                                     <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Balance</div>
-                                        <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#10b981' }}>₹{formatIndianNumber(summary.incentive.balance_value_inr, 2)}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Balance</div>
+                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-success)' }}>₹{formatIndianNumber(summary.incentive.balance_value_inr, 2)}</div>
                                     </div>
                                     <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Purchase</div>
-                                        <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#f59e0b' }}>₹{formatIndianNumber(summary.incentive.purchase_amount_inr, 0)}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Purchase</div>
+                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-warning)' }}>₹{formatIndianNumber(summary.incentive.purchase_amount_inr, 0)}</div>
                                     </div>
                                     <div className="col-3 py-2">
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>P / L</div>
-                                        <div style={{ fontSize: '0.88rem', fontWeight: '700', color: summary.incentive.profit_loss_inr >= 0 ? '#10b981' : '#ef4444' }}>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>P / L</div>
+                                        <div style={{ fontSize: 14, fontWeight: '700', color: summary.incentive.profit_loss_inr >= 0 ? 'var(--tb-success)' : 'var(--tb-danger)' }}>
                                             {summary.incentive.profit_loss_inr >= 0 ? '+' : ''}₹{formatIndianNumber(Math.abs(summary.incentive.profit_loss_inr), 0)}
                                         </div>
                                     </div>
@@ -468,13 +460,13 @@ export default function LicenseLedger() {
             )}
 
             {/* Filters Section */}
-            <div className="card border-0 shadow-sm mb-4">
-                <div className="card-header bg-white border-bottom py-2 px-3 d-flex align-items-center justify-content-between">
+            <div className="card mb-3">
+                <div className="card-header border-bottom py-2 px-3 d-flex align-items-center justify-content-between">
                     <div className="d-flex align-items-center gap-2">
-                        <i className="bi bi-funnel" style={{ color: '#4F46E5' }}></i>
+                        <i className="bi bi-funnel" style={{ color: 'var(--tb-brand)' }}></i>
                         <h6 className="mb-0 fw-semibold">Filters & Search</h6>
                         {filters.company && (
-                            <span className="badge bg-info ms-1" style={{ fontSize: '0.7rem' }}>
+                            <span className="badge bg-info ms-1" style={{ fontSize: 11 }}>
                                 <i className="bi bi-building me-1"></i>{filters.company.label}
                             </span>
                         )}
@@ -488,7 +480,7 @@ export default function LicenseLedger() {
                 <div className="card-body p-3">
                     <div className="row g-3">
                         <div className="col-lg-3 col-md-5">
-                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 <i className="bi bi-building me-1"></i>
                                 Company Filter
                             </label>
@@ -505,7 +497,7 @@ export default function LicenseLedger() {
                             <small className="text-muted">Filter by trades with specific company</small>
                         </div>
                         <div className="col-lg-3 col-md-6">
-                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 License Type
                             </label>
                             <div className="d-flex flex-wrap gap-1">
@@ -515,10 +507,10 @@ export default function LicenseLedger() {
                                         type="button"
                                         onClick={() => handleFilterChange('license_type', opt.value)}
                                         style={{
-                                            fontSize: '0.75rem', fontWeight: '600', padding: '4px 10px', borderRadius: '20px',
-                                            background: filters.license_type === opt.value ? '#4F46E5' : 'white',
+                                            fontSize: 12, fontWeight: '600', padding: '4px 10px', borderRadius: '20px',
+                                            background: filters.license_type === opt.value ? 'var(--tb-brand)' : 'white',
                                             color: filters.license_type === opt.value ? 'white' : 'var(--text-secondary)',
-                                            border: `1px solid ${filters.license_type === opt.value ? '#4F46E5' : '#d1d5db'}`,
+                                            border: `1px solid ${filters.license_type === opt.value ? 'var(--tb-brand)' : 'var(--tb-border)'}`,
                                             cursor: 'pointer', transition: 'all 0.15s',
                                         }}
                                     >
@@ -528,7 +520,7 @@ export default function LicenseLedger() {
                             </div>
                         </div>
                         <div className="col-lg-2 col-md-3">
-                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 Min Balance
                             </label>
                             <input
@@ -538,11 +530,11 @@ export default function LicenseLedger() {
                                 onChange={(e) => handleFilterChange('min_balance', e.target.value)}
                                 placeholder="0"
                                 step="100"
-                                style={{ borderColor: 'var(--bs-gray-300)', fontSize: '0.95rem' }}
+                                style={{ borderColor: 'var(--tb-border-strong)', fontSize: 15 }}
                             />
                         </div>
                         <div className="col-lg-3 col-md-5">
-                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 Search
                             </label>
                             <div className="input-group">
@@ -555,19 +547,19 @@ export default function LicenseLedger() {
                                     value={filters.search}
                                     onChange={(e) => handleFilterChange('search', e.target.value)}
                                     placeholder="License # or exporter..."
-                                    style={{ borderLeft: 'none', fontSize: '0.95rem' }}
+                                    style={{ borderLeft: 'none', fontSize: 15 }}
                                 />
                             </div>
                         </div>
                         <div className="col-lg-2 col-md-4">
-                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 Sort By
                             </label>
                             <select
                                 className="form-select"
                                 value={filters.ordering}
                                 onChange={(e) => handleFilterChange('ordering', e.target.value)}
-                                style={{ borderColor: 'var(--bs-gray-300)', fontSize: '0.95rem' }}
+                                style={{ borderColor: 'var(--tb-border-strong)', fontSize: 15 }}
                             >
                                 <option value="-license_date">Latest First</option>
                                 <option value="license_date">Oldest First</option>
@@ -585,7 +577,7 @@ export default function LicenseLedger() {
                                     onChange={(e) => handleFilterChange('active_only', e.target.checked)}
                                     style={{ cursor: 'pointer' }}
                                 />
-                                <label className="form-check-label" htmlFor="activeOnly" style={{ fontSize: '0.78rem', fontWeight: '600', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                                <label className="form-check-label" htmlFor="activeOnly" style={{ fontSize: 12, fontWeight: '600', cursor: 'pointer', color: 'var(--text-secondary)' }}>
                                     Active Only
                                 </label>
                             </div>
@@ -598,15 +590,15 @@ export default function LicenseLedger() {
                             <div className="d-flex align-items-center justify-content-between mb-2">
                                 <div className="d-flex align-items-center">
                                     <i className="bi bi-calendar-range text-primary me-2"></i>
-                                    <strong style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Purchase Date Range</strong>
-                                    <small className="text-muted ms-2" style={{ fontSize: '0.8rem' }}>(Defaults to current FY: Apr-Mar)</small>
+                                    <strong style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Purchase Date Range</strong>
+                                    <small className="text-muted ms-2" style={{ fontSize: 12.5 }}>(Defaults to current FY: Apr-Mar)</small>
                                 </div>
                                 <div className="btn-group" role="group">
                                     <button
                                         type="button"
                                         className="btn btn-sm btn-outline-primary"
                                         onClick={setCurrentFinancialYear}
-                                        style={{ fontSize: '0.75rem' }}
+                                        style={{ fontSize: 12 }}
                                     >
                                         <i className="bi bi-calendar-check me-1"></i>Current FY
                                     </button>
@@ -614,7 +606,7 @@ export default function LicenseLedger() {
                                         type="button"
                                         className="btn btn-sm btn-outline-secondary"
                                         onClick={setPreviousFinancialYear}
-                                        style={{ fontSize: '0.75rem' }}
+                                        style={{ fontSize: 12 }}
                                     >
                                         <i className="bi bi-calendar3 me-1"></i>Previous FY
                                     </button>
@@ -623,7 +615,7 @@ export default function LicenseLedger() {
                                         className="btn btn-sm btn-outline-danger"
                                         onClick={clearDateFilter}
                                         disabled={!filters.purchase_date_from && !filters.purchase_date_to}
-                                        style={{ fontSize: '0.75rem' }}
+                                        style={{ fontSize: 12 }}
                                     >
                                         <i className="bi bi-x-circle me-1"></i>Clear
                                     </button>
@@ -631,7 +623,7 @@ export default function LicenseLedger() {
                             </div>
                         </div>
                         <div className="col-lg-3 col-md-4">
-                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 <i className="bi bi-calendar-check me-1"></i>From Date
                             </label>
                             <input
@@ -639,11 +631,11 @@ export default function LicenseLedger() {
                                 className="form-control"
                                 value={filters.purchase_date_from}
                                 onChange={(e) => handleFilterChange('purchase_date_from', e.target.value)}
-                                style={{ borderColor: 'var(--bs-gray-300)', fontSize: '0.95rem' }}
+                                style={{ borderColor: 'var(--tb-border-strong)', fontSize: 15 }}
                             />
                         </div>
                         <div className="col-lg-3 col-md-4">
-                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 <i className="bi bi-calendar-x me-1"></i>To Date
                             </label>
                             <input
@@ -651,7 +643,7 @@ export default function LicenseLedger() {
                                 className="form-control"
                                 value={filters.purchase_date_to}
                                 onChange={(e) => handleFilterChange('purchase_date_to', e.target.value)}
-                                style={{ borderColor: 'var(--bs-gray-300)', fontSize: '0.95rem' }}
+                                style={{ borderColor: 'var(--tb-border-strong)', fontSize: 15 }}
                             />
                         </div>
                     </div>
@@ -659,7 +651,7 @@ export default function LicenseLedger() {
             </div>
 
             {/* Company-wise Ledger */}
-            <div className="card border-0 shadow-sm">
+            <div className="card">
                 <div className="card-body p-0">
                     {companyWiseLoading ? (
                         <div className="text-center py-5">
@@ -675,8 +667,8 @@ export default function LicenseLedger() {
                         />
                     ) : (
                         <div className="text-center py-5">
-                            <i className="bi bi-building" style={{ fontSize: '2.5rem', color: 'var(--bs-gray-300)' }}></i>
-                            <p className="mt-3 mb-1 fw-semibold" style={{ color: 'var(--text-dark)', fontSize: '0.95rem' }}>No Data</p>
+                            <i className="bi bi-building" style={{ fontSize: '2.5rem', color: 'var(--tb-border-strong)' }}></i>
+                            <p className="mt-3 mb-1 fw-semibold" style={{ color: 'var(--tb-text)', fontSize: 15 }}>No Data</p>
                             <p className="text-muted mb-0 small">No trades found</p>
                         </div>
                     )}

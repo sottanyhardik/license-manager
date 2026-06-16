@@ -271,13 +271,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-xl">
                 <div className="modal-content" style={{
-                    borderRadius: '12px',
+                    borderRadius: 'var(--tb-r-md)',
                     boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
                     border: 'none'
                 }}>
                     <div className="modal-header" style={{
-                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                        color: 'white',
+                        background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))',
+                        color: '#fff',
                         borderTopLeftRadius: '12px',
                         borderTopRightRadius: '12px',
                         padding: '1.5rem',
@@ -301,7 +301,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                     </div>
 
                     <form onSubmit={handleSubmit}>
-                        <div className="modal-body" style={{ padding: '2rem', backgroundColor: 'var(--bs-gray-50)' }}>
+                        <div className="modal-body" style={{ padding: '2rem', backgroundColor: 'var(--tb-sunken)' }}>
                             {/* Non-Field Errors */}
                             {nonFieldErrors.length > 0 && (
                                 <div className="alert alert-danger mb-3" role="alert">
@@ -321,13 +321,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                 <div className="d-flex flex-column gap-3">
 
                                     {/* Section: Basic Information */}
-                                    <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #4F46E5' }}>
-                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4F46E5', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-brand)' }}>
+                                        <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-brand)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <i className="bi bi-building"></i> Basic Information
                                         </div>
                                         <div className="row g-3">
                                             <div className="col-md-6">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Company <span className="text-danger">*</span></label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Company <span className="text-danger">*</span></label>
                                                 <AsyncSelect
                                                     cacheOptions
                                                     defaultOptions
@@ -340,13 +340,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     className={getFieldError(fieldErrors, 'company') ? 'is-invalid' : ''}
                                                 />
                                                 {getFieldError(fieldErrors, 'company') && (
-                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: 12 }}>
                                                         <i className="bi bi-exclamation-circle me-1"></i>{getFieldError(fieldErrors, 'company')}
                                                     </div>
                                                 )}
                                             </div>
                                             <div className="col-md-3">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Type</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Type</label>
                                                 <select
                                                     className="form-select"
                                                     value={formData.type}
@@ -357,7 +357,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                 </select>
                                             </div>
                                             <div className="col-md-3">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Port <span className="text-danger">*</span></label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Port <span className="text-danger">*</span></label>
                                                 <AsyncSelect
                                                     cacheOptions
                                                     defaultOptions
@@ -370,13 +370,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     className={getFieldError(fieldErrors, 'port') ? 'is-invalid' : ''}
                                                 />
                                                 {getFieldError(fieldErrors, 'port') && (
-                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: 12 }}>
                                                         <i className="bi bi-exclamation-circle me-1"></i>{getFieldError(fieldErrors, 'port')}
                                                     </div>
                                                 )}
                                             </div>
                                             <div className="col-md-6">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Item Name</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Item Name</label>
                                                 <input
                                                     type="text"
                                                     className={`form-control ${getFieldErrorClass(fieldErrors, 'item_name')}`}
@@ -385,11 +385,11 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     placeholder="Enter item name"
                                                 />
                                                 {getFieldError(fieldErrors, 'item_name') && (
-                                                    <div className="invalid-feedback" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'item_name')}</div>
+                                                    <div className="invalid-feedback" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'item_name')}</div>
                                                 )}
                                             </div>
                                             <div className="col-md-6">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Required Quantity</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Required Quantity</label>
                                                 <input
                                                     type="number"
                                                     step="0.01"
@@ -399,22 +399,22 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     placeholder="0.00"
                                                 />
                                                 {getFieldError(fieldErrors, 'required_quantity') && (
-                                                    <div className="invalid-feedback" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'required_quantity')}</div>
+                                                    <div className="invalid-feedback" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'required_quantity')}</div>
                                                 )}
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Section: Financial Details */}
-                                    <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #10b981' }}>
-                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10b981', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-success)' }}>
+                                        <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-success)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <i className="bi bi-currency-dollar"></i> Financial Details
                                         </div>
                                         <div className="row g-3">
                                             <div className="col-md-3">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>CIF INR</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>CIF INR</label>
                                                 <div className="input-group">
-                                                    <span className="input-group-text" style={{ fontSize: '0.8rem' }}>₹</span>
+                                                    <span className="input-group-text" style={{ fontSize: 12.5 }}>₹</span>
                                                     <input
                                                         type="number"
                                                         step="0.01"
@@ -425,11 +425,11 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     />
                                                 </div>
                                                 {getFieldError(fieldErrors, 'cif_inr') && (
-                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'cif_inr')}</div>
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'cif_inr')}</div>
                                                 )}
                                             </div>
                                             <div className="col-md-3">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Exchange Rate</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Exchange Rate</label>
                                                 <input
                                                     type="number"
                                                     step="0.01"
@@ -439,13 +439,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     placeholder="e.g. 83.50"
                                                 />
                                                 {getFieldError(fieldErrors, 'exchange_rate') && (
-                                                    <div className="invalid-feedback" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'exchange_rate')}</div>
+                                                    <div className="invalid-feedback" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'exchange_rate')}</div>
                                                 )}
                                             </div>
                                             <div className="col-md-3">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>CIF FC</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>CIF FC</label>
                                                 <div className="input-group">
-                                                    <span className="input-group-text" style={{ fontSize: '0.8rem' }}>$</span>
+                                                    <span className="input-group-text" style={{ fontSize: 12.5 }}>$</span>
                                                     <input
                                                         type="number"
                                                         step="0.01"
@@ -456,13 +456,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     />
                                                 </div>
                                                 {getFieldError(fieldErrors, 'cif_fc') && (
-                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'cif_fc')}</div>
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'cif_fc')}</div>
                                                 )}
                                             </div>
                                             <div className="col-md-3">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Unit Value / Unit</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Unit Value / Unit</label>
                                                 <div className="input-group">
-                                                    <span className="input-group-text" style={{ fontSize: '0.8rem' }}>$</span>
+                                                    <span className="input-group-text" style={{ fontSize: 12.5 }}>$</span>
                                                     <input
                                                         type="number"
                                                         step="0.001"
@@ -473,20 +473,20 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     />
                                                 </div>
                                                 {getFieldError(fieldErrors, 'unit_value_per_unit') && (
-                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'unit_value_per_unit')}</div>
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'unit_value_per_unit')}</div>
                                                 )}
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Section: Additional Info */}
-                                    <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #f59e0b' }}>
-                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#d97706', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-warning)' }}>
+                                        <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-warning-text)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <i className="bi bi-file-text"></i> Additional Info
                                         </div>
                                         <div className="row g-3">
                                             <div className="col-md-4">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Invoice</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Invoice</label>
                                                 <input
                                                     type="text"
                                                     className={`form-control ${getFieldErrorClass(fieldErrors, 'invoice')}`}
@@ -495,11 +495,11 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     placeholder="Invoice number"
                                                 />
                                                 {getFieldError(fieldErrors, 'invoice') && (
-                                                    <div className="invalid-feedback" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'invoice')}</div>
+                                                    <div className="invalid-feedback" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'invoice')}</div>
                                                 )}
                                             </div>
                                             <div className="col-md-4">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Estimated Arrival Date</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Estimated Arrival Date</label>
                                                 <input
                                                     type="date"
                                                     className="form-control"
@@ -508,7 +508,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                 />
                                             </div>
                                             <div className="col-md-4">
-                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>BL Detail</label>
+                                                <label className="form-label" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>BL Detail</label>
                                                 <textarea
                                                     className="form-control"
                                                     rows="1"
@@ -521,8 +521,8 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                     </div>
 
                                     {/* Section: Status */}
-                                    <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #6366F1' }}>
-                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6366F1', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-brand)' }}>
+                                        <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-brand)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <i className="bi bi-toggle-on"></i> Status Flags
                                         </div>
                                         <div className="d-flex gap-4">
@@ -560,8 +560,8 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                         </div>
 
                         <div className="modal-footer" style={{
-                            backgroundColor: 'var(--bs-gray-50)',
-                            borderTop: '1px solid #dee2e6',
+                            backgroundColor: 'var(--tb-sunken)',
+                            borderTop: '1px solid var(--tb-border)',
                             padding: '1rem 2rem'
                         }}>
                             <button
@@ -577,8 +577,8 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                 className="btn"
                                 disabled={loading || initialLoad}
                                 style={{
-                                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                                    color: 'white',
+                                    background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))',
+                                    color: '#fff',
                                     border: 'none'
                                 }}
                             >

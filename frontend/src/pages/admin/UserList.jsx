@@ -1,20 +1,33 @@
-import {useCallback, useContext, useEffect, useState} from 'react';
-import {Link, useNavigate} from 'react-router-dom';
-import {toast} from 'react-toastify';
-import {deleteUser, listUsers} from '../../api/users';
-import {AuthContext} from '../../context/AuthContext';
-import {getErrorMessage} from '../../utils/errorUtils';
-import {ROLE_LABELS, getRoleBadgeProps} from '../../utils/roleConstants';
+import { useCallback, useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { Plus, Pencil, Trash2, Search, Users } from "lucide-react";
+
+import { deleteUser, listUsers } from "../../api/users";
+import { AuthContext } from "../../context/AuthContext";
+import { getErrorMessage } from "../../utils/errorUtils";
+import { ROLE_LABELS, getRoleBadgeProps } from "../../utils/roleConstants";
+import PageHeader from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function UserList() {
     const navigate = useNavigate();
-    const {user: currentUser} = useContext(AuthContext);
+    const { user: currentUser } = useContext(AuthContext);
 
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [roleFilter, setRoleFilter] = useState('');
-    const [activeFilter, setActiveFilter] = useState('');
+    const [search, setSearch] = useState("");
+    const [roleFilter, setRoleFilter] = useState("");
+    const [activeFilter, setActiveFilter] = useState("");
     const [confirmDelete, setConfirmDelete] = useState(null);
 
     const fetchUsers = useCallback(async () => {
@@ -23,8 +36,8 @@ export default function UserList() {
             const params = {};
             if (search) params.search = search;
             if (roleFilter) params.role = roleFilter;
-            if (activeFilter !== '') params.is_active = activeFilter;
-            const {data} = await listUsers(params);
+            if (activeFilter !== "") params.is_active = activeFilter;
+            const { data } = await listUsers(params);
             setUsers(Array.isArray(data) ? data : data.results ?? []);
         } catch (err) {
             toast.error(getErrorMessage(err));
@@ -33,14 +46,12 @@ export default function UserList() {
         }
     }, [search, roleFilter, activeFilter]);
 
-    useEffect(() => {
-        fetchUsers();
-    }, [fetchUsers]);
+    useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
     const handleDelete = async (userId) => {
         try {
             await deleteUser(userId);
-            toast.success('User deleted');
+            toast.success("User deleted");
             setConfirmDelete(null);
             fetchUsers();
         } catch (err) {
@@ -48,163 +59,148 @@ export default function UserList() {
         }
     };
 
+    // Select uses non-empty sentinel values; map to "" for the API
+    const ALL = "__all__";
+
     return (
-        <div className="container-fluid py-4">
-            {/* Header */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h4 className="fw-bold mb-0">User Management</h4>
-                    <small className="text-muted">Manage users, roles and access</small>
-                </div>
-                <Link to="/admin/users/create" className="btn btn-primary">
-                    + Add User
-                </Link>
-            </div>
+        <>
+            <PageHeader
+                pretitle="Admin"
+                title="User Management"
+                description="Manage users, roles and access"
+                actions={
+                    <Button onClick={() => navigate("/admin/users/create")}>
+                        <Plus className="size-4" />
+                        Add User
+                    </Button>
+                }
+            />
 
             {/* Filters */}
-            <div className="card mb-3">
-                <div className="card-body py-2">
-                    <div className="row g-2">
-                        <div className="col-md-4">
-                            <input
-                                className="form-control form-control-sm"
-                                placeholder="Search by username or email…"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
-                        </div>
-                        <div className="col-md-3">
-                            <select
-                                className="form-select form-select-sm"
-                                value={roleFilter}
-                                onChange={e => setRoleFilter(e.target.value)}
-                            >
-                                <option value="">All Roles</option>
-                                {Object.keys(ROLE_LABELS).map(code => (
-                                    <option key={code} value={code}>{ROLE_LABELS[code]}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="col-md-2">
-                            <select
-                                className="form-select form-select-sm"
-                                value={activeFilter}
-                                onChange={e => setActiveFilter(e.target.value)}
-                            >
-                                <option value="">All Status</option>
-                                <option value="true">Active</option>
-                                <option value="false">Inactive</option>
-                            </select>
-                        </div>
+            <Card className="mb-3">
+                <CardContent className="flex flex-wrap items-center gap-2 py-3">
+                    <div className="relative min-w-[220px] flex-1">
+                        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            className="h-9 pl-8"
+                            placeholder="Search by username or email…"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
                     </div>
-                </div>
-            </div>
+                    <Select value={roleFilter || ALL} onValueChange={(v) => setRoleFilter(v === ALL ? "" : v)}>
+                        <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Roles" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={ALL}>All Roles</SelectItem>
+                            {Object.keys(ROLE_LABELS).map((code) => (
+                                <SelectItem key={code} value={code}>{ROLE_LABELS[code]}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={activeFilter || ALL} onValueChange={(v) => setActiveFilter(v === ALL ? "" : v)}>
+                        <SelectTrigger className="w-[140px]"><SelectValue placeholder="All Status" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={ALL}>All Status</SelectItem>
+                            <SelectItem value="true">Active</SelectItem>
+                            <SelectItem value="false">Inactive</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </CardContent>
+            </Card>
 
             {/* Table */}
-            <div className="card">
-                <div className="card-body p-0">
+            <Card>
+                <CardContent className="p-0">
                     {loading ? (
-                        <div className="p-4 text-center text-muted">Loading users…</div>
+                        <div className="p-8 text-center text-sm text-muted-foreground">Loading users…</div>
                     ) : users.length === 0 ? (
-                        <div className="p-4 text-center text-muted">No users found.</div>
+                        <div className="flex flex-col items-center gap-2 p-10 text-center text-muted-foreground">
+                            <Users className="size-8 opacity-50" />
+                            <span className="text-sm">No users found.</span>
+                        </div>
                     ) : (
-                        <div className="table-responsive">
-                            <table className="table table-hover mb-0 align-middle">
-                                <thead className="table-light">
-                                <tr>
-                                    <th>User</th>
-                                    <th>Email</th>
-                                    <th>Roles</th>
-                                    <th>Status</th>
-                                    <th className="text-end">Actions</th>
-                                </tr>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-border bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <th className="px-4 py-2.5">User</th>
+                                        <th className="px-4 py-2.5">Email</th>
+                                        <th className="px-4 py-2.5">Roles</th>
+                                        <th className="px-4 py-2.5">Status</th>
+                                        <th className="px-4 py-2.5 text-right">Actions</th>
+                                    </tr>
                                 </thead>
                                 <tbody>
-                                {users.map(u => (
-                                    <tr key={u.id}>
-                                        <td>
-                                            <div className="fw-semibold">{u.username}</div>
-                                            {u.first_name || u.last_name
-                                                ? <small className="text-muted">{u.first_name} {u.last_name}</small>
-                                                : null}
-                                            {u.is_superuser &&
-                                                <span className="badge bg-danger ms-1">Super Admin</span>}
-                                        </td>
-                                        <td className="text-muted small">{u.email || '—'}</td>
-                                        <td>
-                                            {(u.roles ?? []).length === 0
-                                                ? <span className="text-muted small">No roles</span>
-                                                : (u.roles ?? []).map(r => {
-                                                    const bp = getRoleBadgeProps(r);
-                                                    return (
-                                                        <span
-                                                            key={r}
-                                                            className={`${bp.className} me-1 mb-1`}
-                                                            style={{fontSize: '0.7rem', ...bp.style}}
-                                                        >
-                                                            {ROLE_LABELS[r] ?? r}
-                                                        </span>
-                                                    );
-                                                })
-                                            }
-                                        </td>
-                                        <td>
-                                            <span className={`badge bg-${u.is_active ? 'success' : 'secondary'}`}>
-                                                {u.is_active ? 'Active' : 'Inactive'}
-                                            </span>
-                                        </td>
-                                        <td className="text-end">
-                                            <div className="btn-group btn-group-sm">
-                                                <button
-                                                    className="btn btn-outline-primary"
-                                                    onClick={() => navigate(`/admin/users/${u.id}/edit`)}
-                                                >
-                                                    Edit
-                                                </button>
-                                                {currentUser?.is_superuser && u.id !== currentUser?.id && (
-                                                    <button
-                                                        className="btn btn-outline-danger"
-                                                        onClick={() => setConfirmDelete(u)}
-                                                    >
-                                                        Delete
-                                                    </button>
+                                    {users.map((u) => (
+                                        <tr key={u.id} className="border-b border-border/60 transition-colors hover:bg-accent/40">
+                                            <td className="px-4 py-2.5">
+                                                <div className="flex items-center gap-1.5 font-medium text-foreground">
+                                                    {u.username}
+                                                    {u.is_superuser && <Badge variant="destructive">Super Admin</Badge>}
+                                                </div>
+                                                {(u.first_name || u.last_name) && (
+                                                    <div className="text-xs text-muted-foreground">{u.first_name} {u.last_name}</div>
                                                 )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="px-4 py-2.5 text-muted-foreground">{u.email || "—"}</td>
+                                            <td className="px-4 py-2.5">
+                                                {(u.roles ?? []).length === 0 ? (
+                                                    <span className="text-xs text-muted-foreground">No roles</span>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {(u.roles ?? []).map((r) => {
+                                                            const bp = getRoleBadgeProps(r);
+                                                            return (
+                                                                <span key={r} className={bp.className} style={{ fontSize: 11, ...bp.style }}>
+                                                                    {ROLE_LABELS[r] ?? r}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-2.5">
+                                                <Badge variant={u.is_active ? "success" : "secondary"}>
+                                                    {u.is_active ? "Active" : "Inactive"}
+                                                </Badge>
+                                            </td>
+                                            <td className="px-4 py-2.5">
+                                                <div className="flex justify-end gap-1.5">
+                                                    <Button variant="outline" size="sm" onClick={() => navigate(`/admin/users/${u.id}/edit`)}>
+                                                        <Pencil className="size-3.5" />
+                                                        Edit
+                                                    </Button>
+                                                    {currentUser?.is_superuser && u.id !== currentUser?.id && (
+                                                        <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setConfirmDelete(u)}>
+                                                            <Trash2 className="size-3.5" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
                     )}
-                </div>
-            </div>
+                </CardContent>
+            </Card>
 
-            {/* Delete confirmation modal */}
-            {confirmDelete && (
-                <div className="modal show d-block" tabIndex="-1" style={{background: 'rgba(0,0,0,0.5)'}}>
-                    <div className="modal-dialog modal-sm">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h5 className="modal-title">Delete User</h5>
-                                <button className="btn-close" onClick={() => setConfirmDelete(null)}/>
-                            </div>
-                            <div className="modal-body">
-                                Are you sure you want to delete <strong>{confirmDelete.username}</strong>?
-                                This cannot be undone.
-                            </div>
-                            <div className="modal-footer">
-                                <button className="btn btn-secondary btn-sm"
-                                        onClick={() => setConfirmDelete(null)}>Cancel
-                                </button>
-                                <button className="btn btn-danger btn-sm"
-                                        onClick={() => handleDelete(confirmDelete.id)}>Delete
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+            {/* Delete confirmation */}
+            <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete User</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete <strong className="text-foreground">{confirmDelete?.username}</strong>? This cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={() => handleDelete(confirmDelete.id)}>Delete</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }

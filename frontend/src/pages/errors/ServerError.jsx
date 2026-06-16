@@ -1,26 +1,22 @@
-import { Link } from "react-router-dom";
-import { Button, EmptyState } from "../../components/ui";
+import { ServerCrash, House, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import ErrorScreen from "../../components/ErrorScreen";
 
 export default function ServerError() {
     return (
-        <div
-            className="d-flex align-items-center justify-content-center"
-            style={{ minHeight: "100vh", background: "var(--tb-body-bg)", padding: 20 }}
-        >
-            <div className="card" style={{ maxWidth: 480, width: "100%" }}>
-                <div className="card-body">
-                    <EmptyState
-                        icon="exclamation-octagon"
-                        title="500 — Something went wrong"
-                        description="A server error occurred. Please try again in a moment."
-                        action={
-                            <Link to="/dashboard">
-                                <Button variant="primary" size="sm" icon="house">Back to Dashboard</Button>
-                            </Link>
-                        }
-                    />
-                </div>
-            </div>
-        </div>
+        <ErrorScreen
+            code="500"
+            icon={ServerCrash}
+            tone="destructive"
+            title="Something went wrong"
+            description="A server error occurred. Please try refreshing, or come back in a moment."
+            action={{ to: "/dashboard", label: "Back to Dashboard", icon: House }}
+            secondary={
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                    <RefreshCw className="size-4" />
+                    Retry
+                </Button>
+            }
+        />
     );
 }

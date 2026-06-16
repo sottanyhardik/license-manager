@@ -7,6 +7,8 @@ import {formatDate} from "../../utils/dateFormatter";
 import {toast} from "react-toastify";
 import Select from "react-select";
 import {useDebouncedFilters} from "../../hooks/useDebounce";
+import { Button } from "@/components/ui/button";
+import { FileSpreadsheet, XCircle, Loader2 } from "lucide-react";
 
 export default function ItemReport() {
     const navigate = useNavigate();
@@ -406,7 +408,7 @@ export default function ItemReport() {
     const itemNameOptions = availableItems;
 
     return (
-        <div style={{ minHeight: '100vh' }}>
+        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
             {/* Tabler-style page header */}
             <div className="page-header">
                 <div style={{ minWidth: 0 }}>
@@ -435,24 +437,15 @@ export default function ItemReport() {
                     )}
                 </div>
                 <div className="page-actions">
-                    <button
-                        type="button"
-                        className="btn btn-outline-secondary btn-sm"
+                    <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleExport}
                         disabled={downloading || (selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch)}
                     >
-                        {downloading ? (
-                            <>
-                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style={{ width: 12, height: 12 }} />
-                                Generating…
-                            </>
-                        ) : (
-                            <>
-                                <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
-                                Excel
-                            </>
-                        )}
-                    </button>
+                        {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
+                        {downloading ? 'Generating…' : 'Excel'}
+                    </Button>
                 </div>
             </div>
 
@@ -462,25 +455,21 @@ export default function ItemReport() {
                     <div className="surface-card">
                         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}
                              className="d-flex justify-content-between align-items-center">
-                            <h5 className="mb-0" style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                            <h5 className="mb-0" style={{ fontWeight: 600, fontSize: 15 }}>
                                 <i className="bi bi-sliders me-2" style={{ color: 'var(--primary-color)' }}></i>
                                 Filters
                                 {isPending && (
-                                    <span className="ms-2" style={{ fontSize: '0.85rem', color: 'var(--bs-gray-500)' }}>
+                                    <span className="ms-2" style={{ fontSize: 13.5, color: 'var(--tb-text-secondary)' }}>
                                         <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
                                         Updating...
                                     </span>
                                 )}
                             </h5>
                             {hasActiveFilters && (
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-secondary btn-sm"
-                                    onClick={handleClearFilters}
-                                >
-                                    <i className="bi bi-x-circle me-1"></i>
+                                <Button variant="outline" size="sm" onClick={handleClearFilters}>
+                                    <XCircle className="size-3.5" />
                                     Clear Filters
-                                </button>
+                                </Button>
                             )}
                         </div>
                         <div style={{ padding: '14px 16px' }}>
@@ -774,17 +763,17 @@ export default function ItemReport() {
             {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
                 <div className="row mb-3">
                     <div className="col-12">
-                        <div className="card shadow-sm border-0" style={{
+                        <div className="card" style={{
                             position: 'sticky',
                             top: '70px',
                             zIndex: 1020
                         }}>
-                            <div className="card-body bg-light py-2">
+                            <div className="card-body py-2">
                                 <div className="d-flex justify-content-end align-items-center gap-4">
-                                    <div className="fw-bold text-dark">Total:</div>
+                                    <div className="fw-bold">Total:</div>
                                     <div className="d-flex align-items-center gap-2">
                                         <span className="text-muted small">Avail Qty:</span>
-                                        <span className="fw-bold text-dark">
+                                        <span className="fw-bold">
                                             {reportData.items.reduce((sum, item) => sum + (item.available_quantity || 0), 0).toLocaleString('en-IN', {
                                                 minimumFractionDigits: 3,
                                                 maximumFractionDigits: 3
@@ -836,20 +825,17 @@ export default function ItemReport() {
             <div className="row">
                 <div className="col-12">
                     {loading && (
-                        <div className="card shadow-sm border-0">
-                            <div className="card-body text-center py-5">
-                                <div className="spinner-border text-primary mb-3" role="status"
-                                     style={{width: '3rem', height: '3rem'}}>
-                                    <span className="visually-hidden">Loading...</span>
-                                </div>
-                                <h5 className="text-muted">Loading Item Report...</h5>
+                        <div className="card">
+                            <div className="card-body flex flex-col items-center py-12 text-center">
+                                <Loader2 className="mb-3 size-10 animate-spin text-primary" />
+                                <h5 className="text-muted">Loading Item Report…</h5>
                                 <p className="text-muted small">Please wait while we fetch the data</p>
                             </div>
                         </div>
                     )}
 
                     {!loading && selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch && (
-                        <div className="card shadow-sm border-0">
+                        <div className="card">
                             <div className="card-body text-center py-5">
                                 <i className="bi bi-tag" style={{fontSize: '3rem', color: 'var(--primary-color)'}}></i>
                                 <h5 className="mt-3 text-primary">Select Filters to View Report</h5>
@@ -859,9 +845,9 @@ export default function ItemReport() {
                     )}
 
                     {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length === 0 && (
-                        <div className="card shadow-sm border-0">
+                        <div className="card">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--bs-gray-300)'}}></i>
+                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--tb-border-strong)'}}></i>
                                 <h5 className="mt-3 text-muted">No items found</h5>
                                 <p className="text-muted">Try adjusting your filters to see more results.</p>
                                 <div className="mt-3 text-start" style={{maxWidth: '600px', margin: '0 auto'}}>
@@ -877,7 +863,7 @@ export default function ItemReport() {
                     )}
 
                     {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
-                        <div className="card shadow-sm border-0">
+                        <div className="card">
                             <div className="card-body p-0">
                                 <div className="table-responsive" style={{overflowX: 'auto'}}>
                                     <table className="table table-hover table-sm mb-0"
@@ -888,7 +874,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: 0,
                                                 zIndex: 11,
-                                                backgroundColor: 'var(--bs-gray-50)',
+                                                backgroundColor: 'var(--tb-sunken)',
                                                 minWidth: '60px'
                                             }}>Sr No
                                             </th>
@@ -896,7 +882,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: '60px',
                                                 zIndex: 11,
-                                                backgroundColor: 'var(--bs-gray-50)',
+                                                backgroundColor: 'var(--tb-sunken)',
                                                 minWidth: '150px'
                                             }}>License No
                                             </th>
@@ -904,7 +890,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: '210px',
                                                 zIndex: 11,
-                                                backgroundColor: 'var(--bs-gray-50)',
+                                                backgroundColor: 'var(--tb-sunken)',
                                                 minWidth: '120px'
                                             }}>License Date
                                             </th>
@@ -912,10 +898,10 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: '330px',
                                                 zIndex: 11,
-                                                backgroundColor: 'var(--bs-gray-50)',
+                                                backgroundColor: 'var(--tb-sunken)',
                                                 minWidth: '140px',
                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
-                                                borderRight: '2px solid #dee2e6'
+                                                borderRight: '2px solid var(--tb-border)'
                                             }}>Expiry Date
                                             </th>
                                             <th style={{minWidth: '200px'}}>Exporter Name</th>
@@ -954,7 +940,7 @@ export default function ItemReport() {
 
                                                     return (
                                                         <tr key={item.id} style={{
-                                                            borderBottom: itemIdx === licenseItems.length - 1 ? '2px solid #dee2e6' : '',
+                                                            borderBottom: itemIdx === licenseItems.length - 1 ? '2px solid var(--tb-border)' : '',
                                                             verticalAlign: 'middle'
                                                         }}>
                                                             {isFirstRow && (
@@ -965,7 +951,7 @@ export default function ItemReport() {
                                                                             left: 0,
                                                                             zIndex: 9,
                                                                             verticalAlign: 'middle',
-                                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                                            backgroundColor: 'var(--tb-sunken)',
                                                                             fontWeight: '500'
                                                                         }}>{srNo - itemIdx}</td>
                                                                     <td rowSpan={rowSpan} style={{
@@ -973,7 +959,7 @@ export default function ItemReport() {
                                                                         left: '60px',
                                                                         zIndex: 9,
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: 'var(--bs-gray-50)',
+                                                                        backgroundColor: 'var(--tb-sunken)',
                                                                         fontWeight: '600'
                                                                     }}>
                                                                         <div
@@ -983,7 +969,7 @@ export default function ItemReport() {
                                                                                 className="btn btn-sm btn-outline-secondary ms-2"
                                                                                 style={{
                                                                                     padding: '2px 8px',
-                                                                                    fontSize: '0.75rem'
+                                                                                    fontSize: 12
                                                                                 }}
                                                                                 onClick={() => {
                                                                                     window.open(`/api/licenses/${firstItem.license_id}/merged-documents/`, '_blank');
@@ -999,20 +985,20 @@ export default function ItemReport() {
                                                                         left: '210px',
                                                                         zIndex: 9,
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: 'var(--bs-gray-50)'
+                                                                        backgroundColor: 'var(--tb-sunken)'
                                                                     }}>{formatDate(firstItem.license_date)}</td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         position: 'sticky',
                                                                         left: '330px',
                                                                         zIndex: 9,
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: 'var(--bs-gray-50)',
+                                                                        backgroundColor: 'var(--tb-sunken)',
                                                                         boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
-                                                                        borderRight: '2px solid #dee2e6'
+                                                                        borderRight: '2px solid var(--tb-border)'
                                                                     }}>{formatDate(firstItem.license_expiry_date)}</td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: 'var(--bs-gray-50)'
+                                                                        backgroundColor: 'var(--tb-sunken)'
                                                                     }}>{firstItem.exporter_name || '-'}</td>
                                                                 </>
                                                             )}
@@ -1039,7 +1025,7 @@ export default function ItemReport() {
                                                                         control: (base) => ({
                                                                             ...base,
                                                                             minHeight: '32px',
-                                                                            fontSize: '0.875rem'
+                                                                            fontSize: 14
                                                                         })
                                                                     }}
                                                                 />
@@ -1050,17 +1036,17 @@ export default function ItemReport() {
                                                                     <td className="text-end text-success fw-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: 'var(--bs-gray-50)'
+                                                                        backgroundColor: 'var(--tb-sunken)'
                                                                     }}>{firstItem.available_balance.toFixed(2)}</td>
                                                                     <td className="text-end text-primary fw-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: 'var(--bs-gray-50)'
+                                                                        backgroundColor: 'var(--tb-sunken)'
                                                                     }}>{firstItem.balance_cif.toFixed(2)}</td>
                                                                     <td className="text-center" rowSpan={rowSpan}
                                                                         style={{
                                                                             verticalAlign: 'middle',
-                                                                            backgroundColor: 'var(--bs-gray-50)'
+                                                                            backgroundColor: 'var(--tb-sunken)'
                                                                         }}>
                                                                         {/* Restriction is derived from condition_type (licence's
                                                                             condition sheet) — read-only display. */}
@@ -1072,7 +1058,7 @@ export default function ItemReport() {
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: 'var(--bs-gray-50)'
+                                                                        backgroundColor: 'var(--tb-sunken)'
                                                                     }}>
                                                                         {editingCell?.itemId === firstItem.id && editingCell?.field === 'notes' ? (
                                                                             <div className="d-flex gap-1">
@@ -1109,7 +1095,7 @@ export default function ItemReport() {
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: 'var(--bs-gray-50)'
+                                                                        backgroundColor: 'var(--tb-sunken)'
                                                                     }}>
                                                                         {editingCell?.itemId === firstItem.id && editingCell?.field === 'condition_sheet' ? (
                                                                             <div className="d-flex gap-1">
@@ -1146,8 +1132,8 @@ export default function ItemReport() {
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: 'var(--bs-gray-50)',
-                                                                        fontSize: '0.85rem',
+                                                                        backgroundColor: 'var(--tb-sunken)',
+                                                                        fontSize: 13.5,
                                                                         lineHeight: '1.4'
                                                                     }}>
                                                                         {firstItem.latest_transfer ? (
@@ -1170,7 +1156,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: 0,
                                                 zIndex: 11,
-                                                backgroundColor: 'var(--bs-gray-200)',
+                                                backgroundColor: 'var(--tb-border)',
                                                 fontWeight: '600'
                                             }}>
                                                 Total:

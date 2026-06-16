@@ -1,11 +1,18 @@
-import {useContext, useState} from "react";
-import {useNavigate} from "react-router-dom";
+import { useContext, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
+import { KeyRound, Mail, Send, Loader2, ArrowLeft, CheckCircle2 } from "lucide-react";
+
 import api from "../../api/axios";
-import {ToastContext} from "../../components/ToastContext";
+import { ToastContext } from "../../components/ToastContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function PasswordReset() {
-    const {showToast} = useContext(ToastContext);
+    const { showToast } = useContext(ToastContext);
     const navigate = useNavigate();
+    const reduce = useReducedMotion();
     const [email, setEmail] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [sent, setSent] = useState(false);
@@ -14,7 +21,7 @@ export default function PasswordReset() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            await api.post("/auth/password-reset/", {email});
+            await api.post("/auth/password-reset/", { email });
             setSent(true);
             showToast("Reset instructions sent to your email.");
         } catch {
@@ -25,116 +32,75 @@ export default function PasswordReset() {
     };
 
     return (
-        <div style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-            padding: '20px'
-        }}>
-            <div className="card border-0 shadow-lg" style={{ maxWidth: '420px', width: '100%', borderRadius: '16px', overflow: 'hidden' }}>
-                {/* Header */}
-                <div style={{
-                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                    padding: '36px 32px',
-                    textAlign: 'center',
-                    color: 'white'
-                }}>
-                    <div style={{
-                        width: '72px', height: '72px', margin: '0 auto 16px',
-                        borderRadius: '18px',
-                        background: 'rgba(255,255,255,0.2)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        backdropFilter: 'blur(10px)'
-                    }}>
-                        <i className="bi bi-key" style={{ fontSize: '2rem' }}></i>
-                    </div>
-                    <h2 style={{ fontSize: '1.6rem', fontWeight: '700', marginBottom: '6px' }}>Forgot Password</h2>
-                    <p style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: 0 }}>
-                        Enter your email to receive reset instructions
-                    </p>
-                </div>
-
-                {/* Body */}
-                <div style={{ padding: '32px' }}>
-                    {sent ? (
-                        <div className="text-center">
-                            <div style={{
-                                width: 64, height: 64, borderRadius: '50%',
-                                background: '#d1fae5',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                margin: '0 auto 16px'
-                            }}>
-                                <i className="bi bi-check-lg text-success" style={{ fontSize: '1.75rem' }}></i>
-                            </div>
-                            <h6 className="fw-bold mb-2">Check Your Email</h6>
-                            <p className="text-muted small mb-4">
-                                Reset instructions have been sent to <strong>{email}</strong>.
-                            </p>
-                            <button
-                                className="btn btn-outline-primary w-100"
-                                onClick={() => navigate('/login')}
-                                style={{ borderRadius: '10px', padding: '12px' }}
-                            >
-                                <i className="bi bi-arrow-left me-2"></i>Back to Login
-                            </button>
+        <div className="flex min-h-screen items-center justify-center bg-background px-6">
+            <motion.div
+                className="w-full max-w-sm"
+                initial={reduce ? false : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            >
+                <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+                    {/* Header */}
+                    <div
+                        className="px-8 py-9 text-center text-white"
+                        style={{ background: "linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))" }}
+                    >
+                        <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl border border-white/20 bg-white/15 backdrop-blur-sm">
+                            <KeyRound className="size-7" />
                         </div>
-                    ) : (
-                        <form onSubmit={submit}>
-                            <div className="mb-4">
-                                <label className="form-label" style={{ fontWeight: '500', color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: 8 }}>
-                                    <i className="bi bi-envelope me-2"></i>Email Address
-                                </label>
-                                <input
-                                    type="email"
-                                    className="form-control"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="Enter your email"
-                                    required
-                                    style={{ padding: '12px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '1rem' }}
-                                />
-                            </div>
+                        <h1 className="text-2xl font-bold tracking-tight">Forgot Password</h1>
+                        <p className="mt-1.5 text-sm text-white/80">Enter your email to receive reset instructions</p>
+                    </div>
 
-                            <button
-                                className="btn w-100 mb-3"
-                                type="submit"
-                                disabled={submitting}
-                                style={{
-                                    padding: '13px 24px', fontWeight: '600', fontSize: '1rem',
-                                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                                    border: 'none', borderRadius: '10px', color: 'white',
-                                    boxShadow: '0 4px 12px rgba(79,70,229,0.3)'
-                                }}
-                            >
-                                {submitting ? (
-                                    <><span className="spinner-border spinner-border-sm me-2"></span>Sending...</>
-                                ) : (
-                                    <><i className="bi bi-send me-2"></i>Send Reset Email</>
-                                )}
-                            </button>
-
+                    {/* Body */}
+                    <div className="p-8">
+                        {sent ? (
                             <div className="text-center">
-                                <button
-                                    type="button"
-                                    className="btn btn-link text-muted p-0"
-                                    style={{ fontSize: '0.875rem', textDecoration: 'none' }}
-                                    onClick={() => navigate('/login')}
-                                >
-                                    <i className="bi bi-arrow-left me-1"></i>Back to Login
-                                </button>
+                                <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-success/10">
+                                    <CheckCircle2 className="size-8 text-success" />
+                                </div>
+                                <h2 className="mb-1.5 font-semibold text-foreground">Check Your Email</h2>
+                                <p className="mb-6 text-[13px] text-muted-foreground">
+                                    Reset instructions have been sent to <strong className="text-foreground">{email}</strong>.
+                                </p>
+                                <Button variant="outline" className="w-full" onClick={() => navigate("/login")}>
+                                    <ArrowLeft className="size-4" />Back to Login
+                                </Button>
                             </div>
-                        </form>
-                    )}
-                </div>
+                        ) : (
+                            <form onSubmit={submit} className="flex flex-col gap-4">
+                                <div>
+                                    <Label className="mb-1.5 flex items-center gap-1.5" htmlFor="reset-email">
+                                        <Mail className="size-3.5" />Email Address
+                                    </Label>
+                                    <Input
+                                        id="reset-email"
+                                        type="email"
+                                        className="h-10"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder="Enter your email"
+                                        required
+                                        autoComplete="email"
+                                        autoFocus
+                                    />
+                                </div>
+                                <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+                                    {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                                    {submitting ? "Sending…" : "Send Reset Email"}
+                                </Button>
+                                <Button type="button" variant="link" className="mx-auto text-muted-foreground" onClick={() => navigate("/login")}>
+                                    <ArrowLeft className="size-3.5" />Back to Login
+                                </Button>
+                            </form>
+                        )}
+                    </div>
 
-                <div style={{ padding: '16px 32px', backgroundColor: 'var(--bs-gray-50)', textAlign: 'center', borderTop: '1px solid #e5e7eb' }}>
-                    <small style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
-                        License Manager System
-                    </small>
+                    <div className="border-t border-border/70 bg-muted/40 px-8 py-3.5 text-center">
+                        <span className="text-[11.5px] text-muted-foreground">License Manager System</span>
+                    </div>
                 </div>
-            </div>
+            </motion.div>
         </div>
     );
 }

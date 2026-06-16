@@ -1,67 +1,45 @@
-import {useContext, useState} from "react";
-import {AuthContext} from "../context/AuthContext";
+import { useContext, useState } from "react";
+import { Pencil, Check, AlertCircle, CheckCircle2, X } from "lucide-react";
+
+import { AuthContext } from "../context/AuthContext";
 import api from "../api/axios";
+import PageHeader from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 export default function Profile() {
-    const {user, loginSuccess} = useContext(AuthContext);
+    const { user, loginSuccess } = useContext(AuthContext);
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
-
     const [formData, setFormData] = useState({
         first_name: user?.first_name || "",
         last_name: user?.last_name || "",
         email: user?.email || "",
     });
 
-    const handleEdit = () => {
-        setEditing(true);
-        setError("");
-        setSuccess("");
-    };
-
+    const handleEdit = () => { setEditing(true); setError(""); setSuccess(""); };
     const handleCancel = () => {
         setEditing(false);
-        setFormData({
-            first_name: user?.first_name || "",
-            last_name: user?.last_name || "",
-            email: user?.email || "",
-        });
-        setError("");
-        setSuccess("");
+        setFormData({ first_name: user?.first_name || "", last_name: user?.last_name || "", email: user?.email || "" });
+        setError(""); setSuccess("");
     };
-
-    const handleChange = (e) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value,
-        });
-    };
+    const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
     const handleSave = async () => {
         setSaving(true);
-        setError("");
-        setSuccess("");
-
+        setError(""); setSuccess("");
         try {
-            const {data} = await api.patch("/auth/me/", formData);
-
-            // Update user in context and localStorage
-            loginSuccess({
-                access: localStorage.getItem("access"),
-                refresh: localStorage.getItem("refresh"),
-                user: data,
-            });
-
-            setSuccess("Profile updated successfully!");
+            const { data } = await api.patch("/auth/me/", formData);
+            loginSuccess({ access: localStorage.getItem("access"), refresh: localStorage.getItem("refresh"), user: data });
+            setSuccess("Profile updated successfully.");
             setEditing(false);
         } catch (err) {
-            setError(
-                err.response?.data?.detail ||
-                err.response?.data?.email?.[0] ||
-                "Failed to update profile"
-            );
+            setError(err.response?.data?.detail || err.response?.data?.email?.[0] || "Failed to update profile.");
         } finally {
             setSaving(false);
         }
@@ -69,165 +47,146 @@ export default function Profile() {
 
     if (!user) {
         return (
-            <div className="container mt-4">
-                <div className="alert alert-warning">Loading user data...</div>
-            </div>
+            <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
         );
     }
 
-    const initials = ((user.first_name?.[0] || '') + (user.last_name?.[0] || '') || user.username?.[0] || '?').toUpperCase();
+    const initials = ((user.first_name?.[0] || "") + (user.last_name?.[0] || "") || user.username?.[0] || "?").toUpperCase();
+    const displayName = user.first_name || user.last_name
+        ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+        : user.username;
+
+    // Read-only field display
+    const ReadField = ({ value }) => (
+        <div className={`flex h-9 items-center rounded-md border border-input bg-muted px-3 text-sm ${value ? "text-foreground" : "text-muted-foreground/60"}`}>
+            {value || "Not set"}
+        </div>
+    );
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
-            {/* Compact Header */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
-                        <i className="bi bi-person-circle me-2" style={{ color: 'var(--primary-color)' }}></i>
-                        My Profile
-                    </h4>
-                    <small className="text-muted">Manage your account information</small>
-                </div>
-                {!editing && (
-                    <button className="btn btn-sm btn-outline-primary" onClick={handleEdit}>
-                        <i className="bi bi-pencil me-1"></i>Edit Profile
-                    </button>
-                )}
-            </div>
+        <>
+            <PageHeader
+                pretitle="Account"
+                title="Profile"
+                description="Manage your personal information and account settings"
+                actions={
+                    !editing && (
+                        <Button variant="outline" onClick={handleEdit}>
+                            <Pencil className="size-4" />
+                            Edit Profile
+                        </Button>
+                    )
+                }
+            />
 
             {error && (
-                <div className="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-3">
-                    <i className="bi bi-exclamation-circle-fill flex-shrink-0"></i>
-                    <span>{error}</span>
-                    <button type="button" className="btn-close ms-auto" onClick={() => setError("")}></button>
+                <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive">
+                    <AlertCircle className="size-4 shrink-0" />
+                    <span className="flex-1">{error}</span>
+                    <button onClick={() => setError("")} aria-label="Dismiss" className="cursor-pointer opacity-70 hover:opacity-100">
+                        <X className="size-4" />
+                    </button>
                 </div>
             )}
             {success && (
-                <div className="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-3">
-                    <i className="bi bi-check-circle-fill flex-shrink-0"></i>
+                <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px] text-success">
+                    <CheckCircle2 className="size-4 shrink-0" />
                     <span>{success}</span>
-                    <button type="button" className="btn-close ms-auto" onClick={() => setSuccess("")}></button>
                 </div>
             )}
 
-            <div className="row g-3">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
                 {/* Avatar card */}
-                <div className="col-lg-3">
-                    <div className="card border-0 shadow-sm text-center" style={{ borderRadius: '12px' }}>
-                        <div className="card-body py-4">
-                            <div style={{
-                                width: 80, height: 80, borderRadius: '50%',
-                                background: 'linear-gradient(135deg, #4F46E5, #6366F1)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '1.75rem', fontWeight: '700', color: 'white',
-                                margin: '0 auto 16px'
-                            }}>
-                                {initials}
-                            </div>
-                            <h6 className="fw-bold mb-1">
-                                {user.first_name || user.last_name
-                                    ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
-                                    : user.username}
-                            </h6>
-                            <small className="text-muted">@{user.username}</small>
-                            <div className="mt-2">
-                                <span className="badge bg-success" style={{ fontSize: '0.7rem' }}>Active</span>
-                            </div>
+                <Card>
+                    <CardContent className="flex flex-col items-center pt-6 text-center">
+                        <div
+                            className="mb-3.5 flex size-18 items-center justify-center rounded-full text-2xl font-bold tracking-tight text-white shadow-lg"
+                            style={{ background: "linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))" }}
+                            aria-hidden="true"
+                        >
+                            {initials}
                         </div>
-                    </div>
-                </div>
+                        <div className="text-[15px] font-semibold tracking-tight text-foreground">
+                            {displayName}
+                        </div>
+                        <div className="mb-3 text-xs text-muted-foreground">@{user.username}</div>
+                        <div className="flex flex-wrap justify-center gap-1.5">
+                            <Badge variant="success">Active</Badge>
+                            {user.is_superuser && <Badge>Superuser</Badge>}
+                        </div>
+                    </CardContent>
+                </Card>
 
-                {/* Form card */}
-                <div className="col-lg-9">
-                    <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                        <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                            <h6 className="mb-0 fw-semibold">
-                                <i className="bi bi-person me-2" style={{ color: '#4F46E5' }}></i>
-                                Account Details
-                            </h6>
-                        </div>
-                        <div className="card-body p-4">
-                            <div className="d-flex flex-column gap-3">
-                                {/* Account info section */}
-                                <div style={{ background: 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #6b7280' }}>
-                                    <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', marginBottom: '14px' }}>
-                                        <i className="bi bi-shield-lock me-1"></i> Account
-                                    </div>
-                                    <div>
-                                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Username</label>
-                                        <div className="form-control" style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', color: 'var(--text-secondary)', cursor: 'not-allowed' }}>
-                                            {user.username}
-                                        </div>
-                                        <small className="text-muted" style={{ fontSize: '0.73rem' }}>
-                                            <i className="bi bi-info-circle me-1"></i>Username cannot be changed
-                                        </small>
-                                    </div>
+                {/* Details */}
+                <div className="flex flex-col gap-4">
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between border-b">
+                            <CardTitle className="text-sm">Account Details</CardTitle>
+                            {editing && <Badge>Editing</Badge>}
+                        </CardHeader>
+                        <CardContent className="pt-5">
+                            <div className="mb-5">
+                                <Label className="mb-1.5" htmlFor="username">Username</Label>
+                                <Input id="username" value={user.username} disabled readOnly />
+                                <p className="mt-1.5 text-[11.5px] text-muted-foreground">Username cannot be changed.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div>
+                                    <Label className="mb-1.5" htmlFor="first_name">First Name</Label>
+                                    {editing
+                                        ? <Input id="first_name" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First name" />
+                                        : <ReadField value={user.first_name} />}
                                 </div>
-
-                                {/* Personal info section */}
-                                <div style={{ background: editing ? 'white' : 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #4F46E5', border: editing ? '1px solid #e0e7ff' : undefined }}>
-                                    <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4F46E5', marginBottom: '14px' }}>
-                                        <i className="bi bi-person me-1"></i> Personal Information
-                                        {editing && <span className="badge ms-2" style={{ backgroundColor: '#4F46E522', color: '#4F46E5', fontSize: '0.6rem' }}>Editing</span>}
-                                    </div>
-                                    <div className="row g-3">
-                                        <div className="col-md-6">
-                                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>First Name</label>
-                                            {editing ? (
-                                                <input type="text" className="form-control" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First name" />
-                                            ) : (
-                                                <div className="form-control" style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
-                                                    {user.first_name || <em className="text-muted small">Not set</em>}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Last Name</label>
-                                            {editing ? (
-                                                <input type="text" className="form-control" name="last_name" value={formData.last_name} onChange={handleChange} placeholder="Last name" />
-                                            ) : (
-                                                <div className="form-control" style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
-                                                    {user.last_name || <em className="text-muted small">Not set</em>}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="col-12">
-                                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Email</label>
-                                            {editing ? (
-                                                <input type="email" className="form-control" name="email" value={formData.email} onChange={handleChange} placeholder="email@example.com" />
-                                            ) : (
-                                                <div className="form-control" style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
-                                                    {user.email || <em className="text-muted small">Not set</em>}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                                <div>
+                                    <Label className="mb-1.5" htmlFor="last_name">Last Name</Label>
+                                    {editing
+                                        ? <Input id="last_name" name="last_name" value={formData.last_name} onChange={handleChange} placeholder="Last name" />
+                                        : <ReadField value={user.last_name} />}
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <Label className="mb-1.5" htmlFor="email">Email Address</Label>
+                                    {editing
+                                        ? <Input id="email" type="email" name="email" value={formData.email} onChange={handleChange} placeholder="email@example.com" autoComplete="email" />
+                                        : <ReadField value={user.email} />}
                                 </div>
                             </div>
 
                             {editing && (
-                                <div className="d-flex gap-2 mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={handleSave}
-                                        disabled={saving}
-                                        style={{ padding: '10px 28px', fontWeight: '600', background: 'linear-gradient(135deg, #4F46E5, #4338CA)', border: 'none', borderRadius: '8px' }}
-                                    >
-                                        {saving ? (
-                                            <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>
-                                        ) : (
-                                            <><i className="bi bi-check-circle me-2"></i>Save Changes</>
-                                        )}
-                                    </button>
-                                    <button className="btn btn-outline-secondary" onClick={handleCancel} disabled={saving} style={{ padding: '10px 20px', borderRadius: '8px' }}>
-                                        <i className="bi bi-x-lg me-2"></i>Cancel
-                                    </button>
+                                <div className="mt-5 flex gap-2 border-t border-border/70 pt-4">
+                                    <Button onClick={handleSave} disabled={saving}>
+                                        <Check className="size-4" />
+                                        {saving ? "Saving…" : "Save Changes"}
+                                    </Button>
+                                    <Button variant="outline" onClick={handleCancel} disabled={saving}>
+                                        Cancel
+                                    </Button>
                                 </div>
                             )}
-                        </div>
-                    </div>
+                        </CardContent>
+                    </Card>
+
+                    {Array.isArray(user.roles) && user.roles.length > 0 && (
+                        <Card>
+                            <CardHeader className="border-b">
+                                <CardTitle className="text-sm">Assigned Roles</CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-4">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {user.roles.map((role) => (
+                                        <span
+                                            key={role}
+                                            className="rounded-md border border-primary/15 bg-primary/10 px-2 py-1 font-mono text-[11.5px] font-medium text-primary"
+                                        >
+                                            {role}
+                                        </span>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
-        </div>
+        </>
     );
 }

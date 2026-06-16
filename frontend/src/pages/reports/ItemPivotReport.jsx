@@ -8,6 +8,9 @@ import {formatDate} from "../../utils/dateFormatter";
 import {formatIndianNumber} from "../../utils/numberFormatter";
 import {openPdfPreview} from "../../utils/pdfPreview";
 import {toast} from "react-toastify";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { RefreshCw, FileSpreadsheet, Loader2 } from "lucide-react";
 
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
@@ -18,7 +21,7 @@ const DEFAULT_PURCHASE_STATUS = ['GE', 'MI', 'CO'];
 // table's alternating row backgrounds. Unknown codes get a neutral grey.
 const PURCHASE_STATUS_STYLES = {
     GE: { bg: '#DBEAFE', color: '#1E3A8A', short: 'GE' },  // Global Exim — blue
-    MI: { bg: '#D1FAE5', color: '#065F46', short: 'MI' },  // MITC         — green
+    MI: { bg: '#D1FAE5', color: 'var(--tb-success-text)', short: 'MI' },  // MITC         — green
     CO: { bg: '#EDE9FE', color: '#5B21B6', short: 'CO' },  // Conversion   — purple
     IP: { bg: '#FED7AA', color: '#7C2D12', short: 'IP' },  // Item Purch.  — orange
     SM: { bg: '#FCE7F3', color: '#831843', short: 'SM' },  // Snehav       — pink
@@ -27,7 +30,7 @@ const PURCHASE_STATUS_STYLES = {
     RA: { bg: '#CCFBF1', color: '#134E4A', short: 'RA' },  // Ravi Foods   — teal
     LM: { bg: '#FEE2E2', color: '#7F1D1D', short: 'LM' },  // LM (inactive) — red
 };
-const UNKNOWN_PS_STYLE = { bg: '#E5E7EB', color: '#374151', short: '?' };
+const UNKNOWN_PS_STYLE = { bg: '#E5E7EB', color: 'var(--tb-text)', short: '?' };
 
 function PurchaseStatusBadge({ code, label }) {
     if (!code) return null;
@@ -40,9 +43,9 @@ function PurchaseStatusBadge({ code, label }) {
                 backgroundColor: s.bg,
                 color: s.color,
                 fontWeight: 600,
-                fontSize: '0.7rem',
+                fontSize: 11,
                 padding: '1px 6px',
-                borderRadius: '4px',
+                borderRadius: 'var(--tb-r-sm)',
                 lineHeight: 1.4,
                 whiteSpace: 'nowrap',
             }}
@@ -396,7 +399,7 @@ export default function ItemPivotReport() {
 
 
     return (
-        <div style={{ minHeight: '100vh' }}>
+        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
             {/* Tabler-style page header */}
             <div className="page-header">
                 <div style={{ minWidth: 0 }}>
@@ -437,42 +440,24 @@ export default function ItemPivotReport() {
                     </div>
                 </div>
                 <div className="page-actions">
-                    <button
-                        type="button"
-                        className="btn btn-outline-secondary btn-sm"
-                        onClick={() => setFiltersCollapsed(!filtersCollapsed)}
-                    >
-                        <i className={`bi bi-funnel${hasActiveFilters ? '-fill' : ''} me-1`}></i>
+                    <Button variant="outline" size="sm" onClick={() => setFiltersCollapsed(!filtersCollapsed)}>
+                        <i className={`bi bi-funnel${hasActiveFilters ? '-fill' : ''}`} />
                         {filtersCollapsed ? 'Show' : 'Hide'} Filters
-                        {hasActiveFilters && <span className="badge bg-primary ms-2">Active</span>}
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-outline-secondary btn-sm"
+                        {hasActiveFilters && <Badge className="ml-1">Active</Badge>}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleUpdateBalance}
                         title="Update balance_cif, is_active, is_expired, and restrictions. Runs in background."
                     >
-                        <i className="bi bi-arrow-clockwise me-1"></i>
+                        <RefreshCw className="size-3.5" />
                         Update Balance
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-outline-secondary btn-sm"
-                        onClick={handleExport}
-                        disabled={downloading}
-                    >
-                        {downloading ? (
-                            <>
-                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style={{ width: 12, height: 12 }} />
-                                Generating…
-                            </>
-                        ) : (
-                            <>
-                                <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
-                                Excel
-                            </>
-                        )}
-                    </button>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleExport} disabled={downloading}>
+                        {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
+                        {downloading ? 'Generating…' : 'Excel'}
+                    </Button>
                 </div>
             </div>
 
@@ -483,7 +468,7 @@ export default function ItemPivotReport() {
                         <div className="surface-card" style={{maxWidth: '1400px'}}>
                             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}
                                  className="d-flex justify-content-between align-items-center">
-                                <h5 className="mb-0" style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                                <h5 className="mb-0" style={{ fontWeight: 600, fontSize: 15 }}>
                                     <i className="bi bi-sliders me-2" style={{ color: 'var(--primary-color)' }}></i>
                                     Filters
                                 </h5>
@@ -659,7 +644,7 @@ export default function ItemPivotReport() {
                 <div className="col-12">
                     <div className="surface-card">
                         <div style={{ padding: '14px 16px' }}>
-                            <h6 className="mb-3" style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--primary-color)' }}>
+                            <h6 className="mb-3" style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--primary-color)' }}>
                                 <i className="bi bi-tag-fill me-2"></i>
                                 Available Norms ({availableNorms.length})
                                 <small className="text-muted ms-2">(includes E1, E5, E126, E132 conversion norms)</small>
@@ -694,14 +679,14 @@ export default function ItemPivotReport() {
                                             >
                                                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: description ? '4px' : '0'}}>
                                                     <i className={`bi ${isConversionNorm ? 'bi-arrow-repeat' : 'bi-tag-fill'} me-1`}></i>
-                                                    <span style={{fontSize: '1rem', fontWeight: '600'}}>{normClass}</span>
+                                                    <span style={{fontSize: 16, fontWeight: '600'}}>{normClass}</span>
                                                     {loading && activeNormTab === normClass && (
                                                         <span className="spinner-border spinner-border-sm ms-2" role="status"
                                                               style={{width: '0.8rem', height: '0.8rem'}}></span>
                                                     )}
                                                 </div>
                                                 {description && (
-                                                    <small style={{fontSize: '0.7rem', opacity: 0.85, lineHeight: '1.2'}}>
+                                                    <small style={{fontSize: 11, opacity: 0.85, lineHeight: '1.2'}}>
                                                         {description}
                                                     </small>
                                                 )}
@@ -725,7 +710,7 @@ export default function ItemPivotReport() {
                 <div className="col-12">
                     {/* Loading state */}
                     {loading && activeNormTab && (
-                        <div className="card shadow-sm border-0">
+                        <div className="card">
                             <div className="card-body text-center py-5">
                                 <div className="spinner-border text-primary mb-3" role="status" style={{width: '3rem', height: '3rem'}}>
                                     <span className="visually-hidden">Loading...</span>
@@ -738,9 +723,9 @@ export default function ItemPivotReport() {
 
                     {/* No data message after loading */}
                     {!loading && activeNormTab && reportData?.licenses_by_norm_notification && (!reportData?.licenses_by_norm_notification?.[activeNormTab] || Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length === 0) && (
-                        <div className="card shadow-sm border-0">
+                        <div className="card">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--bs-gray-300)'}}></i>
+                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--tb-border-strong)'}}></i>
                                 <h5 className="mt-3 text-muted">No licenses found for {activeNormTab}</h5>
                                 <p className="text-muted">Try adjusting your filters to see more results.</p>
                             </div>
@@ -753,10 +738,10 @@ export default function ItemPivotReport() {
                             {/* Notifications within active norm */}
                             {Object.entries(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).sort().map(([notification, licenses]) => (
                                 <div key={`${activeNormTab}-${notification}`} className="mb-4">
-                                    <div className="card shadow-sm border-0">
+                                    <div className="card">
                                         <div
                                             className="card-header bg-gradient text-primary d-flex justify-content-between align-items-center"
-                                            style={{background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)'}}>
+                                            style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
                                             <div>
                                                 <h5 className="mb-0">
                                                     <i className="bi bi-bell-fill me-2"></i>
@@ -785,7 +770,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '60px'
                                                         }}>Sr No
                                                         </th>
@@ -793,7 +778,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '60px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '120px'
                                                         }}>DFIA No
                                                         </th>
@@ -801,7 +786,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '180px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
                                                         }}>DFIA Dt
                                                         </th>
@@ -809,7 +794,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '280px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
                                                         }}>Expiry Dt
                                                         </th>
@@ -817,7 +802,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '380px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '150px'
                                                         }}>Exporter
                                                         </th>
@@ -825,7 +810,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '530px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '120px'
                                                         }}>Notif No
                                                         </th>
@@ -833,7 +818,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '650px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
                                                         }}>Total CIF
                                                         </th>
@@ -841,7 +826,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '750px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
                                                         }}>Alloted CIF
                                                         </th>
@@ -849,10 +834,10 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '850px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-50)',
+                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '110px',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
-                                                            borderRight: '2px solid #dee2e6'
+                                                            borderRight: '2px solid var(--tb-border)'
                                                         }}>Balance CIF
                                                         </th>
                                                         {reportData.items.filter(item => item.name).map(item => {
@@ -879,98 +864,98 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-200)'
+                                                            backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '60px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-200)'
+                                                            backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '180px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-200)'
+                                                            backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '280px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-200)'
+                                                            backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '380px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-200)'
+                                                            backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '530px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-200)'
+                                                            backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '650px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-200)'
+                                                            backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '750px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-200)'
+                                                            backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '850px',
                                                             zIndex: 11,
-                                                            backgroundColor: 'var(--bs-gray-200)',
+                                                            backgroundColor: 'var(--tb-border)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
-                                                            borderRight: '2px solid #dee2e6'
+                                                            borderRight: '2px solid var(--tb-border)'
                                                         }}></th>
                                                         {reportData.items.filter(item => item.name).map(item => (
                                                             <React.Fragment key={`${item.id}-headers`}>
-                                                                <th style={{minWidth: '90px', fontSize: '0.85rem'}}>HSN
+                                                                <th style={{minWidth: '90px', fontSize: 13.5}}>HSN
                                                                     Code
                                                                 </th>
                                                                 <th style={{
                                                                     minWidth: '150px',
-                                                                    fontSize: '0.85rem'
+                                                                    fontSize: 13.5
                                                                 }}>Description
                                                                 </th>
                                                                 <th className="text-end" style={{
                                                                     minWidth: '90px',
-                                                                    fontSize: '0.85rem'
+                                                                    fontSize: 13.5
                                                                 }}>Total QTY
                                                                 </th>
                                                                 <th className="text-end" style={{
                                                                     minWidth: '100px',
-                                                                    fontSize: '0.85rem'
+                                                                    fontSize: 13.5
                                                                 }}>Allotted QTY
                                                                 </th>
                                                                 <th className="text-end" style={{
                                                                     minWidth: '100px',
-                                                                    fontSize: '0.85rem'
+                                                                    fontSize: 13.5
                                                                 }}>Debited QTY
                                                                 </th>
                                                                 <th className="text-end" style={{
                                                                     minWidth: '110px',
-                                                                    fontSize: '0.85rem'
+                                                                    fontSize: 13.5
                                                                 }}>Balance QTY
                                                                 </th>
                                                                 {item.has_restriction && (
                                                                     <>
                                                                         <th className="text-center" style={{
                                                                             minWidth: '90px',
-                                                                            fontSize: '0.85rem'
+                                                                            fontSize: 13.5
                                                                         }}>Restriction %
                                                                         </th>
                                                                         <th className="text-end" style={{
                                                                             minWidth: '120px',
-                                                                            fontSize: '0.85rem'
+                                                                            fontSize: 13.5
                                                                         }}>Restriction Val
                                                                         </th>
                                                                     </>
@@ -980,18 +965,18 @@ export default function ItemPivotReport() {
                                                                     Balance Excel uses. */}
                                                                 <th className="text-end" style={{
                                                                     minWidth: '100px',
-                                                                    fontSize: '0.85rem'
+                                                                    fontSize: 13.5
                                                                 }}>Unit Price
                                                                 </th>
                                                                 <th className="text-end" style={{
                                                                     minWidth: '120px',
-                                                                    fontSize: '0.85rem'
+                                                                    fontSize: 13.5
                                                                 }}>Planned CIF
                                                                 </th>
                                                                 {item.name === 'RUTILE - A3627' && (
                                                                     <th className="text-end" style={{
                                                                         minWidth: '100px',
-                                                                        fontSize: '0.85rem'
+                                                                        fontSize: 13.5
                                                                     }}>Unit Price (RUTILE)
                                                                     </th>
                                                                 )}
@@ -1007,13 +992,13 @@ export default function ItemPivotReport() {
                                                                 position: 'sticky',
                                                                 left: 0,
                                                                 zIndex: 1,
-                                                                backgroundColor: '#ffffff'
+                                                                backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{idx + 1}</td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
                                                                 left: '60px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#ffffff'
+                                                                backgroundColor: 'var(--tb-card-bg)'
                                                             }}>
                                                                 <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
                                                                     <span>{license.license_number}</span>
@@ -1039,7 +1024,7 @@ export default function ItemPivotReport() {
                                                                                 }
                                                                             }}
                                                                             style={{
-                                                                                fontSize: '0.7rem',
+                                                                                fontSize: 11,
                                                                                 color: 'var(--success-color)',
                                                                                 textDecoration: 'none',
                                                                                 padding: '1px 4px',
@@ -1065,8 +1050,8 @@ export default function ItemPivotReport() {
                                                                                 });
                                                                             }}
                                                                             style={{
-                                                                                fontSize: '0.7rem',
-                                                                                color: '#7c4a00',
+                                                                                fontSize: 11,
+                                                                                color: 'var(--tb-warning-text)',
                                                                                 border: 'none',
                                                                                 padding: '1px 6px',
                                                                                 backgroundColor: 'var(--row-yellow-bg)',
@@ -1086,19 +1071,19 @@ export default function ItemPivotReport() {
                                                                 position: 'sticky',
                                                                 left: '180px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#ffffff'
+                                                                backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{formatDate(license.license_date)}</td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
                                                                 left: '280px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#ffffff'
+                                                                backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{formatDate(license.license_expiry_date)}</td>
                                                             <td className="text-truncate" style={{
                                                                 position: 'sticky',
                                                                 left: '380px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#ffffff',
+                                                                backgroundColor: 'var(--tb-card-bg)',
                                                                 maxWidth: '150px'
                                                             }} title={license.exporter}>
                                                                 {license.exporter}
@@ -1107,7 +1092,7 @@ export default function ItemPivotReport() {
                                                                 position: 'sticky',
                                                                 left: '530px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#ffffff'
+                                                                backgroundColor: 'var(--tb-card-bg)'
                                                             }}>
                                                                 {license.notification_number}
                                                                 {license.notification_number === 'Unknown' && (
@@ -1119,21 +1104,21 @@ export default function ItemPivotReport() {
                                                                 position: 'sticky',
                                                                 left: '650px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#ffffff'
+                                                                backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{license.total_cif.toFixed(2)}</td>
                                                             <td className="text-end fw-semibold text-info" style={{
                                                                 position: 'sticky',
                                                                 left: '750px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#ffffff'
+                                                                backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{(license.alloted_cif || 0).toFixed(2)}</td>
                                                             <td className="text-end fw-semibold text-success" style={{
                                                                 position: 'sticky',
                                                                 left: '850px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#ffffff',
+                                                                backgroundColor: 'var(--tb-card-bg)',
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
-                                                                borderRight: '2px solid #dee2e6'
+                                                                borderRight: '2px solid var(--tb-border)'
                                                             }}>{license.balance_cif.toFixed(2)}</td>
                                                             {reportData.items.filter(item => item.name).map(item => {
                                                                 const itemData = license.items[item.name] || {};
@@ -1196,24 +1181,24 @@ export default function ItemPivotReport() {
                                                         </tr>
                                                         {/* Notes and Latest Transfer Row (Condition Sheet moved to button + modal) */}
                                                         {(license.balance_report_notes || license.latest_transfer) && (
-                                                            <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--bs-gray-50)' }}>
+                                                            <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--tb-sunken)' }}>
                                                                 <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 8 : 6))} style={{
                                                                     padding: '10px 15px',
                                                                     borderTop: 'none'
                                                                 }}>
-                                                                    <div style={{ fontSize: '0.85rem', lineHeight: '1.5' }}>
+                                                                    <div style={{ fontSize: 13.5, lineHeight: '1.5' }}>
                                                                         {license.balance_report_notes && (
                                                                             <div style={{
                                                                                 marginBottom: license.latest_transfer ? '8px' : '0',
                                                                                 backgroundColor: 'var(--danger-color)',
                                                                                 padding: '6px 10px',
-                                                                                borderRadius: '4px'
+                                                                                borderRadius: 'var(--tb-r-sm)'
                                                                             }}>
-                                                                                <strong style={{ color: '#000000' }}>
+                                                                                <strong style={{ color: '#000' }}>
                                                                                     <i className="bi bi-sticky me-1"></i>
                                                                                     Notes:
                                                                                 </strong>
-                                                                                <span style={{ color: '#000000', marginLeft: '8px' }}>
+                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
                                                                                     {license.balance_report_notes}
                                                                                 </span>
                                                                             </div>
@@ -1222,13 +1207,13 @@ export default function ItemPivotReport() {
                                                                             <div style={{
                                                                                 backgroundColor: 'var(--info-color)',
                                                                                 padding: '6px 10px',
-                                                                                borderRadius: '4px'
+                                                                                borderRadius: 'var(--tb-r-sm)'
                                                                             }}>
-                                                                                <strong style={{ color: '#000000' }}>
+                                                                                <strong style={{ color: '#000' }}>
                                                                                     <i className="bi bi-arrow-left-right me-1"></i>
                                                                                     Latest Transfer:
                                                                                 </strong>
-                                                                                <span style={{ color: '#000000', marginLeft: '8px' }}>
+                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
                                                                                     {license.latest_transfer}
                                                                                 </span>
                                                                             </div>
@@ -1281,7 +1266,7 @@ export default function ItemPivotReport() {
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
-                                                            borderRight: '2px solid #dee2e6'
+                                                            borderRight: '2px solid var(--tb-border)'
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + lic.balance_cif, 0).toFixed(2)}
                                                         </td>
@@ -1470,7 +1455,7 @@ export default function ItemPivotReport() {
                             {activeNormTab && reportData?.norm_notes_conditions?.[activeNormTab] && (
                                 reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 || reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0
                             ) && (
-                                <div className="card shadow-sm border-0 mb-4">
+                                <div className="card mb-4">
                                     <div className="card-header bg-light">
                                         <h5 className="mb-0">
                                             <i className="bi bi-info-circle-fill me-2 text-info"></i>
@@ -1535,7 +1520,7 @@ export default function ItemPivotReport() {
 
                     {/* No norm selected message */}
                     {!loading && !activeNormTab && availableNorms.length > 0 && (
-                        <div className="card shadow-sm border-0">
+                        <div className="card">
                             <div className="card-body text-center py-5">
                                 <i className="bi bi-tag" style={{fontSize: '3rem', color: 'var(--primary-color)'}}></i>
                                 <h5 className="mt-3 text-primary">Select a Norm to View Report</h5>
@@ -1546,9 +1531,9 @@ export default function ItemPivotReport() {
 
                     {/* No norms available */}
                     {!loading && availableNorms.length === 0 && (
-                        <div className="card shadow-sm border-0">
+                        <div className="card">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--bs-gray-300)'}}></i>
+                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--tb-border-strong)'}}></i>
                                 <h5 className="mt-3 text-muted">No Norms Available</h5>
                                 <p className="text-muted">No active norm classes found in the system.</p>
                             </div>
@@ -1571,7 +1556,7 @@ export default function ItemPivotReport() {
                             role="document"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="modal-content" style={{ borderRadius: '8px' }}>
+                            <div className="modal-content" style={{ borderRadius: 'var(--tb-r-md)' }}>
                                 <div className="modal-header" style={{ backgroundColor: 'var(--row-yellow-bg)' }}>
                                     <h5 className="modal-title">
                                         <i className="bi bi-file-earmark-text me-2"></i>
@@ -1589,7 +1574,7 @@ export default function ItemPivotReport() {
                                         whiteSpace: 'pre-wrap',
                                         wordBreak: 'break-word',
                                         fontFamily: 'inherit',
-                                        fontSize: '0.9rem',
+                                        fontSize: 14.5,
                                         margin: 0,
                                         color: '#000',
                                     }}>

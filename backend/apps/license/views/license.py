@@ -1274,6 +1274,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
             summary_rows = []
             total_cif = 0.0
+            total_cif_inr = 0.0
 
             for item in license_obj.import_license.all():
                 item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
@@ -1285,8 +1286,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 for rd in boes:
                     qty  = float(rd.qty or 0)
                     cif  = float(rd.cif_fc or 0)
+                    cif_inr = float(rd.cif_inr or 0)
                     rate = cif / qty if qty else 0.0
                     total_cif += cif
+                    total_cif_inr += cif_inr
                     boe_company = rd.bill_of_entry.company.name if rd.bill_of_entry.company else '-'
                     ref_no   = rd.bill_of_entry.bill_of_entry_number or '-'
                     ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else ''
@@ -1295,7 +1298,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _sort_dt = rd.bill_of_entry.bill_of_entry_date or _date_cls.min
                     summary_rows.append((0, _sort_dt, {
                         'item': product, 'type': 'BOE', 'company': boe_company,
-                        'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
+                        'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif,
+                        'cif_inr': cif_inr,
                     }, True))
 
                 allotments = AllotmentItems.objects.filter(
@@ -1305,8 +1309,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 for ai in allotments:
                     qty     = float(ai.qty or 0)
                     cif     = float(ai.cif_fc or 0)
+                    cif_inr = float(ai.cif_inr or 0)
                     rate    = cif / qty if qty else 0.0
                     total_cif += cif
+                    total_cif_inr += cif_inr
                     company = ai.allotment.company.name if ai.allotment.company else '-'
                     invoice = ai.allotment.invoice or '-'
                     eta     = ai.allotment.estimated_arrival_date.strftime('%d-%m-%Y') if ai.allotment.estimated_arrival_date else ''
@@ -1315,7 +1321,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _sort_dt = ai.allotment.estimated_arrival_date or _date_cls.min
                     summary_rows.append((1, _sort_dt, {
                         'item': product, 'type': 'Allotment', 'company': company,
-                        'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
+                        'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif,
+                        'cif_inr': cif_inr,
                     }, False))
 
             # BOEs first (sorted by BOE date), then allotments (sorted by allotment date)
@@ -1384,27 +1391,28 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 c.alignment = Alignment(horizontal='right' if col == 5 else 'left', vertical='center')
             r += 1
 
-            ws.merge_cells(f'A{r}:G{r}')
+            ws.merge_cells(f'A{r}:H{r}')
             sh = ws[f'A{r}']
             sh.value = 'Summary (BOE & Allotments)'
             sh.fill = HDR_FILL; sh.font = Font(bold=True, color="FFFFFF", size=10)
             sh.alignment = Alignment(horizontal='center', vertical='center')
             r += 1
 
-            SUMM_COLS = ['Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']
+            SUMM_COLS = ['Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)', 'CIF Value (INR)']
             for col, h in enumerate(SUMM_COLS, 1):
                 _hdr(ws, r, col, h)
             r += 1
 
             for _s, _sd, row_data, is_boe in summary_rows:
                 fill = BOE_FILL if is_boe else ALLOT_FILL
-                _cell(ws, r, 1, row_data['item'],      fill=fill)
-                _cell(ws, r, 2, row_data['type'],      fill=fill)
-                _cell(ws, r, 3, row_data['company'],   fill=fill)
-                _cell(ws, r, 4, row_data['reference'], fill=fill)
-                _cell(ws, r, 5, row_data['qty'],       fill=fill, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 6, row_data['rate'],      fill=fill, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 7, row_data['cif'],       fill=fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 1, row_data['item'],          fill=fill)
+                _cell(ws, r, 2, row_data['type'],          fill=fill)
+                _cell(ws, r, 3, row_data['company'],       fill=fill)
+                _cell(ws, r, 4, row_data['reference'],     fill=fill)
+                _cell(ws, r, 5, row_data['qty'],           fill=fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 6, row_data['rate'],          fill=fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 7, row_data['cif'],           fill=fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 8, row_data.get('cif_inr', 0), fill=fill, align='right', num_fmt='#,##0.00')
                 r += 1
 
             if summary_rows:
@@ -1413,6 +1421,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _cell(ws, r, 4, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
                 _cell(ws, r, 5, '', fill=TOTAL_FILL); _cell(ws, r, 6, '', fill=TOTAL_FILL)
                 _cell(ws, r, 7, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 8, total_cif_inr, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 r += 1
 
             r += 1

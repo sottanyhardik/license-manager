@@ -58,7 +58,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
             {isEditing ? (
                 <div>
                     <textarea
-                        className="form-control mb-2"
+                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm mb-2 outline-none focus-visible:border-ring"
                         rows="4"
                         value={textValue}
                         onChange={(e) => setTextValue(e.target.value)}

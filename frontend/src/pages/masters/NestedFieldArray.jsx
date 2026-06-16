@@ -149,7 +149,7 @@ export default function NestedFieldArray({
         if (isFrozen && ['cif_inr', 'cif_fc', 'qty'].includes(field.name)) {
             const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
             return (
-                <div className="form-control form-control-sm d-flex align-items-center justify-content-between"
+                <div className="flex h-8 items-center justify-between rounded-md border border-input bg-card px-2 py-1 text-sm"
                     style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand-hover)', fontWeight: '600', borderColor: 'var(--tb-brand-200)', cursor: 'default' }}>
                     <span>{displayVal}</span>
                     <i className="bi bi-lock-fill" style={{ fontSize: 11, opacity: 0.5, color: 'var(--tb-info)' }}></i>
@@ -289,7 +289,7 @@ export default function NestedFieldArray({
         if (field.readonly || field.read_only) {
             const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
             return (
-                <div className="form-control form-control-sm d-flex align-items-center justify-content-between"
+                <div className="flex h-8 items-center justify-between rounded-md border border-input bg-card px-2 py-1 text-sm"
                     style={{ background: 'var(--tb-success-soft)', color: 'var(--tb-success-text)', fontWeight: '600', borderColor: 'var(--tb-success-border)', cursor: 'default' }}>
                     <span>{displayVal}</span>
                     <i className="bi bi-calculator text-success" style={{ fontSize: 11, opacity: 0.6 }}></i>

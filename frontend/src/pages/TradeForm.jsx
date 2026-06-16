@@ -892,12 +892,12 @@ export default function TradeForm() {
                 </div>
                 <div className="d-flex gap-2">
                     {isEdit && (
-                        <button type="button" className="btn btn-sm btn-outline-secondary"
+                        <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                             onClick={() => setShowTransferLetterModal(true)}>
                             <i className="bi bi-file-earmark-text me-1"></i>Transfer Letter
                         </button>
                     )}
-                    <button type="button" className="btn btn-sm btn-outline-secondary"
+                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                         onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}>
                         <i className="bi bi-arrow-left me-1"></i>Back to Trades
                     </button>
@@ -925,8 +925,8 @@ export default function TradeForm() {
                         </h6>
                     </div>
                     <div className="card-body p-4">
-                        <div className="row g-4">
-                            <div className="col-md-6">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
                                 <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
                                     TRANSACTION TYPE <span className="text-danger">*</span>
                                 </label>
@@ -947,7 +947,7 @@ export default function TradeForm() {
                                     ))}
                                 </div>
                             </div>
-                            <div className="col-md-6">
+                            <div>
                                 <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
                                     LICENSE TYPE <span className="text-danger">*</span>
                                 </label>
@@ -991,7 +991,7 @@ export default function TradeForm() {
                 {/* Company Snapshots */}
                 <div className="row mb-4">
                     {/* From Company */}
-                    <div className="col-md-6">
+                    <div>
                         <div className="card h-100" style={{ borderRadius: 'var(--tb-r-md)' }}>
                             <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
                                 <h6 className="mb-0 fw-semibold">
@@ -1019,20 +1019,20 @@ export default function TradeForm() {
                                 </div>
 
                                 <div className="row">
-                                    <div className="col-md-6 mb-2">
+                                    <div>
                                         <label className="form-label small">PAN</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={formData.from_pan || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_pan: e.target.value }))}
                                         />
                                     </div>
-                                    <div className="col-md-6 mb-2">
+                                    <div>
                                         <label className="form-label small">GST</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={formData.from_gst || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_gst: e.target.value }))}
                                         />
@@ -1040,20 +1040,20 @@ export default function TradeForm() {
                                 </div>
 
                                 <div className="row">
-                                    <div className="col-md-6 mb-2">
+                                    <div>
                                         <label className="form-label small">Address Line 1</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={formData.from_addr_line_1 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_addr_line_1: e.target.value }))}
                                         />
                                     </div>
-                                    <div className="col-md-6 mb-2">
+                                    <div>
                                         <label className="form-label small">Address Line 2</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={formData.from_addr_line_2 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_addr_line_2: e.target.value }))}
                                         />
@@ -1064,7 +1064,7 @@ export default function TradeForm() {
                     </div>
 
                     {/* To Company */}
-                    <div className="col-md-6">
+                    <div>
                         <div className="card h-100" style={{ borderRadius: 'var(--tb-r-md)' }}>
                             <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
                                 <h6 className="mb-0 fw-semibold">
@@ -1091,20 +1091,20 @@ export default function TradeForm() {
                                 </div>
 
                                 <div className="row">
-                                    <div className="col-md-6 mb-2">
+                                    <div>
                                         <label className="form-label small">PAN</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={formData.to_pan || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_pan: e.target.value }))}
                                         />
                                     </div>
-                                    <div className="col-md-6 mb-2">
+                                    <div>
                                         <label className="form-label small">GST</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={formData.to_gst || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_gst: e.target.value }))}
                                         />
@@ -1112,20 +1112,20 @@ export default function TradeForm() {
                                 </div>
 
                                 <div className="row">
-                                    <div className="col-md-6 mb-2">
+                                    <div>
                                         <label className="form-label small">Address Line 1</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={formData.to_addr_line_1 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_addr_line_1: e.target.value }))}
                                         />
                                     </div>
-                                    <div className="col-md-6 mb-2">
+                                    <div>
                                         <label className="form-label small">Address Line 2</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={formData.to_addr_line_2 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_addr_line_2: e.target.value }))}
                                         />
@@ -1146,12 +1146,12 @@ export default function TradeForm() {
                     </div>
                     <div className="card-body p-4">
                 <div className="row mb-3">
-                    <div className="col-md-6">
+                    <div>
                         <div className="d-flex justify-content-between align-items-center mb-2">
                             <label className="form-label mb-0" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>Invoice Number (optional)</label>
                             <button
                                 type="button"
-                                className="btn btn-outline-primary btn-sm"
+                                className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10"
                                 onClick={handlePrefillInvoiceNumber}
                                 disabled={
                                     !formData.direction ||
@@ -1180,18 +1180,18 @@ export default function TradeForm() {
                         </div>
                         <input
                             type="text"
-                            className="form-control"
+                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                             value={formData.invoice_number || ""}
                             onChange={(e) => setFormData(prev => ({ ...prev, invoice_number: e.target.value }))}
                         />
                     </div>
-                    <div className="col-md-6">
+                    <div>
                         <label className="form-label">Invoice Date</label>
                         <DatePicker
                             selected={formData.invoice_date instanceof Date ? formData.invoice_date : parseDate(formData.invoice_date)}
                             onChange={(date) => setFormData(prev => ({ ...prev, invoice_date: date }))}
                             dateFormat="dd-MM-yyyy"
-                            className="form-control"
+                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                         />
                     </div>
                 </div>
@@ -1199,11 +1199,11 @@ export default function TradeForm() {
                 {/* Purchase Invoice Copy Upload - Only for PURCHASE direction */}
                 {formData.direction === "PURCHASE" && (
                     <div className="row mb-3">
-                        <div className="col-md-6">
+                        <div>
                             <label className="form-label">Purchase Invoice Copy (optional)</label>
                             <input
                                 type="file"
-                                className="form-control"
+                                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                 accept=".pdf,.jpg,.jpeg,.png"
                                 onChange={(e) => {
                                     const file = e.target.files?.[0];
@@ -1219,14 +1219,14 @@ export default function TradeForm() {
                                         href={formData.purchase_invoice_copy}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="btn btn-sm btn-primary text-white"
+                                        className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
                                     >
                                         <i className="bi bi-file-earmark-pdf me-1"></i>
                                         View Current Invoice Copy
                                     </a>
                                     <button
                                         type="button"
-                                        className="btn btn-sm btn-outline-danger ms-2"
+                                        className="ml-2 flex items-center gap-1.5 rounded border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-medium text-destructive cursor-pointer hover:bg-destructive/20"
                                         onClick={() => setFormData(prev => ({ ...prev, purchase_invoice_copy: null }))}
                                     >
                                         <i className="bi bi-trash me-1"></i>
@@ -1252,7 +1252,7 @@ export default function TradeForm() {
                 {/* BOE and Remarks */}
                 <div className="row mb-0">
                     {formData.direction !== 'PURCHASE' && (
-                        <div className="col-md-6">
+                        <div>
                             <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>BOE (optional)</label>
                             <HybridSelect
                                 fieldMeta={{
@@ -1286,7 +1286,7 @@ export default function TradeForm() {
                     <div className={formData.direction === 'PURCHASE' ? 'col-md-12' : 'col-md-6'}>
                         <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>Remarks</label>
                         <textarea
-                            className="form-control"
+                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                             rows="2"
                             value={formData.remarks || ""}
                             onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
@@ -1345,7 +1345,7 @@ export default function TradeForm() {
                                         </span>
                                     )}
                                 </h6>
-                                <button type="button" className="btn btn-sm btn-outline-success"
+                                <button type="button" className="flex items-center gap-1.5 rounded border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
                                     onClick={handleAddLine} style={{ borderRadius: 'var(--tb-r-md)' }}>
                                     <i className="bi bi-plus-lg me-1"></i>Add Row
                                 </button>
@@ -1409,7 +1409,7 @@ export default function TradeForm() {
                                     <td>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value="49070000"
                                             readOnly
                                         />
@@ -1417,7 +1417,7 @@ export default function TradeForm() {
                                     <td>
                                         <input
                                             type="number"
-                                            className="form-control form-control-sm text-end"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                             value={line.cif_fc || ""}
                                             onChange={(e) => handleLineChange(index, 'cif_fc', parseFloat(e.target.value) || 0)}
                                             step="0.01"
@@ -1428,7 +1428,7 @@ export default function TradeForm() {
                                             <td>
                                                 <input
                                                     type="number"
-                                                    className="form-control form-control-sm text-end"
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                                     value={line.exc_rate || ""}
                                                     onChange={(e) => handleLineChange(index, 'exc_rate', parseFloat(e.target.value) || 0)}
                                                     step="0.01"
@@ -1437,7 +1437,7 @@ export default function TradeForm() {
                                             <td>
                                                 <input
                                                     type="number"
-                                                    className="form-control form-control-sm text-end"
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                                     value={line.cif_inr || ""}
                                                     onChange={(e) => handleLineChange(index, 'cif_inr', parseFloat(e.target.value) || 0)}
                                                     step="0.01"
@@ -1449,7 +1449,7 @@ export default function TradeForm() {
                                         <td>
                                             <input
                                                 type="number"
-                                                className="form-control form-control-sm text-end"
+                                                className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                                 value={line.fob_inr || ""}
                                                 onChange={(e) => handleLineChange(index, 'fob_inr', parseFloat(e.target.value) || 0)}
                                                 step="0.01"
@@ -1461,7 +1461,7 @@ export default function TradeForm() {
                                             <td>
                                                 <input
                                                     type="number"
-                                                    className="form-control form-control-sm text-end"
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                                     value={line.qty_kg || ""}
                                                     onChange={(e) => handleLineChange(index, 'qty_kg', parseFloat(e.target.value) || 0)}
                                                     step="0.0001"
@@ -1470,7 +1470,7 @@ export default function TradeForm() {
                                             <td>
                                                 <input
                                                     type="number"
-                                                    className="form-control form-control-sm text-end"
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                                     value={line.rate_inr_per_kg || ""}
                                                     onChange={(e) => handleLineChange(index, 'rate_inr_per_kg', parseFloat(e.target.value) || 0)}
                                                     step="0.01"
@@ -1482,7 +1482,7 @@ export default function TradeForm() {
                                         <td>
                                             <input
                                                 type="number"
-                                                className="form-control form-control-sm text-end"
+                                                className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                                 value={line.pct || ""}
                                                 onChange={(e) => handleLineChange(index, 'pct', parseFloat(e.target.value) || 0)}
                                                 step="0.001"
@@ -1493,14 +1493,14 @@ export default function TradeForm() {
                                         <input
                                             type="number"
                                             step="0.01"
-                                            className="form-control form-control-sm text-end fw-bold"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-right text-sm font-bold outline-none focus-visible:border-ring "
                                             value={line.amount_inr || ""}
                                             onChange={(e) => handleLineChange(index, 'amount_inr', e.target.value)}
                                             placeholder="0.00"
                                         />
                                     </td>
                                     <td className="text-center px-2">
-                                        <button type="button" className="btn btn-sm btn-outline-danger"
+                                        <button type="button" className="flex items-center gap-1.5 rounded border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-medium text-destructive cursor-pointer hover:bg-destructive/20"
                                             onClick={() => handleRemoveLine(index)} style={{ borderRadius: 'var(--tb-r-sm)', padding: '2px 8px' }}>
                                             <i className="bi bi-trash"></i>
                                         </button>
@@ -1542,7 +1542,7 @@ export default function TradeForm() {
                                         </span>
                                     )}
                                 </h6>
-                                <button type="button" className="btn btn-sm btn-outline-success"
+                                <button type="button" className="flex items-center gap-1.5 rounded border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
                                     onClick={handleAddIncentiveLine} style={{ borderRadius: 'var(--tb-r-md)' }}>
                                     <i className="bi bi-plus-lg me-1"></i>Add Row
                                 </button>
@@ -1582,7 +1582,7 @@ export default function TradeForm() {
                                             <td>
                                                 <input
                                                     type="number"
-                                                    className="form-control form-control-sm text-end"
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                                     value={line.license_value || ""}
                                                     onChange={(e) => handleIncentiveLineChange(index, 'license_value', parseFloat(e.target.value) || 0)}
                                                     step="0.01"
@@ -1592,7 +1592,7 @@ export default function TradeForm() {
                                             <td>
                                                 <input
                                                     type="number"
-                                                    className="form-control form-control-sm text-end"
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                                     value={line.rate_pct || ""}
                                                     onChange={(e) => handleIncentiveLineChange(index, 'rate_pct', parseFloat(e.target.value) || 0)}
                                                     step="0.001"
@@ -1603,7 +1603,7 @@ export default function TradeForm() {
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    className="form-control form-control-sm text-end fw-bold"
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-right text-sm font-bold outline-none focus-visible:border-ring "
                                                     value={line.amount_inr || ""}
                                                     onChange={(e) => handleIncentiveLineChange(index, 'amount_inr', e.target.value)}
                                                     placeholder="0.00"
@@ -1612,7 +1612,7 @@ export default function TradeForm() {
                                             <td className="text-center">
                                                 <button
                                                     type="button"
-                                                    className="btn btn-danger btn-sm"
+                                                    className="flex items-center gap-1.5 rounded bg-destructive px-2.5 py-1.5 text-xs font-medium text-destructive-foreground cursor-pointer hover:bg-destructive/90"
                                                     onClick={() => handleRemoveIncentiveLine(index)}
                                                 >
                                                     <i className="bi bi-trash"></i>
@@ -1643,27 +1643,27 @@ export default function TradeForm() {
 
                 {/* Action Buttons */}
                 <div className="d-flex align-items-center gap-2 mt-4 pt-3 mb-4" style={{ borderTop: '1px solid var(--tb-border-soft)' }}>
-                    <button type="submit" className="btn btn-primary" disabled={saving}
+                    <button type="submit" className="flex items-center gap-1.5 rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground cursor-pointer hover:bg-primary/90 disabled:opacity-50" disabled={saving}
                         style={{ padding: '10px 28px', fontWeight: '600', background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))', border: 'none', borderRadius: 'var(--tb-r-md)' }}>
-                        {saving ? <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</> : <><i className="bi bi-check-circle me-2"></i>Save Trade</>}
+                        {saving ? <><span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" aria-hidden="true" />Saving…</> : <><i className="bi bi-check-circle me-2" aria-hidden="true" />Save Trade</>}
                     </button>
-                    <button type="button" className="btn btn-outline-secondary" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}
+                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}
                         style={{ padding: '10px 20px', fontWeight: '500', borderRadius: 'var(--tb-r-md)' }}>
                         <i className="bi bi-x-lg me-2"></i>Cancel
                     </button>
                     {isEdit && (
                         <>
-                            <button type="button" className="btn btn-outline-info" onClick={() => setShowTransferLetterModal(true)}
+                            <button type="button" className="flex items-center gap-1.5 rounded border border-info/30 bg-info/10 px-2.5 py-1.5 text-xs font-medium text-info cursor-pointer hover:bg-info/20" onClick={() => setShowTransferLetterModal(true)}
                                 style={{ padding: '10px 18px', fontWeight: '500', borderRadius: 'var(--tb-r-md)' }}>
                                 <i className="bi bi-file-earmark-text me-1"></i>Transfer Letter
                             </button>
                             {formData.direction === 'SALE' && (
                                 <div className="btn-group">
-                                    <button type="button" className="btn btn-outline-secondary" onClick={() => handleDownloadPDF(true)}
+                                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(true)}
                                         style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
                                         <i className="bi bi-file-pdf me-1"></i>Bill of Supply
                                     </button>
-                                    <button type="button" className="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split"
+                                    <button type="button" className="flex items-center justify-center rounded border border-border bg-card px-2 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                         data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
                                         <span className="visually-hidden">Toggle Dropdown</span>
                                     </button>
@@ -1699,11 +1699,11 @@ export default function TradeForm() {
                             )}
                             {formData.direction === 'PURCHASE' && (
                                 <div className="btn-group">
-                                    <button type="button" className="btn btn-outline-secondary" onClick={() => handleDownloadPurchaseInvoice(true)}
+                                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPurchaseInvoice(true)}
                                         style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
                                         <i className="bi bi-file-pdf me-1"></i>Purchase Invoice
                                     </button>
-                                    <button type="button" className="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split"
+                                    <button type="button" className="flex items-center justify-center rounded border border-border bg-card px-2 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                         data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
                                         <span className="visually-hidden">Toggle Dropdown</span>
                                     </button>

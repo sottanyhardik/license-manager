@@ -492,7 +492,7 @@ export default function ItemPivotReport() {
                                             Minimum Balance (CIF)
                                         </label>
                                         <select
-                                            className="form-select"
+                                            flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
                                             value={minBalance}
                                             onChange={(e) => setMinBalance(parseInt(e.target.value))}
                                         >
@@ -513,7 +513,7 @@ export default function ItemPivotReport() {
                                             License Status
                                         </label>
                                         <select
-                                            className="form-select"
+                                            flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
                                             value={licenseStatus}
                                             onChange={(e) => setLicenseStatus(e.target.value)}
                                         >
@@ -552,7 +552,7 @@ export default function ItemPivotReport() {
                                         </label>
                                         <input
                                             type="date"
-                                            className="form-control"
+                                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                             value={expiryDateFrom}
                                             onChange={(e) => setExpiryDateFrom(e.target.value)}
                                         />
@@ -565,7 +565,7 @@ export default function ItemPivotReport() {
                                         </label>
                                         <input
                                             type="date"
-                                            className="form-control"
+                                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                             value={expiryDateTo}
                                             onChange={(e) => setExpiryDateTo(e.target.value)}
                                         />

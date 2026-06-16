@@ -1597,7 +1597,7 @@ export default function MasterForm({
                         selected={parseDate(value)}
                         onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
-                        className={`form-control ${errorClass}`}
+                        className={`flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring  aria-invalid:border-destructive ${errorClass}`}
                         wrapperClassName="w-100 d-block"
                         placeholderText="Select date"
                         isClearable
@@ -1634,7 +1634,7 @@ export default function MasterForm({
                 <div>
                     <input
                         type="file"
-                        className={`form-control ${errorClass}`}
+                        className={`flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring  aria-invalid:border-destructive ${errorClass}`}
                         onChange={(e) => handleChange(fieldName, e.target.files[0])}
                         accept="image/*"
                     />
@@ -1646,7 +1646,7 @@ export default function MasterForm({
                                     href={existingFileUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="btn btn-sm btn-outline-primary"
+                                    className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10"
                                 >
                                     <i className="bi bi-eye me-1"></i>
                                     View Current
@@ -1769,9 +1769,9 @@ export default function MasterForm({
                 </div>
                 <div className="card" style={{ borderRadius: 'var(--tb-r-md)' }}>
                     <div className="card-body p-4">
-                        <div className="row g-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                             {[...Array(6)].map((_, i) => (
-                                <div key={i} className="col-md-4">
+                                <div key={i}>
                                     <div className="placeholder-glow mb-1"><span className="placeholder col-6 rounded" style={{ height: 12 }}></span></div>
                                     <span className="placeholder col-12 rounded d-block" style={{ height: 38 }}></span>
                                 </div>
@@ -1922,7 +1922,7 @@ export default function MasterForm({
                                             type="file"
                                             accept=".pdf,application/pdf"
                                             id="boe-pdf-input"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             style={{ maxWidth: 260 }}
                                             onChange={(e) => {
                                                 setBoePdfFile(e.target.files?.[0] || null);
@@ -1931,7 +1931,7 @@ export default function MasterForm({
                                         />
                                         <button
                                             type="button"
-                                            className="btn btn-outline-primary btn-sm"
+                                            className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10"
                                             onClick={handleParseBoePdf}
                                             disabled={!boePdfFile || boeParsing}
                                         >
@@ -1973,7 +1973,7 @@ export default function MasterForm({
                                             type="file"
                                             accept=".pdf,application/pdf"
                                             id="boe-pdf-input"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             style={{ maxWidth: 340 }}
                                             onChange={(e) => {
                                                 setBoePdfFile(e.target.files?.[0] || null);
@@ -1982,7 +1982,7 @@ export default function MasterForm({
                                         />
                                         <button
                                             type="button"
-                                            className="btn btn-primary btn-sm"
+                                            className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
                                             onClick={handleParseBoePdf}
                                             disabled={!boePdfFile || boeParsing}
                                         >
@@ -2085,7 +2085,7 @@ export default function MasterForm({
                                             type="file"
                                             accept=".pdf,application/pdf"
                                             id="licence-pdf-input"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             style={{ maxWidth: 340 }}
                                             onChange={(e) => {
                                                 setLicensePdfFile(e.target.files?.[0] || null);
@@ -2094,7 +2094,7 @@ export default function MasterForm({
                                         />
                                         <button
                                             type="button"
-                                            className="btn btn-primary btn-sm"
+                                            className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
                                             onClick={handleParseLicensePdf}
                                             disabled={!licensePdfFile || licenseParsing}
                                         >
@@ -2133,7 +2133,7 @@ export default function MasterForm({
                                             </span>
                                             <button
                                                 type="button"
-                                                className="btn btn-outline-primary btn-sm"
+                                                className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10"
                                                 onClick={handleReparseExistingCopy}
                                                 disabled={licenseParsing}
                                                 style={{ marginLeft: 'auto' }}
@@ -2228,7 +2228,7 @@ export default function MasterForm({
                                 const isTextarea = !colClass && (field.includes("address") || field.includes("description") ||
                                     field.includes("note") || field.includes("comment") ||
                                     field.includes("condition") || field.includes("restriction"));
-                                const col = colClass || (isTextarea ? "col-12" : "col-md-4");
+                                const bsToTw = (c) => { if (!c) return isTextarea ? "col-span-full" : ""; const m = c.match(/col(?:-md)?-(\d+)/); if (!m) return ""; const n = parseInt(m[1]); return n >= 12 ? "col-span-full" : n >= 8 ? "sm:col-span-2 md:col-span-3" : n >= 6 ? "sm:col-span-1 md:col-span-2" : n >= 4 ? "" : n >= 3 ? "" : ""; }; const col = bsToTw(colClass);
                                 const fieldMeta = metadata.field_meta?.[field] || {};
                                 const label = fieldMeta.label || field.replace(/_/g, " ");
                                 const helpText = fieldMeta.help_text;
@@ -2270,7 +2270,7 @@ export default function MasterForm({
                                                     <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: section.color, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                                                         <i className={`bi bi-${section.icon}`}></i> {section.title}
                                                     </div>
-                                                    <div className="row g-3">
+                                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                                                         {visibleFields.map(f => renderOneField(f, section.cols?.[f]))}
                                                     </div>
                                                 </div>
@@ -2281,7 +2281,7 @@ export default function MasterForm({
                                                 <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-text-secondary)', marginBottom: '14px' }}>
                                                     <i className="bi bi-three-dots me-1"></i> Other Fields
                                                 </div>
-                                                <div className="row g-3">
+                                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                                                     {remainingFields.map(f => renderOneField(f))}
                                                 </div>
                                             </div>
@@ -2291,7 +2291,7 @@ export default function MasterForm({
                             }
 
                             return (
-                                <div className="row g-3">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                                     {activeFields.map(f => renderOneField(f))}
                                 </div>
                             );
@@ -2334,7 +2334,7 @@ export default function MasterForm({
                                     };
                                     return (
                                         <>
-                                            <ul className="nav nav-tabs" style={{ borderBottom: '2px solid #e5e7eb', gap: 2, marginBottom: 0 }}>
+                                            <ul className="flex gap-1 border-b border-border" style={{ marginBottom: 0 }}>
                                                 {nestedEntries.map(([nestedKey]) => {
                                                     const count = (formData[nestedKey] || []).length;
                                                     const isActive = activeTab === nestedKey;
@@ -2344,7 +2344,7 @@ export default function MasterForm({
                                                         <li key={nestedKey} className="nav-item">
                                                             <button
                                                                 type="button"
-                                                                className={`nav-link d-flex align-items-center gap-2 ${isActive ? 'active' : ''}`}
+                                                                className={`flex cursor-pointer items-center gap-2 rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-border bg-card text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                                                                 onClick={() => setActiveNestedTab(nestedKey)}
                                                                 style={{ fontSize: '0.83rem', fontWeight: isActive ? '600' : '500', padding: '8px 16px', color: isActive ? entityColor : 'var(--tb-text-secondary)', borderColor: isActive ? `${entityColor} ${entityColor} white` : 'transparent', borderRadius: '8px 8px 0 0' }}
                                                             >

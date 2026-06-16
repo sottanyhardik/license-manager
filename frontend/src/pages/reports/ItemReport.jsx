@@ -474,13 +474,13 @@ export default function ItemReport() {
                         </div>
                         <div style={{ padding: '14px 16px' }}>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                <div className="col-lg-2 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-currency-dollar me-1"></i>
                                         Min Balance (CIF)
                                     </label>
                                     <select
-                                        className="form-select"
+                                        flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
                                         value={minBalance}
                                         onChange={(e) => setMinBalance(parseInt(e.target.value))}
                                     >
@@ -493,13 +493,13 @@ export default function ItemReport() {
                                     </select>
                                 </div>
 
-                                <div className="col-lg-2 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-box-seam me-1"></i>
                                         Min Avail Qty
                                     </label>
                                     <select
-                                        className="form-select"
+                                        flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
                                         value={minAvailQty}
                                         onChange={(e) => setMinAvailQty(parseInt(e.target.value))}
                                     >
@@ -512,13 +512,13 @@ export default function ItemReport() {
                                     </select>
                                 </div>
 
-                                <div className="col-lg-2 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-calendar-check me-1"></i>
                                         License Status
                                     </label>
                                     <select
-                                        className="form-select"
+                                        flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
                                         value={licenseStatus}
                                         onChange={(e) => setLicenseStatus(e.target.value)}
                                     >
@@ -529,33 +529,33 @@ export default function ItemReport() {
                                     </select>
                                 </div>
 
-                                <div className="col-lg-2 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-calendar-range me-1"></i>
                                         Expiry Date From
                                     </label>
                                     <input
                                         type="date"
-                                        className="form-control"
+                                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={expiryDateFrom}
                                         onChange={(e) => setExpiryDateFrom(e.target.value)}
                                     />
                                 </div>
 
-                                <div className="col-lg-2 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-calendar-range me-1"></i>
                                         Expiry Date To
                                     </label>
                                     <input
                                         type="date"
-                                        className="form-control"
+                                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={expiryDateTo}
                                         onChange={(e) => setExpiryDateTo(e.target.value)}
                                     />
                                 </div>
 
-                                <div className="col-lg-3 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-building me-1"></i>
                                         Include Companies
@@ -574,7 +574,7 @@ export default function ItemReport() {
                                     </div>
                                 </div>
 
-                                <div className="col-lg-3 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-dash-circle me-1"></i>
                                         Exclude Companies
@@ -595,13 +595,13 @@ export default function ItemReport() {
                             </div>
 
                             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                <div className="col-lg-3 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-shield-lock me-1"></i>
                                         Is Restricted
                                     </label>
                                     <select
-                                        className="form-select"
+                                        flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
                                         value={isRestricted}
                                         onChange={(e) => setIsRestricted(e.target.value)}
                                     >
@@ -611,7 +611,7 @@ export default function ItemReport() {
                                     </select>
                                 </div>
 
-                                <div className="col-lg-6 col-md-6">
+                                <div className="sm:col-span-2">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-cart-check me-1"></i>
                                         Purchase Status
@@ -641,7 +641,7 @@ export default function ItemReport() {
                                     />
                                 </div>
 
-                                <div className="col-lg-3 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-tags me-1"></i>
                                         Norms
@@ -667,7 +667,7 @@ export default function ItemReport() {
                                     />
                                 </div>
 
-                                <div className="col-lg-3 col-md-6">
+                                <div>
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-bell me-1"></i>
                                         Notification
@@ -685,27 +685,27 @@ export default function ItemReport() {
                             </div>
 
                             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                <div className="col-lg-6 col-md-12">
+                                <div className="sm:col-span-full">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-file-text me-1"></i>
                                         Product Description
                                     </label>
                                     <input
                                         type="text"
-                                        className="form-control"
+                                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         placeholder="Search by product description..."
                                         value={productDescSearch}
                                         onChange={(e) => setProductDescSearch(e.target.value)}
                                     />
                                 </div>
-                                <div className="col-lg-6 col-md-12">
+                                <div className="sm:col-span-full">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-upc-scan me-1"></i>
                                         HSN Code
                                     </label>
                                     <input
                                         type="text"
-                                        className="form-control"
+                                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         placeholder="Search by HSN code..."
                                         value={hsnCodeSearch}
                                         onChange={(e) => setHsnCodeSearch(e.target.value)}
@@ -1064,7 +1064,7 @@ export default function ItemReport() {
                                                                             <div className="d-flex gap-1">
                                                                                 <input
                                                                                     type="text"
-                                                                                    className="form-control form-control-sm"
+                                                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                                                                     value={editValue}
                                                                                     onChange={(e) => setEditValue(e.target.value)}
                                                                                     autoFocus
@@ -1101,7 +1101,7 @@ export default function ItemReport() {
                                                                             <div className="d-flex gap-1">
                                                                                 <input
                                                                                     type="text"
-                                                                                    className="form-control form-control-sm"
+                                                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                                                                     value={editValue}
                                                                                     onChange={(e) => setEditValue(e.target.value)}
                                                                                     autoFocus

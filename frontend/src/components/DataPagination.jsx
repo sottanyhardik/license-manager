@@ -50,7 +50,7 @@ export default function DataPagination({
                 </label>
                 <select
                     id="page-size-select"
-                    className="form-select form-select-sm"
+                    className="flex h-8 rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                     style={{ width: "auto" }}
                     value={pageSize}
                     onChange={e => onPageSizeChange(parseInt(e.target.value))}

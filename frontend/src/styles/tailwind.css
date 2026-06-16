@@ -19,6 +19,7 @@
 @layer theme, base, components, utilities;
 
 @import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "tw-animate-css";
 
@@ -27,25 +28,7 @@
 @custom-variant dark (&:is([data-theme="dark"] *));
 
 
-/* ── Minimal preflight substitute (coexistence) ────────────────
-   Full preflight is skipped so Bootstrap's reset stays intact.
-   But Tailwind's `border-*` utilities only set border-WIDTH and
-   assume preflight has set `border-style: solid` globally. We
-   replicate just that one rule in @layer base. Because Bootstrap
-   is unlayered it always wins on the elements it targets, so this
-   only affects shadcn-rendered nodes. Removed in Phase 4. */
-@layer base {
-    *,
-    ::before,
-    ::after,
-    ::backdrop,
-    ::file-selector-button {
-        box-sizing: border-box;
-        border-width: 0;
-        border-style: solid;
-        border-color: var(--color-border, currentColor);
-    }
-}
+/* Preflight is now fully enabled (Bootstrap removed). */
 
 
 /* ── shadcn semantic tokens → bridged onto --tb-* ──────────── */

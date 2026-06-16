@@ -582,7 +582,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     </div>
                     <div className="d-flex gap-2 flex-wrap">
                         <button
-                            className="btn btn-sm btn-outline-secondary"
+                            className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                             onClick={() => {
                                 if (isModal && onClose) { onClose(); }
                                 sessionStorage.setItem('allotmentListFilters', JSON.stringify({ returnTo: 'edit', timestamp: new Date().getTime() }));
@@ -593,7 +593,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <i className="bi bi-pencil-square me-1"></i>Edit
                         </button>
                         <button
-                            className="btn btn-sm btn-outline-secondary"
+                            className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                             onClick={async () => {
                                 if (!window.confirm('Are you sure you want to create a copy of this allotment?')) return;
                                 try {
@@ -609,7 +609,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <i className="bi bi-files me-1"></i>Copy
                         </button>
                         <button
-                            className="btn btn-sm btn-primary"
+                            className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
                             onClick={async () => {
                                 try {
                                     const response = await api.get(`allotment-actions/${id}/generate-pdf/`, { responseType: 'blob' });
@@ -632,7 +632,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </button>
                         {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
                             <button
-                                className="btn btn-sm btn-outline-secondary"
+                                className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                 onClick={() => document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' })}
                                 title="Generate Transfer Letter"
                             >
@@ -640,7 +640,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </button>
                         )}
                         <button
-                            className="btn btn-sm btn-outline-secondary"
+                            className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                             onClick={() => {
                                 sessionStorage.setItem('allotmentListFilters', JSON.stringify({ returnTo: 'list', timestamp: new Date().getTime() }));
                                 navigate('/allotments');
@@ -694,9 +694,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <div style={{ height: '100%', borderRadius: 4, width: `${progressPct}%`, background: `linear-gradient(90deg, ${progressColor}, ${progressColor}cc)`, transition: 'width 0.4s ease' }} />
                                 </div>
                             </div>
-                            <div className="row g-3 align-items-stretch">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12 items-stretch">
                                 {/* Unit Price */}
-                                <div className="col-lg-2 col-md-4">
+                                <div className="lg:col-span-2">
                                     <div className="h-100 p-3 d-flex flex-column justify-content-center" style={{ backgroundColor: 'rgba(23,162,184,0.06)', borderRadius: 'var(--tb-r-md)', border: '1px solid rgba(23,162,184,0.2)' }}>
                                         <small className="text-muted d-block mb-1" style={{ fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Unit Price</small>
                                         <strong style={{ fontSize: '1.15rem', color: 'var(--info-color)' }}>{unitPrice.toFixed(3)}</strong>
@@ -704,7 +704,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </div>
 
                                 {/* Required group */}
-                                <div className="col-lg-3 col-md-8">
+                                <div className="lg:col-span-3">
                                     <div className="h-100 p-3" style={{ backgroundColor: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-border-soft)', borderTop: '3px solid #6c757d' }}>
                                         <small className="d-block mb-2" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-text-secondary)' }}>Required</small>
                                         <div className="d-flex gap-3">
@@ -722,7 +722,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </div>
 
                                 {/* Allotted group */}
-                                <div className="col-lg-3 col-md-6">
+                                <div className="lg:col-span-3">
                                     <div className="h-100 p-3" style={{ backgroundColor: 'rgba(40,167,69,0.04)', borderRadius: 'var(--tb-r-md)', border: '1px solid rgba(40,167,69,0.2)', borderTop: '3px solid #28a745' }}>
                                         <small className="d-block mb-2" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-success-text)' }}>Allotted</small>
                                         <div className="d-flex gap-3">
@@ -740,7 +740,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </div>
 
                                 {/* Balance group */}
-                                <div className="col-lg-4 col-md-6">
+                                <div className="lg:col-span-4">
                                     <div className="h-100 p-3" style={{ backgroundColor: 'var(--tb-brand-50)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-brand-200)', borderTop: '3px solid var(--tb-brand)' }}>
                                         <small className="d-block mb-2" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-brand)' }}>Balance</small>
                                         <div className="d-flex gap-3 align-items-end">
@@ -774,7 +774,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </span>
                         </h6>
                         <button
-                            className="btn btn-sm btn-outline-secondary"
+                            className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                             onClick={() => {
                                     const headers = ['License', 'Serial', 'Description', 'HSN Code', 'Exporter', 'Transfer Status', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
                                     const rows = allotment.allotment_details.map(detail => {
@@ -857,13 +857,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         <td className="text-end" style={{whiteSpace: 'nowrap'}}>{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
                                         <td className="text-center" style={{whiteSpace: 'nowrap'}}>
                                             <button
-                                                className="btn btn-outline-secondary btn-sm"
+                                                className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                                 onClick={() => handleDeleteAllotment(detail.id)}
                                                 disabled={deletingItems[detail.id]}
                                                 title="Remove this allocation"
                                             >
                                                 {deletingItems[detail.id] ? (
-                                                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                                                    <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                                 ) : (
                                                     <i className="bi bi-trash"></i>
                                                 )}
@@ -938,7 +938,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <i className="bi bi-funnel"></i> Filters
                             </span>
                             <button
-                                className="btn btn-sm btn-link text-muted p-0"
+                                className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline bg-transparent border-0 p-0"
                                 style={{ fontSize: 12, textDecoration: 'none' }}
                                 onClick={() => setFilters({
                                     description: "",
@@ -965,8 +965,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </button>
                         </div>
                         <div className="card-body" style={{ padding: '16px' }}>
-                            <div className="row g-3">
-                                <div className="col-md-12">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <div className="col-span-full sm:col-span-2 lg:col-span-4">
                                     <label className="form-label">Filter By Item Name</label>
                                     <Select
                                         isMulti
@@ -981,7 +981,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         classNamePrefix="select"
                                     />
                                 </div>
-                                <div className="col-md-3">
+                                <div>
                                     <label className="form-label">Norm Class</label>
                                     <HybridSelect
                                         fieldMeta={{endpoint: "masters/sion-classes/", label_field: "norm_class"}}
@@ -991,10 +991,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         isClearable={true}
                                     />
                                 </div>
-                                <div className="col-md-3">
+                                <div>
                                     <label className="form-label">Notification Number</label>
                                     <select
-                                        className="form-control form-control-sm"
+                                        className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                         value={filters.notification_number}
                                         onChange={(e) => setFilters({...filters, notification_number: e.target.value})}
                                     >
@@ -1006,27 +1006,27 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         ))}
                                     </select>
                                 </div>
-                                <div className="col-md-3">
+                                <div>
                                     <label className="form-label">License Number</label>
                                     <input
                                         type="text"
-                                        className="form-control form-control-sm"
+                                        className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                         placeholder="Filter by license number..."
                                         value={filters.license_number}
                                         onChange={(e) => setFilters({...filters, license_number: e.target.value})}
                                     />
                                 </div>
-                                <div className="col-md-3">
+                                <div>
                                     <label className="form-label">Item Description</label>
                                     <input
                                         type="text"
-                                        className="form-control form-control-sm"
+                                        className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                         placeholder="Filter by item description..."
                                         value={filters.description}
                                         onChange={(e) => setFilters({...filters, description: e.target.value})}
                                     />
                                 </div>
-                                <div className="col-md-3">
+                                <div>
                                     <label className="form-label">Exporter</label>
                                     <HybridSelect
                                         fieldMeta={{endpoint: "masters/companies/", label_field: "name"}}
@@ -1036,7 +1036,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         isClearable={true}
                                     />
                                 </div>
-                                <div className="col-md-3">
+                                <div>
                                     <label className="form-label">Exclude Exporter</label>
                                     <HybridSelect
                                         fieldMeta={{endpoint: "masters/companies/", label_field: "name"}}
@@ -1046,55 +1046,55 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         isClearable={true}
                                     />
                                 </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">HS Code</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.hs_code}
                                             onChange={(e) => setFilters({...filters, hs_code: e.target.value})}
                                         />
                                     </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">Min Available Qty</label>
                                         <input
                                             type="number"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.available_quantity_gte}
                                             onChange={(e) => setFilters({...filters, available_quantity_gte: e.target.value})}
                                         />
                                     </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">Max Available Qty</label>
                                         <input
                                             type="number"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.available_quantity_lte}
                                             onChange={(e) => setFilters({...filters, available_quantity_lte: e.target.value})}
                                         />
                                     </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">Min Available Value</label>
                                         <input
                                             type="number"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.available_value_gte}
                                             onChange={(e) => setFilters({...filters, available_value_gte: e.target.value})}
                                         />
                                     </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">Max Available Value</label>
                                         <input
                                             type="number"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.available_value_lte}
                                             onChange={(e) => setFilters({...filters, available_value_lte: e.target.value})}
                                         />
                                     </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">Is Restricted</label>
                                         <select
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.is_restricted}
                                             onChange={(e) => setFilters({...filters, is_restricted: e.target.value})}
                                         >
@@ -1103,7 +1103,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <option value="false">Not Restricted</option>
                                         </select>
                                     </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">Purchase Status</label>
                                         <Select
                                             isMulti
@@ -1125,10 +1125,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             classNamePrefix="select"
                                         />
                                     </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">License Status</label>
                                         <select
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.license_status}
                                             onChange={(e) => setFilters({...filters, license_status: e.target.value})}
                                         >
@@ -1138,20 +1138,20 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <option value="expiring_soon">Expiring Soon</option>
                                         </select>
                                     </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">Expiry Date From</label>
                                         <input
                                             type="date"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.expiry_date_from}
                                             onChange={(e) => setFilters({...filters, expiry_date_from: e.target.value})}
                                         />
                                     </div>
-                                    <div className="col-md-3">
+                                    <div>
                                         <label className="form-label">Expiry Date To</label>
                                         <input
                                             type="date"
-                                            className="form-control form-control-sm"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.expiry_date_to}
                                             onChange={(e) => setFilters({...filters, expiry_date_to: e.target.value})}
                                         />
@@ -1300,15 +1300,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 <label style={{fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', display: 'block', marginBottom: '3px'}}>
                                                     Qty <span style={{fontWeight: '400', textTransform: 'none'}}>/ max {maxAllocation.qty}</span>
                                                 </label>
-                                                <div className="input-group input-group-sm">
-                                                    <input type="number" className="form-control form-control-sm"
+                                                <div className="relative flex">
+                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                                         value={currentAllocation?.qty || ""}
                                                         onChange={(e) => handleQuantityChange(item.id, e.target.value)}
                                                         placeholder="Qty"
                                                         step="1" min="0" max={maxAllocation.qty}
                                                         style={{fontSize: '0.82rem'}}
                                                     />
-                                                    <button className="btn btn-outline-secondary btn-sm" type="button"
+                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" type="button"
                                                         onClick={() => handleMaxQuantity(item)}
                                                         style={{fontSize: 12, fontWeight: '600'}}>Max</button>
                                                 </div>
@@ -1317,15 +1317,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 <label style={{fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', display: 'block', marginBottom: '3px'}}>
                                                     Value <span style={{fontWeight: '400', textTransform: 'none'}}>/ max {maxAllocation.value.toFixed(2)}</span>
                                                 </label>
-                                                <div className="input-group input-group-sm">
-                                                    <input type="number" className="form-control form-control-sm"
+                                                <div className="relative flex">
+                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                                         value={currentAllocation?.cif_fc || ""}
                                                         onChange={(e) => handleValueChange(item.id, e.target.value)}
                                                         placeholder="Value"
                                                         step="0.01" min="0"
                                                         style={{fontSize: '0.82rem'}}
                                                     />
-                                                    <button className="btn btn-outline-secondary btn-sm" type="button"
+                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" type="button"
                                                         onClick={() => handleMaxValue(item)}
                                                         style={{fontSize: 12, fontWeight: '600'}}>Max</button>
                                                 </div>
@@ -1340,7 +1340,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         }}>
                                             <button
-                                                className="btn btn-sm"
+                                                className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                                 style={{
                                                     background: isReady ? 'var(--primary-gradient)' : 'var(--tb-gray-100)',
                                                     border: 'none',
@@ -1358,7 +1358,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             >
                                                 {saving[item.id] ? (
                                                     <>
-                                                        <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent me-1" aria-hidden="true" />
                                                         Saving…
                                                     </>
                                                 ) : (
@@ -1376,11 +1376,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     </div>
 
                     {tableLoading && (
-                        <div className="text-center py-4">
-                            <div className="spinner-border spinner-border-sm text-primary" role="status">
-                                <span className="visually-hidden">Loading...</span>
-                            </div>
-                            <span className="ms-2 text-muted" style={{ fontSize: 14.5 }}>Loading items...</span>
+                        <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                            <span className="inline-block size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
+                            Loading items…
                         </div>
                     )}
 

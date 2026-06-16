@@ -2016,7 +2016,7 @@ export default function MasterList() {
                         <input
                             autoFocus
                             type="text"
-                            className="form-control"
+                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                             placeholder="Search by invoice number..."
                             value={linkSearch}
                             onChange={e => setLinkSearch(e.target.value)}

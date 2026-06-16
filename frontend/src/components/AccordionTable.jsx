@@ -409,7 +409,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                 <div className="d-flex align-items-center gap-1">
                                                     <input
                                                         type="text"
-                                                        className="form-control form-control-sm"
+                                                        className="flex h-8 rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                                         value={editValue}
                                                         onChange={(e) => setEditValue(e.target.value)}
                                                         onKeyDown={(e) => handleKeyDown(e, item, col)}

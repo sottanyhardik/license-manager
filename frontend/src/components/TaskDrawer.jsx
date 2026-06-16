@@ -440,7 +440,7 @@ export default function TaskDrawer({ show, onClose }) {
                     <div className="d-flex gap-2 mb-2">
                         <input
                             ref={titleInputRef}
-                            className="form-control form-control-sm"
+                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
                             placeholder='New task title (or click mic and say "next" to split)'
                             value={draft.title}
                             onChange={(e) => setDraft(d => ({ ...d, title: e.target.value }))}
@@ -521,7 +521,7 @@ export default function TaskDrawer({ show, onClose }) {
                     <div className="flex flex-wrap gap-2">
                         <div className="col-6">
                             <select
-                                className="form-select form-select-sm"
+                                flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
                                 value={draft.priority}
                                 onChange={(e) => setDraft(d => ({ ...d, priority: e.target.value }))}
                             >
@@ -533,14 +533,14 @@ export default function TaskDrawer({ show, onClose }) {
                         <div className="col-6">
                             <input
                                 type="date"
-                                className="form-control form-control-sm"
+                                className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
                                 value={draft.due_date}
                                 onChange={(e) => setDraft(d => ({ ...d, due_date: e.target.value }))}
                             />
                         </div>
                         <div className="col-12">
                             <select
-                                className="form-select form-select-sm"
+                                flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
                                 value={draft.assigned_to}
                                 onChange={(e) => setDraft(d => ({ ...d, assigned_to: e.target.value }))}
                             >
@@ -554,7 +554,7 @@ export default function TaskDrawer({ show, onClose }) {
                         </div>
                         <div className="col-12">
                             <textarea
-                                className="form-control form-control-sm"
+                                className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
                                 placeholder="Description (optional)"
                                 rows={2}
                                 value={draft.description}
@@ -580,14 +580,14 @@ export default function TaskDrawer({ show, onClose }) {
                     }}
                 >
                     <input
-                        className="form-control form-control-sm"
+                        className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
                         placeholder="Search…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && fetchTasks()}
                     />
                     <select
-                        className="form-select form-select-sm"
+                        flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
                         style={{ width: 130 }}
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
@@ -720,7 +720,7 @@ export default function TaskDrawer({ show, onClose }) {
                                     <div className="mt-2 ps-4">
                                         {/* Inline editable description */}
                                         <textarea
-                                            className="form-control form-control-sm mb-2"
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm mb-2 outline-none focus-visible:border-ring"
                                             placeholder="Description"
                                             rows={2}
                                             defaultValue={task.description}
@@ -733,7 +733,7 @@ export default function TaskDrawer({ show, onClose }) {
                                         <div className="flex flex-wrap gap-2 mb-2">
                                             <div className="col-6">
                                                 <select
-                                                    className="form-select form-select-sm"
+                                                    flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
                                                     value={task.priority}
                                                     onChange={(e) => handleInlineUpdate(task, { priority: e.target.value })}
                                                 >
@@ -745,14 +745,14 @@ export default function TaskDrawer({ show, onClose }) {
                                             <div className="col-6">
                                                 <input
                                                     type="date"
-                                                    className="form-control form-control-sm"
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
                                                     value={task.due_date || ""}
                                                     onChange={(e) => handleInlineUpdate(task, { due_date: e.target.value || null })}
                                                 />
                                             </div>
                                             <div className="col-12">
                                                 <select
-                                                    className="form-select form-select-sm"
+                                                    flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
                                                     value={task.assigned_to || ""}
                                                     onChange={(e) => handleInlineUpdate(task, { assigned_to: e.target.value ? parseInt(e.target.value, 10) : null })}
                                                 >
@@ -769,7 +769,7 @@ export default function TaskDrawer({ show, onClose }) {
                                             <div className="small fw-semibold mb-1">Remarks</div>
                                             <div className="d-flex gap-2 mb-2">
                                                 <input
-                                                    className="form-control form-control-sm"
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
                                                     placeholder="Add a remark…"
                                                     value={remarkDrafts[task.id] || ""}
                                                     onChange={(e) => setRemarkDrafts(prev => ({ ...prev, [task.id]: e.target.value }))}

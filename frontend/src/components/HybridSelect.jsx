@@ -144,7 +144,7 @@ export default function HybridSelect({
     return (
         <input
             type="text"
-            className="form-control"
+            className="react-select-container"
             value={value || ""}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}

@@ -35,7 +35,7 @@ export default function DebouncedSearchInput({
             </span>
             <input
                 type="text"
-                className={`flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 pl-8 text-sm shadow-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/30 focus-visible:ring-[3px] ${className}`}
+                className={`flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 pl-8 text-sm shadow-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${className}`}
                 placeholder={placeholder}
                 value={localValue}
                 onChange={(e) => setLocalValue(e.target.value)}

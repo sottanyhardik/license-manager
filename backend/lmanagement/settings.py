@@ -32,17 +32,17 @@ ALLOWED_HOSTS = os.getenv(
     "127.0.0.1,localhost"  # production: set ALLOWED_HOSTS env var with real domains
 ).split(",")
 
-# HTTPS Settings
-# When DEBUG=True (dev server, HTTP only) these are automatically off.
-# When DEBUG=False (production) these default to on — can be overridden via env vars.
+# HTTPS Settings — all default to OFF; production servers must set them
+# explicitly via environment variables (see server-envs/*.env).
+# Tying these to DEBUG caused SECURE_SSL_REDIRECT to activate locally
+# when DEBUG was defaulted to False, which 301-redirected CORS preflights.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-_https_default = "False" if DEBUG else "True"
-SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", _https_default).lower() == "true"
-SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", _https_default).lower() == "true"
-CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", _https_default).lower() == "true"
-SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000"))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", _https_default).lower() == "true"
-SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", _https_default).lower() == "true"
+SECURE_SSL_REDIRECT         = os.getenv("SECURE_SSL_REDIRECT",         "False").lower() == "true"
+SESSION_COOKIE_SECURE       = os.getenv("SESSION_COOKIE_SECURE",       "False").lower() == "true"
+CSRF_COOKIE_SECURE          = os.getenv("CSRF_COOKIE_SECURE",          "False").lower() == "true"
+SECURE_HSTS_SECONDS         = int(os.getenv("SECURE_HSTS_SECONDS",     "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "False").lower() == "true"
+SECURE_HSTS_PRELOAD             = os.getenv("SECURE_HSTS_PRELOAD",             "False").lower() == "true"
 
 # ---------------------------------------------------------------------
 # Applications

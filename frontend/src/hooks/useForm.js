@@ -28,8 +28,9 @@
 
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import api from '../api/axios';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export const useForm = (initialData = {}, options = {}) => {
   const {
@@ -138,11 +139,7 @@ export const useForm = (initialData = {}, options = {}) => {
       }
 
       // Handle form-level error message
-      const errorMsg = err.response?.data?.detail
-        || err.response?.data?.message
-        || err.response?.data?.error
-        || err.message
-        || errorMessage;
+      const errorMsg = getErrorMessage(err) || errorMessage;
 
       setError(errorMsg);
       toast.error(errorMsg);

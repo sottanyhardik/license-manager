@@ -61,6 +61,64 @@ print_warning() {
     echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
+# Function: Ensure local PostgreSQL is running, auto-recovering from a stale
+# postmaster.pid lock left behind by an unclean shutdown. No sudo required —
+# the data dir and lock file are owned by the current user, and brew services
+# runs as the user.
+ensure_local_postgres() {
+    if pg_isready -q 2>/dev/null; then
+        return 0
+    fi
+
+    print_warning "Local PostgreSQL is not responding — attempting auto-recovery"
+
+    local data_dir=""
+    if [ -d "/opt/homebrew/var/postgresql@18" ]; then
+        data_dir="/opt/homebrew/var/postgresql@18"
+    elif [ -d "/usr/local/var/postgresql@18" ]; then
+        data_dir="/usr/local/var/postgresql@18"
+    else
+        print_error "PostgreSQL@18 data directory not found in /opt/homebrew or /usr/local"
+        exit 1
+    fi
+
+    local pid_file="$data_dir/postmaster.pid"
+    if [ -f "$pid_file" ]; then
+        local stale_pid
+        stale_pid=$(head -n1 "$pid_file" 2>/dev/null | tr -d '[:space:]')
+        if [ -n "$stale_pid" ] && ps -p "$stale_pid" >/dev/null 2>&1; then
+            local proc_name
+            proc_name=$(ps -p "$stale_pid" -o comm= 2>/dev/null | xargs basename 2>/dev/null)
+            if echo "$proc_name" | grep -qi postgres; then
+                print_error "Postgres PID $stale_pid is running but not accepting connections. Investigate manually."
+                exit 1
+            fi
+            print_info "Stale lock: PID $stale_pid is '$proc_name', not postgres — removing $pid_file"
+        else
+            print_info "Stale lock: PID $stale_pid is dead — removing $pid_file"
+        fi
+        rm -f "$pid_file"
+    fi
+
+    print_info "Starting postgresql@18 via brew services..."
+    if ! brew services restart postgresql@18 >/dev/null 2>&1; then
+        print_error "brew services restart postgresql@18 failed"
+        exit 1
+    fi
+
+    local i
+    for i in $(seq 1 30); do
+        if pg_isready -q 2>/dev/null; then
+            print_success "PostgreSQL is up"
+            return 0
+        fi
+        sleep 0.5
+    done
+
+    print_error "PostgreSQL did not become ready within 15s"
+    exit 1
+}
+
 # Function: Select server
 select_server() {
     print_header "🖥️  Select Remote Server"
@@ -215,6 +273,8 @@ restore_db() {
     pkill -f "python.*manage.py runserver" 2>/dev/null || true
     print_success "Server stopped"
 
+    ensure_local_postgres
+
     # Drop and recreate database
     print_info "Dropping existing database..."
     psql -U hardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;" 2>/dev/null
@@ -296,23 +356,38 @@ sync_db() {
     print_info "Stopping Django server..."
     pkill -f "python.*manage.py runserver" 2>/dev/null || true
 
-    print_info "Recreating database..."
-    psql -U hardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;" 2>/dev/null
-    psql -U hardiksottany -d postgres -c "CREATE DATABASE $LOCAL_DB_NAME OWNER $LOCAL_DB_USER;" 2>/dev/null
+    ensure_local_postgres
 
-    if [ $? -ne 0 ]; then
-        print_error "Failed to recreate database"
+    print_info "Recreating database..."
+    if ! psql -U hardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;"; then
+        print_error "Failed to drop existing database"
+        exit 1
+    fi
+    if ! psql -U hardiksottany -d postgres -c "CREATE DATABASE $LOCAL_DB_NAME OWNER $LOCAL_DB_USER;"; then
+        print_error "Failed to create database"
         exit 1
     fi
 
     print_info "Restoring backup (this may take a while)..."
-    PGPASSWORD="$LOCAL_DB_PASS" pg_restore -U $LOCAL_DB_USER -d $LOCAL_DB_NAME -j 4 --no-owner --no-acl "$BACKUP_DIR/$BACKUP_FILE" 2>/dev/null
-
-    if [ $? -ne 0 ]; then
-        print_error "Failed to restore backup"
-        exit 1
+    local restore_log
+    restore_log=$(mktemp)
+    if PGPASSWORD="$LOCAL_DB_PASS" pg_restore -U "$LOCAL_DB_USER" -d "$LOCAL_DB_NAME" -j 4 --no-owner --no-acl "$BACKUP_DIR/$BACKUP_FILE" 2>"$restore_log"; then
+        print_success "Database restored"
+    else
+        local rc=$?
+        # PG 17+ dumps contain `SET transaction_timeout = 0`, which PG <17 rejects.
+        # pg_restore returns 1 even when only this benign SET fails and all data is loaded.
+        if grep -q 'transaction_timeout' "$restore_log" && ! grep -qE 'ERROR.*(COPY|TABLE|INDEX|CONSTRAINT|SEQUENCE)' "$restore_log"; then
+            print_warning "pg_restore exit=$rc, but only PG17+ session params failed (local server is older). Data likely intact."
+            cat "$restore_log" >&2
+        else
+            print_error "Failed to restore backup (pg_restore exit=$rc):"
+            cat "$restore_log" >&2
+            rm -f "$restore_log"
+            exit 1
+        fi
     fi
-    print_success "Database restored"
+    rm -f "$restore_log"
 
     print_info "Running migrations..."
     cd backend

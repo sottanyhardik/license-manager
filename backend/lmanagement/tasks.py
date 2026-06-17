@@ -4,8 +4,8 @@ import logging
 from celery import shared_task
 from django.db.models import Q
 
-from bill_of_entry.scripts.boe import request_bill_of_entry, be_details
-from core.models import PortModel
+from apps.bill_of_entry.scripts.boe import request_bill_of_entry, be_details
+from apps.core.models import PortModel
 from backend.scripts.dgft_shipping_bill import get_shipping_dgft_cookies, get_dgft_shipping_details
 from .celery import app
 
@@ -67,7 +67,7 @@ def dgft_shipping_details(data):
 
 @app.task
 def fetch_data_to_model(cookies, csrftoken, data_dict, captcha, data_id):
-    from bill_of_entry.models import BillOfEntryModel
+    from apps.bill_of_entry.models import BillOfEntryModel
     data = BillOfEntryModel.objects.filter(pk=data_id).filter(
         Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).order_by('failed').first()
     if data:
@@ -89,9 +89,9 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, captcha, data_id):
             }
             dict_sb_data = be_details(cookies, dict_data)
             if dict_sb_data:
-                from core.models import CompanyModel
+                from apps.core.models import CompanyModel
                 company, bool = CompanyModel.objects.get_or_create(iec=dict_sb_data['iec'])
-                from bill_of_entry.models import BillOfEntryModel
+                from apps.bill_of_entry.models import BillOfEntryModel
                 BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(company=company,
                                                                                                        is_fetch=True)
                 boe = BillOfEntryModel.objects.get(bill_of_entry_number=data.bill_of_entry_number,
@@ -122,6 +122,6 @@ def delete_license_details_by_numbers(license_numbers):
     Deletes LicenseDetailsModel entries matching the given license_numbers.
     Expects a list of strings.
     """
-    from license.models import LicenseDetailsModel
+    from apps.license.models import LicenseDetailsModel
     data = LicenseDetailsModel.objects.get(license_number=license_numbers).delete()
     return f"Deleted {data} LicenseDetailsModel records with license_numbers: {license_numbers}"

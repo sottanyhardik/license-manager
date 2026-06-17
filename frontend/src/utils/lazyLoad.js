@@ -131,7 +131,7 @@ export function lazyLoadRoute(routeName, importFunc) {
         importFunc()
             .then(module => {
                 // Log successful load in development
-                if (process.env.NODE_ENV === 'development') {
+                if (import.meta.env.DEV) {
                     console.log(`Route "${routeName}" loaded`);
                 }
                 return module;
@@ -181,7 +181,7 @@ export function preloadCriticalRoutes(routes, delay = 2000) {
         Object.entries(routes).forEach(([name, importFunc]) => {
             importFunc()
                 .then(() => {
-                    if (process.env.NODE_ENV === 'development') {
+                    if (import.meta.env.DEV) {
                         console.log(`Preloaded route: ${name}`);
                     }
                 })

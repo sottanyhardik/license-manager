@@ -50,10 +50,11 @@ export const routes = [
     },
     {
         path: "/settings",
-        label: "Settings",
+        label: "Users & Roles",
         component: "Settings",
         protected: false,
-        icon: "gear",
+        icon: "shield-lock",
+        superuserOnly: true,
     },
 ];
 
@@ -104,18 +105,10 @@ export const masterEntities = [
     {
         path: "/masters/exchange-rates",
         label: "Exchange Rates",
-        entity: "exchange-rates",
+                entity: "exchange-rates",
         icon: "currency-exchange",
     },
-    {
-        path: "/masters/item-heads",
-        label: "Item Heads (Deprecated)",
-        entity: "item-heads",
-        icon: "folder",
-        deprecated: true,
-    },
 ];
-
 // Report entities configuration
 export const reportEntities = [
     {
@@ -132,15 +125,5 @@ export const reportEntities = [
         path: "/reports/item-report",
         label: "Item Report",
         icon: "list-ul",
-    },
-    {
-        path: "/license-ledger",
-        label: "License Ledger",
-        icon: "journal-text",
-    },
-    {
-        path: "/ledger-upload",
-        label: "Ledger Upload",
-        icon: "upload",
     },
 ];

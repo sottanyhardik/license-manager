@@ -1,23 +1,20 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: light;
 }
+[data-theme="dark"] { color-scheme: dark; }
 
 body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  overflow-x: hidden;
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    overflow-x: hidden;
 }
 
-/* WCAG 2.1 AA Accessibility Fixes */
-
-/* Focus indicators for all interactive elements */
+/* ── WCAG 2.1 AA Focus indicators ── */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
@@ -25,170 +22,107 @@ select:focus-visible,
 textarea:focus-visible,
 [role="button"]:focus-visible,
 [tabindex]:not([tabindex="-1"]):focus-visible {
-  outline: 3px solid #0d6efd;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+    outline: 2px solid var(--tb-brand, #2563EB);
+    outline-offset: 2px;
 }
 
-/* Icon-only buttons need visible focus */
-.btn-icon:focus-visible,
-button[aria-label]:focus-visible {
-  outline: 3px solid #0d6efd;
-  outline-offset: 2px;
-}
-
-/* Footer text color for WCAG AA compliance (4.5:1 contrast) */
-footer,
-.footer,
-.text-muted {
-  color: #4b5563 !important;
-}
-
-/* Required field indicators */
+/* ── Required field indicators ── */
 .required::after,
 label.required::after {
-  content: " *";
-  color: #dc3545;
-  font-weight: bold;
-  margin-left: 2px;
-}
-
-/* Responsive table wrapper */
-.table-responsive-mobile {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-@media (max-width: 768px) {
-  .table-responsive-mobile table {
-    display: block;
-    width: 100%;
-  }
-
-  .table-responsive-mobile thead {
-    display: none;
-  }
-
-  .table-responsive-mobile tbody,
-  .table-responsive-mobile tr,
-  .table-responsive-mobile td {
-    display: block;
-    width: 100%;
-  }
-
-  .table-responsive-mobile tr {
-    margin-bottom: 1rem;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 0.5rem;
-  }
-
-  .table-responsive-mobile td {
-    text-align: right;
-    padding-left: 50%;
-    position: relative;
-    border-bottom: 1px solid #dee2e6;
-  }
-
-  .table-responsive-mobile td:last-child {
-    border-bottom: none;
-  }
-
-  .table-responsive-mobile td::before {
-    content: attr(data-label);
-    position: absolute;
-    left: 0;
-    width: 50%;
-    padding-left: 0.75rem;
+    content: " *";
+    color: var(--tb-danger, #DC2626);
     font-weight: 600;
-    text-align: left;
-  }
+    margin-left: 2px;
 }
 
-/* Touch targets for mobile (minimum 44x44px) */
+/* ── Mobile responsive table ── */
+.table-responsive-mobile { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 @media (max-width: 768px) {
-  button,
-  a.btn,
-  input[type="submit"],
-  input[type="button"],
-  input[type="checkbox"],
-  input[type="radio"],
-  select {
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  .btn-sm {
-    min-height: 44px;
-    padding: 0.5rem 1rem;
-  }
+    .table-responsive-mobile table { display: block; width: 100%; }
+    .table-responsive-mobile thead { display: none; }
+    .table-responsive-mobile tbody,
+    .table-responsive-mobile tr,
+    .table-responsive-mobile td {
+        display: block;
+        width: 100%;
+    }
+    .table-responsive-mobile tr {
+        margin-bottom: 10px;
+        border: 1px solid var(--tb-border, #E4E7EC);
+        border-radius: 8px;
+        padding: 8px;
+        background: var(--tb-card-bg, #fff);
+    }
+    .table-responsive-mobile td {
+        text-align: right;
+        padding-left: 50%;
+        position: relative;
+        border-bottom: 1px solid var(--tb-border-soft, #EEF0F4);
+        font-size: 13px;
+        padding-top: 7px;
+        padding-bottom: 7px;
+    }
+    .table-responsive-mobile td:last-child { border-bottom: none; }
+    .table-responsive-mobile td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 0;
+        width: 50%;
+        padding-left: 12px;
+        font-weight: 600;
+        text-align: left;
+        font-size: 11px;
+        color: var(--tb-text-secondary, #6B7280);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
 }
 
-/* ARIA live region styling */
+/* ── Touch targets (44px minimum on mobile) ── */
+@media (max-width: 768px) {
+    button,
+    a.btn,
+    input[type="submit"],
+    input[type="button"],
+    select {
+        min-height: 44px;
+    }
+    input[type="checkbox"],
+    input[type="radio"] {
+        min-width: 20px;
+        min-height: 20px;
+    }
+    .btn-sm {
+        min-height: 40px;
+        padding: 0.45rem 0.875rem;
+    }
+}
+
+/* ── ARIA live region ── */
 .sr-only,
 .visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+[aria-live] { position: relative; }
+
+/* ── Toastify custom colors in dark mode ── */
+[data-theme="dark"] .Toastify__progress-bar {
+    opacity: 0.6;
 }
 
-[aria-live] {
-  position: relative;
+/* ── Scrollbar styling ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: var(--tb-border-strong, #CDD2DA);
+    border-radius: 3px;
 }
-
-/* Empty state styling */
-.empty-state {
-  text-align: center;
-  padding: 3rem 1.5rem;
-  color: #6c757d;
-}
-
-.empty-state-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
-}
-
-.empty-state-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: #495057;
-}
-
-.empty-state-description {
-  font-size: 0.95rem;
-  margin-bottom: 1.5rem;
-}
-
-/* Loading Spinner Animations */
-@keyframes bar-scale {
-  0%, 40%, 100% {
-    transform: scaleY(0.4);
-  }
-  20% {
-    transform: scaleY(1.0);
-  }
-}
-
-/* Fade in slide animation for toasts */
-@keyframes fade-in-slide {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.fade-in-slide {
-  animation: fade-in-slide 0.3s ease-out;
-}
+::-webkit-scrollbar-thumb:hover { background: var(--tb-text-muted, #C4C9D4); }

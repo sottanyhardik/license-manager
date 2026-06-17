@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def create_norm_specific_items():
     """Create new ItemNameModel entries for norm-specific items"""
-    from core.models import ItemNameModel
+    from apps.core.models import ItemNameModel
 
     # List of new norm-specific item names
     new_items = [

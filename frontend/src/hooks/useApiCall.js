@@ -16,13 +16,12 @@
  */
 
 import {useCallback, useState} from 'react';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export const useApiCall = (options = {}) => {
     const {
         onSuccess,
         onError,
-        showErrorAlert = true,
-        showSuccessAlert = true,
     } = options;
 
     const [loading, setLoading] = useState(false);
@@ -30,7 +29,7 @@ export const useApiCall = (options = {}) => {
     const [data, setData] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    const execute = useCallback(async (apiFunction, config = {}) => {
+    const execute = useCallback(async (apiFunction) => {
         setLoading(true);
         setError(null);
         setSuccess(false);
@@ -49,10 +48,7 @@ export const useApiCall = (options = {}) => {
 
             return {success: true, data: responseData, error: null};
         } catch (err) {
-            const errorMessage = err.response?.data?.detail
-                || err.response?.data?.message
-                || err.message
-                || 'An error occurred';
+            const errorMessage = getErrorMessage(err) || 'An error occurred';
 
             const errorData = err.response?.data || {detail: errorMessage};
 
@@ -127,10 +123,7 @@ export const useMultipleApiCalls = () => {
 
             return {success: true, data: responseData, error: null};
         } catch (err) {
-            const errorMessage = err.response?.data?.detail
-                || err.response?.data?.message
-                || err.message
-                || 'An error occurred';
+            const errorMessage = getErrorMessage(err) || 'An error occurred';
 
             setErrorStates(prev => ({...prev, [key]: errorMessage}));
             setSuccessStates(prev => ({...prev, [key]: false}));

@@ -1,8 +1,8 @@
 /**
  * useFileUpload Hook
  *
- * Comprehensive file upload hook that consolidates 780+ lines of duplicate
- * file upload logic from LedgerUpload.jsx and LedgerCSVUpload.jsx.
+ * Comprehensive file upload hook that consolidates file upload logic
+ * across the app (used by LedgerUpload.jsx and other upload pages).
  *
  * Features:
  * - Drag and drop support
@@ -34,7 +34,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import api from '../api/axios';
 
 export const useFileUpload = (options = {}) => {
@@ -383,7 +383,7 @@ export const useFileUpload = (options = {}) => {
       successCount: uploadResults.filter(r => r.success).length,
       failureCount: failedCount,
     };
-  }, [files, endpoint, timeout, onSuccess, onError]);
+  }, [files, endpoint, timeout, onSuccess, onError, fileFieldName, uploadMode]);
 
   /**
    * Format file size for display

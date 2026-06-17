@@ -1,998 +1,299 @@
-/* ============================================================
-   Design Token System — Single Source of Truth
-   ============================================================ */
-:root {
-    /* ── Primary Brand: Obsidian Indigo ──────────────────── */
-    --primary-color:    #4F46E5;
-    --primary-light:    #6366F1;
-    --primary-dark:     #4338CA;
-    --primary-deeper:   #3730A3;
-    --primary-gradient: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%);
+/*
+ * ============================================================
+ *  App.css — slim layer.
+ *
+ *  All tokens, base typography, buttons, cards, tables, forms,
+ *  badges, modals, alerts, page-header, and primitives now live
+ *  in theme/tabler.css (loaded LAST in main.jsx, so it wins).
+ *
+ *  This file holds only:
+ *    1. Third-party library tweaks (react-select, react-datepicker)
+ *    2. Bootstrap form-switch specifics not covered by tabler
+ *    3. Wrapper classes used by legacy code (form-group-material,
+ *       nested-items-container)
+ *    4. App-specific animations and utilities
+ *
+ *  When adding new global styling, prefer theme/tabler.css.
+ * ============================================================
+ */
 
-    /* Indigo scale */
-    --indigo-50:  #EEF2FF;
-    --indigo-100: #E0E7FF;
-    --indigo-200: #C7D2FE;
-    --indigo-300: #A5B4FC;
-    --indigo-400: #818CF8;
-    --indigo-500: #6366F1;
-    --indigo-600: #4F46E5;
-    --indigo-700: #4338CA;
-    --indigo-800: #3730A3;
-    --indigo-900: #312E81;
 
-    /* ── Secondary / Neutral ─────────────────────────────── */
-    --secondary-color: #64748b;
-    --secondary-light: #94a3b8;
-    --secondary-dark:  #475569;
+/* ─── Root base ─────────────────────────────────────────── */
+* { box-sizing: border-box; }
 
-    /* Neutral / Gray scale (Tailwind + Bootstrap compatible) */
-    --gray-50:  #f9fafb;
-    --gray-100: #f3f4f6;
-    --gray-200: #e5e7eb;
-    --gray-300: #d1d5db;
-    --gray-400: #9ca3af;
-    --gray-500: #6b7280;
-    --gray-600: #4b5563;
-    --gray-700: #374151;
-    --gray-800: #1f2937;
-    --gray-900: #111827;
-
-    /* Bootstrap-compatible gray aliases */
-    --bs-gray-50:  #f8f9fa;
-    --bs-gray-100: #e9ecef;
-    --bs-gray-200: #dee2e6;
-    --bs-gray-300: #ced4da;
-    --bs-gray-400: #adb5bd;
-    --bs-gray-500: #6c757d;
-    --bs-gray-600: #495057;
-    --bs-gray-700: #343a40;
-    --bs-gray-800: #212529;
-
-    /* ── Semantic Text ───────────────────────────────────── */
-    --text-primary:   #0f172a;
-    --text-secondary: #475569;
-    --text-tertiary:  #94a3b8;
-    --text-muted:     #cbd5e1;
-    --text-dark:      #2c3e50;
-    --text-medium:    #3d4f5f;
-    --text-light:     #5a6c7d;
-
-    /* ── Status: Success ─────────────────────────────────── */
-    --success-color:  #28a745;
-    --success-light:  #51cf66;
-    --success-bg:     #d4edda;
-    --success-border: #c3e6cb;
-    --success-text:   #155724;
-
-    /* ── Status: Danger ──────────────────────────────────── */
-    --danger-color:   #dc3545;
-    --danger-light:   #f87171;
-    --danger-bg:      #f8d7da;
-    --danger-border:  #f5c6cb;
-    --danger-text:    #721c24;
-
-    /* ── Status: Warning ─────────────────────────────────── */
-    --warning-color:  #ffc107;
-    --warning-light:  #fb923c;
-    --warning-bg:     #fff3cd;
-    --warning-border: #ffeeba;
-    --warning-text:   #856404;
-
-    /* ── Status: Info ────────────────────────────────────── */
-    --info-color:     #17a2b8;
-    --info-light:     #22d3ee;
-    --info-bg:        #d1ecf1;
-    --info-border:    #bee5eb;
-    --info-text:      #0c5460;
-
-    /* ── Accent / Purple ─────────────────────────────────── */
-    --accent-color: #8b5cf6;
-    --accent-light: #a78bfa;
-
-    /* ── Surfaces & Backgrounds ──────────────────────────── */
-    --surface-color:      #ffffff;
-    --surface-hover:      #f8fafc;
-    --background-color:   #F5F5FF;
-    --background-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-
-    /* ── Borders & Dividers ──────────────────────────────── */
-    --divider-color: #e2e8f0;
-    --border-light:  #cbd5e1;
-    --border-medium: #94a3b8;
-
-    /* ── Material Elevation (box-shadow scale) ───────────── */
-    --elevation-0: none;
-    --elevation-1: 0 1px 3px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.06);
-    --elevation-2: 0 3px 6px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08);
-    --elevation-3: 0 8px 16px rgba(0,0,0,0.12), 0 3px 6px rgba(0,0,0,0.08);
-    --elevation-4: 0 16px 32px rgba(0,0,0,0.14), 0 6px 12px rgba(0,0,0,0.08);
-    --elevation-6: 0 24px 48px rgba(0,0,0,0.16), 0 10px 20px rgba(0,0,0,0.10);
-
-    /* Legacy shadow aliases → mapped to elevation tokens */
-    --shadow-sm: var(--elevation-1);
-    --shadow-md: var(--elevation-2);
-    --shadow-lg: var(--elevation-3);
-    --shadow-xl: var(--elevation-4);
-
-    /* ── Card Tokens ─────────────────────────────────────── */
-    --card-radius:        12px;
-    --card-shadow:        var(--elevation-1);
-    --card-shadow-hover:  var(--elevation-2);
-    --card-shadow-modal:  var(--elevation-4);
-
-    /* ── Badge Tokens ────────────────────────────────────── */
-    --badge-primary-bg:    var(--indigo-100);
-    --badge-primary-color: var(--primary-dark);
-    --badge-success-bg:    var(--success-bg);
-    --badge-success-color: var(--success-text);
-    --badge-danger-bg:     var(--danger-bg);
-    --badge-danger-color:  var(--danger-text);
-    --badge-warning-bg:    var(--warning-bg);
-    --badge-warning-color: var(--warning-text);
-    --badge-info-bg:       var(--info-bg);
-    --badge-info-color:    var(--info-text);
-    --badge-gray-bg:       var(--bs-gray-100);
-    --badge-gray-color:    var(--bs-gray-600);
-
-    /* ── Table Row Highlights ────────────────────────────── */
-    --row-hover-bg:   rgba(79, 70, 229, 0.04);
-    --row-success-bg: #f0fdf4;
-    --row-danger-bg:  #fff5f5;
-    --row-warning-bg: #fffbeb;
-    --row-yellow-bg:  #fffacd;
-
-    /* ── Navigation ──────────────────────────────────────── */
-    --nav-bg:    linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    --nav-hover: rgba(79, 70, 229, 0.12);
-
-    /* ── Bootstrap Overrides ─────────────────────────────── */
-    --bs-primary:          #4F46E5;
-    --bs-primary-rgb:      79, 70, 229;
-    --bs-link-color:       #4F46E5;
-    --bs-link-hover-color: #4338CA;
-    --bs-body-bg:          #F5F5FF;
-    --bs-success:          #28a745;
-    --bs-danger:           #dc3545;
-    --bs-warning:          #ffc107;
-    --bs-info:             #17a2b8;
-    --bs-secondary:        #6c757d;
-}
-
-* {
-    box-sizing: border-box;
-}
-
-#root {
-    margin: 0 auto;
-    background-color: var(--background-color);
-    min-height: 100vh;
-}
-
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-    color: var(--text-primary);
-    background-color: var(--background-color);
-    line-height: 1.6;
-    font-size: 14px;
-    overflow-x: hidden;
-}
-
-/* Ensure proper scrolling on all pages */
 html, body, #root {
     height: 100%;
     margin: 0;
     padding: 0;
 }
 
-.logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
+#root {
+    margin: 0 auto;
+    background-color: var(--tb-body-bg);
+    min-height: 100vh;
 }
 
-.logo:hover {
-    filter: drop-shadow(0 0 2em #646cffaa);
-}
 
-.logo.react:hover {
-    filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    a:nth-of-type(2) .logo {
-        animation: logo-spin infinite 20s linear;
-    }
-}
-
-.card {
-    padding: 1.5em;
-}
-
-.read-the-docs {
-    color: #888;
-}
-
-/* Custom styles for form switches */
+/* ─── Bootstrap form-switch (uses success-green by default,
+       align with brand) ──────────────────────────────────── */
 .form-switch .form-check-input {
-    width: 3em;
-    height: 1.5em;
+    width: 2.5em;
+    height: 1.3em;
     cursor: pointer;
-    border: 1px solid var(--bs-gray-200);
-    background-color: var(--bs-gray-100);
-    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    border: 1px solid var(--tb-border);
+    background-color: var(--tb-sunken);
+    transition: background-color var(--tb-tx-fast), border-color var(--tb-tx-fast);
 }
-
 .form-switch .form-check-input:checked {
-    background-color: #198754;
-    border-color: #198754;
+    background-color: var(--tb-brand);
+    border-color: var(--tb-brand);
 }
-
 .form-switch .form-check-input:focus {
-    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
-    border-color: #86b7fe;
+    box-shadow: var(--tb-ring);
+    border-color: var(--tb-brand);
 }
-
 .form-switch .form-check-label {
     margin-left: 0.5rem;
-    font-weight: 500;
+    font-weight: var(--tb-fw-medium);
     cursor: pointer;
+    color: var(--tb-text);
 }
-
-/* Ensure switches align properly in nested forms */
 .nested-items-container .form-switch {
     display: flex;
     align-items: center;
     min-height: 38px;
 }
 
-/* Better spacing for switch groups in filters */
-.btn-group .btn-check + .btn {
-    border-width: 1px;
-}
 
-.btn-group .btn-check:checked + .btn {
-    font-weight: 600;
-}
-
-/* Highlighting for updated fields from SION fetch */
+/* ─── Highlight pulse (used after SION auto-fill) ───────── */
 .border-warning.border-2 {
-    animation: highlightPulse 0.5s ease-in-out;
+    animation: highlightPulse 0.6s var(--tb-ease);
 }
-
 @keyframes highlightPulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
-    }
-    50% {
-        box-shadow: 0 0 0 8px rgba(249, 115, 22, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
-    }
+    0%   { box-shadow: 0 0 0 0 rgba(247, 103, 7, 0.55); }
+    50%  { box-shadow: 0 0 0 8px rgba(247, 103, 7, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(247, 103, 7, 0); }
 }
 
-/* Material Design Form Styles */
+
+/* ─── form-group-material wrapper (used by forms across the
+       app — kept thin so tabler.css handles the controls) ── */
 .form-group-material {
     position: relative;
-    margin-bottom: 1.75rem;
+    margin-bottom: 1.1rem;
 }
-
+.form-group-material label.form-label {
+    font-weight: var(--tb-fw-medium);
+    margin-bottom: 4px;
+    color: var(--tb-text-secondary);
+    font-size: 12.5px;
+    display: block;
+    letter-spacing: 0.01em;
+}
 .form-group-material .form-control,
 .form-group-material .form-select,
 .form-group-material textarea.form-control {
-    border: 1px solid var(--border-light);
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 0.875rem;
-    transition: all 0.2s ease;
-    background-color: var(--surface-color);
-    width: 100%;
-    box-shadow: none;
+    background-color: var(--tb-card-bg);
 }
-
-.form-group-material .form-control:focus,
-.form-group-material .form-select:focus,
-.form-group-material textarea.form-control:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-    outline: 0;
-    background-color: #fff;
-}
-
-.form-group-material .form-control:hover:not(:focus):not(:disabled),
-.form-group-material .form-select:hover:not(:focus):not(:disabled),
-.form-group-material textarea.form-control:hover:not(:focus):not(:disabled) {
-    border-color: var(--text-secondary);
-}
-
-.form-group-material label.form-label {
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-    color: var(--text-primary);
-    font-size: 0.8125rem;
-    text-transform: capitalize !important;
-    display: block;
-    letter-spacing: 0.3px;
-}
-
-/* ── Material-style card ─────────────────────────────────── */
-.card {
-    border: none;
-    box-shadow: var(--card-shadow);
-    border-radius: var(--card-radius);
-    transition: box-shadow 0.2s ease, transform 0.15s ease;
-    background-color: var(--surface-color);
-}
-
-.card:hover {
-    box-shadow: var(--card-shadow-hover);
-}
-
-.card-header {
-    background-color: var(--surface-color);
-    border-bottom: 1px solid var(--divider-color);
-    padding: 1rem 1.5rem;
-    border-radius: var(--card-radius) var(--card-radius) 0 0 !important;
-    font-weight: 600;
-    color: var(--text-primary);
-    font-size: 0.9375rem;
-}
-
-/* Nested field array styling */
-.nested-items-container .card {
-    margin-bottom: 1rem;
-    border: 1px solid var(--divider-color);
-}
-
-.nested-items-container .card-header {
-    background-color: var(--indigo-50);
-    color: var(--primary-dark);
-    font-weight: 600;
-    border-bottom: 2px solid var(--primary-color);
-}
-
-.nested-items-container .card-body {
-    padding: 1.5rem;
-    background-color: var(--surface-color);
-}
-
-/* Material Design Button Styles */
-.btn {
-    font-weight: 500;
-    padding: 8px 20px;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
-    text-transform: none;
-    letter-spacing: 0.3px;
-    font-size: 0.875rem;
-    box-shadow: none;
-}
-
-.btn:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
-}
-
-.btn:active {
-    transform: translateY(0);
-    box-shadow: none;
-}
-
-.btn-primary {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
-
-.btn-primary:hover {
-    background-color: var(--primary-dark);
-    border-color: var(--primary-dark);
-    color: white;
-}
-
-.btn-success {
-    background-color: var(--success-color);
-    color: white;
-    border-color: var(--success-color);
-}
-
-.btn-success:hover {
-    background-color: #0ea472;
-    border-color: #0ea472;
-    color: white;
-}
-
-.btn-danger {
-    background-color: var(--danger-color);
-    color: white;
-    border-color: var(--danger-color);
-}
-
-.btn-danger:hover {
-    background-color: #dc2626;
-    border-color: #dc2626;
-    color: white;
-}
-
-.btn-outline-danger {
-    border: 1px solid var(--danger-color);
-    color: var(--danger-color);
-    background: transparent;
-}
-
-.btn-outline-danger:hover {
-    background: var(--danger-color);
-    border-color: var(--danger-color);
-    color: white;
-}
-
-/* React Select enhancements - Material Design */
-.react-select__control {
-    border-radius: 6px !important;
-    border-color: var(--border-light) !important;
-    min-height: 38px !important;
-    transition: all 0.2s ease !important;
-    box-shadow: none !important;
-    background-color: var(--surface-color) !important;
-}
-
-.react-select__control:hover {
-    border-color: var(--text-secondary) !important;
-}
-
-.react-select__control--is-focused {
-    border-color: var(--primary-color) !important;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important;
-}
-
-.react-select__menu {
-    border-radius: 6px !important;
-    box-shadow: var(--shadow-lg) !important;
-    z-index: 9999 !important;
-    border: 1px solid var(--divider-color) !important;
-}
-
-.react-select__option--is-selected {
-    background-color: var(--primary-color) !important;
-}
-
-.react-select__option--is-focused {
-    background-color: #EEF2FF !important;
-    color: var(--text-primary) !important;
-}
-
-/* Date picker styling - Material Design */
-.react-datepicker-wrapper {
-    width: 100%;
-    display: block;
-}
-
-.react-datepicker__input-container {
-    width: 100%;
-    display: block;
-}
-
-.react-datepicker__input-container input {
-    border: 1px solid var(--border-light);
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 0.875rem;
-    width: 100%;
-    transition: all 0.2s ease;
-    display: block;
-    background-color: var(--surface-color);
-    box-shadow: none;
-}
-
-.react-datepicker__input-container input:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-    outline: 0;
-}
-
-.react-datepicker__input-container input:hover:not(:focus) {
-    border-color: var(--text-secondary);
-}
-
-/* Ensure DatePicker in forms looks consistent */
 .form-group-material .react-datepicker-wrapper,
 .form-group-material .react-datepicker__input-container {
     width: 100%;
     display: block;
 }
 
-/* DatePicker calendar styling */
+
+/* ─── Nested item container (e.g. nested field arrays) ──── */
+.nested-items-container .card {
+    margin-bottom: 12px;
+    border: 1px solid var(--tb-border);
+}
+.nested-items-container .card-header {
+    background-color: var(--tb-sunken);
+    color: var(--tb-text);
+    font-weight: var(--tb-fw-semibold);
+    border-bottom: 1px solid var(--tb-border-soft);
+}
+.nested-items-container .card-body {
+    padding: 14px 16px;
+    background-color: var(--tb-card-bg);
+}
+
+
+/* ─── React Select tweaks ───────────────────────────────── */
+.react-select__value-container { padding: 0 8px !important; }
+.react-select__single-value { color: var(--tb-text) !important; }
+.react-select__placeholder { color: var(--tb-text-tertiary) !important; }
+.react-select__input-container { color: var(--tb-text) !important; }
+.react-select__menu-list { background: var(--tb-card-bg) !important; }
+.react-select__option { color: var(--tb-text) !important; background: var(--tb-card-bg) !important; }
+.react-select__option:hover,
+.react-select__option--is-focused { background: var(--tb-sunken) !important; color: var(--tb-text) !important; }
+.react-select__multi-value {
+    background: var(--tb-brand-50) !important;
+    border: 1px solid var(--tb-brand-100) !important;
+    border-radius: var(--tb-r-sm) !important;
+}
+.react-select__multi-value__label { color: var(--tb-brand-active) !important; font-size: 12px !important; }
+.react-select__multi-value__remove:hover { background: var(--tb-danger-soft) !important; color: var(--tb-danger-text) !important; }
+.react-select__dropdown-indicator { color: var(--tb-text-tertiary) !important; }
+.react-select__dropdown-indicator:hover { color: var(--tb-text-secondary) !important; }
+.react-select__clear-indicator:hover { color: var(--tb-danger-text) !important; }
+.react-select__indicator-separator { background: var(--tb-border) !important; }
+
+.react-select__control {
+    border-radius: var(--tb-r-sm) !important;
+    border-color: var(--tb-border) !important;
+    min-height: 36px !important;
+    transition: border-color var(--tb-tx-fast), box-shadow var(--tb-tx-fast) !important;
+    box-shadow: none !important;
+    background-color: var(--tb-card-bg) !important;
+}
+.react-select__control:hover { border-color: var(--tb-border-strong) !important; }
+.react-select__control--is-focused {
+    border-color: var(--tb-brand) !important;
+    box-shadow: var(--tb-ring) !important;
+}
+.react-select__menu {
+    border-radius: var(--tb-r-sm) !important;
+    box-shadow: var(--tb-shadow-3) !important;
+    z-index: 9999 !important;
+    border: 1px solid var(--tb-border) !important;
+}
+.react-select__option--is-selected {
+    background-color: var(--tb-brand) !important;
+    color: #fff !important;
+}
+.react-select__option--is-focused:not(.react-select__option--is-selected) {
+    background-color: var(--tb-brand-50) !important;
+    color: var(--tb-text) !important;
+}
+
+
+/* ─── React DatePicker (Material → Tabler) ──────────────── */
+.react-datepicker-wrapper { width: 100%; display: block; }
+.react-datepicker__input-container { width: 100%; display: block; }
+.react-datepicker__input-container input {
+    border: 1px solid var(--tb-border);
+    border-radius: var(--tb-r-sm);
+    padding: 0.4375rem 0.75rem;
+    font-size: var(--tb-fs-base);
+    width: 100%;
+    transition: border-color var(--tb-tx-fast), box-shadow var(--tb-tx-fast);
+    display: block;
+    background-color: var(--tb-card-bg);
+    box-shadow: none;
+    color: var(--tb-text);
+    font-family: var(--tb-font);
+}
+.react-datepicker__input-container input:focus {
+    border-color: var(--tb-brand);
+    box-shadow: var(--tb-ring);
+    outline: 0;
+}
+.react-datepicker__input-container input:hover:not(:focus) {
+    border-color: var(--tb-border-strong);
+}
 .react-datepicker__header {
-    background-color: var(--primary-color) !important;
+    background-color: var(--tb-brand) !important;
     border-bottom: none !important;
 }
-
 .react-datepicker__current-month,
-.react-datepicker__day-name {
-    color: white !important;
-}
-
+.react-datepicker__day-name { color: #fff !important; }
 .react-datepicker__day--selected,
 .react-datepicker__day--keyboard-selected {
-    background-color: var(--primary-color) !important;
+    background-color: var(--tb-brand) !important;
+    color: #fff !important;
 }
-
-.react-datepicker__day:hover {
-    background-color: var(--primary-light) !important;
-}
-
+.react-datepicker__day:hover { background-color: var(--tb-brand-50) !important; }
 .react-datepicker__close-icon::after {
-    background-color: var(--primary-color) !important;
-    color: white !important;
+    background-color: var(--tb-brand) !important;
+    color: #fff !important;
 }
+.react-datepicker__close-icon:hover::after { background-color: var(--tb-brand-hover) !important; }
 
-.react-datepicker__close-icon:hover::after {
-    background-color: var(--primary-dark) !important;
-}
 
-/* Ensure all form labels are capitalized */
-label.form-label,
-.form-label,
-label,
-.form-group-material label,
-.form-group-material .form-label {
-    text-transform: capitalize !important;
-}
-
-/* Additional capitalization rules */
-.card-header h6,
-.nested-items-container label {
-    text-transform: capitalize !important;
-}
-
-/* Force all labels to be capitalized - highest priority */
-label,
+/* ─── Label capitalization (kept from legacy — many forms
+       rely on this) ──────────────────────────────────────── */
 label.form-label,
 .form-label,
 .form-group-material label,
 .form-group-material .form-label,
-.col-md-4 label,
-.col-12 label,
-div label {
-    text-transform: capitalize !important;
-    font-weight: 500 !important;
+.col-md-4 > label,
+.col-12 > label,
+div > label[for] {
+    text-transform: capitalize;
 }
 
-/* ========================================
-   Bootstrap Component Color Overrides
-   ======================================== */
 
-/* Bootstrap Buttons */
-.btn-primary {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
+/* ─── Slide-in animation for toasts ─────────────────────── */
+@keyframes fade-in-slide {
+    from { opacity: 0; transform: translateX(16px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+.fade-in-slide { animation: fade-in-slide 220ms var(--tb-ease); }
+
+
+/* ─── Compact-row gutter helpers (existing usage) ───────── */
+.row.row-tight   { --bs-gutter-y: 8px;  --bs-gutter-x: 12px; }
+.row.row-compact { --bs-gutter-y: 10px; --bs-gutter-x: 16px; }
+
+
+/* ─── Sticky table header utility ───────────────────────── */
+.table-sticky-head thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
 }
 
-.btn-primary:hover {
-    background-color: #4338CA !important;
-    border-color: #4338CA !important;
+
+/* ─── Truncate helper ───────────────────────────────────── */
+.truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.btn-primary:focus,
-.btn-primary:active,
-.btn-primary.active,
-.btn-primary:first-child:active {
-    background-color: #4338CA !important;
-    border-color: #4338CA !important;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.25) !important;
-}
 
-.btn-primary:disabled,
-.btn-primary.disabled {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-    opacity: 0.65;
-}
-
-.btn-outline-primary {
-    color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-}
-
-.btn-outline-primary:hover {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-    color: white !important;
-}
-
-.btn-outline-primary:focus,
-.btn-outline-primary:active {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.25) !important;
-}
-
-/* Bootstrap Form Controls */
-.form-control:focus,
-.form-select:focus {
-    border-color: #6366F1 !important;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15) !important;
-}
-
-.form-check-input:checked {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-}
-
-.form-check-input:focus {
-    border-color: #6366F1 !important;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15) !important;
-}
-
-.form-switch .form-check-input:checked {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Links */
-a {
-    color: #4F46E5;
-    text-decoration: none;
-}
-
-a:hover {
-    color: #4338CA;
-}
-
-/* Bootstrap Badges */
-.badge.bg-primary,
-.badge.text-bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Alerts */
-.alert-primary {
-    color: #1E1B4B;
-    background-color: #E0E7FF;
-    border-color: #C7D2FE;
-}
-
-.alert-primary .alert-link {
-    color: #4338CA;
-}
-
-/* Bootstrap Pagination */
-.pagination .page-link {
-    color: #4F46E5;
-}
-
-.pagination .page-link:hover {
-    color: #4338CA;
-    background-color: #EEF2FF;
-}
-
-.pagination .page-item.active .page-link {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-}
-
-.pagination .page-link:focus {
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap Progress Bar */
-.progress-bar,
-.progress-bar.bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Spinners */
-.spinner-border.text-primary {
-    color: #4F46E5 !important;
-}
-
+/* ─── Spinner brand color (Bootstrap) ───────────────────── */
+.spinner-border.text-primary,
 .spinner-grow.text-primary {
-    color: #4F46E5 !important;
+    color: var(--tb-brand) !important;
 }
 
-/* Bootstrap Nav Pills */
-.nav-pills .nav-link.active,
-.nav-pills .show > .nav-link {
-    background-color: #4F46E5 !important;
-    color: white !important;
+
+/* ─── Form check + radio brand color ────────────────────── */
+.form-check-input:checked {
+    background-color: var(--tb-brand);
+    border-color: var(--tb-brand);
+}
+.form-check-input:focus {
+    border-color: var(--tb-brand);
+    box-shadow: var(--tb-ring);
 }
 
-.nav-pills .nav-link:hover {
-    background-color: #EEF2FF !important;
-    color: #4338CA !important;
+
+/* ─── Pagination brand color ────────────────────────────── */
+.pagination .page-link {
+    color: var(--tb-brand);
+    border-color: var(--tb-border);
+}
+.pagination .page-item.active .page-link {
+    background-color: var(--tb-brand);
+    border-color: var(--tb-brand);
+    color: #fff;
+}
+.pagination .page-link:hover {
+    background-color: var(--tb-brand-50);
+    color: var(--tb-brand-hover);
+    border-color: var(--tb-border-strong);
+}
+.pagination .page-link:focus {
+    box-shadow: var(--tb-ring);
+    z-index: 2;
 }
 
-.nav-pills .nav-link {
-    color: var(--text-primary);
-    transition: all 0.2s ease;
-}
 
-/* Bootstrap Nav Tabs */
-.nav-tabs .nav-link.active {
-    color: #4F46E5;
-    border-color: var(--divider-color) var(--divider-color) #fff;
-}
-
-.nav-tabs .nav-link:hover {
-    color: #4338CA;
-}
-
-/* Bootstrap Accordion */
-.accordion-button:not(.collapsed) {
-    background-color: #EEF2FF;
-    color: #4338CA;
-}
-
-.accordion-button:focus {
-    border-color: #6366F1;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap List Group */
-.list-group-item.active {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-}
-
-.list-group-item-primary {
-    color: #1E1B4B;
-    background-color: #E0E7FF;
-}
-
-.list-group-item-primary.list-group-item-action:hover,
-.list-group-item-primary.list-group-item-action:focus {
-    color: #1E1B4B;
-    background-color: #C7D2FE;
-}
-
-/* Bootstrap Dropdown */
-.dropdown-item.active,
-.dropdown-item:active {
-    background-color: #4F46E5 !important;
-    color: white;
-}
-
-.dropdown-item:hover,
-.dropdown-item:focus {
-    background-color: #EEF2FF;
-    color: #4338CA;
-}
-
-/* Bootstrap Breadcrumb */
-.breadcrumb-item.active {
-    color: #4F46E5;
-}
-
-.breadcrumb-item a {
-    color: #4F46E5;
-}
-
-.breadcrumb-item a:hover {
-    color: #4338CA;
-}
-
-/* Bootstrap Tables */
-.table-primary {
-    --bs-table-bg: #EEF2FF;
-    --bs-table-border-color: #C7D2FE;
-}
-
-.table-hover tbody tr:hover {
-    background-color: #EEF2FF;
-}
-
-/* Bootstrap Text Colors */
-.text-primary {
-    color: #4F46E5 !important;
-}
-
-.text-bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Border Colors */
-.border-primary {
-    border-color: #4F46E5 !important;
-}
-
-/* Bootstrap Background Colors */
-.bg-primary,
-.bg-primary.bg-gradient,
-div.bg-primary,
-span.bg-primary,
-td.bg-primary,
-th.bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-.bg-primary-subtle {
-    background-color: #EEF2FF !important;
-}
-
-/* Bootstrap Toast */
-.toast-header {
-    background-color: #EEF2FF;
-    color: #4338CA;
-}
-
-/* Bootstrap Input Group */
-.input-group-text {
-    border-color: var(--border-light);
-}
-
-.input-group:focus-within .input-group-text {
-    border-color: #6366F1;
-}
-
-/* Additional Bootstrap Primary Overrides */
-.btn-check:checked + .btn-primary,
-.btn-check:active + .btn-primary {
-    background-color: #4338CA !important;
-    border-color: #4338CA !important;
-}
-
-.btn-close:focus {
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap Card with primary header */
-.card-header.bg-primary,
-.card-header.text-bg-primary {
-    background-color: #4F46E5 !important;
-    color: white;
-}
-
-/* Bootstrap Placeholder */
-.placeholder.bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Offcanvas */
-.offcanvas-header .btn-close:focus {
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap Form Validation with Primary */
-.was-validated .form-control:valid:focus,
-.form-control.is-valid:focus {
-    border-color: #6366F1;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap Range Slider */
-.form-range:focus::-webkit-slider-thumb {
-    box-shadow: 0 0 0 1px #fff, 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-.form-range::-webkit-slider-thumb:active {
-    background-color: #C7D2FE;
-}
-
-.form-range::-moz-range-thumb:active {
-    background-color: #C7D2FE;
-}
-
-/* Bootstrap Floating Labels */
-.form-floating > .form-control:focus ~ label,
-.form-floating > .form-control:not(:placeholder-shown) ~ label,
-.form-floating > .form-select ~ label {
-    color: rgba(79, 70, 229, 0.65);
-}
-
-.form-floating > .form-control:focus ~ label {
-    color: #6366F1;
-}
-
-/* Bootstrap Modal Header with Primary */
-.modal-header.bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Popover */
-.popover-header {
-    background-color: #EEF2FF;
-}
-
-/* Bootstrap Tooltip */
-.tooltip-inner {
-    background-color: #1e293b;
-}
-
-/* Bootstrap Button Group */
-.btn-group > .btn-primary:not(:last-child):not(.dropdown-toggle),
-.btn-group > .btn-group:not(:last-child) > .btn-primary {
-    border-right-color: #4338CA;
-}
-
-.btn-group > .btn-primary:not(:first-child),
-.btn-group > .btn-group:not(:first-child) > .btn-primary {
-    border-left-color: #4338CA;
-}
-
-/* Bootstrap Focus Ring */
-.focus-ring-primary {
-    --bs-focus-ring-color: rgba(79, 70, 229, 0.25);
-}
-
-/* ========================================
-   Toast Notifications
-   ======================================== */
-
-/* Toast Animation */
-@keyframes fadeInSlide {
-    from {
-        opacity: 0;
-        transform: translateX(100%);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-.fade-in-slide {
-    animation: fadeInSlide 0.3s ease-out;
-}
-
-/* Toast Container */
-.toast-container {
-    z-index: 10000 !important;
-}
-
-/* Toast Styling */
-.toast {
-    min-width: 300px;
-    box-shadow: var(--shadow-lg);
-    border-radius: 8px;
-    margin-bottom: 1rem;
-}
-
-.toast.text-bg-success {
-    background-color: var(--success-color) !important;
-}
-
-.toast.text-bg-danger {
-    background-color: var(--danger-color) !important;
-}
-
-.toast.text-bg-warning {
-    background-color: var(--warning-color) !important;
-    color: #ffffff !important;
-}
-
-.toast.text-bg-info {
-    background-color: var(--info-color) !important;
-}
-
-.toast.text-bg-primary {
-    background-color: var(--primary-color) !important;
-}
-
-.toast .toast-body {
-    padding: 1rem;
-    font-size: 0.9375rem;
-}
-
-.toast .btn-close {
-    opacity: 0.8;
-}
-
-.toast .btn-close:hover {
-    opacity: 1;
-}
-
-/* Warning toast specific - use dark text */
-.toast.text-bg-warning .btn-close {
-    filter: invert(1);
+/* ─── Reduced motion ────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    .btn:hover { transform: none; }
 }

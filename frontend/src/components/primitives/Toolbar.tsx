@@ -10,6 +10,8 @@
  *     <Toolbar.Search value={q} onChange={setQ} placeholder="Search…" />
  *   </Toolbar>
  */
+import { Search } from "lucide-react";
+
 export default function Toolbar({ children, className = "", style }) {
     return (
         <div className={`tb-toolbar ${className}`.trim()} style={style}>

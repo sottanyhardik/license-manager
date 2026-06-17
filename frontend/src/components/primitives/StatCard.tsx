@@ -11,6 +11,7 @@
  *   />
  */
 const ALLOWED_TONES = new Set(["primary", "success", "warning", "danger", "info", "neutral"]);
+import { ArrowDown, ArrowUp } from "lucide-react";
 
 export default function StatCard({
     label,

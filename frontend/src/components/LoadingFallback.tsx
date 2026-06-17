@@ -1,6 +1,7 @@
 /**
  * Premium loading fallbacks — skeleton-first, no spinners for page loads.
  */
+import { ShieldCheck } from "lucide-react";
 
 export function PageLoader() {
     return (

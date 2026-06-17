@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { AuthContext } from "../context/AuthContext";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
-import { AlertCircle, Check, CheckSquare, ChevronDown, ClipboardCheck, OctagonX, X } from "lucide-react";
+import { AlertCircle, Check, CheckSquare, ChevronDown, ClipboardCheck, OctagonX, Trash2, X } from "lucide-react";
 import {
     TASK_PRIORITY,
     TASK_STATUS,

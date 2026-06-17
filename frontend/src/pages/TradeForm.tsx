@@ -12,7 +12,7 @@ import { ValidationRules } from "../utils/formValidation";
 import TransferLetterModal from "../components/TransferLetterModal";
 import {navigateToList} from "../utils/navigationUtils";
 import {useBackButton} from "../hooks/useBackButton";
-import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Building2, Calculator, CheckCircle, FileText, List, Plus, Trash2, Wand2, X, XCircle } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Building2, Calculator, CheckCircle, FileText, Link, List, Plus, SlidersHorizontal, Trash2, Wand2, X, XCircle } from "lucide-react";
 
 export default function TradeForm() {
     const { id } = useParams();
@@ -921,7 +921,7 @@ export default function TradeForm() {
                 <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
                     <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
                         <h6 className="mb-0 font-semibold">
-                            <Toggles2 className="size-4" aria-hidden="true" />
+                            <SlidersHorizontal className="size-4" aria-hidden="true" />
                             Trade Configuration
                         </h6>
                     </div>

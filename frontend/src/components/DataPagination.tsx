@@ -1,3 +1,5 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
 export default function DataPagination({
     currentPage = 1,
     totalPages = 1,

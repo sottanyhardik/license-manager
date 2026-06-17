@@ -1113,33 +1113,33 @@ export default function MasterList() {
                                                     {item.license_number || '-'}
                                                 </span>
                                                 {item.license_date && (
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <Calendar className="size-4" aria-hidden="true" />{item.license_date}
+                                                    <span className="chip chip-neutral" style={{}}>
+                                                        <Calendar className="size-3" aria-hidden="true" />{item.license_date}
                                                     </span>
                                                 )}
                                                 {item.license_expiry_date && (
-                                                    <span style={{ fontSize: 12.5, color: isExpired ? 'var(--tb-danger-text)' : 'var(--tb-text-secondary)', background: isExpired ? 'var(--tb-danger-soft)' : 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <CalendarX className="size-4" aria-hidden="true" />Exp: {item.license_expiry_date}
+                                                    <span className={`chip ${isExpired ? 'chip-danger' : 'chip-neutral'}`} style={{}}>
+                                                        <CalendarX className="size-3" aria-hidden="true" />Exp: {item.license_expiry_date}
                                                     </span>
                                                 )}
                                                 {item.ledger_date && (
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <BookCheck className="size-4" aria-hidden="true" />Ledger: {item.ledger_date}
+                                                    <span className="chip chip-success" style={{}}>
+                                                        <BookCheck className="size-3" aria-hidden="true" />Ledger: {item.ledger_date}
                                                     </span>
                                                 )}
                                                 {item.port_name && (
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <MapPin className="size-4" aria-hidden="true" />{item.port_name}
+                                                    <span className="chip chip-info" style={{}}>
+                                                        <MapPin className="size-3" aria-hidden="true" />{item.port_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_name && (
-                                                    <span style={{ fontSize: 12.5, color: 'var(--accent-color)', background: 'var(--tb-sunken)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <Building2 className="size-4" aria-hidden="true" />{item.exporter_name}
+                                                    <span className="chip chip-neutral" style={{}}>
+                                                        <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_iec && (
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <Fingerprint className="size-4" aria-hidden="true" />IEC: {item.exporter_iec}
+                                                    <span className="chip chip-warning" style={{}}>
+                                                        <Fingerprint className="size-3" aria-hidden="true" />IEC: {item.exporter_iec}
                                                     </span>
                                                 )}
                                                 {item.purchase_status_label && (
@@ -1160,12 +1160,12 @@ export default function MasterList() {
                                                                 toast.error(err.response?.data ? String(err.response.data).slice(0, 200) : 'Failed to load documents');
                                                             }
                                                         }
-                                                    }} style={{ fontSize: 11, color: 'var(--tb-success)', background: 'var(--tb-success-soft)', padding: '2px 6px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500', border: 'none', cursor: 'pointer' }}>
+                                                    }} className="chip chip-success cursor-pointer border-0 hover:opacity-80 transition-opacity" style={{}}>
                                                         Copy
                                                     </button>
                                                 )}
                                                 {item.has_condition_sheet && (
-                                                    <span title="Condition sheet parsed from license copy" style={{ fontSize: 11, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
+                                                    <span title="Condition sheet parsed from license copy" className="chip chip-primary cursor-pointer" style={{}}>
                                                         <FileText className="size-4" aria-hidden="true" />Cond. Sheet
                                                     </span>
                                                 )}
@@ -1180,13 +1180,8 @@ export default function MasterList() {
                                                             <div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '500' }}>{item.get_norm_class}</div>
                                                         </div>
                                                     )}
-                                                    {item.latest_transfer && (
-                                                        <div style={{ flex: 1, minWidth: '160px' }}>
-                                                            <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Latest Transfer</div>
-                                                            <div style={{ fontSize: '0.82rem', color: 'var(--tb-gray-700)' }}>{item.latest_transfer}</div>
-                                                        </div>
-                                                    )}
-                                                    {!item.get_norm_class && !item.latest_transfer && (
+                                                    {/* Latest Transfer hidden — accessible via action buttons */}
+                                                    {!item.get_norm_class && (
                                                         <div style={{ fontSize: '0.82rem', color: 'var(--tb-text-tertiary)', fontStyle: 'italic' }}>No additional details</div>
                                                     )}
                                                 </div>
@@ -1485,28 +1480,28 @@ export default function MasterList() {
                                                     <span style={{ fontSize: 12, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>{item.license_type}</span>
                                                 )}
                                                 {item.license_date && (
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <Calendar className="size-4" aria-hidden="true" />{item.license_date}
+                                                    <span className="chip chip-neutral" style={{}}>
+                                                        <Calendar className="size-3" aria-hidden="true" />{item.license_date}
                                                     </span>
                                                 )}
                                                 {item.license_expiry_date && (
-                                                    <span style={{ fontSize: 12.5, color: isExpired ? 'var(--tb-danger-text)' : 'var(--tb-text-secondary)', background: isExpired ? 'var(--tb-danger-soft)' : 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <CalendarX className="size-4" aria-hidden="true" />Exp: {item.license_expiry_date}
+                                                    <span className={`chip ${isExpired ? 'chip-danger' : 'chip-neutral'}`} style={{}}>
+                                                        <CalendarX className="size-3" aria-hidden="true" />Exp: {item.license_expiry_date}
                                                     </span>
                                                 )}
                                                 {item.port_name && (
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <MapPin className="size-4" aria-hidden="true" />{item.port_name}
+                                                    <span className="chip chip-info" style={{}}>
+                                                        <MapPin className="size-3" aria-hidden="true" />{item.port_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_name && (
-                                                    <span style={{ fontSize: 12.5, color: 'var(--accent-color)', background: 'var(--tb-sunken)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <Building2 className="size-4" aria-hidden="true" />{item.exporter_name}
+                                                    <span className="chip chip-neutral" style={{}}>
+                                                        <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_iec && (
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <Fingerprint className="size-4" aria-hidden="true" />IEC: {item.exporter_iec}
+                                                    <span className="chip chip-warning" style={{}}>
+                                                        <Fingerprint className="size-3" aria-hidden="true" />IEC: {item.exporter_iec}
                                                     </span>
                                                 )}
                                                 <span style={{ fontSize: 12, color: soldStyle.badgeText, background: soldStyle.badge, padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>

@@ -765,9 +765,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         <h6 className="mb-0 font-semibold">
                             <CheckSquare className="size-4" aria-hidden="true" />
                             Allotted Items
-                            <span className="ml-2 badge" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--tb-success-text)', fontWeight: '600', fontSize: 11 }}>
-                                {allotment.allotment_details.length}
-                            </span>
+                            <span className="chip chip-success">{allotment.allotment_details.length}</span>
                         </h6>
                         <button
                             className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"

@@ -165,7 +165,7 @@ export default function Dashboard() {
 
             {/* Operations KPIs */}
             {(canSeeAllotments || canSeeBOE) && (
-                <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3">
+                <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3">
                     {canSeeAllotments && <StatCard label="Allotments" value={stats.allotments.total} icon={Network} tone="info" onClick={() => navigate("/allotments")} />}
                     {canSeeBOE && <StatCard label="Bills of Entry" value={stats.boe.total} icon={ReceiptText} tone="primary" onClick={() => navigate("/bill-of-entries?is_invoice=all")} />}
                     {canSeeBOE && <StatCard label="Pending Invoices" value={stats.boe.pending_invoices} icon={FileSpreadsheet} tone="warning" onClick={() => navigate("/bill-of-entries")} />}

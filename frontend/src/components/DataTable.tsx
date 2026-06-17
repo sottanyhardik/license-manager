@@ -1,7 +1,18 @@
-import { useState } from "react";
+import { useState, type ElementType } from "react";
 import { toast } from "sonner";
 import { formatDate } from "../utils/dateFormatter";
-import { Check, Inbox, Pencil, Trash2, X } from "lucide-react";
+import { ArrowLeftRight, Check, Copy, Download, Eye, FileText, Inbox, LogIn, Pencil, Trash2, X } from "lucide-react";
+import Icon from "@/components/Icon";
+
+// customActions pass `icon` as either a lucide PascalCase name or a legacy
+// Bootstrap-icon kebab name. Resolve PascalCase here; fall back to <Icon> (bi map).
+const ACTION_ICONS: Record<string, ElementType> = {
+    FileText, ArrowLeftRight, Eye, Pencil, Copy, LogIn, Download, Trash2, Check,
+};
+function ActionIcon({ name }: { name: string }) {
+    const L = ACTION_ICONS[name];
+    return L ? <L className="size-4" aria-hidden="true" /> : <Icon name={name} className="size-4" />;
+}
 
 const NUMERIC_PATTERNS = [
     "amount", "price", "rate", "cost", "total", "subtotal",
@@ -93,9 +104,9 @@ export default function DataTable({
                 );
             }
             return value ? (
-                <span className="chip chip-success">Yes</span>
+                <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" style={{ background: "var(--tb-success-soft)", color: "var(--tb-success-text)" }}>Yes</span>
             ) : (
-                <span className="chip chip-neutral">No</span>
+                <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" style={{ background: "var(--tb-sunken)", color: "var(--tb-text-secondary)" }}>No</span>
             );
         }
         if (columnName && (columnName.includes("date") || columnName.includes("_at") || columnName.includes("_on"))) {
@@ -281,7 +292,7 @@ export default function DataTable({
                                                 aria-label={action.label}
                                                 style={{ padding: "3px 8px" }}
                                             >
-                                                {action.icon && <i className={action.icon} aria-hidden="true" />}
+                                                {action.icon && <ActionIcon name={action.icon} />}
                                             </button>
                                         );
                                     })}

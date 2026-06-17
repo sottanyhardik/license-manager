@@ -805,27 +805,27 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <table className="w-full text-sm" style={{width: '100%'}}>
                                 <thead style={{ backgroundColor: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
                                 <tr>
-                                    <th style={{minWidth: '120px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>License</th>
-                                    <th style={{minWidth: '70px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Serial</th>
-                                    <th style={{minWidth: '300px', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Description</th>
-                                    <th style={{minWidth: '100px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>HSN Code</th>
-                                    <th style={{minWidth: '200px', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Exporter</th>
-                                    <th style={{minWidth: '180px', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Transfer<br/>Status</th>
+                                    <th style={{minWidth: '120px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>License</th>
+                                    <th style={{minWidth: '70px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>Serial</th>
+                                    <th style={{minWidth: '240px', fontWeight: '600', fontSize: 12, padding: '8px'}}>Description</th>
+                                    <th style={{minWidth: '80px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>HSN Code</th>
+                                    <th style={{minWidth: '160px', fontWeight: '600', fontSize: 12, padding: '8px'}}>Exporter</th>
+                                    <th style={{minWidth: '140px', fontWeight: '600', fontSize: 12, padding: '8px'}}>Transfer<br/>Status</th>
                                     <th style={{minWidth: '100px', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>License<br/>Date</th>
                                     <th style={{minWidth: '100px', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Expiry<br/>Date</th>
-                                    <th style={{minWidth: '100px', textAlign: 'right', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Allotted<br/>Qty</th>
-                                    <th style={{minWidth: '110px', textAlign: 'right', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Allotted<br/>Value</th>
-                                    <th style={{minWidth: '80px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Action</th>
+                                    <th style={{minWidth: '80px', textAlign: 'right', fontWeight: '600', fontSize: 12, padding: '8px'}}>Allotted<br/>Qty</th>
+                                    <th style={{minWidth: '90px', textAlign: 'right', fontWeight: '600', fontSize: 12, padding: '8px'}}>Allotted<br/>Value</th>
+                                    <th style={{minWidth: '64px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>Action</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 {allotment.allotment_details.map((detail) => (
                                     <tr key={detail.id} className="border-b border-border/40 transition-colors hover:bg-muted/30">
-                                        <td className='px-3 py-2.5 font-mono text-[13px] font-semibold text-foreground' style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{detail.license_number}</td>
-                                        <td className='px-3 py-2.5' style={{whiteSpace: 'nowrap'}}><span className='font-medium'>{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" /></td>
-                                        <td className='px-3 py-2.5 text-[13px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
-                                        <td className='px-3 py-2.5 font-mono text-[12px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.hs_code || '-'}</td>
-                                        <td className='px-3 py-2.5 text-[13px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
+                                        <td className='px-3 py-1.5 font-mono text-[12.5px] font-semibold text-foreground' style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{detail.license_number}</td>
+                                        <td className='px-3 py-1.5 text-[12.5px]' style={{whiteSpace: 'nowrap'}}><span className='font-medium'>{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" /></td>
+                                        <td className='px-3 py-1.5 text-[12.5px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
+                                        <td className='px-3 py-1.5 font-mono text-[11.5px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.hs_code || '-'}</td>
+                                        <td className='px-3 py-1.5 text-[12.5px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
                                         <td style={{wordWrap: 'break-word', whiteSpace: 'normal', fontSize: '0.80rem', lineHeight: '1.3'}}>
                                             {detail.current_owner && detail.file_transfer_status ? (
                                                 <div>
@@ -844,13 +844,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 <span className="text-muted">-</span>
                                             )}
                                         </td>
-                                        <td className='px-3 py-2.5 text-[12.5px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_date}</td>
-                                        <td className='px-3 py-2.5 text-[12.5px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_expiry}</td>
-                                        <td className='px-3 py-2.5 text-right font-semibold tabular-nums' style={{whiteSpace: 'nowrap'}}>{parseInt(detail.qty || 0).toLocaleString()}</td>
-                                        <td className='px-3 py-2.5 text-right font-semibold tabular-nums' style={{whiteSpace: 'nowrap'}}>{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
-                                        <td className="text-center" style={{whiteSpace: 'nowrap'}}>
+                                        <td className='px-3 py-1.5 text-[12px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_date}</td>
+                                        <td className='px-3 py-1.5 text-[12px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_expiry}</td>
+                                        <td className='px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px]' style={{whiteSpace: 'nowrap'}}>{parseInt(detail.qty || 0).toLocaleString()}</td>
+                                        <td className='px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px]' style={{whiteSpace: 'nowrap'}}>{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
+                                        <td className="px-2 py-1.5 text-center" style={{whiteSpace: 'nowrap'}}>
                                             <button
-                                                className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
+                                                className="flex size-7 items-center justify-center rounded border border-destructive/30 text-destructive/70 hover:bg-destructive/10 hover:border-destructive cursor-pointer transition-colors"
                                                 onClick={() => handleDeleteAllotment(detail.id)}
                                                 disabled={deletingItems[detail.id]}
                                                 title="Remove this allocation"
@@ -867,9 +867,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </tbody>
                                 <tfoot>
                                 <tr style={{ background: 'var(--tb-sunken)', borderTop: '2px solid var(--tb-border)' }}>
-                                    <th colSpan={8} className="px-3 py-2.5 text-right text-[12px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
-                                    <th className="px-3 py-2.5 text-right text-[14px] font-extrabold tabular-nums text-foreground">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
-                                    <th className="px-3 py-2.5 text-right text-[14px] font-extrabold tabular-nums text-foreground">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
+                                    <th colSpan={8} className="px-3 py-1.5 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
+                                    <th className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
+                                    <th className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
                                     <th></th>
                                 </tr>
                                 </tfoot>
@@ -1179,7 +1179,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         alignItems: 'center',
                                         flexWrap: 'wrap',
                                         gap: '6px',
-                                        padding: '9px 14px',
+                                        padding: '6px 12px',
                                         background: 'var(--tb-sunken)',
                                         borderBottom: '1px solid #e2e8f0',
                                     }}>
@@ -1240,39 +1240,30 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             )}
                                     </div>
 
-                                    {/* ── Row 2: Description (full width) ── */}
-                                    <div style={{padding: '10px 14px 8px', borderBottom: '1px solid #e2e8f0', background: 'var(--tb-card-bg)'}}>
-                                        <div style={{fontWeight: '600', fontSize: 13.5, color: 'var(--tb-text)', lineHeight: '1.4', marginBottom: '2px'}}>
+                                    {/* ── Row 2: Compact description + exporter + chips ── */}
+                                    <div style={{padding: '5px 12px 5px', borderBottom: '1px solid var(--tb-border-soft)', background: 'var(--tb-card-bg)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', minHeight: 0}}>
+                                        <span style={{fontWeight: '700', fontSize: 13, color: 'var(--tb-text)'}}>
                                             {item.description}
-                                        </div>
-                                        <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: '6px'}}>
-                                            <Building2 className="size-4" aria-hidden="true" />{item.exporter_name}
-                                        </div>
-                                        <div style={{display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center'}}>
-                                            {item.items_detail && item.items_detail.length > 0
-                                                ? item.items_detail.map((i, idx) => (
-                                                    <span key={idx} style={{
-                                                        background: 'var(--indigo-50)', color: 'var(--primary-color)',
-                                                        border: '1px solid var(--indigo-200)',
-                                                        borderRadius: 'var(--tb-r-sm)', padding: '2px 8px',
-                                                        fontSize: '0.73rem', fontWeight: '500',
-                                                    }}>{i.name}</span>
-                                                ))
-                                                : <span style={{fontSize: 12, color: 'var(--text-secondary)'}}>No items</span>
-                                            }
-                                            {item.notes && (
-                                                <span style={{fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic', marginLeft: '4px'}}>
-                                                    <StickyNote className="size-4" aria-hidden="true" />{item.notes}
-                                                </span>
-                                            )}
-                                        </div>
+                                        </span>
+                                        <span style={{width: 1, height: 12, background: 'var(--tb-border)', flexShrink: 0, display: 'inline-block'}} />
+                                        <span style={{fontSize: 11.5, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3}}>
+                                            <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
+                                        </span>
+                                        {item.items_detail && item.items_detail.length > 0 && item.items_detail.map((i, idx) => (
+                                            <span key={idx} style={{
+                                                background: 'var(--tb-brand-50)', color: 'var(--tb-brand)',
+                                                border: '1px solid var(--tb-brand-100)',
+                                                borderRadius: 4, padding: '0px 6px',
+                                                fontSize: '0.7rem', fontWeight: '600', lineHeight: '1.6',
+                                            }}>{i.name}</span>
+                                        ))}
                                     </div>
 
                                     {/* ── Row 3: Stats + Inputs + Action (compact bottom bar) ── */}
                                     <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0', background: 'var(--tb-sunken)'}}>
 
                                         {/* Availability stats */}
-                                        <div style={{display: 'flex', gap: '16px', padding: '10px 14px', flexShrink: 0}}>
+                                        <div style={{display: 'flex', gap: '12px', padding: '7px 12px', flexShrink: 0}}>
                                             {[
                                                 {label: 'Avail Qty', value: qty.toFixed(3)},
                                                 {label: 'CIF FC', value: cifFc.toFixed(2)},
@@ -1280,7 +1271,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             ].map(({label, value}) => (
                                                 <div key={label}>
                                                     <div style={{fontSize: '0.62rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px'}}>{label}</div>
-                                                    <div style={{fontWeight: '700', fontSize: 14, color: 'var(--tb-text)', lineHeight: '1.3'}}>{value}</div>
+                                                    <div style={{fontWeight: '700', fontSize: 13, color: 'var(--tb-text)', lineHeight: '1.2'}}>{value}</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -1288,7 +1279,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         <div style={{width: '1px', height: '36px', background: 'var(--tb-border-soft)', flexShrink: 0}} />
 
                                         {/* Allocation inputs */}
-                                        <div style={{display: 'flex', gap: '10px', padding: '8px 14px', flexWrap: 'wrap', flex: 1, minWidth: '280px'}}>
+                                        <div style={{display: 'flex', gap: '8px', padding: '7px 12px', flexWrap: 'wrap', flex: 1, minWidth: '260px'}}>
                                             <div style={{flex: '1', minWidth: '130px'}}>
                                                 <label style={{fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', display: 'block', marginBottom: '3px'}}>
                                                     Qty <span style={{fontWeight: '400', textTransform: 'none'}}>/ max {maxAllocation.qty}</span>
@@ -1329,7 +1320,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                                         {/* Confirm action */}
                                         <div style={{
-                                            flexShrink: 0, padding: '8px 14px',
+                                            flexShrink: 0, padding: '7px 12px',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         }}>
                                             <button

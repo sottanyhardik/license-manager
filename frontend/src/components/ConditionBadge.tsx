@@ -8,13 +8,7 @@
 //
 // Anything else passes through as a generic grey badge with the raw value.
 
-const CONDITION_BADGE_STYLES = {
-    "AU":  { bg: "#DBEAFE", color: "#1E3A8A", label: "AU" },
-    "2%":  { bg: "#FEE2E2", color: "#7F1D1D", label: "2%" },
-    "3%":  { bg: "#FED7AA", color: "#7C2D12", label: "3%" },
-    "5%":  { bg: "#FEF3C7", color: "#78350F", label: "5%" },
-    "10%": { bg: "#D1FAE5", color: "#065F46", label: "10%" },
-};
+import { CONDITION_BADGE_PALETTE as CONDITION_BADGE_STYLES } from "../theme/tokens";
 
 export default function ConditionBadge({ type, size = "sm" }) {
     if (!type) return null;

@@ -12,26 +12,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ArrowLeftRight, Bell, Building2, Calculator, CalendarCheck, CalendarDays, CalendarRange, DollarSign, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, MinusCircle, Package, RefreshCw, ShoppingCart, SlidersHorizontal, StickyNote, Tag, TriangleAlert, XCircle } from "lucide-react";
+import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
 const DEFAULT_PURCHASE_STATUS = ['GE', 'MI', 'CO'];
 
-// Colour palette for the per-row Purchase Status badge. Codes map to a
-// pastel-on-deep-text scheme so the badge stays readable against the
-// table's alternating row backgrounds. Unknown codes get a neutral grey.
-const PURCHASE_STATUS_STYLES = {
-    GE: { bg: '#DBEAFE', color: '#1E3A8A', short: 'GE' },  // Global Exim — blue
-    MI: { bg: '#D1FAE5', color: 'var(--tb-success-text)', short: 'MI' },  // MITC         — green
-    CO: { bg: '#EDE9FE', color: '#5B21B6', short: 'CO' },  // Conversion   — purple
-    IP: { bg: '#FED7AA', color: '#7C2D12', short: 'IP' },  // Item Purch.  — orange
-    SM: { bg: '#FCE7F3', color: '#831843', short: 'SM' },  // Snehav       — pink
-    OT: { bg: '#FEF3C7', color: '#78350F', short: 'OT' },  // OT Purchase  — amber
-    GO: { bg: '#E2E8F0', color: '#1E293B', short: 'GO' },  // GO Purchase  — slate
-    RA: { bg: '#CCFBF1', color: '#134E4A', short: 'RA' },  // Ravi Foods   — teal
-    LM: { bg: '#FEE2E2', color: '#7F1D1D', short: 'LM' },  // LM (inactive) — red
-};
-const UNKNOWN_PS_STYLE = { bg: '#E5E7EB', color: 'var(--tb-text)', short: '?' };
+// Purchase-status badge palette now lives in theme/tokens.js (single source of truth).
+const PURCHASE_STATUS_STYLES = PURCHASE_STATUS_PALETTE;
+const UNKNOWN_PS_STYLE = PURCHASE_STATUS_UNKNOWN;
 
 function PurchaseStatusBadge({ code, label }) {
     if (!code) return null;

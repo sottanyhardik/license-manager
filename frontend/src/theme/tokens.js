@@ -57,6 +57,34 @@ export function tone(map, key) {
     return map[key] || map.neutral || Object.values(map)[0];
 }
 
+// ── Categorical palettes ──────────────────────────────────────────────────
+// Distinct hue per category (more categories than the 6 semantic tones above),
+// so these intentionally stay as a fixed palette rather than mapping to TONE_MAP.
+// Centralized here as the single source of truth for category-coded badges.
+
+// Per-item DFIA licence condition badges (see ConditionBadge).
+export const CONDITION_BADGE_PALETTE = {
+    "AU":  { bg: "#DBEAFE", color: "#1E3A8A", label: "AU" },
+    "2%":  { bg: "#FEE2E2", color: "#7F1D1D", label: "2%" },
+    "3%":  { bg: "#FED7AA", color: "#7C2D12", label: "3%" },
+    "5%":  { bg: "#FEF3C7", color: "#78350F", label: "5%" },
+    "10%": { bg: "#D1FAE5", color: "#065F46", label: "10%" },
+};
+
+// Purchase-status chips on the Item Pivot report.
+export const PURCHASE_STATUS_PALETTE = {
+    GE: { bg: '#DBEAFE', color: '#1E3A8A', short: 'GE' },  // Global Exim — blue
+    MI: { bg: '#D1FAE5', color: 'var(--tb-success-text)', short: 'MI' },  // MITC — green
+    CO: { bg: '#EDE9FE', color: '#5B21B6', short: 'CO' },  // Conversion — purple
+    IP: { bg: '#FED7AA', color: '#7C2D12', short: 'IP' },  // Item Purch. — orange
+    SM: { bg: '#FCE7F3', color: '#831843', short: 'SM' },  // Snehav — pink
+    OT: { bg: '#FEF3C7', color: '#78350F', short: 'OT' },  // OT Purchase — amber
+    GO: { bg: '#E2E8F0', color: '#1E293B', short: 'GO' },  // GO Purchase — slate
+    RA: { bg: '#CCFBF1', color: '#134E4A', short: 'RA' },  // Ravi Foods — teal
+    LM: { bg: '#FEE2E2', color: '#7F1D1D', short: 'LM' },  // LM (inactive) — red
+};
+export const PURCHASE_STATUS_UNKNOWN = { bg: '#E5E7EB', color: 'var(--tb-text)', short: '?' };
+
 // Bootstrap color name → status tone. Useful when adapting old code.
 export const BOOTSTRAP_TO_TONE = {
     primary:   "primary",

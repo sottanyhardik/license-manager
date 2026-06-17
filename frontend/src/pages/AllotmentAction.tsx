@@ -662,101 +662,96 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 const requiredValue = parseFloat(allotment.required_value || 0);
                 const allotedQty = parseInt(allotment.alloted_quantity || 0);
                 const allotedValue = parseFloat(allotment.allotted_value || 0);
-                // Use balanced_quantity from backend (already calculated correctly)
                 const balanceQty = parseFloat(allotment.balanced_quantity || 0);
                 const balanceValue = requiredValue - allotedValue;
-
                 const progressPct = requiredQty > 0 ? Math.min(100, Math.round((allotedQty / requiredQty) * 100)) : 0;
-                const progressColor = progressPct >= 100 ? 'var(--tb-success)' : progressPct >= 60 ? 'var(--tb-brand)' : 'var(--tb-warning)';
+                const isComplete = progressPct >= 100;
+                const progressColor = isComplete ? 'var(--tb-success)' : progressPct >= 60 ? 'var(--tb-brand)' : 'var(--tb-warning)';
 
                 return (
-                    <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                        <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                            <h6 className="mb-0 font-semibold">
-                                <Info className="size-4" aria-hidden="true" />
-                                Allotment Details
-                                <span className="ml-2 text-muted-foreground font-normal" style={{ fontSize: 13.5 }}>{allotment.item_name}</span>
-                            </h6>
-                            <span className="badge" style={{
-                                background: progressPct >= 100 ? 'var(--tb-success-soft)' : 'var(--tb-brand-50)',
-                                color: progressPct >= 100 ? 'var(--tb-success-text)' : 'var(--tb-brand)',
-                                fontWeight: '600', fontSize: 12, padding: '5px 10px'
-                            }}>
-                                {progressPct}% Allotted
-                            </span>
-                        </div>
-                        <div className="p-5">
-                            <div className="mb-4">
-                                <div className="flex justify-between mb-1" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                                    <span>Allotted: <strong>{allotedQty.toLocaleString()}</strong></span>
-                                    <span>Required: <strong>{requiredQty.toLocaleString()}</strong></span>
+                    <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+                            <div className="flex items-center gap-3">
+                                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg" style={{ background: 'var(--tb-brand-50)', border: '1px solid var(--tb-brand-100)' }}>
+                                    <ListChecks className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
                                 </div>
-                                <div style={{ height: 6, borderRadius: 4, background: 'var(--tb-border-soft)', overflow: 'hidden' }}>
-                                    <div style={{ height: '100%', borderRadius: 4, width: `${progressPct}%`, background: `linear-gradient(90deg, ${progressColor}, ${progressColor}cc)`, transition: 'width 0.4s ease' }} />
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Allotment Details</p>
+                                    <h3 className="text-sm font-bold leading-tight tracking-tight text-foreground">{allotment.item_name}</h3>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-12 items-stretch">
-                                {/* Unit Price */}
-                                <div className="lg:col-span-2">
-                                    <div className="h-100 p-3 flex flex-col justify-center" style={{ backgroundColor: 'rgba(23,162,184,0.06)', borderRadius: 'var(--tb-r-md)', border: '1px solid rgba(23,162,184,0.2)' }}>
-                                        <small className="text-muted-foreground block mb-1" style={{ fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Unit Price</small>
-                                        <strong style={{ fontSize: '1.15rem', color: 'var(--info-color)' }}>{unitPrice.toFixed(3)}</strong>
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                                        <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${progressPct}%`, background: progressColor }} />
                                     </div>
+                                    <span className="text-xs font-bold tabular-nums" style={{ color: progressColor }}>{progressPct}%</span>
                                 </div>
+                                <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none" style={{
+                                    background: isComplete ? 'var(--tb-success-soft)' : progressPct >= 60 ? 'var(--tb-brand-50)' : 'var(--tb-warning-soft)',
+                                    color: isComplete ? 'var(--tb-success-text)' : progressPct >= 60 ? 'var(--tb-brand)' : 'var(--tb-warning-text)',
+                                }}>
+                                    {isComplete ? '✓ Complete' : 'In Progress'}
+                                </span>
+                            </div>
+                        </div>
 
-                                {/* Required group */}
-                                <div className="lg:col-span-3">
-                                    <div className="h-100 p-3" style={{ backgroundColor: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-border-soft)', borderTop: '3px solid #6c757d' }}>
-                                        <small className="mb-2 block" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-text-secondary)' }}>Required</small>
-                                        <div className="flex gap-3">
-                                            <div>
-                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Quantity</small>
-                                                <strong style={{ fontSize: 17, color: 'var(--tb-text)' }}>{requiredQty.toLocaleString()}</strong>
-                                            </div>
-                                            <div style={{ width: 1, backgroundColor: 'var(--tb-border)' }} />
-                                            <div>
-                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Value</small>
-                                                <strong style={{ fontSize: 17, color: 'var(--tb-text)' }}>{requiredValue.toFixed(2)}</strong>
-                                            </div>
-                                        </div>
-                                    </div>
+                        {/* 4-column stat grid with dividers */}
+                        <div className="grid grid-cols-2 divide-y divide-border/40 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                            {/* Unit Price */}
+                            <div className="flex flex-col px-5 py-4">
+                                <div className="mb-2 flex items-center gap-1.5">
+                                    <span className="size-2 shrink-0 rounded-full" style={{ background: 'var(--tb-info)' }} />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Unit Price</span>
                                 </div>
+                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums" style={{ color: 'var(--tb-info)' }}>
+                                    {unitPrice.toFixed(3)}
+                                </span>
+                                <span className="mt-1.5 text-[11px] text-muted-foreground">USD per unit</span>
+                            </div>
 
-                                {/* Allotted group */}
-                                <div className="lg:col-span-3">
-                                    <div className="h-100 p-3" style={{ backgroundColor: 'rgba(40,167,69,0.04)', borderRadius: 'var(--tb-r-md)', border: '1px solid rgba(40,167,69,0.2)', borderTop: '3px solid #28a745' }}>
-                                        <small className="mb-2 block" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-success-text)' }}>Allotted</small>
-                                        <div className="flex gap-3">
-                                            <div>
-                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Quantity</small>
-                                                <strong style={{ fontSize: 17, color: 'var(--success-color)' }}>{allotedQty.toLocaleString()}</strong>
-                                            </div>
-                                            <div style={{ width: 1, backgroundColor: 'rgba(40,167,69,0.2)' }} />
-                                            <div>
-                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Value</small>
-                                                <strong style={{ fontSize: 17, color: 'var(--success-color)' }}>{allotedValue.toFixed(2)}</strong>
-                                            </div>
-                                        </div>
-                                    </div>
+                            {/* Required */}
+                            <div className="flex flex-col px-5 py-4">
+                                <div className="mb-2 flex items-center gap-1.5">
+                                    <span className="size-2 shrink-0 rounded-full bg-muted-foreground/40" />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Required</span>
                                 </div>
+                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums text-foreground">
+                                    {requiredQty.toLocaleString()}
+                                </span>
+                                <span className="mt-1.5 text-[11px] font-semibold text-muted-foreground">
+                                    ${requiredValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                            </div>
 
-                                {/* Balance group */}
-                                <div className="lg:col-span-4">
-                                    <div className="h-100 p-3" style={{ backgroundColor: 'var(--tb-brand-50)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-brand-200)', borderTop: '3px solid var(--tb-brand)' }}>
-                                        <small className="mb-2 block" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-brand)' }}>Balance</small>
-                                        <div className="flex gap-3 items-end">
-                                            <div>
-                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Quantity</small>
-                                                <strong style={{ fontSize: 17, color: 'var(--primary-color)' }}>{balanceQty.toLocaleString()}</strong>
-                                            </div>
-                                            <div style={{ width: 1, backgroundColor: 'var(--tb-brand-200)' }} />
-                                            <div>
-                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Value <span className="text-muted" style={{ fontWeight: '400' }}>(+$20 buffer)</span></small>
-                                                <strong style={{ fontSize: 17, color: 'var(--primary-color)' }}>{balanceValue.toFixed(2)}</strong>
-                                            </div>
-                                        </div>
-                                    </div>
+                            {/* Allotted */}
+                            <div className="flex flex-col px-5 py-4" style={{ background: 'rgba(16,185,129,0.04)' }}>
+                                <div className="mb-2 flex items-center gap-1.5">
+                                    <span className="size-2 shrink-0 rounded-full" style={{ background: 'var(--tb-success)' }} />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--tb-success-text)' }}>Allotted</span>
                                 </div>
+                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums" style={{ color: 'var(--tb-success)' }}>
+                                    {allotedQty.toLocaleString()}
+                                </span>
+                                <span className="mt-1.5 text-[11px] font-semibold" style={{ color: 'var(--tb-success-text)' }}>
+                                    ${allotedValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                            </div>
+
+                            {/* Balance */}
+                            <div className="flex flex-col px-5 py-4" style={{ background: balanceQty <= 0 ? 'rgba(16,185,129,0.06)' : 'var(--tb-brand-50)' }}>
+                                <div className="mb-2 flex items-center gap-1.5">
+                                    <span className="size-2 shrink-0 rounded-full" style={{ background: balanceQty <= 0 ? 'var(--tb-success)' : 'var(--tb-brand)' }} />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: balanceQty <= 0 ? 'var(--tb-success-text)' : 'var(--tb-brand)' }}>Balance</span>
+                                </div>
+                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums" style={{ color: balanceQty <= 0 ? 'var(--tb-success)' : 'var(--tb-brand-active)' }}>
+                                    {balanceQty.toLocaleString()}
+                                </span>
+                                <span className="mt-1.5 text-[11px] font-semibold" style={{ color: balanceQty <= 0 ? 'var(--tb-success-text)' : 'var(--tb-brand)' }}>
+                                    ${balanceValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    <span className="ml-1 font-normal opacity-50">+$20 buf</span>
+                                </span>
                             </div>
                         </div>
                     </div>

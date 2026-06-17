@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, ArrowLeft, Check, CheckCircle, CheckCircle2, ExternalLink, Eye, FileText, Info, Loader2, MoreHorizontal, Paperclip, QrCode, RefreshCw, TriangleAlert, Wand2, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Check, CheckCircle, CheckCircle2, ExternalLink, Eye, FileText, Info, Loader2, MoreHorizontal, PackagePlus, Paperclip, QrCode, Receipt, RefreshCw, Table, TriangleAlert, Wand2, X } from "lucide-react";
 
 /**
  * Generic Master Form for Create/Edit
@@ -1742,13 +1742,14 @@ export default function MasterForm({
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
 
-    const entityIconMap = {
-        licenses: 'file-earmark-text',
-        allotments: 'diagram-3',
-        'bill-of-entries': 'receipt-cutoff',
-        trades: 'arrow-left-right',
-        'incentive-licenses': 'award',
+    const ENTITY_ICON_MAP = {
+        licenses: FileText,
+        allotments: PackagePlus,
+        'bill-of-entries': Receipt,
+        trades: ArrowLeftRight,
+        'incentive-licenses': Award,
     };
+    const EntityIcon = ENTITY_ICON_MAP[entityName] || FileText;
     const entityColorMap = {
         licenses: 'var(--tb-brand)',
         allotments: 'var(--tb-info)',
@@ -1756,7 +1757,6 @@ export default function MasterForm({
         trades: 'var(--tb-success)',
         'incentive-licenses': 'var(--tb-warning)',
     };
-    const entityIcon = entityIconMap[entityName] || 'file-earmark';
     const entityColor = entityColorMap[entityName] || 'var(--tb-brand)';
 
     if (loading) {
@@ -1764,17 +1764,17 @@ export default function MasterForm({
             <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
                 <div className="flex justify-between items-center mb-4">
                     <div>
-                        <div className="placeholder-glow mb-1"><span className="placeholder col-3 rounded" style={{ height: 24 }}></span></div>
-                        <div className="placeholder-glow"><span className="placeholder col-5 rounded" style={{ height: 14 }}></span></div>
+                        <div className="mb-1 h-6 w-1/3 animate-pulse rounded-md bg-muted"></div>
+                        <div className="h-3.5 w-1/2 animate-pulse rounded-md bg-muted"></div>
                     </div>
                 </div>
-                <div className="card" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                    <div className="card-body p-4">
+                <div className="rounded-xl border border-border bg-card shadow-sm">
+                    <div className="p-5">
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                             {[...Array(6)].map((_, i) => (
                                 <div key={i}>
-                                    <div className="placeholder-glow mb-1"><span className="placeholder col-6 rounded" style={{ height: 12 }}></span></div>
-                                    <span className="placeholder col-12 rounded d-block" style={{ height: 38 }}></span>
+                                    <div className="mb-1 h-3 w-1/2 animate-pulse rounded-md bg-muted"></div>
+                                    <div className="h-9 w-full animate-pulse rounded-md bg-muted"></div>
                                 </div>
                             ))}
                         </div>
@@ -1790,7 +1790,7 @@ export default function MasterForm({
             <div className="flex justify-between items-center mb-4">
                 <div>
                     <h4 className="mb-0 font-bold" style={{ color: 'var(--tb-text)' }}>
-                        <i className={`bi bi-${entityIcon} mr-2`} style={{ color: entityColor }}></i>
+                        <EntityIcon className="size-5 mr-2" style={{ color: entityColor }} />
                         {isEdit ? 'Edit' : 'New'} {entityTitle}
                         {/* Clickable BOE number → opens saved BOE copy PDF */}
                         {entityName === 'bill-of-entries' && isEdit && formData.bill_of_entry_number && (() => {
@@ -1832,11 +1832,11 @@ export default function MasterForm({
                 </Button>
             </div>
 
-            <div className="card" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+            <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+                <div className="border-b border-border/70 px-6 py-4">
                     <div className="flex items-center justify-between">
                         <h6 className="mb-0 font-semibold">
-                            <i className={`bi bi-${entityIcon} mr-2`} style={{ color: entityColor }}></i>
+                            <EntityIcon className="size-5 mr-2" style={{ color: entityColor }} />
                             {entityTitle} Details
                         </h6>
                         {entityName === 'trades' && formData.direction && (() => {
@@ -1848,7 +1848,7 @@ export default function MasterForm({
                             return (
                                 <div className="flex gap-2">
                                     <span className="badge flex items-center gap-1" style={{ background: `${dirColors[formData.direction]}20`, color: dirColors[formData.direction], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
-                                        <i className={`bi bi-${dirIcons[formData.direction]}`}></i>
+                                        
                                         {dirLabels[formData.direction]}
                                     </span>
                                     {formData.license_type && (
@@ -1862,7 +1862,7 @@ export default function MasterForm({
                         })()}
                     </div>
                 </div>
-                <div className="card-body" style={{ padding: '24px' }}>
+                <div className="p-6">
                     {error && (
                         <div className="alert alert-danger flex items-start gap-2 mb-4">
                             <TriangleAlert className="size-4" aria-hidden="true" />
@@ -2269,7 +2269,7 @@ export default function MasterForm({
                                             return (
                                                 <div key={section.title} style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: `3px solid ${section.color}` }}>
                                                     <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: section.color, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                        <i className={`bi bi-${section.icon}`}></i> {section.title}
+                                                        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><FileText className="size-3.5" style={{opacity:0.7}}/>{section.title}</span>
                                                     </div>
                                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                                                         {visibleFields.map(f => renderOneField(f, section.cols?.[f]))}
@@ -2349,7 +2349,7 @@ export default function MasterForm({
                                                                 onClick={() => setActiveNestedTab(nestedKey)}
                                                                 style={{ fontSize: '0.83rem', fontWeight: isActive ? '600' : '500', padding: '8px 16px', color: isActive ? entityColor : 'var(--tb-text-secondary)', borderColor: isActive ? `${entityColor} ${entityColor} white` : 'transparent', borderRadius: '8px 8px 0 0' }}
                                                             >
-                                                                <i className={`bi bi-${tabIcons[nestedKey] || 'table'}`}></i>
+                                                                <Table className="size-3.5" />
                                                                 {label}
                                                                 {count > 0 && (
                                                                     <span className="badge rounded-pill" style={{ backgroundColor: isActive ? entityColor : 'var(--tb-border-soft)', color: isActive ? 'white' : 'var(--tb-text-secondary)', fontSize: 11, padding: '2px 7px' }}>
@@ -2407,7 +2407,7 @@ export default function MasterForm({
                                 type="submit"
                                 size="lg"
                                 disabled={saving}
-                                style={{ background: `linear-gradient(135deg, ${entityColor}, ${entityColor}cc)`, border: "none", color: "#fff" }}
+                                style={{ background: entityColor, border: "none", color: "#fff" }}
                             >
                                 {saving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
                                 {saving ? "Saving…" : isEdit ? "Update" : "Create"}

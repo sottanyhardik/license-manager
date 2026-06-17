@@ -543,7 +543,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 <div className="card-header py-3" style={{ borderRadius: '12px 12px 0 0' }}>
                     <div className="placeholder col-3" style={{ height: 18, borderRadius: 4 }}></div>
                 </div>
-                <div className="card-body flex gap-3 p-4">
+                <div className="flex gap-3 p-5">
                     {[1,2,3,4].map(i => <div key={i} className="placeholder flex-fill" style={{ borderRadius: 8, height: 72 }}></div>)}
                 </div>
             </div>
@@ -551,7 +551,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 <div className="card-header py-3" style={{ borderRadius: '12px 12px 0 0' }}>
                     <div className="placeholder col-4" style={{ height: 18, borderRadius: 4 }}></div>
                 </div>
-                <div className="card-body p-4">
+                <div className="p-5">
                     {[1,2,3].map(i => <div key={i} className="placeholder w-full mb-2" style={{ height: 90, borderRadius: 8 }}></div>)}
                 </div>
             </div>
@@ -577,7 +577,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         {allotment && (
                             <small className="text-muted">
                                 {allotment.item_name}
-                                {allotment.invoice && <span className="ms-2">— Invoice #{allotment.invoice}</span>}
+                                {allotment.invoice && <span className="ml-2">— Invoice #{allotment.invoice}</span>}
                             </small>
                         )}
                     </div>
@@ -675,7 +675,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <h6 className="mb-0 font-semibold">
                                 <Info className="size-4" aria-hidden="true" />
                                 Allotment Details
-                                <span className="ms-2 text-muted-foreground font-normal" style={{ fontSize: 13.5 }}>{allotment.item_name}</span>
+                                <span className="ml-2 text-muted-foreground font-normal" style={{ fontSize: 13.5 }}>{allotment.item_name}</span>
                             </h6>
                             <span className="badge" style={{
                                 background: progressPct >= 100 ? 'var(--tb-success-soft)' : 'var(--tb-brand-50)',
@@ -685,7 +685,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 {progressPct}% Allotted
                             </span>
                         </div>
-                        <div className="card-body" style={{ padding: '20px 24px' }}>
+                        <div className="p-5">
                             <div className="mb-4">
                                 <div className="flex justify-between mb-1" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                                     <span>Allotted: <strong>{allotedQty.toLocaleString()}</strong></span>
@@ -695,7 +695,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <div style={{ height: '100%', borderRadius: 4, width: `${progressPct}%`, background: `linear-gradient(90deg, ${progressColor}, ${progressColor}cc)`, transition: 'width 0.4s ease' }} />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12 items-stretch">
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-12 items-stretch">
                                 {/* Unit Price */}
                                 <div className="lg:col-span-2">
                                     <div className="h-100 p-3 flex flex-col justify-center" style={{ backgroundColor: 'rgba(23,162,184,0.06)', borderRadius: 'var(--tb-r-md)', border: '1px solid rgba(23,162,184,0.2)' }}>
@@ -707,7 +707,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 {/* Required group */}
                                 <div className="lg:col-span-3">
                                     <div className="h-100 p-3" style={{ backgroundColor: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-border-soft)', borderTop: '3px solid #6c757d' }}>
-                                        <small className="d-block mb-2" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-text-secondary)' }}>Required</small>
+                                        <small className="mb-2 block" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-text-secondary)' }}>Required</small>
                                         <div className="flex gap-3">
                                             <div>
                                                 <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Quantity</small>
@@ -725,7 +725,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 {/* Allotted group */}
                                 <div className="lg:col-span-3">
                                     <div className="h-100 p-3" style={{ backgroundColor: 'rgba(40,167,69,0.04)', borderRadius: 'var(--tb-r-md)', border: '1px solid rgba(40,167,69,0.2)', borderTop: '3px solid #28a745' }}>
-                                        <small className="d-block mb-2" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-success-text)' }}>Allotted</small>
+                                        <small className="mb-2 block" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-success-text)' }}>Allotted</small>
                                         <div className="flex gap-3">
                                             <div>
                                                 <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Quantity</small>
@@ -743,7 +743,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 {/* Balance group */}
                                 <div className="lg:col-span-4">
                                     <div className="h-100 p-3" style={{ backgroundColor: 'var(--tb-brand-50)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-brand-200)', borderTop: '3px solid var(--tb-brand)' }}>
-                                        <small className="d-block mb-2" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-brand)' }}>Balance</small>
+                                        <small className="mb-2 block" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-brand)' }}>Balance</small>
                                         <div className="flex gap-3 items-end">
                                             <div>
                                                 <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Quantity</small>
@@ -770,7 +770,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         <h6 className="mb-0 font-semibold">
                             <CheckSquare className="size-4" aria-hidden="true" />
                             Allotted Items
-                            <span className="ms-2 badge" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--tb-success-text)', fontWeight: '600', fontSize: 11 }}>
+                            <span className="ml-2 badge" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--tb-success-text)', fontWeight: '600', fontSize: 11 }}>
                                 {allotment.allotment_details.length}
                             </span>
                         </h6>
@@ -805,9 +805,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <Clipboard className="size-4" aria-hidden="true" /> Copy
                             </button>
                     </div>
-                    <div className="card-body p-0">
+                    <div>
                         <div style={{overflowX: 'auto'}}>
-                            <table className="table table-sm table-hover mb-0" style={{width: '100%'}}>
+                            <table className="w-full text-sm" style={{width: '100%'}}>
                                 <thead style={{ backgroundColor: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
                                 <tr>
                                     <th style={{minWidth: '120px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>License</th>
@@ -911,11 +911,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         <ListChecks className="size-4" aria-hidden="true" />
                         Available License Items
                         {pagination.totalItems > 0 && (
-                            <span className="ms-2 text-muted-foreground font-normal" style={{ fontSize: '0.82rem' }}>{pagination.totalItems} items</span>
+                            <span className="ml-2 text-muted-foreground font-normal" style={{ fontSize: '0.82rem' }}>{pagination.totalItems} items</span>
                         )}
                     </h6>
                 </div>
-                <div className="card-body" style={{ padding: '20px 24px' }}>
+                <div className="p-5">
 
                     {/* Show success/error messages near the table for better visibility */}
                     {error && (

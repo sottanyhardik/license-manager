@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import AsyncSelect from 'react-select/async';
 import { extractFormErrors, formatNonFieldErrors, getFieldError } from '../utils/formErrors';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Building2, Check, DollarSign, FileText, Loader2, Package, ToggleRight, TriangleAlert, X } from "lucide-react";
 
@@ -288,11 +289,8 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                         <div className="overflow-y-auto bg-muted/40" style={{ maxHeight: 'calc(95vh - 130px)', padding: '1.5rem' }}>
                             {/* Non-Field Errors */}
                             {nonFieldErrors.length > 0 && (
-                                <div className="alert alert-danger mb-3" role="alert">
-                                    <strong><TriangleAlert className="size-4" aria-hidden="true" />ERROR:</strong>
-                                    <div className="mt-1" style={{ textTransform: 'uppercase', fontWeight: '600' }}>
-                                        {formatNonFieldErrors(nonFieldErrors)}
-                                    </div>
+                                <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
+                                    <TriangleAlert className="size-4 mt-0.5 shrink-0" /><div><strong className="font-semibold">Error:</strong> <span className="font-medium">{formatNonFieldErrors(nonFieldErrors)}</span></div>
                                 </div>
                             )}
 
@@ -397,16 +395,9 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
                                             <div className="sm:col-span-2">
                                                 <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>CIF INR</label>
-                                                <div className="input-group">
-                                                    <span className="input-group-text" style={{ fontSize: 12.5 }}>₹</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
-                                                        value={formData.cif_inr}
-                                                        onChange={(e) => handleChange('cif_inr', e.target.value)}
-                                                        placeholder="0.00"
-                                                    />
+                                                <div className="relative">
+                                                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-muted-foreground">₹</span>
+                                                    <input type="number" step="0.01" className="flex h-9 w-full rounded-md border border-input bg-card pl-6 pr-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring" value={formData.cif_inr} onChange={(e) => handleChange('cif_inr', e.target.value)} placeholder="0.00" />
                                                 </div>
                                                 {getFieldError(fieldErrors, 'cif_inr') && (
                                                     <div className="mt-0.5 text-[11.5px] text-destructive" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'cif_inr')}</div>
@@ -428,16 +419,9 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                             </div>
                                             <div className="sm:col-span-2">
                                                 <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>CIF FC</label>
-                                                <div className="input-group">
-                                                    <span className="input-group-text" style={{ fontSize: 12.5 }}>$</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
-                                                        value={formData.cif_fc}
-                                                        onChange={(e) => handleChange('cif_fc', e.target.value)}
-                                                        placeholder="0.00"
-                                                    />
+                                                <div className="relative">
+                                                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-muted-foreground">$</span>
+                                                    <input type="number" step="0.01" className="flex h-9 w-full rounded-md border border-input bg-card pl-6 pr-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring" value={formData.cif_fc} onChange={(e) => handleChange('cif_fc', e.target.value)} placeholder="0.00" />
                                                 </div>
                                                 {getFieldError(fieldErrors, 'cif_fc') && (
                                                     <div className="mt-0.5 text-[11.5px] text-destructive" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'cif_fc')}</div>
@@ -445,16 +429,9 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                             </div>
                                             <div className="sm:col-span-2">
                                                 <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Unit Value / Unit</label>
-                                                <div className="input-group">
-                                                    <span className="input-group-text" style={{ fontSize: 12.5 }}>$</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.001"
-                                                        className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
-                                                        value={formData.unit_value_per_unit}
-                                                        onChange={(e) => handleChange('unit_value_per_unit', e.target.value)}
-                                                        placeholder="0.000"
-                                                    />
+                                                <div className="relative">
+                                                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-muted-foreground">$</span>
+                                                    <input type="number" step="0.001" className="flex h-9 w-full rounded-md border border-input bg-card pl-6 pr-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring" value={formData.unit_value_per_unit} onChange={(e) => handleChange('unit_value_per_unit', e.target.value)} placeholder="0.000" />
                                                 </div>
                                                 {getFieldError(fieldErrors, 'unit_value_per_unit') && (
                                                     <div className="mt-0.5 text-[11.5px] text-destructive" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'unit_value_per_unit')}</div>
@@ -510,32 +487,20 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                             <ToggleRight className="size-4" aria-hidden="true" /> Status Flags
                                         </div>
                                         <div className="flex gap-4">
-                                            <div className="form-check form-switch">
-                                                <input
-                                                    className="form-check-input"
-                                                    type="checkbox"
-                                                    role="switch"
-                                                    id="isBoe"
+                                            <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium">
+                                                <Switch
                                                     checked={formData.is_boe}
-                                                    onChange={(e) => handleChange('is_boe', e.target.checked)}
+                                                    onCheckedChange={(v) => handleChange('is_boe', v)}
                                                 />
-                                                <label className="form-check-label" htmlFor="isBoe" style={{ fontWeight: '500' }}>
-                                                    Is BOE
-                                                </label>
-                                            </div>
-                                            <div className="form-check form-switch">
-                                                <input
-                                                    className="form-check-input"
-                                                    type="checkbox"
-                                                    role="switch"
-                                                    id="isApproved"
+                                                Is BOE
+                                            </label>
+                                            <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium">
+                                                <Switch
                                                     checked={formData.is_approved}
-                                                    onChange={(e) => handleChange('is_approved', e.target.checked)}
+                                                    onCheckedChange={(v) => handleChange('is_approved', v)}
                                                 />
-                                                <label className="form-check-label" htmlFor="isApproved" style={{ fontWeight: '500' }}>
-                                                    Approved
-                                                </label>
-                                            </div>
+                                                Approved
+                                            </label>
                                         </div>
                                     </div>
 

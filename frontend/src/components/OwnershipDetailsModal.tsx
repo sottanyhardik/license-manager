@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Network, Loader2, TriangleAlert } from "lucide-react";
 
 import api from "../api/axios";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";

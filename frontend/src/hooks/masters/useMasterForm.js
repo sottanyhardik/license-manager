@@ -6,7 +6,7 @@
  */
 
 import {useCallback, useEffect, useState} from 'react';
-import {toast} from 'react-toastify';
+import {toast} from "sonner";
 import {masterApi} from '../../services/api';
 import {formCalculator} from '../../services/calculators';
 import {useApiCall} from '../useApiCall';

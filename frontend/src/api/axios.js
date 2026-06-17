@@ -1,5 +1,5 @@
 import axios from "axios";
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 
 // Resolve API base URL:
 //   - If VITE_API_URL is defined (e.g. "http://localhost:8000"), call Django directly.

@@ -28,7 +28,7 @@
 
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import api from '../api/axios';
 import { getErrorMessage } from '../utils/errorUtils';
 

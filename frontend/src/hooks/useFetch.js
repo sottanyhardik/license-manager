@@ -21,7 +21,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import api from '../api/axios';
 import { getErrorMessage } from '../utils/errorUtils';
 

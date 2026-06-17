@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import AsyncSelect from 'react-select/async';
 import { extractFormErrors, formatNonFieldErrors, getFieldError } from '../utils/formErrors';
 import { Dialog, DialogContent } from "@/components/ui/dialog";

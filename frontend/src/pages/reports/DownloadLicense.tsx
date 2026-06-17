@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import {
     ScanBarcode, Funnel, FileSpreadsheet, Loader2, Info,
     CircleCheck, TriangleAlert, CheckCircle2,

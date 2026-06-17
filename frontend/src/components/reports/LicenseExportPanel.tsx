@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import { Download, Loader2, CheckCircle2 } from "lucide-react";
 
 import api from "../../api/axios";

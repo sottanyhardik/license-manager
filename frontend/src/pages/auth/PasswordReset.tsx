@@ -1,16 +1,15 @@
-import { useContext, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { motion, useReducedMotion } from "framer-motion";
 import { KeyRound, Mail, Send, Loader2, ArrowLeft, CheckCircle2 } from "lucide-react";
 
 import api from "../../api/axios";
-import { ToastContext } from "../../components/ToastContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function PasswordReset() {
-    const { showToast } = useContext(ToastContext);
     const navigate = useNavigate();
     const reduce = useReducedMotion();
     const [email, setEmail] = useState("");
@@ -23,9 +22,9 @@ export default function PasswordReset() {
         try {
             await api.post("/auth/password-reset/", { email });
             setSent(true);
-            showToast("Reset instructions sent to your email.");
+            toast.success("Reset instructions sent to your email.");
         } catch {
-            showToast("Error sending reset email", "danger");
+            toast.error("Error sending reset email");
         } finally {
             setSubmitting(false);
         }

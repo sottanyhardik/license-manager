@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import { formatDate } from "../utils/dateFormatter";
 import { Check, Inbox, Pencil, Trash2, X } from "lucide-react";
 

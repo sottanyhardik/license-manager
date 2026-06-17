@@ -1,6 +1,6 @@
 import {useEffect, useState, useCallback, useRef} from "react";
 import {useParams, useNavigate, useLocation} from "react-router-dom";
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import Select from "react-select";
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
 import { generatePDF, generateExcel } from '../utils/ledgerExport';
@@ -339,7 +339,7 @@ export default function LicenseLedger() {
         if (!companyWiseData?.licenses?.length) { toast.error('No data to export'); return; }
         setBulkExporting(true);
         try {
-            toast.info('Fetching ledger details…', { autoClose: false, toastId: 'bulk-pdf' });
+            toast.info('Fetching ledger details…', { duration: Infinity, id: 'bulk-pdf' });
             const allLedgers = await fetchFullLedgerDetails();
             toast.dismiss('bulk-pdf');
             if (!allLedgers.length) { toast.error('No ledger data available'); return; }
@@ -357,7 +357,7 @@ export default function LicenseLedger() {
         if (!companyWiseData?.licenses?.length) { toast.error('No data to export'); return; }
         setBulkExporting(true);
         try {
-            toast.info('Fetching ledger details…', { autoClose: false, toastId: 'bulk-xlsx' });
+            toast.info('Fetching ledger details…', { duration: Infinity, id: 'bulk-xlsx' });
             const allLedgers = await fetchFullLedgerDetails();
             toast.dismiss('bulk-xlsx');
             if (!allLedgers.length) { toast.error('No ledger data available'); return; }

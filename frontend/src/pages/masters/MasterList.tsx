@@ -1,7 +1,7 @@
 import {useContext, useEffect, useState, useCallback, useRef} from "react";
 import {Link, useParams, useLocation, useNavigate} from "react-router-dom";
 import {AuthContext} from "../../context/AuthContext";
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import api from "../../api/axios";
 import {boeApi} from "../../services/api";
 import AdvancedFilter from "../../components/AdvancedFilter";

@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search, Users } from "lucide-react";
 
 import { deleteUser, listUsers } from "../../api/users";

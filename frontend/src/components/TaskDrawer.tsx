@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import { AuthContext } from "../context/AuthContext";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import { AlertCircle, Check, CheckSquare, ChevronDown, ClipboardCheck, OctagonX, Trash2, X } from "lucide-react";

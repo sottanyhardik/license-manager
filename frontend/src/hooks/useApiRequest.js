@@ -33,7 +33,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import PropTypes from 'prop-types';
 import { getErrorMessage } from '../utils/errorUtils';
 

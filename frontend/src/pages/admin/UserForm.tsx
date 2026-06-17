@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import { ArrowLeft, Check, X, KeyRound } from "lucide-react";
 
 import { createUser, getAvailableRoles, getUser, resetPassword, updateUser } from "../../api/users";

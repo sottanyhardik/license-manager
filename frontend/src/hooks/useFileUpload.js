@@ -34,7 +34,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import api from '../api/axios';
 
 export const useFileUpload = (options = {}) => {

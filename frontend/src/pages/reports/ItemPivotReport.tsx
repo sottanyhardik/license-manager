@@ -464,9 +464,7 @@ export default function ItemPivotReport() {
 
             {/* Filters Section */}
             {!filtersCollapsed && (
-                <div className="row mb-3">
-                    <div className="col-12">
-                        <div className="surface-card" style={{maxWidth: '1400px'}}>
+                <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm" style={{maxWidth: '1400px'}}>
                             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}
                                  className="flex justify-between items-center">
                                 <h5 className="mb-0" style={{ fontWeight: 600, fontSize: 15 }}>
@@ -636,96 +634,145 @@ export default function ItemPivotReport() {
                                 )}
                             </div>
                         </div>
-                    </div>
-                </div>
             )}
 
-            {/* Norm Tabs */}
-            <div className="row mb-3">
-                <div className="col-12">
-                    <div className="surface-card">
-                        <div style={{ padding: '14px 16px' }}>
-                            <h6 className="mb-3" style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--primary-color)' }}>
-                                <Tag className="size-4" aria-hidden="true" />
-                                Available Norms ({availableNorms.length})
-                                <small className="text-muted ml-2">(includes E1, E5, E126, E132 conversion norms)</small>
-                            </h6>
-                            {availableNorms.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                    {availableNorms.map((normObj) => {
-                                        const normClass = normObj.norm_class || normObj;
-                                        const description = normObj.description || '';
-                                        const isConversionNorm = ['E1', 'E5', 'E126', 'E132'].includes(normClass);
-                                        return (
-                                            <button
-                                                key={normClass}
-                                                className={`btn btn-sm ${activeNormTab === normClass ? (isConversionNorm ? 'btn-success' : 'btn-primary') : (isConversionNorm ? 'btn-outline-success' : 'btn-outline-primary')}`}
-                                                onClick={() => {
-                                                    if (activeNormTab !== normClass) {
-                                                        setReportData(null);
-                                                    }
-                                                    setActiveNormTab(normClass);
-                                                }}
-                                                type="button"
-                                                style={{
-                                                    minWidth: '120px',
-                                                    fontWeight: activeNormTab === normClass ? 'bold' : 'normal',
-                                                    transition: 'all 0.3s ease',
-                                                    textAlign: 'center',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    padding: '8px 12px'
-                                                }}
-                                            >
-                                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: description ? '4px' : '0'}}>
-                                                    {isConversionNorm ? <RefreshCw className="size-3.5 mr-1" aria-hidden="true" /> : <Tag className="size-3.5 mr-1" aria-hidden="true" />}
-                                                    <span style={{fontSize: 16, fontWeight: '600'}}>{normClass}</span>
-                                                    {loading && activeNormTab === normClass && (
-                                                        <Loader2 className="ml-1.5 size-3.5 animate-spin text-primary" />
-                                                    )}
-                                                </div>
-                                                {description && (
-                                                    <small style={{fontSize: 11, opacity: 0.85, lineHeight: '1.2'}}>
-                                                        {description}
-                                                    </small>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <div className="text-center py-3">
-                                    <Inbox className="size-4" aria-hidden="true" />
-                                    <p className="text-muted mb-0 mt-2">No norms available.</p>
-                                </div>
-                            )}
-                        </div>
+            {/* Norm Tabs — redesigned */}
+            <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+                    <div className="flex items-center gap-2">
+                        <Tag className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
+                        <span className="text-sm font-bold tracking-tight text-foreground">Available Norms</span>
+                        {availableNorms.length > 0 && (
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand)' }}>
+                                {availableNorms.length}
+                            </span>
+                        )}
                     </div>
+                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <RefreshCw className="size-3" />E1, E5, E126, E132 are conversion norms
+                    </span>
+                </div>
+
+                {/* Norm grid */}
+                <div className="p-4">
+                    {availableNorms.length > 0 ? (
+                        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+                            {availableNorms.map((normObj) => {
+                                const normClass = normObj.norm_class || normObj;
+                                const description = normObj.description || '';
+                                const isConversionNorm = ['E1', 'E5', 'E126', 'E132'].includes(normClass);
+                                const isActive = activeNormTab === normClass;
+                                const activeColor = isConversionNorm ? 'var(--tb-success)' : 'var(--tb-brand)';
+                                const activeBg = isConversionNorm ? 'var(--tb-success)' : 'var(--tb-brand)';
+                                const softBg = isConversionNorm ? 'var(--tb-success-soft)' : 'var(--tb-brand-50)';
+                                const softText = isConversionNorm ? 'var(--tb-success-text)' : 'var(--tb-brand)';
+                                const softBorder = isConversionNorm ? 'var(--tb-success-border, #B7E2BE)' : 'var(--tb-brand-100)';
+                                return (
+                                    <button
+                                        key={normClass}
+                                        type="button"
+                                        onClick={() => {
+                                            if (activeNormTab !== normClass) setReportData(null);
+                                            setActiveNormTab(normClass);
+                                        }}
+                                        style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'flex-start',
+                                            padding: '10px 14px',
+                                            borderRadius: 8,
+                                            border: isActive ? `2px solid ${activeBg}` : `1px solid ${softBorder}`,
+                                            background: isActive ? `linear-gradient(135deg, ${activeBg}, ${activeBg}dd)` : softBg,
+                                            color: isActive ? '#fff' : softText,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.18s ease',
+                                            boxShadow: isActive ? `0 4px 12px ${isConversionNorm ? 'rgba(40,167,69,.25)' : 'rgba(59,130,246,.25)'}` : 'none',
+                                            textAlign: 'left',
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                                            <span style={{
+                                                fontSize: 18, fontWeight: '800', letterSpacing: '-0.5px', lineHeight: 1,
+                                                color: isActive ? '#fff' : softText,
+                                            }}>{normClass}</span>
+                                            {loading && isActive && (
+                                                <Loader2 className="size-3.5 animate-spin ml-auto" style={{ color: '#fff' }} />
+                                            )}
+                                            {isConversionNorm && !isActive && (
+                                                <RefreshCw className="ml-auto size-3" style={{ color: softText, opacity: 0.6 }} />
+                                            )}
+                                        </div>
+                                        {description && (
+                                            <span style={{
+                                                fontSize: 10.5, lineHeight: '1.3', marginTop: 3,
+                                                color: isActive ? 'rgba(255,255,255,0.85)' : 'var(--tb-text-secondary)',
+                                                overflow: 'hidden', display: '-webkit-box',
+                                                WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                                                maxWidth: '100%',
+                                            }}>{description}</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center py-6 text-center text-muted-foreground">
+                            <Inbox className="mb-2 size-8 opacity-30" />
+                            <p className="text-sm">No norms available. Try adjusting the filters.</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Report Tables - Only show active norm */}
-            <div className="row">
-                <div className="col-12">
+            <div>
+                    {/* Empty state: no norm selected */}
+                    {!activeNormTab && !loading && (
+                        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border py-16 text-center">
+                            <div className="flex size-16 items-center justify-center rounded-2xl" style={{ background: 'var(--tb-brand-50)' }}>
+                                <Tag className="size-8" style={{ color: 'var(--tb-brand)' }} />
+                            </div>
+                            <div>
+                                <p className="text-base font-bold text-foreground">Select a Norm to View Report</p>
+                                <p className="mt-1 text-[12.5px] text-muted-foreground">Click any norm card above to load license data for that SION norm class</p>
+                            </div>
+                            {availableNorms.length > 0 && (
+                                <div className="flex flex-wrap justify-center gap-1.5 mt-1">
+                                    {availableNorms.slice(0, 5).map((n) => (
+                                        <button key={n.norm_class || n} type="button"
+                                            onClick={() => { setReportData(null); setActiveNormTab(n.norm_class || n); }}
+                                            className="rounded-lg px-3 py-1 text-xs font-bold transition-colors hover:opacity-90"
+                                            style={{ background: ['E1','E5','E126','E132'].includes(n.norm_class || n) ? 'var(--tb-success-soft)' : 'var(--tb-brand-50)', color: ['E1','E5','E126','E132'].includes(n.norm_class || n) ? 'var(--tb-success-text)' : 'var(--tb-brand)', border: '1px solid' }}>
+                                            {n.norm_class || n}
+                                        </button>
+                                    ))}
+                                    {availableNorms.length > 5 && <span className="self-center text-[11px] text-muted-foreground">+{availableNorms.length - 5} more</span>}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Loading state */}
                     {loading && activeNormTab && (
-                        <div className="card">
-                            <div className="card-body flex flex-col items-center py-12 text-center">
-                                <Loader2 className="mb-3 size-10 animate-spin text-primary" />
-                                <h5 className="text-muted">Loading {activeNormTab} Report…</h5>
-                                <p className="text-muted small">Please wait while we fetch the data</p>
+                        <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-14 text-center shadow-sm">
+                            <div className="flex size-14 items-center justify-center rounded-full" style={{ background: 'var(--tb-brand-50)' }}>
+                                <Loader2 className="size-7 animate-spin" style={{ color: 'var(--tb-brand)' }} />
+                            </div>
+                            <div>
+                                <p className="font-semibold text-foreground">Loading {activeNormTab} Report…</p>
+                                <p className="mt-0.5 text-[12.5px] text-muted-foreground">Fetching license data for this norm</p>
                             </div>
                         </div>
                     )}
 
                     {/* No data message after loading */}
                     {!loading && activeNormTab && reportData?.licenses_by_norm_notification && (!reportData?.licenses_by_norm_notification?.[activeNormTab] || Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length === 0) && (
-                        <div className="card">
-                            <div className="card-body text-center py-5">
-                                <Inbox className="size-4" aria-hidden="true" />
-                                <h5 className="mt-3 text-muted-foreground">No licenses found for {activeNormTab}</h5>
-                                <p className="text-muted">Try adjusting your filters to see more results.</p>
+                        <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-12 text-center shadow-sm">
+                            <Inbox className="size-10 opacity-20" aria-hidden="true" />
+                            <div>
+                                <p className="font-semibold text-foreground">No licenses found for <span style={{ color: 'var(--tb-brand)' }}>{activeNormTab}</span></p>
+                                <p className="mt-0.5 text-[12.5px] text-muted-foreground">Try adjusting your filters — e.g. increase minimum balance or change purchase status.</p>
                             </div>
                         </div>
                     )}
@@ -1536,7 +1583,6 @@ export default function ItemPivotReport() {
                             </div>
                         </div>
                     )}
-                </div>
             </div>
 
             {conditionModal && (

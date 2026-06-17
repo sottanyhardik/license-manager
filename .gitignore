@@ -71,3 +71,4 @@ master-audit-*/
 phase3-replication-*/
 /sample/
 .aider*
+server-envs/

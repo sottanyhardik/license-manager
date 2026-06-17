@@ -10,6 +10,15 @@ from django.urls import reverse_lazy
 # ---------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load .env file if present (production servers place it at BASE_DIR/.env)
+try:
+    from dotenv import load_dotenv
+    _env_path = BASE_DIR / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=False)  # env vars already set take precedence
+except ImportError:
+    pass  # python-dotenv not installed — rely on process environment
+
 # ---------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------

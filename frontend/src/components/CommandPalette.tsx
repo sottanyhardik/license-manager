@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { masterEntities, reportEntities } from "../routes/config";
 import { Search } from "lucide-react";
+import Icon from "@/components/Icon";
 
 const BASE_COMMANDS = [
     { id: "dashboard",      label: "Dashboard",          icon: "speedometer2",          path: "/dashboard",        group: "Navigation" },
@@ -140,7 +141,7 @@ export default function CommandPalette({ open, onClose }) {
                                                 onMouseEnter={() => setActiveIdx(idx)}
                                             >
                                                 <span className="cmd-item-icon">
-                                                    <i className={`bi bi-${cmd.icon}`} aria-hidden="true" />
+                                                    <Icon name={cmd.icon} className="size-4" />
                                                 </span>
                                                 <span className="cmd-item-label">{cmd.label}</span>
                                             </div>

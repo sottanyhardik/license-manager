@@ -9,6 +9,8 @@
  *     actions={<Button size="sm">Refresh</Button>}
  *   />
  */
+import Icon from "@/components/Icon";
+
 const ALLOWED_TONES = new Set(["primary", "success", "warning", "danger", "info", "neutral"]);
 
 export default function SectionHeader({
@@ -25,7 +27,7 @@ export default function SectionHeader({
         <div className={`tb-section-head ${className}`.trim()} style={style}>
             {icon && (
                 <span className={`tb-section-icon tone-${safeTone}`} aria-hidden="true">
-                    <i className={`bi bi-${icon}`} />
+                    <Icon name={icon} className="size-4" />
                 </span>
             )}
             <div className="tb-section-body">

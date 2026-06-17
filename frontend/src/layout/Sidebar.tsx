@@ -3,6 +3,7 @@ import {useContext, useState} from "react";
 import {masterEntities, routes, reportEntities} from "../routes/config";
 import {AuthContext} from "../context/AuthContext";
 import { BarChart3, Database, Grid3x3, Users } from "lucide-react";
+import Icon from "@/components/Icon";
 
 export default function Sidebar() {
     const location = useLocation();
@@ -55,7 +56,7 @@ export default function Sidebar() {
                                 onMouseEnter={handleMouseEnter(isActive(r.path))}
                                 onMouseLeave={handleMouseLeave(isActive(r.path))}
                             >
-                                <i className={`bi bi-${r.icon} mr-2`} style={{fontSize: '1.1rem'}}/>
+                                <Icon name={r.icon} className="mr-2 size-4" />
                                 <span>{r.label}</span>
                             </Link>
                         </li>
@@ -88,7 +89,7 @@ export default function Sidebar() {
                                         onMouseEnter={handleMouseEnter(isActive(report.path))}
                                         onMouseLeave={handleMouseLeave(isActive(report.path))}
                                     >
-                                        <i className={`bi bi-${report.icon} mr-2`} style={{fontSize: 14.5}}/>
+                                        <Icon name={report.icon} className="mr-2 size-3.5" />
                                         {report.label}
                                     </Link>
                                 </li>
@@ -140,7 +141,7 @@ export default function Sidebar() {
                                         onMouseEnter={handleMouseEnter(isActive(master.path))}
                                         onMouseLeave={handleMouseLeave(isActive(master.path))}
                                     >
-                                        <i className={`bi bi-${master.icon} mr-2`} style={{fontSize: 14.5}}/>
+                                        <Icon name={master.icon} className="mr-2 size-3.5" />
                                         {master.label}
                                     </Link>
                                 </li>

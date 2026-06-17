@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import Icon from "@/components/Icon";
 
 const SEVERITY = {
     danger:  { icon: "exclamation-triangle-fill", tone: "danger",  confirmVariant: "btn-danger" },
@@ -131,7 +132,7 @@ export const ConfirmDialog = ({
                             flexShrink: 0,
                         }}
                     >
-                        <i className={`bi bi-${cfg.icon}`} aria-hidden="true" />
+                        <Icon name={cfg.icon} className="size-4" />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <h5

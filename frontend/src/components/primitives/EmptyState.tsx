@@ -1,3 +1,5 @@
+import Icon from "@/components/Icon";
+
 export default function EmptyState({
     icon = "inbox",
     title = "Nothing here yet",
@@ -15,7 +17,7 @@ export default function EmptyState({
             }}
         >
             <div className="empty-icon" aria-hidden="true">
-                <i className={`bi bi-${icon}`} />
+                <Icon name={icon} className="size-8" />
             </div>
             <div className="empty-title">{title}</div>
             {description && <div className="empty-sub">{description}</div>}

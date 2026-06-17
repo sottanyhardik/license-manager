@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {formatIndianNumber} from "../utils/numberFormatter";
+import Icon from "@/components/Icon";
 
 // Maps bi-icon short-names and component-name strings → lucide components
 const LUCIDE_MAP = {
@@ -42,7 +43,7 @@ function IconFromString({ name, className = "size-4" }) {
     const Comp = LUCIDE_MAP[name];
     if (Comp) return <Comp className={className} aria-hidden="true" />;
     // Fallback: render as bi icon if unknown
-    return <i className={`bi bi-${name}`} aria-hidden="true" />;
+    return <Icon name={name} className="size-4" />;
 }
 
 /**
@@ -243,7 +244,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
         return (
             <div className="mb-3">
                 <h6 className="text-primary mb-2">
-                    <i className={`bi bi-${getIcon()} mr-2`}></i>
+                    <Icon name={getIcon()} className="mr-2 size-4" />
                     {fieldKey.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
                 </h6>
                 <div className="table-responsive">

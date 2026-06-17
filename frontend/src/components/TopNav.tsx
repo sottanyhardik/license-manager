@@ -5,6 +5,7 @@ import { useTheme } from "../context/ThemeContext";
 import { reportEntities, masterEntities } from "../routes/config";
 import CommandPalette from "./CommandPalette";
 import { ChevronDown, Gauge, Search, ShieldCheck } from "lucide-react";
+import Icon from "@/components/Icon";
 
 const NAV_GROUPS = [
     {
@@ -66,7 +67,7 @@ function NavMenu({ icon, label, items, isActive, end = false }) {
                 aria-expanded={open}
                 aria-haspopup="menu"
             >
-                <i className={`bi bi-${icon}`} aria-hidden="true" />
+                <Icon name={icon} className="size-4" />
                 {label}
                 <ChevronDown className="size-4" aria-hidden="true" />
             </button>
@@ -90,7 +91,7 @@ function MenuItem({ to, icon, label, active, onClick, danger = false }: { to?: s
     ].filter(Boolean).join(" ");
     const inner = (
         <>
-            {icon && <i className={`bi bi-${icon}`} aria-hidden="true" />}
+            {icon && <Icon name={icon} className="size-4" />}
             <span style={{ flex: 1 }}>{label}</span>
         </>
     );
@@ -246,7 +247,7 @@ export default function TopNav() {
                         aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                         title={theme === "dark" ? "Light mode" : "Dark mode"}
                     >
-                        <i className={`bi bi-${theme === "dark" ? "sun" : "moon"}`} style={{ fontSize: 15 }} />
+                        <Icon name={theme === "dark" ? "sun" : "moon"} className="size-4" />
                     </button>
 
                     <div className="tb-nav-sep" />

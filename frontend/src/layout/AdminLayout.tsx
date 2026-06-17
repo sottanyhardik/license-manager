@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import TopNav from "../components/TopNav";
 import TaskFAB from "../components/TaskFAB";
+import Icon from "@/components/Icon";
 
 const QUICK_ACTIONS = [
     { to: "/licenses/create",        label: "New License",   icon: "plus-circle-fill",   primary: true },
@@ -56,7 +57,7 @@ export default function AdminLayout({ children }) {
                                     className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${a.primary ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border border-border bg-card text-muted-foreground hover:bg-muted"}`}
                                     style={{ fontSize: 12, height: 30, display: "inline-flex", alignItems: "center", gap: 5 }}
                                 >
-                                    <i className={`bi bi-${a.icon}`} aria-hidden="true" style={{ fontSize: 12 }} />
+                                    <Icon name={a.icon} className="size-3" />
                                     <span className="footer-action-label">{a.label}</span>
                                 </button>
                             ))}

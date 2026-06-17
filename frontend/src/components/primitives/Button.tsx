@@ -1,4 +1,5 @@
 import React, { forwardRef } from "react";
+import Icon from "@/components/Icon";
 
 /*
  * Button — thin wrapper around Bootstrap's .btn classes plus tabler.css.
@@ -72,19 +73,11 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
                 />
             )}
             {!loading && icon && (
-                <i
-                    className={`bi bi-${icon}`}
-                    aria-hidden="true"
-                    style={{ marginRight: iconOnly ? 0 : 6, fontSize: "0.95em" }}
-                />
+                <Icon name={icon} className="size-3.5" style={{ marginRight: iconOnly ? 0 : 6 }} />
             )}
             {!iconOnly && children}
             {!loading && iconRight && (
-                <i
-                    className={`bi bi-${iconRight}`}
-                    aria-hidden="true"
-                    style={{ marginLeft: 6, fontSize: "0.95em" }}
-                />
+                <Icon name={iconRight} className="size-3.5" style={{ marginLeft: 6 }} />
             )}
         </button>
     );

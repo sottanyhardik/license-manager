@@ -12,6 +12,7 @@
  */
 const ALLOWED_TONES = new Set(["primary", "success", "warning", "danger", "info", "neutral"]);
 import { ArrowDown, ArrowUp } from "lucide-react";
+import Icon from "@/components/Icon";
 
 export default function StatCard({
     label,
@@ -42,7 +43,7 @@ export default function StatCard({
         >
             {icon && (
                 <span className={`tb-stat-icon tone-${safeTone}`} aria-hidden="true">
-                    <i className={`bi bi-${icon}`} />
+                    <Icon name={icon} className="size-4" />
                 </span>
             )}
             <div className="tb-stat-body">

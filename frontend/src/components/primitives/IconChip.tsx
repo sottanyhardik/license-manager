@@ -4,6 +4,8 @@
  *
  *   <IconChip icon="check2-square" tone="primary" />
  */
+import Icon from "@/components/Icon";
+
 const ALLOWED_TONES = new Set(["primary", "success", "warning", "danger", "info", "neutral"]);
 const ALLOWED_SIZES = new Set(["sm", "md", "lg"]);
 
@@ -22,7 +24,7 @@ export default function IconChip({
             className={`tb-icon-chip size-${safeSize} tone-${safeTone} ${className}`.trim()}
             style={style}
         >
-            <i className={`bi bi-${icon}`} />
+            <Icon name={icon} className="size-4" />
         </span>
     );
 }

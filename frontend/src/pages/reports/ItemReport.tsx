@@ -4,7 +4,7 @@ import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
-import {toast} from "react-toastify";
+import {toast} from "sonner";
 import Select from "react-select";
 import {useDebouncedFilters} from "../../hooks/useDebounce";
 import { Button } from "@/components/ui/button";
@@ -1012,7 +1012,7 @@ export default function ItemReport() {
                                                             <td>
                                                                 <Select
                                                                     isMulti
-                                                                    value={item.item_names.map(i => ({
+                                                                    value={(item.item_names || []).map(i => ({
                                                                         value: i.id,
                                                                         label: i.name
                                                                     }))}
@@ -1030,19 +1030,19 @@ export default function ItemReport() {
                                                                     }}
                                                                 />
                                                             </td>
-                                                            <td className="text-end">{item.available_quantity.toFixed(3)}</td>
+                                                            <td className="text-end">{Number(item.available_quantity || 0).toFixed(3)}</td>
                                                             {isFirstRow && (
                                                                 <>
                                                                     <td className="text-end text-success font-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
                                                                         backgroundColor: 'var(--tb-sunken)'
-                                                                    }}>{firstItem.available_balance.toFixed(2)}</td>
+                                                                    }}>{Number(firstItem.available_balance || 0).toFixed(2)}</td>
                                                                     <td className="text-end text-primary font-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
                                                                         backgroundColor: 'var(--tb-sunken)'
-                                                                    }}>{firstItem.balance_cif.toFixed(2)}</td>
+                                                                    }}>{Number(firstItem.balance_cif || 0).toFixed(2)}</td>
                                                                     <td className="text-center" rowSpan={rowSpan}
                                                                         style={{
                                                                             verticalAlign: 'middle',

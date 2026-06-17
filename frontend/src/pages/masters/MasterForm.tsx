@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useState} from "react";
 import {useLocation, useNavigate, useParams} from "react-router-dom";
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import api from "../../api/axios";
 import NestedFieldArray from "./NestedFieldArray";
 import HybridSelect from "../../components/HybridSelect";
@@ -1841,18 +1841,20 @@ export default function MasterForm({
                         </h6>
                         {entityName === 'trades' && formData.direction && (() => {
                             const dirColors = { PURCHASE: 'var(--tb-brand)', SALE: 'var(--tb-success)', COMMISSION_PURCHASE: 'var(--tb-warning)', COMMISSION_SALE: 'var(--tb-brand)' };
+                            // Soft backgrounds — the old `${color}20` hex-alpha trick was invalid on var()
+                            // (`var(--tb-brand)20`), so badges rendered with no background. Use the soft tokens.
+                            const dirSoftBg = { PURCHASE: 'var(--tb-brand-50)', SALE: 'var(--tb-success-soft)', COMMISSION_PURCHASE: 'var(--tb-warning-soft)', COMMISSION_SALE: 'var(--tb-brand-50)' };
                             const dirLabels = { PURCHASE: 'Purchase', SALE: 'Sale', COMMISSION_PURCHASE: 'Commission Purchase', COMMISSION_SALE: 'Commission Sale' };
-                            const dirIcons = { PURCHASE: 'cart-check', SALE: 'shop', COMMISSION_PURCHASE: 'percent', COMMISSION_SALE: 'percent' };
                             const ltColors = { DFIA: 'var(--tb-info)', INCENTIVE: 'var(--tb-warning)' };
+                            const ltSoftBg = { DFIA: 'var(--tb-info-soft)', INCENTIVE: 'var(--tb-warning-soft)' };
                             const ltLabels = { DFIA: 'DFIA License', INCENTIVE: 'Incentive License' };
                             return (
                                 <div className="flex gap-2">
-                                    <span className="badge flex items-center gap-1" style={{ background: `${dirColors[formData.direction]}20`, color: dirColors[formData.direction], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
-                                        
+                                    <span className="badge flex items-center gap-1" style={{ background: dirSoftBg[formData.direction], color: dirColors[formData.direction], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
                                         {dirLabels[formData.direction]}
                                     </span>
                                     {formData.license_type && (
-                                        <span className="badge flex items-center gap-1" style={{ background: `${ltColors[formData.license_type]}20`, color: ltColors[formData.license_type], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
+                                        <span className="badge flex items-center gap-1" style={{ background: ltSoftBg[formData.license_type], color: ltColors[formData.license_type], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
                                             <FileText className="size-4" aria-hidden="true" />
                                             {ltLabels[formData.license_type]}
                                         </span>
@@ -2317,14 +2319,6 @@ export default function MasterForm({
                                     const activeTab = (activeNestedTab && nestedEntries.some(([k]) => k === activeNestedTab))
                                         ? activeNestedTab
                                         : nestedEntries[0]?.[0];
-                                    const tabIcons = {
-                                        export_license: 'box-arrow-up',
-                                        import_license: 'box-arrow-in-down',
-                                        license_documents: 'file-earmark',
-                                        lines: 'list-ul',
-                                        incentive_lines: 'award',
-                                        payments: 'cash-stack',
-                                    };
                                     const tabLabels = {
                                         export_license: 'Export Items',
                                         import_license: 'Import Items',

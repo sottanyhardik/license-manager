@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import {
     RefreshCw, Plus, FileText, CheckCircle2, AlertTriangle, FileX,
     Hourglass, Network, ReceiptText, FileSpreadsheet, BarChart3,
@@ -65,6 +65,16 @@ function BarRow({ label, value, pct }) {
         </div>
     );
 }
+
+// Makes a clickable table row keyboard-operable (WCAG AA): focusable + Enter/Space.
+const rowNav = (fn: () => void) => ({
+    onClick: fn,
+    role: "button",
+    tabIndex: 0,
+    onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+    },
+});
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -199,7 +209,7 @@ export default function Dashboard() {
                                             const d = lic.days_to_expiry ?? daysUntil(lic.license_expiry_date);
                                             const variant = d <= 7 ? "destructive" : d <= 15 ? "warning" : "info";
                                             return (
-                                                <tr key={lic.license_number} className="cursor-pointer border-b border-border/60 hover:bg-accent/40" onClick={() => navigate(`/licenses?search=${lic.license_number}`)}>
+                                                <tr key={lic.license_number} className="cursor-pointer border-b border-border/60 hover:bg-accent/40 focus-visible:outline-none focus-visible:bg-accent/60" {...rowNav(() => navigate(`/licenses?search=${lic.license_number}`))}>
                                                     <td className="px-4 py-2 text-[13px] font-medium text-primary">{lic.license_number}</td>
                                                     <td className="px-4 py-2 text-xs text-muted-foreground">{fmtDate(lic.license_expiry_date)}</td>
                                                     <td className="px-4 py-2 text-right text-xs tabular-nums">${parseFloat(lic.balance_cif || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -251,7 +261,7 @@ export default function Dashboard() {
                                     </thead>
                                     <tbody>
                                         {stats.boe.recent.map((boe) => (
-                                            <tr key={boe.id} className="cursor-pointer border-b border-border/60 hover:bg-accent/40" onClick={() => navigate(`/bill-of-entries/${boe.id}/edit`)}>
+                                            <tr key={boe.id} className="cursor-pointer border-b border-border/60 hover:bg-accent/40 focus-visible:outline-none focus-visible:bg-accent/60" {...rowNav(() => navigate(`/bill-of-entries/${boe.id}/edit`))}>
                                                 <td className="px-4 py-2 text-[13px] font-medium text-primary">{boe.bill_of_entry_number || "—"}</td>
                                                 <td className="px-4 py-2 text-xs text-muted-foreground">{fmtDate(boe.bill_of_entry_date)}</td>
                                                 <td className="max-w-[160px] truncate px-4 py-2 text-xs" title={boe.company_name}>{boe.company_name || "—"}</td>
@@ -286,7 +296,7 @@ export default function Dashboard() {
                                 </thead>
                                 <tbody>
                                     {stats.allotments.recent.map((a) => (
-                                        <tr key={a.id} className="cursor-pointer border-b border-border/60 hover:bg-accent/40" onClick={() => navigate(`/allotments/${a.id}/allocate`)}>
+                                        <tr key={a.id} className="cursor-pointer border-b border-border/60 hover:bg-accent/40 focus-visible:outline-none focus-visible:bg-accent/60" {...rowNav(() => navigate(`/allotments/${a.id}/allocate`))}>
                                             <td className="whitespace-nowrap px-4 py-2 text-xs text-muted-foreground">{fmtDate(a.modified_on || a.created_at)}</td>
                                             <td className="max-w-[340px] truncate px-4 py-2 text-[13px]" title={a.item_name}>{a.item_name || "—"}</td>
                                             <td className="px-4 py-2 text-right text-[13px] tabular-nums">{parseFloat(a.required_quantity || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>

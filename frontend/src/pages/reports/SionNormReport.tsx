@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import api from "../../api/axios";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import { formatDate as formatDateUtil } from "../../utils/dateFormatter";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -125,42 +125,42 @@ export default function SionNormReport({ sionNorm, title }) {
             <td style={{fontSize: '8px'}}>{license.exporter_name}</td>
             <td className="text-end">{formatNumber(license.total_cif)}</td>
             <td className="text-end">{formatNumber(license.balance_cif)}</td>
-            <td>{license.vegetable_oil.hsn_code}</td>
-            <td style={{fontSize: '7px'}}>{license.vegetable_oil.description}</td>
-            <td className="text-end">{formatNumber(license.vegetable_oil.total_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.vegetable_oil.rbd_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.vegetable_oil.rbd_cif)}</td>
-            <td className="text-end">{formatNumber(license.vegetable_oil.pko_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.vegetable_oil.pko_cif)}</td>
-            <td className="text-end">{formatNumber(license.vegetable_oil.olive_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.vegetable_oil.olive_cif)}</td>
+            <td>{license.vegetable_oil?.hsn_code}</td>
+            <td style={{fontSize: '7px'}}>{license.vegetable_oil?.description}</td>
+            <td className="text-end">{formatNumber(license.vegetable_oil?.total_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.vegetable_oil?.rbd_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.vegetable_oil?.rbd_cif)}</td>
+            <td className="text-end">{formatNumber(license.vegetable_oil?.pko_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.vegetable_oil?.pko_cif)}</td>
+            <td className="text-end">{formatNumber(license.vegetable_oil?.olive_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.vegetable_oil?.olive_cif)}</td>
             <td className="text-end">{formatNumber(license.ten_percent_balance)}</td>
-            <td>{license.juice.hsn_code}</td>
-            <td style={{fontSize: '7px'}}>{license.juice.description}</td>
-            <td className="text-end">{formatNumber(license.juice.qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.juice.cif)}</td>
-            <td>{license.food_flavour.hsn_code}</td>
-            <td style={{fontSize: '7px'}}>{license.food_flavour.description}</td>
-            <td className="text-end">{formatNumber(license.food_flavour.ff_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.food_flavour.df_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.fruit_cocoa.qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.fruit_cocoa.cif)}</td>
-            <td className="text-end">{formatNumber(license.leavening_agent.qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.starch_1108.qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.starch_1108.cif)}</td>
-            <td className="text-end">{formatNumber(license.starch_3505.qty, 2)}</td>
-            <td style={{fontSize: '7px'}}>{license.milk_and_milk.description}</td>
-            <td className="text-end">{formatNumber(license.milk_and_milk.total_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.milk_and_milk.cheese_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.milk_and_milk.cheese_cif)}</td>
-            <td className="text-end">{formatNumber(license.milk_and_milk.swp_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.milk_and_milk.swp_cif)}</td>
-            <td className="text-end">{formatNumber(license.milk_and_milk.wpc_qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.milk_and_milk.wpc_cif)}</td>
-            <td>{license.pp.hsn_code}</td>
-            <td style={{fontSize: '7px'}}>{license.pp.description}</td>
-            <td className="text-end">{formatNumber(license.pp.qty, 2)}</td>
-            <td className="text-end">{formatNumber(license.aluminium_foil.qty, 2)}</td>
+            <td>{license.juice?.hsn_code}</td>
+            <td style={{fontSize: '7px'}}>{license.juice?.description}</td>
+            <td className="text-end">{formatNumber(license.juice?.qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.juice?.cif)}</td>
+            <td>{license.food_flavour?.hsn_code}</td>
+            <td style={{fontSize: '7px'}}>{license.food_flavour?.description}</td>
+            <td className="text-end">{formatNumber(license.food_flavour?.ff_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.food_flavour?.df_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.fruit_cocoa?.qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.fruit_cocoa?.cif)}</td>
+            <td className="text-end">{formatNumber(license.leavening_agent?.qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.starch_1108?.qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.starch_1108?.cif)}</td>
+            <td className="text-end">{formatNumber(license.starch_3505?.qty, 2)}</td>
+            <td style={{fontSize: '7px'}}>{license.milk_and_milk?.description}</td>
+            <td className="text-end">{formatNumber(license.milk_and_milk?.total_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.milk_and_milk?.cheese_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.milk_and_milk?.cheese_cif)}</td>
+            <td className="text-end">{formatNumber(license.milk_and_milk?.swp_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.milk_and_milk?.swp_cif)}</td>
+            <td className="text-end">{formatNumber(license.milk_and_milk?.wpc_qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.milk_and_milk?.wpc_cif)}</td>
+            <td>{license.pp?.hsn_code}</td>
+            <td style={{fontSize: '7px'}}>{license.pp?.description}</td>
+            <td className="text-end">{formatNumber(license.pp?.qty, 2)}</td>
+            <td className="text-end">{formatNumber(license.aluminium_foil?.qty, 2)}</td>
             <td className="text-end">{formatNumber(license.wastage_cif)}</td>
         </tr>
     );

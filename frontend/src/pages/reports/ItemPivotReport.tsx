@@ -7,7 +7,7 @@ import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
 import {formatIndianNumber} from "../../utils/numberFormatter";
 import {openPdfPreview} from "../../utils/pdfPreview";
-import {toast} from "react-toastify";
+import {toast} from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -180,7 +180,7 @@ export default function ItemPivotReport() {
 
             // Show immediate toast notification
             toast.info(`Balance update started for ${statusText} licenses. You'll be notified when complete.`, {
-                autoClose: 5000
+                duration: 5000
             });
 
             // Start polling for status in background
@@ -199,7 +199,7 @@ export default function ItemPivotReport() {
                 // Show success notification
                 toast.success(
                     `Balance update completed! Updated ${result.updated} licenses in ${result.elapsed_seconds.toFixed(1)}s`,
-                    { autoClose: 6000 }
+                    { duration: 6000 }
                 );
 
                 // Reload the report if a norm is active
@@ -418,30 +418,34 @@ export default function ItemPivotReport() {
                         Item Pivot Report
                     </div>
                     <h1>Item Pivot Report</h1>
-                    <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         {reportData && (
-                            <>
-                                <CalendarDays className="size-4" aria-hidden="true" />
+                            <span className="inline-flex items-center gap-1">
+                                <CalendarDays className="size-3.5" aria-hidden="true" />
                                 {reportData.report_date}
-                                <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
-                            </>
+                            </span>
                         )}
-                        <Tag className="size-4" aria-hidden="true" />
-                        Active Norm: {activeNormTab || 'None'}
+                        <span className="inline-flex items-center gap-1">
+                            <Tag className="size-3.5" aria-hidden="true" />
+                            Active Norm:
+                            <span className="font-semibold text-foreground">{activeNormTab || 'None'}</span>
+                        </span>
                         {reportData && (
                             <>
-                                <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
-                                <Bell className="size-4" aria-hidden="true" />
-                                {getTotalNotificationCount()} Notifications
-                                <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
-                                <FileText className="size-4" aria-hidden="true" />
-                                {getTotalLicenseCount()} Licenses
+                                <span className="inline-flex items-center gap-1">
+                                    <Bell className="size-3.5" aria-hidden="true" />
+                                    {getTotalNotificationCount()} Notifications
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                    <FileText className="size-3.5" aria-hidden="true" />
+                                    {getTotalLicenseCount()} Licenses
+                                </span>
                             </>
                         )}
                     </div>
                 </div>
                 <div className="page-actions">
-                    <Button variant="outline" size="sm" onClick={() => setFiltersCollapsed(!filtersCollapsed)}>
+                    <Button variant="ghost" size="sm" onClick={() => setFiltersCollapsed(!filtersCollapsed)}>
                         <Filter className="size-4" />
                         {filtersCollapsed ? 'Show' : 'Hide'} Filters
                         {hasActiveFilters && <Badge className="ml-1">Active</Badge>}
@@ -637,7 +641,7 @@ export default function ItemPivotReport() {
             )}
 
             {/* Norm Tabs — redesigned */}
-            <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
                     <div className="flex items-center gap-2">
@@ -657,13 +661,14 @@ export default function ItemPivotReport() {
                 {/* Norm grid */}
                 <div className="p-4">
                     {availableNorms.length > 0 ? (
-                        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+                        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
                             {availableNorms.map((normObj) => {
                                 const normClass = normObj.norm_class || normObj;
+                                // Never render a blank norm card (guards against malformed/empty entries).
+                                if (!normClass) return null;
                                 const description = normObj.description || '';
                                 const isConversionNorm = ['E1', 'E5', 'E126', 'E132'].includes(normClass);
                                 const isActive = activeNormTab === normClass;
-                                const activeColor = isConversionNorm ? 'var(--tb-success)' : 'var(--tb-brand)';
                                 const activeBg = isConversionNorm ? 'var(--tb-success)' : 'var(--tb-brand)';
                                 const softBg = isConversionNorm ? 'var(--tb-success-soft)' : 'var(--tb-brand-50)';
                                 const softText = isConversionNorm ? 'var(--tb-success-text)' : 'var(--tb-brand)';
@@ -683,7 +688,10 @@ export default function ItemPivotReport() {
                                             padding: '10px 14px',
                                             borderRadius: 8,
                                             border: isActive ? `2px solid ${activeBg}` : `1px solid ${softBorder}`,
-                                            background: isActive ? `linear-gradient(135deg, ${activeBg}, ${activeBg}dd)` : softBg,
+                                            // activeBg is a CSS var() — the old `${activeBg}dd` hex-alpha trick produced
+                                            // invalid CSS (`var(--tb-success)dd`), which killed the background and left
+                                            // white text on a white card. Solid var() fill is always valid + readable.
+                                            background: isActive ? activeBg : softBg,
                                             color: isActive ? '#fff' : softText,
                                             cursor: 'pointer',
                                             transition: 'all 0.18s ease',
@@ -727,8 +735,8 @@ export default function ItemPivotReport() {
 
             {/* Report Tables - Only show active norm */}
             <div>
-                    {/* Empty state: no norm selected */}
-                    {!activeNormTab && !loading && (
+                    {/* Empty state: norms exist but none selected */}
+                    {!activeNormTab && !loading && availableNorms.length > 0 && (
                         <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border py-16 text-center">
                             <div className="flex size-16 items-center justify-center rounded-2xl" style={{ background: 'var(--tb-brand-50)' }}>
                                 <Tag className="size-8" style={{ color: 'var(--tb-brand)' }} />
@@ -774,6 +782,12 @@ export default function ItemPivotReport() {
                                 <p className="font-semibold text-foreground">No licenses found for <span style={{ color: 'var(--tb-brand)' }}>{activeNormTab}</span></p>
                                 <p className="mt-0.5 text-[12.5px] text-muted-foreground">Try adjusting your filters — e.g. increase minimum balance or change purchase status.</p>
                             </div>
+                            {hasActiveFilters && (
+                                <Button variant="outline" size="sm" onClick={handleClearFilters}>
+                                    <XCircle className="size-4" />
+                                    Clear Filters
+                                </Button>
+                            )}
                         </div>
                     )}
 
@@ -1562,27 +1576,6 @@ export default function ItemPivotReport() {
                         </div>
                     )}
 
-                    {/* No norm selected message */}
-                    {!loading && !activeNormTab && availableNorms.length > 0 && (
-                        <div className="card">
-                            <div className="card-body text-center py-5">
-                                <Tag className="size-4" aria-hidden="true" />
-                                <h5 className="mt-3 text-primary">Select a Norm to View Report</h5>
-                                <p className="text-muted">Click on any norm tab above to load the report data</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* No norms available */}
-                    {!loading && availableNorms.length === 0 && (
-                        <div className="card">
-                            <div className="card-body text-center py-5">
-                                <Inbox className="size-4" aria-hidden="true" />
-                                <h5 className="mt-3 text-muted-foreground">No Norms Available</h5>
-                                <p className="text-muted">No active norm classes found in the system.</p>
-                            </div>
-                        </div>
-                    )}
             </div>
 
             {conditionModal && (

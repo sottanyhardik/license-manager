@@ -1,13 +1,13 @@
 import { useContext, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import api from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
 import { ROLE_LABELS, getRoleBadgeProps } from "../utils/roleConstants";
 import { PageHeader, Button, Skeleton } from "../components/ui";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, Trash2, Users, X } from "lucide-react";
+import { Check, Lock, Pencil, Plus, ShieldCheck, SquarePen, ToggleRight, Trash2, User, UserPlus, Users, X } from "lucide-react";
 
 function fmtDate(val) {
     if (!val) return "—";
@@ -21,7 +21,7 @@ const EMPTY_FORM = {
     password: "", is_active: true, roles: [],
 };
 
-function SectionBox({ icon, label, tone = "primary", children }) {
+function SectionBox({ icon: Icon, label, tone = "primary", children }) {
     const toneColors = {
         primary: { border: "var(--tb-brand)",         label: "var(--tb-brand)" },
         success: { border: "var(--tb-success)",        label: "var(--tb-success-text)" },
@@ -41,7 +41,7 @@ function SectionBox({ icon, label, tone = "primary", children }) {
             }}
         >
             <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: c.label, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                <i className={`bi bi-${icon}`} aria-hidden="true" />{label}
+                {Icon && <Icon className="size-3.5" aria-hidden="true" />}{label}
             </div>
             {children}
         </div>
@@ -130,7 +130,7 @@ export default function Settings() {
                 pretitle="Admin"
                 title="Users & Roles"
                 description="Manage users and assign roles — visible to superusers only"
-                actions={<Button variant="primary" size="sm" icon="plus-lg" onClick={() => handleOpenModal()}>Add User</Button>}
+                actions={<Button variant="primary" size="sm" onClick={() => handleOpenModal()}><Plus className="size-4" aria-hidden="true" />Add User</Button>}
             />
 
             <div className="card">
@@ -165,7 +165,7 @@ export default function Settings() {
                                                 </div>
                                                 <div>
                                                     <div style={{ fontSize: 13, fontWeight: 500 }}>{user.username}</div>
-                                                    {user.is_superuser && <span className="chip chip-danger" style={{ fontSize: 10 }}>Superuser</span>}
+                                                    {user.is_superuser && <span className="inline-flex items-center rounded px-1.5 py-0.5 font-medium" style={{ fontSize: 10, background: "var(--tb-danger-soft)", color: "var(--tb-danger-text)" }}>Superuser</span>}
                                                 </div>
                                             </div>
                                         </td>
@@ -208,7 +208,7 @@ export default function Settings() {
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--tb-border)", flexShrink: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                 <div style={{ width: 32, height: 32, borderRadius: "var(--tb-r-md)", background: "var(--tb-brand-50)", border: "1px solid var(--tb-brand-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--tb-brand)", fontSize: 15 }}>
-                                    <i className={`bi bi-${editingUser ? "pencil-square" : "person-plus"}`} aria-hidden="true" />
+                                    {editingUser ? <SquarePen className="size-4" aria-hidden="true" /> : <UserPlus className="size-4" aria-hidden="true" />}
                                 </div>
                                 <h5 id="user-modal-title" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>{editingUser ? "Edit User" : "Add New User"}</h5>
                             </div>
@@ -216,7 +216,7 @@ export default function Settings() {
                         </div>
                         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
                             <div style={{ padding: "20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-                                <SectionBox icon="shield-lock" label="Account Credentials" tone="primary">
+                                <SectionBox icon={Lock} label="Account Credentials" tone="primary">
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         <div>
                                             <Label className="mb-1.5 required" htmlFor="modal-username">Username</Label>
@@ -229,7 +229,7 @@ export default function Settings() {
                                         </div>
                                     </div>
                                 </SectionBox>
-                                <SectionBox icon="person" label="Personal Information" tone="success">
+                                <SectionBox icon={User} label="Personal Information" tone="success">
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                         <div><Label className="mb-1.5" htmlFor="modal-fname">First Name</Label><Input id="modal-fname" value={formData.first_name} onChange={e => setFormData({ ...formData, first_name: e.target.value })} placeholder="First name" /></div>
                                         <div><Label className="mb-1.5" htmlFor="modal-lname">Last Name</Label><Input id="modal-lname" value={formData.last_name} onChange={e => setFormData({ ...formData, last_name: e.target.value })} placeholder="Last name" /></div>
@@ -237,7 +237,7 @@ export default function Settings() {
                                     </div>
                                 </SectionBox>
                                 {availableRoles.length > 0 && (
-                                    <SectionBox icon="shield-check" label="Roles" tone="info">
+                                    <SectionBox icon={ShieldCheck} label="Roles" tone="info">
                                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                                             {availableRoles.map(code => {
                                                 const checked = formData.roles.includes(code);
@@ -253,7 +253,7 @@ export default function Settings() {
                                         </div>
                                     </SectionBox>
                                 )}
-                                <SectionBox icon="toggle-on" label="Account Status" tone="neutral">
+                                <SectionBox icon={ToggleRight} label="Account Status" tone="neutral">
                                     <div className="form-check form-switch">
                                         <input type="checkbox" className="form-check-input" role="switch" id="modal-is-active" checked={formData.is_active} onChange={e => setFormData({ ...formData, is_active: e.target.checked })} />
                                         <label className="form-check-label" htmlFor="modal-is-active">Active — allow this user to log in</label>
@@ -262,7 +262,8 @@ export default function Settings() {
                             </div>
                             <div style={{ padding: "12px 20px", borderTop: "1px solid var(--tb-border-soft)", background: "var(--tb-sunken)", display: "flex", gap: 8, justifyContent: "flex-end", flexShrink: 0 }}>
                                 <Button variant="outline-secondary" size="sm" onClick={handleCloseModal} disabled={saving}>Cancel</Button>
-                                <Button type="submit" variant="primary" size="sm" loading={saving} icon={saving ? null : (editingUser ? "check-lg" : "person-plus")}>
+                                <Button type="submit" variant="primary" size="sm" loading={saving}>
+                                    {!saving && (editingUser ? <Check className="size-4" aria-hidden="true" /> : <UserPlus className="size-4" aria-hidden="true" />)}
                                     {saving ? "Saving…" : editingUser ? "Update User" : "Create User"}
                                 </Button>
                             </div>

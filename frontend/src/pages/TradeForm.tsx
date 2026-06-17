@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import ConditionBadge from "../components/ConditionBadge";
@@ -12,7 +12,7 @@ import { ValidationRules } from "../utils/formValidation";
 import TransferLetterModal from "../components/TransferLetterModal";
 import {navigateToList} from "../utils/navigationUtils";
 import {useBackButton} from "../hooks/useBackButton";
-import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Building2, Calculator, CheckCircle, FileText, Link, List, Plus, SlidersHorizontal, Trash2, Wand2, X, XCircle } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Building2, Calculator, CheckCircle, FileText, IndianRupee, Link, List, Package, Percent, Plus, ShoppingCart, SlidersHorizontal, Store, Trash2, TrendingUp, Wand2, Weight, X, XCircle } from "lucide-react";
 
 export default function TradeForm() {
     const { id } = useParams();
@@ -116,18 +116,14 @@ export default function TradeForm() {
                 lines: lines
             }));
 
-            toast.update(loadingToastId, {
-                render: "BOE details loaded successfully",
-                type: "success",
-                isLoading: false,
-                autoClose: 2000
+            toast.success("BOE details loaded successfully", {
+                id: loadingToastId,
+                duration: 2000,
             });
         } catch (err) {
-            toast.update(loadingToastId, {
-                render: "Failed to fetch BOE details",
-                type: "error",
-                isLoading: false,
-                autoClose: 3000
+            toast.error("Failed to fetch BOE details", {
+                id: loadingToastId,
+                duration: 3000,
             });
         }
     }, [formData.boe, formData.lines, billingMode]);
@@ -866,10 +862,10 @@ export default function TradeForm() {
     };
 
     const directionMeta = {
-        PURCHASE:           { label: 'Purchase',            icon: 'cart-check',   color: 'var(--tb-brand)' },
-        SALE:               { label: 'Sale',                icon: 'shop',         color: 'var(--tb-success)' },
-        COMMISSION_PURCHASE:{ label: 'Commission Purchase', icon: 'percent',      color: 'var(--tb-warning)' },
-        COMMISSION_SALE:    { label: 'Commission Sale',     icon: 'graph-up',     color: 'var(--tb-brand)' },
+        PURCHASE:           { label: 'Purchase',            icon: ShoppingCart, color: 'var(--tb-brand)',   soft: 'var(--tb-brand-50)' },
+        SALE:               { label: 'Sale',                icon: Store,        color: 'var(--tb-success)', soft: 'var(--tb-success-soft)' },
+        COMMISSION_PURCHASE:{ label: 'Commission Purchase', icon: Percent,      color: 'var(--tb-warning)', soft: 'var(--tb-warning-soft)' },
+        COMMISSION_SALE:    { label: 'Commission Sale',     icon: TrendingUp,   color: 'var(--tb-brand)',   soft: 'var(--tb-brand-50)' },
     };
 
     return (
@@ -883,12 +879,16 @@ export default function TradeForm() {
                     </h4>
                     <small className="text-muted">
                         {isEdit ? 'Update trade details' : 'Create a new trade transaction'}
-                        {formData.direction && (
-                            <span className="ms-2 badge" style={{ background: `${directionMeta[formData.direction]?.color}20`, color: directionMeta[formData.direction]?.color, fontSize: 12 }}>
-                                <i className={`bi bi-${directionMeta[formData.direction]?.icon} mr-1`}></i>
-                                {directionMeta[formData.direction]?.label}
-                            </span>
-                        )}
+                        {formData.direction && (() => {
+                            const m = directionMeta[formData.direction];
+                            const Icon = m?.icon;
+                            return (
+                                <span className="ms-2 badge inline-flex items-center gap-1" style={{ background: m?.soft, color: m?.color, fontSize: 12 }}>
+                                    {Icon && <Icon className="size-3.5" aria-hidden="true" />}
+                                    {m?.label}
+                                </span>
+                            );
+                        })()}
                     </small>
                 </div>
                 <div className="flex gap-2">
@@ -932,20 +932,25 @@ export default function TradeForm() {
                                     TRANSACTION TYPE <span className="text-danger">*</span>
                                 </label>
                                 <div className="flex gap-2 flex-wrap">
-                                    {Object.entries(directionMeta).map(([val, m]) => (
-                                        <button key={val} type="button"
-                                            onClick={() => setFormData(prev => ({ ...prev, direction: val }))}
-                                            style={{
-                                                border: `2px solid ${formData.direction === val ? m.color : 'var(--tb-border-soft)'}`,
-                                                background: formData.direction === val ? `${m.color}18` : 'white',
-                                                color: formData.direction === val ? m.color : 'var(--tb-text-secondary)',
-                                                borderRadius: 'var(--tb-r-md)', padding: '8px 14px',
-                                                fontWeight: formData.direction === val ? '600' : '500',
-                                                fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
-                                            }}>
-                                            <i className={`bi bi-${m.icon} mr-1`}></i>{m.label}
-                                        </button>
-                                    ))}
+                                    {Object.entries(directionMeta).map(([val, m]) => {
+                                        const Icon = m.icon;
+                                        const active = formData.direction === val;
+                                        return (
+                                            <button key={val} type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, direction: val }))}
+                                                className="inline-flex items-center gap-1.5"
+                                                style={{
+                                                    border: `2px solid ${active ? m.color : 'var(--tb-border-soft)'}`,
+                                                    background: active ? m.soft : 'var(--tb-card-bg)',
+                                                    color: active ? m.color : 'var(--tb-text-secondary)',
+                                                    borderRadius: 'var(--tb-r-md)', padding: '8px 14px',
+                                                    fontWeight: active ? '600' : '500',
+                                                    fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
+                                                }}>
+                                                <Icon className="size-3.5" aria-hidden="true" />{m.label}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                             <div>
@@ -953,21 +958,26 @@ export default function TradeForm() {
                                     LICENSE TYPE <span className="text-danger">*</span>
                                 </label>
                                 <div className="flex gap-2">
-                                    {[{ val:'DFIA', label:'DFIA License', icon:'file-earmark-text', color:'var(--tb-brand)' },
-                                      { val:'INCENTIVE', label:'Incentive License', icon:'award', color:'var(--tb-warning)' }].map(m => (
-                                        <button key={m.val} type="button"
-                                            onClick={() => setFormData(prev => ({ ...prev, license_type: m.val, incentive_license: m.val === 'DFIA' ? null : prev.incentive_license }))}
-                                            style={{
-                                                border: `2px solid ${formData.license_type === m.val ? m.color : 'var(--tb-border-soft)'}`,
-                                                background: formData.license_type === m.val ? `${m.color}18` : 'white',
-                                                color: formData.license_type === m.val ? m.color : 'var(--tb-text-secondary)',
-                                                borderRadius: 'var(--tb-r-md)', padding: '8px 16px',
-                                                fontWeight: formData.license_type === m.val ? '600' : '500',
-                                                fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
-                                            }}>
-                                            <i className={`bi bi-${m.icon} mr-1`}></i>{m.label}
-                                        </button>
-                                    ))}
+                                    {[{ val:'DFIA', label:'DFIA License', icon: FileText, color:'var(--tb-brand)', soft:'var(--tb-brand-50)' },
+                                      { val:'INCENTIVE', label:'Incentive License', icon: Award, color:'var(--tb-warning)', soft:'var(--tb-warning-soft)' }].map(m => {
+                                        const Icon = m.icon;
+                                        const active = formData.license_type === m.val;
+                                        return (
+                                            <button key={m.val} type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, license_type: m.val, incentive_license: m.val === 'DFIA' ? null : prev.incentive_license }))}
+                                                className="inline-flex items-center gap-1.5"
+                                                style={{
+                                                    border: `2px solid ${active ? m.color : 'var(--tb-border-soft)'}`,
+                                                    background: active ? m.soft : 'var(--tb-card-bg)',
+                                                    color: active ? m.color : 'var(--tb-text-secondary)',
+                                                    borderRadius: 'var(--tb-r-md)', padding: '8px 16px',
+                                                    fontWeight: active ? '600' : '500',
+                                                    fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
+                                                }}>
+                                                <Icon className="size-3.5" aria-hidden="true" />{m.label}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -1240,7 +1250,7 @@ export default function TradeForm() {
                             {/* Show selected file name if new file selected */}
                             {formData.purchase_invoice_copy instanceof File && (
                                 <div className="mt-2">
-                                    <span className="chip chip-success">
+                                    <span className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium" style={{ background: 'var(--tb-success-soft)', color: 'var(--tb-success-text)' }}>
                                         <CheckCircle className="size-4" aria-hidden="true" />
                                         {formData.purchase_invoice_copy.name}
                                     </span>
@@ -1312,25 +1322,30 @@ export default function TradeForm() {
                             </div>
                             <div className="card-body">
                                 <div className="flex gap-2 flex-wrap">
-                                    {[{ val:'QTY', label:'By Quantity (KG × Rate)', icon:'weight' },
-                                      { val:'CIF_INR', label:'By CIF INR (%)', icon:'currency-rupee' },
-                                      { val:'FOB_INR', label:'By FOB INR (%)', icon:'box-seam' }].map(m => (
-                                        <button key={m.val} type="button"
-                                            onClick={() => {
-                                                setBillingMode(m.val);
-                                                setFormData(prev => ({ ...prev, lines: prev.lines.map(line => ({ ...line, mode: m.val })) }));
-                                            }}
-                                            style={{
-                                                border: `2px solid ${billingMode === m.val ? 'var(--tb-brand)' : 'var(--tb-border-soft)'}`,
-                                                background: billingMode === m.val ? 'rgba(37, 99, 235, 0.08)' : 'white',
-                                                color: billingMode === m.val ? 'var(--tb-brand)' : 'var(--tb-text-secondary)',
-                                                borderRadius: 'var(--tb-r-md)', padding: '8px 18px',
-                                                fontWeight: billingMode === m.val ? '600' : '500',
-                                                fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
-                                            }}>
-                                            <i className={`bi bi-${m.icon} mr-2`}></i>{m.label}
-                                        </button>
-                                    ))}
+                                    {[{ val:'QTY', label:'By Quantity (KG × Rate)', icon: Weight },
+                                      { val:'CIF_INR', label:'By CIF INR (%)', icon: IndianRupee },
+                                      { val:'FOB_INR', label:'By FOB INR (%)', icon: Package }].map(m => {
+                                        const Icon = m.icon;
+                                        const active = billingMode === m.val;
+                                        return (
+                                            <button key={m.val} type="button"
+                                                onClick={() => {
+                                                    setBillingMode(m.val);
+                                                    setFormData(prev => ({ ...prev, lines: prev.lines.map(line => ({ ...line, mode: m.val })) }));
+                                                }}
+                                                className="inline-flex items-center gap-1.5"
+                                                style={{
+                                                    border: `2px solid ${active ? 'var(--tb-brand)' : 'var(--tb-border-soft)'}`,
+                                                    background: active ? 'var(--tb-brand-50)' : 'var(--tb-card-bg)',
+                                                    color: active ? 'var(--tb-brand)' : 'var(--tb-text-secondary)',
+                                                    borderRadius: 'var(--tb-r-md)', padding: '8px 18px',
+                                                    fontWeight: active ? '600' : '500',
+                                                    fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
+                                                }}>
+                                                <Icon className="size-3.5" aria-hidden="true" />{m.label}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -1660,83 +1675,30 @@ export default function TradeForm() {
                                 <FileText className="size-4" aria-hidden="true" />Transfer Letter
                             </button>
                             {formData.direction === 'SALE' && (
-                                <div className="btn-group">
+                                <div className="flex items-center gap-1">
                                     <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(true)}
-                                        style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
+                                        style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Download Bill of Supply with signature & stamp">
                                         <FileText className="size-4" aria-hidden="true" />Bill of Supply
                                     </button>
-                                    <button type="button" className="flex items-center justify-center rounded border border-border bg-card px-2 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
-                                        data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
-                                        <span className="visually-hidden">Toggle Dropdown</span>
+                                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(false)}
+                                        style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Download without signature & stamp">
+                                        <XCircle className="size-4" aria-hidden="true" />Unsigned
                                     </button>
-                                    <ul className="dropdown-menu">
-                                        <li>
-                                            <a
-                                                className="dropdown-item"
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    handleDownloadPDF(true);
-                                                }}
-                                            >
-                                                <CheckCircle className="size-4" aria-hidden="true" />
-                                                With Signature & Stamp
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a
-                                                className="dropdown-item"
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    handleDownloadPDF(false);
-                                                }}
-                                            >
-                                                <XCircle className="size-4" aria-hidden="true" />
-                                                Without Signature & Stamp
-                                            </a>
-                                        </li>
-                                    </ul>
                                 </div>
                             )}
                             {formData.direction === 'PURCHASE' && (
-                                <div className="btn-group">
+                                <div className="flex items-center gap-1">
                                     <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPurchaseInvoice(true)}
-                                        style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
+                                        style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Download Purchase Invoice with signature & stamp">
                                         <FileText className="size-4" aria-hidden="true" />Purchase Invoice
                                     </button>
-                                    <button type="button" className="flex items-center justify-center rounded border border-border bg-card px-2 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
-                                        data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
-                                        <span className="visually-hidden">Toggle Dropdown</span>
-                                    </button>
-                                    <ul className="dropdown-menu">
-                                        <li>
-                                            <a
-                                                className="dropdown-item"
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    handleDownloadPurchaseInvoice(true);
-                                                }}
-                                            >
-                                                <CheckCircle className="size-4" aria-hidden="true" />
-                                                With Signature & Stamp
-                                            </a>
-                                        </li>
-                                        {formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
-                                            <li>
-                                                <a
-                                                    className="dropdown-item"
-                                                    href={formData.purchase_invoice_copy}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                >
-                                                    <FileText className="size-4" aria-hidden="true" />
-                                                    Original Invoice Copy
-                                                </a>
-                                            </li>
-                                        )}
-                                    </ul>
+                                    {formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
+                                        <a className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground no-underline cursor-pointer hover:bg-muted"
+                                            href={formData.purchase_invoice_copy} target="_blank" rel="noopener noreferrer"
+                                            style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Open the original uploaded invoice copy">
+                                            <FileText className="size-4" aria-hidden="true" />Original Copy
+                                        </a>
+                                    )}
                                 </div>
                             )}
                         </>

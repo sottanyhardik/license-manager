@@ -348,13 +348,13 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     return (
         <Dialog open={show} onOpenChange={(o) => !o && onHide()}>
             <DialogContent
-                className="max-h-[95vh] w-[95vw] max-w-[1400px] overflow-hidden p-0"
+                className="flex max-h-[95vh] w-[98vw] max-w-[1920px] flex-col overflow-hidden p-0"
                 // Hide default close button — we render our own in the header
                 style={{ '--dialog-close-display': 'none' } as React.CSSProperties}
             >
                 {/* Custom gradient header */}
                 <div
-                    className="flex items-center justify-between px-6 py-4 text-white"
+                    className="flex shrink-0 items-center justify-between px-6 py-4 text-white"
                     style={{ background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))' }}
                 >
                     <h5 className="flex items-center gap-2 text-[1.15rem] font-semibold tracking-tight text-white">
@@ -394,7 +394,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                         </button>
                     </div>
                 </div>
-                <div className="overflow-y-auto bg-muted/40" style={{ maxHeight: 'calc(95vh - 130px)', padding: '1.5rem' }}>
+                <div className="min-h-0 flex-1 overflow-y-auto bg-muted/40" style={{ padding: '1.5rem' }}>
                         {loading || !licenseData ? (
                             <div className="flex flex-col items-center gap-2 py-10 text-center">
                                 <Loader2 className="size-8 animate-spin text-primary" />

@@ -91,8 +91,8 @@ function LicenseWiseLedger({ data, navigate }) {
                                             <td colSpan={3} style={{ padding: '5px 12px', textAlign: 'right', fontSize: 12 }}>
                                                 Total — {company.company_name}
                                             </td>
-                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--tb-success-soft)' }}>{fmt(company.purchase_total)}</td>
-                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--tb-danger-border)' }}>
+                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: '#86efac' }}>{fmt(company.purchase_total)}</td>
+                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: '#fca5a5' }}>
                                                 {fmt(company.sale_total)}
                                                 <span style={{ marginLeft: '8px', color: plColor(company.profit_loss), fontSize: 11 }}>
                                                     P/L: {company.profit_loss >= 0 ? '+' : ''}{fmt(company.profit_loss)}

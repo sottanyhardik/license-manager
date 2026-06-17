@@ -369,10 +369,10 @@ export default function LicenseLedgerDetail() {
                                         <td colSpan={isDFIA ? 6 : 5} style={{ padding: '7px 10px', textAlign: 'right', fontSize: 12.5 }}>
                                             Total — {company.company_name}
                                         </td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--tb-success-soft)' }}>₹{formatIndianNumber(totalDebit, 2)}</td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--tb-danger-border)' }}>₹{formatIndianNumber(totalCredit, 2)}</td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--tb-brand-200)' }}>{formatIndianNumber(companyRunning, 2)}</td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: companyPL >= 0 ? 'var(--tb-success-soft)' : 'var(--tb-danger-border)' }}>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#86efac' }}>₹{formatIndianNumber(totalDebit, 2)}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#fca5a5' }}>₹{formatIndianNumber(totalCredit, 2)}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#fff' }}>{formatIndianNumber(companyRunning, 2)}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: companyPL >= 0 ? '#86efac' : '#fca5a5' }}>
                                             {companyPL !== 0 ? `${companyPL >= 0 ? '+' : ''}₹${formatIndianNumber(Math.abs(companyPL), 2)}` : '-'}
                                         </td>
                                     </tr>

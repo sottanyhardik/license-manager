@@ -976,7 +976,7 @@ export default function ItemReport() {
                                                                                 }}
                                                                                 title="View/Download merged documents"
                                                                             >
-                                                                                Copy
+                                                                                Docs
                                                                             </button>
                                                                         </div>
                                                                     </td>

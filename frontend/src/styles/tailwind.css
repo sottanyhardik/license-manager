@@ -94,3 +94,16 @@
     --font-sans: var(--tb-font);
     --font-mono: var(--tb-font-mono);
 }
+
+/* ── Fix: tabler.css sets `a { color: var(--tb-brand) }` which overrides
+      shadcn Button text color when Button uses `asChild` with a Link/anchor.
+      Reset anchor color to `inherit` inside any element that sets an explicit
+      text color (Tailwind text-* utilities), so the button's text-primary-foreground
+      class wins over the global anchor rule.  ──────────────────────────────── */
+a[class*="text-"],
+button[class*="text-"],
+[class*="bg-primary"] a,
+[class*="bg-secondary"] a,
+[class*="bg-destructive"] a {
+    color: inherit;
+}

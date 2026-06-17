@@ -247,8 +247,8 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                     {fieldKey.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
                 </h6>
                 <div className="table-responsive">
-                    <table className="table table-sm table-bordered mb-0">
-                        <thead className="table-light">
+                    <table className="table table-sm">
+                        <thead>
                         <tr>
                             {visibleFields.map(field => {
                                 // Hide headers based on billing mode for trade lines
@@ -356,8 +356,8 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
 
     return (
         <div className="table-responsive">
-            <table className="table table-hover">
-                <thead className="table-light">
+            <table className="table">
+                <thead>
                 <tr>
                     <th style={{width: "40px"}}></th>
                     {columns.map((col) => (

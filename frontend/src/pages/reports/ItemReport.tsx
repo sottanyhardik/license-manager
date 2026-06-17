@@ -738,18 +738,18 @@ export default function ItemReport() {
                                         <div>
                                             <Filter className="size-4" aria-hidden="true" />
                                             <strong>Active Filters:</strong>
-                                            {minBalance !== 200 && <span className="badge bg-primary ml-2">Min Balance: ₹{minBalance}</span>}
-                                            {minAvailQty !== 0 && <span className="badge bg-primary ml-2">Min Qty: {minAvailQty}</span>}
+                                            {minBalance !== 200 && <span className="chip chip-primary ml-2">Min Balance: ₹{minBalance}</span>}
+                                            {minAvailQty !== 0 && <span className="chip chip-primary ml-2">Min Qty: {minAvailQty}</span>}
                                             {licenseStatus !== 'active' && <span
                                                 className="badge bg-primary ml-2">Status: {licenseStatus.replace('_', ' ')}</span>}
-                                            {selectedCompanies.length > 0 && <span className="badge bg-primary ml-2">Incl. Companies: {selectedCompanies.length}</span>}
-                                            {excludeCompanies.length > 0 && <span className="badge bg-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>}
-                                            {isRestricted !== 'all' && <span className="badge bg-primary ml-2">Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span>}
-                                            {purchaseStatus.length > 0 && purchaseStatus.length < 6 && <span className="badge bg-primary ml-2">Purchase Status: {purchaseStatus.length}</span>}
-                                            {selectedItemNames.length > 0 && <span className="badge bg-primary ml-2">Item Names: {selectedItemNames.length}</span>}
-                                            {productDescSearch !== '' && <span className="badge bg-primary ml-2">Product Desc: "{productDescSearch}"</span>}
-                                            {hsnCodeSearch !== '' && <span className="badge bg-primary ml-2">HSN Code: "{hsnCodeSearch}"</span>}
-                                            {selectedNorms.length > 0 && <span className="badge bg-primary ml-2">Norms: {selectedNorms.length}</span>}
+                                            {selectedCompanies.length > 0 && <span className="chip chip-primary ml-2">Incl. Companies: {selectedCompanies.length}</span>}
+                                            {excludeCompanies.length > 0 && <span className="chip chip-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>}
+                                            {isRestricted !== 'all' && <span className="chip chip-primary ml-2">Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span>}
+                                            {purchaseStatus.length > 0 && purchaseStatus.length < 6 && <span className="chip chip-primary ml-2">Purchase Status: {purchaseStatus.length}</span>}
+                                            {selectedItemNames.length > 0 && <span className="chip chip-primary ml-2">Item Names: {selectedItemNames.length}</span>}
+                                            {productDescSearch !== '' && <span className="chip chip-primary ml-2">Product Desc: "{productDescSearch}"</span>}
+                                            {hsnCodeSearch !== '' && <span className="chip chip-primary ml-2">HSN Code: "{hsnCodeSearch}"</span>}
+                                            {selectedNorms.length > 0 && <span className="chip chip-primary ml-2">Norms: {selectedNorms.length}</span>}
                                         </div>
                                     </div>
                                 </div>
@@ -864,7 +864,7 @@ export default function ItemReport() {
 
                     {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
                         <div className="card">
-                            <div className="card-body p-0">
+                            <div className="card-body" style={{padding:0}}>
                                 <div className="table-responsive" style={{overflowX: 'auto'}}>
                                     <table className="table table-hover table-sm mb-0"
                                            style={{tableLayout: 'auto', minWidth: '1400px'}}>

@@ -16,7 +16,7 @@ export const FormField = ({
   fieldErrors = {},
   required = false,
   placeholder = '',
-  className = 'col-md-6',
+  className = '',
   ...props
 }) => {
   const error = getFieldError(fieldErrors, name);
@@ -53,7 +53,7 @@ export const FormTextArea = ({
   required = false,
   placeholder = '',
   rows = 3,
-  className = 'col-md-12',
+  className = '',
   ...props
 }) => {
   const error = getFieldError(fieldErrors, name);
@@ -89,7 +89,7 @@ export const FormSelect = ({
   options = [],
   fieldErrors = {},
   required = false,
-  className = 'col-md-6',
+  className = '',
   ...props
 }) => {
   const error = getFieldError(fieldErrors, name);

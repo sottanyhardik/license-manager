@@ -616,18 +616,18 @@ export default function ItemPivotReport() {
                                                 <Filter className="size-4" aria-hidden="true" />
                                                 <strong>Active Filters:</strong>
                                                 {!isDefaultPurchaseStatus && (
-                                                    <span className="badge bg-primary ml-2">
+                                                    <span className="chip chip-primary ml-2">
                                                         Purchase: {purchaseStatus.length > 0 ? purchaseStatus.join(', ') : 'none'}
                                                     </span>
                                                 )}
-                                                {minBalance !== 200 && <span className="badge bg-primary ml-2">Min Balance: ₹{minBalance}</span>}
+                                                {minBalance !== 200 && <span className="chip chip-primary ml-2">Min Balance: ₹{minBalance}</span>}
                                                 {licenseStatus !== 'active' && <span
                                                     className="badge bg-primary ml-2">Status: {licenseStatus.replace('_', ' ')}</span>}
-                                                {expiryDateFrom && <span className="badge bg-primary ml-2">Expiry From: {expiryDateFrom}</span>}
-                                                {expiryDateTo && <span className="badge bg-primary ml-2">Expiry To: {expiryDateTo}</span>}
+                                                {expiryDateFrom && <span className="chip chip-primary ml-2">Expiry From: {expiryDateFrom}</span>}
+                                                {expiryDateTo && <span className="chip chip-primary ml-2">Expiry To: {expiryDateTo}</span>}
                                                 {selectedCompanies.length > 0 && <span
                                                     className="badge bg-primary ml-2">Incl. Companies: {selectedCompanies.length}</span>}
-                                                {excludeCompanies.length > 0 && <span className="badge bg-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>}
+                                                {excludeCompanies.length > 0 && <span className="chip chip-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>}
                                             </div>
                                         </div>
                                     </div>
@@ -792,7 +792,7 @@ export default function ItemPivotReport() {
                                                     <Bell className="size-4" aria-hidden="true" />
                                                     Notification Number: {notification}
                                                     {notification === 'Unknown' && (
-                                                        <span className="badge bg-warning text-dark ml-2"
+                                                        <span className="chip chip-warning ml-2"
                                                               title="Notification number is blank or missing">
                                                             <TriangleAlert className="size-4" aria-hidden="true" />
                                                             Missing
@@ -803,9 +803,9 @@ export default function ItemPivotReport() {
                                                     {licenses.length} License{licenses.length !== 1 ? 's' : ''}
                                                 </small>
                                             </div>
-                                            <span className="badge bg-white text-dark">{licenses.length}</span>
+                                            <span className="chip chip-neutral">{licenses.length}</span>
                                         </div>
-                                        <div className="card-body p-0">
+                                        <div className="card-body" style={{padding:0}}>
                                             <div className="table-responsive" style={{overflowX: 'auto'}}>
                                                 <table className="table table-hover table-sm mb-0"
                                                        style={{tableLayout: 'auto', minWidth: '860px'}}>
@@ -1198,7 +1198,7 @@ export default function ItemPivotReport() {
                                                                                 <td className={`text-center ${hasData ? 'bg-light' : ''}`}>
                                                                                     {itemData.restriction !== null && itemData.restriction !== undefined ? (
                                                                                         <span
-                                                                                            className="badge bg-info">{itemData.restriction}%</span>
+                                                                                            className="chip chip-info">{itemData.restriction}%</span>
                                                                                     ) : '-'}
                                                                                 </td>
                                                                                 <td className={`text-end ${hasData ? 'bg-light font-semibold' : ''}`}>
@@ -1521,7 +1521,7 @@ export default function ItemPivotReport() {
                                                             .map((note, index) => (
                                                                 <div key={index} className="list-group-item border-start border-primary border-3">
                                                                     <div className="flex w-full justify-between items-start">
-                                                                        <span className="badge bg-primary rounded-pill mr-2">{index + 1}</span>
+                                                                        <span className="chip chip-primary mr-2">{index + 1}</span>
                                                                         <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
                                                                             {note.note_text}
                                                                         </p>
@@ -1545,7 +1545,7 @@ export default function ItemPivotReport() {
                                                             .map((condition, index) => (
                                                                 <div key={index} className="list-group-item border-start border-warning border-3">
                                                                     <div className="flex w-full justify-between items-start">
-                                                                        <span className="badge bg-warning text-dark rounded-pill mr-2">{index + 1}</span>
+                                                                        <span className="chip chip-warning mr-2">{index + 1}</span>
                                                                         <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
                                                                             {condition.condition_text}
                                                                         </p>

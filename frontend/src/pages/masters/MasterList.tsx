@@ -787,7 +787,7 @@ export default function MasterList() {
             />
 
             {/* Table */}
-            <div className="surface-card" style={{ marginTop: 16 }}>
+            <div className="surface-card mt-4">
                 <div style={{ padding: '14px 16px' }}>
                     {/* BOE Card Layout */}
                     {entityName === 'bill-of-entries' && (

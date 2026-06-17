@@ -1,48 +1,22 @@
 import React from "react";
+import { cn } from "@/lib/utils";
 
-/**
- * PageHeader — Tabler-style page header.
- *
- *   <PageHeader
- *     pretitle="Operations"
- *     title="Allotments"
- *     description="Manage incoming allotments and their licence allocations"
- *     actions={(
- *       <>
- *         <button className="btn btn-outline-secondary btn-sm">Export</button>
- *         <button className="btn btn-primary btn-sm">+ New</button>
- *       </>
- *     )}
- *   />
- */
 export default function PageHeader({
-    pretitle,
-    title,
-    description,
-    actions,
-    children,
+    pretitle, title, description, actions, children, className,
 }: {
-    pretitle?: React.ReactNode;
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    actions?: React.ReactNode;
-    children?: React.ReactNode;
+    pretitle?: React.ReactNode; title?: React.ReactNode;
+    description?: React.ReactNode; actions?: React.ReactNode;
+    children?: React.ReactNode; className?: string;
 }) {
     return (
-        <div className="page-header">
-            <div style={{ minWidth: 0 }}>
+        <div className={cn("page-header", className)}>
+            <div className="min-w-0 flex-1">
                 {pretitle && <div className="page-pretitle">{pretitle}</div>}
-                {title && <h1>{title}</h1>}
-                {description && (
-                    <div className="text-secondary" style={{ marginTop: 4, fontSize: "13.5px" }}>
-                        {description}
-                    </div>
-                )}
+                {title && <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">{title}</h1>}
+                {description && <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>}
                 {children}
             </div>
-            {actions && (
-                <div className="page-actions">{actions}</div>
-            )}
+            {actions && <div className="page-actions">{actions}</div>}
         </div>
     );
 }

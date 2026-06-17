@@ -469,7 +469,7 @@ export default function LicenseLedger() {
                         <Filter className="size-4" aria-hidden="true" />
                         <h6 className="mb-0 font-semibold">Filters & Search</h6>
                         {filters.company && (
-                            <span className="badge bg-info ml-1" style={{ fontSize: 11 }}>
+                            <span className="chip chip-info ml-1" style={{ fontSize: 11 }}>
                                 <Building2 className="size-4" aria-hidden="true" />{typeof filters.company === 'object' && filters.company !== null ? (filters.company as any).label : filters.company}
                             </span>
                         )}
@@ -557,7 +557,7 @@ export default function LicenseLedger() {
 
             {/* Company-wise Ledger */}
             <div className="card">
-                <div className="card-body p-0">
+                <div className="card-body" style={{padding:0}}>
                     {companyWiseLoading ? (
                         <div className="flex flex-col items-center gap-2 py-10 text-center">
                             <span className="inline-block size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />

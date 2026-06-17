@@ -593,7 +593,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             <Package className="size-4 mr-2" />
                                             Export Items
                                         </h5>
-                                        <table className="table table-hover" style={{
+                                        <table className="table" style={{
                                             marginBottom: '0',
                                             border: 'none'
                                         }}>
@@ -649,8 +649,8 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         {usageData.boes && usageData.boes.length > 0 ? (
                                                                             <div className="mb-3">
                                                                                 <strong>BOEs:</strong>
-                                                                                <table className="table table-sm table-bordered mt-2">
-                                                                                    <thead className="table-secondary">
+                                                                                <table className="table table-sm">
+                                                                                    <thead>
                                                                                         <tr>
                                                                                             <th>BOE Number</th>
                                                                                             <th>Date</th>
@@ -684,8 +684,8 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         {usageData.allotments && usageData.allotments.length > 0 && (
                                                                             <div>
                                                                                 <strong>Allotments:</strong>
-                                                                                <table className="table table-sm table-bordered mt-2">
-                                                                                    <thead className="table-secondary">
+                                                                                <table className="table table-sm">
+                                                                                    <thead>
                                                                                         <tr>
                                                                                             <th>Company</th>
                                                                                             <th>Qty</th>
@@ -735,7 +735,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             Import Items
                                         </h5>
                                         <div className="table-responsive">
-                                            <table className="table table-hover table-sm" style={{
+                                            <table className="table table-sm" style={{
                                                 marginBottom: '0',
                                                 border: 'none'
                                             }}>
@@ -942,8 +942,8 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                             {usageData.boes && usageData.boes.length > 0 ? (
                                                                                 <div className="mb-3">
                                                                                     <strong>BOEs:</strong>
-                                                                                    <table className="table table-sm table-bordered mt-2">
-                                                                                        <thead className="table-secondary">
+                                                                                    <table className="table table-sm">
+                                                                                        <thead>
                                                                                             <tr>
                                                                                                 <th>BOE Number</th>
                                                                                                 <th>Date</th>
@@ -977,8 +977,8 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                             {usageData.allotments && usageData.allotments.length > 0 ? (
                                                                                 <div>
                                                                                     <strong>Allotments:</strong>
-                                                                                    <table className="table table-sm table-bordered mt-2">
-                                                                                        <thead className="table-secondary">
+                                                                                    <table className="table table-sm">
+                                                                                        <thead>
                                                                                             <tr>
                                                                                                 <th>Company</th>
                                                                                                 <th>Qty</th>

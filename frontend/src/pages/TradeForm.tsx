@@ -925,7 +925,7 @@ export default function TradeForm() {
                             Trade Configuration
                         </h6>
                     </div>
-                    <div className="card-body p-4">
+                    <div className="card-body">
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
                                 <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
@@ -1145,7 +1145,7 @@ export default function TradeForm() {
                             Invoice & Reference Details
                         </h6>
                     </div>
-                    <div className="card-body p-4">
+                    <div className="card-body">
                 <div className="row mb-3">
                     <div>
                         <div className="flex justify-between items-center mb-2">
@@ -1240,7 +1240,7 @@ export default function TradeForm() {
                             {/* Show selected file name if new file selected */}
                             {formData.purchase_invoice_copy instanceof File && (
                                 <div className="mt-2">
-                                    <span className="badge bg-success">
+                                    <span className="chip chip-success">
                                         <CheckCircle className="size-4" aria-hidden="true" />
                                         {formData.purchase_invoice_copy.name}
                                     </span>
@@ -1310,7 +1310,7 @@ export default function TradeForm() {
                                     Billing Mode
                                 </h6>
                             </div>
-                            <div className="card-body p-4">
+                            <div className="card-body">
                                 <div className="flex gap-2 flex-wrap">
                                     {[{ val:'QTY', label:'By Quantity (KG × Rate)', icon:'weight' },
                                       { val:'CIF_INR', label:'By CIF INR (%)', icon:'currency-rupee' },
@@ -1352,7 +1352,7 @@ export default function TradeForm() {
                                     <Plus className="size-4" aria-hidden="true" />Add Row
                                 </button>
                             </div>
-                            <div className="card-body p-0">
+                            <div className="card-body" style={{padding:0}}>
                         <div className="table-responsive">
                     <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
                         <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid #e5e7eb' }}>
@@ -1549,7 +1549,7 @@ export default function TradeForm() {
                                     <Plus className="size-4" aria-hidden="true" />Add Row
                                 </button>
                             </div>
-                            <div className="card-body p-0">
+                            <div className="card-body" style={{padding:0}}>
                         <div className="table-responsive">
                             <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
                                 <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid #e5e7eb' }}>

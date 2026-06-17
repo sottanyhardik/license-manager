@@ -93,9 +93,9 @@ export default function DataTable({
                 );
             }
             return value ? (
-                <span className="badge bg-success">Yes</span>
+                <span className="chip chip-success">Yes</span>
             ) : (
-                <span className="badge bg-secondary">No</span>
+                <span className="chip chip-neutral">No</span>
             );
         }
         if (columnName && (columnName.includes("date") || columnName.includes("_at") || columnName.includes("_on"))) {
@@ -177,7 +177,7 @@ export default function DataTable({
 
     return (
         <div className="table-responsive-mobile">
-            <table className="table table-hover mb-0">
+            <table className="table">
                 <thead>
                     <tr>
                         {columns.map(col => (

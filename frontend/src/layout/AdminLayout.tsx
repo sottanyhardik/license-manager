@@ -53,7 +53,7 @@ export default function AdminLayout({ children }) {
                                     key={a.to}
                                     type="button"
                                     onClick={() => navigate(a.to)}
-                                    className={a.primary ? "btn btn-primary btn-sm" : "btn btn-outline-secondary btn-sm"}
+                                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${a.primary ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border border-border bg-card text-muted-foreground hover:bg-muted"}`}
                                     style={{ fontSize: 12, height: 30, display: "inline-flex", alignItems: "center", gap: 5 }}
                                 >
                                     <i className={`bi bi-${a.icon}`} aria-hidden="true" style={{ fontSize: 12 }} />

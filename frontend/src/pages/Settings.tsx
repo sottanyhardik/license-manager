@@ -141,7 +141,7 @@ export default function Settings() {
                         {users.length}
                     </span>
                 </div>
-                <div className="card-body p-0">
+                <div className="card-body" style={{padding:0}}>
                     <div className="table-responsive">
                         <table className="table table-hover mb-0">
                             <thead>
@@ -165,7 +165,7 @@ export default function Settings() {
                                                 </div>
                                                 <div>
                                                     <div style={{ fontSize: 13, fontWeight: 500 }}>{user.username}</div>
-                                                    {user.is_superuser && <span className="badge bg-danger" style={{ fontSize: 10 }}>Superuser</span>}
+                                                    {user.is_superuser && <span className="chip chip-danger" style={{ fontSize: 10 }}>Superuser</span>}
                                                 </div>
                                             </div>
                                         </td>

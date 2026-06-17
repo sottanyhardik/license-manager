@@ -539,7 +539,7 @@ export default function TaskDrawer({ show, onClose }) {
                                 onChange={(e) => setDraft(d => ({ ...d, due_date: e.target.value }))}
                             />
                         </div>
-                        <div className="col-12">
+                        <div className="w-full">
                             <select
                                 className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                 value={draft.assigned_to}
@@ -553,7 +553,7 @@ export default function TaskDrawer({ show, onClose }) {
                                 ))}
                             </select>
                         </div>
-                        <div className="col-12">
+                        <div className="w-full">
                             <textarea
                                 className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
                                 placeholder="Description (optional)"
@@ -562,7 +562,7 @@ export default function TaskDrawer({ show, onClose }) {
                                 onChange={(e) => setDraft(d => ({ ...d, description: e.target.value }))}
                             />
                         </div>
-                        <div className="col-12 flex justify-end">
+                        <div className="flex justify-end">
                             <button type="submit" className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90 disabled:opacity-50" disabled={saving}>
                                 {saving ? "Saving..." : "Add task"}
                             </button>
@@ -652,7 +652,7 @@ export default function TaskDrawer({ show, onClose }) {
                                                 {STATUS_LABEL[task.status] || task.status}
                                             </span>
                                             {bouncedBack && (
-                                                <span className="badge bg-warning text-dark" style={{ fontSize: "0.65rem" }}>
+                                                <span className="chip chip-warning" style={{ fontSize: "0.65rem" }}>
                                                     Bounced back
                                                 </span>
                                             )}
@@ -751,7 +751,7 @@ export default function TaskDrawer({ show, onClose }) {
                                                     onChange={(e) => handleInlineUpdate(task, { due_date: e.target.value || null })}
                                                 />
                                             </div>
-                                            <div className="col-12">
+                                            <div className="w-full">
                                                 <select
                                                     className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                                     value={task.assigned_to || ""}

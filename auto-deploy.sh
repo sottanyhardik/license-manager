@@ -31,7 +31,22 @@ SERVER_USER="django"
 ALL_SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
 BRANCH="${1:-feature/Version5}"
-PASSWORD="admin"
+PASSWORD="${DEPLOY_PASSWORD:-}"          # set: export DEPLOY_PASSWORD=admin
+
+if [ -z "$PASSWORD" ]; then
+    print_error "DEPLOY_PASSWORD is not set. Run: export DEPLOY_PASSWORD=yourpassword"
+    exit 1
+fi
+
+# Map server IP → short name (used to pick the right .env file)
+get_server_name() {
+    case "$1" in
+        "143.110.252.201") echo "license-manager" ;;
+        "139.59.92.226")   echo "labdhi" ;;
+        "165.232.185.220") echo "tractor" ;;
+        *) echo "unknown" ;;
+    esac
+}
 
 # Target: single server or all
 if [ -n "$2" ]; then
@@ -76,12 +91,20 @@ get_server_meta() {
     esac
 }
 
-# ── SSH helper ───────────────────────────────────────────────
+# ── SSH / SCP helpers ────────────────────────────────────────
 ssh_cmd() {
     if command -v sshpass &>/dev/null; then
-        sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "$@"
+        sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR "$SERVER_USER@$SERVER_IP" "$@"
     else
-        ssh "$SERVER_USER@$SERVER_IP" "$@"
+        ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "$@"
+    fi
+}
+scp_cmd() {
+    local src="$1" dest="$2"
+    if command -v sshpass &>/dev/null; then
+        sshpass -p "$PASSWORD" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR "$src" "$SERVER_USER@$SERVER_IP:$dest"
+    else
+        scp -o StrictHostKeyChecking=no "$src" "$SERVER_USER@$SERVER_IP:$dest"
     fi
 }
 
@@ -91,6 +114,19 @@ deploy_to_server() {
     get_server_meta "$SERVER_IP"
 
     print_header "🚀 Deploying to $SERVER_IP ($SERVER_DOMAIN)"
+
+    # ── Upload server-specific .env ──────────────────────────
+    local ENV_NAME
+    ENV_NAME=$(get_server_name "$SERVER_IP")
+    local ENV_FILE
+    ENV_FILE="$(dirname "$(realpath "$0")")/server-envs/${ENV_NAME}.env"
+    if [ -f "$ENV_FILE" ]; then
+        print_info "Uploading .env for $ENV_NAME..."
+        scp_cmd "$ENV_FILE" "$SERVER_PATH/backend/.env"
+        print_success ".env uploaded to $SERVER_PATH/backend/.env"
+    else
+        print_warn "No env file found at $ENV_FILE — server will use existing .env or process env"
+    fi
 
     ssh_cmd bash << ENDSSH
 set -e

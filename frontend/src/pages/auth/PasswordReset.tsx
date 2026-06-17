@@ -47,7 +47,7 @@ export default function PasswordReset() {
                         <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl border border-white/20 bg-white/15 backdrop-blur-sm">
                             <KeyRound className="size-7" />
                         </div>
-                        <h1 className="text-2xl font-bold tracking-tight">Forgot Password</h1>
+                        <h1 className="text-2xl font-bold tracking-tight text-white">Forgot Password</h1>
                         <p className="mt-1.5 text-sm text-white/80">Enter your email to receive reset instructions</p>
                     </div>
 

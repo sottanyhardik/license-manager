@@ -332,12 +332,17 @@ html, body {
 @supports (overflow: clip) { html, body { overflow-x: clip; } }
 @supports not (overflow: clip) { html { overflow-x: hidden; } }
 
-h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5, h6, .h6 {
-    font-family: var(--tb-font);
-    color: var(--tb-text);
-    font-weight: var(--tb-fw-semibold);
-    margin-top: 0;
-    letter-spacing: -0.015em;
+/* In @layer base so Tailwind text-* utilities (e.g. text-white on a heading over
+   a colored header) can override the default heading color. Unlayered, this rule
+   would beat layered utilities regardless of specificity (Tailwind v4 cascade). */
+@layer base {
+    h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5, h6, .h6 {
+        font-family: var(--tb-font);
+        color: var(--tb-text);
+        font-weight: var(--tb-fw-semibold);
+        margin-top: 0;
+        letter-spacing: -0.015em;
+    }
 }
 h1, .h1 { font-size: var(--tb-fs-2xl); line-height: 1.2; }
 h2, .h2 { font-size: var(--tb-fs-xl);  line-height: 1.25; }

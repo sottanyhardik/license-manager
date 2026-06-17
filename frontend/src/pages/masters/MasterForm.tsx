@@ -1659,7 +1659,7 @@ export default function MasterForm({
                                         maxHeight: '60px',
                                         maxWidth: '100px',
                                         objectFit: 'contain',
-                                        border: '1px solid #ddd',
+                                        border: '1px solid var(--tb-border)',
                                         borderRadius: 'var(--tb-r-sm)',
                                         padding: '4px'
                                     }}
@@ -2280,7 +2280,7 @@ export default function MasterForm({
                                             );
                                         })}
                                         {remainingFields.length > 0 && (
-                                            <div style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid #9ca3af' }}>
+                                            <div style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-border-strong)' }}>
                                                 <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-text-secondary)', marginBottom: '14px' }}>
                                                     <MoreHorizontal className="size-4" aria-hidden="true" /> Other Fields
                                                 </div>

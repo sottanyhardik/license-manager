@@ -1109,7 +1109,7 @@ export default function MasterList() {
                                             boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                                         }}>
                                             {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid var(--tb-border)', flexWrap: 'wrap' }}>
                                                 <span style={{ fontWeight: '700', fontSize: 16, color: 'var(--tb-brand-active)', marginRight: '4px' }}>
                                                     {item.license_number || '-'}
                                                 </span>
@@ -1173,7 +1173,7 @@ export default function MasterList() {
                                             </div>
 
                                             {/* Row 2: Norm class + Transfer */}
-                                            <div style={{ padding: '10px 14px', background: 'var(--tb-card-bg)', borderBottom: '1px solid #e2e8f0' }}>
+                                            <div style={{ padding: '10px 14px', background: 'var(--tb-card-bg)', borderBottom: '1px solid var(--tb-border)' }}>
                                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
                                                     {item.get_norm_class && (
                                                         <div style={{ minWidth: '120px' }}>
@@ -1475,7 +1475,7 @@ export default function MasterList() {
                                     return (
                                         <div key={item.id} style={{ display: 'block', background: 'var(--tb-card-bg)', border: `1px solid ${soldStyle.border}`, borderLeft: `4px solid ${soldStyle.left}`, borderRadius: 'var(--tb-r-md)', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                                             {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid var(--tb-border)', flexWrap: 'wrap' }}>
                                                 <span style={{ fontWeight: '700', fontSize: 16, color: 'var(--tb-brand-active)', marginRight: '4px' }}>{item.license_number || '-'}</span>
                                                 {item.license_type && (
                                                     <span style={{ fontSize: 12, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>{item.license_type}</span>
@@ -1895,7 +1895,7 @@ export default function MasterList() {
                                             display: 'flex',
                                             alignItems: 'center',
                                             background: 'var(--tb-card-bg)',
-                                            border: '1px solid #e2e8f0',
+                                            border: '1px solid var(--tb-border)',
                                             borderLeft: '4px solid #4f46e5',
                                             borderRadius: 'var(--tb-r-md)',
                                             marginBottom: '6px',
@@ -2023,7 +2023,7 @@ export default function MasterList() {
                             <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px', fontSize: 14 }}>No unlinked trades found for "{linkSearch}"</div>
                         )}
                         {linkResults.map(t => (
-                            <div key={t.id} {...clickable(() => confirmLink(t))} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 'var(--tb-r-md)', marginBottom: '8px', cursor: 'pointer', transition: 'background 0.15s' }}
+                            <div key={t.id} {...clickable(() => confirmLink(t))} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--tb-border)', borderRadius: 'var(--tb-r-md)', marginBottom: '8px', cursor: 'pointer', transition: 'background 0.15s' }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'var(--tb-info-soft)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                 <div>
@@ -2131,7 +2131,7 @@ export default function MasterList() {
                         )}
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
-                            <button onClick={closeMergeModal} style={{ padding: '6px 16px', borderRadius: 'var(--tb-r-sm)', border: '1px solid #e2e8f0', background: 'var(--tb-sunken)', cursor: 'pointer', fontSize: 14 }}>
+                            <button onClick={closeMergeModal} style={{ padding: '6px 16px', borderRadius: 'var(--tb-r-sm)', border: '1px solid var(--tb-border)', background: 'var(--tb-sunken)', cursor: 'pointer', fontSize: 14 }}>
                                 Cancel
                             </button>
                             <button

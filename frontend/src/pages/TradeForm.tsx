@@ -1370,7 +1370,7 @@ export default function TradeForm() {
                             <div className="card-body" style={{padding:0}}>
                         <div className="table-responsive">
                     <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
-                        <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid #e5e7eb' }}>
+                        <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
                             <tr>
                                 <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "3%" }}>#</th>
                                 <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "22%" }}>License (SR)</th>
@@ -1567,7 +1567,7 @@ export default function TradeForm() {
                             <div className="card-body" style={{padding:0}}>
                         <div className="table-responsive">
                             <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
-                                <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid #e5e7eb' }}>
+                                <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
                                     <tr>
                                         <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "5%" }}>#</th>
                                         <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "40%" }}>Incentive License</th>

@@ -766,7 +766,7 @@ export default function TaskDrawer({ show, onClose }) {
                                         </div>
 
                                         {/* Remarks */}
-                                        <div className="border rounded p-2" style={{ background: "#fafbfc" }}>
+                                        <div className="border rounded p-2" style={{ background: "var(--tb-sunken)" }}>
                                             <div className="small font-semibold mb-1">Remarks</div>
                                             <div className="flex gap-2 mb-2">
                                                 <input

@@ -116,7 +116,7 @@ export default function HybridSelect({
                     control: (base) => ({
                         ...base,
                         minHeight: "38px",
-                        borderColor: "#dee2e6",
+                        borderColor: "var(--tb-border)",
                     }),
                     menu: (base) => ({ ...base, zIndex: 9999 }),
                 }}

@@ -1179,7 +1179,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         gap: '6px',
                                         padding: '6px 12px',
                                         background: 'var(--tb-sunken)',
-                                        borderBottom: '1px solid #e2e8f0',
+                                        borderBottom: '1px solid var(--tb-border)',
                                     }}>
                                         <button
                                             onClick={async () => {
@@ -1365,7 +1365,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     )}
 
                     {!tableLoading && availableItems.length === 0 && (
-                        <div className="text-center py-5" style={{ border: '2px dashed #d1d5db', borderRadius: 'var(--tb-r-md)', background: 'var(--tb-card-bg)' }}>
+                        <div className="text-center py-5" style={{ border: '2px dashed var(--tb-border)', borderRadius: 'var(--tb-r-md)', background: 'var(--tb-card-bg)' }}>
                             <Inbox className="size-4" aria-hidden="true" />
                             <div className="font-semibold text-muted-foreground mb-1">No available license items found</div>
                             <small className="text-muted">Try adjusting the filters above</small>

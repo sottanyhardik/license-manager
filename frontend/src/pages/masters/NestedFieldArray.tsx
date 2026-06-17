@@ -259,7 +259,7 @@ export default function NestedFieldArray({
                                 ...base,
                                 minHeight: "34px",
                                 height: "auto",
-                                borderColor: hasError ? "#dc3545" : (isHighlighted ? "#ffc107" : "#dee2e6"),
+                                borderColor: hasError ? "#dc3545" : (isHighlighted ? "#ffc107" : "var(--tb-border)"),
                                 boxShadow: hasError ? "0 0 0 0.2rem rgba(220, 53, 69, 0.25)" : (state.isFocused ? "0 0 0 0.2rem rgba(13, 110, 253, 0.25)" : "none")
                             }),
                             valueContainer: (base) => ({
@@ -402,7 +402,7 @@ export default function NestedFieldArray({
                             control: (base, state) => ({
                                 ...base,
                                 minHeight: "34px",
-                                borderColor: hasError ? "#dc3545" : (isHighlighted ? "#ffc107" : "#dee2e6"),
+                                borderColor: hasError ? "#dc3545" : (isHighlighted ? "#ffc107" : "var(--tb-border)"),
                                 boxShadow: hasError ? "0 0 0 0.2rem rgba(220, 53, 69, 0.25)" : (state.isFocused ? "0 0 0 0.2rem rgba(13, 110, 253, 0.25)" : "none")
                             }),
                             menu: (base) => ({

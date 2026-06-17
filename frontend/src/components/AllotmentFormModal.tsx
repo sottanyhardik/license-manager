@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, Building2, Check, DollarSign, FileText, Loader2, Package, ToggleRight, TriangleAlert, X } from "lucide-react";
 
 export default function AllotmentFormModal({ show, onHide, allotmentId = null, mode = 'create', onSuccess, onSaveNavigate }) {
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<Record<string, any>>({
         company: null,
         type: 'AT',
         port: null,
         item_name: '',
+        item_name_fk: null,
         required_quantity: '',
         cif_inr: '',
         exchange_rate: '',
@@ -40,6 +41,9 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                     type: data.type || 'AT',
                     port: data.port ? { value: data.port, label: data.port_name } : null,
                     item_name: data.item_name || '',
+                    item_name_fk: data.item_name_fk
+                        ? { value: data.item_name_fk, label: data.item_name_fk_display || data.item_name }
+                        : null,
                     required_quantity: data.required_quantity || '',
                     cif_inr: data.cif_inr || '',
                     exchange_rate: data.exchange_rate || '',
@@ -73,6 +77,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                     type: 'AT',
                     port: null,
                     item_name: '',
+                    item_name_fk: null,
                     required_quantity: '',
                     cif_inr: '',
                     exchange_rate: defaultRate,
@@ -91,6 +96,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                     type: 'AT',
                     port: null,
                     item_name: '',
+                    item_name_fk: null,
                     required_quantity: '',
                     cif_inr: '',
                     exchange_rate: '',
@@ -129,6 +135,20 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
         }
     };
 
+    const loadItemNameOptions = async (inputValue: string) => {
+        try {
+            const { data } = await api.get('masters/item-names/', {
+                params: { search: inputValue, page_size: 50, is_active: true }
+            });
+            return (data.results || data).map((item: Record<string, any>) => ({
+                value: item.id,
+                label: item.name,
+            }));
+        } catch {
+            return [];
+        }
+    };
+
     const loadPortOptions = async (inputValue) => {
         try {
             const { data } = await api.get('masters/ports/', {
@@ -151,11 +171,12 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
         setNonFieldErrors([]);
 
         try {
-            const payload = {
+            const payload: Record<string, any> = {
                 company: formData.company?.value,
                 type: formData.type,
                 port: formData.port?.value,
-                item_name: formData.item_name,
+                item_name_fk: formData.item_name_fk?.value || null,
+                item_name: formData.item_name_fk?.label || formData.item_name,
                 required_quantity: formData.required_quantity,
                 cif_inr: formData.cif_inr,
                 exchange_rate: formData.exchange_rate,
@@ -361,13 +382,29 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Item Name</label>
-                                                <input
-                                                    type="text"
-                                                    className={`form-control ${getFieldErrorClass(fieldErrors, 'item_name')}`}
-                                                    value={formData.item_name}
-                                                    onChange={(e) => handleChange('item_name', e.target.value)}
-                                                    placeholder="Enter item name"
+                                                <AsyncSelect
+                                                    cacheOptions
+                                                    defaultOptions
+                                                    value={formData.item_name_fk}
+                                                    loadOptions={loadItemNameOptions}
+                                                    onChange={(option) => {
+                                                        handleChange('item_name_fk', option);
+                                                        if (option) handleChange('item_name', option.label);
+                                                    }}
+                                                    placeholder="Search item name..."
+                                                    isClearable
+                                                    className={getFieldError(fieldErrors, 'item_name_fk') || getFieldError(fieldErrors, 'item_name') ? 'is-invalid' : ''}
                                                 />
+                                                {/* Free-text fallback for items not in master */}
+                                                {!formData.item_name_fk && (
+                                                    <input
+                                                        type="text"
+                                                        className={`form-control mt-1.5 ${getFieldErrorClass(fieldErrors, 'item_name')}`}
+                                                        value={formData.item_name}
+                                                        onChange={(e) => handleChange('item_name', e.target.value)}
+                                                        placeholder="Or type item name manually..."
+                                                    />
+                                                )}
                                                 {getFieldError(fieldErrors, 'item_name') && (
                                                     <div className="invalid-feedback" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'item_name')}</div>
                                                 )}

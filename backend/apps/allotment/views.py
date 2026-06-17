@@ -46,7 +46,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
     AllotmentModel,
     AllotmentSerializer,
     config={
-        "search": ["item_name", "company__name", "invoice", "bl_detail",
+        "search": ["item_name", "item_name_fk__name", "company__name", "invoice", "bl_detail",
                    "allotment_details__item__license__license_number"],
         "filter": {
             "license_number": {"type": "text", "label": "License Number"},
@@ -61,6 +61,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "modified_on": {"type": "date_range"},
             "is_boe": {"type": "exact"},
             "is_allotted": {"type": "exact"},
+            "item_name_fk": {"type": "fk", "fk_endpoint": "/masters/item-names/", "label_field": "name"},
         },
         "list_display": [
             "modified_on",
@@ -79,6 +80,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "company",
             "type",
             "port",
+            "item_name_fk",
             "item_name",
             "required_quantity",
             "cif_inr",
@@ -113,10 +115,17 @@ AllotmentViewSet = MasterViewSet.create_viewset(
                 "label_field": "name",
                 "required": True
             },
+            "item_name_fk": {
+                "type": "fk",
+                "fk_endpoint": "/masters/item-names/",
+                "label_field": "name",
+                "label": "Item Name",
+                "required": False,
+            },
             "item_name": {
                 "type": "text",
-                "required": True,
-                "label": "Item Name"
+                "required": False,
+                "label": "Item Name (free text fallback)",
             },
             "port": {
                 "type": "fk",
@@ -153,7 +162,7 @@ AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)
 AllotmentViewSet.permission_classes = [AllotmentPermission]
 AllotmentViewSet.filterset_class = AllotmentFilterSet
 AllotmentViewSet.filter_backends = [DjangoFilterBackend, CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
-AllotmentViewSet.search_fields = ['item_name', 'company__name', 'invoice', 'bl_detail', 'port__name']
+AllotmentViewSet.search_fields = ['item_name', 'item_name_fk__name', 'company__name', 'invoice', 'bl_detail', 'port__name']
 AllotmentViewSet.ordering_fields = ['estimated_arrival_date', 'modified_on', 'company__name', 'item_name']
 
 # Add default filters and performance optimizations
@@ -167,7 +176,7 @@ def custom_get_queryset_with_defaults(self):
     qs = original_get_queryset(self)
 
     # Add select_related for FK fields to avoid N+1 queries
-    qs = qs.select_related('company', 'port', 'related_company')
+    qs = qs.select_related('company', 'port', 'related_company', 'item_name_fk')
 
     # Prefetch related allotment_details and their nested relationships
     qs = qs.prefetch_related(

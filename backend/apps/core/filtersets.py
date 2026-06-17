@@ -355,11 +355,10 @@ class ItemReportFilterSet(filters.FilterSet):
     purchase_status = filters.CharFilter(method='filter_purchase_status')
 
     def filter_item_names(self, queryset, name, value):
-        """Filter by comma-separated item name IDs."""
+        """Filter by comma-separated ItemNameModel IDs via item_name_fk FK."""
         if value:
             ids = [int(x.strip()) for x in value.split(',') if x.strip().isdigit()]
-            # Assuming queryset has items relationship
-            return queryset.filter(items__id__in=ids).distinct()
+            return queryset.filter(item_name_fk__id__in=ids).distinct()
         return queryset
 
     def filter_company_ids(self, queryset, name, value):

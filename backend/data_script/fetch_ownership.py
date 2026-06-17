@@ -10,14 +10,18 @@ def fetch_scrip_ownership(
     app_id: str,
     session_id: str,
     csrf_token: str,
-    proxy: str = None
+    proxy: str = None,
+    aws_alb: str = None,
 ):
     """
     Fetch the current ownership and transfer status of a scrip from DGFT.
 
     Args:
-        proxy: Optional proxy URL (e.g., "http://proxy.example.com:8080" or "socks5://proxy.example.com:1080")
-               If not provided, will check DGFT_PROXY environment variable
+        proxy:   Optional proxy URL (e.g., "http://proxy.example.com:8080" or "socks5://proxy.example.com:1080")
+                 If not provided, will check DGFT_PROXY environment variable.
+        aws_alb: Optional AWSALB sticky-session cookie. DGFT now sits behind an
+                 AWS load balancer; without this, requests can be routed to a
+                 backend instance that doesn't recognize JSESSIONID.
     """
     url = "https://www.dgft.gov.in/CP/webHP"
 
@@ -40,8 +44,10 @@ def fetch_scrip_ownership(
     }
 
     cookies = {
-        "JSESSIONID": session_id
+        "JSESSIONID": session_id,
     }
+    if aws_alb:
+        cookies["AWSALB"] = aws_alb
 
     params = {
         "requestType": "ApplicationRH",

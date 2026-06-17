@@ -2,10 +2,15 @@ import datetime
 from django.db import transaction
 from django.db.models import Q
 
-from bill_of_entry.models import BillOfEntryModel, RowDetails
-from core.models import CompanyModel, PortModel
-from core.scripts.calculate_balance import update_balance_values
-from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
+from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.core.models import CompanyModel, NotificationNumber, PortModel, SchemeCode
+from apps.core.scripts.calculate_balance import update_balance_values
+from apps.license.models import (
+    LicenseBalance,
+    LicenseDetailsModel,
+    LicenseExportItemModel,
+    LicenseImportItemsModel,
+)
 
 
 def parse_date(date_str):
@@ -123,8 +128,8 @@ def bulk_get_or_create_license_items(type_credit_list, license, skip_signals=Fal
         skip_signals: If True, temporarily disable post_save signals during bulk operations
     """
     from django.db.models.signals import post_save, post_delete
-    from license.models import update_balance
-    from license.signals import update_license_on_import_item_change, update_license_on_import_item_delete
+    from apps.license.models import update_balance
+    from apps.license.signals import update_license_on_import_item_change, update_license_on_import_item_delete
 
     license_import_list = [
         LicenseImportItemsModel(
@@ -180,7 +185,12 @@ def bulk_get_or_create_license_items(type_credit_list, license, skip_signals=Fal
 
 
 def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
-    """Bulk create Bill of Entry records."""
+    """Bulk create Bill of Entry records.
+
+    Dedup is by (bill_of_entry_number, bill_of_entry_date) — matching the unique
+    constraint on the model. If a BOE with the same number+date already exists
+    with a different port, the existing record wins; we do not create a duplicate.
+    """
     # Skip debit rows with missing be_number or port — can't create/find a BOE without them
     type_debit_list = [
         item for item in type_debit_list
@@ -191,7 +201,6 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
 
     unique_bill_entries = {}
 
-    # Normalize date format and deduplicate by (be_number, be_date)
     for item in type_debit_list:
         try:
             date_object = datetime.datetime.strptime(item["be_date"], "%Y/%m/%d")
@@ -201,43 +210,37 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
                 item["be_date"] = item["be_date"].strftime("%Y-%m-%d")
             except AttributeError:
                 pass
-        key = (item["be_number"], item["be_date"], existing_ports[item["port"]])
+        key = (item["be_number"], item["be_date"])
         unique_bill_entries[key] = item
 
-    fetch_numbers = set((k[0], k[1], k[2].id) for k in unique_bill_entries.keys())
-
-    # Fetch existing (be_number, be_date, port) to skip them
     existing = BillOfEntryModel.objects.filter(
-        bill_of_entry_number__in=[k[0] for k in fetch_numbers],
-        bill_of_entry_date__in=[k[1] for k in fetch_numbers],
-        port_id__in=[k[2] for k in fetch_numbers]
+        bill_of_entry_number__in=[k[0] for k in unique_bill_entries.keys()],
+        bill_of_entry_date__in=[k[1] for k in unique_bill_entries.keys()],
     )
 
-    # Build a set of (be_number, be_date, port_model) already in DB
-    # Guard against BOEs that have a null port in the database
     existing_set = set(
-        (be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d'), existing_ports.get(be.port.code) if be.port else None)
+        (be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d'))
         for be in existing
     )
 
     to_create = []
-    for (be_number, be_date, port_id), item in unique_bill_entries.items():
-        if (be_number, be_date, port_id) not in existing_set:
+    for (be_number, be_date), item in unique_bill_entries.items():
+        if (be_number, be_date) not in existing_set:
+            port_model = existing_ports[item["port"]]
             to_create.append(
                 BillOfEntryModel(
                     bill_of_entry_number=be_number,
                     bill_of_entry_date=be_date,
-                    port_id=port_id.id,
+                    port_id=port_model.id,
                 )
             )
 
     with transaction.atomic():
         BillOfEntryModel.objects.bulk_create(to_create)
 
-    # Return all related entries
     result = BillOfEntryModel.objects.filter(
-        bill_of_entry_number__in=[item['be_number'] for item in type_debit_list],
-        bill_of_entry_date__in=[item['be_date'] for item in type_debit_list]
+        bill_of_entry_number__in=[k[0] for k in unique_bill_entries.keys()],
+        bill_of_entry_date__in=[k[1] for k in unique_bill_entries.keys()],
     )
 
     return {
@@ -248,12 +251,15 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
 
 def delete_stale_boe_rows(license, new_debit_row, skip_signals=False):
     """
-    Delete debit RowDetails for this license that no longer appear in the
-    freshly uploaded ledger CSV.  Returns the count of deleted rows.
-    """
-    from django.db.models.signals import post_delete
-    from bill_of_entry.models import delete_stock
+    Flag debit RowDetails for this license that no longer appear in the
+    freshly uploaded ledger CSV as dispute (is_dispute=True) instead of
+    deleting them, so they can be reviewed and resolved manually.
 
+    Also clears the dispute flag on rows that ARE present in the new upload
+    (re-upload of the same ledger resolves the dispute).
+
+    Returns a tuple: (flagged_count, resolved_count).
+    """
     # Build the set of (boe_id, sr_number_id) present in the new upload
     new_row_keys = set()
     for data in new_debit_row:
@@ -263,29 +269,37 @@ def delete_stale_boe_rows(license, new_debit_row, skip_signals=False):
             new_row_keys.add((boe.id, licence.id))
 
     # Fetch all existing debit RowDetails for this license
-    existing_rows = RowDetails.objects.filter(
-        sr_number__license=license,
-        transaction_type='D'
-    ).select_related('bill_of_entry', 'sr_number')
+    existing_rows = list(
+        RowDetails.objects.filter(
+            sr_number__license=license,
+            transaction_type='D'
+        ).select_related('bill_of_entry', 'sr_number')
+    )
 
-    stale_ids = [
-        rd.id for rd in existing_rows
-        if (rd.bill_of_entry_id, rd.sr_number_id) not in new_row_keys
-    ]
+    stale_ids   = []
+    present_ids = []
+    for rd in existing_rows:
+        key = (rd.bill_of_entry_id, rd.sr_number_id)
+        if key not in new_row_keys:
+            stale_ids.append(rd.id)
+        else:
+            present_ids.append(rd.id)
 
-    if not stale_ids:
-        return 0
+    # Flag stale rows as dispute
+    flagged_count = 0
+    if stale_ids:
+        flagged_count = RowDetails.objects.filter(
+            id__in=stale_ids, is_dispute=False
+        ).update(is_dispute=True)
 
-    if skip_signals:
-        post_delete.disconnect(delete_stock, sender=RowDetails)
+    # Clear dispute flag on rows that appear in the new upload
+    resolved_count = 0
+    if present_ids:
+        resolved_count = RowDetails.objects.filter(
+            id__in=present_ids, is_dispute=True
+        ).update(is_dispute=False)
 
-    try:
-        deleted_count, _ = RowDetails.objects.filter(id__in=stale_ids).delete()
-    finally:
-        if skip_signals:
-            post_delete.connect(delete_stock, sender=RowDetails)
-
-    return deleted_count
+    return flagged_count, resolved_count
 
 
 def bulk_get_or_create_boe(boe_row, skip_signals=False):
@@ -297,7 +311,7 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
         skip_signals: If True, temporarily disable post_save signals during bulk operations
     """
     from django.db.models.signals import post_save, post_delete
-    from bill_of_entry.models import update_stock, delete_stock
+    from apps.bill_of_entry.models import update_stock, delete_stock
 
     # Skip rows that are missing licence (import item) — can't create RowDetails without it
     valid_items = [item for item in boe_row if item.get('licence') is not None]
@@ -315,6 +329,15 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
             is_frozen=True,  # Rows from ledger upload are frozen — cannot be edited from frontend
         ) for item in valid_items
     ]
+
+    # Sort by (bill_of_entry_id, sr_number_id) so the FK share-locks Postgres
+    # takes on parent BOE/LicenseImportItem rows are acquired in a deterministic
+    # global order — prevents deadlocks between concurrent uploads that share BOEs.
+    row_details_list.sort(key=lambda r: (
+        r.bill_of_entry_id or 0,
+        r.sr_number_id or 0,
+        r.transaction_type,
+    ))
 
     with transaction.atomic():
         # Build the existence query correctly for both credit (null BOE) and debit rows.
@@ -377,14 +400,18 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
 def _recalculate_boe_exchange_rates_for_rows(debit_row):
     """After bulk_create (which skips signals), force-recalculate exchange_rate for
     each unique BOE in the debit rows. force=True always writes the computed rate,
-    overriding whatever was stored before (ledger is the authoritative source)."""
-    from bill_of_entry.models import _recalculate_boe_exchange_rate
-    seen = set()
-    for data in debit_row:
-        boe = data.get('boe')
-        if boe and boe.pk and boe.pk not in seen:
-            seen.add(boe.pk)
-            _recalculate_boe_exchange_rate(boe.pk, force=True)
+    overriding whatever was stored before (ledger is the authoritative source).
+
+    BOE PKs are sorted before iteration so concurrent uploads acquire row locks in
+    the same global order, preventing deadlocks on overlapping BOEs.
+    """
+    from apps.bill_of_entry.models import _recalculate_boe_exchange_rate
+    boe_pks = sorted({
+        data['boe'].pk for data in debit_row
+        if data.get('boe') and data['boe'].pk
+    })
+    for pk in boe_pks:
+        _recalculate_boe_exchange_rate(pk, force=True)
 
 
 def create_object(data_dict):
@@ -400,6 +427,18 @@ def create_object(data_dict):
 def _create_object_inner(data_dict):
     # Get or create company
     company, _ = CompanyModel.objects.get_or_create(iec=data_dict['iec'])
+    scheme_code = None
+    if data_dict.get('scheme_code'):
+        scheme_code, _ = SchemeCode.objects.get_or_create(
+            code=data_dict['scheme_code'],
+            defaults={'label': data_dict['scheme_code']},
+        )
+    notification_number = None
+    if data_dict.get('notification'):
+        notification_number, _ = NotificationNumber.objects.get_or_create(
+            code=data_dict['notification'],
+            defaults={'label': data_dict['notification']},
+        )
 
     # Update or create license
     license, _ = LicenseDetailsModel.objects.update_or_create(
@@ -407,13 +446,22 @@ def _create_object_inner(data_dict):
         defaults={
             'license_date': datetime.datetime.strptime(data_dict['lic_date'], '%d/%m/%Y').strftime('%Y-%m-%d'),
             'exporter_id': company.pk,
-            'notification_number': data_dict['notification'],
+            'notification_number': notification_number,
             'registration_number': data_dict['registration_no'],
             'registration_date': datetime.datetime.strptime(data_dict['registration_date'], '%d/%m/%Y').strftime('%Y-%m-%d'),
             'port': PortModel.objects.get_or_create(code=data_dict['port'])[0],
-            'scheme_code': data_dict['scheme_code'],
-            'ledger_date': data_dict['ledger_date'].strftime('%Y-%m-%d') if isinstance(data_dict['ledger_date'], datetime.datetime) else data_dict['ledger_date']
+            'scheme_code': scheme_code,
         }
+    )
+    LicenseBalance.objects.update_or_create(
+        license=license,
+        defaults={
+            'ledger_date': (
+                data_dict['ledger_date'].strftime('%Y-%m-%d')
+                if isinstance(data_dict['ledger_date'], datetime.datetime)
+                else data_dict['ledger_date']
+            )
+        },
     )
 
     # Update or create export item
@@ -469,8 +517,13 @@ def _create_object_inner(data_dict):
     bulk_get_or_create_boe(debit_row, skip_signals=True)
     bulk_get_or_create_boe(credit_row, skip_signals=True)
 
-    # Remove debit rows that were in the DB but are no longer in the new CSV
-    delete_stale_boe_rows(license, debit_row, skip_signals=True)
+    # Flag debit rows missing from the new CSV as dispute (is_dispute=True).
+    # Rows present in the new CSV get their dispute flag cleared automatically.
+    flagged, resolved = delete_stale_boe_rows(license, debit_row, skip_signals=True)
+    if flagged:
+        logger.warning("Ledger upload: %d row(s) not found in ledger — flagged as dispute for %s", flagged, license.license_number)
+    if resolved:
+        logger.info("Ledger upload: %d dispute(s) resolved for %s", resolved, license.license_number)
 
     # Recalculate exchange rate for each debit BOE — bulk_create skips signals so
     # the post_save recalc never fires; we must do it explicitly here.

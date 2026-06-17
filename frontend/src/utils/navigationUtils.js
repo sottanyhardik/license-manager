@@ -66,7 +66,7 @@ export const navigateToEdit = (navigate, entityName, id, currentFilters = {}) =>
         'licenses': `/licenses/${id}/edit`,
         'allotments': `/allotments/${id}/edit`,
         'trades': `/trades/${id}/edit`,
-        'bill-of-entries': `/masters/bill-of-entries/${id}/edit`,
+        'bill-of-entries': `/bill-of-entries/${id}/edit`,
         'incentive-licenses': `/incentive-licenses/${id}/edit`
     };
 
@@ -97,7 +97,7 @@ export const navigateToCreate = (navigate, entityName, currentFilters = {}) => {
         'licenses': '/licenses/create',
         'allotments': '/allotments/create',
         'trades': '/trades/create',
-        'bill-of-entries': '/masters/bill-of-entries/create',
+        'bill-of-entries': '/bill-of-entries/create',
         'incentive-licenses': '/incentive-licenses/create'
     };
 

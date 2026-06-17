@@ -1,0 +1,388 @@
+/*
+ * ============================================================
+ *  Tailwind v4 + shadcn/ui entry  ·  License Manager
+ *
+ *  COEXISTENCE STRATEGY (migration phase):
+ *  - Preflight (Tailwind's CSS reset) is intentionally NOT
+ *    imported. It would reset Bootstrap's base styles and
+ *    break every not-yet-migrated page. We only pull in the
+ *    `theme` (token → utility generation) and `utilities`
+ *    layers. Preflight gets re-enabled in Phase 4 once
+ *    Bootstrap is removed.
+ *  - shadcn semantic variables (--background, --primary, …)
+ *    are bridged onto the existing --tb-* design tokens so
+ *    both styling systems render pixel-identical, and dark
+ *    mode (driven by [data-theme="dark"]) flips both at once.
+ * ============================================================
+ */
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+/* Dark mode is driven by [data-theme="dark"] on <html>, not the
+   default `.dark` class — point Tailwind's `dark:` variant at it. */
+@custom-variant dark (&:is([data-theme="dark"] *));
+
+
+/* Preflight is now fully enabled (Bootstrap removed). */
+
+
+/* ── shadcn semantic tokens → bridged onto --tb-* ──────────── */
+:root {
+    --background:            var(--tb-body-bg);
+    --foreground:            var(--tb-text);
+    --card:                  var(--tb-card-bg);
+    --card-foreground:       var(--tb-text);
+    --popover:               var(--tb-card-bg);
+    --popover-foreground:    var(--tb-text);
+    --primary:               var(--tb-brand);
+    --primary-foreground:    #ffffff;
+    --secondary:             var(--tb-sunken);
+    --secondary-foreground:  var(--tb-text);
+    --muted:                 var(--tb-sunken);
+    --muted-foreground:      var(--tb-text-secondary);
+    --accent:                var(--tb-brand-50);
+    --accent-foreground:     var(--tb-brand-active);
+    --destructive:           var(--tb-danger);
+    --destructive-foreground:#ffffff;
+    --success:               var(--tb-success);
+    --warning:               var(--tb-warning);
+    --info:                  var(--tb-info);
+    --border:                var(--tb-border);
+    --input:                 var(--tb-border);
+    --ring:                  var(--tb-brand);
+
+    --radius:                10px;
+}
+
+
+/* ── Map bridged vars into Tailwind's theme so utilities like
+      bg-background / text-foreground / border-border exist ──── */
+@theme inline {
+    --color-background:            var(--background);
+    --color-foreground:            var(--foreground);
+    --color-card:                  var(--card);
+    --color-card-foreground:       var(--card-foreground);
+    --color-popover:               var(--popover);
+    --color-popover-foreground:    var(--popover-foreground);
+    --color-primary:               var(--primary);
+    --color-primary-foreground:    var(--primary-foreground);
+    --color-secondary:             var(--secondary);
+    --color-secondary-foreground:  var(--secondary-foreground);
+    --color-muted:                 var(--muted);
+    --color-muted-foreground:      var(--muted-foreground);
+    --color-accent:                var(--accent);
+    --color-accent-foreground:     var(--accent-foreground);
+    --color-destructive:           var(--destructive);
+    --color-destructive-foreground:var(--destructive-foreground);
+    --color-success:               var(--success);
+    --color-warning:               var(--warning);
+    --color-info:                  var(--info);
+    --color-border:                var(--border);
+    --color-input:                 var(--input);
+    --color-ring:                  var(--ring);
+
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+
+    --font-sans: var(--tb-font);
+    --font-mono: var(--tb-font-mono);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   COMPONENT LAYER — Agent 4+7: Centralized design tokens so zero
+   page needs inline styles or Bootstrap class fallbacks.
+   Every pattern here replaces a recurring inline style or Bootstrap
+   class. Adding to this layer benefits all 105 pages at once.
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+@layer components {
+
+  /* ── Layout & Page ─────────────────────────────────────── */
+  .page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--tb-border-soft);
+  }
+  .page-pretitle {
+    margin-bottom: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tb-text-secondary);
+  }
+  .page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── Surface / Card ────────────────────────────────────── */
+  .surface-card,
+  .ui-card {
+    overflow: hidden;
+    border-radius: var(--tb-r-xl);
+    border: 1px solid var(--tb-border);
+    background: var(--tb-card-bg);
+    box-shadow: var(--tb-shadow-1);
+  }
+  .card-header,
+  .ui-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--tb-border-soft);
+    background: var(--tb-card-bg);
+    border-radius: var(--tb-r-xl) var(--tb-r-xl) 0 0;
+  }
+  .card-body,
+  .ui-card-body {
+    padding: 20px;
+  }
+  .card-header.border-bottom { border-bottom: 1px solid var(--tb-border-soft); }
+
+  /* ── Tables ────────────────────────────────────────────── */
+  .table,
+  .ui-table {
+    width: 100%;
+    font-size: 13px;
+    border-collapse: collapse;
+  }
+  .table thead tr,
+  .table-light,
+  .ui-table thead tr {
+    background: var(--tb-sunken);
+    border-bottom: 2px solid var(--tb-border);
+  }
+  .table thead th,
+  .ui-table thead th {
+    padding: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--tb-text-secondary);
+    white-space: nowrap;
+  }
+  .table tbody tr,
+  .ui-table tbody tr {
+    border-bottom: 1px solid var(--tb-border-soft);
+    transition: background 150ms ease;
+  }
+  .table-hover tbody tr:hover,
+  .ui-table tbody tr:hover {
+    background: color-mix(in srgb, var(--tb-brand) 4%, transparent);
+  }
+  .table tbody td,
+  .ui-table tbody td {
+    padding: 8px;
+    vertical-align: middle;
+  }
+  .table-sm thead th,
+  .table-sm tbody td {
+    padding: 6px 8px;
+    font-size: 12.5px;
+  }
+  .table tfoot tr,
+  .table-secondary,
+  .ui-table tfoot tr {
+    background: var(--tb-sunken);
+    border-top: 2px solid var(--tb-border);
+  }
+  .table tfoot th,
+  .table tfoot td,
+  .ui-table tfoot th,
+  .ui-table tfoot td {
+    padding: 8px;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .table-bordered td,
+  .table-bordered th {
+    border: 1px solid var(--tb-border-soft);
+  }
+
+  /* ── Badges ────────────────────────────────────────────── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+  .badge.bg-primary,   .badge-primary   { background: var(--tb-brand-50);     color: var(--tb-brand); }
+  .badge.bg-success,   .badge-success   { background: var(--tb-success-soft);  color: var(--tb-success-text); }
+  .badge.bg-danger,    .badge-danger    { background: var(--tb-danger-soft);   color: var(--tb-danger-text); }
+  .badge.bg-warning,   .badge-warning   { background: var(--tb-warning-soft);  color: var(--tb-warning-text); }
+  .badge.bg-info,      .badge-info      { background: var(--tb-info-soft);     color: var(--tb-info-text); }
+  .badge.bg-secondary, .badge-secondary { background: var(--tb-sunken);        color: var(--tb-text-secondary); }
+  .badge.bg-white { background: var(--tb-card-bg); color: var(--tb-text); border: 1px solid var(--tb-border); }
+  .badge.text-dark { color: var(--tb-text) !important; }
+  .badge.rounded-pill { border-radius: 999px; }
+  .badge.bg-primary.rounded-pill,
+  .badge.bg-warning.rounded-pill,
+  .badge.bg-danger.rounded-pill { border-radius: 999px; }
+
+  /* ── Buttons (Bootstrap compat fallback) ───────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    border-radius: var(--tb-r-md);
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    transition: all 200ms ease-out;
+    border: 1px solid transparent;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: var(--tb-r-sm); }
+  .btn-lg { padding: 9px 20px; font-size: 14.5px; }
+
+  .btn-primary     { background: var(--tb-brand);         color: #fff;    border-color: var(--tb-brand); }
+  .btn-primary:hover { background: var(--tb-brand-hover); border-color: var(--tb-brand-hover); }
+  .btn-secondary   { background: var(--tb-sunken);        color: var(--tb-text);   border-color: var(--tb-border); }
+  .btn-secondary:hover { background: var(--tb-border-soft); }
+  .btn-success     { background: var(--tb-success);       color: #fff;    border-color: var(--tb-success); }
+  .btn-success:hover { opacity: 0.9; }
+  .btn-danger      { background: var(--tb-danger);        color: #fff;    border-color: var(--tb-danger); }
+  .btn-danger:hover  { opacity: 0.9; }
+  .btn-warning     { background: var(--tb-warning);       color: #fff;    border-color: var(--tb-warning); }
+  .btn-warning:hover { opacity: 0.9; }
+  .btn-info        { background: var(--tb-info);          color: #fff;    border-color: var(--tb-info); }
+  .btn-info:hover    { opacity: 0.9; }
+
+  .btn-outline-primary { background: transparent; color: var(--tb-brand);        border-color: var(--tb-brand); }
+  .btn-outline-primary:hover { background: var(--tb-brand-50); }
+  .btn-outline-secondary { background: transparent; color: var(--tb-text-secondary); border-color: var(--tb-border); }
+  .btn-outline-secondary:hover { background: var(--tb-sunken); }
+  .btn-outline-success { background: transparent; color: var(--tb-success-text); border-color: var(--tb-success); }
+  .btn-outline-success:hover { background: var(--tb-success-soft); }
+  .btn-outline-danger  { background: transparent; color: var(--tb-danger-text);  border-color: var(--tb-danger); }
+  .btn-outline-danger:hover  { background: var(--tb-danger-soft); }
+  .btn-outline-warning { background: transparent; color: var(--tb-warning-text); border-color: var(--tb-warning); }
+  .btn-outline-warning:hover { background: var(--tb-warning-soft); }
+  .btn-outline-info    { background: transparent; color: var(--tb-info-text);    border-color: var(--tb-info); }
+  .btn-outline-info:hover    { background: var(--tb-info-soft); }
+
+  /* ── Status chip (semantic, not Bootstrap) ─────────────── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .chip-primary { background: var(--tb-brand-50);    color: var(--tb-brand); }
+  .chip-success { background: var(--tb-success-soft); color: var(--tb-success-text); }
+  .chip-warning { background: var(--tb-warning-soft); color: var(--tb-warning-text); }
+  .chip-danger  { background: var(--tb-danger-soft);  color: var(--tb-danger-text); }
+  .chip-info    { background: var(--tb-info-soft);    color: var(--tb-info-text); }
+  .chip-neutral { background: var(--tb-sunken);       color: var(--tb-text-secondary); }
+
+  /* ── Section label ─────────────────────────────────────── */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tb-text-secondary);
+  }
+
+  /* ── Alert/Feedback ────────────────────────────────────── */
+  .alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    border-radius: var(--tb-r-md);
+    padding: 12px 16px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .alert-success { background: var(--tb-success-soft); color: var(--tb-success-text); border: 1px solid var(--tb-success-border); }
+  .alert-danger  { background: var(--tb-danger-soft);  color: var(--tb-danger-text);  border: 1px solid var(--tb-danger-border); }
+  .alert-warning { background: var(--tb-warning-soft); color: var(--tb-warning-text); border: 1px solid var(--tb-warning-border); }
+  .alert-info    { background: var(--tb-info-soft);    color: var(--tb-info-text);    border: 1px solid var(--tb-info-border); }
+  .btn-close { background: none; border: none; cursor: pointer; padding: 2px; opacity: 0.5; }
+  .btn-close:hover { opacity: 1; }
+
+  /* ── Interactive transitions (Agent 1 spec) ────────────── */
+  button, [role="button"], .btn, a.btn {
+    transition: all 200ms ease-out;
+  }
+  button:active:not(:disabled), [role="button"]:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* ── Compact helper classes ────────────────────────────── */
+  .text-secondary { color: var(--tb-text-secondary); }
+  .text-muted     { color: var(--tb-text-secondary); }
+  .text-tertiary  { color: var(--tb-text-tertiary); }
+  .flex-fill      { flex: 1 1 auto; }
+  .input-group {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+  }
+  .input-group-text {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 13px;
+    color: var(--tb-text-secondary);
+    background: var(--tb-sunken);
+    border: 1px solid var(--tb-border);
+    border-right: none;
+    border-radius: var(--tb-r-md) 0 0 var(--tb-r-md);
+  }
+  .input-group .flex { flex: 1; }
+  .input-group .flex input,
+  .input-group .flex .form-control { border-radius: 0 var(--tb-r-md) var(--tb-r-md) 0 !important; }
+
+  /* ── Placeholder/skeleton ──────────────────────────────── */
+  .placeholder-glow .placeholder { animation: placeholder-glow 1.5s ease-in-out infinite; }
+  .placeholder { display: inline-block; background: var(--tb-border); border-radius: 4px; }
+  @keyframes placeholder-glow {
+    50% { opacity: 0.3; }
+  }
+}
+
+/* ── Fix: tabler.css sets `a { color: var(--tb-brand) }` which overrides
+      shadcn Button text color when <Button asChild><Link> renders as <a>.
+      Only reset <a> elements — NOT <button> elements, whose text-* classes
+      (e.g. text-primary-foreground = white) must NOT be inherited.  ────── */
+a[class*="text-"],
+[class*="bg-primary"] > a,
+[class*="bg-primary"] a[class*="text-"],
+[class*="bg-secondary"] a[class*="text-"],
+[class*="bg-destructive"] a[class*="text-"] {
+    color: inherit;
+}

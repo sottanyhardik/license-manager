@@ -5,7 +5,7 @@
  * action page, including fetching data, handling allocations, and filtering.
  */
 
-import {useState, useEffect, useCallback} from 'react';
+import {useState, useEffect, useCallback, useRef} from 'react';
 import {allotmentApi} from '../../services/api';
 import {allocationCalculator} from '../../services/calculators';
 import {usePagination} from '../usePagination';
@@ -48,45 +48,24 @@ export const useAllotmentAction = (allotmentId) => {
     // API calls tracker
     const {execute, isLoading, getError} = useMultipleApiCalls();
 
-    // Fetch notification options on mount
-    useEffect(() => {
-        fetchNotificationOptions();
-    }, []);
-
-    // Auto-set description filter from allotment item_name on first load
-    useEffect(() => {
-        if (isFirstLoad && allotment?.item_name) {
-            setFilters(prev => ({...prev, description: allotment.item_name}));
-            setIsFirstLoad(false);
-        }
-    }, [allotment, isFirstLoad]);
-
-    // Fetch data when filters change (reset to page 1)
-    useEffect(() => {
-        pagination.goToPage(1);
-        fetchData(1);
-    }, [debouncedSearch, debouncedFilters]);
-
-    // Fetch data when page changes
-    useEffect(() => {
-        if (pagination.currentPage > 1) {
-            fetchData(pagination.currentPage);
-        }
-    }, [pagination.currentPage]);
+    // Stable accessors for state that fetchData reads but should not re-create on
+    const isFirstFetchRef = useRef(true);
+    const paginationRef = useRef(pagination);
+    paginationRef.current = pagination;
 
     // Fetch notification options
-    const fetchNotificationOptions = async () => {
+    const fetchNotificationOptions = useCallback(async () => {
         try {
             const choices = await allotmentApi.fetchNotificationOptions();
             setNotificationOptions(choices);
         } catch (err) {
             console.error('Failed to load notification options:', err);
         }
-    };
+    }, []);
 
     // Fetch available licenses
-    const fetchData = async (page = 1) => {
-        if (allotment === null) {
+    const fetchData = useCallback(async (page = 1) => {
+        if (isFirstFetchRef.current) {
             setInitialLoading(true);
         } else {
             setTableLoading(true);
@@ -97,7 +76,7 @@ export const useAllotmentAction = (allotmentId) => {
             const params = {
                 search: debouncedSearch,
                 page,
-                page_size: pagination.pageSize,
+                page_size: paginationRef.current.pageSize,
                 ...Object.fromEntries(
                     Object.entries(debouncedFilters).filter(([_, value]) => value)
                 )
@@ -109,15 +88,42 @@ export const useAllotmentAction = (allotmentId) => {
             setAvailableItems(data.available_items || data.results || []);
 
             if (data.count !== undefined) {
-                pagination.setTotalItems(data.count);
+                paginationRef.current.setTotalItems(data.count);
             }
+            isFirstFetchRef.current = false;
         } catch (err) {
             setError(err.response?.data?.detail || 'Failed to load data');
         } finally {
             setInitialLoading(false);
             setTableLoading(false);
         }
-    };
+    }, [allotmentId, debouncedSearch, debouncedFilters]);
+
+    // Fetch notification options on mount
+    useEffect(() => {
+        fetchNotificationOptions();
+    }, [fetchNotificationOptions]);
+
+    // Auto-set description filter from allotment item_name on first load
+    useEffect(() => {
+        if (isFirstLoad && allotment?.item_name) {
+            setFilters(prev => ({...prev, description: allotment.item_name}));
+            setIsFirstLoad(false);
+        }
+    }, [allotment, isFirstLoad]);
+
+    // Fetch data when filters change (reset to page 1)
+    useEffect(() => {
+        paginationRef.current.goToPage(1);
+        fetchData(1);
+    }, [fetchData]);
+
+    // Fetch data when page changes
+    useEffect(() => {
+        if (pagination.currentPage > 1) {
+            fetchData(pagination.currentPage);
+        }
+    }, [pagination.currentPage, fetchData]);
 
     // Calculate max allocation for an item
     const calculateMaxAllocation = useCallback((item) => {

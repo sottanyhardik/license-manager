@@ -1,434 +1,379 @@
 #!/bin/bash
+# ============================================================
+#  Auto-Deploy Script — License Manager
+#  Deploys to all production servers, handles SSL certs and
+#  nginx config automatically.
+#
+#  Usage:
+#    ./auto-deploy.sh [BRANCH]          — deploy to all servers
+#    ./auto-deploy.sh [BRANCH] <IP>     — deploy to one server only
+#
+#  Requires:
+#    sshpass  →  sudo apt install sshpass   (or brew install sshpass)
+#    DuckDNS token stored on each server at ~/duckdns.env:
+#      DUCKDNS_TOKEN=your_token_here
+# ============================================================
 
-# Automated Deployment Script for License Manager
-# Deploys to multiple servers sequentially
-# Usage: ./auto-deploy.sh
-# Password: admin (hardcoded)
-
-set -e  # Exit on error
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Configuration
-SERVER_USER="django"
-SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
-SERVER_PATH="/home/django/license-manager"
-BRANCH="master"
-PASSWORD="admin"
-
-print_header() {
-    echo -e "\n${BLUE}================================================${NC}"
-    echo -e "${BLUE}$1${NC}"
-    echo -e "${BLUE}================================================${NC}\n"
-}
-
-print_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-print_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
-print_info() {
-    echo -e "${BLUE}→ $1${NC}"
-}
-
-# Function to deploy to a single server
-deploy_to_server() {
-    local SERVER_IP=$1
-
-    print_header "🚀 Starting Deployment to $SERVER_IP"
-
-    # Check if sshpass is installed, if not use expect
-    if command -v sshpass &> /dev/null; then
-        print_info "Using sshpass for authentication"
-        SSH_CMD="sshpass -p '$PASSWORD' ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP"
-        SUDO_CMD="echo '$PASSWORD' | sudo -S"
-    else
-        print_info "Using SSH (password will be prompted if needed)"
-        SSH_CMD="ssh $SERVER_USER@$SERVER_IP"
-        SUDO_CMD="sudo"
-    fi
-
-    # Execute deployment via SSH
-    $SSH_CMD bash << ENDSSH
 set -e
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# ── Colors ──────────────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'
 
-echo -e "\${BLUE}→ Navigating to project directory...\${NC}"
-cd $SERVER_PATH
+print_header()  { echo -e "\n${BLUE}================================================${NC}"; echo -e "${BLUE}$1${NC}"; echo -e "${BLUE}================================================${NC}\n"; }
+print_success() { echo -e "${GREEN}✅ $1${NC}"; }
+print_error()   { echo -e "${RED}❌ $1${NC}"; }
+print_warn()    { echo -e "${YELLOW}⚠️  $1${NC}"; }
+print_info()    { echo -e "${BLUE}→ $1${NC}"; }
 
-echo -e "\${BLUE}→ Stashing local changes if any...\${NC}"
-git stash
+# ── Configuration ───────────────────────────────────────────
+SERVER_USER="django"
+ALL_SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
+SERVER_PATH="/home/django/license-manager"
+BRANCH="${1:-develop}"
+PASSWORD="${DEPLOY_PASSWORD:-}"          # set: export DEPLOY_PASSWORD=admin
 
-echo -e "\${BLUE}→ Removing untracked files that would block merge...\${NC}"
-git clean -fd
+if [ -z "$PASSWORD" ]; then
+    print_error "DEPLOY_PASSWORD is not set. Run: export DEPLOY_PASSWORD=yourpassword"
+    exit 1
+fi
 
-echo -e "\${BLUE}→ Checking out branch $BRANCH...\${NC}"
-git checkout $BRANCH
+# Map server IP → short name (used to pick the right .env file)
+get_server_name() {
+    case "$1" in
+        "143.110.252.201") echo "license-manager" ;;
+        "139.59.92.226")   echo "labdhi" ;;
+        "165.232.185.220") echo "tractor" ;;
+        *) echo "unknown" ;;
+    esac
+}
 
-echo -e "\${BLUE}→ Pulling latest code from $BRANCH...\${NC}"
-git pull origin $BRANCH
+# Target: single server or all
+if [ -n "$2" ]; then
+    SERVERS=("$2")
+else
+    SERVERS=("${ALL_SERVERS[@]}")
+fi
 
-# ── Backend first (migrations must run before frontend build) ─────────────────
-echo -e "\${BLUE}→ Activating Python virtual environment...\${NC}"
-cd $SERVER_PATH
-source venv/bin/activate
+# ── Per-server metadata ──────────────────────────────────────
+get_server_meta() {
+    local ip=$1
+    case "$ip" in
+        "143.110.252.201")
+            SERVER_DOMAIN="license-manager.duckdns.org"
+            NGINX_CONF_HTTP="nginx-http-only.conf"      # used before cert exists
+            NGINX_CONF_HTTPS="nginx-license-manager.conf" # used after cert
+            NGINX_SITE_NAME="license-manager"
+            DUCKDNS_SUBDOMAIN="license-manager"
+            DB_NAME="lmanagement"
+            DB_USER="lmanagement"
+            ;;
+        "139.59.92.226")
+            SERVER_DOMAIN="labdhi.duckdns.org"
+            NGINX_CONF_HTTP="nginx-http-only.conf"
+            NGINX_CONF_HTTPS="nginx-labdhi.conf"
+            NGINX_SITE_NAME="labdhi"
+            DUCKDNS_SUBDOMAIN="labdhi"
+            DB_NAME="lmanagement"
+            DB_USER="lmanagement"
+            ;;
+        "165.232.185.220")
+            SERVER_DOMAIN="license-tractor.duckdns.org"
+            NGINX_CONF_HTTP="nginx-http-only-tractor.conf"
+            NGINX_CONF_HTTPS="nginx-license-tractor.conf"
+            NGINX_SITE_NAME="license-tractor"
+            DUCKDNS_SUBDOMAIN="license-tractor"
+            DB_NAME="lmanagement"
+            DB_USER="lmanagement"
+            ;;
+        *)
+            print_error "Unknown server: $ip"; exit 1 ;;
+    esac
+}
 
-echo -e "\${BLUE}→ Upgrading pip to latest version...\${NC}"
-pip install --upgrade pip --quiet
-
-echo -e "\${BLUE}→ Installing/upgrading Python dependencies...\${NC}"
-cd backend
-pip install --upgrade -r requirements.txt --quiet
-
-echo -e "\${BLUE}→ Creating new migrations if needed...\${NC}"
-python manage.py makemigrations
-
-echo -e "\${BLUE}→ Running database migrations...\${NC}"
-if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
-    if grep -q "InsufficientPrivilege\|must be owner of table" /tmp/migration_output.log; then
-        echo -e "\${YELLOW}⚠️  Database permission issue detected. Attempting to fix...\${NC}"
-
-        DB_NAME="lmanagement"
-        DB_USER="lmanagement"
-        if [[ "$SERVER_IP" == "143.110.252.201" ]]; then
-            DB_NAME="license_manager_db"
-            DB_USER="django"
-        fi
-        echo -e "\${BLUE}→ Using database: \${DB_NAME} with user: \${DB_USER}\${NC}"
-
-        # Grant table ownership and retry
-        if echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};" 2>/dev/null; then
-            echo -e "\${GREEN}✅ Ownership granted, retrying migration...\${NC}"
-            python manage.py migrate
-        else
-            # Extract pending migrations and add any missing columns manually
-            echo -e "\${YELLOW}→ Attempting to add missing columns via psql...\${NC}"
-            PENDING_COLS=\$(python manage.py sqlmigrate license 0029 2>/dev/null | grep "ADD COLUMN" || true)
-            if [ -n "\$PENDING_COLS" ]; then
-                # Run ADD COLUMN IF NOT EXISTS for each pending column
-                echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "
-                    ALTER TABLE license_licensedetailsmodel
-                    ADD COLUMN IF NOT EXISTS last_ownership_fetch timestamp with time zone NULL;
-                " 2>/dev/null && echo -e "\${GREEN}✅ Columns added, faking migrations...\${NC}" && python manage.py migrate --fake
-            else
-                echo -e "\${RED}❌ Could not fix database permissions automatically\${NC}"
-                echo -e "\${YELLOW}Run manually:\${NC}"
-                echo -e "  sudo -u postgres psql -d \${DB_NAME} -c \"ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};\""
-                echo -e "  cd $SERVER_PATH/backend && source ../venv/bin/activate && python manage.py migrate"
-                exit 1
-            fi
-        fi
+# ── SSH / SCP helpers ────────────────────────────────────────
+ssh_cmd() {
+    if command -v sshpass &>/dev/null; then
+        sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR "$SERVER_USER@$SERVER_IP" "$@"
     else
-        echo -e "\${RED}❌ Migration failed (non-permission error):\${NC}"
-        cat /tmp/migration_output.log | tail -20
-        exit 1
+        ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "$@"
+    fi
+}
+scp_cmd() {
+    local src="$1" dest="$2"
+    if command -v sshpass &>/dev/null; then
+        sshpass -p "$PASSWORD" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR "$src" "$SERVER_USER@$SERVER_IP:$dest"
+    else
+        scp -o StrictHostKeyChecking=no "$src" "$SERVER_USER@$SERVER_IP:$dest"
+    fi
+}
+
+# ── Main deploy function ─────────────────────────────────────
+deploy_to_server() {
+    local SERVER_IP=$1
+    get_server_meta "$SERVER_IP"
+
+    print_header "🚀 Deploying to $SERVER_IP ($SERVER_DOMAIN)"
+
+    # ── Upload server-specific .env ──────────────────────────
+    local ENV_NAME
+    ENV_NAME=$(get_server_name "$SERVER_IP")
+    local ENV_FILE
+    ENV_FILE="$(dirname "$(realpath "$0")")/server-envs/${ENV_NAME}.env"
+    if [ -f "$ENV_FILE" ]; then
+        print_info "Uploading .env for $ENV_NAME..."
+        scp_cmd "$ENV_FILE" "$SERVER_PATH/backend/.env"
+        print_success ".env uploaded to $SERVER_PATH/backend/.env"
+    else
+        print_warn "No env file found at $ENV_FILE — server will use existing .env or process env"
+    fi
+
+    ssh_cmd bash << ENDSSH
+set -e
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+echo_ok()   { echo -e "\${GREEN}  ✅ \$1\${NC}"; }
+echo_info() { echo -e "\${BLUE}  → \$1\${NC}"; }
+echo_warn() { echo -e "\${YELLOW}  ⚠️  \$1\${NC}"; }
+echo_err()  { echo -e "\${RED}  ❌ \$1\${NC}"; }
+
+# ── 0. DuckDNS: keep domain pointing to this server ─────────
+echo_info "Updating DuckDNS IP for ${DUCKDNS_SUBDOMAIN}..."
+if [ -f ~/duckdns.env ]; then
+    source ~/duckdns.env
+    RESULT=\$(curl -s "https://www.duckdns.org/update?domains=${DUCKDNS_SUBDOMAIN}&token=\$DUCKDNS_TOKEN&ip=")
+    if [ "\$RESULT" = "OK" ]; then
+        echo_ok "DuckDNS updated for ${DUCKDNS_SUBDOMAIN}.duckdns.org"
+    else
+        echo_warn "DuckDNS update returned: \$RESULT (token may be missing in ~/duckdns.env)"
+    fi
+else
+    echo_warn "~/duckdns.env not found — skipping DuckDNS update"
+    echo_warn "Create ~/duckdns.env with: DUCKDNS_TOKEN=your_token"
+fi
+
+# ── 1. Pull latest code ──────────────────────────────────────
+echo_info "Pulling latest code from ${BRANCH}..."
+cd $SERVER_PATH
+git stash
+git clean -fd
+git fetch --all --prune
+git checkout $BRANCH || git checkout -b $BRANCH origin/$BRANCH
+git pull origin $BRANCH
+echo_ok "Code updated to latest $BRANCH"
+
+# ── 2. Backend: dependencies + migrations ───────────────────
+echo_info "Installing Python dependencies..."
+source $SERVER_PATH/venv/bin/activate
+cd $SERVER_PATH/backend
+pip install --upgrade pip --quiet
+pip install --upgrade -r requirements.txt --quiet
+echo_ok "Python dependencies installed"
+
+echo_info "Running database migrations..."
+# Note: do NOT run makemigrations on production — migrations must be committed
+# to git and pulled. Running makemigrations here risks creating divergent
+# auto-generated migration files across servers.
+if ! python manage.py migrate --no-input 2>&1 | tee /tmp/migration.log; then
+    if grep -q "InsufficientPrivilege\|must be owner" /tmp/migration.log; then
+        echo_warn "Permission issue — attempting fix..."
+        echo '$PASSWORD' | sudo -S -u postgres psql -d ${DB_NAME} \
+            -c "REASSIGN OWNED BY postgres TO ${DB_USER};" 2>/dev/null || true
+        python manage.py migrate --no-input
+    else
+        echo_err "Migration failed"; cat /tmp/migration.log | tail -20; exit 1
     fi
 fi
-rm -f /tmp/migration_output.log
+rm -f /tmp/migration.log
+echo_ok "Migrations applied"
 
-# ── Frontend build (after migrations — failure here does not lose DB changes) ──
-echo -e "\${BLUE}→ Installing frontend dependencies...\${NC}"
+# ── 3. Static files ─────────────────────────────────────────
+python manage.py collectstatic --no-input -v 0
+echo_ok "Static files collected"
+
+# ── 4. Frontend build ────────────────────────────────────────
+echo_info "Building frontend..."
 cd $SERVER_PATH/frontend
 npm install --silent
+npm run build
+echo_ok "Frontend built"
 
-echo -e "\${BLUE}→ Building frontend...\${NC}"
-npm run build || echo -e "\${YELLOW}⚠️  Frontend build failed — continuing with existing build\${NC}"
+# ── 5. Nginx config — HTTP phase (needed only when cert doesn't exist) ──
+# Skip HTTP-only swap when a cert already exists — keeping the current HTTPS
+# config avoids a transient "conflicting server name" warning when both the
+# new -http symlink and the old HTTPS symlink overlap on port 80.
+if echo '$PASSWORD' | sudo -S test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+    echo_info "SSL cert exists — skipping HTTP-only nginx phase"
+else
+    echo_info "No SSL cert yet — installing HTTP-only nginx config to let certbot bootstrap..."
+    echo '$PASSWORD' | sudo -S cp $SERVER_PATH/${NGINX_CONF_HTTP} /etc/nginx/sites-available/${NGINX_SITE_NAME}-http
 
-echo -e "\${BLUE}→ Collecting static files...\${NC}"
+    # Remove wrong/default sites that could shadow our port-80 server block
+    for WRONG in default license-manager labdhi license-tractor nginx-http-only; do
+        [ "\$WRONG" = "${NGINX_SITE_NAME}-http" ] && continue
+        [ "\$WRONG" = "${NGINX_SITE_NAME}" ] && continue
+        echo '$PASSWORD' | sudo -S rm -f "/etc/nginx/sites-enabled/\$WRONG" 2>/dev/null || true
+    done
+
+    # Remove any existing HTTPS-variant symlink during bootstrap to avoid
+    # two port-80 server blocks declaring the same server_name.
+    echo '$PASSWORD' | sudo -S rm -f /etc/nginx/sites-enabled/${NGINX_SITE_NAME} 2>/dev/null || true
+
+    echo '$PASSWORD' | sudo -S ln -sf \
+        /etc/nginx/sites-available/${NGINX_SITE_NAME}-http \
+        /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
+
+    echo '$PASSWORD' | sudo -S nginx -t
+    echo '$PASSWORD' | sudo -S systemctl reload nginx
+    echo_ok "HTTP nginx config active (bootstrap)"
+fi
+
+# ── 6. SSL certificate (get or renew) ───────────────────────
+echo_info "Checking SSL certificate for ${SERVER_DOMAIN}..."
+CERT_EXISTS=0
+if echo '$PASSWORD' | sudo -S test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+    CERT_EXISTS=1
+fi
+
+if [ \$CERT_EXISTS -eq 1 ]; then
+    echo_info "Certificate found — renewing if needed..."
+    echo '$PASSWORD' | sudo -S certbot renew --quiet --no-random-sleep-on-renew 2>&1 | \
+        grep -E "renewed|no action|Congratulations" || true
+    echo_ok "Certificate renewal checked"
+else
+    echo_info "No certificate found — requesting new one for ${SERVER_DOMAIN}..."
+    # Read email from duckdns.env or use fallback
+    ADMIN_EMAIL="admin@${SERVER_DOMAIN}"
+    [ -f ~/duckdns.env ] && source ~/duckdns.env && [ -n "\$ADMIN_EMAIL" ] && ADMIN_EMAIL=\$ADMIN_EMAIL
+
+    echo '$PASSWORD' | sudo -S certbot certonly --webroot \
+        -w /var/www/html \
+        -d ${SERVER_DOMAIN} \
+        --non-interactive \
+        --agree-tos \
+        -m "\$ADMIN_EMAIL" \
+        --deploy-hook "sudo systemctl reload nginx" 2>&1 | \
+        grep -E "Congratulations|Certificate|Error|failed" || true
+
+    # Verify cert was obtained
+    if echo '$PASSWORD' | sudo -S test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+        echo_ok "SSL certificate obtained for ${SERVER_DOMAIN}"
+    else
+        echo_warn "SSL cert could not be obtained — HTTPS will not work until DNS resolves correctly"
+        echo_warn "Run manually: sudo certbot --nginx -d ${SERVER_DOMAIN}"
+    fi
+fi
+
+# ── 7. Switch to HTTPS nginx config (if cert exists) ─────────
+if echo '$PASSWORD' | sudo -S test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+    echo_info "Installing HTTPS nginx config..."
+    echo '$PASSWORD' | sudo -S cp $SERVER_PATH/${NGINX_CONF_HTTPS} /etc/nginx/sites-available/${NGINX_SITE_NAME}
+
+    # Remove HTTP-only variant, enable HTTPS variant
+    echo '$PASSWORD' | sudo -S rm -f /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
+    echo '$PASSWORD' | sudo -S ln -sf \
+        /etc/nginx/sites-available/${NGINX_SITE_NAME} \
+        /etc/nginx/sites-enabled/${NGINX_SITE_NAME}
+
+    if echo '$PASSWORD' | sudo -S nginx -t 2>/dev/null; then
+        echo '$PASSWORD' | sudo -S systemctl reload nginx
+        echo_ok "HTTPS nginx config active for https://${SERVER_DOMAIN}"
+    else
+        echo_err "HTTPS nginx config invalid — keeping HTTP config"
+        echo '$PASSWORD' | sudo -S ln -sf \
+            /etc/nginx/sites-available/${NGINX_SITE_NAME}-http \
+            /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
+        echo '$PASSWORD' | sudo -S systemctl reload nginx
+    fi
+else
+    echo_warn "Running HTTP only — HTTPS requires a valid DNS record first"
+fi
+
+# ── 8. Services: materialized views, cache, gunicorn ────────
+# Migration core/0003_create_materialized_views.py creates the MVs on first
+# migrate (idempotent via CREATE ... IF NOT EXISTS). This extra step refreshes
+# their data and is harmless if the views already exist.
+echo_info "Ensuring materialized views exist + refreshing..."
 cd $SERVER_PATH/backend
 source $SERVER_PATH/venv/bin/activate
-python manage.py collectstatic --noinput
-
-echo -e "\n\${BLUE}================================================\${NC}"
-echo -e "\${BLUE}📊 Database Optimization & Setup\${NC}"
-echo -e "\${BLUE}================================================\${NC}"
-
-echo -e "\${BLUE}→ Creating materialized views...\${NC}"
 python manage.py shell -c "
-from core.materialized_views import create_all_materialized_views
+from apps.core.materialized_views import create_materialized_views, refresh_all_materialized_views
 try:
-    create_all_materialized_views()
-    print('✅ Materialized views created successfully')
+    create_materialized_views()
+    refresh_all_materialized_views(concurrently=False)
+    print('Views OK')
 except Exception as e:
-    print(f'⚠️  Materialized views may already exist or error: {e}')
-" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Materialized views check completed\${NC}"
+    print(f'Views error: {e}')
+" 2>&1 | grep -E "Views" || true
 
-echo -e "\${BLUE}→ Refreshing materialized views with data...\${NC}"
-python manage.py refresh_materialized_views --all 2>&1 | tail -5 || echo -e "\${YELLOW}  ⚠️  Materialized views refresh completed with warnings\${NC}"
-
-echo -e "\${BLUE}→ Verifying database indexes...\${NC}"
-python manage.py shell -c "
-from django.db import connection
-with connection.cursor() as cursor:
-    cursor.execute('''
-        SELECT
-            schemaname,
-            tablename,
-            indexname
-        FROM pg_indexes
-        WHERE schemaname = 'public'
-        AND (
-            indexname LIKE '%composite%'
-            OR indexname LIKE '%performance%'
-            OR indexname LIKE '%_idx'
-        )
-        ORDER BY tablename, indexname
-    ''')
-    indexes = cursor.fetchall()
-    print(f'✅ Found {len(indexes)} performance indexes')
-    for schema, table, index in indexes[:5]:
-        print(f'  - {table}.{index}')
-    if len(indexes) > 5:
-        print(f'  ... and {len(indexes) - 5} more')
-" 2>&1 | grep -E '✅|Found' || echo -e "\${YELLOW}  ⚠️  Index verification completed\${NC}"
-
-echo -e "\${BLUE}→ Checking Redis cache connection...\${NC}"
+echo_info "Warming caches..."
 python manage.py shell -c "
 from django.core.cache import cache
-try:
-    cache.set('deployment_test_key', 'deployment_test_value', 10)
-    value = cache.get('deployment_test_key')
-    if value == 'deployment_test_value':
-        print('✅ Redis cache is working correctly')
-        cache.delete('deployment_test_key')
-    else:
-        print('⚠️  Redis cache connection issue')
-except Exception as e:
-    print(f'⚠️  Redis cache error: {e}')
-" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Redis check completed\${NC}"
-
-echo -e "\${BLUE}→ Warming up critical caches...\${NC}"
-python manage.py shell -c "
-from django.core.cache import cache
-from core.models import CompanyModel, PurchaseStatus
+from apps.core.models import CompanyModel
 import json
-
 try:
-    # Cache active companies
-    companies = list(CompanyModel.objects.all().values('id', 'name'))
+    companies = list(CompanyModel.objects.values('id','name'))
     cache.set('active_companies_list', json.dumps(companies), 3600)
-
-    # Cache purchase statuses
-    statuses = list(PurchaseStatus.objects.all().values('id', 'code', 'label'))
-    cache.set('purchase_statuses_list', json.dumps(statuses), 3600)
-
-    print(f'✅ Cached {len(companies)} companies and {len(statuses)} purchase statuses')
+    print(f'Cached {len(companies)} companies')
 except Exception as e:
-    print(f'⚠️  Cache warmup error: {e}')
-" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Cache warmup completed\${NC}"
+    print(f'Cache error: {e}')
+" 2>&1 | grep -E "Cached|Cache" || true
+echo_ok "Cache warmed"
 
-echo -e "\${BLUE}→ Checking throttle system health...\${NC}"
-python manage.py shell -c "
-from django.core.cache import cache
-try:
-    # Test throttle cache
-    cache.set('throttle_health_check', 'ok', 10)
-    test = cache.get('throttle_health_check')
-    if test == 'ok':
-        print('✅ Throttling system ready')
-        cache.delete('throttle_health_check')
-    else:
-        print('⚠️  Throttling cache issue')
-except Exception as e:
-    print(f'⚠️  Throttling system error: {e}')
-" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Throttling check completed\${NC}"
-
-echo -e "\n\${BLUE}→ Setting file permissions...\${NC}"
+echo_info "Setting file permissions..."
 echo '$PASSWORD' | sudo -S chown -R django:django $SERVER_PATH/backend/media 2>/dev/null || true
 echo '$PASSWORD' | sudo -S chmod -R 775 $SERVER_PATH/backend/media 2>/dev/null || true
 echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null || true
 
-echo -e "\${BLUE}→ Restarting license-manager service...\${NC}"
+echo_info "Restarting application services..."
 echo '$PASSWORD' | sudo -S supervisorctl restart license-manager
 
-echo -e "\${BLUE}→ Updating Celery supervisor config (worker --beat -Q celery,ledger)...\${NC}"
-CELERY_BIN="$SERVER_PATH/venv/bin/celery"
-CELERY_CONF=\$(echo '$PASSWORD' | sudo -S find /etc/supervisor/conf.d/ -name "*celery*" ! -name "*beat*" 2>/dev/null | head -1)
-if [ -n "\$CELERY_CONF" ]; then
-    echo -e "\${BLUE}  → Found conf: \$CELERY_CONF\${NC}"
-    echo '$PASSWORD' | sudo -S sed -i "s|^command=.*celery.*|command=\$CELERY_BIN -A lmanagement worker --beat -Q celery,ledger -l info|" "\$CELERY_CONF"
-    echo '$PASSWORD' | sudo -S supervisorctl reread
-    echo '$PASSWORD' | sudo -S supervisorctl update
-    echo -e "\${GREEN}  ✅ Supervisor config updated: celery worker --beat -Q celery,ledger -l info\${NC}"
-else
-    echo -e "\${YELLOW}  ⚠️  Celery supervisor conf not found, skipping\${NC}"
-fi
-
-echo -e "\${BLUE}→ Stopping Celery (worker + beat combined)...\${NC}"
+echo_info "Restarting Celery..."
 echo '$PASSWORD' | sudo -S supervisorctl stop license-manager-celery 2>/dev/null || true
-echo -e "\${GREEN}  ✅ Celery stopped\${NC}"
-
-echo -e "\${BLUE}→ Killing any orphaned Celery processes...\${NC}"
 echo '$PASSWORD' | sudo -S pkill -9 -f "celery" 2>/dev/null || true
 sleep 2
-echo -e "\${GREEN}  ✅ Orphaned Celery processes cleared\${NC}"
-
-echo -e "\${BLUE}→ Clearing all Celery tasks (queue purge)...\${NC}"
-cd $SERVER_PATH/backend
-source $SERVER_PATH/venv/bin/activate
+cd $SERVER_PATH/backend && source $SERVER_PATH/venv/bin/activate
 celery -A lmanagement purge -f 2>/dev/null || true
-echo -e "\${GREEN}  ✅ All Celery tasks cleared\${NC}"
-
-echo -e "\${BLUE}→ Starting Celery (worker + beat combined)...\${NC}"
 echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery
-echo -e "\${GREEN}  ✅ Celery started (worker --beat -Q celery,ledger)\${NC}"
 
-echo -e "\${BLUE}→ Reloading Nginx...\${NC}"
-echo '$PASSWORD' | sudo -S systemctl reload nginx
-
-echo -e "\n\${BLUE}================================================\${NC}"
-echo -e "\${BLUE}📊 Service Status\${NC}"
-echo -e "\${BLUE}================================================\${NC}"
-echo -e "\${YELLOW}Supervisor Services:\${NC}"
-echo '$PASSWORD' | sudo -S supervisorctl status
-
-echo -e "\n\${YELLOW}Nginx Status:\${NC}"
-echo '$PASSWORD' | sudo -S systemctl status nginx --no-pager | head -15
-
-echo -e "\n\${BLUE}================================================\${NC}"
-echo -e "\${BLUE}✨ Deployment Summary\${NC}"
-echo -e "\${BLUE}================================================\${NC}"
-echo -e "\${GREEN}✅ Code pulled from $BRANCH\${NC}"
-echo -e "\${GREEN}✅ Frontend built and deployed\${NC}"
-echo -e "\${GREEN}✅ Backend dependencies installed\${NC}"
-echo -e "\${GREEN}✅ Migrations created and applied\${NC}"
-echo -e "\${GREEN}✅ Static files collected\${NC}"
-echo -e "\${GREEN}✅ Services restarted\${NC}"
+# ── 9. Summary ───────────────────────────────────────────────
 echo ""
-echo -e "\${BLUE}🌐 Application URLs:\${NC}"
-echo -e "   → http://143.110.252.201 (license-manager.duckdns.org)"
-echo -e "   → http://139.59.92.226 (labdhi.duckdns.org)"
-echo -e "   → http://165.232.185.220 (license-tractor.duckdns.org)"
-echo ""
-
-echo -e "\${BLUE}→ Final service status check...\${NC}"
-echo '$PASSWORD' | sudo -S supervisorctl status | grep license-manager
-
-echo -e "\n\${BLUE}================================================\${NC}"
-echo -e "\${BLUE}🧪 Testing Celery Functions\${NC}"
-echo -e "\${BLUE}================================================\${NC}"
-
-echo -e "\${BLUE}→ Checking registered Celery tasks...\${NC}"
-cd $SERVER_PATH/backend
-source $SERVER_PATH/venv/bin/activate
-
-# Test Level-1 task
-echo -e "\${BLUE}→ Testing Level-1 task (identify_licenses_needing_update)...\${NC}"
-python manage.py shell -c "
-from license.tasks import identify_licenses_needing_update
-print('✓ Level-1 task imported successfully')
-print('  Task name:', identify_licenses_needing_update.name)
-" 2>/dev/null && echo -e "\${GREEN}  ✅ Level-1 task OK\${NC}" || echo -e "\${RED}  ❌ Level-1 task failed\${NC}"
-
-# Test Level-2 task
-echo -e "\${BLUE}→ Testing Level-2 task (update_identified_licenses)...\${NC}"
-python manage.py shell -c "
-from license.tasks import update_identified_licenses
-print('✓ Level-2 task imported successfully')
-print('  Task name:', update_identified_licenses.name)
-" 2>/dev/null && echo -e "\${GREEN}  ✅ Level-2 task OK\${NC}" || echo -e "\${RED}  ❌ Level-2 task failed\${NC}"
-
-# Check Celery Beat schedule
-echo -e "\${BLUE}→ Verifying Celery Beat schedule...\${NC}"
-python manage.py shell -c "
-from lmanagement.celery import app
-schedule = app.conf.beat_schedule
-if 'update-balances-11am-ist' in schedule and 'update-balances-8pm-ist' in schedule:
-    print('✓ Scheduled tasks configured:')
-    print('  - 11 AM IST (5:30 UTC)')
-    print('  - 8 PM IST (14:30 UTC)')
-    exit(0)
-else:
-    print('✗ Schedule not found')
-    exit(1)
-" 2>/dev/null && echo -e "\${GREEN}  ✅ Schedule configured correctly\${NC}" || echo -e "\${RED}  ❌ Schedule configuration failed\${NC}"
-
-# Test CeleryTaskTracker model
-echo -e "\${BLUE}→ Testing CeleryTaskTracker model...\${NC}"
-python manage.py shell -c "
-from core.models import CeleryTaskTracker
-count = CeleryTaskTracker.objects.count()
-print(f'✓ CeleryTaskTracker table accessible: {count} records')
-" 2>/dev/null && echo -e "\${GREEN}  ✅ Task tracking ready\${NC}" || echo -e "\${RED}  ❌ Task tracking failed\${NC}"
-
-echo -e "\n\${GREEN}================================================\${NC}"
-echo -e "\${GREEN}🎉 Deployment completed successfully!\${NC}"
 echo -e "\${GREEN}================================================\${NC}"
+echo -e "\${GREEN}🎉 Deployment complete — $SERVER_IP\${NC}"
+echo -e "\${GREEN}================================================\${NC}"
+echo_info "URL: https://${SERVER_DOMAIN}"
+echo '$PASSWORD' | sudo -S supervisorctl status | grep license-manager
 ENDSSH
-
-    # Check if SSH command was successful
-    if [ $? -eq 0 ]; then
-        print_header "🎉 Deployment Verification for $SERVER_IP"
-        print_success "Deployment to $SERVER_IP completed successfully!"
-        print_info "Testing API at http://$SERVER_IP..."
-
-        # Test the server endpoint
-        if curl -s -m 10 "http://$SERVER_IP/api/licenses/?page_size=1" > /dev/null 2>&1; then
-            print_success "API at $SERVER_IP is responding correctly"
-
-            # Get license count
-            LICENSE_COUNT=$(curl -s -m 10 "http://$SERVER_IP/api/licenses/?page_size=1" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('count', 0))" 2>/dev/null || echo "N/A")
-            print_info "Total licenses on $SERVER_IP: $LICENSE_COUNT"
-        else
-            print_error "API at $SERVER_IP not responding (might still be starting up)"
-        fi
-
-        echo ""
-        print_info "View logs: ssh $SERVER_USER@$SERVER_IP 'tail -f /home/django/license-manager/logs/*.log'"
-        print_info "Nginx error log: ssh $SERVER_USER@$SERVER_IP 'sudo tail -f /var/log/nginx/error.log'"
-        return 0
-    else
-        print_header "❌ Deployment to $SERVER_IP Failed"
-        print_error "Please check the error messages above."
-        return 1
-    fi
 }
 
-# Main deployment loop
-print_header "🚀 Starting Multi-Server Deployment"
-print_info "Deploying to ${#SERVERS[@]} servers: ${SERVERS[*]}"
-echo ""
+# ── Run deployment ───────────────────────────────────────────
+print_header "🚀 Auto-Deploy to ${#SERVERS[@]} server(s): ${SERVERS[*]}"
+print_info  "Branch: $BRANCH"
 
-FAILED_SERVERS=()
-SUCCESS_COUNT=0
+FAILED=()
+SUCCESS=0
 
-for SERVER_IP in "${SERVERS[@]}"; do
-    if deploy_to_server "$SERVER_IP"; then
-        ((SUCCESS_COUNT++))
-        echo ""
+for IP in "${SERVERS[@]}"; do
+    if deploy_to_server "$IP"; then
+        ((SUCCESS++))
+        get_server_meta "$IP"
+        print_success "Deployed: $IP → https://$SERVER_DOMAIN"
     else
-        FAILED_SERVERS+=("$SERVER_IP")
-        echo ""
+        FAILED+=("$IP")
+        print_error "Failed: $IP"
     fi
+    echo ""
 done
 
-# Final summary
+# ── Final summary ────────────────────────────────────────────
 print_header "📊 Deployment Summary"
-print_success "Successfully deployed to $SUCCESS_COUNT/${#SERVERS[@]} servers"
+print_success "Success: $SUCCESS/${#SERVERS[@]} servers"
 
-if [ ${#FAILED_SERVERS[@]} -gt 0 ]; then
-    print_error "Failed servers: ${FAILED_SERVERS[*]}"
+if [ ${#FAILED[@]} -gt 0 ]; then
+    print_error "Failed: ${FAILED[*]}"
     exit 1
 else
     print_success "All servers deployed successfully!"
-    echo ""
-    print_info "Application URLs:"
-    print_info "   → http://143.110.252.201 (license-manager.duckdns.org)"
-    print_info "   → http://139.59.92.226 (labdhi.duckdns.org)"
-    print_info "   → http://165.232.185.220 (license-tractor.duckdns.org)"
-    exit 0
+    print_info "https://license-manager.duckdns.org  (143.110.252.201)"
+    print_info "https://labdhi.duckdns.org            (139.59.92.226)"
+    print_info "https://license-tractor.duckdns.org  (165.232.185.220)"
 fi

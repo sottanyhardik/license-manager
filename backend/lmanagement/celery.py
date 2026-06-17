@@ -61,6 +61,12 @@ app.conf.beat_schedule = {
         }
     },
 
+    # NOTE: DGFT's WAF blocks our DigitalOcean server IPs (403), so we don't
+    # schedule `core.tasks.fetch_exchange_rates` on Celery beat here.  Instead,
+    # the fetch runs from a local cron on the dev machine and pushes the result
+    # to license-manager; the existing master-sync cron replicates it to the
+    # other servers.  See: fetch-and-push-rates.sh
+
     # Cleanup old task records every hour
     "cleanup-old-tasks-hourly": {
         "task": "cleanup_old_task_records",

@@ -1,8 +1,15 @@
 import axios from "axios";
-import { toast } from 'react-toastify';
+import { toast } from "sonner";
+
+// Resolve API base URL:
+//   - If VITE_API_URL is defined (e.g. "http://localhost:8000"), call Django directly.
+//   - Otherwise fall back to "/api/" so requests flow through Vite's dev proxy.
+// Django CORS_ALLOWED_ORIGINS must include the frontend origin when calling directly.
+const API_HOST = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_BASE = API_HOST ? `${API_HOST}/api/` : "/api/";
 
 const api = axios.create({
-    baseURL: "/api/",
+    baseURL: API_BASE,
     headers: {"Content-Type": "application/json"},
 });
 
@@ -12,6 +19,48 @@ api.interceptors.request.use((config) => {
     if (access) config.headers.Authorization = `Bearer ${access}`;
     return config;
 });
+
+// ─── In-flight GET dedup ─────────────────────────────────────────────────────
+// Coalesces concurrent identical GETs into a single HTTP request. Each caller
+// gets its own response copy (so an .interceptor/transform on one doesn't
+// affect another). Cleared as soon as the request resolves/rejects — this is
+// NOT a response cache, only a request dedup.
+//
+// Common triggers this fixes:
+//   • React StrictMode double-mount in dev (effects fire twice → 2 GETs)
+//   • Two components mounting near-simultaneously and both fetching the same
+//     metadata endpoint.
+const _getInFlight = new Map(); // url -> Promise<axiosResponse>
+
+const _origGet = api.get.bind(api);
+api.get = (url, config = {}) => {
+    // Skip dedup if caller used signal/cancelToken (they want fine control).
+    if (config.signal || config.cancelToken || config._noDedupe) {
+        return _origGet(url, config);
+    }
+    // Key includes the URL plus any params so paginated/filtered requests
+    // don't share a single promise.
+    const paramKey = config.params
+        ? JSON.stringify(config.params, Object.keys(config.params).sort())
+        : "";
+    const key = `${url}|${paramKey}`;
+
+    let pending = _getInFlight.get(key);
+    if (!pending) {
+        pending = _origGet(url, config).finally(() => {
+            // Use a microtask delay so synchronous .then handlers see the
+            // same in-flight promise, but a fresh later GET re-fetches.
+            queueMicrotask(() => _getInFlight.delete(key));
+        });
+        _getInFlight.set(key, pending);
+    }
+    // Each caller gets a separate Promise resolving to a shallow-cloned
+    // response, so downstream mutations on `data` don't leak across callers.
+    return pending.then(
+        (res) => ({ ...res, data: res.data }),
+        (err) => Promise.reject(err),
+    );
+};
 
 // ─── Refresh queue ────────────────────────────────────────────────────────────
 // Prevents the race condition where multiple concurrent 401s each try to refresh,
@@ -73,7 +122,7 @@ api.interceptors.response.use(
             }
 
             try {
-                const { data } = await axios.post("/api/auth/refresh/", { refresh });
+                const { data } = await axios.post(`${API_BASE}auth/refresh/`, { refresh });
 
                 localStorage.setItem("access", data.access);
                 if (data.refresh) localStorage.setItem("refresh", data.refresh);

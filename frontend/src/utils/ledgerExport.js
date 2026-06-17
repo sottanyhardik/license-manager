@@ -152,7 +152,6 @@ function writeLicenseHeaderToPdf(doc, license, pageWidth, startY = 12) {
         ['Balance:', `$${formatIndianNumber(currentBalance, 2)}`],
     ];
 
-    let x = lx;
     const colW = (pageWidth - 28) / 2;
     [[cols, 0], [col2, colW]].forEach(([items, xOff]) => {
         items.forEach(([label, val], i) => {
@@ -281,7 +280,6 @@ export function generatePDF(licensesData, filename) {
         doc.addPage(); // summary is always page 1
 
         const isDFIA = license.license_type === 'DFIA';
-        const colCount = isDFIA ? 10 : 9;
         const tableStartY = writeLicenseHeaderToPdf(doc, license, pageWidth);
 
         const companiesGrouped = groupByCompany(license.transactions);

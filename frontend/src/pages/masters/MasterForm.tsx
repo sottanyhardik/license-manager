@@ -17,6 +17,8 @@ import {useBackButton} from "../../hooks/useBackButton";
 import { ENTITY_SECTIONS } from "./entitySections";
 import { buildLicensePatch, buildLicenseSummary } from "./masterFormHelpers";
 import LicenseParsePanel from "./LicenseParsePanel";
+import TradeMetaBadges from "./TradeMetaBadges";
+import BoeParsePanel from "./BoeParsePanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1636,29 +1638,9 @@ export default function MasterForm({
                             <EntityIcon className="size-5 mr-2" style={{ color: entityColor }} />
                             {entityTitle} Details
                         </h6>
-                        {entityName === 'trades' && formData.direction && (() => {
-                            const dirColors = { PURCHASE: 'var(--tb-brand)', SALE: 'var(--tb-success)', COMMISSION_PURCHASE: 'var(--tb-warning)', COMMISSION_SALE: 'var(--tb-brand)' };
-                            // Soft backgrounds — the old `${color}20` hex-alpha trick was invalid on var()
-                            // (`var(--tb-brand)20`), so badges rendered with no background. Use the soft tokens.
-                            const dirSoftBg = { PURCHASE: 'var(--tb-brand-50)', SALE: 'var(--tb-success-soft)', COMMISSION_PURCHASE: 'var(--tb-warning-soft)', COMMISSION_SALE: 'var(--tb-brand-50)' };
-                            const dirLabels = { PURCHASE: 'Purchase', SALE: 'Sale', COMMISSION_PURCHASE: 'Commission Purchase', COMMISSION_SALE: 'Commission Sale' };
-                            const ltColors = { DFIA: 'var(--tb-info)', INCENTIVE: 'var(--tb-warning)' };
-                            const ltSoftBg = { DFIA: 'var(--tb-info-soft)', INCENTIVE: 'var(--tb-warning-soft)' };
-                            const ltLabels = { DFIA: 'DFIA License', INCENTIVE: 'Incentive License' };
-                            return (
-                                <div className="flex gap-2">
-                                    <span className="badge flex items-center gap-1" style={{ background: dirSoftBg[formData.direction], color: dirColors[formData.direction], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
-                                        {dirLabels[formData.direction]}
-                                    </span>
-                                    {formData.license_type && (
-                                        <span className="badge flex items-center gap-1" style={{ background: ltSoftBg[formData.license_type], color: ltColors[formData.license_type], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
-                                            <FileText className="size-4" aria-hidden="true" />
-                                            {ltLabels[formData.license_type]}
-                                        </span>
-                                    )}
-                                </div>
-                            );
-                        })()}
+                        {entityName === 'trades' && formData.direction && (
+                            <TradeMetaBadges direction={formData.direction} licenseType={formData.license_type} />
+                        )}
                     </div>
                 </div>
                 <div className="p-6">
@@ -1747,118 +1729,18 @@ export default function MasterForm({
                         );
                     })()}
 
-                    {entityName === 'bill-of-entries' && !isEdit && (
-                        <section className="surface-card mb-4" style={{ padding: 20 }}>
-                            <div className="flex items-start" style={{ gap: 16, flexWrap: 'wrap' }}>
-                                <div
-                                    aria-hidden="true"
-                                    style={{
-                                        width: 44, height: 44, borderRadius: 12,
-                                        background: 'var(--indigo-50)', color: 'var(--primary-color)',
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    <FileText className="size-4" aria-hidden="true" />
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                                        Import from BOE PDF
-                                    </div>
-                                    <div className="mt-1" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                                        Upload an ICEGATE BOE, then click <strong>Fetch</strong> to prefill the form and item rows.
-                                    </div>
-                                    <div className="flex items-center mt-3" style={{ gap: 10, flexWrap: 'wrap' }}>
-                                        <input
-                                            type="file"
-                                            accept=".pdf,application/pdf"
-                                            id="boe-pdf-input"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
-                                            style={{ maxWidth: 340 }}
-                                            onChange={(e) => {
-                                                setBoePdfFile(e.target.files?.[0] || null);
-                                                setBoeParseSummary(null);
-                                            }}
-                                        />
-                                        <button
-                                            type="button"
-                                            className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
-                                            onClick={handleParseBoePdf}
-                                            disabled={!boePdfFile || boeParsing}
-                                        >
-                                            {boeParsing ? (
-                                                <><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent" role="status" aria-hidden="true"></span>Fetching…</>
-                                            ) : (
-                                                <><Wand2 className="size-4" aria-hidden="true" />Fetch</>
-                                            )}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            {boeParseSummary && (
-                                <div
-                                    className="mt-3"
-                                    style={{
-                                        background: 'var(--surface-sunken)',
-                                        border: '1px solid var(--border-subtle)',
-                                        borderRadius: 'var(--radius-md)',
-                                        padding: '12px 14px',
-                                        fontSize: '0.8125rem',
-                                    }}
-                                >
-                                    <div style={{ color: 'var(--text-primary)' }}>
-                                        <strong>BE {boeParseSummary.be_number}</strong>
-                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>{boeParseSummary.be_date}
-                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>port <code>{boeParseSummary.port_code}</code>
-                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>1 {boeParseSummary.currency || 'USD'} = ₹{boeParseSummary.exchange_rate}
-                                    </div>
-                                    {boeParseSummary.company_created && (
-                                        <div className="mt-1" style={{ color: 'var(--tb-success-text)' }}>
-                                            <CheckCircle2 className="size-4" aria-hidden="true" />
-                                            New company created from buyer details ({boeParseSummary.buyer_name}).
-                                        </div>
-                                    )}
-                                    {!boeParseSummary.company_created && boeParseSummary.matched_company_id && (
-                                        <div className="mt-1" style={{ color: 'var(--text-secondary)' }}>
-                                            <Check className="size-4" aria-hidden="true" />
-                                            Matched existing company ({boeParseSummary.buyer_name}).
-                                        </div>
-                                    )}
-                                    {boeParseSummary.matched_allotment_id && (
-                                        <div className="mt-1" style={{ color: 'var(--primary-deeper)' }}>
-                                            <Info className="size-4" aria-hidden="true" />
-                                            Matched existing allotment <strong>#{boeParseSummary.matched_allotment_id}</strong> by invoice number.
-                                        </div>
-                                    )}
-                                    {boeParseSummary.licences?.length > 0 && (
-                                        <details className="mt-2">
-                                            <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>
-                                                {boeParseSummary.licences.length} licence row(s) — {boeParseSummary.unmatched} unmatched
-                                            </summary>
-                                            <ul className="mb-0 mt-2" style={{ paddingLeft: '1.1rem', color: 'var(--text-secondary)' }}>
-                                                {boeParseSummary.licences.map((l, i) => {
-                                                    const badge = l.match_status === 'matched'
-                                                        ? <span style={{ color: 'var(--tb-success-text)', marginLeft: 6 }}>✓ prefill item</span>
-                                                        : l.match_status === 'license_only'
-                                                            ? <span style={{ color: 'var(--tb-warning-text)', marginLeft: 6 }}>⚠ license found, sl#{l.licence_slno} missing</span>
-                                                            : l.match_status === 'license_missing'
-                                                                ? <span style={{ color: 'var(--tb-danger-text)', marginLeft: 6 }}>✗ license not in DB</span>
-                                                                : <span style={{ color: 'var(--text-tertiary)', marginLeft: 6 }}>— no data</span>;
-                                                    return (
-                                                        <li key={i} style={{ padding: '2px 0' }}>
-                                                            License <code>{l.licence_number}</code> sl#{l.licence_slno} · CIF ₹{l.cif_inr} · ${l.cif_fc} · qty {l.qty} {l.uqc}
-                                                            {badge}
-                                                        </li>
-                                                    );
-                                                })}
-                                            </ul>
-                                        </details>
-                                    )}
-                                </div>
-                            )}
-                        </section>
-                    )}
 
+
+                    {entityName === 'bill-of-entries' && !isEdit && (
+                        <BoeParsePanel
+                            boePdfFile={boePdfFile}
+                            setBoePdfFile={setBoePdfFile}
+                            boeParsing={boeParsing}
+                            boeParseSummary={boeParseSummary}
+                            setBoeParseSummary={setBoeParseSummary}
+                            handleParseBoePdf={handleParseBoePdf}
+                        />
+                    )}
 
                     {entityName === 'licenses' && (
                         <LicenseParsePanel

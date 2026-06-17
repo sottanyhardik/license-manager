@@ -7,7 +7,7 @@ import {
     Moon, Network, NotebookText, Package, Pencil, Plus, PlusCircle, Receipt,
     ReceiptText, RefreshCw, ScanBarcode, ShieldCheck, Square, SquarePen, Star, Sun,
     Table, Tags, ToggleRight, Trash2, TrendingUp, TriangleAlert, User, UserPlus,
-    Users,
+    Users, X,
 } from "lucide-react";
 
 /**
@@ -76,7 +76,7 @@ const BI_TO_LUCIDE: Record<string, LucideIcon> = {
     "trash": Trash2,
     "trophy": Award,
     "upc-scan": ScanBarcode,
-    "x-lg": Square,
+    "x-lg": X,
     "sun": Sun,
     "moon": Moon,
 };

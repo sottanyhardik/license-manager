@@ -14,6 +14,7 @@ import TransferLetterModal from "../../components/TransferLetterModal";
 import { EntityCard, DetailTable } from "../../components/ui";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
 import {openPdfPreview} from "../../utils/pdfPreview";
+import {clickable} from "../../utils/clickable";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, BookCheck, Building2, Calendar, CalendarX, ChevronDown, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Link as LinkIcon, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Trash2, TriangleAlert, X } from "lucide-react";
@@ -1428,7 +1429,7 @@ export default function MasterList() {
                                             <div key={pairKey} style={{ border: '1px solid #a5b4fc', borderLeft: '4px solid #6366f1', borderRadius: 'var(--tb-r-md)', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                                                 <div
                                                     style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-brand-50)', cursor: 'pointer', flexWrap: 'wrap' }}
-                                                    onClick={() => togglePair(pairKey)}
+                                                    {...clickable(() => togglePair(pairKey))}
                                                 >
                                                     <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Sale</span>
                                                     <LinkIcon className="size-4" aria-hidden="true" />
@@ -2022,7 +2023,7 @@ export default function MasterList() {
                             <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px', fontSize: 14 }}>No unlinked trades found for "{linkSearch}"</div>
                         )}
                         {linkResults.map(t => (
-                            <div key={t.id} onClick={() => confirmLink(t)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 'var(--tb-r-md)', marginBottom: '8px', cursor: 'pointer', transition: 'background 0.15s' }}
+                            <div key={t.id} {...clickable(() => confirmLink(t))} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 'var(--tb-r-md)', marginBottom: '8px', cursor: 'pointer', transition: 'background 0.15s' }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'var(--tb-info-soft)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                 <div>

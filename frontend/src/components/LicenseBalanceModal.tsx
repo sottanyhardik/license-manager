@@ -348,9 +348,8 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     return (
         <Dialog open={show} onOpenChange={(o) => !o && onHide()}>
             <DialogContent
+                showCloseButton={false}
                 className="flex max-h-[95vh] w-[98vw] max-w-[1920px] flex-col overflow-hidden p-0"
-                // Hide default close button — we render our own in the header
-                style={{ '--dialog-close-display': 'none' } as React.CSSProperties}
             >
                 {/* Custom gradient header */}
                 <div
@@ -368,7 +367,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                     size="sm"
                                     onClick={handleDownloadPDF}
                                     disabled={loading}
-                                    className="bg-card text-primary hover:bg-card/90 border-0"
+                                    className="border border-white/30 bg-white/15 text-white hover:bg-white/25"
                                     variant="outline"
                                 >
                                     <FileText className="size-3.5" />Download PDF
@@ -377,7 +376,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                     size="sm"
                                     onClick={handleDownloadExcel}
                                     disabled={loading}
-                                    className="bg-card text-success hover:bg-card/90 border-0"
+                                    className="border border-white/30 bg-white/15 text-white hover:bg-white/25"
                                     variant="outline"
                                 >
                                     <FileSpreadsheet className="size-3.5" />Download Excel

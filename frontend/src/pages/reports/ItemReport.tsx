@@ -4,6 +4,7 @@ import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
+import {clickable} from "../../utils/clickable";
 import {toast} from "sonner";
 import Select from "react-select";
 import {useDebouncedFilters} from "../../hooks/useDebounce";
@@ -1086,7 +1087,7 @@ export default function ItemReport() {
                                                                             <div
                                                                                 className="flex items-center justify-between"
                                                                                 style={{cursor: 'pointer'}}
-                                                                                onClick={() => startEdit(firstItem.id, 'notes', firstItem.notes)}
+                                                                                {...clickable(() => startEdit(firstItem.id, 'notes', firstItem.notes))}
                                                                             >
                                                                                 <span>{firstItem.notes || '-'}</span>
                                                                                 <Pencil className="size-4" aria-hidden="true" />
@@ -1123,7 +1124,7 @@ export default function ItemReport() {
                                                                             <div
                                                                                 className="flex items-center justify-between"
                                                                                 style={{cursor: 'pointer'}}
-                                                                                onClick={() => startEdit(firstItem.id, 'condition_sheet', firstItem.condition_sheet)}
+                                                                                {...clickable(() => startEdit(firstItem.id, 'condition_sheet', firstItem.condition_sheet))}
                                                                             >
                                                                                 <span>{firstItem.condition_sheet || '-'}</span>
                                                                                 <Pencil className="size-4" aria-hidden="true" />

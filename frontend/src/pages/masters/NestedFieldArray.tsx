@@ -36,7 +36,19 @@ export default function NestedFieldArray({
                                              entityName = "",
                                              formData = {},
                                              itemConditionsBySerial = {},
-                                         }) {
+                                         }: {
+    label?: string;
+    fields?: any[];
+    value?: any[];
+    onChange?: (value: any[]) => void;
+    fieldKey?: string;
+    onFetchImports?: (...args: any[]) => any;
+    updatedFields?: Record<string, any>;
+    errors?: any[];
+    entityName?: string;
+    formData?: Record<string, any>;
+    itemConditionsBySerial?: Record<string, any>;
+}) {
 
     // Use centralized date parser from utility
     const parseDate = (dateString) => {
@@ -75,7 +87,7 @@ export default function NestedFieldArray({
 
     const handleChange = (index, fieldName, fieldValue) => {
         const newArray = [...value];
-        const updates = {[fieldName]: fieldValue};
+        const updates: Record<string, any> = {[fieldName]: fieldValue};
 
         // Enforce max 3 decimal places for BOE numeric fields
         if (fieldKey === 'item_details' && ['cif_inr', 'cif_fc', 'qty'].includes(fieldName) && fieldValue !== '' && fieldValue !== null) {
@@ -206,7 +218,7 @@ export default function NestedFieldArray({
 
                 if (selected) {
                     // Update description and optionally auto-fill hs_code in a single update
-                    const updates = {
+                    const updates: Record<string, any> = {
                         [field.name]: selected.value
                     };
 
@@ -302,6 +314,7 @@ export default function NestedFieldArray({
         if (field.type === "date" || field.name.includes("date") || field.name.includes("_at") || field.name.includes("_on")) {
             return (
                 <div className="w-full">
+                    {/* @ts-expect-error DatePicker onChange type mismatch */}
                     <DatePicker
                         selected={parseDate(fieldValue)}
                         onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}

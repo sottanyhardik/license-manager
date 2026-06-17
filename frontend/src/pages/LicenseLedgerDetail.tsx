@@ -11,7 +11,7 @@ export default function LicenseLedgerDetail() {
     const { id, companyId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
-    const [ledger, setLedger] = useState(null);
+    const [ledger, setLedger] = useState<Record<string, any> | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -239,7 +239,7 @@ export default function LicenseLedgerDetail() {
 
             {/* Company-grouped Ledger Table */}
             {(() => {
-                const companiesMap = {};
+                const companiesMap: Record<string, { company_id: any; company_name: string; transactions: Record<string, any>[] }> = {};
                 (ledger.transactions || []).forEach(txn => {
                     const key = txn.company_id != null ? txn.company_id : 'unknown';
                     if (!companiesMap[key]) {

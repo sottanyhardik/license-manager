@@ -1,9 +1,19 @@
 import axios from "axios";
-import {createContext, useCallback, useEffect, useRef, useState} from "react";
+import React, {createContext, useCallback, useEffect, useRef, useState} from "react";
 import api from "../api/axios";
+import type { AuthContextValue, AuthUser, LoginResponse } from "../types";
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const AuthContext = createContext();
+export const AuthContext = createContext<AuthContextValue>({
+    user: null,
+    loading: true,
+    loginSuccess: () => {},
+    logout: async () => {},
+    hasRole: () => false,
+    hasAnyRole: () => false,
+    isSuperAdmin: () => false,
+    canManageUsers: () => false,
+});
 
 // ─── Session config ───────────────────────────────────────────────────────────
 // How long with no mouse/keyboard/scroll activity before auto-logout (30 minutes)
@@ -14,7 +24,7 @@ const IDLE_CHECK_INTERVAL_MS = 60 * 1000;
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getTokenExpiryMs(token) {
+function getTokenExpiryMs(token: string): number | null {
     try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         return payload.exp * 1000; // JWT exp is in seconds, convert to ms
@@ -23,17 +33,17 @@ function getTokenExpiryMs(token) {
     }
 }
 
-export const AuthProvider = ({children}) => {
-    const [user, setUser] = useState(
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+    const [user, setUser] = useState<AuthUser | null>(
         localStorage.getItem("user")
-            ? JSON.parse(localStorage.getItem("user"))
+            ? JSON.parse(localStorage.getItem("user")!)
             : null
     );
     const [loading, setLoading] = useState(true);
     const loadUserCalled = useRef(false);
     const lastActivityRef = useRef(Date.now());
-    const idleTimerRef = useRef(null);
-    const refreshTimerRef = useRef(null);
+    const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const clearTimers = () => {
         if (idleTimerRef.current) clearInterval(idleTimerRef.current);
@@ -42,7 +52,7 @@ export const AuthProvider = ({children}) => {
         refreshTimerRef.current = null;
     };
 
-    const logout = useCallback(async (reason) => {
+    const logout = useCallback(async (reason?: string) => {
         clearTimers();
         try {
             await api.post("auth/logout/", {
@@ -146,7 +156,7 @@ export const AuthProvider = ({children}) => {
         loadUser();
     }, []);
 
-    const loginSuccess = (data) => {
+    const loginSuccess = (data: LoginResponse) => {
         localStorage.setItem("access", data.access);
         localStorage.setItem("refresh", data.refresh);
         localStorage.setItem("user", JSON.stringify(data.user));
@@ -160,12 +170,12 @@ export const AuthProvider = ({children}) => {
 
     const isSuperAdmin = () => user?.is_superuser === true;
 
-    const hasRole = (roleCode) => {
+    const hasRole = (roleCode: string) => {
         if (user?.is_superuser) return true;
         return Array.isArray(user?.roles) && user.roles.includes(roleCode);
     };
 
-    const hasAnyRole = (roleCodes) => {
+    const hasAnyRole = (roleCodes: string[]) => {
         if (user?.is_superuser) return true;
         if (!Array.isArray(user?.roles)) return false;
         return roleCodes.some(r => user.roles.includes(r));

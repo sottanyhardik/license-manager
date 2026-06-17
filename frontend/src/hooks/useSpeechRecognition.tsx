@@ -1,5 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+declare global {
+    interface Window {
+        SpeechRecognition?: new () => SpeechRecognition;
+        webkitSpeechRecognition?: new () => SpeechRecognition;
+    }
+    interface SpeechRecognition extends EventTarget {
+        continuous: boolean;
+        interimResults: boolean;
+        lang: string;
+        start(): void;
+        stop(): void;
+        onresult: ((event: SpeechRecognitionEvent) => void) | null;
+        onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+        onend: (() => void) | null;
+        onstart: (() => void) | null;
+    }
+    interface SpeechRecognitionEvent extends Event {
+        results: SpeechRecognitionResultList;
+        resultIndex: number;
+    }
+    interface SpeechRecognitionErrorEvent extends Event {
+        error: string;
+    }
+}
+
 /**
  * Wraps the browser Web Speech API for continuous dictation with a
  * "separator phrase" split mode.
@@ -41,7 +66,7 @@ export default function useSpeechRecognition({
     onSegment,
     separators = ["next", "new task", "next task"],
     lang = "en-US",
-} = {}) {
+}: { onSegment?: (text: string) => void; separators?: string[]; lang?: string } = {}) {
     const SR = typeof window !== "undefined"
         ? (window.SpeechRecognition || window.webkitSpeechRecognition)
         : null;

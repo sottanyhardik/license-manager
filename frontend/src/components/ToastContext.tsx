@@ -1,7 +1,9 @@
-import {createContext, useCallback, useState} from "react";
+import React, {createContext, useCallback, useState} from "react";
+
+interface ToastContextValue { showToast: (message: string, type?: string, duration?: number) => void }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const ToastContext = createContext();
+export const ToastContext = createContext<ToastContextValue>({ showToast: () => {} });
 
 export const ToastProvider = ({children}) => {
     const [toasts, setToasts] = useState([]);

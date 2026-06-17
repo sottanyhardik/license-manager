@@ -179,14 +179,14 @@ export default function MasterForm({
     const recordId = propRecordId || id;
     const isEdit = Boolean(recordId);
 
-    const [formData, setFormData] = useState({});
-    const [metadata, setMetadata] = useState({});
+    const [formData, setFormData] = useState<Record<string, any>>({});
+    const [metadata, setMetadata] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [fetchingAllotment, setFetchingAllotment] = useState(false);
     const [error, setError] = useState("");
-    const [fieldErrors, setFieldErrors] = useState({}); // Track field-level errors
-    const [updatedFields, setUpdatedFields] = useState({}); // Track updated fields for highlighting
+    const [fieldErrors, setFieldErrors] = useState<Record<string, any>>({});
+    const [updatedFields, setUpdatedFields] = useState<Record<string, boolean>>({});
     const [showBalanceModal, setShowBalanceModal] = useState(false); // License balance modal state
     const [savedLicenseId, setSavedLicenseId] = useState(null); // Store saved license ID for modal
     const [activeNestedTab, setActiveNestedTab] = useState(null);
@@ -198,7 +198,7 @@ export default function MasterForm({
     const [licenseParseSummary, setLicenseParseSummary] = useState(null);
     // {serialNumber: "AU" | "2%" | "3%" | "5%"} — drives the per-row condition
     // badge in the Import Items table.
-    const [itemConditionsBySerial, setItemConditionsBySerial] = useState({});
+    const [itemConditionsBySerial, setItemConditionsBySerial] = useState<Record<string, any>>({});
 
     // Enable browser back button support with filter preservation
     useBackButton(entityName, !isModal);
@@ -392,7 +392,7 @@ export default function MasterForm({
             const { parsed, prefill, matched_allotment_id, matched_company_id, matched_port_id, company_created, licences } = data;
 
             // Build patch — only fields we successfully extracted/matched
-            const patch = {};
+            const patch: Record<string, any> = {};
             if (parsed.be_number) patch.bill_of_entry_number = parsed.be_number;
             if (parsed.be_date) patch.bill_of_entry_date = parsed.be_date;
             if (matched_company_id) patch.company = parseInt(matched_company_id, 10);
@@ -507,7 +507,7 @@ export default function MasterForm({
             ? { fob_inr: fobInr || 0, cif_inr: cifInr || 0, cif_fc: cifFc || 0 }
             : null;
 
-        const patch = {};
+        const patch: Record<string, any> = {};
         if (prefill.license_number) patch.license_number = prefill.license_number;
         if (prefill.license_date) patch.license_date = prefill.license_date;
         if (prefill.license_expiry_date) patch.license_expiry_date = prefill.license_expiry_date;
@@ -543,7 +543,7 @@ export default function MasterForm({
         };
     };
 
-    const applyLicenseParse = (data, fileOverride, opts = {}) => {
+    const applyLicenseParse = (data: Record<string, any>, fileOverride?: File | null, opts: Record<string, any> = {}) => {
         const { patch, importRows, conditionBySerial, exportFinancials } = buildLicensePatch(data);
         // `skipAttach` is set when re-parsing from a Licence Copy already
         // stored on the licence — we don't want to attach a duplicate.
@@ -714,7 +714,7 @@ export default function MasterForm({
     };
 
     const handleChange = async (field, value) => {
-        const updates = {[field]: value};
+        const updates: Record<string, any> = {[field]: value};
 
         // Auto-calculate registration_number when license_number changes
         if (field === "license_number" && value && entityName === "licenses") {
@@ -1013,7 +1013,7 @@ export default function MasterForm({
 
     // Frontend validation function
     const validateForm = () => {
-        const errors = {};
+        const errors: Record<string, any> = {};
 
         // Collect required fields from metadata and validate using utility
         if (metadata.form_fields) {
@@ -1218,7 +1218,7 @@ export default function MasterForm({
                 const firstErrorField = document.querySelector('.is-invalid');
                 if (firstErrorField) {
                     firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    firstErrorField.focus();
+                    (firstErrorField as HTMLElement).focus();
                 }
             }, 100);
 
@@ -1540,7 +1540,7 @@ export default function MasterForm({
                     const firstErrorField = document.querySelector('.is-invalid');
                     if (firstErrorField) {
                         firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        firstErrorField.focus();
+                        (firstErrorField as HTMLElement).focus();
                     }
                 }, 100);
             } else {
@@ -1593,6 +1593,7 @@ export default function MasterForm({
         if (fieldMeta.type === "date" || fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
             return (
                 <div className="w-full">
+                    {/* @ts-expect-error DatePicker onChange type mismatch */}
                     <DatePicker
                         selected={parseDate(value)}
                         onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
@@ -2224,7 +2225,7 @@ export default function MasterForm({
                         {(() => {
                             const activeFields = (metadata.form_fields || []).filter(f => !metadata.nested_field_defs?.[f]);
 
-                            const renderOneField = (field, colClass) => {
+                            const renderOneField = (field: string, colClass?: string) => {
                                 const isTextarea = !colClass && (field.includes("address") || field.includes("description") ||
                                     field.includes("note") || field.includes("comment") ||
                                     field.includes("condition") || field.includes("restriction"));
@@ -2366,7 +2367,7 @@ export default function MasterForm({
                                                     <NestedFieldArray
                                                         key={nestedKey}
                                                         label={nestedKey.replace(/_/g, " ")}
-                                                        fields={nestedDef}
+                                                        fields={nestedDef as any[]}
                                                         value={formData[nestedKey] || []}
                                                         onChange={(value) => handleChange(nestedKey, value)}
                                                         fieldKey={nestedKey}
@@ -2385,7 +2386,7 @@ export default function MasterForm({
                                     <NestedFieldArray
                                         key={nestedKey}
                                         label={nestedKey.replace(/_/g, " ")}
-                                        fields={nestedDef}
+                                        fields={nestedDef as any[]}
                                         value={formData[nestedKey] || []}
                                         onChange={(value) => handleChange(nestedKey, value)}
                                         fieldKey={nestedKey}

@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import React, { forwardRef } from "react";
 
 /*
  * Button — thin wrapper around Bootstrap's .btn classes plus tabler.css.
@@ -10,13 +10,25 @@ import { forwardRef } from "react";
  *   <Button icon="download" iconOnly aria-label="Download" />
  *   <Button loading>Saving</Button>
  */
+
+interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
+    variant?: string;
+    size?: 'sm' | 'lg';
+    icon?: string;
+    iconRight?: string;
+    iconOnly?: boolean;
+    loading?: boolean;
+    block?: boolean;
+    children?: React.ReactNode;
+}
+
 const VARIANTS = new Set([
     "primary", "secondary", "success", "danger", "warning", "info", "light", "dark", "link",
     "outline-primary", "outline-secondary", "outline-success", "outline-danger",
     "outline-warning", "outline-info", "outline-light", "outline-dark",
 ]);
 
-const Button = forwardRef(function Button(
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
     {
         variant = "primary",
         size,
@@ -28,6 +40,7 @@ const Button = forwardRef(function Button(
         disabled,
         className = "",
         children,
+        type = "button",
         ...rest
     },
     ref
@@ -44,7 +57,7 @@ const Button = forwardRef(function Button(
     return (
         <button
             ref={ref}
-            type={rest.type || "button"}
+            type={type}
             className={classes}
             disabled={disabled || loading}
             aria-busy={loading || undefined}

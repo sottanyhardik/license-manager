@@ -17,7 +17,7 @@ function Detail({ label, value }) {
     );
 }
 
-export default function BOETransferLetter({ boeId: propId, isModal = false }) {
+export default function BOETransferLetter({ boeId: propId, isModal = false, onClose: _onClose }: { boeId?: number | string; isModal?: boolean; onClose?: () => void }) {
     const { id: paramId } = useParams();
     const navigate = useNavigate();
     const id = propId || paramId;

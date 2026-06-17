@@ -19,7 +19,7 @@ export default function TradeForm() {
     const navigate = useNavigate();
     const isEdit = Boolean(id);
 
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<Record<string, any>>({
         direction: "PURCHASE",
         license_type: "DFIA",
         incentive_license: null,
@@ -39,7 +39,7 @@ export default function TradeForm() {
     const [autoCreatePaired, setAutoCreatePaired] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
-    const [fieldErrors, setFieldErrors] = useState({});
+    const [fieldErrors, setFieldErrors] = useState<Record<string, any>>({});
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
     const isInitialLoadRef = useRef(true);
     const [initialFormData, setInitialFormData] = useState(null);
@@ -472,10 +472,10 @@ export default function TradeForm() {
 
     // Validation function for trade form
     const validateTradeForm = () => {
-        const errors = {};
+        const errors: Record<string, any> = {};
 
         // Basic field validation
-        const basicSchema = {
+        const basicSchema: Record<string, any> = {
             direction: { rules: [ValidationRules.REQUIRED], label: 'Direction' },
             invoice_date: { rules: [ValidationRules.REQUIRED, ValidationRules.DATE], label: 'Invoice Date' }
         };
@@ -552,7 +552,7 @@ export default function TradeForm() {
                         errors.forEach((lineError, index) => {
                             if (lineError && typeof lineError === 'object') {
                                 Object.entries(lineError).forEach(([lineField, lineErrors]) => {
-                                    errorDetails.push(`Line ${index + 1} - ${lineField}: ${lineErrors.join(', ')}`);
+                                    errorDetails.push(`Line ${index + 1} - ${lineField}: ${(lineErrors as string[]).join(', ')}`);
                                 });
                             }
                         });
@@ -578,7 +578,7 @@ export default function TradeForm() {
                 const firstErrorField = document.querySelector('.is-invalid');
                 if (firstErrorField) {
                     firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    firstErrorField.focus();
+                    (firstErrorField as HTMLElement).focus();
                 }
             }, 100);
 
@@ -1188,7 +1188,8 @@ export default function TradeForm() {
                     </div>
                     <div>
                         <label className="form-label">Invoice Date</label>
-                        <DatePicker
+                        {/* @ts-expect-error DatePicker onChange type mismatch */}
+                    <DatePicker
                             selected={formData.invoice_date instanceof Date ? formData.invoice_date : parseDate(formData.invoice_date)}
                             onChange={(date) => setFormData(prev => ({ ...prev, invoice_date: date }))}
                             dateFormat="dd-MM-yyyy"
@@ -1288,7 +1289,7 @@ export default function TradeForm() {
                         <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>Remarks</label>
                         <textarea
                             className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
-                            rows="2"
+                            rows={2}
                             value={formData.remarks || ""}
                             onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
                             placeholder="Enter any remarks..."
@@ -1404,7 +1405,7 @@ export default function TradeForm() {
                                                         <ConditionBadge type={option.condition_type} size="xs" />
                                                     )}
                                                 </>
-                                            )}
+                                            ) as unknown as string}
                                         />
                                     </td>
                                     <td>

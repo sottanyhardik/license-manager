@@ -12,7 +12,7 @@ import { Bell, Building2, CalendarCheck, CalendarDays, CalendarRange, Check, Dol
 
 export default function ItemReport() {
     const navigate = useNavigate();
-    const [reportData, setReportData] = useState(null);
+    const [reportData, setReportData] = useState<Record<string, any> | null>(null);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
 
@@ -318,7 +318,7 @@ export default function ItemReport() {
 
         try {
             // Update notes or condition_sheet on the license
-            const updateData = {};
+            const updateData: Record<string, any> = {};
             if (field === 'notes') {
                 updateData.balance_report_notes = editValue;
             } else if (field === 'condition_sheet') {
@@ -480,7 +480,7 @@ export default function ItemReport() {
                                         Min Balance (CIF)
                                     </label>
                                     <select
-                                        flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
+                                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={minBalance}
                                         onChange={(e) => setMinBalance(parseInt(e.target.value))}
                                     >
@@ -499,7 +499,7 @@ export default function ItemReport() {
                                         Min Avail Qty
                                     </label>
                                     <select
-                                        flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
+                                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={minAvailQty}
                                         onChange={(e) => setMinAvailQty(parseInt(e.target.value))}
                                     >
@@ -518,7 +518,7 @@ export default function ItemReport() {
                                         License Status
                                     </label>
                                     <select
-                                        flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
+                                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={licenseStatus}
                                         onChange={(e) => setLicenseStatus(e.target.value)}
                                     >
@@ -601,7 +601,7 @@ export default function ItemReport() {
                                         Is Restricted
                                     </label>
                                     <select
-                                        flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
+                                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={isRestricted}
                                         onChange={(e) => setIsRestricted(e.target.value)}
                                     >
@@ -784,13 +784,13 @@ export default function ItemReport() {
                                         <span className="text-muted small">Avail Bal:</span>
                                         <span className="fw-bold text-success">
                                             {(() => {
-                                                const uniqueLicenses = {};
-                                                reportData.items.forEach(item => {
+                                                const uniqueLicenses: Record<string, number> = {};
+                                                reportData.items.forEach((item: any) => {
                                                     if (!uniqueLicenses[item.license_id]) {
                                                         uniqueLicenses[item.license_id] = item.available_balance || 0;
                                                     }
                                                 });
-                                                return Object.values(uniqueLicenses).reduce((sum, val) => sum + val, 0).toLocaleString('en-IN', {
+                                                return Object.values(uniqueLicenses).reduce((sum: number, val: number) => sum + val, 0).toLocaleString('en-IN', {
                                                     minimumFractionDigits: 2,
                                                     maximumFractionDigits: 2
                                                 });
@@ -801,13 +801,13 @@ export default function ItemReport() {
                                         <span className="text-muted small">Balance CIF:</span>
                                         <span className="fw-bold text-primary">
                                             {(() => {
-                                                const uniqueLicenses = {};
-                                                reportData.items.forEach(item => {
+                                                const uniqueLicenses: Record<string, number> = {};
+                                                reportData.items.forEach((item: any) => {
                                                     if (!uniqueLicenses[item.license_id]) {
                                                         uniqueLicenses[item.license_id] = item.balance_cif || 0;
                                                     }
                                                 });
-                                                return Object.values(uniqueLicenses).reduce((sum, val) => sum + val, 0).toLocaleString('en-IN', {
+                                                return Object.values(uniqueLicenses).reduce((sum: number, val: number) => sum + val, 0).toLocaleString('en-IN', {
                                                     minimumFractionDigits: 2,
                                                     maximumFractionDigits: 2
                                                 });
@@ -930,7 +930,7 @@ export default function ItemReport() {
                                             });
 
                                             let srNo = 0;
-                                            return Object.values(groupedByLicense).map((licenseItems) => {
+                                            return Object.values(groupedByLicense as Record<string, any[]>).map((licenseItems: any[]) => {
                                                 const firstItem = licenseItems[0];
                                                 const rowSpan = licenseItems.length;
 
@@ -1152,7 +1152,7 @@ export default function ItemReport() {
                                         </tbody>
                                         <tfoot style={{position: 'sticky', bottom: 0, zIndex: 10}}>
                                         <tr className="table-secondary font-bold">
-                                            <td colSpan="10" className="text-end" style={{
+                                            <td colSpan={10} className="text-end" style={{
                                                 position: 'sticky',
                                                 left: 0,
                                                 zIndex: 11,
@@ -1167,16 +1167,16 @@ export default function ItemReport() {
                                             <td className="text-end text-success" style={{fontWeight: '600'}}>
                                                 {(() => {
                                                     // Calculate unique license balance total (don't double count licenses with multiple items)
-                                                    const uniqueLicenses = {};
-                                                    reportData.items.forEach(item => {
+                                                    const uniqueLicenses: Record<string, number> = {};
+                                                    reportData.items.forEach((item: any) => {
                                                         if (!uniqueLicenses[item.license_id]) {
                                                             uniqueLicenses[item.license_id] = item.available_balance || 0;
                                                         }
                                                     });
-                                                    return Object.values(uniqueLicenses).reduce((sum, val) => sum + val, 0).toFixed(2);
+                                                    return Object.values(uniqueLicenses).reduce((sum: number, val: number) => sum + val, 0).toFixed(2);
                                                 })()}
                                             </td>
-                                            <td colSpan="4"></td>
+                                            <td colSpan={4}></td>
                                         </tr>
                                         </tfoot>
                                     </table>

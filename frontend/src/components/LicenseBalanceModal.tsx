@@ -59,7 +59,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                 <div>
                     <textarea
                         className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm mb-2 outline-none focus-visible:border-ring"
-                        rows="4"
+                        rows={4}
                         value={textValue}
                         onChange={(e) => setTextValue(e.target.value)}
                         placeholder={`Enter ${label.toLowerCase()} here...`}
@@ -185,7 +185,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     const loadItemOptions = async (inputValue) => {
         try {
             // Filter items by license's norm class (get_norm_class)
-            const params = {
+            const params: Record<string, any> = {
                 search: inputValue,
                 page_size: 50
             };
@@ -350,7 +350,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             <DialogContent
                 className="max-h-[95vh] w-[95vw] max-w-[1400px] overflow-hidden p-0"
                 // Hide default close button — we render our own in the header
-                style={{ '--dialog-close-display': 'none' }}
+                style={{ '--dialog-close-display': 'none' } as React.CSSProperties}
             >
                 {/* Custom gradient header */}
                 <div
@@ -457,12 +457,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         whiteSpace: 'nowrap'
                                                                     }}
                                                                     onMouseOver={(e) => {
-                                                                        e.target.style.backgroundColor = 'var(--success-border)';
-                                                                        e.target.style.textDecoration = 'underline';
+                                                                        (e.target as HTMLElement).style.backgroundColor = 'var(--success-border)';
+                                                                        (e.target as HTMLElement).style.textDecoration = 'underline';
                                                                     }}
                                                                     onMouseOut={(e) => {
-                                                                        e.target.style.backgroundColor = 'var(--success-bg)';
-                                                                        e.target.style.textDecoration = 'none';
+                                                                        (e.target as HTMLElement).style.backgroundColor = 'var(--success-bg)';
+                                                                        (e.target as HTMLElement).style.textDecoration = 'none';
                                                                     }}
                                                                 >
                                                                     Copy
@@ -641,7 +641,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                         </tr>
                                                         {expandedItem?.id === item.id && usageData && (
                                                             <tr>
-                                                                <td colSpan="3">
+                                                                <td colSpan={3}>
                                                                     <div className="p-3 bg-light">
                                                                         <h6>Usage Details:</h6>
 
@@ -798,7 +798,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 defaultOptions
                                                                                 value={editingItems}
                                                                                 loadOptions={loadItemOptions}
-                                                                                onChange={setEditingItems}
+                                                                                onChange={(v) => setEditingItems(v as any[])}
                                                                                 placeholder="Select items..."
                                                                                 className="flex-grow-1"
                                                                                 menuPortalTarget={document.body}
@@ -934,7 +934,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             </tr>
                                                             {expandedItem?.id === item.id && usageData && (
                                                                 <tr>
-                                                                    <td colSpan="11">
+                                                                    <td colSpan={11}>
                                                                         <div className="p-3 bg-light">
                                                                             <h6>Usage Details:</h6>
 
@@ -1014,10 +1014,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                         </div>
                                                                                         <div className="flex-1 text-right">
                                                                                             <strong>
-                                                                                                Balance: {parseFloat(
-                                                                                                    (item.quantity || 0) -
-                                                                                                    (item.debited_quantity || 0) -
-                                                                                                    (item.allotted_quantity || 0)
+                                                                                                Balance: {(
+                                                                                                    (Number(item.quantity) || 0) -
+                                                                                                    (Number(item.debited_quantity) || 0) -
+                                                                                                    (Number(item.allotted_quantity) || 0)
                                                                                                 ).toFixed(2)}
                                                                                             </strong>
                                                                                         </div>

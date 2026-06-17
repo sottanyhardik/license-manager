@@ -1,18 +1,22 @@
 import Select from "react-select";
 import AsyncSelectField from "./AsyncSelectField";
+import type { FieldMeta, SelectOption } from "../types";
+
+interface HybridSelectProps {
+    fieldMeta?: FieldMeta;
+    value?: unknown;
+    onChange: (value: unknown) => void;
+    isMulti?: boolean;
+    placeholder?: string;
+    isClearable?: boolean;
+    isDisabled?: boolean;
+    staticOptions?: SelectOption[] | null;
+    className?: string;
+    formatLabel?: ((item: Record<string, unknown>) => string) | null;
+}
 
 /**
  * HybridSelect Component - Intelligently chooses between static Select and AsyncSelect
- *
- * Props:
- * - fieldMeta: metadata from backend containing type, endpoint, choices, etc.
- * - value: current selected value(s)
- * - onChange: callback function(value)
- * - isMulti: enable multi-select (default: false)
- * - placeholder: placeholder text
- * - isClearable: allow clearing selection (default: true)
- * - isDisabled: disable the select
- * - staticOptions: array of static options [{value, label}] (overrides choices)
  */
 export default function HybridSelect({
     fieldMeta = {},
@@ -24,35 +28,26 @@ export default function HybridSelect({
     isDisabled = false,
     staticOptions = null,
     className = "",
-    formatLabel: customFormatLabel = null  // Accept custom formatLabel prop
-}) {
-    // Determine if we should use AsyncSelect or static Select
+    formatLabel: customFormatLabel = null,
+}: HybridSelectProps) {
     const useAsync = Boolean(fieldMeta.endpoint || fieldMeta.fk_endpoint);
     const hasChoices = Boolean(staticOptions || fieldMeta.choices);
 
-    // For FK/ManyToMany fields, use AsyncSelect
     if (useAsync) {
-        const endpoint = fieldMeta.endpoint || fieldMeta.fk_endpoint;
+        const endpoint = (fieldMeta.endpoint || fieldMeta.fk_endpoint)!;
         const labelField = fieldMeta.label_field || "name";
         const valueField = fieldMeta.value_field || "id";
 
-        // Custom label formatter based on field type
-        const defaultFormatLabel = (item) => {
-            // Special handling for hs_code - show hs_code field instead of id
+        const defaultFormatLabel = (item: Record<string, unknown>) => {
             if (endpoint.includes("hs-code")) {
-                return item.hs_code || item.name || item.id;
+                return String(item.hs_code || item.name || item.id || "");
             }
-
-            // Special handling for ports - show name (which includes code like "NHAVA SHEVA SEA (INNSA1)")
             if (endpoint.includes("port")) {
-                return item.name || item.code || item.id;
+                return String(item.name || item.code || item.id || "");
             }
-
-            // Default: use labelField
-            return item[labelField] || item.name || item.id;
+            return String(item[labelField] || item.name || item.id || "");
         };
 
-        // Use custom formatLabel if provided, otherwise use default
         const formatLabel = customFormatLabel || defaultFormatLabel;
 
         return (
@@ -68,49 +63,41 @@ export default function HybridSelect({
                 isDisabled={isDisabled}
                 formatLabel={formatLabel}
                 className={className}
-                // Pre-populate the dropdown on first open so small lookup
-                // tables (scheme codes, notification numbers, purchase
-                // statuses, …) show their options without forcing the user
-                // to type a search string. AsyncSelect still page-limits to
-                // 50 results, so large endpoints (companies, hs-codes) stay
-                // responsive.
                 loadOnMount={true}
             />
         );
     }
 
-    // For fields with fixed choices (like account_type, etc.)
     if (hasChoices) {
-        let options = staticOptions;
+        let options: SelectOption[] = staticOptions || [];
 
-        // If no staticOptions provided, try to parse from fieldMeta.choices
-        if (!options && fieldMeta.choices) {
+        if (!staticOptions && fieldMeta.choices) {
             options = fieldMeta.choices.map(choice => {
                 if (Array.isArray(choice)) {
-                    return {value: choice[0], label: choice[1]};
+                    return { value: choice[0], label: choice[1] };
                 }
                 if (typeof choice === "object") {
-                    return {value: choice.value, label: choice.label};
+                    return { value: (choice as SelectOption).value, label: (choice as SelectOption).label };
                 }
-                return {value: choice, label: choice};
+                return { value: String(choice), label: String(choice) };
             });
         }
 
-        // Find selected option(s)
-        let selectedOption = null;
+        let selectedOption: SelectOption | SelectOption[] | null = null;
         if (isMulti) {
             const values = Array.isArray(value) ? value : (value ? [value] : []);
-            selectedOption = options.filter(opt => values.includes(opt.value));
+            selectedOption = options.filter(opt => (values as unknown[]).includes(opt.value));
         } else {
             selectedOption = options.find(opt => opt.value === value) || null;
         }
 
-        const handleChange = (selected) => {
+        const handleChange = (selected: SelectOption | SelectOption[] | null) => {
             if (isMulti) {
-                const values = selected ? selected.map(opt => opt.value) : [];
-                onChange(values);
+                const arr = selected as SelectOption[] | null;
+                onChange(arr ? arr.map(opt => opt.value) : []);
             } else {
-                onChange(selected ? selected.value : null);
+                const single = selected as SelectOption | null;
+                onChange(single ? single.value : null);
             }
         };
 
@@ -118,7 +105,7 @@ export default function HybridSelect({
             <Select
                 options={options}
                 value={selectedOption}
-                onChange={handleChange}
+                onChange={handleChange as (value: unknown) => void}
                 isMulti={isMulti}
                 isClearable={isClearable}
                 isDisabled={isDisabled}
@@ -129,23 +116,19 @@ export default function HybridSelect({
                     control: (base) => ({
                         ...base,
                         minHeight: "38px",
-                        borderColor: "#dee2e6"
+                        borderColor: "#dee2e6",
                     }),
-                    menu: (base) => ({
-                        ...base,
-                        zIndex: 9999
-                    })
+                    menu: (base) => ({ ...base, zIndex: 9999 }),
                 }}
             />
         );
     }
 
-    // Fallback to regular input if no special handling needed
     return (
         <input
             type="text"
             className="react-select-container"
-            value={value || ""}
+            value={String(value || "")}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             disabled={isDisabled}

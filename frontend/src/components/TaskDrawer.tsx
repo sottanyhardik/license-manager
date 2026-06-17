@@ -172,7 +172,7 @@ export default function TaskDrawer({ show, onClose }) {
     const fetchTasks = useMemo(() => async () => {
         setLoading(true);
         try {
-            const params = {};
+            const params: Record<string, string> = {};
             if (search.trim()) params.search = search.trim();
             if (statusFilter && statusFilter !== "open") params.status = statusFilter;
             const data = await listTasks(params);
@@ -220,7 +220,7 @@ export default function TaskDrawer({ show, onClose }) {
         const text = (rawText || "").trim();
         if (!text) return;
         const parsed = parseVoiceCommand(text, usersRef.current);
-        const payload = { title: parsed.title, priority: parsed.priority };
+        const payload: Record<string, any> = { title: parsed.title, priority: parsed.priority };
         if (parsed.assigned_to) payload.assigned_to = parsed.assigned_to;
         try {
             const created = await createTask(payload);
@@ -244,7 +244,7 @@ export default function TaskDrawer({ show, onClose }) {
         }
         setSaving(true);
         try {
-            const payload = {
+            const payload: Record<string, any> = {
                 title: draft.title.trim(),
                 description: draft.description.trim(),
                 priority: draft.priority,
@@ -522,7 +522,7 @@ export default function TaskDrawer({ show, onClose }) {
                     <div className="flex flex-wrap gap-2">
                         <div className="col-6">
                             <select
-                                flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
+                                className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                 value={draft.priority}
                                 onChange={(e) => setDraft(d => ({ ...d, priority: e.target.value }))}
                             >
@@ -541,7 +541,7 @@ export default function TaskDrawer({ show, onClose }) {
                         </div>
                         <div className="col-12">
                             <select
-                                flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
+                                className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                 value={draft.assigned_to}
                                 onChange={(e) => setDraft(d => ({ ...d, assigned_to: e.target.value }))}
                             >
@@ -588,7 +588,7 @@ export default function TaskDrawer({ show, onClose }) {
                         onKeyDown={(e) => e.key === "Enter" && fetchTasks()}
                     />
                     <select
-                        flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
+                        className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                         style={{ width: 130 }}
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
@@ -734,7 +734,7 @@ export default function TaskDrawer({ show, onClose }) {
                                         <div className="flex flex-wrap gap-2 mb-2">
                                             <div className="col-6">
                                                 <select
-                                                    flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                                     value={task.priority}
                                                     onChange={(e) => handleInlineUpdate(task, { priority: e.target.value })}
                                                 >
@@ -753,7 +753,7 @@ export default function TaskDrawer({ show, onClose }) {
                                             </div>
                                             <div className="col-12">
                                                 <select
-                                                    flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                                     value={task.assigned_to || ""}
                                                     onChange={(e) => handleInlineUpdate(task, { assigned_to: e.target.value ? parseInt(e.target.value, 10) : null })}
                                                 >

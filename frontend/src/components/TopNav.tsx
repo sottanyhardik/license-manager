@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -82,7 +82,7 @@ function NavMenu({ icon, label, items, isActive, end = false }) {
 }
 
 
-function MenuItem({ to, icon, label, active, onClick, danger = false }) {
+function MenuItem({ to, icon, label, active, onClick, danger = false }: { to?: string; icon?: string; label?: React.ReactNode; active?: boolean; onClick?: ((...args: unknown[]) => unknown); danger?: boolean }) {
     const classes = [
         "tb-nav-menu-item",
         active ? "is-active" : "",

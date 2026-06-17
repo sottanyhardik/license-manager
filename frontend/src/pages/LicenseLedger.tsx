@@ -58,7 +58,7 @@ function LicenseWiseLedger({ data, navigate }) {
                                     <React.Fragment key={company.company_id}>
                                         {/* Company name row */}
                                         <tr style={{ background: ci % 2 === 0 ? 'var(--tb-brand-50)' : 'var(--tb-sunken)', borderTop: ci > 0 ? '2px solid var(--tb-border)' : 'none' }}>
-                                            <td colSpan="5" style={{ padding: '5px 12px', fontWeight: '700', color: 'var(--tb-text)', fontSize: '0.82rem' }}>
+                                            <td colSpan={5} style={{ padding: '5px 12px', fontWeight: '700', color: 'var(--tb-text)', fontSize: '0.82rem' }}>
                                                 <Building2 className="size-4" aria-hidden="true" />{company.company_name}
                                             </td>
                                         </tr>
@@ -88,7 +88,7 @@ function LicenseWiseLedger({ data, navigate }) {
                                         ))}
                                         {/* Company total row */}
                                         <tr style={{ background: 'var(--tb-brand-active)', color: '#fff', fontWeight: '700' }}>
-                                            <td colSpan="3" style={{ padding: '5px 12px', textAlign: 'right', fontSize: 12 }}>
+                                            <td colSpan={3} style={{ padding: '5px 12px', textAlign: 'right', fontSize: 12 }}>
                                                 Total — {company.company_name}
                                             </td>
                                             <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--tb-success-soft)' }}>{fmt(company.purchase_total)}</td>
@@ -156,15 +156,16 @@ export default function LicenseLedger() {
 
     const { fyStart: currentFYStart, fyEnd: currentFYEnd } = getCurrentFinancialYear();
 
-    const [filters, setFilters] = useState({
-        license_type: 'ALL',
-        min_balance: '',
-        search: '',
-        company: null,
-        active_only: true,
-        ordering: '-license_date',
-        purchase_date_from: currentFYStart,  // Default to current FY start
-        purchase_date_to: currentFYEnd       // Default to current FY end
+    const [filters, setFilters] = useState<{
+        license_type: string; min_balance: string; search: string;
+        company: { value: string | number } | string | null;
+        active_only: boolean; ordering: string;
+        purchase_date_from: string; purchase_date_to: string;
+        no_purchases?: boolean;
+    }>({
+        license_type: 'ALL', min_balance: '', search: '', company: null,
+        active_only: true, ordering: '-license_date',
+        purchase_date_from: currentFYStart, purchase_date_to: currentFYEnd,
     });
 
     const licenseTypeOptions = [
@@ -185,14 +186,17 @@ export default function LicenseLedger() {
         if (currentFilters.license_type) params.append('license_type', currentFilters.license_type);
         if (currentFilters.min_balance) params.append('min_balance', currentFilters.min_balance);
         if (currentFilters.search) params.append('search', currentFilters.search);
-        if (currentFilters.company) params.append('company', currentFilters.company.value || currentFilters.company);
+        if (currentFilters.company) {
+            const co = currentFilters.company;
+            params.append('company', String(typeof co === 'object' && co !== null ? co.value : co));
+        }
         if (currentFilters.ordering) params.append('ordering', currentFilters.ordering);
         if (currentFilters.purchase_date_from) params.append('purchase_date_from', currentFilters.purchase_date_from);
         if (currentFilters.purchase_date_to) params.append('purchase_date_to', currentFilters.purchase_date_to);
-        params.append('active_only', currentFilters.active_only);
+        params.append('active_only', String(currentFilters.active_only));
 
         // Include no_purchases parameter if provided
-        if (currentFilters.no_purchases) params.append('no_purchases', currentFilters.no_purchases);
+        if (currentFilters.no_purchases) params.append('no_purchases', String(currentFilters.no_purchases));
 
         return params;
     }, [filters]);
@@ -466,7 +470,7 @@ export default function LicenseLedger() {
                         <h6 className="mb-0 font-semibold">Filters & Search</h6>
                         {filters.company && (
                             <span className="badge bg-info ml-1" style={{ fontSize: 11 }}>
-                                <Building2 className="size-4" aria-hidden="true" />{filters.company.label}
+                                <Building2 className="size-4" aria-hidden="true" />{typeof filters.company === 'object' && filters.company !== null ? (filters.company as any).label : filters.company}
                             </span>
                         )}
                     </div>

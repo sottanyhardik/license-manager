@@ -1,6 +1,13 @@
-import {useContext} from "react";
+import React, {useContext} from "react";
 import {Navigate, useLocation} from "react-router-dom";
 import {AuthContext} from "../context/AuthContext";
+
+interface ProtectedRouteProps {
+    children: React.ReactNode;
+    requiredRole?: string;
+    requiredAnyRole?: string[];
+    requireSuperuser?: boolean;
+}
 
 /**
  * Wraps a route so it requires authentication.
@@ -12,7 +19,7 @@ import {AuthContext} from "../context/AuthContext";
  * Unauthenticated users → /login
  * Authenticated but unauthorised users → /403
  */
-export default function ProtectedRoute({children, requiredRole, requiredAnyRole, requireSuperuser}) {
+export default function ProtectedRoute({children, requiredRole, requiredAnyRole, requireSuperuser}: ProtectedRouteProps) {
     const {user, loading, hasRole, hasAnyRole} = useContext(AuthContext);
     const location = useLocation();
 
@@ -34,5 +41,5 @@ export default function ProtectedRoute({children, requiredRole, requiredAnyRole,
         return <Navigate to="/403" replace/>;
     }
 
-    return children;
+    return <>{children}</>;
 }

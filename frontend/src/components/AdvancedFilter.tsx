@@ -17,10 +17,16 @@ export default function AdvancedFilter({
     filterConfig = {},
     searchFields = [],
     onFilterChange,
-    initialFilters = {},
-    defaultFilters = {},
+    initialFilters = {} as Record<string, any>,
+    defaultFilters = {} as Record<string, any>,
+}: {
+    filterConfig?: Record<string, any>;
+    searchFields?: string[];
+    onFilterChange?: (filters: Record<string, any>) => void;
+    initialFilters?: Record<string, any>;
+    defaultFilters?: Record<string, any>;
 }) {
-    const [searchTerm, setSearchTerm] = useState(initialFilters.search || "");
+    const [searchTerm, setSearchTerm] = useState(String(initialFilters.search || ""));
     const { search: _search, ...initialFiltersWithoutSearch } = initialFilters;
     const [filterValues, setFilterValues] = useState({ ...defaultFilters, ...initialFiltersWithoutSearch });
     const isInitialMount = useRef(true);
@@ -47,7 +53,7 @@ export default function AdvancedFilter({
         if (isAutoApplyInitialMount.current) { isAutoApplyInitialMount.current = false; return; }
         if (skipNextAutoApply.current) { skipNextAutoApply.current = false; return; }
         const timeoutId = setTimeout(() => {
-            const params = {};
+            const params: Record<string, any> = {};
             if (searchTerm) params.search = searchTerm;
             Object.entries(filterValues).forEach(([key, value]) => {
                 if (value !== null && value !== undefined && value !== "") {

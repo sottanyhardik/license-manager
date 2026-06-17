@@ -19,18 +19,26 @@ import { Card, CardContent } from "@/components/ui/card";
  */
 export default function TransferLetterForm({
     instanceId,
-    instanceType, // 'allotment' | 'boe' | 'trade'
+    instanceType,
     instanceIdentifier,
     items,
     disabled = false,
     onSuccess,
     onError,
+}: {
+    instanceId?: string | number;
+    instanceType?: string;
+    instanceIdentifier?: string;
+    items?: Record<string, any>[];
+    disabled?: boolean;
+    onSuccess?: (msg: string) => void;
+    onError?: (msg: string) => void;
 }) {
     const [parties, setParties] = useState([
         { id: 1, company: null, addressLine1: "", addressLine2: "", template: null },
     ]);
     const [companyOptions, setCompanyOptions] = useState([]);
-    const [licenseEdits, setLicenseEdits] = useState({});
+    const [licenseEdits, setLicenseEdits] = useState<Record<string, any>>({});
     const [generating, setGenerating] = useState(null); // null | 'with_copy' | 'without_copy' | 'pdf'
     const [selectedItems, setSelectedItems] = useState(items?.map((item) => item.id) || []);
 
@@ -39,14 +47,14 @@ export default function TransferLetterForm({
     }, [items]);
 
     const groupedItems = useMemo(() => {
-        const groups = {};
+        const groups: Record<string, { license_number: string; purchase_status: any; item_ids: any[]; total_cif: number }> = {};
         (items || []).forEach((item) => {
-            const key = item.license_number || "-";
+            const key = String(item.license_number || "-");
             if (!groups[key]) {
                 groups[key] = { license_number: key, purchase_status: item.purchase_status, item_ids: [], total_cif: 0 };
             }
             groups[key].item_ids.push(item.id);
-            groups[key].total_cif += parseFloat(item.cif_fc || 0);
+            groups[key].total_cif += parseFloat(String(item.cif_fc || 0));
         });
         return Object.values(groups);
     }, [items]);

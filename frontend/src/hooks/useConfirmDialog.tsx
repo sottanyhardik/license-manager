@@ -32,7 +32,17 @@ import React, { useState, useCallback } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 export const useConfirmDialog = () => {
-  const [dialogConfig, setDialogConfig] = useState({
+  const [dialogConfig, setDialogConfig] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    severity: string;
+    confirmText: string;
+    cancelText: string;
+    showCancelButton?: boolean;
+    onConfirm: (() => void) | null;
+    onCancel: (() => void) | null;
+  }>({
     show: false,
     title: '',
     message: '',

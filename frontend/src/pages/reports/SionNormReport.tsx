@@ -54,25 +54,25 @@ export default function SionNormReport({ sionNorm, title }) {
     const renderTableHeaders = () => (
         <thead className="sticky top-0 z-10 bg-primary/10 text-[10px] text-foreground [&_th]:border [&_th]:border-border [&_th]:px-1.5 [&_th]:py-1 [&_th]:font-semibold">
             <tr>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '40px'}}>Sr</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '120px'}}>DFIA No</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '90px'}}>DFIA Dt</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '90px'}}>Expiry Dt</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '200px'}}>Exporter</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '100px'}}>Total CIF</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '100px'}}>Balance CIF</th>
-                <th colSpan="9" className="text-center">Vegetable Oil</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '80px'}}>10% Bal</th>
-                <th colSpan="4" className="text-center">Juice</th>
-                <th colSpan="4" className="text-center">Food Flavour</th>
-                <th colSpan="2" className="text-center">Fruit</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '60px'}}>Lvng Agt</th>
-                <th colSpan="2" className="text-center">Starch 1108</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '60px'}}>Strch 3505</th>
-                <th colSpan="8" className="text-center">Milk & Milk</th>
-                <th colSpan="3" className="text-center">PP</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '60px'}}>Al Foil</th>
-                <th rowSpan="2" style={{verticalAlign: 'middle', minWidth: '80px'}}>Wastage</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '40px'}}>Sr</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '120px'}}>DFIA No</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '90px'}}>DFIA Dt</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '90px'}}>Expiry Dt</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '200px'}}>Exporter</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '100px'}}>Total CIF</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '100px'}}>Balance CIF</th>
+                <th colSpan={9} className="text-center">Vegetable Oil</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '80px'}}>10% Bal</th>
+                <th colSpan={4} className="text-center">Juice</th>
+                <th colSpan={4} className="text-center">Food Flavour</th>
+                <th colSpan={2} className="text-center">Fruit</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '60px'}}>Lvng Agt</th>
+                <th colSpan={2} className="text-center">Starch 1108</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '60px'}}>Strch 3505</th>
+                <th colSpan={8} className="text-center">Milk & Milk</th>
+                <th colSpan={3} className="text-center">PP</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '60px'}}>Al Foil</th>
+                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '80px'}}>Wastage</th>
             </tr>
             <tr>
                 <th style={{minWidth: '80px'}}>HSN</th>
@@ -167,10 +167,10 @@ export default function SionNormReport({ sionNorm, title }) {
 
     const renderTotalsRow = (totals, label) => (
         <tr className="bg-warning/15 font-bold text-warning [&_td]:border [&_td]:border-border/50 [&_td]:px-1.5 [&_td]:py-1" style={{fontSize: '9px'}}>
-            <td colSpan="5" className="text-end">{label}:</td>
+            <td colSpan={5} className="text-end">{label}:</td>
             <td className="text-end">{formatNumber(totals.total_cif)}</td>
             <td className="text-end">{formatNumber(totals.balance_cif)}</td>
-            <td colSpan="2"></td>
+            <td colSpan={2}></td>
             <td className="text-end">{formatNumber(totals.veg_oil_total_qty, 2)}</td>
             <td className="text-end">{formatNumber(totals.rbd_qty, 2)}</td>
             <td className="text-end">{formatNumber(totals.rbd_cif)}</td>
@@ -179,10 +179,10 @@ export default function SionNormReport({ sionNorm, title }) {
             <td className="text-end">{formatNumber(totals.olive_qty, 2)}</td>
             <td className="text-end">{formatNumber(totals.olive_cif)}</td>
             <td className="text-end">{formatNumber(totals.ten_percent_balance)}</td>
-            <td colSpan="2"></td>
+            <td colSpan={2}></td>
             <td className="text-end">{formatNumber(totals.juice_qty, 2)}</td>
             <td className="text-end">{formatNumber(totals.juice_cif)}</td>
-            <td colSpan="2"></td>
+            <td colSpan={2}></td>
             <td className="text-end">{formatNumber(totals.ff_qty, 2)}</td>
             <td className="text-end">{formatNumber(totals.df_qty, 2)}</td>
             <td className="text-end">{formatNumber(totals.fruit_cocoa_qty, 2)}</td>
@@ -199,7 +199,7 @@ export default function SionNormReport({ sionNorm, title }) {
             <td className="text-end">{formatNumber(totals.swp_cif)}</td>
             <td className="text-end">{formatNumber(totals.wpc_qty, 2)}</td>
             <td className="text-end">{formatNumber(totals.wpc_cif)}</td>
-            <td colSpan="2"></td>
+            <td colSpan={2}></td>
             <td className="text-end">{formatNumber(totals.pp_qty, 2)}</td>
             <td className="text-end">{formatNumber(totals.aluminium_foil_qty, 2)}</td>
             <td className="text-end">{formatNumber(totals.wastage_cif)}</td>

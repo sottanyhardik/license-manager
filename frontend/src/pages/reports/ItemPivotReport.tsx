@@ -58,7 +58,7 @@ function PurchaseStatusBadge({ code, label }) {
 
 export default function ItemPivotReport() {
     const navigate = useNavigate();
-    const [reportData, setReportData] = useState(null);
+    const [reportData, setReportData] = useState<Record<string, any> | null>(null);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
 
@@ -305,10 +305,10 @@ export default function ItemPivotReport() {
 
     // Calculate summary for a notification
     const calculateNotificationSummary = (licenses) => {
-        const summary = {
+        const summary: Record<string, any> = {
             openingBalance: 0,
             regularItems: {},
-            restrictedItemsByPercentage: {}, // Group by restriction percentage
+            restrictedItemsByPercentage: {},
             totalAvailable: 0
         };
 
@@ -492,7 +492,7 @@ export default function ItemPivotReport() {
                                             Minimum Balance (CIF)
                                         </label>
                                         <select
-                                            flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
+                                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                             value={minBalance}
                                             onChange={(e) => setMinBalance(parseInt(e.target.value))}
                                         >
@@ -513,7 +513,7 @@ export default function ItemPivotReport() {
                                             License Status
                                         </label>
                                         <select
-                                            flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring
+                                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                             value={licenseStatus}
                                             onChange={(e) => setLicenseStatus(e.target.value)}
                                         >
@@ -734,7 +734,7 @@ export default function ItemPivotReport() {
                     {!loading && activeNormTab && reportData?.licenses_by_norm_notification?.[activeNormTab] && Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length > 0 && (
                         <div>
                             {/* Notifications within active norm */}
-                            {Object.entries(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).sort().map(([notification, licenses]) => (
+                            {(Object.entries(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}) as [string, any][]).sort().map(([notification, licenses]: [string, any]) => (
                                 <div key={`${activeNormTab}-${notification}`} className="mb-4">
                                     <div className="card">
                                         <div
@@ -1231,7 +1231,7 @@ export default function ItemPivotReport() {
                                                             left: 0,
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)'
-                                                        }} colSpan="5">
+                                                        }} colSpan={5}>
                                                             <Calculator className="size-4" aria-hidden="true" />
                                                             TOTAL
                                                         </td>
@@ -1353,7 +1353,7 @@ export default function ItemPivotReport() {
                                                                 <tbody>
                                                                 {/* Opening Balance */}
                                                                 <tr className="table-info">
-                                                                    <td colSpan="2" className="text-center font-bold">OPENING BALANCE</td>
+                                                                    <td colSpan={2} className="text-center font-bold">OPENING BALANCE</td>
                                                                     <td className="text-end font-bold">
                                                                         {formatIndianNumber(summary.openingBalance, 2)}
                                                                     </td>
@@ -1362,7 +1362,7 @@ export default function ItemPivotReport() {
                                                                 </tr>
 
                                                                 {/* Regular Items */}
-                                                                {Object.entries(summary.regularItems).map(([itemName, itemData], idx) => (
+                                                                {(Object.entries(summary.regularItems) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
                                                                     <tr key={itemName}>
                                                                         <td className="text-center">{idx + 1}</td>
                                                                         <td className="fw-bold">{itemName}</td>
@@ -1387,17 +1387,17 @@ export default function ItemPivotReport() {
                                                                                 const startIdx = Object.keys(summary.regularItems).length +
                                                                                     Object.entries(summary.restrictedItemsByPercentage)
                                                                                         .slice(0, groupIdx)
-                                                                                        .reduce((acc, [, data]) => acc + Object.keys(data.items).length, 0);
+                                                                                        .reduce((acc: number, [, data]: [string, any]) => acc + Object.keys((data as any).items || {}).length, 0);
 
                                                                                 return (
                                                                                     <React.Fragment key={percentage}>
                                                                                         <tr className="table-warning">
-                                                                                            <td colSpan="5" className="text-center font-bold">
+                                                                                            <td colSpan={5} className="text-center font-bold">
                                                                                                 <TriangleAlert className="size-4" aria-hidden="true" />
                                                                                                 RESTRICTED ITEMS - {percentage}%
                                                                                             </td>
                                                                                         </tr>
-                                                                                        {Object.entries(groupData.items).map(([itemName, itemData], idx) => (
+                                                                                        {(Object.entries((groupData as any).items || {}) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
                                                                                             <tr key={itemName} className="table-light">
                                                                                                 <td className="text-center">{startIdx + idx + 1}</td>
                                                                                                 <td className="fw-bold">{itemName}</td>
@@ -1414,9 +1414,9 @@ export default function ItemPivotReport() {
                                                                                         ))}
                                                                                         {/* Balance for this restriction percentage (shared across all items) */}
                                                                                         <tr className="table-warning">
-                                                                                            <td colSpan="2" className="text-center font-bold">Balance {percentage}%</td>
+                                                                                            <td colSpan={2} className="text-center font-bold">Balance {percentage}%</td>
                                                                                             <td className="text-end font-bold">
-                                                                                                {formatIndianNumber(groupData.sharedRestrictionValue, 2)}
+                                                                                                {formatIndianNumber((groupData as any).sharedRestrictionValue, 2)}
                                                                                             </td>
                                                                                             <td className="text-end font-bold">-</td>
                                                                                             <td className="text-end font-bold">-</td>
@@ -1428,7 +1428,7 @@ export default function ItemPivotReport() {
                                                                 )}
                                                                 {/* Grand-total row for the Summary table. */}
                                                                 <tr className="table-success">
-                                                                    <td colSpan="2" className="text-center font-bold">TOTAL PLANNED CIF</td>
+                                                                    <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF</td>
                                                                     <td className="text-end font-bold">
                                                                         {formatIndianNumber(summary.totalAvailable || 0, 2)}
                                                                     </td>

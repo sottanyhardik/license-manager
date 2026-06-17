@@ -20,7 +20,7 @@ const POLL_CONCURRENT = 5; // simultaneous status requests per tick
 // Defined outside LedgerUpload so React doesn't remount it on every parent render,
 // which would destroy polling intervals.
 const TaskStatusModal = ({ fileTasks, show, onHide }) => {
-    const [taskStatuses, setTaskStatuses] = useState({});
+    const [taskStatuses, setTaskStatuses] = useState<Record<string, any>>({});
     const doneRef = useRef(new Set());
 
     useEffect(() => {
@@ -157,7 +157,7 @@ const LedgerUpload = () => {
         timeout: 300000,
         onSuccess: (results) => {
             const fileInput = document.getElementById("file-input");
-            if (fileInput && results.some((r) => r.success)) fileInput.value = "";
+            if (fileInput && results.some((r) => r.success)) (fileInput as HTMLInputElement).value = "";
         },
     });
 
@@ -193,7 +193,7 @@ const LedgerUpload = () => {
                 setAsyncFileTasks(allFileTasks);
                 setShowTaskModal(true);
                 clearFiles();
-                document.getElementById("file-input").value = "";
+                const _inp = document.getElementById("file-input") as HTMLInputElement | null; if (_inp) _inp.value = "";
             }
             if (allErrors.length > 0) {
                 setAsyncError(`${allErrors.length} file(s) failed: ${allErrors.map((e) => e.file).join(", ")}`);
@@ -278,7 +278,7 @@ const LedgerUpload = () => {
                                             variant="outline"
                                             size="sm"
                                             disabled={uploading}
-                                            onClick={() => { clearFiles(); document.getElementById("file-input").value = ""; }}
+                                            onClick={() => { clearFiles(); const _inp = document.getElementById("file-input") as HTMLInputElement | null; if (_inp) _inp.value = ""; }}
                                         >
                                             <Trash2 className="size-3.5" />Clear All
                                         </Button>
@@ -312,7 +312,7 @@ const LedgerUpload = () => {
                             {uploading && Object.keys(fileProgress).length > 0 && (
                                 <div className="mb-4">
                                     <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><CloudUpload className="size-4" />Uploading Files</h3>
-                                    {Object.entries(fileProgress).map(([index, fileData]) => (
+                                    {Object.entries(fileProgress as Record<string, any>).map(([index, fileData]) => (
                                         <div key={index} className="mb-3">
                                             <div className="mb-1 flex items-center justify-between">
                                                 <small className="flex items-center gap-1 truncate text-muted-foreground" style={{ maxWidth: "70%" }}>

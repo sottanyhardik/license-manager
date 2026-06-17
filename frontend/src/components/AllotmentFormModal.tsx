@@ -205,8 +205,8 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
     const handleChange = (field, value) => {
         setFormData(prev => {
-            const updates = { [field]: value };
-            const currentData = { ...prev, ...updates };
+            const updates: Record<string, any> = { [field]: value };
+            const currentData: Record<string, any> = { ...prev, ...updates };
 
             // Auto-calculate cif_fc from unit_value_per_unit and required_quantity
             if ((field === "unit_value_per_unit" || field === "required_quantity" || field === "exchange_rate")
@@ -495,7 +495,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                 <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>BL Detail</label>
                                                 <textarea
                                                     className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm"
-                                                    rows="1"
+                                                    rows={1}
                                                     value={formData.bl_detail}
                                                     onChange={(e) => handleChange('bl_detail', e.target.value)}
                                                     placeholder="BL detail"

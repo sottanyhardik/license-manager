@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, type ReactElement } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
@@ -50,7 +50,7 @@ const REPORT_ROLES = [
     "INCENTIVE_LICENSE_MANAGER",
 ];
 
-const REPORT_ROUTES = [
+const REPORT_ROUTES: [string, ReactElement][] = [
     ["/reports/parle/sion-e1", <SionE1 />],
     ["/reports/parle/sion-e5", <SionE5 />],
     ["/reports/parle/sion-e126", <SionE126 />],

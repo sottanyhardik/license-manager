@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { ACTION_TONE_MAP, CHIP_TONE_MAP, TEXT_TONE_MAP, tone as resolveTone } from "../../theme/tokens";
 
 /*
@@ -19,7 +19,7 @@ import { ACTION_TONE_MAP, CHIP_TONE_MAP, TEXT_TONE_MAP, tone as resolveTone } fr
  */
 const ALLOWED_TONES = new Set(["primary", "success", "warning", "danger", "info", "neutral"]);
 
-function HeaderChip({ icon, label, tone = "neutral", style }) {
+function HeaderChip({ icon, label, tone = "neutral", style }: { icon?: string; label: React.ReactNode; tone?: string; style?: React.CSSProperties }) {
     const safe = ALLOWED_TONES.has(tone) ? tone : "neutral";
     const c = resolveTone(CHIP_TONE_MAP, safe);
     return (
@@ -46,7 +46,7 @@ function HeaderChip({ icon, label, tone = "neutral", style }) {
     );
 }
 
-function ActionButton({ icon, title, onClick, tone = "neutral", children, disabled }) {
+function ActionButton({ icon, title, onClick, tone = "neutral", children, disabled }: { icon?: string; title?: string; onClick?: () => void; tone?: string; children?: React.ReactNode; disabled?: boolean }) {
     const safe = ALLOWED_TONES.has(tone) ? tone : "neutral";
     const c = resolveTone(ACTION_TONE_MAP, safe);
     return (
@@ -104,6 +104,21 @@ export default function EntityCard({
     defaultOpen = false,
     className = "",
     style,
+}: {
+    accent?: string;
+    title?: React.ReactNode;
+    headerChips?: any[];
+    statusBadges?: any[];
+    children?: React.ReactNode;
+    summary?: any[];
+    actions?: any[];
+    onView?: () => void;
+    viewOpen?: boolean;
+    detail?: () => React.ReactNode;
+    detailLabel?: string;
+    defaultOpen?: boolean;
+    className?: string;
+    style?: React.CSSProperties;
 }) {
     const [internalOpen, setInternalOpen] = useState(defaultOpen);
     const isControlled = typeof onView === "function";

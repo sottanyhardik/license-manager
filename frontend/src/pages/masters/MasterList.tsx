@@ -16,7 +16,7 @@ import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../u
 import {openPdfPreview} from "../../utils/pdfPreview";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BookCheck, Building2, Calendar, CalendarX, ChevronDown, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowRight, BookCheck, Building2, Calendar, CalendarX, ChevronDown, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Link as LinkIcon, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Trash2, TriangleAlert, X } from "lucide-react";
 
 /**
  * Generic Master List Page
@@ -59,7 +59,7 @@ export default function MasterList() {
     // ACCOUNT_ACCESS users can edit invoice_no on BOE items only
     const canEditInvoice = canWrite || hasRole('ACCOUNT_ACCESS');
     const [data, setData] = useState([]);
-    const [metadata, setMetadata] = useState({});
+    const [metadata, setMetadata] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -1436,7 +1436,7 @@ export default function MasterList() {
                                                     onClick={() => togglePair(pairKey)}
                                                 >
                                                     <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Sale</span>
-                                                    <Link className="size-4" aria-hidden="true" />
+                                                    <LinkIcon className="size-4" aria-hidden="true" />
                                                     <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Purchase</span>
                                                     <span style={{ fontSize: '0.82rem', color: 'var(--tb-brand)', fontWeight: '600', flex: 1 }}>{companies}</span>
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
@@ -2006,7 +2006,7 @@ export default function MasterList() {
                     <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '24px', width: '480px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                             <h6 style={{ margin: 0, fontWeight: '700', color: 'var(--tb-brand-active)' }}>
-                                <Link className="size-4" aria-hidden="true" />
+                                <LinkIcon className="size-4" aria-hidden="true" />
                                 Link Trade: <span style={{ color: 'var(--tb-brand)' }}>{linkModalTrade.invoice_number || 'No Invoice'}</span>
                             </h6>
                             <button onClick={closeLinkModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--tb-text-tertiary)' }}>

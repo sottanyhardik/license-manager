@@ -1,3 +1,5 @@
+import React from "react";
+
 /**
  * DetailTable — clean, readable table for the expanded detail area of an
  * EntityCard. Wraps the table in a horizontal-scroll container so narrow
@@ -14,8 +16,14 @@ export default function DetailTable({
     columns = [],
     rows = [],
     emptyMessage = "No details to show.",
-    rowKey = (r, i) => r.id ?? i,
+    rowKey = (r: any, i: number) => r.id ?? i,
     rowStyle,
+}: {
+    columns?: any[];
+    rows?: any[];
+    emptyMessage?: string;
+    rowKey?: (r: any, i: number) => any;
+    rowStyle?: (r: any) => React.CSSProperties | undefined;
 }) {
     if (!rows || rows.length === 0) {
         return (

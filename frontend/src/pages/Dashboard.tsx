@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
@@ -29,7 +29,7 @@ function SkeletonStat() {
     );
 }
 
-function SectionTitle({ icon: Icon, tone = "primary", title, subtitle, action }) {
+function SectionTitle({ icon: Icon, tone = "primary", title, subtitle, action }: { icon: React.ElementType; tone?: string; title: React.ReactNode; subtitle?: React.ReactNode; action?: React.ReactNode }) {
     const toneCls = {
         primary: "bg-primary/10 text-primary",
         warning: "bg-warning/10 text-warning",
@@ -108,7 +108,7 @@ export default function Dashboard() {
         const p = s.split("-");
         return p.length === 3 && p[0].length === 4 ? `${p[2]}-${p[1]}-${p[0]}` : s;
     };
-    const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / 86400000);
+    const daysUntil = (d: string) => Math.ceil((new Date(d).getTime() - new Date().getTime()) / 86400000);
     const today = new Date();
     const dateLabel = today.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
     const maxBoe = boeMonthlyData.length ? Math.max(...boeMonthlyData.map((d) => d.count ?? d.value ?? 0), 1) : 1;

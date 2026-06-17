@@ -7,13 +7,13 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export default function DataFilter({ filters = [], searchFields = [], onFilterChange }) {
     const [searchTerm, setSearchTerm] = useState("");
-    const [filterValues, setFilterValues] = useState({});
+    const [filterValues, setFilterValues] = useState<Record<string, any>>({});
 
-    const handleFilterChange = (field, value) =>
+    const handleFilterChange = (field: string, value: any) =>
         setFilterValues((prev) => ({ ...prev, [field]: value }));
 
     const handleApply = () => {
-        const params = { ...filterValues };
+        const params: Record<string, any> = { ...filterValues };
         if (searchTerm) params.search = searchTerm;
         onFilterChange(params);
     };

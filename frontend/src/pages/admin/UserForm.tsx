@@ -32,7 +32,7 @@ export default function UserForm() {
     const [resettingPw, setResettingPw] = useState(false);
     const [newPassword, setNewPassword] = useState("");
     const [showPwReset, setShowPwReset] = useState(false);
-    const [fieldErrors, setFieldErrors] = useState({});
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
 
     useEffect(() => {
         const init = async () => {

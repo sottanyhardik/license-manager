@@ -875,7 +875,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </tbody>
                                 <tfoot className="table-secondary">
                                 <tr>
-                                    <th colSpan="8" className="text-end">Total:</th>
+                                    <th colSpan={8} className="text-end">Total:</th>
                                     <th className="text-end">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
                                     <th className="text-end">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
                                     <th></th>
@@ -987,7 +987,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <HybridSelect
                                         fieldMeta={{endpoint: "masters/sion-classes/", label_field: "norm_class"}}
                                         value={filters.norm_class}
-                                        onChange={(value) => setFilters({...filters, norm_class: value})}
+                                        onChange={(value) => setFilters({...filters, norm_class: value as string})}
                                         placeholder="All Norm Classes"
                                         isClearable={true}
                                     />
@@ -1032,7 +1032,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <HybridSelect
                                         fieldMeta={{endpoint: "masters/companies/", label_field: "name"}}
                                         value={filters.exporter}
-                                        onChange={(value) => setFilters({...filters, exporter: value})}
+                                        onChange={(value) => setFilters({...filters, exporter: value as string})}
                                         placeholder="All Exporters"
                                         isClearable={true}
                                     />
@@ -1042,7 +1042,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <HybridSelect
                                         fieldMeta={{endpoint: "masters/companies/", label_field: "name"}}
                                         value={filters.exclude_exporter}
-                                        onChange={(value) => setFilters({...filters, exclude_exporter: value})}
+                                        onChange={(value) => setFilters({...filters, exclude_exporter: value as string})}
                                         placeholder="None"
                                         isClearable={true}
                                     />

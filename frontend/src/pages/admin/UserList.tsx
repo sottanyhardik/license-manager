@@ -33,7 +33,7 @@ export default function UserList() {
     const fetchUsers = useCallback(async () => {
         setLoading(true);
         try {
-            const params = {};
+            const params: Record<string, string> = {};
             if (search) params.search = search;
             if (roleFilter) params.role = roleFilter;
             if (activeFilter !== "") params.is_active = activeFilter;

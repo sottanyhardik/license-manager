@@ -1,3 +1,5 @@
+import React from "react";
+
 /**
  * PageHeader — Tabler-style page header.
  *
@@ -19,6 +21,12 @@ export default function PageHeader({
     description,
     actions,
     children,
+}: {
+    pretitle?: React.ReactNode;
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    actions?: React.ReactNode;
+    children?: React.ReactNode;
 }) {
     return (
         <div className="page-header">

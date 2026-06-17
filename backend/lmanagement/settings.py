@@ -277,9 +277,13 @@ _cors_extra = [
     o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
 ]
 CORS_ALLOWED_ORIGINS = [
-    # ── Development (HTTP allowed locally) ───────────────────────────────────
+    # ── Development (HTTP allowed locally — all common Vite/React ports) ─────
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:5174",   # Vite uses 5174 when 5173 is taken
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8000",
@@ -290,6 +294,12 @@ CORS_ALLOWED_ORIGINS = [
 
 # Allow cookies (credentials) across origins when frontend sends withCredentials
 CORS_ALLOW_CREDENTIALS = True
+
+# Allow ANY localhost port (covers Vite's dynamic port assignment 5173–5180+)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
 
 # Extend allowed headers to include CSRF and Authorization (case-insensitive)
 try:
@@ -325,6 +335,10 @@ _csrf_extra = [
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8000",

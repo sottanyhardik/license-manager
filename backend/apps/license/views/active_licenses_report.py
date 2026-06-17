@@ -23,6 +23,14 @@ from apps.accounts.permissions import ReportPermission
 from apps.core.constants import DEC_0, DEC_000, GE, MI, IP, SM
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+
 
 class ActiveLicensesReportView(View):
     """
@@ -35,7 +43,7 @@ class ActiveLicensesReportView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        days = int(request.GET.get('days', 30))
+        days = _safe_int(request.GET.get('days'), 30)
         output_format = request.GET.get('format', 'json').lower()
         sion_norm = request.GET.get('sion_norm', None)
 

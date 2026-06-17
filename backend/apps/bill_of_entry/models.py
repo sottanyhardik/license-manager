@@ -1,7 +1,10 @@
 # bill_of_entry/models.py
 from __future__ import annotations
 
+import logging
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, DivisionByZero
+
+logger = logging.getLogger(__name__)
 
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
@@ -291,8 +294,8 @@ class RowDetails(AuditModel):
             try:
                 if RowDetails.objects.filter(pk=self.pk, is_frozen=True).exists():
                     return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Could not check frozen status for RowDetails pk=%s: %s", self.pk, e)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -310,9 +313,10 @@ def _update_balance_sync(item_id: int) -> None:
 
         item = LicenseImportItemsModel.objects.get(id=item_id)
         update_balance_values(item)
-    except Exception:
-        # swallow exceptions to avoid failing DB writes
-        pass
+    except LicenseImportItemsModel.DoesNotExist:
+        logger.warning("_update_balance_sync: item_id=%s no longer exists", item_id)
+    except Exception as e:
+        logger.exception("_update_balance_sync failed for item_id=%s: %s", item_id, e)
 
 
 @receiver(post_save, sender=RowDetails, dispatch_uid="update_stock_on_save")
@@ -328,8 +332,8 @@ def update_stock(sender, instance, **kwargs):
 
     try:
         transaction.on_commit(_job)
-    except Exception:
-        # fallback immediate invocation in environments without on_commit
+    except Exception as e:
+        logger.debug("on_commit not available, invoking balance update immediately: %s", e)
         _job()
 
 
@@ -346,8 +350,8 @@ def delete_stock(sender, instance, **kwargs):
 
     try:
         transaction.on_commit(_job)
-    except Exception:
-        # fallback immediate invocation in environments without on_commit
+    except Exception as e:
+        logger.debug("on_commit not available, invoking balance update immediately: %s", e)
         _job()
 
 

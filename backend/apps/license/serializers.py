@@ -170,11 +170,11 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
     items = serializers.PrimaryKeyRelatedField(many=True, queryset=ItemNameModel.objects.all(), required=False)
     items_detail = serializers.SerializerMethodField(read_only=True)
-    license_number = serializers.CharField(source="license.license_number", read_only=True)
-    license_date = IndianDateField(source="license.license_date", read_only=True)
-    license_expiry_date = IndianDateField(source="license.license_expiry_date", read_only=True)
+    license_number = serializers.CharField(source="license.license_number", read_only=True, allow_null=True)
+    license_date = IndianDateField(source="license.license_date", read_only=True, allow_null=True)
+    license_expiry_date = IndianDateField(source="license.license_expiry_date", read_only=True, allow_null=True)
     notification_number = serializers.SlugRelatedField(source="license.notification_number", slug_field="code", read_only=True)
-    exporter_name = serializers.CharField(source="license.exporter.name", read_only=True)
+    exporter_name = serializers.CharField(source="license.exporter.name", read_only=True, allow_null=True)
     notes = serializers.CharField(source="license.balance_report_notes", read_only=True, allow_null=True, allow_blank=True)
     hs_code_detail = HSCodeSerializer(source='hs_code', read_only=True)
     hs_code_label = serializers.SerializerMethodField()
@@ -1522,8 +1522,8 @@ class IncentiveLicenseSerializer(serializers.ModelSerializer):
     license_expiry_date = IndianDateField(required=False, allow_null=True)
 
     # Read-only fields for display
-    exporter_name = serializers.CharField(source="exporter.name", read_only=True)
-    port_name = serializers.CharField(source="port_code.name", read_only=True)
+    exporter_name = serializers.CharField(source="exporter.name", read_only=True, allow_null=True)
+    port_name = serializers.CharField(source="port_code.name", read_only=True, allow_null=True)
     sold_value = serializers.SerializerMethodField()
     balance_value = serializers.SerializerMethodField()
 

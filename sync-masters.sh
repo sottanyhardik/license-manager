@@ -26,11 +26,18 @@ ok()   { [ "$QUIET" != "--quiet" ] && echo -e "${GREEN}✓${NC} $*"; return 0; }
 warn() { echo -e "${YELLOW}⚠${NC} $*"; }
 err()  { echo -e "${RED}✗${NC} $*"; }
 
-PASSWORD="admin"
-SOURCE_IP="143.110.252.201"             # license-manager (canonical source)
-FOLLOWER_IPS=("139.59.92.226:labdhi" "165.232.185.220:tractor")
-REMOTE_PATH="/home/django/license-manager/backend"
-VENV_ACTIVATE="/home/django/license-manager/venv/bin/activate"
+PASSWORD="${SYNC_PASSWORD:-}"             # set SYNC_PASSWORD env var — never hardcode
+SOURCE_IP="${SYNC_SOURCE_IP:-143.110.252.201}"
+FOLLOWER_IPS=("${SYNC_FOLLOWER1:-139.59.92.226}:labdhi" "${SYNC_FOLLOWER2:-165.232.185.220}:tractor")
+REMOTE_PATH="${SYNC_REMOTE_PATH:-/home/django/license-manager/backend}"
+VENV_ACTIVATE="${SYNC_VENV:-/home/django/license-manager/venv/bin/activate}"
+
+if [ -z "$PASSWORD" ]; then
+    err "SYNC_PASSWORD env var is not set. Export it before running this script."
+    err "  export SYNC_PASSWORD=yourpassword"
+    err "  (Recommended: use SSH key auth instead — see README)"
+    exit 1
+fi
 
 if ! command -v sshpass &>/dev/null; then
     err "sshpass not installed. Install with: brew install sshpass (Mac) or apt install sshpass (Linux)"

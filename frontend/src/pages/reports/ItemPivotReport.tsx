@@ -1365,7 +1365,7 @@ export default function ItemPivotReport() {
                                                                 {(Object.entries(summary.regularItems) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
                                                                     <tr key={itemName}>
                                                                         <td className="text-center">{idx + 1}</td>
-                                                                        <td className="fw-bold">{itemName}</td>
+                                                                        <td className="font-bold">{itemName}</td>
                                                                         <td className="text-end">
                                                                             {formatIndianNumber(itemData.available, 2)}
                                                                         </td>
@@ -1400,7 +1400,7 @@ export default function ItemPivotReport() {
                                                                                         {(Object.entries((groupData as any).items || {}) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
                                                                                             <tr key={itemName} className="table-light">
                                                                                                 <td className="text-center">{startIdx + idx + 1}</td>
-                                                                                                <td className="fw-bold">{itemName}</td>
+                                                                                                <td className="font-bold">{itemName}</td>
                                                                                                 <td className="text-end">
                                                                                                     {formatIndianNumber(itemData.available, 2)}
                                                                                                 </td>

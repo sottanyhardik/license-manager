@@ -2242,7 +2242,7 @@ export default function MasterForm({
                                         </label>
                                         {renderField(field)}
                                         {hasError && (
-                                            <div className="invalid-feedback d-block" style={{ fontSize: 12, marginTop: 4 }}>
+                                            <div className="mt-0.5 text-[11.5px] text-destructive block" style={{ fontSize: 12, marginTop: 4 }}>
                                                 <AlertCircle className="size-4" aria-hidden="true" />
                                                 {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
                                             </div>

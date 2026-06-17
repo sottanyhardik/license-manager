@@ -319,7 +319,7 @@ export default function NestedFieldArray({
                         selected={parseDate(fieldValue)}
                         onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
-                        className={`form-control form-control-sm ${highlightClass}`}
+                        className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         wrapperClassName="w-100 d-block"
                         placeholderText="Select date"
                         isClearable
@@ -441,7 +441,7 @@ export default function NestedFieldArray({
                 <div>
                     <input
                         type="file"
-                        className={`form-control form-control-sm ${highlightClass}`}
+                        className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         onChange={(e) => {
                             const file = e.target.files[0];
                             if (file) {
@@ -474,7 +474,7 @@ export default function NestedFieldArray({
                     <input
                         type="number"
                         step={['cif_inr', 'cif_fc', 'qty'].includes(field.name) ? "0.001" : "0.01"}
-                        className={`form-control form-control-sm ${highlightClass}`}
+                        className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
                     />
@@ -483,7 +483,7 @@ export default function NestedFieldArray({
                 return (
                     <input
                         type="number"
-                        className={`form-control form-control-sm ${highlightClass}`}
+                        className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
                     />
@@ -491,7 +491,7 @@ export default function NestedFieldArray({
             case "textarea":
                 return (
                     <textarea
-                        className={`form-control form-control-sm ${highlightClass}`}
+                        className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         rows={field.name === "description" ? 3 : 2}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
@@ -501,7 +501,7 @@ export default function NestedFieldArray({
                 return (
                     <input
                         type="text"
-                        className={`form-control form-control-sm ${highlightClass}`}
+                        className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
                     />

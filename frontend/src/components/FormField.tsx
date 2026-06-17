@@ -1,6 +1,8 @@
 import React from 'react';
-import { getFieldError, getFieldErrorClass } from '../utils/formErrors';
+import { getFieldError } from '../utils/formErrors';
 import { TriangleAlert } from "lucide-react";
+
+const TW_INPUT = "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive";
 
 /**
  * Reusable form field component with error handling
@@ -18,7 +20,6 @@ export const FormField = ({
   ...props
 }) => {
   const error = getFieldError(fieldErrors, name);
-  const errorClass = getFieldErrorClass(fieldErrors, name);
 
   return (
     <div className={className}>
@@ -28,15 +29,14 @@ export const FormField = ({
       <input
         type={type}
         name={name}
-        className={`form-control ${errorClass}`}
+        className={TW_INPUT}
+        aria-invalid={!!error}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         {...props}
       />
-      {error && (
-        <div className="invalid-feedback">{error}</div>
-      )}
+      {error && <div className="mt-0.5 text-[11.5px] text-destructive">{error}</div>}
     </div>
   );
 };
@@ -57,7 +57,6 @@ export const FormTextArea = ({
   ...props
 }) => {
   const error = getFieldError(fieldErrors, name);
-  const errorClass = getFieldErrorClass(fieldErrors, name);
 
   return (
     <div className={className}>
@@ -66,16 +65,15 @@ export const FormTextArea = ({
       </label>
       <textarea
         name={name}
-        className={`form-control ${errorClass}`}
+        className={TW_INPUT}
+        aria-invalid={!!error}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         rows={rows}
         {...props}
       />
-      {error && (
-        <div className="invalid-feedback">{error}</div>
-      )}
+      {error && <div className="mt-0.5 text-[11.5px] text-destructive">{error}</div>}
     </div>
   );
 };
@@ -95,7 +93,6 @@ export const FormSelect = ({
   ...props
 }) => {
   const error = getFieldError(fieldErrors, name);
-  const errorClass = getFieldErrorClass(fieldErrors, name);
 
   return (
     <div className={className}>
@@ -104,7 +101,8 @@ export const FormSelect = ({
       </label>
       <select
         name={name}
-        className={`form-select ${errorClass}`}
+        className={`${TW_INPUT} cursor-pointer`}
+        aria-invalid={!!error}
         value={value}
         onChange={onChange}
         {...props}
@@ -115,9 +113,7 @@ export const FormSelect = ({
           </option>
         ))}
       </select>
-      {error && (
-        <div className="invalid-feedback">{error}</div>
-      )}
+      {error && <div className="mt-0.5 text-[11.5px] text-destructive">{error}</div>}
     </div>
   );
 };
@@ -131,10 +127,11 @@ export const NonFieldErrors = ({ errors = [], formatFunction }) => {
   const formattedErrors = formatFunction ? formatFunction(errors) : errors.join(' | ');
 
   return (
-    <div className="alert alert-danger mb-3" role="alert">
-      <strong><TriangleAlert className="size-4" aria-hidden="true" />ERROR:</strong>
-      <div className="mt-1" style={{ textTransform: 'uppercase', fontWeight: '600' }}>
-        {formattedErrors}
+    <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
+      <TriangleAlert className="size-4 mt-0.5 shrink-0" aria-hidden="true" />
+      <div>
+        <strong className="font-semibold">ERROR:</strong>
+        <div className="mt-0.5 font-semibold uppercase">{formattedErrors}</div>
       </div>
     </div>
   );

@@ -17,10 +17,11 @@ SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
     "local-dev-only-secret-key-change-for-production-7f8e6d5c4b3a2910",
 )
-DEBUG = os.getenv("DEBUG", "True").lower() == "true"
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS",
-                          "127.0.0.1,localhost,139.59.92.226,labdhi.duckdns.org,143.110.252.201,license-manager.duckdns.org,178.128.58.219,165.232.185.220,license-tractor.duckdns.org").split(
-    ",")
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"   # PRODUCTION DEFAULT: False
+ALLOWED_HOSTS = os.getenv(
+    "ALLOWED_HOSTS",
+    "127.0.0.1,localhost"  # production: set ALLOWED_HOSTS env var with real domains
+).split(",")
 
 # HTTPS Settings
 # When DEBUG=True (dev server, HTTP only) these are automatically off.
@@ -263,6 +264,9 @@ CACHES = {
 # Note: For development we explicitly whitelist origins (do not use allow-all in production).
 CORS_ALLOW_ALL_ORIGINS = False
 
+_cors_extra = [
+    o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
 CORS_ALLOWED_ORIGINS = [
     # ── Development (HTTP allowed locally) ───────────────────────────────────
     "http://localhost:5173",
@@ -271,12 +275,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    # ── Production (HTTPS only — HTTP origins removed to prevent MITM) ───────
-    "https://labdhi.duckdns.org",
-    "https://license-manager.duckdns.org",
-    "https://165.232.185.220",
-    "https://license-tractor.duckdns.org",
-]
+    # ── Production: add via CORS_ALLOWED_ORIGINS env var (comma-separated) ───
+    # e.g. CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://app2.com
+] + _cors_extra
 
 # Allow cookies (credentials) across origins when frontend sends withCredentials
 CORS_ALLOW_CREDENTIALS = True
@@ -309,6 +310,9 @@ except Exception:
 CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken", "Authorization"]
 
 # CSRF trusted origins for Django's CSRF checks (if you use session auth)
+_csrf_extra = [
+    o.strip() for o in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
+]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -316,20 +320,24 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "https://labdhi.duckdns.org",
-    "https://license-manager.duckdns.org",
-    "https://165.232.185.220",
-    "https://license-tractor.duckdns.org",
-]
+    # Production: set CSRF_TRUSTED_ORIGINS env var (comma-separated HTTPS origins)
+] + _csrf_extra
 
 # ---------------------------------------------------------------------
 # Email (file backend for dev)
 # ---------------------------------------------------------------------
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",  # dev default — set to SMTP in prod
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() == "true"
 
-# Optional: also set a from email for clarity
-DEFAULT_FROM_EMAIL = "info@labdhimercantile.com"
-FRONTEND_URL = "http://localhost:5173"  # update for production
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "info@labdhimercantile.com")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 # ---------------------------------------------------------------------
 # App-specific Config

@@ -156,11 +156,9 @@ export default function DebouncedAsyncSelect({
         setIsSearching(true);
 
         // Call the debounced function and handle the result
-        debouncedFetch(inputValue).then(options => {
-            if (callback) {
-                callback(options);
-            }
-        });
+        debouncedFetch(inputValue)
+            .then(options => { if (callback) callback(options); })
+            .catch(() => { if (callback) callback([]); });
     };
 
     const handleChange = (selected) => {

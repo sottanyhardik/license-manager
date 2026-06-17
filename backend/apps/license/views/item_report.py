@@ -15,6 +15,14 @@ from rest_framework.response import Response
 from apps.core.models import ItemNameModel
 from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
 
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +40,7 @@ class ItemReportView(View):
         item_names = request.GET.get('item_names')  # Comma-separated item name IDs
         company_ids = request.GET.get('company_ids')  # Comma-separated company IDs
         exclude_company_ids = request.GET.get('exclude_company_ids')  # Comma-separated company IDs to exclude
-        min_balance = int(request.GET.get('min_balance', 200))
+        min_balance = _safe_int(request.GET.get('min_balance'), 200)
         min_avail_qty = float(request.GET.get('min_avail_qty', 0))
         license_status = request.GET.get('license_status', 'active')
         is_restricted = request.GET.get('is_restricted')  # 'true', 'false', or None for all

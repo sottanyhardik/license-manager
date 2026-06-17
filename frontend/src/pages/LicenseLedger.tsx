@@ -404,7 +404,7 @@ export default function LicenseLedger() {
                     <div className="card" style={{ borderLeft: '3px solid var(--tb-brand)' }}>
                             <div className="card-header border-bottom py-2 px-3 flex items-center gap-2">
                                 <Globe className="size-4" aria-hidden="true" />
-                                <span className="fw-semibold small">DFIA Licenses</span>
+                                <span className="font-semibold small">DFIA Licenses</span>
                                 <span className="badge ms-auto" style={{ background: 'var(--tb-brand)', fontSize: 11 }}>{summary.dfia.total_licenses} active</span>
                             </div>
                             <div className="card-body py-2 px-3">
@@ -433,7 +433,7 @@ export default function LicenseLedger() {
                     <div className="card" style={{ borderLeft: '3px solid var(--tb-info)' }}>
                             <div className="card-header border-bottom py-2 px-3 flex items-center gap-2">
                                 <Trophy className="size-4" aria-hidden="true" />
-                                <span className="fw-semibold small">Incentive Licenses</span>
+                                <span className="font-semibold small">Incentive Licenses</span>
                                 <span className="badge ms-auto" style={{ background: 'var(--tb-info)', fontSize: 11 }}>{summary.incentive.total_licenses} active</span>
                             </div>
                             <div className="card-body py-2 px-3">

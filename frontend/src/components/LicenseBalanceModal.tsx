@@ -69,7 +69,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                             backgroundColor: 'var(--row-yellow-bg)'
                         }}
                     />
-                    <div className="d-flex gap-2">
+                    <div className="flex gap-2">
                         <button
                             className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
                             onClick={handleSave}
@@ -424,7 +424,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             <tbody>
                                                 <tr style={{ backgroundColor: 'var(--tb-sunken)' }}>
                                                     <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)', fontWeight: '500' }}>
-                                                        <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
+                                                        <div className="flex items-center gap-2" style={{ flexWrap: 'nowrap' }}>
                                                             <span style={{ fontWeight: '600', color: 'var(--tb-text)' }}>
                                                                 {licenseData.license_number || '-'}
                                                             </span>
@@ -521,7 +521,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                     padding: '1.5rem',
                                     boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                                 }}>
-                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <div className="flex justify-between items-center mb-3">
                                         <h5 style={{
                                             color: 'var(--tb-text)',
                                             fontWeight: '600',
@@ -552,7 +552,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                     padding: '1.5rem',
                                     boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                                 }}>
-                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <div className="flex justify-between items-center mb-3">
                                         <h5 style={{
                                             color: 'var(--tb-text)',
                                             fontWeight: '600',
@@ -791,7 +791,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                 </td>
                                                                 <td onClick={(e) => e.stopPropagation()} style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {editingItemId === item.id ? (
-                                                                        <div className="d-flex align-items-center gap-1">
+                                                                        <div className="flex items-center gap-1">
                                                                             <AsyncSelect
                                                                                 isMulti
                                                                                 cacheOptions
@@ -858,7 +858,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         </div>
                                                                     ) : (
                                                                         <div
-                                                                            className="d-flex justify-content-between align-items-center"
+                                                                            className="flex justify-between items-center"
                                                                             style={{ cursor: 'pointer' }}
                                                                             title="Click to edit"
                                                                         >

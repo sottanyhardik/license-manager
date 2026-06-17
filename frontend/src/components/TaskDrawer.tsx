@@ -395,13 +395,13 @@ export default function TaskDrawer({ show, onClose }) {
             >
                 {/* Header */}
                 <div
-                    className="d-flex align-items-center justify-content-between"
+                    className="flex items-center justify-between"
                     style={{
                         padding: "18px 20px",
                         borderBottom: "1px solid var(--border-subtle)",
                     }}
                 >
-                    <div className="d-flex align-items-center" style={{ gap: 10 }}>
+                    <div className="flex items-center" style={{ gap: 10 }}>
                         <span
                             aria-hidden="true"
                             style={{
@@ -438,7 +438,7 @@ export default function TaskDrawer({ show, onClose }) {
                         borderBottom: "1px solid var(--border-subtle)",
                     }}
                 >
-                    <div className="d-flex gap-2 mb-2">
+                    <div className="flex gap-2 mb-2">
                         <input
                             ref={titleInputRef}
                             className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
@@ -495,7 +495,7 @@ export default function TaskDrawer({ show, onClose }) {
 
                     {!speech.listening && speech.error && (
                         <div
-                            className="small mb-2 d-flex align-items-start"
+                            className="small mb-2 flex items-start"
                             role="alert"
                             style={{
                                 gap: 8,
@@ -562,7 +562,7 @@ export default function TaskDrawer({ show, onClose }) {
                                 onChange={(e) => setDraft(d => ({ ...d, description: e.target.value }))}
                             />
                         </div>
-                        <div className="col-12 d-flex justify-content-end">
+                        <div className="col-12 flex justify-end">
                             <button type="submit" className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90 disabled:opacity-50" disabled={saving}>
                                 {saving ? "Saving..." : "Add task"}
                             </button>
@@ -572,7 +572,7 @@ export default function TaskDrawer({ show, onClose }) {
 
                 {/* Filters */}
                 <div
-                    className="d-flex align-items-center"
+                    className="flex items-center"
                     style={{
                         padding: "12px 20px",
                         gap: 8,
@@ -632,7 +632,7 @@ export default function TaskDrawer({ show, onClose }) {
                                     borderBottom: "1px solid var(--border-subtle)",
                                 }}
                             >
-                                <div className="d-flex align-items-start gap-2">
+                                <div className="flex items-start gap-2">
                                     <input
                                         type="checkbox"
                                         className="form-check-input mt-1"
@@ -641,7 +641,7 @@ export default function TaskDrawer({ show, onClose }) {
                                         title={task.status === TASK_STATUS.COMPLETED ? "Reopen" : "Mark complete"}
                                     />
                                     <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                                        <div className="flex items-center gap-2 flex-wrap">
                                             <span style={{
                                                 textDecoration: task.status === TASK_STATUS.COMPLETED ? "line-through" : "none",
                                                 fontWeight: 500,
@@ -767,8 +767,8 @@ export default function TaskDrawer({ show, onClose }) {
 
                                         {/* Remarks */}
                                         <div className="border rounded p-2" style={{ background: "#fafbfc" }}>
-                                            <div className="small fw-semibold mb-1">Remarks</div>
-                                            <div className="d-flex gap-2 mb-2">
+                                            <div className="small font-semibold mb-1">Remarks</div>
+                                            <div className="flex gap-2 mb-2">
                                                 <input
                                                     className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
                                                     placeholder="Add a remark…"

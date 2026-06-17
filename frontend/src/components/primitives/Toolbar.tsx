@@ -45,7 +45,7 @@ function ToolbarSearch({ value, onChange, placeholder = "Search…", style }) {
             </span>
             <input
                 type="search"
-                className="form-control form-control-sm"
+                className="flex h-8 rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                 value={value ?? ""}
                 onChange={e => onChange?.(e.target.value)}
                 placeholder={placeholder}

@@ -55,7 +55,7 @@ export const ToastProvider = ({children}) => {
                         aria-live="assertive"
                         aria-atomic="true"
                     >
-                        <div className="d-flex">
+                        <div className="flex">
                             <div className="toast-body flex items-center">
                                 <i className={`bi ${getToastIcon(toast.type)} mr-2 fs-5`}></i>
                                 <span>{toast.message}</span>

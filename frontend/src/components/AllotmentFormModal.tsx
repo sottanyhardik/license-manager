@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import AsyncSelect from 'react-select/async';
-import { extractFormErrors, formatNonFieldErrors, getFieldError, getFieldErrorClass } from '../utils/formErrors';
+import { extractFormErrors, formatNonFieldErrors, getFieldError } from '../utils/formErrors';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Building2, Check, DollarSign, FileText, Loader2, Package, ToggleRight, TriangleAlert, X } from "lucide-react";
@@ -363,13 +363,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                 <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Item Name</label>
                                                 <input
                                                     type="text"
-                                                    className={`form-control ${getFieldErrorClass(fieldErrors, 'item_name')}`}
+                                                    className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
                                                     value={formData.item_name}
                                                     onChange={(e) => handleChange('item_name', e.target.value)}
                                                     placeholder="Enter item name"
                                                 />
                                                 {getFieldError(fieldErrors, 'item_name') && (
-                                                    <div className="invalid-feedback" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'item_name')}</div>
+                                                    <div className="mt-0.5 text-[11.5px] text-destructive" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'item_name')}</div>
                                                 )}
                                             </div>
                                             <div className="sm:col-span-3">
@@ -377,13 +377,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    className={`form-control ${getFieldErrorClass(fieldErrors, 'required_quantity')}`}
+                                                    className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
                                                     value={formData.required_quantity}
                                                     onChange={(e) => handleChange('required_quantity', e.target.value)}
                                                     placeholder="0.00"
                                                 />
                                                 {getFieldError(fieldErrors, 'required_quantity') && (
-                                                    <div className="invalid-feedback" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'required_quantity')}</div>
+                                                    <div className="mt-0.5 text-[11.5px] text-destructive" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'required_quantity')}</div>
                                                 )}
                                             </div>
                                         </div>
@@ -402,7 +402,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     <input
                                                         type="number"
                                                         step="0.01"
-                                                        className={`form-control ${getFieldErrorClass(fieldErrors, 'cif_inr')}`}
+                                                        className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
                                                         value={formData.cif_inr}
                                                         onChange={(e) => handleChange('cif_inr', e.target.value)}
                                                         placeholder="0.00"
@@ -417,13 +417,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    className={`form-control ${getFieldErrorClass(fieldErrors, 'exchange_rate')}`}
+                                                    className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
                                                     value={formData.exchange_rate}
                                                     onChange={(e) => handleChange('exchange_rate', e.target.value)}
                                                     placeholder="e.g. 83.50"
                                                 />
                                                 {getFieldError(fieldErrors, 'exchange_rate') && (
-                                                    <div className="invalid-feedback" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'exchange_rate')}</div>
+                                                    <div className="mt-0.5 text-[11.5px] text-destructive" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'exchange_rate')}</div>
                                                 )}
                                             </div>
                                             <div className="sm:col-span-2">
@@ -433,7 +433,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     <input
                                                         type="number"
                                                         step="0.01"
-                                                        className={`form-control ${getFieldErrorClass(fieldErrors, 'cif_fc')}`}
+                                                        className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
                                                         value={formData.cif_fc}
                                                         onChange={(e) => handleChange('cif_fc', e.target.value)}
                                                         placeholder="0.00"
@@ -450,7 +450,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                     <input
                                                         type="number"
                                                         step="0.001"
-                                                        className={`form-control ${getFieldErrorClass(fieldErrors, 'unit_value_per_unit')}`}
+                                                        className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
                                                         value={formData.unit_value_per_unit}
                                                         onChange={(e) => handleChange('unit_value_per_unit', e.target.value)}
                                                         placeholder="0.000"
@@ -473,13 +473,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                 <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground" style={{ fontSize: 12.5, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Invoice</label>
                                                 <input
                                                     type="text"
-                                                    className={`form-control ${getFieldErrorClass(fieldErrors, 'invoice')}`}
+                                                    className={"flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive"}
                                                     value={formData.invoice}
                                                     onChange={(e) => handleChange('invoice', e.target.value)}
                                                     placeholder="Invoice number"
                                                 />
                                                 {getFieldError(fieldErrors, 'invoice') && (
-                                                    <div className="invalid-feedback" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'invoice')}</div>
+                                                    <div className="mt-0.5 text-[11.5px] text-destructive" style={{ fontSize: 12 }}>{getFieldError(fieldErrors, 'invoice')}</div>
                                                 )}
                                             </div>
                                             <div className="sm:col-span-2">

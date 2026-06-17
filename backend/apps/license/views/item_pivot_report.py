@@ -22,6 +22,14 @@ from apps.core.constants import DEC_0, DEC_000, GE, MI, CO
 from apps.core.models import ItemNameModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
 
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,11 +44,11 @@ class ItemPivotReportView(View):
 
     def get(self, request, *args, **kwargs):
         output_format = request.GET.get('format', 'json').lower()
-        days = int(request.GET.get('days', 30))
+        days = _safe_int(request.GET.get('days'), 30)
         sion_norm = request.GET.get('sion_norm')
         company_ids = request.GET.get('company_ids')  # Comma-separated company IDs
         exclude_company_ids = request.GET.get('exclude_company_ids')  # Comma-separated company IDs to exclude
-        min_balance = int(request.GET.get('min_balance', 200))
+        min_balance = _safe_int(request.GET.get('min_balance'), 200)
         license_status = request.GET.get('license_status', 'active')
         expiry_date_from = request.GET.get('expiry_date_from')  # YYYY-MM-DD
         expiry_date_to = request.GET.get('expiry_date_to')      # YYYY-MM-DD

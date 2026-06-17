@@ -19,8 +19,9 @@ for model_name, model in app.models.items():
             model_admin.search_fields = model.admin_search_fields if hasattr(model, 'admin_search_fields') else ()
             model_admin.list_filter = model.list_filter if hasattr(model, 'list_filter') else ()
             admin.site.register(model, model_admin)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Admin registration failed for %s: %s", model, e)
 
 
 @admin.register(PurchaseStatus)

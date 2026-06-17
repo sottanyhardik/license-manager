@@ -770,10 +770,10 @@ export default function ItemReport() {
                         }}>
                             <div className="card-body py-2">
                                 <div className="flex justify-end items-center gap-4">
-                                    <div className="fw-bold">Total:</div>
+                                    <div className="font-bold">Total:</div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-muted small">Avail Qty:</span>
-                                        <span className="fw-bold">
+                                        <span className="font-bold">
                                             {reportData.items.reduce((sum, item) => sum + (item.available_quantity || 0), 0).toLocaleString('en-IN', {
                                                 minimumFractionDigits: 3,
                                                 maximumFractionDigits: 3
@@ -782,7 +782,7 @@ export default function ItemReport() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-muted small">Avail Bal:</span>
-                                        <span className="fw-bold text-success">
+                                        <span className="font-bold text-success">
                                             {(() => {
                                                 const uniqueLicenses: Record<string, number> = {};
                                                 reportData.items.forEach((item: any) => {
@@ -799,7 +799,7 @@ export default function ItemReport() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-muted small">Balance CIF:</span>
-                                        <span className="fw-bold text-primary">
+                                        <span className="font-bold text-primary">
                                             {(() => {
                                                 const uniqueLicenses: Record<string, number> = {};
                                                 reportData.items.forEach((item: any) => {

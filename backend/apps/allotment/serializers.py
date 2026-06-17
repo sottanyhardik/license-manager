@@ -4,7 +4,6 @@ from datetime import datetime, date
 from rest_framework import serializers
 
 from apps.allotment.models import AllotmentModel, AllotmentItems
-from apps.core.models import ItemNameModel
 from apps.core.serializers.fields import IndianDateField
 
 
@@ -116,19 +115,6 @@ class AllotmentSerializer(serializers.ModelSerializer):
     port_name = serializers.CharField(source='port.name', read_only=True, required=False)
     related_company_name = serializers.CharField(source='related_company.name', read_only=True, required=False)
 
-    # item_name FK — writable by ID; also exposes the display name read-only
-    item_name_fk = serializers.PrimaryKeyRelatedField(
-        queryset=ItemNameModel.objects.all(),
-        required=False,
-        allow_null=True,
-    )
-    item_name_fk_display = serializers.CharField(
-        source='item_name_fk.name',
-        read_only=True,
-        allow_null=True,
-        default=None,
-    )
-
     # Custom label field for dropdown display
     display_label = serializers.SerializerMethodField(read_only=True)
 
@@ -176,21 +162,13 @@ class AllotmentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'company', 'type', 'required_quantity', 'unit_value_per_unit',
             'cif_fc', 'cif_inr', 'exchange_rate',
-            'item_name', 'item_name_fk', 'item_name_fk_display',
-            'contact_person', 'contact_number', 'invoice',
+            'item_name', 'contact_person', 'contact_number', 'invoice',
             'estimated_arrival_date', 'bl_detail', 'port', 'related_company',
             'is_boe', 'is_approved', 'created_on', 'modified_on', 'created_by', 'modified_by',
             'required_value', 'dfia_list', 'balanced_quantity',
             'alloted_quantity', 'allotted_value', 'company_name', 'port_name',
             'related_company_name', 'display_label', 'allotment_details_read'
         ]
-
-    def validate(self, data):
-        """If item_name_fk is provided, sync item_name CharField to match."""
-        fk = data.get('item_name_fk')
-        if fk and not data.get('item_name'):
-            data['item_name'] = fk.name
-        return data
 
     def create(self, validated_data):
         """Set default values for type and exchange_rate if not provided"""

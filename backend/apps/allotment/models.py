@@ -87,13 +87,6 @@ class AllotmentModel(AuditModel):
         blank=True,
     )
     item_name = models.CharField(max_length=255)
-    item_name_fk = models.ForeignKey(
-        "core.ItemNameModel",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="allotments",
-    )
     contact_person = models.CharField(max_length=255, null=True, blank=True)
     contact_number = models.CharField(max_length=255, null=True, blank=True)
     invoice = models.CharField(max_length=255, null=True, blank=True)
@@ -127,7 +120,6 @@ class AllotmentModel(AuditModel):
             models.Index(fields=['is_boe', 'is_allotted']),
             models.Index(fields=['type']),
             models.Index(fields=['invoice']),
-            models.Index(fields=['item_name_fk']),
         ]
 
     def __str__(self):
@@ -143,10 +135,7 @@ class AllotmentModel(AuditModel):
         1. If unit_value_per_unit and required_quantity provided, calculate cif_fc = unit_value_per_unit * required_quantity
         2. If cif_fc and required_quantity provided, calculate unit_value_per_unit = cif_fc / required_quantity
         3. If cif_fc and exchange_rate provided, calculate cif_inr = cif_fc * exchange_rate
-        4. If item_name_fk is set, sync item_name CharField to keep backward-compat displays consistent
         """
-        if self.item_name_fk_id and not self.item_name:
-            self.item_name = self.item_name_fk.name
         unit_value = _to_decimal(self.unit_value_per_unit, DEC_0)
         required_qty = _to_decimal(self.required_quantity, DEC_0)
         cif_fc_val = _to_decimal(self.cif_fc, DEC_0)

@@ -8,7 +8,7 @@ import ConditionBadge from "../components/ConditionBadge";
 import TransferLetterForm from "../components/TransferLetterForm";
 import {openPdfPreview} from "../utils/pdfPreview";
 import {useBackButton} from "../hooks/useBackButton";
-import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, XCircle } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
     const {id: paramId} = useParams();
@@ -820,15 +820,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </thead>
                                 <tbody>
                                 {allotment.allotment_details.map((detail) => (
-                                    <tr key={detail.id}>
-                                        <td style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{detail.license_number}</td>
-                                        <td style={{whiteSpace: 'nowrap'}}>
-                                            {detail.serial_number}
-                                            <ConditionBadge type={detail.condition_type} size="xs" />
-                                        </td>
-                                        <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
-                                        <td style={{whiteSpace: 'nowrap'}}>{detail.hs_code || '-'}</td>
-                                        <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
+                                    <tr key={detail.id} className="border-b border-border/40 transition-colors hover:bg-muted/30">
+                                        <td className='px-3 py-2.5 font-mono text-[13px] font-semibold text-foreground' style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{detail.license_number}</td>
+                                        <td className='px-3 py-2.5' style={{whiteSpace: 'nowrap'}}><span className='font-medium'>{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" /></td>
+                                        <td className='px-3 py-2.5 text-[13px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
+                                        <td className='px-3 py-2.5 font-mono text-[12px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.hs_code || '-'}</td>
+                                        <td className='px-3 py-2.5 text-[13px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
                                         <td style={{wordWrap: 'break-word', whiteSpace: 'normal', fontSize: '0.80rem', lineHeight: '1.3'}}>
                                             {detail.current_owner && detail.file_transfer_status ? (
                                                 <div>
@@ -847,10 +844,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 <span className="text-muted">-</span>
                                             )}
                                         </td>
-                                        <td style={{whiteSpace: 'nowrap', fontSize: 13.5}}>{detail.license_date}</td>
-                                        <td style={{whiteSpace: 'nowrap', fontSize: 13.5}}>{detail.license_expiry}</td>
-                                        <td className="text-end" style={{whiteSpace: 'nowrap'}}>{parseInt(detail.qty || 0).toLocaleString()}</td>
-                                        <td className="text-end" style={{whiteSpace: 'nowrap'}}>{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
+                                        <td className='px-3 py-2.5 text-[12.5px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_date}</td>
+                                        <td className='px-3 py-2.5 text-[12.5px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_expiry}</td>
+                                        <td className='px-3 py-2.5 text-right font-semibold tabular-nums' style={{whiteSpace: 'nowrap'}}>{parseInt(detail.qty || 0).toLocaleString()}</td>
+                                        <td className='px-3 py-2.5 text-right font-semibold tabular-nums' style={{whiteSpace: 'nowrap'}}>{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
                                         <td className="text-center" style={{whiteSpace: 'nowrap'}}>
                                             <button
                                                 className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
@@ -868,11 +865,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     </tr>
                                 ))}
                                 </tbody>
-                                <tfoot className="table-secondary">
-                                <tr>
-                                    <th colSpan={8} className="text-end">Total:</th>
-                                    <th className="text-end">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
-                                    <th className="text-end">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
+                                <tfoot>
+                                <tr style={{ background: 'var(--tb-sunken)', borderTop: '2px solid var(--tb-border)' }}>
+                                    <th colSpan={8} className="px-3 py-2.5 text-right text-[12px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
+                                    <th className="px-3 py-2.5 text-right text-[14px] font-extrabold tabular-nums text-foreground">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
+                                    <th className="px-3 py-2.5 text-right text-[14px] font-extrabold tabular-nums text-foreground">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
                                     <th></th>
                                 </tr>
                                 </tfoot>
@@ -900,36 +897,36 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 </div>
             )}
 
-            <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                    <h6 className="mb-0 font-semibold">
-                        <ListChecks className="size-4" aria-hidden="true" />
-                        Available License Items
+            <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
+                    <div className="flex items-center gap-2">
+                        <ListChecks className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
+                        <span className="text-sm font-bold tracking-tight text-foreground">Available License Items</span>
                         {pagination.totalItems > 0 && (
-                            <span className="ml-2 text-muted-foreground font-normal" style={{ fontSize: '0.82rem' }}>{pagination.totalItems} items</span>
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand)' }}>{pagination.totalItems} items</span>
                         )}
-                    </h6>
+                    </div>
                 </div>
                 <div className="p-5">
 
                     {/* Show success/error messages near the table for better visibility */}
                     {error && (
-                        <div className="alert alert-danger alert-dismissible fade show flex items-start gap-2" role="alert" style={{ borderRadius: 'var(--tb-r-md)' }}>
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
                             <TriangleAlert className="size-4" aria-hidden="true" />
-                            <div className="flex-fill">{error}</div>
-                            <button type="button" className="btn-close" onClick={() => setError("")}></button>
+                            <div className="flex-1">{error}</div>
+                            <button type="button" className="ml-auto shrink-0 cursor-pointer opacity-60 hover:opacity-100" onClick={() => setError("")}><X className="size-3.5" /></button>
                         </div>
                     )}
                     {success && (
-                        <div className="alert alert-success alert-dismissible fade show flex items-start gap-2" role="alert" style={{ borderRadius: 'var(--tb-r-md)' }}>
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px]" style={{ color: 'var(--tb-success-text)' }} role="alert">
                             <CheckCircle2 className="size-4" aria-hidden="true" />
-                            <div className="flex-fill">{success}</div>
-                            <button type="button" className="btn-close" onClick={() => setSuccess("")}></button>
+                            <div className="flex-1">{success}</div>
+                            <button type="button" className="ml-auto shrink-0 cursor-pointer opacity-60 hover:opacity-100" onClick={() => setSuccess("")}><X className="size-3.5" /></button>
                         </div>
                     )}
 
-                    <div className="card mb-3" style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-border)' }}>
-                        <div className="card-header border-0 flex justify-between items-center py-2 px-3" style={{ background: 'transparent', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                    <div className="mb-3 overflow-hidden rounded-lg border border-border/60" style={{ background: 'var(--tb-sunken)' }}>
+                        <div className="flex justify-between items-center py-2 px-3" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                             <span style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <Filter className="size-4" aria-hidden="true" /> Filters
                             </span>
@@ -960,7 +957,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <XCircle className="size-4" aria-hidden="true" />Clear All
                             </button>
                         </div>
-                        <div className="card-body" style={{ padding: '16px' }}>
+                        <div style={{ padding: '16px' }}>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                 <div className="col-span-full sm:col-span-2 lg:col-span-4">
                                     <label className="form-label">Filter By Item Name</label>

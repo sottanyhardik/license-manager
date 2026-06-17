@@ -1,4 +1,12 @@
 import React, { useState } from "react";
+import {
+    AlertTriangle, ArrowLeftRight, Award, Building2, Calendar,
+    CalendarCheck, CalendarRange, Check, CheckCircle2, Clipboard,
+    CloudDownload, Copy, Download, Eye, FileText, Fingerprint,
+    Globe, Info, Layers, Link as LinkIcon, LogIn, MapPin,
+    MoreHorizontal, Network, Pencil, Plus, Receipt, RefreshCw,
+    Trash2, TriangleAlert, X, ChevronDown, ChevronUp,
+} from "lucide-react";
 import { ACTION_TONE_MAP, CHIP_TONE_MAP, TEXT_TONE_MAP, tone as resolveTone } from "../../theme/tokens";
 
 /*
@@ -17,6 +25,46 @@ import { ACTION_TONE_MAP, CHIP_TONE_MAP, TEXT_TONE_MAP, tone as resolveTone } fr
  *   detailLabel  string                    — label next to the View button
  *   defaultOpen  bool                      — initial open state
  */
+
+// ── Icon lookup: maps bi-name strings AND lucide component-name strings ───────
+const ICON_MAP: Record<string, React.ElementType> = {
+    // Lucide component-name strings (from Phase 4c-2 migration)
+    "Pencil": Pencil, "pencil": Pencil, "pencil-fill": Pencil,
+    "Eye": Eye, "eye": Eye,
+    "Copy": Copy, "copy": Copy,
+    "Download": Download, "download": Download,
+    "FileText": FileText, "file-earmark-text": FileText, "file-pdf": FileText,
+    "LogIn": LogIn, "box-arrow-in-down": LogIn,
+    "ArrowLeftRight": ArrowLeftRight, "arrow-left-right": ArrowLeftRight,
+    "RefreshCw": RefreshCw, "arrow-repeat": RefreshCw, "bi bi-arrow-repeat": RefreshCw,
+    "Trash2": Trash2, "trash": Trash2,
+    "Check": Check, "check2-circle": CheckCircle2,
+    "AlertTriangle": AlertTriangle, "exclamation-triangle-fill": AlertTriangle,
+    "Building2": Building2, "building": Building2, "building2": Building2,
+    "Calendar": Calendar, "calendar3": Calendar,
+    "MapPin": MapPin, "geo-alt": MapPin,
+    "Layers": Layers, "intersect": Layers, "intersect2": Layers,
+    "LinkIcon": LinkIcon, "link-45deg": LinkIcon,
+    "CloudDownload": CloudDownload,
+    "Plus": Plus,
+    "Info": Info,
+    "Fingerprint": Fingerprint,
+    "Globe": Globe,
+    "Receipt": Receipt,
+    "Network": Network,
+    "MoreHorizontal": MoreHorizontal,
+    "Clipboard": Clipboard,
+    "X": X,
+    "chevron-down": ChevronDown, "chevron-up": ChevronUp,
+};
+
+function IconFromString({ name, className = "size-3.5" }: { name?: string; className?: string }) {
+    if (!name) return null;
+    const Comp = ICON_MAP[name];
+    if (Comp) return <Comp className={className} aria-hidden="true" />;
+    return null; // unknown icon — show nothing rather than broken bi- tag
+}
+
 const ALLOWED_TONES = new Set(["primary", "success", "warning", "danger", "info", "neutral"]);
 
 function HeaderChip({ icon, label, tone = "neutral", style }: { icon?: string; label: React.ReactNode; tone?: string; style?: React.CSSProperties }) {
@@ -40,7 +88,7 @@ function HeaderChip({ icon, label, tone = "neutral", style }: { icon?: string; l
                 ...style,
             }}
         >
-            {icon && <i className={`bi bi-${icon}`} style={{ fontSize: "10.5px" }} />}
+            <IconFromString name={icon} className="size-3" />
             {label}
         </span>
     );
@@ -49,6 +97,7 @@ function HeaderChip({ icon, label, tone = "neutral", style }: { icon?: string; l
 function ActionButton({ icon, title, onClick, tone = "neutral", children, disabled }: { icon?: string; title?: string; onClick?: () => void; tone?: string; children?: React.ReactNode; disabled?: boolean }) {
     const safe = ALLOWED_TONES.has(tone) ? tone : "neutral";
     const c = resolveTone(ACTION_TONE_MAP, safe);
+    const hasLabel = !!children;
     return (
         <button
             type="button"
@@ -59,18 +108,22 @@ function ActionButton({ icon, title, onClick, tone = "neutral", children, disabl
             style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 4,
+                gap: hasLabel ? 4 : 0,
                 fontWeight: 500,
+                fontSize: 12,
+                padding: hasLabel ? "4px 9px" : "4px 7px",
                 color: c.fg,
                 background: c.bg,
                 border: `1px solid ${c.border}`,
+                borderRadius: 6,
                 cursor: disabled ? "not-allowed" : "pointer",
                 opacity: disabled ? 0.55 : 1,
                 lineHeight: 1.4,
                 transition: "background var(--tb-tx-fast), box-shadow var(--tb-tx-fast)",
+                whiteSpace: "nowrap",
             }}
         >
-            {icon && <i className={`bi bi-${icon}`} aria-hidden="true" />}
+            <IconFromString name={icon} className="size-3.5" />
             {children}
         </button>
     );

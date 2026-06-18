@@ -649,8 +649,6 @@ export default function ItemPivotReport() {
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}>Balance CIF
                                                         </th>
-                                                        <th className="text-center" style={{minWidth: '120px'}}>Latest Transfer</th>
-                                                        <th className="text-center" style={{minWidth: '90px'}}>Notes</th>
                                                         {reportData.items.filter(item => item.name).map(item => {
                                                             // Sub-cols per item: HSN, Description, Total, Allotted,
                                                             // Debited, Balance, Unit Price, Planned CIF
@@ -727,8 +725,6 @@ export default function ItemPivotReport() {
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{minWidth: '120px', fontSize: 13.5}}></th>
-                                                        <th style={{minWidth: '90px', fontSize: 13.5}}></th>
                                                         {reportData.items.filter(item => item.name).map(item => (
                                                             <React.Fragment key={`${item.id}-headers`}>
                                                                 <th style={{minWidth: '90px', fontSize: 13.5}}>HSN
@@ -878,6 +874,58 @@ export default function ItemPivotReport() {
                                                                             Condition
                                                                         </button>
                                                                     )}
+                                                                    {license.latest_transfer && (
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <span style={{
+                                                                                    fontSize: 11,
+                                                                                    color: 'var(--info-text)',
+                                                                                    padding: '1px 6px',
+                                                                                    backgroundColor: 'var(--info-bg)',
+                                                                                    borderRadius: '2px',
+                                                                                    fontWeight: 500,
+                                                                                    whiteSpace: 'nowrap',
+                                                                                    lineHeight: 1.4,
+                                                                                    cursor: 'help',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '2px',
+                                                                                }}>
+                                                                                    <ArrowLeftRight className="size-4" aria-hidden="true" />
+                                                                                    Transfer
+                                                                                </span>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent className="max-w-sm whitespace-pre-wrap text-left">
+                                                                                {license.latest_transfer}
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    )}
+                                                                    {license.balance_report_notes && (
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <span style={{
+                                                                                    fontSize: 11,
+                                                                                    color: 'var(--danger-text)',
+                                                                                    padding: '1px 6px',
+                                                                                    backgroundColor: 'var(--danger-bg)',
+                                                                                    borderRadius: '2px',
+                                                                                    fontWeight: 500,
+                                                                                    whiteSpace: 'nowrap',
+                                                                                    lineHeight: 1.4,
+                                                                                    cursor: 'help',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '2px',
+                                                                                }}>
+                                                                                    <StickyNote className="size-4" aria-hidden="true" />
+                                                                                    Notes
+                                                                                </span>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent className="max-w-sm whitespace-pre-wrap text-left">
+                                                                                {license.balance_report_notes}
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    )}
                                                                 </div>
                                                             </td>
                                                             <td className="text-nowrap" style={{
@@ -932,36 +980,6 @@ export default function ItemPivotReport() {
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                                 borderRight: '2px solid var(--tb-border)'
                                                             }}>{license.balance_cif.toFixed(2)}</td>
-                                                            {/* Latest Transfer — icon in-row, full details on hover. */}
-                                                            <td className="text-center">
-                                                                {license.latest_transfer ? (
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <span style={{cursor: 'help', color: 'var(--info-color)'}}>
-                                                                                <ArrowLeftRight className="size-4" aria-hidden="true" />
-                                                                            </span>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent className="max-w-sm whitespace-pre-wrap text-left">
-                                                                            {license.latest_transfer}
-                                                                        </TooltipContent>
-                                                                    </Tooltip>
-                                                                ) : '-'}
-                                                            </td>
-                                                            {/* Notes — icon in-row, full details on hover. */}
-                                                            <td className="text-center">
-                                                                {license.balance_report_notes ? (
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <span style={{cursor: 'help', color: 'var(--danger-color)'}}>
-                                                                                <StickyNote className="size-4" aria-hidden="true" />
-                                                                            </span>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent className="max-w-sm whitespace-pre-wrap text-left">
-                                                                            {license.balance_report_notes}
-                                                                        </TooltipContent>
-                                                                    </Tooltip>
-                                                                ) : '-'}
-                                                            </td>
                                                             {reportData.items.filter(item => item.name).map(item => {
                                                                 const itemData = license.items[item.name] || {};
                                                                 const hasData = itemData.quantity > 0;
@@ -1069,8 +1087,6 @@ export default function ItemPivotReport() {
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + lic.balance_cif, 0).toFixed(2)}
                                                         </td>
-                                                        <td></td>
-                                                        <td></td>
                                                         {reportData.items.filter(item => item.name).map(item => {
                                                             const totalQty = licenses.reduce((sum, lic) => {
                                                                 return sum + (lic.items[item.name]?.quantity || 0);

@@ -1430,6 +1430,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
             _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
             _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
+            _is_e132 = any(n and str(n).strip() == 'E132' for n in _norm_vals)
             _exporter_name = license_obj.exporter.name if license_obj.exporter else ''
             _exporter_iec  = license_obj.exporter.iec  if license_obj.exporter else ''
             _port_code     = license_obj.port.code     if license_obj.port     else ''
@@ -1524,15 +1525,28 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     else:
                         _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
                         _e5_unclassified.append((_ik, _sr_str, _bal_agg[_ik]['hs_code'], _de, _bq))
+            elif _is_e132:
+                # Build the per-item input for the sequential debit (rendered
+                # below), ordered by serial no for a stable within-step order.
+                _e132_items = []
+                for _ik in sorted(_bal_agg.keys(),
+                                  key=lambda k: min(_bal_agg[k]['sr_ids'] or [0])):
+                    _agg = _bal_agg[_ik]
+                    _e132_items.append({
+                        'item_name': _ik,
+                        'quantity': _agg['qty'],
+                        'hs_code': _agg['hs_code'] or '',
+                        'description': _agg['description'] or _ik,
+                    })
 
             # E1's utilisation table is 8 cols wide (extra Util Qty column);
-            # E5 and "other" stay 7 cols. The banner widths follow suit.
-            _util_span = 'H' if _is_e1 else 'G'
-            _balcif_label_span = 'E' if _is_e1 else 'D'
-            _balcif_value_col = 6 if _is_e1 else 5
+            # E5/"other" stay 7 cols; E132's debit table is 9 cols.
+            _util_span = 'H' if _is_e1 else ('I' if _is_e132 else 'G')
+            _balcif_label_span = 'E' if _is_e1 else ('H' if _is_e132 else 'D')
+            _balcif_value_col = 6 if _is_e1 else (9 if _is_e132 else 5)
             ws.merge_cells(f'A{r}:{_util_span}{r}')
             bh = ws[f'A{r}']
-            bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
+            bh.value = 'Utilization Planning' if (_is_e1 or _is_e5 or _is_e132) else 'Summary (Balance Quantity)'
             bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
             bh.alignment = Alignment(horizontal='center', vertical='center')
             r += 1
@@ -1762,6 +1776,50 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     'pool_10': float(_ten_balance or 0),
                     'condition_per_cat': dict(_e5_cond_per_cat),
                 })
+            elif _is_e132:
+                # Sequential hard-stop debit (Download License spec). `_util_return`
+                # is left at its 'other' default so the cross-licence "Utilization
+                # Planning Summary" sheet (buckets only E1/E5/other) is unaffected.
+                from apps.license.services.e132_debit import (
+                    EXHAUSTED as _E132_EXHAUSTED,
+                    NO_MATCH_MESSAGE as _E132_NO_MATCH,
+                    compute_e132_debit as _compute_e132_debit,
+                )
+                _e132_result = _compute_e132_debit(_e132_items, _license_balance)
+
+                if not _e132_result['any_match']:
+                    ws.merge_cells(f'A{r}:I{r}')
+                    _nm = ws[f'A{r}']
+                    _nm.value = _E132_NO_MATCH
+                    _nm.font = Font(bold=True, size=9)
+                    _nm.alignment = Alignment(horizontal='center', vertical='center')
+                    r += 1
+                else:
+                    for col, h in enumerate(['Product Code', 'Description', 'HSN Code', 'Total Qty', 'Unit Rate ($)', 'Debit Amount ($)', 'Previous Balance ($)', 'New Balance ($)', 'Status'], 1):
+                        _hdr(ws, r, col, h)
+                    r += 1
+                    for _idx, _row in enumerate(_e132_result['rows']):
+                        _bad = _row['status'] == _E132_EXHAUSTED
+                        _rf = (PatternFill(start_color="F8CBAD", end_color="F8CBAD", fill_type="solid")
+                               if _bad else (None if _idx % 2 == 0 else ALT_FILL))
+                        _cell(ws, r, 1, _row['product_code'], fill=_rf)
+                        _cell(ws, r, 2, _row['description'], fill=_rf)
+                        _cell(ws, r, 3, _row['hs_code'], fill=_rf)
+                        _cell(ws, r, 4, _row['total_quantity'], fill=_rf, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 5, _row['unit_rate'], fill=_rf, align='right', num_fmt='#,##0.0000')
+                        _cell(ws, r, 6, _row['debit_amount'], fill=_rf, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 7, _row['previous_balance'], fill=_rf, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 8, _row['new_balance'], fill=_rf, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 9, _row['status'], fill=_rf, align='center', bold=_bad)
+                        r += 1
+
+                    r += 1
+                    for _ci in range(1, 7):
+                        _cell(ws, r, _ci, '', fill=TOTAL_FILL)
+                    _cell(ws, r, 7, 'FINAL BALANCE CIF $', fill=TOTAL_FILL, bold=True, align='right')
+                    _cell(ws, r, 8, _e132_result['final_balance'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 9, 'Fully debited' if _e132_result['fully_consumed'] else 'Balance remaining', fill=TOTAL_FILL, bold=True, align='center')
+                    r += 1
             else:
                 from apps.license.utils.condition_excel import annotate_cell as _annotate_cond
                 BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC', 'Cond']
@@ -2458,6 +2516,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
         _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
         _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
+        _is_e132 = any(n and str(n).strip() == 'E132' for n in _norm_vals)
         if _is_e1:
             from apps.license.services.e1_plan import (
                 E1_CATS as _E1_CATS_BE,
@@ -2489,12 +2548,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _unclassified.append((_ik, _sr_str, _hs, _de, _bq))
 
         # E1's utilisation table is 8 cols wide; E5 and "other" stay 7 cols.
-        _util_span = 'H' if _is_e1 else 'G'
-        _balcif_label_span = 'E' if _is_e1 else 'D'
-        _balcif_value_col = 6 if _is_e1 else 5
+        _util_span = 'H' if _is_e1 else ('I' if _is_e132 else 'G')
+        _balcif_label_span = 'E' if _is_e1 else ('H' if _is_e132 else 'D')
+        _balcif_value_col = 6 if _is_e1 else (9 if _is_e132 else 5)
         ws.merge_cells(f'A{r}:{_util_span}{r}')
         bh = ws[f'A{r}']
-        bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
+        bh.value = 'Utilization Planning' if (_is_e1 or _is_e5 or _is_e132) else 'Summary (Balance Quantity)'
         bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
         bh.alignment = Alignment(horizontal='center', vertical='center')
         r += 1
@@ -2694,6 +2753,60 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _cell(ws, r, 4, 'TOTAL ALLOCATED CIF $', fill=TOTAL_FILL, bold=True, align='right')
             _cell(ws, r, 5, _e5_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             r += 1
+        elif _is_e132:
+            # Sequential hard-stop debit (Download License spec). Each matched
+            # item debits the full qty×rate from the running Balance CIF; on
+            # overflow it is flagged "Insufficient Balance" and the run stops.
+            from apps.license.services.e132_debit import (
+                EXHAUSTED as _E132_EXHAUSTED,
+                NO_MATCH_MESSAGE as _E132_NO_MATCH,
+                compute_e132_debit as _compute_e132_debit,
+            )
+            _e132_items = []
+            for _ik in sorted(_bal_agg.keys(),
+                              key=lambda k: min(_bal_agg[k]['sr_ids'] or [0])):
+                _agg = _bal_agg[_ik]
+                _e132_items.append({
+                    'item_name': _ik,
+                    'quantity': _agg['qty'],
+                    'hs_code': _agg['hs_code'] or '',
+                    'description': _agg['description'] or _ik,
+                })
+            _e132_result = _compute_e132_debit(_e132_items, _license_balance)
+
+            if not _e132_result['any_match']:
+                ws.merge_cells(f'A{r}:I{r}')
+                _nm = ws[f'A{r}']
+                _nm.value = _E132_NO_MATCH
+                _nm.font = Font(bold=True, size=9)
+                _nm.alignment = Alignment(horizontal='center', vertical='center')
+                r += 1
+            else:
+                for col, h in enumerate(['Product Code', 'Description', 'HSN Code', 'Total Qty', 'Unit Rate ($)', 'Debit Amount ($)', 'Previous Balance ($)', 'New Balance ($)', 'Status'], 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+                for _idx, _row in enumerate(_e132_result['rows']):
+                    _bad = _row['status'] == _E132_EXHAUSTED
+                    _rf = (PatternFill(start_color="F8CBAD", end_color="F8CBAD", fill_type="solid")
+                           if _bad else (None if _idx % 2 == 0 else ALT_FILL))
+                    _cell(ws, r, 1, _row['product_code'], fill=_rf)
+                    _cell(ws, r, 2, _row['description'], fill=_rf)
+                    _cell(ws, r, 3, _row['hs_code'], fill=_rf)
+                    _cell(ws, r, 4, _row['total_quantity'], fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, _row['unit_rate'], fill=_rf, align='right', num_fmt='#,##0.0000')
+                    _cell(ws, r, 6, _row['debit_amount'], fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 7, _row['previous_balance'], fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 8, _row['new_balance'], fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 9, _row['status'], fill=_rf, align='center', bold=_bad)
+                    r += 1
+
+                r += 1
+                for _ci in range(1, 7):
+                    _cell(ws, r, _ci, '', fill=TOTAL_FILL)
+                _cell(ws, r, 7, 'FINAL BALANCE CIF $', fill=TOTAL_FILL, bold=True, align='right')
+                _cell(ws, r, 8, _e132_result['final_balance'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 9, 'Fully debited' if _e132_result['fully_consumed'] else 'Balance remaining', fill=TOTAL_FILL, bold=True, align='center')
+                r += 1
         else:
             from apps.license.utils.condition_excel import annotate_cell as _annotate_cond_be
             # Column headers

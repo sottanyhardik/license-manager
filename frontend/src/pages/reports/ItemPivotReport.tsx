@@ -11,6 +11,7 @@ import {toast} from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { ArrowLeftRight, Bell, Building2, Calculator, CalendarCheck, CalendarDays, CalendarRange, DollarSign, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, MinusCircle, Package, RefreshCw, ShoppingCart, SlidersHorizontal, StickyNote, Tag, TriangleAlert, XCircle } from "lucide-react";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
@@ -648,6 +649,8 @@ export default function ItemPivotReport() {
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}>Balance CIF
                                                         </th>
+                                                        <th className="text-center" style={{minWidth: '120px'}}>Latest Transfer</th>
+                                                        <th className="text-center" style={{minWidth: '90px'}}>Notes</th>
                                                         {reportData.items.filter(item => item.name).map(item => {
                                                             // Sub-cols per item: HSN, Description, Total, Allotted,
                                                             // Debited, Balance, Unit Price, Planned CIF
@@ -724,6 +727,8 @@ export default function ItemPivotReport() {
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}></th>
+                                                        <th style={{minWidth: '120px', fontSize: 13.5}}></th>
+                                                        <th style={{minWidth: '90px', fontSize: 13.5}}></th>
                                                         {reportData.items.filter(item => item.name).map(item => (
                                                             <React.Fragment key={`${item.id}-headers`}>
                                                                 <th style={{minWidth: '90px', fontSize: 13.5}}>HSN
@@ -927,6 +932,36 @@ export default function ItemPivotReport() {
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                                 borderRight: '2px solid var(--tb-border)'
                                                             }}>{license.balance_cif.toFixed(2)}</td>
+                                                            {/* Latest Transfer — icon in-row, full details on hover. */}
+                                                            <td className="text-center">
+                                                                {license.latest_transfer ? (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span style={{cursor: 'help', color: 'var(--info-color)'}}>
+                                                                                <ArrowLeftRight className="size-4" aria-hidden="true" />
+                                                                            </span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent className="max-w-sm whitespace-pre-wrap text-left">
+                                                                            {license.latest_transfer}
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                ) : '-'}
+                                                            </td>
+                                                            {/* Notes — icon in-row, full details on hover. */}
+                                                            <td className="text-center">
+                                                                {license.balance_report_notes ? (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span style={{cursor: 'help', color: 'var(--danger-color)'}}>
+                                                                                <StickyNote className="size-4" aria-hidden="true" />
+                                                                            </span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent className="max-w-sm whitespace-pre-wrap text-left">
+                                                                            {license.balance_report_notes}
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                ) : '-'}
+                                                            </td>
                                                             {reportData.items.filter(item => item.name).map(item => {
                                                                 const itemData = license.items[item.name] || {};
                                                                 const hasData = itemData.quantity > 0;
@@ -986,49 +1021,6 @@ export default function ItemPivotReport() {
                                                                 );
                                                             })}
                                                         </tr>
-                                                        {/* Notes and Latest Transfer Row (Condition Sheet moved to button + modal) */}
-                                                        {(license.balance_report_notes || license.latest_transfer) && (
-                                                            <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--tb-sunken)' }}>
-                                                                <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 8 : 6))} style={{
-                                                                    padding: '10px 15px',
-                                                                    borderTop: 'none'
-                                                                }}>
-                                                                    <div style={{ fontSize: 13.5, lineHeight: '1.5' }}>
-                                                                        {license.balance_report_notes && (
-                                                                            <div style={{
-                                                                                marginBottom: license.latest_transfer ? '8px' : '0',
-                                                                                backgroundColor: 'var(--danger-color)',
-                                                                                padding: '6px 10px',
-                                                                                borderRadius: 'var(--tb-r-sm)'
-                                                                            }}>
-                                                                                <strong style={{ color: '#000' }}>
-                                                                                    <StickyNote className="size-4" aria-hidden="true" />
-                                                                                    Notes:
-                                                                                </strong>
-                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
-                                                                                    {license.balance_report_notes}
-                                                                                </span>
-                                                                            </div>
-                                                                        )}
-                                                                        {license.latest_transfer && (
-                                                                            <div style={{
-                                                                                backgroundColor: 'var(--info-color)',
-                                                                                padding: '6px 10px',
-                                                                                borderRadius: 'var(--tb-r-sm)'
-                                                                            }}>
-                                                                                <strong style={{ color: '#000' }}>
-                                                                                    <ArrowLeftRight className="size-4" aria-hidden="true" />
-                                                                                    Latest Transfer:
-                                                                                </strong>
-                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
-                                                                                    {license.latest_transfer}
-                                                                                </span>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )}
                                                         </React.Fragment>
                                                     ))}
                                                     <tr className="table-warning font-bold" style={{
@@ -1077,6 +1069,8 @@ export default function ItemPivotReport() {
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + lic.balance_cif, 0).toFixed(2)}
                                                         </td>
+                                                        <td></td>
+                                                        <td></td>
                                                         {reportData.items.filter(item => item.name).map(item => {
                                                             const totalQty = licenses.reduce((sum, lic) => {
                                                                 return sum + (lic.items[item.name]?.quantity || 0);

@@ -612,6 +612,28 @@ class ItemPivotReportView(View):
                     'planned_cif': round(item_plan, 2),
                 }
 
+        # ── Per-item sequential debit (E132) ──────────────────────────────
+        # E132 uses a hard-stop debit sequence (services/e132_debit.py), not the
+        # E1/E5 waterfall: each matched item debits qty×rate from a running
+        # Balance CIF; on overflow it is flagged "Insufficient Balance" and the
+        # run stops. Map the per-item result back by item-name.
+        item_e132_data: Dict[str, Dict[str, Any]] = {}
+        if primary_norm == 'E132':
+            from apps.license.services.e132_debit import compute_e132_debit as _compute_e132_debit
+            _e132_input = []
+            for _iid, _inm in all_items:
+                if _iid in item_quantities:
+                    _d132 = item_quantities[_iid]
+                    _e132_input.append({
+                        'item_name': _inm,
+                        'quantity': float(_d132['available_quantity'] or 0),
+                        'hs_code': _d132['hs_code'] or '',
+                        'description': _d132['description'] or '',
+                    })
+            _e132_res = _compute_e132_debit(_e132_input, float(balance_cif))
+            for _r132 in _e132_res['rows']:
+                item_e132_data[_r132['item_name']] = _r132
+
         # Add item columns
         for item_id, item_name in all_items:
             if item_id in item_quantities:
@@ -634,11 +656,23 @@ class ItemPivotReportView(View):
                 # Use pre-calculated unit price for RUTILE; otherwise fall
                 # back to the E1/E5 category rate computed above.
                 planner = item_plan_data.get(item_name) or {}
+                _e132 = item_e132_data.get(item_name) or {}
                 if item_name == 'RUTILE - A3627':
                     unit_price = rutile_unit_price
+                    planned_cif = planner.get('planned_cif', 0.0)
+                elif _e132:
+                    # E132 reuses the Unit Price / Planned CIF columns to show
+                    # the sequential debit's Unit Rate / Debit Amount. Only a
+                    # *Success* row is actually applied to the balance — an
+                    # "Insufficient Balance" item is NOT debited, so it must
+                    # contribute 0 to the summed Planned CIF (otherwise the
+                    # report total can exceed the opening Balance CIF).
+                    _applied = _e132.get('status') == 'Success'
+                    unit_price = _e132.get('unit_rate') if _applied else None
+                    planned_cif = _e132.get('debit_amount') if _applied else 0.0
                 else:
                     unit_price = planner.get('unit_price')
-                planned_cif = planner.get('planned_cif', 0.0)
+                    planned_cif = planner.get('planned_cif', 0.0)
 
                 row_data['items'][item_name] = {
                     'hs_code': item_data['hs_code'],
@@ -652,6 +686,13 @@ class ItemPivotReportView(View):
                     'unit_price': unit_price,
                     'planned_cif': planned_cif,
                     'condition_type': cond_type,
+                    # E132 sequential-debit fields (None for non-E132 norms).
+                    'product_code': _e132.get('product_code'),
+                    'unit_rate': _e132.get('unit_rate'),
+                    'debit_amount': _e132.get('debit_amount'),
+                    'previous_balance': _e132.get('previous_balance'),
+                    'new_balance': _e132.get('new_balance'),
+                    'debit_status': _e132.get('status'),
                 }
             else:
                 row_data['items'][item_name] = {
@@ -666,6 +707,12 @@ class ItemPivotReportView(View):
                     'unit_price': None,
                     'planned_cif': 0,
                     'condition_type': '',
+                    'product_code': None,
+                    'unit_rate': None,
+                    'debit_amount': None,
+                    'previous_balance': None,
+                    'new_balance': None,
+                    'debit_status': None,
                 }
 
         return row_data

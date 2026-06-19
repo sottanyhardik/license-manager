@@ -32,7 +32,9 @@ def _get_server_password():
         raise RuntimeError("Server password is required (set SERVER_PASSWORD env var or enter at prompt).")
     return SERVER_PASSWORD
 
-# IP fallbacks use plain HTTP so SSL certificates are not involved — no verify=False needed
+# IP fallbacks are plain HTTP. Servers may now 301-redirect HTTP→HTTPS; authenticate()
+# follows redirects while preserving the POST body — requests downgrades POST→GET on a 301,
+# which would silently drop the credentials and fail auth with a 400.
 SERVER_IP_FALLBACKS = {
     'license-manager.duckdns.org': 'http://143.110.252.201',
     'labdhi.duckdns.org': 'http://139.59.92.226',
@@ -239,23 +241,44 @@ def authenticate(server_url=None):
         if ip_url != server_url:
             urls_to_try.append(ip_url)
 
+    def _post_login(start_url):
+        """POST credentials, manually following redirects so the POST method and
+        body survive an HTTP→HTTPS upgrade. `requests` rewrites POST→GET on a 301
+        (and drops the JSON body), so a force-HTTPS redirect would otherwise make
+        auth fail with a 400. Returns (response, final_url)."""
+        from urllib.parse import urljoin
+        url = start_url
+        payload = {'username': SERVER_USERNAME, 'password': _get_server_password()}
+        response = None
+        for _ in range(5):  # cap the redirect chain
+            response = requests.post(url, json=payload, timeout=30, allow_redirects=False)
+            if response.status_code in (301, 302, 307, 308):
+                location = response.headers.get('Location')
+                if not location:
+                    break
+                url = urljoin(url, location)
+                print(f"   ↪ following redirect to: {url}")
+                continue
+            break
+        return response, url
+
     for attempt_url in urls_to_try:
         auth_url = f"{attempt_url}/api/auth/login/"
         try:
             print(f"   Connecting to: {auth_url}")
             print(f"   Username: {SERVER_USERNAME}")
 
-            response = requests.post(
-                auth_url,
-                json={'username': SERVER_USERNAME, 'password': _get_server_password()},
-                timeout=30
-            )
+            response, final_url = _post_login(auth_url)
 
             if response.status_code == 200:
                 data = response.json()
                 auth_token = data.get('access')
-                print(f"✅ Authenticated successfully (via {attempt_url})")
-                return True, attempt_url
+                # Use the base that actually answered — a redirect may have upgraded
+                # http://<ip> to https://<domain>, and later sync calls must use it too.
+                suffix = '/api/auth/login/'
+                resolved_base = final_url[:-len(suffix)] if final_url.endswith(suffix) else attempt_url
+                print(f"✅ Authenticated successfully (via {resolved_base})")
+                return True, resolved_base
             else:
                 print(f"❌ Authentication failed: {response.status_code}")
                 print(f"   Response: {response.text}")

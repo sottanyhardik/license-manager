@@ -246,8 +246,11 @@ Django's WhiteNoise serves `frontend/dist/assets/` at `/assets/*` and the catch-
 python manage.py migrate
 python manage.py collectstatic
 gunicorn lmanagement.wsgi
-celery -A lmanagement worker -l info
+celery -A lmanagement worker -Q celery,ledger -l info
 ```
+> The worker **must** bind both queues. Ledger uploads are dispatched to the
+> `ledger` queue (`apply_async(..., queue='ledger')`); omitting `-Q celery,ledger`
+> leaves those tasks unconsumed.
 
 ### Environment Variables
 - `DJANGO_SECRET_KEY`

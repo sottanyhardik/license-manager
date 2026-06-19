@@ -8,6 +8,7 @@ import os
 from celery import Celery, signals
 from celery.schedules import crontab
 from django.conf import settings
+from kombu import Queue
 
 # set default Django settings module if not set in environment
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", os.getenv("DJANGO_SETTINGS_MODULE", "lmanagement.settings"))
@@ -23,6 +24,17 @@ app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
+    # Declare both queues on the app so a worker started WITHOUT an explicit -Q
+    # still consumes them. Ledger uploads are dispatched to the dedicated "ledger"
+    # queue (apps/license/views/ledger_upload.py: apply_async(queue="ledger")); the
+    # default queue stays "celery" for everything else (.delay(), beat tasks).
+    # Without this, a bare `celery -A lmanagement worker` only drains "celery" and
+    # ledger tasks pile up unconsumed.
+    task_default_queue="celery",
+    task_queues=(
+        Queue("celery"),
+        Queue("ledger"),
+    ),
 )
 
 # Auto-discover tasks from all installed apps (looks for tasks.py modules)

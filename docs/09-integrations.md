@@ -11,7 +11,7 @@
 **Setup**:
 - Broker: Redis
 - Backend: Redis (for task result storage)
-- Workers: `celery -A lmanagement worker -l info`
+- Workers: `celery -A lmanagement worker -Q celery,ledger -l info` (must bind the `ledger` queue — `process_single_license` is dispatched there via `apply_async(..., queue='ledger')`)
 
 **Tasks**:
 - `process_single_license` — processes one license row from a ledger upload; creates/updates `RowDetails`, recalculates balances

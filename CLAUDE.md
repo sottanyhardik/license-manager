@@ -3,6 +3,20 @@
 Your goal is to reverse engineer this application and produce complete
 documentation so another AI can rebuild it from scratch.
 
+## Code index — consult this BEFORE reading source
+
+A self-maintaining map of the whole codebase lives in `.claude/index/` (kept
+fresh automatically by hooks). To save tokens and answer fast, use it first:
+
+- **Find any symbol** (class/function/method/route/component):
+  `grep -i "Name" .claude/index/symbols.tsv` → gives `file` and `line`.
+- **See a file/area's shape:** skim `.claude/index/CODE_MAP.md`.
+- Read source only for the specific file+lines you need.
+
+See `.claude/index/README.md` for details. Do not hand-edit the generated
+`manifest.json` / `symbols.tsv` / `CODE_MAP.md` (they are rebuilt on every edit
+and at session start); run `python3 .claude/index/build_index.py` to rebuild.
+
 ## Rules
 
 - Never modify source code.

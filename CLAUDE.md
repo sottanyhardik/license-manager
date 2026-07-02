@@ -19,6 +19,16 @@ See `.claude/index/README.md` for details. Do not hand-edit the generated
 `manifest.json` / `symbols.tsv` / `CODE_MAP.md` (they are rebuilt on every edit
 and at session start); run `python3 .claude/index/build_index.py` to rebuild.
 
+## Specialist agents
+
+A team of senior (25-yr) development agents lives in `.claude/agents/`
+(`tech-lead`, `backend-engineer`, `frontend-engineer`, `refactor-specialist`,
+`qa-test-engineer`, `security-auditor`, `code-reviewer`). They all consult the
+code index first and follow the quality gates in `.claude/rules.md`. See
+`.claude/agents/README.md`. Note: the engineer/refactor agents *do* modify source
+for active development, which is intentional and supersedes the doc-only rule
+above for development tasks.
+
 ## Rules
 
 - Never modify source code.

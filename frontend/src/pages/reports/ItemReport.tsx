@@ -911,6 +911,8 @@ export default function ItemReport() {
                                             <th style={{minWidth: '250px'}}>Product Description</th>
                                             <th style={{minWidth: '200px'}}>Item Name</th>
                                             <th className="text-end" style={{minWidth: '140px'}}>Avail Qty</th>
+                                            <th className="text-end" style={{minWidth: '120px'}}>Plan Qty</th>
+                                            <th className="text-end" style={{minWidth: '120px'}}>Plan CIF</th>
                                             <th className="text-end" style={{minWidth: '140px'}}>Avail Bal</th>
                                             <th className="text-end" style={{minWidth: '140px'}}>Balance CIF</th>
                                             <th className="text-center" style={{minWidth: '120px'}}>Is Restricted</th>
@@ -1032,6 +1034,12 @@ export default function ItemReport() {
                                                                 />
                                                             </td>
                                                             <td className="text-end">{Number(item.available_quantity || 0).toFixed(3)}</td>
+                                                            <td className="text-end" title={(item.planned_splits || []).map(s => `${s.item_name || '—'}: ${Number(s.planned_quantity).toFixed(3)} @ ${Number(s.unit_price).toFixed(2)} = ${Number(s.planned_cif_fc).toFixed(2)}`).join('\n')}>
+                                                                {Number(item.planned_quantity || 0) > 0 ? Number(item.planned_quantity).toFixed(3) : '-'}
+                                                            </td>
+                                                            <td className="text-end">
+                                                                {Number(item.planned_cif || 0) > 0 ? Number(item.planned_cif).toFixed(2) : '-'}
+                                                            </td>
                                                             {isFirstRow && (
                                                                 <>
                                                                     <td className="text-end text-success font-semibold"

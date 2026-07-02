@@ -379,7 +379,14 @@ class ItemPivotReportView(View):
             'sion_norm_class': None,
             'restriction_percentage': None,
             'condition_type': '',
+            # User-authored utilization plan (summed across an item's splits).
+            'plan_quantity': Decimal('0.000'),
+            'plan_cif': Decimal('0.00'),
         })
+
+        # Per-import-item utilization plan totals for this license (one query).
+        from apps.license.services.plan_reporting import plan_map_for_license
+        _plan_map = plan_map_for_license(license_obj.id)
 
         # Per condition_type pool — new restriction model. Each "N%" pool is
         # shared by every import item on this licence with that condition_type,
@@ -400,7 +407,15 @@ class ItemPivotReportView(View):
         })
 
         for import_item in license_obj.import_license.all():
+            # Attribute this import item's plan totals to its FIRST attached item
+            # name only, so a multi-name item isn't double-counted across columns.
+            _pl = _plan_map.get(import_item.id)
+            _pl_pending = _pl is not None
             for item in import_item.items.all():
+                if _pl_pending:
+                    item_quantities[item.id]['plan_quantity'] += Decimal(str(_pl['total_planned_quantity']))
+                    item_quantities[item.id]['plan_cif'] += Decimal(str(_pl['total_planned_cif']))
+                    _pl_pending = False
                 # Convert all numeric fields to Decimal to handle potential float values from database
                 item_quantities[item.id]['quantity'] += Decimal(str(import_item.quantity)) if import_item.quantity is not None else DEC_000
                 item_quantities[item.id]['allotted_quantity'] += Decimal(str(import_item.allotted_quantity)) if import_item.allotted_quantity is not None else DEC_000
@@ -505,6 +520,10 @@ class ItemPivotReportView(View):
             'latest_transfer': latest_transfer_text,
             'has_tl': has_tl,
             'has_copy': has_copy,
+            # Per-license plan source: 'manual' if the license has any manual
+            # plan line, else 'norm'. The frontend uses this to show EITHER the
+            # manual plan OR the norm plan for the whole license — never both.
+            'plan_source': 'manual' if _plan_map else 'norm',
             'items': {}
         }
 
@@ -685,6 +704,9 @@ class ItemPivotReportView(View):
                     'restriction_value': float(available_cif),
                     'unit_price': unit_price,
                     'planned_cif': planned_cif,
+                    # User-authored plan (distinct from the norm-derived planned_cif).
+                    'plan_quantity': float(item_data.get('plan_quantity') or 0),
+                    'plan_cif': float(item_data.get('plan_cif') or 0),
                     'condition_type': cond_type,
                     # E132 sequential-debit fields (None for non-E132 norms).
                     'product_code': _e132.get('product_code'),
@@ -706,6 +728,8 @@ class ItemPivotReportView(View):
                     'restriction_value': 0,
                     'unit_price': None,
                     'planned_cif': 0,
+                    'plan_quantity': 0,
+                    'plan_cif': 0,
                     'condition_type': '',
                     'product_code': None,
                     'unit_rate': None,
@@ -796,6 +820,10 @@ class ItemPivotReportView(View):
                         if is_rutile:
                             headers.append(f"{item_name} Unit Price")
 
+                        # Manual plan when present, else norm unit price / planned CIF.
+                        headers.append(f"{item_name} Plan Qty / Unit Price")
+                        headers.append(f"{item_name} Planned CIF")
+
                         item_headers.extend(headers)
 
                     all_headers = base_headers + item_headers
@@ -867,6 +895,19 @@ class ItemPivotReportView(View):
                             if is_rutile:
                                 unit_price = item_data.get('unit_price')
                                 row_data.append(unit_price if unit_price else '')
+
+                            # Per license: manual plan if manually planned, else
+                            # norm unit price / planned CIF.
+                            if license_data.get('plan_source') == 'manual':
+                                plan_q = item_data.get('plan_quantity') or 0
+                                plan_c = item_data.get('plan_cif') or 0
+                                row_data.append(plan_q if plan_q else '')
+                                row_data.append(plan_c if plan_c else '')
+                            else:
+                                _up = item_data.get('unit_price')
+                                _pc = item_data.get('planned_cif')
+                                row_data.append(_up if _up else '')
+                                row_data.append(_pc if _pc else '')
 
                         # Append row to worksheet
                         worksheet.append(row_data)

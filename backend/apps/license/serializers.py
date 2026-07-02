@@ -19,6 +19,7 @@ from apps.license.models import (
     LicenseFlags,
     LicenseNotes,
     LicenseOwnership,
+    LicenseItemPlan,
 )
 
 
@@ -382,6 +383,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     has_tl = serializers.SerializerMethodField()
     has_copy = serializers.SerializerMethodField()
     has_condition_sheet = serializers.SerializerMethodField()
+    is_manually_planned = serializers.SerializerMethodField()
 
     # Nested serializers - separate for read/write to avoid validation issues
     export_license_read = LicenseExportItemSerializer(source='export_license', many=True, read_only=True)
@@ -705,6 +707,15 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     def get_get_balance_cif(self, obj):
         """Get fresh balance_cif (always calculated from property, not cached field)"""
         return obj.get_balance_cif
+
+    def get_is_manually_planned(self, obj):
+        """True when the license has at least one manual utilization plan line.
+        Uses the list-view annotation `_has_manual_plan` when present, else queries."""
+        v = getattr(obj, '_has_manual_plan', None)
+        if v is not None:
+            return bool(v)
+        from apps.license.models import LicenseItemPlan
+        return LicenseItemPlan.objects.filter(license=obj).exists()
 
     def get_has_tl(self, obj):
         """Check if license has Transfer Letter documents"""
@@ -1571,3 +1582,41 @@ class IncentiveLicenseSerializer(serializers.ModelSerializer):
         rep['sold_status'] = self.get_sold_status(instance)
 
         return rep
+
+
+class LicenseItemPlanSerializer(serializers.ModelSerializer):
+    """
+    Serializer for a utilization plan line (an item may have several split lines).
+
+    Read-only context fields (item description / serial / available / total qty,
+    item-name label) help the frontend render each split row. Capacity (Σ split
+    quantity ≤ item capacity) and the CIF-pool cap (Σ planned_cif_fc ≤ licence
+    balance) are cross-line checks and are validated in the viewset's
+    ``bulk_upsert`` where all lines for the licence are known at once.
+    """
+    import_item = serializers.PrimaryKeyRelatedField(
+        queryset=LicenseImportItemsModel.objects.all()
+    )
+    item_name = serializers.PrimaryKeyRelatedField(
+        queryset=ItemNameModel.objects.all(), required=False, allow_null=True
+    )
+    item_name_label = serializers.CharField(source="item_name.name", read_only=True)
+    item_description = serializers.CharField(source="import_item.description", read_only=True)
+    serial_number = serializers.IntegerField(source="import_item.serial_number", read_only=True)
+    item_available_quantity = serializers.DecimalField(
+        source="import_item.available_quantity", max_digits=15, decimal_places=3, read_only=True
+    )
+    item_total_quantity = serializers.DecimalField(
+        source="import_item.quantity", max_digits=15, decimal_places=3, read_only=True
+    )
+    license_number = serializers.CharField(source="import_item.license.license_number", read_only=True)
+
+    class Meta:
+        model = LicenseItemPlan
+        fields = [
+            "id", "import_item", "item_name", "item_name_label", "license",
+            "planned_quantity", "unit_price", "planned_cif_fc", "planned_cif_inr", "note",
+            "item_description", "serial_number", "license_number",
+            "item_available_quantity", "item_total_quantity",
+        ]
+        read_only_fields = ["license"]

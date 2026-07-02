@@ -650,7 +650,7 @@ export default function ItemPivotReport() {
                                                         </th>
                                                         {reportData.items.filter(item => item.name).map(item => {
                                                             // Sub-cols per item: HSN, Description, Total, Allotted,
-                                                            // Debited, Balance, Unit Price, Planned CIF
+                                                            // Debited, Balance, Plan Qty, Plan CIF
                                                             // + 2 optional restriction cols when applicable
                                                             // + 1 optional RUTILE-specific Unit Price.
                                                             const isRutile = item.name === 'RUTILE - A3627';
@@ -768,19 +768,9 @@ export default function ItemPivotReport() {
                                                                         </th>
                                                                     </>
                                                                 )}
-                                                                {/* Per-item Unit Price + Planned CIF — sourced from
-                                                                    the same e1_plan/e5_plan waterfall the bulk
-                                                                    Balance Excel uses. */}
-                                                                <th className="text-end" style={{
-                                                                    minWidth: '100px',
-                                                                    fontSize: 13.5
-                                                                }}>Unit Price
-                                                                </th>
-                                                                <th className="text-end" style={{
-                                                                    minWidth: '120px',
-                                                                    fontSize: 13.5
-                                                                }}>Planned CIF
-                                                                </th>
+                                                                {/* Manual plan when present, else norm unit price / planned CIF */}
+                                                                <th className="text-end" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty / Unit Price</th>
+                                                                <th className="text-end" style={{ minWidth: '110px', fontSize: 13.5 }}>Planned CIF</th>
                                                                 {item.name === 'RUTILE - A3627' && (
                                                                     <th className="text-end" style={{
                                                                         minWidth: '100px',
@@ -930,6 +920,10 @@ export default function ItemPivotReport() {
                                                             {reportData.items.filter(item => item.name).map(item => {
                                                                 const itemData = license.items[item.name] || {};
                                                                 const hasData = itemData.quantity > 0;
+                                                                // Per license: if the license is manually planned show the
+                                                                // manual plan; otherwise show the norm-derived unit price /
+                                                                // planned CIF. Never both for the same license.
+                                                                const hasManualPlan = license.plan_source === 'manual';
                                                                 return (
                                                                     <React.Fragment
                                                                         key={`${license.license_number}-${item.id}`}>
@@ -969,13 +963,16 @@ export default function ItemPivotReport() {
                                                                                 </td>
                                                                             </>
                                                                         )}
-                                                                        {/* Unit Price + Planned CIF — sourced from
-                                                                            the e1_plan/e5_plan waterfall. */}
+                                                                        {/* Manual plan if present, else norm unit price / planned CIF */}
                                                                         <td className={`text-end ${hasData ? 'bg-light' : ''}`}>
-                                                                            {itemData.unit_price ? Number(itemData.unit_price).toFixed(2) : '-'}
+                                                                            {hasManualPlan
+                                                                                ? Number(itemData.plan_quantity || 0).toFixed(3)
+                                                                                : (itemData.unit_price ? Number(itemData.unit_price).toFixed(2) : '-')}
                                                                         </td>
                                                                         <td className={`text-end ${hasData ? 'bg-light font-semibold' : ''}`}>
-                                                                            {itemData.planned_cif ? Number(itemData.planned_cif).toFixed(2) : '-'}
+                                                                            {hasManualPlan
+                                                                                ? Number(itemData.plan_cif || 0).toFixed(2)
+                                                                                : (itemData.planned_cif ? Number(itemData.planned_cif).toFixed(2) : '-')}
                                                                         </td>
                                                                         {item.name === 'RUTILE - A3627' && (
                                                                             <td className={`text-end ${hasData ? 'bg-light font-semibold text-warning' : ''}`}>
@@ -989,7 +986,7 @@ export default function ItemPivotReport() {
                                                         {/* Notes and Latest Transfer Row (Condition Sheet moved to button + modal) */}
                                                         {(license.balance_report_notes || license.latest_transfer) && (
                                                             <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--tb-sunken)' }}>
-                                                                <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 8 : 6))} style={{
+                                                                <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 10 : 8))} style={{
                                                                     padding: '10px 15px',
                                                                     borderTop: 'none'
                                                                 }}>

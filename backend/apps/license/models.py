@@ -1156,6 +1156,78 @@ class LicenseImportItemsModel(models.Model):
 
 
 # -----------------------------
+# Utilization Planning
+# -----------------------------
+class LicenseItemPlan(AuditModel):
+    """
+    User-authored utilization plan line for an import item.
+
+    An import item's total quantity can be SPLIT into several plan lines, each
+    optionally tagged with an item name (e.g. milk → WPC / SWP / DWP) and priced
+    with a unit price. Each line records planned quantity, unit price and CIF-FC.
+
+    At allotment time (`allocate_items`) the SUM of an item's plan lines acts as
+    a CAP: cumulative allotment for the item may not exceed the total planned
+    quantity / CIF-FC. Items without any plan line keep the default
+    availability-based behavior.
+
+    This is distinct from the norm-derived "planned CIF" produced by the
+    E1/E5 waterfall (`services/e1_plan.py` / `e5_plan.py`), which is read-only.
+    """
+    import_item = models.ForeignKey(
+        "license.LicenseImportItemsModel",
+        on_delete=models.CASCADE,
+        related_name="utilization_plans",
+        db_index=True,
+    )
+    # Optional split label — one of the item's attached item names.
+    item_name = models.ForeignKey(
+        "core.ItemNameModel",
+        on_delete=models.SET_NULL,
+        related_name="plan_lines",
+        null=True,
+        blank=True,
+    )
+    # Denormalized for fast per-license querying and shared-pool validation.
+    license = models.ForeignKey(
+        "license.LicenseDetailsModel",
+        on_delete=models.CASCADE,
+        related_name="item_plans",
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    planned_quantity = models.DecimalField(
+        max_digits=15, decimal_places=3, default=DEC_000,
+        validators=[MinValueValidator(DEC_000)],
+    )
+    unit_price = models.DecimalField(
+        max_digits=15, decimal_places=2, default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+    )
+    planned_cif_fc = models.DecimalField(
+        max_digits=15, decimal_places=2, default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+    )
+    planned_cif_inr = models.DecimalField(
+        max_digits=15, decimal_places=2, default=DEC_0, null=True, blank=True,
+    )
+    note = models.CharField(max_length=500, blank=True, null=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["license"]), models.Index(fields=["import_item"])]
+
+    def save(self, *args, **kwargs):
+        # Keep the denormalized license in sync with the item's license.
+        if self.import_item_id and not self.license_id:
+            self.license_id = self.import_item.license_id
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"Plan item={self.import_item_id}: qty={self.planned_quantity} cif_fc={self.planned_cif_fc}"
+
+
+# -----------------------------
 # Documents
 # -----------------------------
 class LicenseDocumentModel(models.Model):

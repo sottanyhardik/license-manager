@@ -192,11 +192,26 @@ class ItemReportView(View):
         # Order by license number and serial number
         items = items.order_by('license__license_number', 'serial_number')
 
+        # Utilization plan per item. Per LICENSE we use the manual plan if one
+        # exists, otherwise the norm (E1/E5/E132) plan — never both.
+        from apps.license.services.plan_reporting import plan_map_for_import_items
+        from apps.license.services.norm_plan import effective_plan_for_license
+        manual_splits = plan_map_for_import_items([it.id for it in items])
+        _eff_cache = {}
+
+        def _effective(lic):
+            if lic.id not in _eff_cache:
+                _eff_cache[lic.id] = effective_plan_for_license(lic)
+            return _eff_cache[lic.id]
+
         # Build report data
         report_items = []
         for item in items:
             # Get item names
             item_names_list = [{"id": i.id, "name": i.name} for i in item.items.all()]
+            _plan_source, _eff = _effective(item.license)
+            plan = _eff.get(item.id)
+            _ms = manual_splits.get(item.id)
 
             # Use the stored available_value field (updated by balance update task)
             # This field already contains the correct value:
@@ -234,6 +249,12 @@ class ItemReportView(View):
                 'condition_sheet': item.license.condition_sheet or '',
                 'unit': item.unit,
                 'serial_number': item.serial_number,
+                # Effective plan (manual if the license is manually planned,
+                # else norm). Splits are shown only for manual plans.
+                'planned_quantity': plan['planned_quantity'] if plan else 0,
+                'planned_cif': plan['planned_cif'] if plan else 0,
+                'plan_source': _plan_source,
+                'planned_splits': (_ms['splits'] if (_plan_source == 'manual' and _ms) else []),
             })
 
         return {
@@ -279,7 +300,8 @@ class ItemReportView(View):
         headers = [
             'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Ledger Date', 'Exporter Name',
             'Serial Number', 'Condition', 'HSN Code', 'Product Description', 'Item Name',
-            'Available Quantity', 'Available Balance', 'Balance CIF', 'Notes', 'Condition Sheet', 'Transfer Status'
+            'Available Quantity', 'Available Balance', 'Balance CIF', 'Notes', 'Condition Sheet', 'Transfer Status',
+            'Plan Qty', 'Plan CIF'
         ]
 
         def create_sheet(workbook, sheet_name, items_list):
@@ -313,6 +335,8 @@ class ItemReportView(View):
             ws.column_dimensions['O'].width = 30  # Notes
             ws.column_dimensions['P'].width = 30  # Condition Sheet
             ws.column_dimensions['Q'].width = 35  # Transfer Status
+            ws.column_dimensions['R'].width = 14  # Plan Qty
+            ws.column_dimensions['S'].width = 16  # Plan CIF
 
             # Group items by license
             grouped_items = {}
@@ -371,6 +395,10 @@ class ItemReportView(View):
                     ws.cell(row=current_row, column=10, value=_safe(item['product_description']))  # Product Description
                     ws.cell(row=current_row, column=11, value=_safe(item_names_str))  # Item Name
                     ws.cell(row=current_row, column=12, value=item['available_quantity'])  # Available Quantity
+                    # Utilization plan (per item) — appended so merged license
+                    # columns (13–17) keep their indices.
+                    ws.cell(row=current_row, column=18, value=item.get('planned_quantity') or 0)  # Plan Qty
+                    ws.cell(row=current_row, column=19, value=item.get('planned_cif') or 0)  # Plan CIF
 
                     current_row += 1
 

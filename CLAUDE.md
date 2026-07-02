@@ -21,13 +21,16 @@ and at session start); run `python3 .claude/index/build_index.py` to rebuild.
 
 ## Specialist agents
 
-A team of senior (25-yr) development agents lives in `.claude/agents/`
-(`tech-lead`, `backend-engineer`, `frontend-engineer`, `refactor-specialist`,
-`qa-test-engineer`, `security-auditor`, `code-reviewer`). They all consult the
-code index first and follow the quality gates in `.claude/rules.md`. See
-`.claude/agents/README.md`. Note: the engineer/refactor agents *do* modify source
-for active development, which is intentional and supersedes the doc-only rule
-above for development tasks.
+A full senior (25-yr) product org lives in `.claude/agents/` — leadership &
+architecture (`tech-lead`, `solutions-architect`, `product-manager`), engineering
+(`backend-engineer`, `frontend-engineer`, `refactor-specialist`,
+`performance-engineer`, `data-engineer`), data & design (`data-scientist`,
+`product-designer`, `ux-researcher`), and quality/ops/docs (`qa-test-engineer`,
+`security-auditor`, `code-reviewer`, `devops-sre`, `technical-writer`). They all
+consult the code index first and follow the quality gates in `.claude/rules.md`.
+See `.claude/agents/README.md`. Note: the engineer/refactor/design/ops agents *do*
+modify source for active development, which is intentional and supersedes the
+doc-only rule above for development tasks; `technical-writer` edits only `docs/`.
 
 ## Rules
 

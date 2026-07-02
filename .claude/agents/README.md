@@ -6,17 +6,46 @@ agent is required to `grep` the index (`symbols.tsv`, `dependents.tsv`,
 `imports.tsv`, `CODE_MAP.md`) **before** reading source — so they locate code and
 size refactor blast radius cheaply instead of re-reading the tree.
 
-## Roster
+## Roster (the org)
+
+A full product org, the way a large software company staffs one. All 16 are
+senior (25-yr) and index-first.
+
+**Leadership & architecture**
 
 | Agent | Use it for | Edits code? |
 |-------|-----------|:-----------:|
 | `tech-lead` | Plan & coordinate multi-part work; decompose, size risk, delegate | plans, delegates |
+| `solutions-architect` | System design, boundaries, ADRs, trade-offs, scalability | ❌ designs/advises |
+| `product-manager` | Requirements, user stories, acceptance criteria, scope, edge cases | ❌ specs only |
+
+**Engineering**
+
+| Agent | Use it for | Edits code? |
+|-------|-----------|:-----------:|
 | `backend-engineer` | Django/DRF/Postgres: models, viewsets, serializers, services, migrations | ✅ |
 | `frontend-engineer` | React 19/TS/Tailwind/shadcn: components, pages, hooks, forms, tables | ✅ |
 | `refactor-specialist` | Behavior-preserving restructuring driven by the dependency graph | ✅ |
+| `performance-engineer` | Profile & fix slow queries/N+1, indexes, caching, renders, bundle | ✅ |
+| `data-engineer` | DGFT/SION/rates pipelines, ETL, schema/index design, data migrations | ✅ |
+
+**Data & design**
+
+| Agent | Use it for | Edits code? |
+|-------|-----------|:-----------:|
+| `data-scientist` | Analytics, reporting/balance-math validation, anomalies, forecasting | ❌ analyses |
+| `product-designer` | Visual design, design system, tokens, layout, dark mode, polish | ✅ (UI) |
+| `ux-researcher` | User flows, usability, interaction, form/table UX, accessibility (AA) | ✅ (UX) |
+
+**Quality, ops & docs**
+
+| Agent | Use it for | Edits code? |
+|-------|-----------|:-----------:|
 | `qa-test-engineer` | Write/extend tests, reproduce bugs, characterization tests, verify | ✅ (tests) |
 | `security-auditor` | RBAC/auth/access-control/data-exposure review | ❌ read-only |
 | `code-reviewer` | Pre-merge diff review for correctness & missed callers | ❌ read-only |
+| `devops-sre` | Deploy scripts, nginx/SSL, systemd, backups, health, rollback | ✅ (ops) |
+| `technical-writer` | `docs/` (features/API/DB/flows), Mermaid diagrams, keep docs in sync | ✅ (docs only) |
 
 ## How to invoke
 
@@ -29,15 +58,26 @@ size refactor blast radius cheaply instead of re-reading the tree.
 - **In parallel:** independent specialists can run concurrently (e.g. backend +
   frontend on separate slices). The tech-lead sequences what must be serial.
 
-A typical feature flow:
+A typical end-to-end feature flow:
 
 ```
-tech-lead (plan + impact map from the graph)
-   ├─ backend-engineer   (API/model/service)      ┐ parallel where independent
-   └─ frontend-engineer  (UI + data wiring)        ┘
-qa-test-engineer   (tests / verify)
-code-reviewer      (pre-merge diff + graph caller check)
+product-manager      (problem → stories + acceptance criteria)
+solutions-architect  (design + boundaries + staged plan)
+tech-lead            (impact map from the graph → delegate)
+   ├─ backend-engineer    (API/model/service)     ┐
+   ├─ frontend-engineer   (UI + data wiring)       │ parallel where independent
+   ├─ product-designer    (visual/design system)   │
+   └─ ux-researcher       (flow/usability/a11y)    ┘
+performance-engineer (measure & optimize hot paths, if relevant)
+qa-test-engineer     (tests / verify)
+security-auditor     (if auth/RBAC/data-exposure touched)
+code-reviewer        (pre-merge diff + graph caller check)
+technical-writer     (update docs/ + diagrams)
 ```
+
+Data/ops tracks run similarly: `data-engineer` (pipelines/schema) with
+`data-scientist` (validate the numbers); `devops-sre` (ship it, with rollback).
+Pick only the agents a task needs — most tasks use two or three, not all sixteen.
 
 ## Shared rules every agent follows
 

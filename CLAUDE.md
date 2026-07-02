@@ -10,6 +10,8 @@ fresh automatically by hooks). To save tokens and answer fast, use it first:
 
 - **Find any symbol** (class/function/method/route/component):
   `grep -i "Name" .claude/index/symbols.tsv` → gives `file` and `line`.
+- **Blast radius before changing a file** (who imports it):
+  `grep '^path' .claude/index/dependents.tsv` (forward: `imports.tsv`).
 - **See a file/area's shape:** skim `.claude/index/CODE_MAP.md`.
 - Read source only for the specific file+lines you need.
 

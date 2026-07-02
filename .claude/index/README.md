@@ -12,7 +12,9 @@ locate code without re-reading source files every session.
 | `hook_session.sh` | ✅ | SessionStart hook — reconciles the whole tree (catches PyCharm/git edits). |
 | `manifest.json` | ❌ gitignored | Per-file `{sha, size, lang, symbols}`. Change-detection + cache. |
 | `symbols.tsv` | ❌ gitignored | `symbol⇥kind⇥file⇥line` — **grep this to find code.** |
-| `CODE_MAP.md` | ❌ gitignored | Human/AI overview: files by area with their symbols. |
+| `dependents.tsv` | ❌ gitignored | `file⇥dependent` — **grep this for blast radius** (who imports a file). |
+| `imports.tsv` | ❌ gitignored | `file⇥imports` — forward direction (what a file depends on). |
+| `CODE_MAP.md` | ❌ gitignored | Overview: most-depended-on files + files by area with their symbols. |
 | `index.log` | ❌ gitignored | Hook run log. |
 
 Generated artifacts are gitignored on purpose — they're rebuilt in ~0.25s at
@@ -26,10 +28,17 @@ session start, so committing them would only create noise and merge conflicts.
    ```
    Each row gives you `file` and `line` — jump straight there.
 
-2. **Understand a file/area before opening it:** skim the relevant section of
+2. **Blast radius before refactoring a file** (who breaks if I change it):
+   ```sh
+   grep '^path/to/file.py' .claude/index/dependents.tsv   # files that import it
+   grep '^path/to/file.py' .claude/index/imports.tsv       # files it imports
+   ```
+   `CODE_MAP.md` lists the most-depended-on files up top (highest refactor risk).
+
+3. **Understand a file/area before opening it:** skim the relevant section of
    `CODE_MAP.md` instead of reading the file cold.
 
-3. **Only then read source** — and only the specific file+lines you need.
+4. **Only then read source** — and only the specific file+lines you need.
 
 `kind` values: `class` `func` `method` `model` `serializer` `view` `route`
 `test` (Python) · `export:component` `export:hook` `export:func` `component`

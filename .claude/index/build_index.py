@@ -45,6 +45,8 @@ INDEX_DIR = os.path.join(ROOT, ".claude", "index")
 MANIFEST = os.path.join(INDEX_DIR, "manifest.json")
 SYMBOLS_TSV = os.path.join(INDEX_DIR, "symbols.tsv")
 CODE_MAP = os.path.join(INDEX_DIR, "CODE_MAP.md")
+IMPORTS_TSV = os.path.join(INDEX_DIR, "imports.tsv")
+DEPENDENTS_TSV = os.path.join(INDEX_DIR, "dependents.tsv")
 
 # Extensions we extract symbols from vs. merely list.
 SYMBOL_EXT = {".py", ".js", ".jsx", ".ts", ".tsx"}
@@ -145,6 +147,125 @@ def extract_symbols(rel, text):
         return extract_js(text)
     return []  # LIST_EXT: tracked, no symbols
 
+
+# --- import extraction (for the dependency graph) -----------------------------
+
+PY_IMPORT = re.compile(r"^\s*import\s+([\w][\w.]*)")
+PY_FROM = re.compile(r"^\s*from\s+(\.*[\w.]*)\s+import\b")
+JS_FROM = re.compile(r"""from\s+['"]([^'"]+)['"]""")
+JS_SIDE = re.compile(r"""^\s*import\s+['"]([^'"]+)['"]""")
+JS_REQUIRE = re.compile(r"""require\(\s*['"]([^'"]+)['"]""")
+JS_DYN = re.compile(r"""(?<![.\w])import\(\s*['"]([^'"]+)['"]""")
+
+
+def extract_imports(rel, text):
+    """Return the raw import specifiers found in a file (deduped, ordered)."""
+    ext = os.path.splitext(rel)[1].lower()
+    specs = []
+    if ext == ".py":
+        for line in text.splitlines():
+            m = PY_FROM.match(line)
+            if m:
+                specs.append(m.group(1))
+                continue
+            m = PY_IMPORT.match(line)
+            if m:
+                specs.append(m.group(1))
+    elif ext in (".js", ".jsx", ".ts", ".tsx"):
+        for line in text.splitlines():
+            for pat in (JS_FROM, JS_SIDE, JS_REQUIRE, JS_DYN):
+                m = pat.search(line)
+                if m:
+                    specs.append(m.group(1))
+    seen, out = set(), []
+    for s in specs:
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
+# --- import resolution (raw specifier -> tracked repo file) -------------------
+
+JS_EXTS = [".tsx", ".ts", ".jsx", ".js"]
+
+
+def resolve_py(spec, from_rel, pyset):
+    parts_dir = from_rel.split("/")[:-1]
+    if spec.startswith("."):
+        level = len(spec) - len(spec.lstrip("."))
+        remainder = spec[level:]
+        base = parts_dir[: len(parts_dir) - (level - 1)] if level >= 1 else parts_dir
+        comps = base + (remainder.split(".") if remainder else [])
+        cand = "/".join(comps)
+        for c in (cand + ".py", cand + "/__init__.py"):
+            if c in pyset:
+                return c
+        return None
+    comps = spec.split(".")
+    for cut in (len(comps), len(comps) - 1):
+        if cut < 1:
+            break
+        sub = "/".join(comps[:cut])
+        for prefix in ("backend/", ""):
+            for suff in (".py", "/__init__.py"):
+                c = prefix + sub + suff
+                if c in pyset:
+                    return c
+    return None
+
+
+def resolve_js(spec, from_rel, jsset):
+    if spec.startswith("@/"):
+        base = "frontend/src/" + spec[2:]
+    elif spec.startswith("."):
+        comps = from_rel.split("/")[:-1]
+        for part in spec.split("/"):
+            if part in ("", "."):
+                continue
+            if part == "..":
+                comps = comps[:-1]
+            else:
+                comps.append(part)
+        base = "/".join(comps)
+    else:
+        return None  # bare specifier -> external package
+    cands = []
+    _, ext = os.path.splitext(base)
+    if ext:
+        cands.append(base)
+    cands += [base + e for e in JS_EXTS]
+    cands += [base + "/index" + e for e in JS_EXTS]
+    for c in cands:
+        if c in jsset:
+            return c
+    return None
+
+
+def build_dep_graph(files):
+    """Return (forward, reverse): rel -> sorted list of internal rel targets."""
+    pyset = {r for r in files if r.endswith(".py")}
+    jsset = {r for r in files if os.path.splitext(r)[1].lower() in (".js", ".jsx", ".ts", ".tsx")}
+    forward = {}
+    reverse = {}
+    for rel, info in files.items():
+        ext = os.path.splitext(rel)[1].lower()
+        targets = set()
+        for spec in info.get("imports", []):
+            if ext == ".py":
+                t = resolve_py(spec, rel, pyset)
+            elif ext in (".js", ".jsx", ".ts", ".tsx"):
+                t = resolve_js(spec, rel, jsset)
+            else:
+                t = None
+            if t and t != rel:
+                targets.add(t)
+        forward[rel] = sorted(targets)
+        for t in targets:
+            reverse.setdefault(t, set()).add(rel)
+    reverse = {k: sorted(v) for k, v in reverse.items()}
+    return forward, reverse
+
 # --- git + hashing ------------------------------------------------------------
 
 def git_files():
@@ -193,18 +314,21 @@ def index_file(rel, manifest):
         return False  # unchanged, reuse cached symbols
     ext = os.path.splitext(rel)[1].lower()
     symbols = []
+    imports = []
     if ext in SYMBOL_EXT:
         try:
             with open(abspath, encoding="utf-8", errors="replace") as f:
                 text = f.read()
             symbols = extract_symbols(rel, text)
+            imports = extract_imports(rel, text)
         except Exception:
-            symbols = []
+            symbols, imports = [], []
     manifest["files"][rel] = {
         "sha": sha,
         "size": os.path.getsize(abspath),
         "lang": LANG.get(ext, ext.lstrip(".")),
         "symbols": symbols,
+        "imports": imports,
     }
     return True
 
@@ -220,6 +344,21 @@ def render_outputs(manifest):
             tsv_lines.append(f"{name}\t{kind}\t{rel}\t{line}")
     with open(SYMBOLS_TSV, "w") as f:
         f.write("\n".join(tsv_lines) + "\n")
+
+    # dependency graph -> imports.tsv (forward) + dependents.tsv (reverse)
+    forward, reverse = build_dep_graph(files)
+    imp_lines = ["file\timports"]
+    for rel in sorted(forward):
+        for t in forward[rel]:
+            imp_lines.append(f"{rel}\t{t}")
+    with open(IMPORTS_TSV, "w") as f:
+        f.write("\n".join(imp_lines) + "\n")
+    dep_lines = ["file\tdependent"]
+    for rel in sorted(reverse):
+        for d in reverse[rel]:
+            dep_lines.append(f"{rel}\t{d}")
+    with open(DEPENDENTS_TSV, "w") as f:
+        f.write("\n".join(dep_lines) + "\n")
 
     # CODE_MAP.md — grouped by top-level dir
     groups = {}
@@ -240,11 +379,23 @@ def render_outputs(manifest):
     out.append("")
     out.append("1. To find where a symbol/class/function/route/component lives, "
                "`grep` **`.claude/index/symbols.tsv`** (format: `symbol<TAB>kind<TAB>file<TAB>line`).")
-    out.append("2. Use this map to see a file's shape before opening it; read source "
+    out.append("2. **Blast radius before changing a file** — `grep '^path/to/file' "
+               "`.claude/index/dependents.tsv`` lists every file that imports it. "
+               "`imports.tsv` is the forward direction (what a file depends on).")
+    out.append("3. Use this map to see a file's shape before opening it; read source "
                "only for the specific file+line you need.")
-    out.append("3. This file is refreshed automatically on every edit and at session "
+    out.append("4. This file is refreshed automatically on every edit and at session "
                "start — trust it as current.")
     out.append("")
+    dep_counts = sorted(
+        ((len(v), k) for k, v in reverse.items()), reverse=True
+    )[:25]
+    if dep_counts:
+        out.append("## Most-depended-on files (refactor risk — change with care)")
+        out.append("")
+        for n, rel in dep_counts:
+            out.append(f"- `{rel}` — {n} dependents")
+        out.append("")
     out.append("## Files by area")
     out.append("")
     for top in sorted(groups):

@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run All (Django + Celery + React)" type="CompoundRunConfigurationType">
+    <toRun name="Django: runserver" type="Python.DjangoServer" />
+    <toRun name="Celery: worker" type="PythonConfigurationType" />
+    <toRun name="Celery: beat" type="PythonConfigurationType" />
+    <toRun name="React: Vite dev" type="js.build_tools.npm" />
+    <method v="2" />
+  </configuration>
+</component>

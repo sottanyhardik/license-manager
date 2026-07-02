@@ -103,7 +103,11 @@ export default function LicensePlanningPanel({
                         available_quantity: 0,
                         itemNames: [],
                         _nameIds: new Set(),
+                        hsCodes: [],
+                        _hsSet: new Set(),
                     });
+                    const hs = it.hs_code_label || it.hs_code_detail?.hs_code;
+                    if (hs && !g._hsSet.has(hs)) { g._hsSet.add(hs); g.hsCodes.push(hs); }
                     g.serials.push(it.serial_number);
                     g.members.push({ id: it.id, serial: it.serial_number });
                     g.total_quantity += Number(it.quantity || 0);
@@ -128,6 +132,7 @@ export default function LicensePlanningPanel({
                         total_quantity: g.total_quantity,
                         available_quantity: g.available_quantity,
                         itemNames: g.itemNames,
+                        hsCodes: g.hsCodes,
                         splits: splits.length ? splits : [emptySplit()],
                     };
                 });
@@ -302,6 +307,9 @@ export default function LicensePlanningPanel({
                                         <div className="text-sm font-medium">
                                             {g.description}
                                             <span className="text-xs text-muted-foreground ml-2">S.No {g.serials.join(', ')}</span>
+                                            {g.hsCodes?.length > 0 && (
+                                                <span className="text-xs text-muted-foreground ml-2">HSN {g.hsCodes.join(', ')}</span>
+                                            )}
                                         </div>
                                         <div className="text-xs text-muted-foreground">
                                             Total {g.total_quantity.toFixed(3)} · Avail {g.available_quantity.toFixed(3)} ·{' '}

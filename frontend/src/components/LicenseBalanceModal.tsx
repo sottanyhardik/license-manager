@@ -8,7 +8,7 @@ import { openPdfPreview } from '../utils/pdfPreview';
 import ConditionBadge from './ConditionBadge';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FileText, FileSpreadsheet, X, Loader2, Check, CheckCircle, Inbox, Package, PenSquare, Pencil } from "lucide-react";
+import { FileText, FileSpreadsheet, X, Loader2, Check, CheckCircle, Inbox, Package, PenSquare, Pencil, Plus } from "lucide-react";
 
 // License Marking values map directly to the backend `condition_type` field.
 // "" is rendered as "None" and clears the restriction.
@@ -131,6 +131,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     const [editingItemId, setEditingItemId] = useState(null);
     const [editingItems, setEditingItems] = useState([]);
     const [saving, setSaving] = useState(false);
+    // Row id currently showing the inline "add item tag" selector.
+    const [addingItemId, setAddingItemId] = useState(null);
+    // Row ids with an in-flight tag PATCH (disables the row's tag controls).
+    const [tagSaving, setTagSaving] = useState({});
 
     useEffect(() => {
         const fetchLicenseData = async () => {
@@ -258,6 +262,41 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         } finally {
             setSaving(false);
         }
+    };
+
+    // Persist a row's item-name tags and update local state (no full reload).
+    const patchItemTags = async (item, newDetails) => {
+        const itemIds = newDetails.map((d) => d.id);
+        const prevData = licenseData;
+        // Optimistic update.
+        setLicenseData((prev) => ({
+            ...prev,
+            import_license: prev.import_license.map((it) =>
+                it.id === item.id ? { ...it, items: itemIds, items_detail: newDetails } : it),
+        }));
+        setTagSaving((s) => ({ ...s, [item.id]: true }));
+        try {
+            await api.patch(`license-items/${item.id}/`, { items: itemIds });
+        } catch (error) {
+            setLicenseData(prevData); // revert on failure
+            toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to update items');
+        } finally {
+            setTagSaving((s) => ({ ...s, [item.id]: false }));
+        }
+    };
+
+    const handleRemoveItemTag = (e, item, tagId) => {
+        e.stopPropagation();
+        const newDetails = (item.items_detail || []).filter((d) => d.id !== tagId);
+        patchItemTags(item, newDetails);
+    };
+
+    const handleAddItemTag = (item, option) => {
+        setAddingItemId(null);
+        if (!option) return;
+        if ((item.items_detail || []).some((d) => d.id === option.value)) return; // already present
+        const newDetails = [...(item.items_detail || []), { id: option.value, name: option.label }];
+        patchItemTags(item, newDetails);
     };
 
     const handleConditionTypeChange = async (item, newValue) => {
@@ -856,21 +895,63 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                             </button>
                                                                         </div>
                                                                     ) : (
-                                                                        <div
-                                                                            className="flex justify-between items-center"
-                                                                            style={{ cursor: 'pointer' }}
-                                                                            title="Click to edit"
-                                                                        >
-                                                                            <span>
-                                                                                {item.items_detail && item.items_detail.length > 0
-                                                                                    ? item.items_detail.map(i => i.name).join(', ')
-                                                                                    : '-'}
-                                                                            </span>
-                                                                            <i
-                                                                                className="text-muted-foreground ml-2 size-3.5"
-                                                                                onClick={(e) => handleEditClick(e, item)}
-                                                                                style={{ fontSize: 12.5 }}
-                                                                            ></i>
+                                                                        <div className="flex flex-wrap items-center gap-1" style={{ minWidth: 220 }}>
+                                                                            {(item.items_detail || []).map((d) => (
+                                                                                <span key={d.id} className="chip chip-neutral inline-flex items-center gap-1" style={{ paddingRight: 4 }}>
+                                                                                    {d.name}
+                                                                                    <button
+                                                                                        onClick={(e) => handleRemoveItemTag(e, item, d.id)}
+                                                                                        disabled={tagSaving[item.id]}
+                                                                                        className="hover:text-red-600 cursor-pointer"
+                                                                                        title={`Remove ${d.name}`}
+                                                                                    >
+                                                                                        <X className="size-3" />
+                                                                                    </button>
+                                                                                </span>
+                                                                            ))}
+                                                                            {(item.items_detail || []).length === 0 && addingItemId !== item.id && (
+                                                                                <span className="text-muted-foreground">-</span>
+                                                                            )}
+                                                                            {addingItemId === item.id ? (
+                                                                                <div onClick={(e) => e.stopPropagation()} style={{ minWidth: 220 }}>
+                                                                                    <AsyncSelect
+                                                                                        autoFocus
+                                                                                        cacheOptions
+                                                                                        defaultOptions
+                                                                                        loadOptions={loadItemOptions}
+                                                                                        onChange={(opt) => handleAddItemTag(item, opt as any)}
+                                                                                        onBlur={() => setAddingItemId(null)}
+                                                                                        placeholder="Add item…"
+                                                                                        menuPortalTarget={document.body}
+                                                                                        menuPosition="fixed"
+                                                                                        styles={{
+                                                                                            control: (base) => ({ ...base, minHeight: '32px', fontSize: 14, minWidth: '220px' }),
+                                                                                            menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                                                                                            menu: (base) => ({ ...base, minWidth: '260px', width: 'max-content' }),
+                                                                                            option: (base) => ({ ...base, whiteSpace: 'nowrap' }),
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <button
+                                                                                        onClick={(e) => { e.stopPropagation(); setAddingItemId(item.id); }}
+                                                                                        disabled={tagSaving[item.id]}
+                                                                                        className="chip chip-primary inline-flex items-center gap-1 cursor-pointer border-0"
+                                                                                        title="Add item"
+                                                                                    >
+                                                                                        <Plus className="size-3" />Add
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={(e) => handleEditClick(e, item)}
+                                                                                        className="text-muted-foreground hover:text-foreground cursor-pointer ml-0.5"
+                                                                                        title="Edit all item tags"
+                                                                                    >
+                                                                                        <Pencil className="size-3.5" />
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                            {tagSaving[item.id] && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
                                                                         </div>
                                                                     )}
                                                                 </td>

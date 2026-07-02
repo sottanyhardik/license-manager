@@ -728,6 +728,11 @@ export default function ItemReport() {
                                         placeholder="Select item names..."
                                         className="basic-multi-select"
                                         classNamePrefix="select"
+                                        // Portal the menu to <body> so it isn't clipped/hidden behind the
+                                        // report card below the filter panel.
+                                        menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
+                                        menuPosition="fixed"
+                                        styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
                                     />
                                 </div>
                             </div>

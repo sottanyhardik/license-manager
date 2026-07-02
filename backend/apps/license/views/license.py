@@ -101,6 +101,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "balance__balance_cif": {"type": "range"},
             "flags__is_expired": {"type": "exact"},
             "flags__is_null": {"type": "exact"},
+            "is_planned": {"type": "exact"},
         },
         "default_filters": {
             "flags__is_expired": "False",
@@ -375,12 +376,34 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 # Show non-null licenses: balance_cif >= 200
                 qs = qs.filter(balance__balance_cif__gte=200)
 
+        # Handle is_planned filter - based on whether the license has a manual
+        # utilization plan (i.e. at least one LicenseItemPlan row). This mirrors
+        # the `is_manually_planned` flag surfaced in the serializer/list UI.
+        # The `_has_manual_plan` annotation is added later in get_queryset (after
+        # this method runs), so we filter with an Exists subquery here instead.
+        is_planned_value = params.get('is_planned')
+
+        # Special case: if user explicitly selects "all", don't apply any filter
+        if is_planned_value and is_planned_value.lower() == "all":
+            is_planned_value = None
+
+        if is_planned_value is not None and is_planned_value != "":
+            from django.db.models import Exists, OuterRef
+            from apps.license.models import LicenseItemPlan
+            has_manual_plan = Exists(LicenseItemPlan.objects.filter(license=OuterRef('pk')))
+            if is_planned_value in ("True", "true", "1", True):
+                # Show planned licenses: has at least one item plan
+                qs = qs.filter(has_manual_plan)
+            elif is_planned_value in ("False", "false", "0", False):
+                # Show licenses that are not planned: no item plans
+                qs = qs.filter(~has_manual_plan)
+
         # Call parent method for remaining filters (exclude is_expired and is_null)
         # Create a new QueryDict-like object
         from django.http import QueryDict
         filtered_params = QueryDict(mutable=True)
         for key, value in params.items():
-            if key not in ('is_expired', 'is_null'):
+            if key not in ('is_expired', 'is_null', 'is_planned'):
                 # Handle array format for purchase_status
                 if key == 'purchase_status[]':
                     # Frontend sends purchase_status[] for multi-select
@@ -390,7 +413,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     filtered_params[key] = value
 
         # Create a copy of filter_config without custom-handled fields
-        filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null')}
+        filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null', 'is_planned')}
 
         # Call parent method with filtered params and config
         qs = super().apply_advanced_filters(qs, filtered_params, filtered_config)

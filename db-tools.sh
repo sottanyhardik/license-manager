@@ -119,6 +119,21 @@ ensure_local_postgres() {
     exit 1
 }
 
+# Function: Ensure the local application role exists (create if missing)
+ensure_local_role() {
+    local exists
+    exists=$(psql -U drushahardiksottany -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$LOCAL_DB_USER';" 2>/dev/null)
+    if [ "$exists" = "1" ]; then
+        return 0
+    fi
+    print_info "Creating role '$LOCAL_DB_USER' (does not exist)..."
+    if ! psql -U drushahardiksottany -d postgres -c "CREATE ROLE $LOCAL_DB_USER WITH LOGIN PASSWORD '$LOCAL_DB_PASS' CREATEDB;"; then
+        print_error "Failed to create role '$LOCAL_DB_USER'"
+        exit 1
+    fi
+    print_success "Role '$LOCAL_DB_USER' created"
+}
+
 # Function: Select server
 select_server() {
     print_header "🖥️  Select Remote Server"
@@ -274,13 +289,14 @@ restore_db() {
     print_success "Server stopped"
 
     ensure_local_postgres
+    ensure_local_role
 
     # Drop and recreate database
     print_info "Dropping existing database..."
-    psql -U hardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;" 2>/dev/null
+    psql -U drushahardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;" 2>/dev/null
 
     print_info "Creating new database..."
-    psql -U hardiksottany -d postgres -c "CREATE DATABASE $LOCAL_DB_NAME OWNER $LOCAL_DB_USER;" 2>/dev/null
+    psql -U drushahardiksottany -d postgres -c "CREATE DATABASE $LOCAL_DB_NAME OWNER $LOCAL_DB_USER;" 2>/dev/null
 
     if [ $? -ne 0 ]; then
         print_error "Failed to recreate database"
@@ -357,13 +373,14 @@ sync_db() {
     pkill -f "python.*manage.py runserver" 2>/dev/null || true
 
     ensure_local_postgres
+    ensure_local_role
 
     print_info "Recreating database..."
-    if ! psql -U hardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;"; then
+    if ! psql -U drushahardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;"; then
         print_error "Failed to drop existing database"
         exit 1
     fi
-    if ! psql -U hardiksottany -d postgres -c "CREATE DATABASE $LOCAL_DB_NAME OWNER $LOCAL_DB_USER;"; then
+    if ! psql -U drushahardiksottany -d postgres -c "CREATE DATABASE $LOCAL_DB_NAME OWNER $LOCAL_DB_USER;"; then
         print_error "Failed to create database"
         exit 1
     fi

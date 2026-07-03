@@ -10,6 +10,7 @@ from django.conf import settings
 from django.core.validators import RegexValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 
 from .constants import (
     DEC_0,
@@ -80,6 +81,57 @@ class AuditModel(models.Model):
                 self.modified_by = user
 
         super().save(*args, **kwargs)
+
+
+class SyncTimestampModel(models.Model):
+    """
+    Lightweight created/modified timestamps for masters that are bulk-imported
+    (no per-user auditing) but must participate in delta sync (`updated_since`).
+
+    Nullable + defaulted so the field can be added to existing tables without a
+    one-off-default prompt; existing rows are backfilled by the migration.
+    See docs/architecture/ADR-001-master-data-service.md (Phase 1).
+    """
+
+    created_on = models.DateTimeField(default=timezone.now, editable=False)
+    modified_on = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    class Meta:
+        abstract = True
+
+
+class MasterChange(models.Model):
+    """
+    Append-only change feed for master/reference data.
+
+    Powers delta-sync webhooks and — crucially — **delete propagation**: deletes
+    are invisible to an `updated_since` pull, so every create/update/delete on a
+    master appends a row here keyed by the master's natural (business) key.
+    See docs/architecture/ADR-001-master-data-service.md (Decision 4).
+    """
+
+    OP_CREATE = "create"
+    OP_UPDATE = "update"
+    OP_DELETE = "delete"
+    OP_CHOICES = [
+        (OP_CREATE, "create"),
+        (OP_UPDATE, "update"),
+        (OP_DELETE, "delete"),
+    ]
+
+    model_label = models.CharField(max_length=100, db_index=True)  # e.g. "core.CompanyModel"
+    natural_key = models.CharField(max_length=255, db_index=True)  # business-key value
+    op = models.CharField(max_length=10, choices=OP_CHOICES)
+    at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["at"]
+        indexes = [
+            models.Index(fields=["model_label", "at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.op} {self.model_label}[{self.natural_key}] @ {self.at:%Y-%m-%d %H:%M:%S}"
 
 
 class CompanyModel(AuditModel):
@@ -261,7 +313,7 @@ class HSCodeModel(AuditModel):
         ordering = ('hs_code',)
 
 
-class HeadSIONNormsModel(models.Model):
+class HeadSIONNormsModel(SyncTimestampModel):
     name = models.CharField(max_length=255)
 
     def __str__(self):
@@ -281,7 +333,7 @@ class SionNormClassModel(AuditModel):
         return reverse('Sion-detail', kwargs={'pk': self.pk})
 
 
-class SIONExportModel(models.Model):
+class SIONExportModel(SyncTimestampModel):
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='export_norm')
     description = models.CharField(max_length=255, null=True, blank=True)
     quantity = models.DecimalField(
@@ -296,7 +348,7 @@ class SIONExportModel(models.Model):
         return f"{self.norm_class} | {self.description}" if self.description else f"{self.norm_class}"
 
 
-class SIONImportModel(models.Model):
+class SIONImportModel(SyncTimestampModel):
     serial_number = models.IntegerField(default=0)
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='import_norm')
     hsn_code = models.ForeignKey(HSCodeModel, on_delete=models.SET_NULL, related_name='sion_imports', null=True,

@@ -8,6 +8,7 @@ import { PageHeader, Button, Skeleton } from "../components/ui";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Check, Lock, Pencil, Plus, ShieldCheck, SquarePen, ToggleRight, Trash2, User, UserPlus, Users, X } from "lucide-react";
+import MdsStatusCard from "./settings/MdsStatusCard";
 
 function fmtDate(val) {
     if (!val) return "—";
@@ -201,6 +202,8 @@ export default function Settings() {
                     </div>
                 </div>
             </div>
+
+            <MdsStatusCard />
 
             {showModal && (
                 <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.48)", zIndex: 1050, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(2px)", animation: "tb-fade-in 120ms ease both" }} onClick={e => { if (e.target === e.currentTarget) handleCloseModal(); }} role="dialog" aria-modal="true" aria-labelledby="user-modal-title">

@@ -17,4 +17,13 @@ default_app_config = "mds_client.apps.MDSClientConfig"
 
 __version__ = "0.1.0"
 
-__all__ = ["__version__", "default_app_config"]
+# Ready-to-use reference mapping for all 17 masters (a plain dict — no Django
+# models imported at package-load time, so this is import-safe).
+from .model_map import DEFAULT_MDS_MODELS, KEYLESS_MODEL_LABELS  # noqa: E402
+
+__all__ = [
+    "__version__",
+    "default_app_config",
+    "DEFAULT_MDS_MODELS",
+    "KEYLESS_MODEL_LABELS",
+]

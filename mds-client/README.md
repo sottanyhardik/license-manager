@@ -39,24 +39,22 @@ MDS_BASE_URL = "https://masters.internal.example.com/api/v1/"
 MDS_TOKEN = env("MDS_TOKEN")  # service-to-service bearer token (write- or read-scoped)
 
 # model_label -> how to reach it on MDS + which LOCAL mirror model to upsert into.
-MDS_MODELS = {
-    "core.CompanyModel": {
-        "endpoint": "companies",          # MDS URL segment
-        "natural_key": "iec",             # shared natural key
-        "mirror_model": "core.CompanyModel",   # local Django model to write into
-        # optional: the label MDS uses in its change feed, if it differs from the
-        # consumer's local label. MDS emits "<app>.<ModelClass>", e.g.:
-        "mds_model_label": "masters.Company",
-    },
-    "core.PortModel": {
-        "endpoint": "ports", "natural_key": "code",
-        "mirror_model": "core.PortModel", "mds_model_label": "masters.Port",
-    },
-    "core.ExchangeRateModel": {
-        "endpoint": "exchange-rates", "natural_key": "date",
-        "mirror_model": "core.ExchangeRateModel", "mds_model_label": "masters.ExchangeRate",
-    },
-}
+# The complete 17-master mapping ships in the package — adopt it wholesale:
+from mds_client import DEFAULT_MDS_MODELS
+MDS_MODELS = DEFAULT_MDS_MODELS
+
+# ...or define/trim your own. Each entry looks like:
+#   "core.CompanyModel": {
+#       "endpoint": "companies",              # MDS URL segment
+#       "natural_key": "iec",                 # shared natural key
+#       "mirror_model": "core.CompanyModel",  # local Django model to upsert into
+#       "mds_model_label": "masters.Company", # label MDS stamps on its change feed
+#   }
+#
+# NOTE: the 7 keyless masters (KEYLESS_MODEL_LABELS) sync on a synthetic `uid`
+# UUID — their local mirror model must carry a matching `uid` column first
+# (added during mirror hydration, ADR Phase 5). Sync the business-keyed masters
+# until then.
 
 # optional tuning
 MDS_TIMEOUT = (3.05, 30)     # (connect, read) seconds

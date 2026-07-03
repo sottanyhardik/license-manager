@@ -45,6 +45,21 @@ if [ -z "$PASSWORD" ]; then
     exit 1
 fi
 
+# ── Master-Data Service (ADR-001) ────────────────────────────
+# MDS_ENABLED=true makes this deploy write MDS_ENABLED into each server's
+# backend/.env, install mds-client, migrate it, and sync master data from the
+# central MDS into the local mirror. Defaults to true (the goal state).
+#
+# For the SYNC to actually run, the MDS service must be deployed + reachable and
+# a token supplied — pass them via env (never hardcode a token in this script):
+#   export MDS_BASE_URL="https://masters.<host>/api/v1/"
+#   export MDS_TOKEN="<this server's write-scoped token>"
+# Without them, MDS is enabled but the sync step is skipped with a warning; the
+# app still works fully (reads come from the local mirror tables).
+MDS_ENABLED="${MDS_ENABLED:-true}"
+MDS_BASE_URL="${MDS_BASE_URL:-}"
+MDS_TOKEN="${MDS_TOKEN:-}"
+
 # Map server IP → short name (used to pick the right .env file)
 get_server_name() {
     case "$1" in
@@ -193,24 +208,39 @@ fi
 rm -f /tmp/migration.log
 echo_ok "Migrations applied"
 
-# ── 2b. Master-Data Service: client + mirror sync (gated on MDS_ENABLED) ──
-# When this server's .env enables MDS, install the mds-client package, apply its
-# migration, and pull the latest master data from the central MDS into the local
-# mirror. Best-effort: reads are always served from the local mirror, so a sync
-# hiccup never blocks the deploy. The MDS service itself deploys via
-# master-data-service/deploy/deploy-mds.sh.
-if grep -iqE '^MDS_ENABLED=(true|1|yes)' $SERVER_PATH/backend/.env 2>/dev/null; then
-    echo_info "MDS enabled — installing mds-client and syncing master data..."
-    export \$(grep -E '^MDS_' $SERVER_PATH/backend/.env 2>/dev/null | xargs) 2>/dev/null || true
+# ── 2b. Master-Data Service: enable + client + mirror sync ───────────────
+# When MDS_ENABLED=true (script config), write MDS_ENABLED/URL/TOKEN into this
+# server's backend/.env, install mds-client, apply its migration, and pull master
+# data from the central MDS into the local mirror. Best-effort — reads always come
+# from the local mirror, so a sync hiccup never blocks the deploy. The MDS service
+# itself deploys via master-data-service/deploy/deploy-mds.sh.
+if [ "$MDS_ENABLED" = "true" ]; then
+    echo_info "Enabling MDS in backend/.env..."
+    cd $SERVER_PATH/backend
+    touch .env
+    sed -i '/^MDS_ENABLED=/d' .env; echo 'MDS_ENABLED=true' >> .env
+    if [ -n '$MDS_BASE_URL' ]; then sed -i '/^MDS_BASE_URL=/d' .env; echo 'MDS_BASE_URL=$MDS_BASE_URL' >> .env; fi
+    if [ -n '$MDS_TOKEN' ]; then sed -i '/^MDS_TOKEN=/d' .env; echo 'MDS_TOKEN=$MDS_TOKEN' >> .env; fi
+    export MDS_ENABLED=true MDS_BASE_URL='$MDS_BASE_URL' MDS_TOKEN='$MDS_TOKEN'
+    echo_ok "MDS_ENABLED=true written to .env"
+
+    echo_info "Installing mds-client + applying its migration..."
     pip install -e $SERVER_PATH/mds-client --quiet || echo_warn "mds-client install failed"
     python manage.py migrate mds_client --no-input || echo_warn "mds_client migrate failed"
-    if python manage.py mds_sync 2>&1 | tail -8; then
-        echo_ok "Master data synced from central MDS"
+
+    if [ -n '$MDS_BASE_URL' ] && [ -n '$MDS_TOKEN' ]; then
+        echo_info "Syncing master data from central MDS..."
+        if python manage.py mds_sync 2>&1 | tail -8; then
+            echo_ok "Master data synced from central MDS"
+        else
+            echo_warn "mds_sync failed — local mirror still serving reads; check MDS URL/token/reachability"
+        fi
     else
-        echo_warn "mds_sync failed — local mirror still serving reads; check MDS reachability/token"
+        echo_warn "MDS enabled but MDS_BASE_URL/MDS_TOKEN not provided — skipping sync."
+        echo_warn "  Set them: export MDS_BASE_URL=... MDS_TOKEN=...  (needs the MDS service deployed)"
     fi
 else
-    echo_info "MDS not enabled on this server — skipping master-data sync"
+    echo_info "MDS_ENABLED not true — skipping master-data sync"
 fi
 
 # ── 3. Static files ─────────────────────────────────────────

@@ -167,3 +167,21 @@ jobs:
 
       - name: Tests
         run: pytest -p no:cacheprovider
+
+  mds-client:
+    name: mds-client (unit tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mds-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install "Django>=6" requests
+      - name: Tests (Django runner, in-memory sqlite)
+        run: python runtests.py

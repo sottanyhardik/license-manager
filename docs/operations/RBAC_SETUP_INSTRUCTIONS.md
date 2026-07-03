@@ -15,7 +15,7 @@ A complete Role-Based Access Control (RBAC) system with:
 ### Step 1: Run Migrations
 
 ```bash
-cd /Users/hardiksottany/PycharmProjects/license-manager/backend
+cd /Users/drushahardiksottany/PycharmProjects/license-manager/backend
 
 # Activate your virtual environment (if using one)
 # source venv/bin/activate

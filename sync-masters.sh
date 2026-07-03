@@ -13,7 +13,7 @@
 #    bash sync-masters.sh --quiet   # silent except errors (for cron)
 #
 #  Cron example (run every 15 min from your local mac):
-#    */15 * * * * cd /Users/hardiksottany/PycharmProjects/license-manager && bash sync-masters.sh --quiet >> /tmp/master-sync.log 2>&1
+#    */15 * * * * cd /Users/drushahardiksottany/PycharmProjects/license-manager && bash sync-masters.sh --quiet >> /tmp/master-sync.log 2>&1
 # ============================================================
 
 set -e

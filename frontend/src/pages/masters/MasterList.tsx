@@ -17,9 +17,10 @@ import {openPdfPreview} from "../../utils/pdfPreview";
 import {clickable} from "../../utils/clickable";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
+import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BookCheck, Building2, Calendar, CalendarX, ChevronDown, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Link as LinkIcon, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowRight, BookCheck, Building2, Calendar, CalendarX, ChevronDown, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Link as LinkIcon, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Target, Trash2, TriangleAlert, X } from "lucide-react";
 
 /**
  * Generic Master List Page
@@ -110,6 +111,10 @@ export default function MasterList() {
     // Ownership details modal state
     const [showOwnershipModal, setShowOwnershipModal] = useState(false);
     const [ownershipLicense, setOwnershipLicense] = useState(null); // { id, number }
+
+    // Utilization planning panel state
+    const [showPlanModal, setShowPlanModal] = useState(false);
+    const [planLicense, setPlanLicense] = useState(null); // { id, number, balance }
 
     // Transfer Letter Modal state (for BOE)
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
@@ -1102,9 +1107,10 @@ export default function MasterList() {
                                     return (
                                         <div key={item.id} style={{
                                             display: 'block',
-                                            background: 'var(--tb-card-bg)',
-                                            border: `1px solid ${isExpired ? 'var(--tb-danger-border)' : 'var(--tb-border-soft)'}`,
-                                            borderLeft: `4px solid ${isExpired ? 'var(--tb-danger)' : 'var(--tb-brand)'}`,
+                                            background: item.is_manually_planned ? 'rgba(22,163,74,0.05)' : 'var(--tb-card-bg)',
+                                            border: `1px solid ${isExpired ? 'var(--tb-danger-border)' : (item.is_manually_planned ? '#16a34a' : 'var(--tb-border-soft)')}`,
+                                            // Green left rail marks a manually-planned license (expired still shows red).
+                                            borderLeft: `4px solid ${isExpired ? 'var(--tb-danger)' : (item.is_manually_planned ? '#16a34a' : 'var(--tb-brand)')}`,
                                             borderRadius: 'var(--tb-r-md)',
                                             marginBottom: '10px',
                                             overflow: 'hidden',
@@ -1115,6 +1121,11 @@ export default function MasterList() {
                                                 <span style={{ fontWeight: '700', fontSize: 16, color: 'var(--tb-brand-active)', marginRight: '4px' }}>
                                                     {item.license_number || '-'}
                                                 </span>
+                                                {item.is_manually_planned && (
+                                                    <span className="chip" style={{ color: '#166534', background: 'rgba(22,163,74,0.12)', border: '1px solid #16a34a', fontWeight: 700 }}>
+                                                        <Target className="size-3" aria-hidden="true" />Planned
+                                                    </span>
+                                                )}
                                                 {item.license_date && (
                                                     <span className="chip chip-neutral" style={{}}>
                                                         <Calendar className="size-3" aria-hidden="true" />{item.license_date}
@@ -1133,16 +1144,6 @@ export default function MasterList() {
                                                 {item.port_name && (
                                                     <span className="chip chip-info" style={{}}>
                                                         <MapPin className="size-3" aria-hidden="true" />{item.port_name}
-                                                    </span>
-                                                )}
-                                                {item.exporter_name && (
-                                                    <span className="chip chip-neutral" style={{}}>
-                                                        <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
-                                                    </span>
-                                                )}
-                                                {item.exporter_iec && (
-                                                    <span className="chip chip-warning" style={{}}>
-                                                        <Fingerprint className="size-3" aria-hidden="true" />IEC: {item.exporter_iec}
                                                     </span>
                                                 )}
                                                 {item.purchase_status_label && (
@@ -1174,19 +1175,25 @@ export default function MasterList() {
                                                 )}
                                             </div>
 
-                                            {/* Row 2: Norm class + Transfer */}
-                                            <div style={{ padding: '10px 14px', background: 'var(--tb-card-bg)', borderBottom: '1px solid var(--tb-border)' }}>
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                                                    {item.get_norm_class && (
-                                                        <div style={{ minWidth: '120px' }}>
-                                                            <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Norm Class</div>
-                                                            <div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '500' }}>{item.get_norm_class}</div>
+                                            {/* Row 2: Norm class (25%) + details fill (75%) */}
+                                            <div style={{ display: 'flex', alignItems: 'stretch', gap: '16px', padding: '10px 14px', background: 'var(--tb-card-bg)', borderBottom: '1px solid var(--tb-border)' }}>
+                                                {/* Left 25% — Norm Class */}
+                                                <div style={{ flex: '0 0 25%', maxWidth: '25%', minWidth: 0, borderRight: '1px solid var(--tb-border)', paddingRight: '16px' }}>
+                                                    <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Norm Class</div>
+                                                    <div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.get_norm_class || '-'}</div>
+                                                </div>
+                                                {/* Right 75% — Exporter / IEC / Transfer status, each clamped to one line */}
+                                                <div style={{ flex: '1 1 75%', minWidth: 0, display: 'grid', gridTemplateColumns: '1.4fr 1fr 1.6fr', gap: '16px' }}>
+                                                    {[
+                                                        { label: 'Exporter', value: item.exporter_name },
+                                                        { label: 'IEC', value: item.exporter_iec },
+                                                        { label: 'Transfer Status', value: item.latest_transfer },
+                                                    ].map((f) => (
+                                                        <div key={f.label} style={{ minWidth: 0 }}>
+                                                            <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>{f.label}</div>
+                                                            <div title={f.value || ''} style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.value || '-'}</div>
                                                         </div>
-                                                    )}
-                                                    {/* Latest Transfer hidden — accessible via action buttons */}
-                                                    {!item.get_norm_class && (
-                                                        <div style={{ fontSize: '0.82rem', color: 'var(--tb-text-tertiary)', fontStyle: 'italic' }}>No additional details</div>
-                                                    )}
+                                                    ))}
                                                 </div>
                                             </div>
 
@@ -1205,6 +1212,12 @@ export default function MasterList() {
                                                     <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <Eye className="size-4" aria-hidden="true" />
                                                     </button>
+                                                    {canWrite && <button
+                                                        onClick={() => { setPlanLicense({ id: item.id, number: item.license_number, balance: Number(item.get_balance_cif || 0) }); setShowPlanModal(true); }}
+                                                        title="Plan utilization"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-50)', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <Target className="size-4" aria-hidden="true" />
+                                                    </button>}
                                                     <button
                                                         onClick={() => { setOwnershipLicense({ id: item.id, number: item.license_number }); setShowOwnershipModal(true); }}
                                                         title="View ownership & transfers"
@@ -1982,6 +1995,17 @@ export default function MasterList() {
                     onHide={() => { setShowOwnershipModal(false); setOwnershipLicense(null); }}
                     licenseId={ownershipLicense?.id}
                     licenseNumber={ownershipLicense?.number}
+                />
+            )}
+
+            {/* Utilization Planning Panel */}
+            {entityName === 'licenses' && (
+                <LicensePlanningPanel
+                    show={showPlanModal}
+                    onHide={() => { setShowPlanModal(false); setPlanLicense(null); }}
+                    licenseId={planLicense?.id}
+                    licenseNumber={planLicense?.number}
+                    balanceCif={planLicense?.balance || 0}
                 />
             )}
 

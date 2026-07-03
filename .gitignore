@@ -72,3 +72,12 @@ phase3-replication-*/
 /sample/
 .aider*
 server-envs/
+
+# Claude code index — generated artifacts (rebuilt in ~0.25s at session start).
+# The generator + hooks are committed; the derived index is not, to avoid churn.
+.claude/index/manifest.json
+.claude/index/symbols.tsv
+.claude/index/imports.tsv
+.claude/index/dependents.tsv
+.claude/index/CODE_MAP.md
+.claude/index/index.log

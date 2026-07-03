@@ -155,6 +155,63 @@ export const fetchLicenseOptions = async () => {
     return response.data;
 };
 
+// ---------------------------------------------------------------------------
+// Utilization planning (per-import-item plan that caps allotment)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch all plan lines for a license.
+ */
+export const fetchItemPlans = async (licenseId) => {
+    const response = await api.get('license-item-plans/', {params: {license: licenseId}});
+    return response.data;
+};
+
+/**
+ * Create/update many plan lines for a license in one call.
+ * lines = [{import_item, planned_quantity, planned_cif_fc, planned_cif_inr?, note?}]
+ */
+export const bulkUpsertItemPlans = async (licenseId, lines) => {
+    const response = await api.post('license-item-plans/bulk-upsert/', {
+        license: licenseId,
+        lines,
+    });
+    return response.data;
+};
+
+/**
+ * Create a single plan line.
+ */
+export const createItemPlan = async (data) => {
+    const response = await api.post('license-item-plans/', data);
+    return response.data;
+};
+
+/**
+ * Update a single plan line (used by the "modify plan" modal at allot time).
+ */
+export const updateItemPlan = async (planId, data) => {
+    const response = await api.patch(`license-item-plans/${planId}/`, data);
+    return response.data;
+};
+
+/**
+ * Delete a single plan line.
+ */
+export const deleteItemPlan = async (planId) => {
+    const response = await api.delete(`license-item-plans/${planId}/`);
+    return response.data;
+};
+
+/**
+ * Compute the norm-based (E1/E5/E132) plan to pre-fill the manual plan.
+ * Returns { norm, plan: { <item_id>: {planned_quantity, unit_price, planned_cif} } }.
+ */
+export const fetchNormPrefill = async (licenseId) => {
+    const response = await api.get('license-item-plans/norm-prefill/', {params: {license: licenseId}});
+    return response.data;
+};
+
 export default {
     fetchLicenseList,
     fetchLicense,
@@ -173,4 +230,10 @@ export default {
     checkLicenseValidity,
     updateLicenseFlags,
     fetchLicenseOptions,
+    fetchItemPlans,
+    bulkUpsertItemPlans,
+    createItemPlan,
+    updateItemPlan,
+    deleteItemPlan,
+    fetchNormPrefill,
 };

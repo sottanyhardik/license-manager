@@ -101,6 +101,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "balance__balance_cif": {"type": "range"},
             "flags__is_expired": {"type": "exact"},
             "flags__is_null": {"type": "exact"},
+            "is_planned": {"type": "exact"},
         },
         "default_filters": {
             "flags__is_expired": "False",
@@ -305,6 +306,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'balance', 'flags', 'ownership', 'ownership__current_owner', 'notes',
         )
 
+        # Flag licenses that have a manual utilization plan (drives list colour).
+        from django.db.models import Exists, OuterRef
+        from apps.license.models import LicenseItemPlan
+        qs = qs.annotate(
+            _has_manual_plan=Exists(LicenseItemPlan.objects.filter(license=OuterRef('pk')))
+        )
+
         # Only prefetch nested items for detail view (single object)
         # For list view, this causes massive performance issues
         if self.action == 'retrieve':
@@ -368,12 +376,34 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 # Show non-null licenses: balance_cif >= 200
                 qs = qs.filter(balance__balance_cif__gte=200)
 
+        # Handle is_planned filter - based on whether the license has a manual
+        # utilization plan (i.e. at least one LicenseItemPlan row). This mirrors
+        # the `is_manually_planned` flag surfaced in the serializer/list UI.
+        # The `_has_manual_plan` annotation is added later in get_queryset (after
+        # this method runs), so we filter with an Exists subquery here instead.
+        is_planned_value = params.get('is_planned')
+
+        # Special case: if user explicitly selects "all", don't apply any filter
+        if is_planned_value and is_planned_value.lower() == "all":
+            is_planned_value = None
+
+        if is_planned_value is not None and is_planned_value != "":
+            from django.db.models import Exists, OuterRef
+            from apps.license.models import LicenseItemPlan
+            has_manual_plan = Exists(LicenseItemPlan.objects.filter(license=OuterRef('pk')))
+            if is_planned_value in ("True", "true", "1", True):
+                # Show planned licenses: has at least one item plan
+                qs = qs.filter(has_manual_plan)
+            elif is_planned_value in ("False", "false", "0", False):
+                # Show licenses that are not planned: no item plans
+                qs = qs.filter(~has_manual_plan)
+
         # Call parent method for remaining filters (exclude is_expired and is_null)
         # Create a new QueryDict-like object
         from django.http import QueryDict
         filtered_params = QueryDict(mutable=True)
         for key, value in params.items():
-            if key not in ('is_expired', 'is_null'):
+            if key not in ('is_expired', 'is_null', 'is_planned'):
                 # Handle array format for purchase_status
                 if key == 'purchase_status[]':
                     # Frontend sends purchase_status[] for multi-select
@@ -383,7 +413,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     filtered_params[key] = value
 
         # Create a copy of filter_config without custom-handled fields
-        filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null')}
+        filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null', 'is_planned')}
 
         # Call parent method with filtered params and config
         qs = super().apply_advanced_filters(qs, filtered_params, filtered_config)
@@ -1339,12 +1369,20 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 'qty': 0.0, 'total_qty': 0.0, 'sr_ids': [],
                 'description': '', 'hs_code': '', 'condition_type': '',
                 'qty_by_cond': {},
+                'plan_qty': 0.0, 'plan_cif': 0.0,
             })
+            # Effective plan per license: manual if manually planned, else norm.
+            from apps.license.services.norm_plan import effective_plan_for_license
+            _plan_source, _plan_map = effective_plan_for_license(license_obj)
             for _item in license_obj.import_license.all():
                 _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
                 _avail = float(_item.available_quantity or 0)
                 _bal_agg[_key]['qty'] += _avail
                 _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)
+                _pl = _plan_map.get(_item.id)
+                if _pl:
+                    _bal_agg[_key]['plan_qty'] += _pl['planned_quantity']
+                    _bal_agg[_key]['plan_cif'] += _pl['planned_cif']
                 _bal_agg[_key]['sr_ids'].append(_item.serial_number)
                 if not _bal_agg[_key]['description']:
                     _bal_agg[_key]['description'] = _item.description or _key
@@ -1616,7 +1654,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
                     r += 1
-                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty', 'Balance Qty'], 1):
+                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty', 'Balance Qty', 'Plan Qty', 'Plan CIF'], 1):
                         _hdr(ws, r, col, h)
                     r += 1
                     for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
@@ -1634,6 +1672,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _cell(ws, r, 4, _de2, fill=_rf2)
                         _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                         _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 7, _agg2.get('plan_qty', 0.0), fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 8, _agg2.get('plan_cif', 0.0), fill=_rf2, align='right', num_fmt='#,##0.00')
                         # Colour the Item Name cell by License Marking so the
                         # Excel matches the ConditionBadge palette in the UI.
                         _annotate_e1_item(_name_cell, _cond2)
@@ -1726,7 +1766,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
                     r += 1
-                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty', 'Balance Qty'], 1):
+                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty', 'Balance Qty', 'Plan Qty', 'Plan CIF'], 1):
                         _hdr(ws, r, col, h)
                     r += 1
                     for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
@@ -1744,6 +1784,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _cell(ws, r, 4, _de2, fill=_rf2)
                         _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                         _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 7, _agg2.get('plan_qty', 0.0), fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 8, _agg2.get('plan_cif', 0.0), fill=_rf2, align='right', num_fmt='#,##0.00')
                         # Colour the Item Name cell by License Marking so the
                         # Excel matches the ConditionBadge palette in the UI.
                         _annotate_e5_item(_name_cell, _cond2)
@@ -1822,7 +1864,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     r += 1
             else:
                 from apps.license.utils.condition_excel import annotate_cell as _annotate_cond
-                BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC', 'Cond']
+                BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC', 'Cond', 'Plan Qty', 'Plan CIF']
                 for col, h in enumerate(BAL_COLS, 1):
                     _hdr(ws, r, col, h)
                 r += 1
@@ -1848,6 +1890,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
                     cond_cell = _cell(ws, r, 6, cond, fill=row_fill, align='center', bold=True)
+                    _cell(ws, r, 7, _bal_agg[item_key].get('plan_qty', 0.0), fill=row_fill, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 8, _bal_agg[item_key].get('plan_cif', 0.0), fill=row_fill, align='right', num_fmt='#,##0.00')
                     # When a licence condition is set on this item, paint the
                     # HSN and Cond cells with the same colour used in the UI
                     # badges so the restriction is visible at a glance.

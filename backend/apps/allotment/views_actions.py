@@ -4,6 +4,7 @@ from decimal import Decimal
 from io import BytesIO
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -269,6 +270,7 @@ class AllotmentActionViewSet(ViewSet):
         })
 
     @action(detail=True, methods=['post'], url_path='allocate-items')
+    @transaction.atomic
     def allocate_items(self, request, pk=None):
         """
         Allocate selected license import items to this allotment.
@@ -305,8 +307,11 @@ class AllotmentActionViewSet(ViewSet):
             cif_inr = Decimal(str(allocation.get('cif_inr', 0)))
 
             try:
-                # Get the license import item
-                license_item = LicenseImportItemsModel.objects.get(id=item_id)
+                # Get the license import item. select_for_update locks the row for
+                # the read-check-create sequence (the whole action runs in one
+                # transaction via @transaction.atomic), so two concurrent
+                # allocations cannot both pass the plan/availability cap.
+                license_item = LicenseImportItemsModel.objects.select_for_update().get(id=item_id)
 
                 # Use the stored available_quantity field — this is the value the
                 # user sees in the Available License Items list (AVAIL QTY column)
@@ -395,6 +400,48 @@ class AllotmentActionViewSet(ViewSet):
                         'error': f'Allocation exceeds balance quantity. Balance: {remaining_balance}, Requested: {qty}'
                     })
                     continue
+
+                # --- Utilization-plan cap (per description-group) -----------
+                # A product is planned by its description group (summed across
+                # serial numbers). The cumulative allotment across the WHOLE
+                # group (already allotted + this request) may not exceed the
+                # group's total planned qty / CIF-FC. Exceeding it returns a
+                # `plan_exceeded` error so the frontend can open the planner.
+                # Groups WITHOUT any plan line fall through to existing behavior.
+                from django.db.models import Sum as _Sum, DecimalField as _DecimalField, Value as _Value
+                from django.db.models.functions import Coalesce as _Coalesce
+                from apps.license.models import LicenseItemPlan as _LIP
+                from apps.license.services.plan_grouping import group_ids_of as _group_ids_of
+                _gids = _group_ids_of(license_item)
+                _group_plans = _LIP.objects.filter(import_item_id__in=_gids)
+                plan_agg = _group_plans.aggregate(
+                    pq=_Coalesce(_Sum('planned_quantity'), _Value(Decimal('0')), output_field=_DecimalField()),
+                    pv=_Coalesce(_Sum('planned_cif_fc'), _Value(Decimal('0')), output_field=_DecimalField()),
+                )
+                if _group_plans.exists():
+                    from apps.license.services.plan_enforcement import (
+                        live_allotted_qty_for, live_allotted_value_for,
+                    )
+                    already_qty = live_allotted_qty_for(_gids)
+                    already_val = live_allotted_value_for(_gids)
+                    planned_qty = Decimal(str(plan_agg['pq'] or 0))
+                    planned_val = Decimal(str(plan_agg['pv'] or 0))
+                    if (already_qty + qty) > planned_qty or (already_val + cif_fc) > planned_val:
+                        errors.append({
+                            'item_id': item_id,
+                            'plan_exceeded': True,
+                            'error': 'Allocation exceeds the utilization plan for this item.',
+                            'planned_quantity': str(planned_qty),
+                            'planned_cif_fc': str(planned_val),
+                            'already_allotted_quantity': str(already_qty),
+                            'already_allotted_cif_fc': str(already_val),
+                            'requested_quantity': str(qty),
+                            'requested_cif_fc': str(cif_fc),
+                            'remaining_planned_quantity': str(planned_qty - already_qty),
+                            'remaining_planned_cif_fc': str(planned_val - already_val),
+                        })
+                        continue
+                # ------------------------------------------------------------
 
                 # Check if this item is already allocated to this allotment
                 existing = AllotmentItems.objects.filter(

@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # ====== CONFIGURATION ======
-VENV_DIR="/Users/hardiksottany/PycharmProjects/license-manager/.venv"
+VENV_DIR="/Users/drushahardiksottany/PycharmProjects/license-manager/.venv"
 PY_BIN="$VENV_DIR/bin/python"
-MANAGE="/Users/hardiksottany/PycharmProjects/license-manager/manage.py"
+MANAGE="/Users/drushahardiksottany/PycharmProjects/license-manager/manage.py"
 # ============================
 
 echo "⚙️ Activating virtual environment..."

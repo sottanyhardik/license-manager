@@ -9,6 +9,7 @@ import TransferLetterForm from "../components/TransferLetterForm";
 import {openPdfPreview} from "../utils/pdfPreview";
 import {useBackButton} from "../hooks/useBackButton";
 import AllotmentFilters from "./AllotmentFilters";
+import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
 import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
@@ -25,6 +26,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const [initialLoading, setInitialLoading] = useState(true);
     const [tableLoading, setTableLoading] = useState(false);
     const [saving, setSaving] = useState({});
+    // When an allot is rejected for exceeding the utilization plan, we stash the
+    // item here so the planning panel can open and retry the allot after editing.
+    const [planModal, setPlanModal] = useState(null);
     const [search] = useState("");
     const [filters, setFilters] = useState({
         description: "",
@@ -409,7 +413,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             });
 
             if (data.errors && data.errors.length > 0) {
-                const errorMsg = `Error: ${data.errors[0].error}`;
+                const firstErr = data.errors[0];
+                // Plan cap hit → open the modify-plan modal instead of just erroring.
+                // After the user raises the plan, we re-run this same allot for the item.
+                if (firstErr.plan_exceeded) {
+                    setPlanModal({ error: firstErr, item });
+                    setSaving({...saving, [item.id]: false});
+                    return;
+                }
+                const errorMsg = `Error: ${firstErr.error}`;
                 setError(errorMsg);
                 toast.error(errorMsg);
             } else {
@@ -1227,6 +1239,21 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
             {/* End scrollable content area */}
             </div>
+
+            {/* Plan gate: when an allot exceeds the item's plan, open the license
+                planner so the user can adjust splits, then retry the allot. */}
+            <LicensePlanningPanel
+                show={!!planModal}
+                licenseId={planModal?.item?.license}
+                licenseNumber={planModal?.item?.license_number}
+                balanceCif={Number(planModal?.item?.balance_cif_fc || 0)}
+                onHide={() => setPlanModal(null)}
+                onSaved={() => {
+                    const item = planModal?.item;
+                    setPlanModal(null);
+                    if (item) handleConfirmAllot(item);
+                }}
+            />
 
         </div>
     );

@@ -113,3 +113,57 @@ jobs:
       - name: App-level tests (advisory — balance/duty math, core utils)
         continue-on-error: true
         run: pytest apps/license/tests apps/core/tests --import-mode=importlib -p no:cacheprovider
+
+  mds:
+    name: Master-Data Service (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: master-data-service
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: master_data
+          POSTGRES_USER: master_data
+          POSTGRES_PASSWORD: master_data
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U master_data"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SETTINGS_MODULE: mds.settings
+      SECRET_KEY: ci-not-a-secret-key-for-tests-only
+      MDS_DB_NAME: master_data
+      MDS_DB_USER: master_data
+      MDS_DB_PASS: master_data
+      MDS_DB_HOST: localhost
+      MDS_DB_PORT: "5432"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System libs (libpq for psycopg)
+        run: sudo apt-get update && sudo apt-get install -y libpq-dev
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: master-data-service/requirements-test.txt
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Migrations check (no missing migrations)
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Tests
+        run: pytest -p no:cacheprovider

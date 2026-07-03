@@ -24,7 +24,19 @@
 | Conflicts block a load | `migrate-all-servers.sh` refuses to load if `reconcile_masters` reports unresolved conflicts / manual-sign-off, unless `--accept-conflicts` is given explicitly. |
 | Reversible | Writes still go to local tables until the Phase-6 write cutover; `sync-masters.sh` remains re-enable-able. See [Rollback](#8-rollback). |
 
-Scripts live in `scripts/mds/`:
+**Deploy artifacts** live in `master-data-service/deploy/` (+ two files at the
+service root). These stand the service up on its host:
+
+| File | Purpose |
+|------|---------|
+| `deploy/gunicorn.conf.py` | gunicorn prod config: workers, timeouts, bind `127.0.0.1:8100`, access/error logs (`GUNICORN_*` env-overridable) |
+| `deploy/mds.service` | systemd unit: gunicorn under the `mds` user, `EnvironmentFile=/etc/mds/mds.env`, `Restart=on-failure`, hardening |
+| `deploy/nginx-mds.conf` | nginx site: HTTP→HTTPS + ACME, TLS placeholders, security headers, `/healthz` passthrough, `/static/` admin static, proxy to gunicorn |
+| `deploy/deploy-mds.sh` | idempotent deploy (dry-run default / `--confirm`): pip → migrate → collectstatic → restart → `curl /healthz`, with rollback note |
+| `.env.production.example` | prod env template (SECRET_KEY, `DEBUG=False`, real `ALLOWED_HOSTS`, `MDS_DB_*`, one scoped token per consumer) |
+| `requirements-prod.txt` | `-r requirements.txt` + gunicorn + whitenoise |
+
+**Data-migration scripts** live in `scripts/mds/`:
 
 | Script | Purpose | Default |
 |--------|---------|---------|
@@ -94,125 +106,94 @@ The `master_data` role owns only its own DB. It has no rights on the license /
 labdhi / tractor application databases — MDS is physically isolated from every
 consumer DB.
 
-### 2.2 App env (`master-data-service/.env`)
+### 2.2 App env (`/etc/mds/mds.env`)
 
-Secrets via env only. One **write** token per server plus a global **read**
-token for probes if desired. Tokens are `token:scope`, comma-separated
-(`master-data-service/mds/settings.py::_parse_tokens`).
-
-```dotenv
-DEBUG=false
-SECRET_KEY=<generated 50+ char secret>
-ALLOWED_HOSTS=masters.internal.example.com,127.0.0.1
-TIME_ZONE=Asia/Kolkata
-
-MDS_DB_NAME=master_data
-MDS_DB_USER=master_data
-MDS_DB_PASS=<secret>
-MDS_DB_HOST=127.0.0.1
-MDS_DB_PORT=5432
-
-# One token per consumer, scoped. Rotate on a schedule (devops-sre).
-MDS_TOKENS=<tok_licmgr>:write,<tok_labdhi>:write,<tok_tractor>:write,<tok_probe>:read
-```
-
-Generate a token: `python -c 'import secrets; print(secrets.token_urlsafe(48))'`.
-
-### 2.3 Migrate + collectstatic
+Secrets via env only. **Template:**
+[`master-data-service/.env.production.example`](../../master-data-service/.env.production.example) —
+copy it to the host (never into git) and fill every `REPLACE_*`:
 
 ```bash
-cd /home/django/master-data-service
-source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py collectstatic --noinput
-python manage.py check --deploy   # verify prod hardening flags
+sudo mkdir -p /etc/mds
+sudo install -o root -g mds -m 640 \
+    master-data-service/.env.production.example /etc/mds/mds.env
+sudo -e /etc/mds/mds.env          # fill SECRET_KEY, DB pass, tokens, ALLOWED_HOSTS
 ```
 
-### 2.4 gunicorn + systemd (sketch)
+Key rules: `DEBUG=False`, `ALLOWED_HOSTS` = **real hosts, never `*`**, and
+**one scoped token per consumer** (`token:scope`, comma-separated —
+`master-data-service/mds/settings.py::_parse_tokens`; a `write` token also
+reads). Generate a secret: `python -c 'import secrets; print(secrets.token_urlsafe(64))'`;
+a token: `python -c 'import secrets; print(secrets.token_urlsafe(48))'`.
 
-`/etc/systemd/system/mds.service`:
+### 2.3 Install deps + migrate + collectstatic
 
-```ini
-[Unit]
-Description=Master-Data Service (gunicorn)
-After=network.target postgresql.service
-Requires=postgresql.service
-
-[Service]
-Type=notify
-User=django
-Group=django
-WorkingDirectory=/home/django/master-data-service
-EnvironmentFile=/home/django/master-data-service/.env
-ExecStart=/home/django/master-data-service/.venv/bin/gunicorn \
-    --workers 3 --bind 127.0.0.1:8100 \
-    --access-logfile /home/django/master-data-service/logs/access.log \
-    --error-logfile  /home/django/master-data-service/logs/error.log \
-    mds.wsgi:application
-Restart=on-failure
-RestartSec=5
-# Least privilege / hardening
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=full
-
-[Install]
-WantedBy=multi-user.target
-```
+Prefer the deploy script (§2.6) which does this idempotently. Manually:
 
 ```bash
+cd /home/mds/master-data-service
+.venv/bin/pip install -r requirements-prod.txt   # base + gunicorn + whitenoise
+.venv/bin/python manage.py migrate --no-input
+.venv/bin/python manage.py collectstatic --no-input   # writes STATIC_ROOT (staticfiles/)
+.venv/bin/python manage.py check --deploy             # verify prod hardening flags
+```
+
+`requirements-prod.txt` is
+[`master-data-service/requirements-prod.txt`](../../master-data-service/requirements-prod.txt)
+(`-r requirements.txt` + `gunicorn` + `whitenoise`). WhiteNoise serves the admin
+static bundle from the app process; it is wired into `MIDDLEWARE` only when
+`DEBUG=False` and importable, so a dev checkout without it still boots.
+
+### 2.4 gunicorn + systemd
+
+The gunicorn config is
+[`master-data-service/deploy/gunicorn.conf.py`](../../master-data-service/deploy/gunicorn.conf.py)
+(workers, timeouts, bind `127.0.0.1:8100`, access/error logs; every value is
+`GUNICORN_*`-env-overridable). The systemd unit is
+[`master-data-service/deploy/mds.service`](../../master-data-service/deploy/mds.service)
+— runs gunicorn as the `mds` service user with
+`EnvironmentFile=/etc/mds/mds.env`, `Restart=on-failure`, and least-privilege
+hardening (`NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths` limited
+to `logs/` and `media/`).
+
+```bash
+sudo cp master-data-service/deploy/mds.service /etc/systemd/system/mds.service
+# review User/Group/WorkingDirectory/venv path for this host before enabling
 sudo systemctl daemon-reload
 sudo systemctl enable --now mds.service
 sudo systemctl status mds.service
 ```
 
-### 2.5 nginx + TLS (sketch)
+### 2.5 nginx + TLS
 
-```nginx
-# /etc/nginx/sites-available/mds
-server {
-    listen 80;
-    server_name masters.internal.example.com;
-    location /.well-known/acme-challenge/ { root /var/www/html; }
-    location / { return 301 https://$host$request_uri; }   # HTTP → HTTPS
-}
-server {
-    listen 443 ssl http2;
-    server_name masters.internal.example.com;
-
-    ssl_certificate     /etc/letsencrypt/live/masters.internal.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/masters.internal.example.com/privkey.pem;
-
-    # Security headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options nosniff always;
-    add_header X-Frame-Options DENY always;
-    add_header Referrer-Policy no-referrer always;
-
-    location = /healthz {
-        proxy_pass http://127.0.0.1:8100;
-        access_log off;
-    }
-    location / {
-        proxy_pass http://127.0.0.1:8100;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-**Always validate before reload — never blind-reload:**
+The site is
+[`master-data-service/deploy/nginx-mds.conf`](../../master-data-service/deploy/nginx-mds.conf):
+port-80 ACME + HTTP→HTTPS redirect, a 443 TLS block with placeholder cert paths,
+security headers (HSTS, nosniff, `X-Frame-Options: DENY`, `Referrer-Policy`), a
+`/static/` alias for admin static, a `/healthz` passthrough (access-log off),
+and `proxy_pass` to gunicorn.
 
 ```bash
-sudo nginx -t && sudo systemctl reload nginx      # apply only if -t passes
+sudo cp master-data-service/deploy/nginx-mds.conf /etc/nginx/sites-available/mds
+sudo ln -sf /etc/nginx/sites-available/mds /etc/nginx/sites-enabled/mds
 # TLS issuance: reuse the repo pattern (setup-ssl-labdhi.sh / setup-ssl-tractor.sh)
-# with certbot --nginx -d masters.internal.example.com
+#   certbot --nginx -d masters.internal.example.com   # fills the ssl_certificate lines
+sudo nginx -t && sudo systemctl reload nginx     # ALWAYS test before reload — never blind-reload
 ```
 
-### 2.6 Deploy verification
+### 2.6 Deploy (idempotent script) + verification
+
+The deploy script is
+[`master-data-service/deploy/deploy-mds.sh`](../../master-data-service/deploy/deploy-mds.sh)
+— **dry-run by default**, `--confirm` to act. It runs, in order:
+`pip install -r requirements-prod.txt` → `migrate` → `collectstatic` →
+`systemctl restart mds` → retrying `curl /healthz`, and prints a rollback note.
+It never ssh-es and touches only this service's DB.
+
+```bash
+cd /home/mds/master-data-service
+bash deploy/deploy-mds.sh            # dry-run: prints every command it would run
+bash deploy/deploy-mds.sh --confirm  # apply + health-check
+```
 
 ```bash
 curl -fsS https://masters.internal.example.com/healthz    # {"status":"ok",...}
@@ -384,6 +365,7 @@ consumer's own mirror/client tables, rollback is straightforward and staged.
 
 | Situation | Rollback |
 |-----------|----------|
+| Bad MDS app deploy (new code/deps won't boot; `/healthz` fails) | The unit stays `failed` rather than serving old code. Revert: `git checkout <previous-good-sha>` then `bash deploy/deploy-mds.sh --confirm`. If a migration is at fault, `pg_dump` the MDS DB, roll it back (`manage.py migrate masters <prev_number>` if reversible), then restart. Consumers are unaffected — reads hit their local mirror (ADR Decision 3). Full note printed by `deploy-mds.sh`. |
 | Bad MDS load | Restore the pre-load dump: `gunzip -c backups/mds/mds-master_data-<ts>.sql.gz \| PGPASSWORD=… psql -h $MDS_DB_HOST -U $MDS_DB_USER $MDS_DB_NAME`. Then re-run the load with a corrected golden export (idempotent). |
 | Onboarding caused a consumer problem | On the affected server, set `MDS_ENABLED=false` in its `.env` and restart the app. Reads fall back to the existing local tables; the client/sync worker goes dormant. `migrate mds_client` is additive and safe to leave in place. |
 | Sync misbehaving | Set `MDS_ENABLED=false` on the consumer (stops the sync worker). The local mirror keeps serving the last-known-good data. |

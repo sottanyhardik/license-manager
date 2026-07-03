@@ -372,3 +372,25 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 # (used in LicenseDetailsModel.get_glass_formers to scope BOE+allotment debits).
 # Override per environment via env var if the owning company differs.
 BISCUIT_COMPANY_ID = int(os.getenv("BISCUIT_COMPANY_ID", "567"))
+
+# ---------------------------------------------------------------------
+# Master-Data Service integration (ADR-001) — OFF by default
+# ---------------------------------------------------------------------
+# When MDS_ENABLED=true and the `mds_client` package is importable, register it
+# and adopt the full 17-master mapping. This does NOT change read behavior (reads
+# still hit the local tables); it enables the sync worker + write client. The
+# write cutover (routing master writes to MDS) is a later, explicit step.
+MDS_ENABLED = os.getenv("MDS_ENABLED", "False").lower() == "true"
+MDS_BASE_URL = os.getenv("MDS_BASE_URL", "")
+MDS_TOKEN = os.getenv("MDS_TOKEN", "")
+if MDS_ENABLED:
+    try:
+        import mds_client  # noqa: F401
+
+        INSTALLED_APPS += ["mds_client"]
+        from mds_client import DEFAULT_MDS_MODELS
+
+        MDS_MODELS = DEFAULT_MDS_MODELS
+    except ImportError:
+        # package not installed in this environment — stay disabled, don't crash
+        MDS_ENABLED = False

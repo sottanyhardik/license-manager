@@ -12,6 +12,13 @@
 #    sshpass  →  sudo apt install sshpass   (or brew install sshpass)
 #    DuckDNS token stored on each server at ~/duckdns.env:
 #      DUCKDNS_TOKEN=your_token_here
+#
+#  Master-Data Service (ADR-001): when a server's backend/.env sets
+#  MDS_ENABLED=true (+ MDS_BASE_URL / MDS_TOKEN), this deploy also installs the
+#  mds-client package, applies its migration, and syncs master data from the
+#  central MDS into the server's local mirror (best-effort — reads always come
+#  from the local mirror, so a sync hiccup never blocks the deploy). The MDS
+#  *service* itself is deployed separately: master-data-service/deploy/deploy-mds.sh
 # ============================================================
 
 set -e
@@ -185,6 +192,26 @@ if ! python manage.py migrate --no-input 2>&1 | tee /tmp/migration.log; then
 fi
 rm -f /tmp/migration.log
 echo_ok "Migrations applied"
+
+# ── 2b. Master-Data Service: client + mirror sync (gated on MDS_ENABLED) ──
+# When this server's .env enables MDS, install the mds-client package, apply its
+# migration, and pull the latest master data from the central MDS into the local
+# mirror. Best-effort: reads are always served from the local mirror, so a sync
+# hiccup never blocks the deploy. The MDS service itself deploys via
+# master-data-service/deploy/deploy-mds.sh.
+if grep -iqE '^MDS_ENABLED=(true|1|yes)' $SERVER_PATH/backend/.env 2>/dev/null; then
+    echo_info "MDS enabled — installing mds-client and syncing master data..."
+    export \$(grep -E '^MDS_' $SERVER_PATH/backend/.env 2>/dev/null | xargs) 2>/dev/null || true
+    pip install -e $SERVER_PATH/mds-client --quiet || echo_warn "mds-client install failed"
+    python manage.py migrate mds_client --no-input || echo_warn "mds_client migrate failed"
+    if python manage.py mds_sync 2>&1 | tail -8; then
+        echo_ok "Master data synced from central MDS"
+    else
+        echo_warn "mds_sync failed — local mirror still serving reads; check MDS reachability/token"
+    fi
+else
+    echo_info "MDS not enabled on this server — skipping master-data sync"
+fi
 
 # ── 3. Static files ─────────────────────────────────────────
 python manage.py collectstatic --no-input -v 0

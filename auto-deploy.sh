@@ -37,7 +37,7 @@ print_info()    { echo -e "${BLUE}→ $1${NC}"; }
 SERVER_USER="django"
 ALL_SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
-BRANCH="${1:-develop}"
+BRANCH="${1:-feature/Phase2}"
 PASSWORD="${DEPLOY_PASSWORD:-}"          # set: export DEPLOY_PASSWORD=admin
 
 if [ -z "$PASSWORD" ]; then

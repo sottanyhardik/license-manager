@@ -4,10 +4,7 @@ this is what makes deletes and targeted refreshes propagate to consumers."""
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from .models import Company, ExchangeRate, MasterChange, Port
-
-# The concrete master models whose changes are tracked.
-TRACKED_MODELS = (Company, Port, ExchangeRate)
+from .models import TRACKED_MODELS, MasterChange
 
 
 def _label(instance) -> str:

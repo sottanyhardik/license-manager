@@ -1,24 +1,15 @@
 from rest_framework import serializers
 
-from .models import Company, ExchangeRate, MasterChange, Port
+from .models import MASTER_REGISTRY, MasterChange
 
 
-class CompanySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Company
-        fields = "__all__"
+def _make_serializer(model):
+    meta = type("Meta", (), {"model": model, "fields": "__all__"})
+    return type(f"{model.__name__}Serializer", (serializers.ModelSerializer,), {"Meta": meta})
 
 
-class PortSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Port
-        fields = "__all__"
-
-
-class ExchangeRateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ExchangeRate
-        fields = "__all__"
+# One ModelSerializer per master, generated from the registry.
+SERIALIZERS = {model: _make_serializer(model) for model, _, _ in MASTER_REGISTRY}
 
 
 class MasterChangeSerializer(serializers.ModelSerializer):

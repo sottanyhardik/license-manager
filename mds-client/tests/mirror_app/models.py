@@ -24,3 +24,24 @@ class PortMirror(models.Model):
 
     class Meta:
         app_label = "mirror_app"
+
+
+class NormClassMirror(models.Model):
+    """A business-keyed parent (stands in for core.SionNormClassModel)."""
+    norm_class = models.CharField(max_length=20, unique=True)
+    modified_on = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        app_label = "mirror_app"
+
+
+class SionExportMirror(models.Model):
+    """A KEYLESS child (stands in for core.SIONExportModel): synced by `uid`,
+    with an FK to a parent resolved by the parent's NATURAL KEY, not by id."""
+    uid = models.UUIDField(null=True, blank=True, unique=True)
+    norm_class = models.ForeignKey(NormClassMirror, on_delete=models.CASCADE, related_name="exports")
+    description = models.CharField(max_length=255, blank=True, default="")
+    modified_on = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        app_label = "mirror_app"

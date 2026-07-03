@@ -24,15 +24,67 @@ Design (see docs/architecture/ADR-001-master-data-service.md):
 The 3 SION models the legacy `audit_masters` command misses
 (HeadSIONNormsModel, SIONExportModel, SIONImportModel) are fully covered here.
 """
-import hashlib
 import json
 import socket
-import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
+# Canonical uid recipe shared with the consumer backfill (mds_client.keys).
+# Falls back to a byte-identical inline copy if mds_client is not installed in
+# this environment (e.g. running the exporter without the client package).
+try:
+    from mds_client.keys import (
+        MDS_UUID_NAMESPACE,
+        synthetic_uid as _canonical_synthetic_uid,
+        sig_head_sion_norm,
+        sig_sion_export,
+        sig_sion_import,
+        sig_sion_norm_note,
+        sig_sion_norm_condition,
+        sig_product_description,
+        sig_unit_price,
+    )
+except ImportError:  # pragma: no cover - fallback keeps the exporter standalone
+    import uuid as _uuid
+
+    MDS_UUID_NAMESPACE = _uuid.UUID("6f1a9d2e-0c4b-5a7e-8b3f-2d9c1e4a7b60")
+
+    def _ss(v):
+        if v is None:
+            return ""
+        if isinstance(v, (datetime, date)):
+            return v.isoformat()
+        if isinstance(v, Decimal):
+            return str(v)
+        return str(v)
+
+    def _canonical_synthetic_uid(label, parent_nk, sig):
+        name = f"{label}|{parent_nk or ''}|{sig or ''}"
+        return str(_uuid.uuid5(MDS_UUID_NAMESPACE, name))
+
+    def sig_head_sion_norm(name):
+        return _ss(name)
+
+    def sig_sion_export(description, quantity, unit):
+        return "|".join([_ss(description), _ss(quantity), _ss(unit)])
+
+    def sig_sion_import(serial_number, description, quantity, unit, condition, hs_code):
+        return "|".join([str(serial_number), _ss(description), _ss(quantity), _ss(unit), _ss(condition), _ss(hs_code)])
+
+    def sig_sion_norm_note(display_order, note_text):
+        return "|".join([str(display_order), _ss(note_text)])
+
+    def sig_sion_norm_condition(display_order, condition_text):
+        return "|".join([str(display_order), _ss(condition_text)])
+
+    def sig_product_description(product_description):
+        return _ss(product_description)
+
+    def sig_unit_price(name, unit_price, label):
+        return "|".join([_ss(name), _ss(unit_price), _ss(label)])
 
 from apps.core.models import (
     CompanyModel,
@@ -54,11 +106,6 @@ from apps.core.models import (
     UnitPriceModel,
 )
 
-# Fixed namespace shared with the MDS loader so synthetic uids are reproducible
-# on both sides. DO NOT CHANGE — changing it re-keys every keyless row.
-MDS_UUID_NAMESPACE = uuid.UUID("6f1a9d2e-0c4b-5a7e-8b3f-2d9c1e4a7b60")
-
-
 def _serialize(value):
     """JSON-safe, stable representation of a scalar field value."""
     if value is None:
@@ -73,11 +120,10 @@ def _serialize(value):
 def _synthetic_uid(mds_model_label: str, parent_natural_key: str, content_signature: str) -> str:
     """Deterministic synthetic natural key for a keyless master row.
 
-    MUST match master-data-service load_masters._synthetic_uid exactly:
-        uuid5(NAMESPACE, "<mds_model_label>|<parent_natural_key>|<content_signature>")
+    Thin wrapper over the canonical ``mds_client.keys.synthetic_uid`` so the
+    exporter and the consumer backfill share ONE recipe (see module docstring).
     """
-    name = f"{mds_model_label}|{parent_natural_key or ''}|{content_signature or ''}"
-    return str(uuid.uuid5(MDS_UUID_NAMESPACE, name))
+    return _canonical_synthetic_uid(mds_model_label, parent_natural_key, content_signature)
 
 
 class Command(BaseCommand):
@@ -223,7 +269,7 @@ class Command(BaseCommand):
         recs = []
         for row in HeadSIONNormsModel.objects.values("name").iterator():
             recs.append({
-                "key": _synthetic_uid("HeadSIONNorm", "", row["name"] or ""),
+                "key": _synthetic_uid("HeadSIONNorm", "", sig_head_sion_norm(row["name"])),
                 "data": {"name": row["name"]},
             })
         return self._rows("uid", recs)
@@ -243,7 +289,7 @@ class Command(BaseCommand):
                 "is_active": s["is_active"],
                 # FK head_norm -> HeadSIONNorm (keyless parent, synthetic uid)
                 "head_norm__uid": (
-                    _synthetic_uid("HeadSIONNorm", "", s["head_norm__name"] or "")
+                    _synthetic_uid("HeadSIONNorm", "", sig_head_sion_norm(s["head_norm__name"]))
                     if s["head_norm_id"] else None
                 ),
             }
@@ -293,11 +339,7 @@ class Command(BaseCommand):
         ).iterator()
         for e in qs:
             parent_nk = e["norm_class__norm_class"] if e["norm_class_id"] else ""
-            sig = "|".join([
-                str(e["description"] or ""),
-                _serialize(e["quantity"]) or "",
-                str(e["unit"] or ""),
-            ])
+            sig = sig_sion_export(e["description"], e["quantity"], e["unit"])
             uid = _synthetic_uid("SIONExport", parent_nk, sig)
             data = {
                 "description": e["description"],
@@ -318,14 +360,10 @@ class Command(BaseCommand):
         for i in qs:
             parent_nk = i["norm_class__norm_class"] if i["norm_class_id"] else ""
             hs = i["hsn_code__hs_code"] if i["hsn_code_id"] else ""
-            sig = "|".join([
-                str(i["serial_number"]),
-                str(i["description"] or ""),
-                _serialize(i["quantity"]) or "",
-                str(i["unit"] or ""),
-                str(i["condition"] or ""),
-                str(hs),
-            ])
+            sig = sig_sion_import(
+                i["serial_number"], i["description"], i["quantity"],
+                i["unit"], i["condition"], hs,
+            )
             uid = _synthetic_uid("SIONImport", parent_nk, sig)
             data = {
                 "serial_number": i["serial_number"],
@@ -345,7 +383,7 @@ class Command(BaseCommand):
         qs = SionNormNote.objects.select_related("sion_norm").iterator()
         for n in qs:
             parent_nk = n.sion_norm.norm_class if n.sion_norm_id else ""
-            sig = "|".join([str(n.display_order), str(n.note_text or "")])
+            sig = sig_sion_norm_note(n.display_order, n.note_text)
             uid = _synthetic_uid("SIONNormNote", parent_nk, sig)
             data = {
                 "note_text": n.note_text,
@@ -360,7 +398,7 @@ class Command(BaseCommand):
         qs = SionNormCondition.objects.select_related("sion_norm").iterator()
         for c in qs:
             parent_nk = c.sion_norm.norm_class if c.sion_norm_id else ""
-            sig = "|".join([str(c.display_order), str(c.condition_text or "")])
+            sig = sig_sion_norm_condition(c.display_order, c.condition_text)
             uid = _synthetic_uid("SIONNormCondition", parent_nk, sig)
             data = {
                 "condition_text": c.condition_text,
@@ -375,7 +413,7 @@ class Command(BaseCommand):
         qs = ProductDescriptionModel.objects.select_related("hs_code").iterator()
         for p in qs:
             parent_nk = p.hs_code.hs_code if p.hs_code_id else ""
-            sig = str(p.product_description or "")
+            sig = sig_product_description(p.product_description)
             uid = _synthetic_uid("ProductDescription", parent_nk, sig)
             data = {
                 "product_description": p.product_description,
@@ -388,7 +426,7 @@ class Command(BaseCommand):
         # keyless, no FK: content signature = name + unit_price + label
         recs = []
         for u in UnitPriceModel.objects.all().iterator():
-            sig = "|".join([str(u.name or ""), _serialize(u.unit_price) or "", str(u.label or "")])
+            sig = sig_unit_price(u.name, u.unit_price, u.label)
             uid = _synthetic_uid("UnitPrice", "", sig)
             data = {
                 "name": u.name,

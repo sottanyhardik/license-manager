@@ -13,10 +13,17 @@ A consuming project can adopt it wholesale::
 - ``mirror_model``    : "app_label.ModelName" of the LOCAL mirror model to upsert
 - ``mds_model_label`` : the label MDS stamps on its change feed (for delete apply)
 
-NOTE on the keyless masters (natural_key = "uid"): MDS assigns each of these a
-synthetic ``uid`` UUID (ADR-001 Decision 6). To sync them, the LOCAL mirror model
-must also carry a matching ``uid`` column — added during mirror hydration
-(ADR Phase 5). Until then, sync only the business-keyed masters.
+NOTE on the keyless masters (natural_key = "uid"): MDS assigns each a DETERMINISTIC
+synthetic ``uid`` (uuid5) via the canonical recipe in ``mds_client.keys`` (ADR-001
+Decision 6). The LOCAL mirror models (core.HeadSIONNormsModel, SIONExportModel,
+SIONImportModel, SionNormNote, SionNormCondition, ProductDescriptionModel,
+UnitPriceModel) now carry a matching ``uid`` column (core migration 0005) that is
+backfilled with the SAME recipe (migration 0006) and set on ``save()``. Because
+both sides compute the same uid for the same logical row, the mirror sync upserts
+by ``uid`` and CONVERGES with no duplicates — so all 17 masters are syncable.
+Inter-master FKs on these models are served by MDS as the parent's natural key and
+resolved locally by the sync (ids diverge across servers), so the sync order must
+place parents (e.g. SionNormClassModel, HSCodeModel) before their keyless children.
 """
 
 DEFAULT_MDS_MODELS = {

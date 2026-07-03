@@ -69,18 +69,66 @@ def _resolve_mirror_model(cfg: dict):
     return django_apps.get_model(app_label, model_name)
 
 
-def _clean_row(row: dict, natural_key: str, model) -> dict:
-    """Keep only fields that exist on the mirror model; drop server-internal ones.
+def _parent_natural_key_for(parent_model) -> str | None:
+    """The natural-key field for a mirror parent model, from settings.MDS_MODELS.
 
-    This makes the mirror tolerant of MDS adding fields the consumer doesn't have
-    yet (additive-v1 API evolution) and never tries to write MDS's ``id`` onto
-    the local PK (ids have diverged across servers — ADR-001 Decision 2)."""
-    field_names = {f.name for f in model._meta.get_fields() if getattr(f, "concrete", False)}
+    MDS serialises inter-master FKs as the parent's NATURAL KEY (not its id, which
+    diverges across servers — ADR-001 Decision 2). To set the FK locally we must
+    look the parent up by that same natural key. Returns None if the parent isn't
+    a configured mirror model (then the FK value is left untouched)."""
+    label = f"{parent_model._meta.app_label}.{parent_model.__name__}"
+    try:
+        cfg = mds_settings.get_model_config(label)
+    except Exception:  # noqa: BLE001 - not a configured mirror model
+        return None
+    return cfg.get("natural_key")
+
+
+def _clean_row(row: dict, natural_key: str, model) -> dict:
+    """Map a raw MDS row onto mirror-model fields, resolving FKs by natural key.
+
+    - Keeps only fields that exist on the mirror model (tolerant of MDS adding
+      fields the consumer doesn't have yet — additive-v1 API evolution).
+    - Never writes MDS's ``id`` onto the local PK (ids diverge — ADR Decision 2).
+    - For each ForeignKey, the MDS row carries the PARENT'S NATURAL KEY. We
+      resolve it to the local parent instance and set ``<fk>_id``, because the
+      parent's id in the consumer differs from its id in MDS. A missing parent
+      leaves the FK unset (nullable) or raises for a required FK caller-side.
+    """
+    concrete = [f for f in model._meta.get_fields() if getattr(f, "concrete", False)]
+    fk_fields = {f.name: f for f in concrete if f.is_relation and f.many_to_one}
+    field_names = {f.name for f in concrete}
+
     cleaned = {}
     for key, value in row.items():
         if key in _SKIP_FIELDS:
             continue
-        if key in field_names:
+        if key in fk_fields:
+            # value is the parent's natural key (or None for a nullable FK).
+            field = fk_fields[key]
+            parent_model = field.related_model
+            if value in (None, ""):
+                cleaned[field.attname] = None  # e.g. norm_class_id = None
+                continue
+            parent_nk = _parent_natural_key_for(parent_model)
+            if parent_nk is None:
+                # Unknown parent mapping — skip rather than write a bad id.
+                logger.warning(
+                    "Cannot resolve FK %s.%s: parent %s not in MDS_MODELS",
+                    model.__name__, key, parent_model.__name__,
+                )
+                continue
+            parent = parent_model.objects.filter(**{parent_nk: value}).first()
+            if parent is None:
+                logger.warning(
+                    "Skipping FK %s.%s -> %s[%s=%r]: parent not in mirror yet",
+                    model.__name__, key, parent_model.__name__, parent_nk, value,
+                )
+                # leave FK unset; a required FK will surface as an IntegrityError
+                # in the caller's transaction (fail loud, never a wrong id).
+                continue
+            cleaned[field.attname] = parent.pk
+        elif key in field_names:
             cleaned[key] = value
     # The natural key must always survive so update_or_create can match.
     if natural_key in row:
@@ -212,8 +260,57 @@ def _mds_label_for(model_label: str) -> str:
 
 
 # --- sync everything --------------------------------------------------------
+def _ordered_model_labels() -> list[str]:
+    """Model labels in a PARENT-BEFORE-CHILD order for a clean fresh hydration.
+
+    A keyless child (e.g. core.SIONExportModel) resolves its FK to a parent
+    (core.SionNormClassModel) by the parent's natural key; that parent must
+    already be in the mirror. We topologically sort the configured models by
+    their mirror-model FK edges (only edges whose target is ALSO a configured
+    mirror model matter). Cycles / unknown parents fall back to declaration
+    order, so this never drops a model."""
+    models = mds_settings.get_models()
+    labels = list(models)
+
+    # Map mirror-model class -> its config label, to translate FK targets back.
+    label_by_mirror = {}
+    deps = {label: set() for label in labels}
+    for label, cfg in models.items():
+        try:
+            mirror = _resolve_mirror_model(cfg)
+        except Exception:  # noqa: BLE001 - unresolved mirror; leave dep-free
+            continue
+        label_by_mirror[mirror] = label
+    for label, cfg in models.items():
+        try:
+            mirror = _resolve_mirror_model(cfg)
+        except Exception:  # noqa: BLE001
+            continue
+        for field in mirror._meta.get_fields():
+            if field.is_relation and field.many_to_one and getattr(field, "concrete", False):
+                parent_label = label_by_mirror.get(field.related_model)
+                if parent_label and parent_label != label:
+                    deps[label].add(parent_label)
+
+    # Kahn's algorithm; stable on declaration order, tolerant of cycles.
+    ordered, placed = [], set()
+    remaining = list(labels)
+    progressed = True
+    while remaining and progressed:
+        progressed = False
+        for label in list(remaining):
+            if deps[label] <= placed:
+                ordered.append(label)
+                placed.add(label)
+                remaining.remove(label)
+                progressed = True
+    ordered.extend(remaining)  # any cycle leftovers, in declaration order
+    return ordered
+
+
 def sync_all(client: MDSClient | None = None) -> list[SyncResult]:
-    """Sync every model in settings.MDS_MODELS. Reuses one client/session.
+    """Sync every model in settings.MDS_MODELS, parents before children. Reuses
+    one client/session.
 
     One model's failure does not abort the rest: MDSUnavailable stops the whole
     run (the service is down); a per-model error is logged and skipped.
@@ -222,7 +319,7 @@ def sync_all(client: MDSClient | None = None) -> list[SyncResult]:
     client = client or MDSClient()
     results: list[SyncResult] = []
     try:
-        for model_label in mds_settings.get_models():
+        for model_label in _ordered_model_labels():
             try:
                 results.append(sync_model(model_label, client=client))
             except MDSUnavailable:

@@ -102,6 +102,60 @@ class MirrorUpsertTests(TestCase):
         self.assertNotEqual(row.pk, 999)
 
 
+class KeylessFKResolutionTests(TestCase):
+    """The keyless-master case: MDS serialises the FK as the parent's NATURAL
+    KEY, and the mirror must resolve it to the LOCAL parent id (ids diverge)."""
+
+    LABEL = "mirror_app.SionExportMirror"
+
+    def test_fk_resolved_by_parent_natural_key_not_id(self):
+        from tests.mirror_app.models import NormClassMirror, SionExportMirror
+
+        # Local parent has a DIFFERENT id than MDS would (simulate divergence by
+        # giving it a specific pk); the row references it only by natural key.
+        parent = NormClassMirror.objects.create(norm_class="E1")
+        uid = "e3c8c2a2-59da-5414-9faf-07eca387ae81"
+        pages = [
+            make_response(json_body={
+                "results": [{
+                    "uid": uid, "norm_class": "E1", "description": "cloth",
+                    "id": 9999,  # MDS's id — must be ignored
+                    "modified_on": "2026-07-03T10:00:00Z",
+                }],
+                "next": None,
+            })
+        ]
+        client = client_with(ScriptedHandler(delta_pages=pages))
+        result = sync_model(self.LABEL, client=client)
+
+        self.assertEqual(result.created, 1)
+        row = SionExportMirror.objects.get(uid=uid)
+        # FK points at the LOCAL parent, resolved by natural key — not MDS's id.
+        self.assertEqual(row.norm_class_id, parent.pk)
+        self.assertEqual(row.description, "cloth")
+        self.assertNotEqual(row.pk, 9999)
+
+    def test_missing_parent_is_skipped_not_wrongly_linked(self):
+        from tests.mirror_app.models import SionExportMirror
+
+        # No parent with norm_class="ZZ" exists -> required FK unresolved ->
+        # the row is skipped (IntegrityError rolled back), never linked wrongly.
+        pages = [
+            make_response(json_body={
+                "results": [{
+                    "uid": "11111111-1111-5111-8111-111111111111",
+                    "norm_class": "ZZ", "description": "orphan",
+                    "modified_on": "2026-07-03T10:00:00Z",
+                }],
+                "next": None,
+            })
+        ]
+        client = client_with(ScriptedHandler(delta_pages=pages))
+        with self.assertRaises(Exception):
+            sync_model(self.LABEL, client=client)
+        self.assertEqual(SionExportMirror.objects.count(), 0)
+
+
 class ETagShortCircuitSyncTests(TestCase):
     def test_304_skips_upsert_but_still_applies_deletes(self):
         # Seed one row + prior state so we send If-None-Match.

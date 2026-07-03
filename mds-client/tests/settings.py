@@ -47,6 +47,18 @@ MDS_MODELS = {
         "mirror_model": "mirror_app.PortMirror",
         "mds_model_label": "mirror_app.PortMirror",
     },
+    "mirror_app.NormClassMirror": {
+        "endpoint": "sion-norm-classes",
+        "natural_key": "norm_class",
+        "mirror_model": "mirror_app.NormClassMirror",
+        "mds_model_label": "mirror_app.NormClassMirror",
+    },
+    "mirror_app.SionExportMirror": {
+        "endpoint": "sion-exports",
+        "natural_key": "uid",
+        "mirror_model": "mirror_app.SionExportMirror",
+        "mds_model_label": "mirror_app.SionExportMirror",
+    },
 }
 
 LOGGING_CONFIG = None

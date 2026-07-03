@@ -4,6 +4,7 @@ Core models (clean, Decimal-safe) that import shared choices from core/constants
 Replace your existing core/models.py with this file (backup first).
 """
 
+import uuid
 from threading import local
 
 from django.conf import settings
@@ -15,6 +16,61 @@ from django.utils import timezone
 from .constants import (
     DEC_0,
 )
+
+# Canonical deterministic-uid recipe shared with MDS export/load (ADR-001).
+# Imported lazily-tolerant: if the mds_client package is not installed in this
+# environment, a byte-identical inline fallback is used so core.models still
+# imports (the mirror sync just won't be active). See mds_client/keys.py.
+try:
+    from mds_client.keys import (
+        synthetic_uid as _mds_synthetic_uid,
+        sig_head_sion_norm as _sig_head_sion_norm,
+        sig_sion_export as _sig_sion_export,
+        sig_sion_import as _sig_sion_import,
+        sig_sion_norm_note as _sig_sion_norm_note,
+        sig_sion_norm_condition as _sig_sion_norm_condition,
+        sig_product_description as _sig_product_description,
+        sig_unit_price as _sig_unit_price,
+    )
+except ImportError:  # pragma: no cover - fallback keeps core importable w/o client
+    from datetime import date as _date, datetime as _datetime
+    from decimal import Decimal as _Decimal
+
+    _MDS_NS = uuid.UUID("6f1a9d2e-0c4b-5a7e-8b3f-2d9c1e4a7b60")
+
+    def _mds_ss(v):
+        if v is None:
+            return ""
+        if isinstance(v, (_datetime, _date)):
+            return v.isoformat()
+        if isinstance(v, _Decimal):
+            return str(v)
+        return str(v)
+
+    def _mds_synthetic_uid(label, parent_nk, sig):
+        return str(uuid.uuid5(_MDS_NS, f"{label}|{parent_nk or ''}|{sig or ''}"))
+
+    def _sig_head_sion_norm(name):
+        return _mds_ss(name)
+
+    def _sig_sion_export(description, quantity, unit):
+        return "|".join([_mds_ss(description), _mds_ss(quantity), _mds_ss(unit)])
+
+    def _sig_sion_import(serial_number, description, quantity, unit, condition, hs_code):
+        return "|".join([str(serial_number), _mds_ss(description), _mds_ss(quantity),
+                         _mds_ss(unit), _mds_ss(condition), _mds_ss(hs_code)])
+
+    def _sig_sion_norm_note(display_order, note_text):
+        return "|".join([str(display_order), _mds_ss(note_text)])
+
+    def _sig_sion_norm_condition(display_order, condition_text):
+        return "|".join([str(display_order), _mds_ss(condition_text)])
+
+    def _sig_product_description(product_description):
+        return _mds_ss(product_description)
+
+    def _sig_unit_price(name, unit_price, label):
+        return "|".join([_mds_ss(name), _mds_ss(unit_price), _mds_ss(label)])
 
 alpha = RegexValidator(r'^[a-zA-Z ]*$', 'Only alpha characters are allowed.')
 
@@ -98,6 +154,40 @@ class SyncTimestampModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+class SyntheticUidMixin(models.Model):
+    """Adds a deterministic synthetic natural key (`uid`) to a KEYLESS master so
+    it can converge across servers via the MDS mirror sync (ADR-001 Decision 6).
+
+    The `uid` is a uuid5 derived from the row's identifying content using the
+    SAME canonical recipe as the MDS export/load (mds_client.keys), so the same
+    logical row gets the SAME uid on every server — the mirror sync then upserts
+    by `uid` and never creates duplicates.
+
+    Nullable + unique + indexed so it can be added additively to existing tables;
+    existing rows are backfilled by a data migration, and `save()` fills it in
+    for any new/blank row. Subclasses implement `compute_uid()`.
+    """
+
+    uid = models.UUIDField(null=True, blank=True, unique=True, db_index=True, editable=False)
+
+    class Meta:
+        abstract = True
+
+    def compute_uid(self):  # pragma: no cover - overridden by each subclass
+        """Return the deterministic uid string for this row. Subclasses override."""
+        raise NotImplementedError
+
+    def save(self, *args, **kwargs):
+        if not self.uid:
+            try:
+                self.uid = self.compute_uid()
+            except Exception:  # noqa: BLE001 - never block a save on uid computation
+                # A row that can't yet compute its uid (e.g. an unsaved required
+                # FK) is saved without one; the backfill / a later save fills it.
+                self.uid = None
+        super().save(*args, **kwargs)
 
 
 class MasterChange(models.Model):
@@ -313,8 +403,11 @@ class HSCodeModel(AuditModel):
         ordering = ('hs_code',)
 
 
-class HeadSIONNormsModel(SyncTimestampModel):
+class HeadSIONNormsModel(SyntheticUidMixin, SyncTimestampModel):
     name = models.CharField(max_length=255)
+
+    def compute_uid(self):
+        return _mds_synthetic_uid("HeadSIONNorm", "", _sig_head_sion_norm(self.name))
 
     def __str__(self):
         return self.name
@@ -333,7 +426,7 @@ class SionNormClassModel(AuditModel):
         return reverse('Sion-detail', kwargs={'pk': self.pk})
 
 
-class SIONExportModel(SyncTimestampModel):
+class SIONExportModel(SyntheticUidMixin, SyncTimestampModel):
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='export_norm')
     description = models.CharField(max_length=255, null=True, blank=True)
     quantity = models.DecimalField(
@@ -344,11 +437,18 @@ class SIONExportModel(SyncTimestampModel):
     )
     unit = models.CharField(max_length=255, null=True, blank=True)
 
+    def compute_uid(self):
+        parent_nk = self.norm_class.norm_class if self.norm_class_id else ""
+        return _mds_synthetic_uid(
+            "SIONExport", parent_nk,
+            _sig_sion_export(self.description, self.quantity, self.unit),
+        )
+
     def __str__(self):
         return f"{self.norm_class} | {self.description}" if self.description else f"{self.norm_class}"
 
 
-class SIONImportModel(SyncTimestampModel):
+class SIONImportModel(SyntheticUidMixin, SyncTimestampModel):
     serial_number = models.IntegerField(default=0)
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='import_norm')
     hsn_code = models.ForeignKey(HSCodeModel, on_delete=models.SET_NULL, related_name='sion_imports', null=True,
@@ -366,11 +466,22 @@ class SIONImportModel(SyncTimestampModel):
     class Meta:
         ordering = ['serial_number']
 
+    def compute_uid(self):
+        parent_nk = self.norm_class.norm_class if self.norm_class_id else ""
+        hs = self.hsn_code.hs_code if self.hsn_code_id else ""
+        return _mds_synthetic_uid(
+            "SIONImport", parent_nk,
+            _sig_sion_import(
+                self.serial_number, self.description, self.quantity,
+                self.unit, self.condition, hs,
+            ),
+        )
+
     def __str__(self):
         return f"{self.norm_class} | {self.description}" if self.description else f"{self.norm_class}"
 
 
-class SionNormNote(AuditModel):
+class SionNormNote(SyntheticUidMixin, AuditModel):
     """Multiple notes per SION norm"""
     sion_norm = models.ForeignKey('SionNormClassModel', on_delete=models.CASCADE, related_name='notes')
     note_text = models.TextField()
@@ -381,11 +492,18 @@ class SionNormNote(AuditModel):
         verbose_name = "SION Norm Note"
         verbose_name_plural = "SION Norm Notes"
 
+    def compute_uid(self):
+        parent_nk = self.sion_norm.norm_class if self.sion_norm_id else ""
+        return _mds_synthetic_uid(
+            "SIONNormNote", parent_nk,
+            _sig_sion_norm_note(self.display_order, self.note_text),
+        )
+
     def __str__(self):
         return f"{self.sion_norm.norm_class} - Note {self.display_order}"
 
 
-class SionNormCondition(AuditModel):
+class SionNormCondition(SyntheticUidMixin, AuditModel):
     """Multiple conditions per SION norm"""
     sion_norm = models.ForeignKey('SionNormClassModel', on_delete=models.CASCADE, related_name='conditions')
     condition_text = models.TextField()
@@ -396,13 +514,27 @@ class SionNormCondition(AuditModel):
         verbose_name = "SION Norm Condition"
         verbose_name_plural = "SION Norm Conditions"
 
+    def compute_uid(self):
+        parent_nk = self.sion_norm.norm_class if self.sion_norm_id else ""
+        return _mds_synthetic_uid(
+            "SIONNormCondition", parent_nk,
+            _sig_sion_norm_condition(self.display_order, self.condition_text),
+        )
+
     def __str__(self):
         return f"{self.sion_norm.norm_class} - Condition {self.display_order}"
 
 
-class ProductDescriptionModel(AuditModel):
+class ProductDescriptionModel(SyntheticUidMixin, AuditModel):
     hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.PROTECT, related_name='product_descriptions')
     product_description = models.TextField()
+
+    def compute_uid(self):
+        parent_nk = self.hs_code.hs_code if self.hs_code_id else ""
+        return _mds_synthetic_uid(
+            "ProductDescription", parent_nk,
+            _sig_product_description(self.product_description),
+        )
 
     def __str__(self):
         return self.product_description
@@ -419,7 +551,7 @@ class TransferLetterModel(AuditModel):
         return self.name
 
 
-class UnitPriceModel(AuditModel):
+class UnitPriceModel(SyntheticUidMixin, AuditModel):
     name = models.CharField(max_length=255)
     unit_price = models.DecimalField(
         max_digits=15,
@@ -428,6 +560,12 @@ class UnitPriceModel(AuditModel):
         validators=[MinValueValidator(DEC_0)],
     )
     label = models.CharField(max_length=255, default='')
+
+    def compute_uid(self):
+        return _mds_synthetic_uid(
+            "UnitPrice", "",
+            _sig_unit_price(self.name, self.unit_price, self.label),
+        )
 
     def __str__(self):
         return self.name

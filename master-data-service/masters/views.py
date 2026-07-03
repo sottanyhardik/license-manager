@@ -21,6 +21,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .models import MASTER_REGISTRY, MasterChange
+from .pagination import ChangeFeedCursorPagination
 from .serializers import SERIALIZERS, MasterChangeSerializer
 
 
@@ -112,6 +113,7 @@ class MasterChangeViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = MasterChange.objects.all()
     serializer_class = MasterChangeSerializer
+    pagination_class = ChangeFeedCursorPagination
 
     def get_queryset(self):
         qs = super().get_queryset()

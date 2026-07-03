@@ -223,6 +223,24 @@ class MDSClient:
         resp = self._request("POST", self._url(f"{endpoint}/bulk_upsert/"), json=rows)
         return resp.json()
 
+    def delete_by_key(self, model: str, key, natural_key_field: str | None = None) -> dict:
+        """POST /<endpoint>/delete_by_key/ to delete one row by its natural key.
+
+        MDS deletes the row (firing its change feed) and returns
+        ``{"deleted": <n>}``. Idempotent server-side: deleting an absent key is a
+        no-op success. ``natural_key_field`` defaults to the configured
+        ``natural_key`` for the model so the body matches MDS's expectation; a
+        raw endpoint segment may pass it explicitly.
+        """
+        endpoint = self._endpoint_for(model)
+        field = natural_key_field
+        if field is None:
+            cfg = mds_settings.get_models().get(model)
+            field = cfg["natural_key"] if cfg else "key"
+        body = {field: key}
+        resp = self._request("POST", self._url(f"{endpoint}/delete_by_key/"), json=body)
+        return resp.json()
+
     def get_changes(self, since: str | None = None) -> list:
         """GET /changes/?since=<since> -> the change feed (create/update/delete).
 

@@ -106,15 +106,11 @@ from apps.core.models import (
     UnitPriceModel,
 )
 
-def _serialize(value):
-    """JSON-safe, stable representation of a scalar field value."""
-    if value is None:
-        return None
-    if isinstance(value, (datetime, date)):
-        return value.isoformat()
-    if isinstance(value, Decimal):
-        return str(value)
-    return value
+# Shared, canonical serialization/row logic (used by BOTH this exporter and the
+# online write cutover in apps/core/views/master_view.py) so the offline export
+# payload and the online write payload derive from ONE codepath.
+from apps.core.mds_payload import _serialize_scalar as _serialize  # noqa: E402
+from apps.core.mds_payload import build_export_record  # noqa: E402
 
 
 def _synthetic_uid(mds_model_label: str, parent_natural_key: str, content_signature: str) -> str:
@@ -177,88 +173,36 @@ class Command(BaseCommand):
     def _rows(self, key_field, records):
         return {"key_field": key_field, "count": len(records), "records": records}
 
+    # Business-keyed masters: the shared per-instance builder produces the exact
+    # id-free row (FKs as parent natural keys, media as path string) — one recipe
+    # shared with the online write cutover. `build_export_record` returns
+    # {"key", "data"} in this exporter's contract shape.
     def _export_company(self):
-        recs = []
-        for c in CompanyModel.objects.all().iterator():
-            recs.append({
-                "key": c.iec,
-                "data": {
-                    "iec": c.iec,
-                    "pan": c.pan,
-                    "gst_number": c.gst_number,
-                    "name": c.name,
-                    "contact_person": c.contact_person,
-                    "phone_number": c.phone_number,
-                    "email": c.email,
-                    "address_line_1": c.address_line_1,
-                    "address_line_2": c.address_line_2,
-                    # ImageField -> stored path string (MDS CharField)
-                    "logo": c.logo.name if c.logo else "",
-                    "signature": c.signature.name if c.signature else "",
-                    "stamp": c.stamp.name if c.stamp else "",
-                    "bill_colour": c.bill_colour,
-                    "bank_account_number": c.bank_account_number,
-                    "bank_name": c.bank_name,
-                    "ifsc_code": c.ifsc_code,
-                    "account_type": c.account_type,
-                },
-            })
+        recs = [build_export_record(c) for c in CompanyModel.objects.all().iterator()]
         return self._rows("iec", recs)
 
     def _export_port(self):
-        recs = [{
-            "key": p.code,
-            "data": {"code": p.code, "name": p.name},
-        } for p in PortModel.objects.all().iterator()]
+        recs = [build_export_record(p) for p in PortModel.objects.all().iterator()]
         return self._rows("code", recs)
 
     def _export_item_group(self):
-        recs = [{
-            "key": g.name,
-            "data": {"name": g.name},
-        } for g in ItemGroupModel.objects.all().iterator()]
+        recs = [build_export_record(g) for g in ItemGroupModel.objects.all().iterator()]
         return self._rows("name", recs)
 
     def _export_hs_code(self):
-        recs = [{
-            "key": h.hs_code,
-            "data": {
-                "hs_code": h.hs_code,
-                "product_description": h.product_description,
-                "unit_price": _serialize(h.unit_price),
-                "basic_duty": h.basic_duty,
-                "unit": h.unit,
-                "policy": h.policy,
-                "note": h.note,
-            },
-        } for h in HSCodeModel.objects.all().iterator()]
+        recs = [build_export_record(h) for h in HSCodeModel.objects.all().iterator()]
         return self._rows("hs_code", recs)
 
     def _export_scheme_code(self):
-        recs = [{
-            "key": s.code,
-            "data": {"code": s.code, "label": s.label},
-        } for s in SchemeCode.objects.all().iterator()]
+        recs = [build_export_record(s) for s in SchemeCode.objects.all().iterator()]
         return self._rows("code", recs)
 
     def _export_notification_number(self):
-        recs = [{
-            "key": n.code,
-            "data": {"code": n.code, "label": n.label},
-        } for n in NotificationNumber.objects.all().iterator()]
+        recs = [build_export_record(n) for n in NotificationNumber.objects.all().iterator()]
         return self._rows("code", recs)
 
     def _export_exchange_rate(self):
-        recs = [{
-            "key": r.date.isoformat(),
-            "data": {
-                "date": r.date.isoformat(),
-                "usd": _serialize(r.usd),
-                "euro": _serialize(r.euro),
-                "pound_sterling": _serialize(r.pound_sterling),
-                "chinese_yuan": _serialize(r.chinese_yuan),
-            },
-        } for r in ExchangeRateModel.objects.all().iterator()]
+        recs = [build_export_record(r) for r in ExchangeRateModel.objects.all().iterator()]
         return self._rows("date", recs)
 
     def _export_head_sion_norm(self):
@@ -297,36 +241,13 @@ class Command(BaseCommand):
         return self._rows("norm_class", recs)
 
     def _export_item_head(self):
-        recs = []
         qs = ItemHeadModel.objects.select_related("restriction_norm").iterator()
-        for i in qs:
-            data = {
-                "name": i.name,
-                "unit_rate": _serialize(i.unit_rate),
-                "is_restricted": i.is_restricted,
-                "restriction_percentage": _serialize(i.restriction_percentage),
-                "dict_key": i.dict_key,
-                # FK restriction_norm -> SIONNormClass(norm_class)
-                "restriction_norm__norm_class": i.restriction_norm.norm_class if i.restriction_norm_id else None,
-            }
-            recs.append({"key": i.name, "data": data})
+        recs = [build_export_record(i) for i in qs]
         return self._rows("name", recs)
 
     def _export_item_name(self):
-        recs = []
         qs = ItemNameModel.objects.select_related("group", "sion_norm_class").iterator()
-        for i in qs:
-            data = {
-                "name": i.name,
-                "is_active": i.is_active,
-                "restriction_percentage": _serialize(i.restriction_percentage),
-                "display_order": i.display_order,
-                # FK group -> ItemGroup(name)
-                "group__name": i.group.name if i.group_id else None,
-                # FK sion_norm_class -> SIONNormClass(norm_class)
-                "sion_norm_class__norm_class": i.sion_norm_class.norm_class if i.sion_norm_class_id else None,
-            }
-            recs.append({"key": i.name, "data": data})
+        recs = [build_export_record(i) for i in qs]
         return self._rows("name", recs)
 
     def _export_sion_export(self):
@@ -378,60 +299,25 @@ class Command(BaseCommand):
             recs.append({"key": uid, "data": data})
         return self._rows("uid", recs)
 
+    # These 4 keyless masters extend AuditModel (timestamps always migrated), so
+    # the instance-based shared builder is safe. It reads the row's own `uid`
+    # (set by SyntheticUidMixin.save via the SAME canonical recipe), so the key
+    # is byte-identical to the inline computation these methods used before.
     def _export_sion_norm_note(self):
-        recs = []
         qs = SionNormNote.objects.select_related("sion_norm").iterator()
-        for n in qs:
-            parent_nk = n.sion_norm.norm_class if n.sion_norm_id else ""
-            sig = sig_sion_norm_note(n.display_order, n.note_text)
-            uid = _synthetic_uid("SIONNormNote", parent_nk, sig)
-            data = {
-                "note_text": n.note_text,
-                "display_order": n.display_order,
-                "sion_norm__norm_class": parent_nk or None,
-            }
-            recs.append({"key": uid, "data": data})
+        recs = [build_export_record(n) for n in qs]
         return self._rows("uid", recs)
 
     def _export_sion_norm_condition(self):
-        recs = []
         qs = SionNormCondition.objects.select_related("sion_norm").iterator()
-        for c in qs:
-            parent_nk = c.sion_norm.norm_class if c.sion_norm_id else ""
-            sig = sig_sion_norm_condition(c.display_order, c.condition_text)
-            uid = _synthetic_uid("SIONNormCondition", parent_nk, sig)
-            data = {
-                "condition_text": c.condition_text,
-                "display_order": c.display_order,
-                "sion_norm__norm_class": parent_nk or None,
-            }
-            recs.append({"key": uid, "data": data})
+        recs = [build_export_record(c) for c in qs]
         return self._rows("uid", recs)
 
     def _export_product_description(self):
-        recs = []
         qs = ProductDescriptionModel.objects.select_related("hs_code").iterator()
-        for p in qs:
-            parent_nk = p.hs_code.hs_code if p.hs_code_id else ""
-            sig = sig_product_description(p.product_description)
-            uid = _synthetic_uid("ProductDescription", parent_nk, sig)
-            data = {
-                "product_description": p.product_description,
-                "hs_code__hs_code": parent_nk or None,
-            }
-            recs.append({"key": uid, "data": data})
+        recs = [build_export_record(p) for p in qs]
         return self._rows("uid", recs)
 
     def _export_unit_price(self):
-        # keyless, no FK: content signature = name + unit_price + label
-        recs = []
-        for u in UnitPriceModel.objects.all().iterator():
-            sig = sig_unit_price(u.name, u.unit_price, u.label)
-            uid = _synthetic_uid("UnitPrice", "", sig)
-            data = {
-                "name": u.name,
-                "unit_price": _serialize(u.unit_price),
-                "label": u.label,
-            }
-            recs.append({"key": uid, "data": data})
+        recs = [build_export_record(u) for u in UnitPriceModel.objects.all().iterator()]
         return self._rows("uid", recs)

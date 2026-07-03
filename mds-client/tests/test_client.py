@@ -105,6 +105,36 @@ class BulkUpsertTests(SimpleTestCase):
         self.assertEqual(len(captured["json"]), 2)
 
 
+class DeleteByKeyTests(SimpleTestCase):
+    def test_delete_by_key_posts_natural_key_body(self):
+        captured = {}
+
+        def handler(method, url, **kwargs):
+            captured["method"] = method
+            captured["url"] = url
+            captured["json"] = kwargs.get("json")
+            return make_response(json_body={"deleted": 1})
+
+        client = client_with(handler)
+        result = client.delete_by_key("mirror_app.CompanyMirror", "AAA")
+        self.assertEqual(result, {"deleted": 1})
+        self.assertEqual(captured["method"], "POST")
+        self.assertTrue(captured["url"].endswith("/companies/delete_by_key/"))
+        # body carries the configured natural-key field for this model.
+        self.assertEqual(captured["json"], {"iec": "AAA"})
+
+    def test_delete_by_key_honours_explicit_field(self):
+        captured = {}
+
+        def handler(method, url, **kwargs):
+            captured["json"] = kwargs.get("json")
+            return make_response(json_body={"deleted": 0})
+
+        client = client_with(handler)
+        client.delete_by_key("ports", "INBOM", natural_key_field="code")
+        self.assertEqual(captured["json"], {"code": "INBOM"})
+
+
 class ChangeFeedTests(SimpleTestCase):
     def test_get_changes_walks_pages(self):
         page1 = make_response(

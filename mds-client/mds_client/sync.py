@@ -358,3 +358,49 @@ def write_master(model_label: str, row: dict, client: MDSClient | None = None) -
     finally:
         if own_client:
             client.close()
+
+
+def delete_master(model_label: str, key, client: MDSClient | None = None) -> dict:
+    """Delete ONE master row on MDS by its natural key, then delete the LOCAL
+    mirror row for the same key.
+
+    Order matters (ADR-001 Phase 6): MDS is the write authority, so we delete
+    there FIRST. Only if MDS confirms do we remove the local mirror row — a
+    partial write (local gone, MDS still has it) would let the next sync
+    resurrect the row and confuse operators. On MDSUnavailable we re-raise a
+    clear error and leave BOTH copies intact so the caller can 503 and the user
+    can retry; nothing is half-deleted.
+
+    Returns MDS's ``{"deleted": <n>}`` (plus a ``local_deleted`` count).
+    """
+    cfg = mds_settings.get_model_config(model_label)
+    natural_key = cfg["natural_key"]
+    mirror_model = _resolve_mirror_model(cfg)
+    own_client = client is None
+    client = client or MDSClient()
+    try:
+        try:
+            result = client.delete_by_key(model_label, key, natural_key_field=natural_key)
+        except MDSUnavailable as exc:
+            logger.error("delete_master(%s, %r) failed: MDS unreachable", model_label, key)
+            raise MDSUnavailable(
+                "Master data is read-only right now — the central service is unreachable. "
+                "Your delete was NOT applied; please retry shortly."
+            ) from exc
+        # MDS confirmed — remove the mirror row by the same natural key.
+        local_deleted, _ = mirror_model.objects.filter(**{natural_key: key}).delete()
+        result = dict(result or {})
+        result["local_deleted"] = local_deleted
+        return result
+    finally:
+        if own_client:
+            client.close()
+
+
+def refresh_local(model_label: str, client: MDSClient | None = None) -> SyncResult:
+    """Refresh the LOCAL mirror for one model from MDS after a write, so the
+    local row reflects MDS's canonical state (server-normalised fields, resolved
+    FKs). A thin, explicit wrapper over :func:`sync_model` used by the write
+    cutover; kept separate so the intent ('reflect my just-written change') reads
+    clearly at the call site."""
+    return sync_model(model_label, client=client)

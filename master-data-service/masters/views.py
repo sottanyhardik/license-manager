@@ -60,6 +60,36 @@ class MasterViewSet(viewsets.ModelViewSet):
         max_modified, count, etag = self._meta_values()
         return Response({"max_modified": max_modified, "count": count, "etag": etag})
 
+    @action(detail=False, methods=["post"], url_path="delete_by_key")
+    def delete_by_key(self, request):
+        """Delete the row identified by its NATURAL KEY (ids diverge across
+        servers, so consumers can only address a row by its business key —
+        ADR-001 Decision 2). Deleting via the ORM fires the ``post_delete``
+        signal, which appends a ``MasterChange`` delete so the change feed
+        carries the deletion to every other mirror.
+
+        Body: ``{"<natural_key_field>": <value>}`` (or ``{"key": <value>}``).
+        Returns 200 ``{"deleted": <n>}``. Idempotent: deleting an absent key is
+        a no-op success (``deleted == 0``) so a retried delete never 404s.
+        """
+        field = self.natural_key_field
+        payload = request.data if isinstance(request.data, dict) else {}
+        key = payload.get(field, payload.get("key"))
+        if key in (None, ""):
+            return Response(
+                {"detail": f"a natural key '{field}' (or 'key') is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        Model = self.queryset.model
+        deleted = 0
+        # Delete instances one-by-one so post_delete fires per row (QuerySet
+        # .delete() would emit the MasterChange, but iterating keeps the natural
+        # key available and is trivial volume for a single-key delete).
+        for obj in Model.objects.filter(**{field: key}):
+            obj.delete()
+            deleted += 1
+        return Response({"deleted": deleted}, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=["post"], url_path="bulk_upsert")
     def bulk_upsert(self, request):
         field = self.natural_key_field

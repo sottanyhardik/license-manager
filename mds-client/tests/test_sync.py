@@ -8,7 +8,7 @@ from django.test import TestCase
 
 from mds_client.client import MDSClient, MDSUnavailable
 from mds_client.models import MDSSyncState
-from mds_client.sync import sync_all, sync_model, write_master
+from mds_client.sync import delete_master, sync_all, sync_model, write_master
 from tests.mirror_app.models import CompanyMirror, PortMirror
 from tests.support import FakeSession, make_response
 
@@ -245,3 +245,37 @@ class WriteMasterTests(TestCase):
         with self.assertRaises(MDSUnavailable) as ctx:
             write_master(COMPANY, {"iec": "AAA"}, client=client)
         self.assertIn("read-only", str(ctx.exception).lower())
+
+
+class DeleteMasterTests(TestCase):
+    def test_delete_master_deletes_on_mds_then_local_mirror(self):
+        # Seed the local mirror so we can confirm it is removed AFTER MDS.
+        CompanyMirror.objects.create(iec="AAA", name="Acme")
+        captured = {}
+
+        def handler(method, url, **kwargs):
+            captured["url"] = url
+            captured["json"] = kwargs.get("json")
+            return make_response(json_body={"deleted": 1})
+
+        client = client_with(handler)
+        result = delete_master(COMPANY, "AAA", client=client)
+
+        self.assertTrue(captured["url"].endswith("/companies/delete_by_key/"))
+        self.assertEqual(captured["json"], {"iec": "AAA"})
+        self.assertEqual(result["deleted"], 1)
+        self.assertEqual(result["local_deleted"], 1)
+        self.assertFalse(CompanyMirror.objects.filter(iec="AAA").exists())
+
+    def test_delete_master_leaves_local_intact_when_mds_down(self):
+        CompanyMirror.objects.create(iec="AAA", name="Acme")
+
+        def handler(method, url, **kwargs):
+            return requests.ConnectionError("refused")
+
+        client = client_with(handler)
+        with self.assertRaises(MDSUnavailable) as ctx:
+            delete_master(COMPANY, "AAA", client=client)
+        self.assertIn("read-only", str(ctx.exception).lower())
+        # MDS never confirmed -> local mirror row must NOT be deleted.
+        self.assertTrue(CompanyMirror.objects.filter(iec="AAA").exists())

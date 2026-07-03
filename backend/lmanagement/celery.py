@@ -78,6 +78,27 @@ app.conf.beat_schedule = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Master-Data Service mirror sync (ADR-001, Decision 3) — OFF by default.
+#
+# When MDS is enabled, poll the central service every 5 minutes to refresh the
+# local read-only mirror (the "polling backstop" that self-heals a missed
+# webhook nudge). This is registered ONLY when settings.MDS_ENABLED is true, so
+# with MDS off nothing extra is scheduled and behavior is identical to before.
+# The task itself (mds_client.sync_masters) is safe to call — it no-ops if the
+# client isn't installed — but we still guard here to avoid scheduling a task
+# that would never do useful work.
+# ---------------------------------------------------------------------------
+if getattr(settings, "MDS_ENABLED", False):
+    app.conf.beat_schedule["mds-sync-masters-every-5-min"] = {
+        "task": "mds_client.sync_masters",
+        "schedule": crontab(minute="*/5"),  # every 5 minutes
+        "args": (),
+        "options": {
+            "expires": 300,  # skip a run rather than pile up if a beat is late
+        },
+    }
+
 
 @signals.worker_process_init.connect
 def reset_db_connections(**kwargs):

@@ -6,10 +6,12 @@ from django.views.static import serve
 from django.conf import settings
 
 from apps.core.views.health import HealthView
+from apps.core.views.mds_status import MDSStatusView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", HealthView.as_view(), name="api-health"),
+    path("api/mds/status/", MDSStatusView.as_view(), name="mds-status"),
     path("api/auth/", include("apps.accounts.urls")),
     path("api/", include("apps.license.urls")),
     path("api/", include("apps.allotment.urls")),

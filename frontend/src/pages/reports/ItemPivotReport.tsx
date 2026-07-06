@@ -339,8 +339,9 @@ export default function ItemPivotReport() {
         // Second pass: Calculate item quantities
         if (reportData?.items) {
             reportData.items.forEach(item => {
-                let itemAvailable = 0;
-                let itemPlanned   = 0;
+                let itemAvailable  = 0;
+                let itemPlanned    = 0;   // planned CIF (manual plan if present, else norm)
+                let itemPlannedQty = 0;   // planned quantity backing that CIF
                 let hasRestriction = false;
                 let restrictionPercentage = 0;
 
@@ -349,8 +350,16 @@ export default function ItemPivotReport() {
                     if (itemData) {
                         // Available quantity
                         itemAvailable += parseFloat(itemData.available_quantity || 0);
-                        // Planned CIF (sum) — sourced from the e1_plan/e5_plan waterfall.
-                        itemPlanned   += parseFloat(itemData.planned_cif || 0);
+                        // Planned CIF + quantity. A manually-planned DFIA uses its
+                        // authored plan (plan_cif / plan_quantity); otherwise fall
+                        // back to the norm-derived planned_cif over available qty.
+                        const manual = license.plan_source === 'manual';
+                        itemPlanned    += manual
+                            ? parseFloat(itemData.plan_cif || 0)
+                            : parseFloat(itemData.planned_cif || 0);
+                        itemPlannedQty += manual
+                            ? parseFloat(itemData.plan_quantity || 0)
+                            : parseFloat(itemData.available_quantity || 0);
 
                         // Check if item has restriction
                         if (itemData.restriction !== null && itemData.restriction !== undefined) {
@@ -362,9 +371,11 @@ export default function ItemPivotReport() {
 
                 if (itemAvailable > 0) {
                     const itemSummary = {
-                        available:   itemAvailable,
-                        planned_cif: itemPlanned,
-                        unit_price:  itemAvailable > 0 ? itemPlanned / itemAvailable : 0,
+                        available:    itemAvailable,
+                        planned_cif:  itemPlanned,
+                        planned_qty:  itemPlannedQty,
+                        // Unit price = Total Planned CIF / Total Planned QTY.
+                        unit_price:   itemPlannedQty > 0 ? itemPlanned / itemPlannedQty : 0,
                     };
 
                     if (hasRestriction) {
@@ -382,6 +393,7 @@ export default function ItemPivotReport() {
 
                     summary.totalAvailable += itemAvailable;
                     summary.totalPlanned = (summary.totalPlanned || 0) + itemPlanned;
+                    summary.totalPlannedQty = (summary.totalPlannedQty || 0) + itemPlannedQty;
                 }
             });
         }
@@ -1090,11 +1102,23 @@ export default function ItemPivotReport() {
                                                             const totalRestrictionVal = licenses.reduce((sum, lic) => {
                                                                 return sum + (lic.items[item.name]?.restriction_value || 0);
                                                             }, 0);
+                                                            // Planned CIF + quantity, manual plan aware (matches the
+                                                            // per-licence rows): manual DFIAs use plan_cif/plan_quantity,
+                                                            // norm DFIAs use planned_cif over available quantity.
                                                             const totalPlanned = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.planned_cif || 0);
+                                                                const it = lic.items[item.name] || {};
+                                                                return sum + (lic.plan_source === 'manual'
+                                                                    ? (it.plan_cif || 0)
+                                                                    : (it.planned_cif || 0));
                                                             }, 0);
-                                                            // Effective unit price across all licences = total planned / total avail.
-                                                            const effectiveUnit = totalAvail > 0 ? totalPlanned / totalAvail : 0;
+                                                            const totalPlannedQty = licenses.reduce((sum, lic) => {
+                                                                const it = lic.items[item.name] || {};
+                                                                return sum + (lic.plan_source === 'manual'
+                                                                    ? (it.plan_quantity || 0)
+                                                                    : (it.available_quantity || 0));
+                                                            }, 0);
+                                                            // Effective unit price = total planned CIF / total planned qty.
+                                                            const effectiveUnit = totalPlannedQty > 0 ? totalPlanned / totalPlannedQty : 0;
                                                             return (
                                                                 <React.Fragment key={`total-${item.id}`}>
                                                                     <td className="text-muted">-</td>
@@ -1154,7 +1178,7 @@ export default function ItemPivotReport() {
                                                                     <th style={{width: '620px'}}>Item Name</th>
                                                                     <th className="text-end" style={{width: '230px'}}>Available Balance QTY</th>
                                                                     <th className="text-end" style={{width: '170px'}}>Unit Price</th>
-                                                                    <th className="text-end" style={{width: '300px'}}>Total Planned CIF</th>
+                                                                    <th className="text-end" style={{width: '300px'}}>Total Planned CIF ($)</th>
                                                                 </tr>
                                                                 </thead>
                                                                 <tbody>
@@ -1235,11 +1259,15 @@ export default function ItemPivotReport() {
                                                                 )}
                                                                 {/* Grand-total row for the Summary table. */}
                                                                 <tr className="table-success">
-                                                                    <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF</td>
+                                                                    <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
                                                                     <td className="text-end font-bold">
                                                                         {formatIndianNumber(summary.totalAvailable || 0, 2)}
                                                                     </td>
-                                                                    <td className="text-end font-bold">-</td>
+                                                                    <td className="text-end font-bold">
+                                                                        {summary.totalPlannedQty > 0
+                                                                            ? (summary.totalPlanned / summary.totalPlannedQty).toFixed(2)
+                                                                            : '-'}
+                                                                    </td>
                                                                     <td className="text-end font-bold">
                                                                         {formatIndianNumber(summary.totalPlanned || 0, 2)}
                                                                     </td>

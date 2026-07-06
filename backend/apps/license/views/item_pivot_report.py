@@ -206,6 +206,48 @@ class ItemPivotReportView(View):
                         else:
                             all_items[item.id] = item
 
+        # ── "As per planning" per-DFIA item map ────────────────────────────
+        # When a DFIA carries a manual utilization plan (LicenseItemPlan), the
+        # pivot must show that licence's items *as planned* rather than every
+        # import item present on the licence: each row shows only the items that
+        # DFIA actually planned, blanking the rest (e.g. BORAX is hidden on the
+        # A3627 DFIAs that did not plan it, but still shown on those that did).
+        #
+        # Licences with NO manual plan are left untouched — they show all their
+        # import items as before — so norm-driven norms (E1 / E5 / E132) are
+        # unaffected. Column headers remain the union across the report; the
+        # filtering is per row/cell in _build_license_row().
+        from apps.license.models import LicenseItemPlan
+
+        # import_item_id -> first attached item id, mirroring how a plan's
+        # totals are attributed to a single item name in _build_license_row().
+        first_item_of_import = {}
+        for _lo in valid_licenses:
+            for _ii in _lo.import_license.all():
+                for _it in _ii.items.all():
+                    first_item_of_import[_ii.id] = _it.id
+                    break
+
+        # license_id -> {item_id: {'q': planned qty, 'cif': planned CIF-FC}}.
+        # Attributed to the plan LINE's own item_name (not the import item's
+        # first attached name) so e.g. a RUTILE plan line on a BORAX+RUTILE
+        # import item lands on RUTILE. Untagged split lines fall back to the
+        # import item's first attached name. The key set doubles as "which
+        # items this DFIA planned" for the per-row filter below.
+        plan_totals_by_license = defaultdict(
+            lambda: defaultdict(lambda: {'q': Decimal('0.000'), 'cif': Decimal('0.00')})
+        )
+        for _pl in (LicenseItemPlan.objects
+                    .filter(license_id__in=[_lo.id for _lo in valid_licenses])
+                    .values('license_id', 'import_item_id', 'item_name_id',
+                            'planned_quantity', 'planned_cif_fc')):
+            _iname = _pl['item_name_id'] or first_item_of_import.get(_pl['import_item_id'])
+            if _iname is None:
+                continue
+            _cell = plan_totals_by_license[_pl['license_id']][_iname]
+            _cell['q'] += _pl['planned_quantity'] or Decimal('0')
+            _cell['cif'] += _pl['planned_cif_fc'] or Decimal('0')
+
         # Sort items by display_order first, then by name for consistent column order
         sorted_items = sorted(
             [(item.id, item.name) for item in all_items.values()],
@@ -213,11 +255,14 @@ class ItemPivotReportView(View):
         )
 
         # Build license data with item columns, grouped by norm first, then notification
-        from collections import defaultdict
+        # (defaultdict is imported at module level).
         licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
 
         for license_obj in valid_licenses:
-            license_row = self._build_license_row(license_obj, sorted_items)
+            license_row = self._build_license_row(
+                license_obj, sorted_items,
+                item_plan_totals=plan_totals_by_license.get(license_obj.id),
+            )
 
             if license_row:
                 # Handle blank/empty notification numbers
@@ -333,13 +378,20 @@ class ItemPivotReportView(View):
             'report_date': today.isoformat(),
         }
 
-    def _build_license_row(self, license_obj: LicenseDetailsModel, all_items: List[tuple]) -> Dict[str, Any]:
+    def _build_license_row(self, license_obj: LicenseDetailsModel, all_items: List[tuple],
+                           item_plan_totals=None) -> Dict[str, Any]:
         """
         Build a single license row with item columns.
 
         Args:
             license_obj: LicenseDetailsModel instance
             all_items: List of (item_id, item_name) tuples
+            item_plan_totals: When the DFIA is manually planned, a map
+                {item_id: {'q': planned qty, 'cif': planned CIF-FC}} of the items
+                it actually planned. Drives the per-cell Planned QTY / Planned
+                CIF and the "as per planning" filter: items outside this map are
+                emitted as empty cells. None => not manually planned, so every
+                import item is shown as before.
 
         Returns:
             Dictionary with license data and item quantities
@@ -407,15 +459,11 @@ class ItemPivotReportView(View):
         })
 
         for import_item in license_obj.import_license.all():
-            # Attribute this import item's plan totals to its FIRST attached item
-            # name only, so a multi-name item isn't double-counted across columns.
-            _pl = _plan_map.get(import_item.id)
-            _pl_pending = _pl is not None
+            # Plan totals are now sourced per plan-line item_name via
+            # `item_plan_totals` (see the item-columns loop below); the old
+            # first-attached-name attribution is gone as it mis-assigned plans
+            # on multi-name import items (e.g. RUTILE on a BORAX+RUTILE item).
             for item in import_item.items.all():
-                if _pl_pending:
-                    item_quantities[item.id]['plan_quantity'] += Decimal(str(_pl['total_planned_quantity']))
-                    item_quantities[item.id]['plan_cif'] += Decimal(str(_pl['total_planned_cif']))
-                    _pl_pending = False
                 # Convert all numeric fields to Decimal to handle potential float values from database
                 item_quantities[item.id]['quantity'] += Decimal(str(import_item.quantity)) if import_item.quantity is not None else DEC_000
                 item_quantities[item.id]['allotted_quantity'] += Decimal(str(import_item.allotted_quantity)) if import_item.allotted_quantity is not None else DEC_000
@@ -654,9 +702,21 @@ class ItemPivotReportView(View):
                 item_e132_data[_r132['item_name']] = _r132
 
         # Add item columns
+        # A manually-planned DFIA only shows the items it planned; the plan
+        # map's keys are that set.
+        planned_item_ids = set(item_plan_totals) if item_plan_totals is not None else None
         for item_id, item_name in all_items:
-            if item_id in item_quantities:
+            # "As per planning": a manually-planned DFIA only shows the items it
+            # planned; every other item is emitted as an empty cell for this row.
+            if planned_item_ids is not None and item_id not in planned_item_ids:
+                show_item = False
+            else:
+                show_item = item_id in item_quantities
+
+            if show_item:
                 item_data = item_quantities[item_id]
+                # Per-item manual plan totals (empty for norm-driven licences).
+                _item_plan = (item_plan_totals or {}).get(item_id) or {}
 
                 # NEW model: restriction is determined by condition_type set
                 # on the licence's import item (from the parsed condition
@@ -704,9 +764,10 @@ class ItemPivotReportView(View):
                     'restriction_value': float(available_cif),
                     'unit_price': unit_price,
                     'planned_cif': planned_cif,
-                    # User-authored plan (distinct from the norm-derived planned_cif).
-                    'plan_quantity': float(item_data.get('plan_quantity') or 0),
-                    'plan_cif': float(item_data.get('plan_cif') or 0),
+                    # User-authored plan (distinct from the norm-derived
+                    # planned_cif), sourced per plan-line item_name.
+                    'plan_quantity': float(_item_plan.get('q') or 0),
+                    'plan_cif': float(_item_plan.get('cif') or 0),
                     'condition_type': cond_type,
                     # E132 sequential-debit fields (None for non-E132 norms).
                     'product_code': _e132.get('product_code'),

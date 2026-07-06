@@ -56,7 +56,11 @@ fi
 #   export MDS_TOKEN="<this server's write-scoped token>"
 # Without them, MDS is enabled but the sync step is skipped with a warning; the
 # app still works fully (reads come from the local mirror tables).
-MDS_ENABLED="${MDS_ENABLED:-true}"
+# MDS is DISABLED by default: master writes stay local-only (the pre-MDS,
+# byte-for-byte behavior). Set MDS_ENABLED=true explicitly to turn the cutover
+# back on. When false, the deploy actively writes MDS_ENABLED=false into each
+# server's backend/.env so a previously-enabled server is turned off.
+MDS_ENABLED="${MDS_ENABLED:-false}"
 MDS_BASE_URL="${MDS_BASE_URL:-}"
 MDS_TOKEN="${MDS_TOKEN:-}"
 
@@ -240,7 +244,14 @@ if [ "$MDS_ENABLED" = "true" ]; then
         echo_warn "  Set them: export MDS_BASE_URL=... MDS_TOKEN=...  (needs the MDS service deployed)"
     fi
 else
-    echo_info "MDS_ENABLED not true — skipping master-data sync"
+    # MDS removed/disabled: force it OFF in this server's .env so master writes
+    # go local-only. Reads already come from the local mirror tables, so nothing
+    # else changes. This actively turns off a server that was previously enabled.
+    echo_info "Disabling MDS in backend/.env (master writes local-only)..."
+    cd $SERVER_PATH/backend
+    touch .env
+    sed -i '/^MDS_ENABLED=/d' .env; echo 'MDS_ENABLED=false' >> .env
+    echo_ok "MDS_ENABLED=false written to .env — master edits no longer route through MDS"
 fi
 
 # ── 3. Static files ─────────────────────────────────────────

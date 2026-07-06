@@ -16,6 +16,9 @@ venv/
 env/
 ENV/
 
+# Local deploy secrets (DEPLOY_PASSWORD / MDS_BASE_URL / MDS_TOKEN) — never commit.
+deploy-secrets.env
+
 # Django
 *.log
 db.sqlite3

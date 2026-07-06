@@ -556,8 +556,15 @@ export default function ItemPivotReport() {
                     {!loading && activeNormTab && reportData?.licenses_by_norm_notification?.[activeNormTab] && Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length > 0 && (
                         <div>
                             {/* Notifications within active norm */}
-                            {(Object.entries(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}) as [string, any][]).sort().map(([notification, licenses]: [string, any]) => (
-                                <div key={`${activeNormTab}-${notification}`} className="mb-4">
+                            {(Object.entries(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}) as [string, any][]).sort().map(([groupKey, licenses]: [string, any]) => {
+                                // Group key is "<Purchase Status> — <notification>" (see backend).
+                                // Split it so the table header shows purchase status as a chip
+                                // and the notification on its own.
+                                const emIdx = groupKey.indexOf(' — ');
+                                const psLabel = emIdx >= 0 ? groupKey.slice(0, emIdx) : (licenses[0]?.purchase_status_label || '');
+                                const notification = emIdx >= 0 ? groupKey.slice(emIdx + 3) : groupKey;
+                                return (
+                                <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
                                     <div className="card">
                                         <div
                                             className="card-header bg-gradient text-primary flex justify-between items-center"
@@ -571,6 +578,11 @@ export default function ItemPivotReport() {
                                                               title="Notification number is blank or missing">
                                                             <TriangleAlert className="size-4" aria-hidden="true" />
                                                             Missing
+                                                        </span>
+                                                    )}
+                                                    {psLabel && (
+                                                        <span className="chip chip-info ml-2" title="Purchase status">
+                                                            {psLabel}
                                                         </span>
                                                     )}
                                                 </h5>
@@ -648,11 +660,19 @@ export default function ItemPivotReport() {
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
-                                                        }}>Alloted CIF
+                                                        }}>Debited CIF
                                                         </th>
                                                         <th className="text-end" style={{
                                                             position: 'sticky',
                                                             left: '850px',
+                                                            zIndex: 11,
+                                                            backgroundColor: 'var(--tb-sunken)',
+                                                            minWidth: '100px'
+                                                        }}>Alloted CIF
+                                                        </th>
+                                                        <th className="text-end" style={{
+                                                            position: 'sticky',
+                                                            left: '950px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '110px',
@@ -915,15 +935,21 @@ export default function ItemPivotReport() {
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{license.total_cif.toFixed(2)}</td>
-                                                            <td className="text-end font-semibold text-info" style={{
+                                                            <td className="text-end font-semibold text-warning" style={{
                                                                 position: 'sticky',
                                                                 left: '750px',
+                                                                zIndex: 1,
+                                                                backgroundColor: 'var(--tb-card-bg)'
+                                                            }}>{(license.debited_cif || 0).toFixed(2)}</td>
+                                                            <td className="text-end font-semibold text-info" style={{
+                                                                position: 'sticky',
+                                                                left: '850px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{(license.alloted_cif || 0).toFixed(2)}</td>
                                                             <td className="text-end font-semibold text-success" style={{
                                                                 position: 'sticky',
-                                                                left: '850px',
+                                                                left: '950px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)',
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -998,7 +1024,7 @@ export default function ItemPivotReport() {
                                                         {/* Notes and Latest Transfer Row (Condition Sheet moved to button + modal) */}
                                                         {(license.balance_report_notes || license.latest_transfer) && (
                                                             <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--tb-sunken)' }}>
-                                                                <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 10 : 8))} style={{
+                                                                <td colSpan={9 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 10 : 8))} style={{
                                                                     padding: '10px 15px',
                                                                     borderTop: 'none'
                                                                 }}>
@@ -1068,9 +1094,17 @@ export default function ItemPivotReport() {
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + lic.total_cif, 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-end text-info" style={{
+                                                        <td className="text-end text-warning" style={{
                                                             position: 'sticky',
                                                             left: '750px',
+                                                            zIndex: 1,
+                                                            backgroundColor: 'var(--warning-bg)'
+                                                        }}>
+                                                            {licenses.reduce((sum, lic) => sum + (lic.debited_cif || 0), 0).toFixed(2)}
+                                                        </td>
+                                                        <td className="text-end text-info" style={{
+                                                            position: 'sticky',
+                                                            left: '850px',
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)'
                                                         }}>
@@ -1078,7 +1112,7 @@ export default function ItemPivotReport() {
                                                         </td>
                                                         <td className="text-end text-success" style={{
                                                             position: 'sticky',
-                                                            left: '850px',
+                                                            left: '950px',
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -1281,7 +1315,8 @@ export default function ItemPivotReport() {
                                         </div>
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
 
                             {/* Notes and Conditions Section */}
                             {activeNormTab && reportData?.norm_notes_conditions?.[activeNormTab] && (

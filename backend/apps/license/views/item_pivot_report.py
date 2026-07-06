@@ -320,6 +320,16 @@ class ItemPivotReportView(View):
                     # Regular grouping by notification for other norms
                     notification_key = notification
 
+                # Split every pivot table by PURCHASE STATUS: prefix the group
+                # key with the licence's purchase-status label so each rendered
+                # table (and its summary / totals / Excel sheet, which all key off
+                # this group) contains a single purchase status. The " — " (em
+                # dash) delimiter is distinct from the " - " used inside
+                # notification_key, so the frontend can split it back apart.
+                ps_label = (license_row.get('purchase_status_label')
+                            or license_row.get('purchase_status_code') or 'Unknown')
+                notification_key = f"{ps_label} — {notification_key}"
+
                 licenses_by_norm_notification[norm_class][notification_key].append(license_row)
 
         # Determine which items have restrictions
@@ -417,6 +427,13 @@ class ItemPivotReportView(View):
 
         for allot_item in allotment_items:
             alloted_cif += Decimal(str(allot_item.cif_fc)) if allot_item.cif_fc is not None else Decimal('0')
+
+        # Debited CIF = CIF already debited (via BOE) across this licence's import
+        # items — the same `debited_value` field the restriction pools treat as
+        # debited_cif below. import_license is prefetched, so no extra query.
+        debited_cif = Decimal('0')
+        for import_item in license_obj.import_license.all():
+            debited_cif += Decimal(str(import_item.debited_value)) if import_item.debited_value is not None else DEC_0
 
         # Aggregate quantities by item (sum across all serial numbers)
         item_quantities = defaultdict(lambda: {
@@ -561,6 +578,7 @@ class ItemPivotReportView(View):
             'purchase_status_code': ps_code,
             'purchase_status_label': ps_label,
             'total_cif': float(total_cif),
+            'debited_cif': float(debited_cif),
             'alloted_cif': float(alloted_cif),
             'balance_cif': float(balance_cif),  # Reuse already calculated balance
             'balance_report_notes': license_obj.balance_report_notes or '',
@@ -852,7 +870,7 @@ class ItemPivotReportView(View):
                     # Build headers
                     base_headers = [
                         'Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter',
-                        'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet',
+                        'Total CIF', 'Debited CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet',
                         'Ledger Date'
                     ]
 
@@ -910,6 +928,7 @@ class ItemPivotReportView(View):
                         row_data.append(license_data['license_expiry_date'])
                         row_data.append(license_data['exporter'])
                         row_data.append(license_data['total_cif'])
+                        row_data.append(license_data.get('debited_cif', 0))
                         row_data.append(license_data['alloted_cif'])
                         row_data.append(license_data['balance_cif'])
                         row_data.append(license_data.get('balance_report_notes', ''))
@@ -1145,7 +1164,7 @@ class ItemPivotReportView(View):
                     worksheet.append([])
 
                     # Headers
-                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet']
+                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Debited CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet']
                     item_headers = []
                     for item in items_with_data:
                         item_name = item['name']
@@ -1192,6 +1211,7 @@ class ItemPivotReportView(View):
                             lic['license_expiry_date'],
                             lic['exporter'],
                             lic['total_cif'],
+                            lic.get('debited_cif', 0),
                             lic['alloted_cif'],
                             lic['balance_cif'],
                             lic.get('balance_report_notes', ''),
@@ -1236,6 +1256,10 @@ class ItemPivotReportView(View):
                     total_cif_cell = WriteOnlyCell(worksheet, value=sum(l['total_cif'] for l in licenses_list))
                     total_cif_cell.font = Font(bold=True)
                     totals_row.append(total_cif_cell)
+
+                    debited_cif_cell = WriteOnlyCell(worksheet, value=sum(l.get('debited_cif', 0) for l in licenses_list))
+                    debited_cif_cell.font = Font(bold=True)
+                    totals_row.append(debited_cif_cell)
 
                     alloted_cif_cell = WriteOnlyCell(worksheet, value=sum(l['alloted_cif'] for l in licenses_list))
                     alloted_cif_cell.font = Font(bold=True)

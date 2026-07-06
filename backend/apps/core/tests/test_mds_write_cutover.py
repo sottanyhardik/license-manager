@@ -35,24 +35,43 @@ class FakeMDSUnavailable(Exception):
     pass
 
 
-class WriteRecorder:
-    """Stands in for mds_client.sync.{write_master,delete_master,refresh_local}."""
+class FakeMDSHTTPError(Exception):
+    """Stands in for mds_client.client.MDSHTTPError (reachable but non-2xx)."""
 
-    def __init__(self, *, down=False):
+    def __init__(self, status_code, body, url="https://mds.test/x"):
+        self.status_code = status_code
+        self.body = body
+        self.url = url
+        super().__init__(f"MDS returned HTTP {status_code}: {body!r}")
+
+
+class WriteRecorder:
+    """Stands in for mds_client.sync.{write_master,delete_master,refresh_local}.
+
+    ``down`` -> raise MDSUnavailable (service unreachable).
+    ``reject`` -> a (status_code, body) tuple; raise MDSHTTPError (MDS reachable
+    but rejected the write/delete, e.g. a 400 validation error)."""
+
+    def __init__(self, *, down=False, reject=None):
         self.down = down
+        self.reject = reject
         self.writes = []
         self.deletes = []
         self.refreshed = []
 
-    def write_master(self, label, row):
+    def _maybe_fail(self):
         if self.down:
             raise FakeMDSUnavailable("down")
+        if self.reject is not None:
+            raise FakeMDSHTTPError(*self.reject)
+
+    def write_master(self, label, row):
+        self._maybe_fail()
         self.writes.append((label, row))
         return {"created": 1, "updated": 0}
 
     def delete_master(self, label, key):
-        if self.down:
-            raise FakeMDSUnavailable("down")
+        self._maybe_fail()
         self.deletes.append((label, key))
         return {"deleted": 1, "local_deleted": 1}
 
@@ -82,6 +101,7 @@ def patch_client(monkeypatch):
             "apps.core.mds_write._client_mods",
             lambda: (
                 FakeMDSUnavailable,
+                FakeMDSHTTPError,
                 recorder.write_master,
                 recorder.delete_master,
                 recorder.refresh_local,
@@ -203,6 +223,48 @@ class TestMdsOnDelete:
 
         assert resp.status_code == 503
         # MDS never confirmed -> local row must survive (no half-delete).
+        assert CompanyModel.objects.filter(pk=c.pk).exists()
+
+
+@pytest.mark.django_db
+class TestMdsRejectsWrite:
+    """MDS reachable but returns a non-2xx (validation / conflict). This must NOT
+    crash as a 500: a 4xx surfaces MDS's real message as a 400 (local change
+    rolled back), a 5xx degrades to the 503 service-unavailable contract."""
+
+    def test_create_4xx_surfaces_message_as_validation_error(self, user, enable_mds, patch_client):
+        patch_client(WriteRecorder(reject=(400, {"display_order": ["must be unique per norm class"]})))
+        request = FACTORY.post("/companies/", {"iec": "IEC6000006", "name": "Rejected"})
+        force_authenticate(request, user=user)
+        view = CompanyViewSet.as_view({"post": "create"})
+        resp = view(request)
+
+        assert resp.status_code == 400
+        assert "unique per norm class" in str(resp.data)
+        # local write rolled back — no partial write.
+        assert not CompanyModel.objects.filter(iec="IEC6000006").exists()
+
+    def test_create_5xx_degrades_to_503(self, user, enable_mds, patch_client):
+        patch_client(WriteRecorder(reject=(500, "boom")))
+        request = FACTORY.post("/companies/", {"iec": "IEC7000007", "name": "Boom"})
+        force_authenticate(request, user=user)
+        view = CompanyViewSet.as_view({"post": "create"})
+        resp = view(request)
+
+        assert resp.status_code == 503
+        assert not CompanyModel.objects.filter(iec="IEC7000007").exists()
+
+    def test_delete_4xx_surfaces_message_and_keeps_local_row(self, user, enable_mds, patch_client):
+        patch_client(WriteRecorder(reject=(409, {"detail": "row is referenced"})))
+        c = CompanyModel.objects.create(iec="IEC8000008", name="Ref")
+        request = FACTORY.delete("/companies/")
+        force_authenticate(request, user=user)
+        view = CompanyViewSet.as_view({"delete": "destroy"})
+        resp = view(request, pk=c.pk)
+
+        assert resp.status_code == 400
+        assert "referenced" in str(resp.data)
+        # MDS never confirmed the delete -> local row must survive.
         assert CompanyModel.objects.filter(pk=c.pk).exists()
 
 

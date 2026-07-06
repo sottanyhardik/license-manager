@@ -36,7 +36,7 @@ import logging
 from django.conf import settings
 from django.db import transaction
 from rest_framework import status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, ValidationError as DRFValidationError
 
 from apps.core import mds_payload
 
@@ -77,9 +77,20 @@ def mds_active_for(model) -> bool:
 
 def _client_mods():
     """Import the mds_client write helpers lazily (only when the gate is on)."""
-    from mds_client.client import MDSUnavailable
+    from mds_client.client import MDSUnavailable, MDSHTTPError
     from mds_client.sync import write_master, delete_master, refresh_local
-    return MDSUnavailable, write_master, delete_master, refresh_local
+    return MDSUnavailable, MDSHTTPError, write_master, delete_master, refresh_local
+
+
+def _mds_rejection_detail(body):
+    """Normalise an MDS 4xx response body into a DRF-friendly error detail.
+
+    MDS returns DRF-shaped errors (dict of field -> [msgs], a list, or a plain
+    string). Any of those is accepted verbatim by ValidationError so the user
+    sees the real reason; anything else is stringified."""
+    if isinstance(body, (dict, list, str)):
+        return body
+    return str(body) if body else "Master data service rejected the change."
 
 
 def _refresh_mirror(model_label: str) -> None:
@@ -92,7 +103,7 @@ def _refresh_mirror(model_label: str) -> None:
     (e.g. MDS blips right after the write committed), we log and move on: MDS is
     already authoritative and the periodic sync worker will converge the mirror.
     """
-    _, _, _, refresh_local = _client_mods()
+    _, _, _, _, refresh_local = _client_mods()
     try:
         refresh_local(model_label)
     except Exception:  # noqa: BLE001 - never fail the request on a post-write refresh
@@ -120,10 +131,11 @@ def save_through_mds(serializer, *, extra_save_kwargs=None):
     ``extra_save_kwargs`` carries created_by/modified_by exactly as the local-only
     path did, preserving audit behavior.
     """
-    MDSUnavailable, write_master, _, _ = _client_mods()
+    MDSUnavailable, MDSHTTPError, write_master, _, _ = _client_mods()
     extra_save_kwargs = extra_save_kwargs or {}
 
     model = serializer.Meta.model if hasattr(serializer, "Meta") else None
+    model_label = _model_label(model) if model else "?"
     try:
         with transaction.atomic():
             instance = serializer.save(**extra_save_kwargs)
@@ -132,6 +144,18 @@ def save_through_mds(serializer, *, extra_save_kwargs=None):
             write_master(model_label, row)
     except MDSUnavailable as exc:
         logger.error("MDS write failed (%s); local change rolled back.", model_label)
+        raise MasterServiceUnavailable() from exc
+    except MDSHTTPError as exc:
+        # MDS was reachable but REJECTED the write. The atomic block already
+        # rolled back the local change, so there is no partial write. A 4xx is a
+        # validation/conflict problem with the data the user submitted — surface
+        # MDS's real message as a 400 instead of crashing with a 500. A 5xx means
+        # MDS itself is malfunctioning; treat it like the service being down.
+        logger.warning(
+            "MDS rejected write (%s) HTTP %s: %r", model_label, exc.status_code, exc.body,
+        )
+        if 400 <= exc.status_code < 500:
+            raise DRFValidationError(_mds_rejection_detail(exc.body)) from exc
         raise MasterServiceUnavailable() from exc
 
     # Committed on MDS + locally; now make the local mirror mirror MDS exactly.
@@ -145,10 +169,19 @@ def delete_through_mds(instance) -> None:
     On MDSUnavailable we raise 503 and do NOT touch the local row (nothing
     half-deleted). ``mds_client.sync.delete_master`` performs both deletes in the
     correct order (MDS then local mirror by natural key)."""
-    MDSUnavailable, _, delete_master, _ = _client_mods()
+    MDSUnavailable, MDSHTTPError, _, delete_master, _ = _client_mods()
     model_label, _nk, key = mds_payload.natural_key_value(instance)
     try:
         delete_master(model_label, key)
     except MDSUnavailable as exc:
         logger.error("MDS delete failed (%s=%r); local row untouched.", model_label, key)
+        raise MasterServiceUnavailable() from exc
+    except MDSHTTPError as exc:
+        # MDS reachable but rejected the delete (e.g. row referenced elsewhere).
+        # Local row untouched. Surface a 4xx reason; a 5xx is a service fault.
+        logger.warning(
+            "MDS rejected delete (%s=%r) HTTP %s: %r", model_label, key, exc.status_code, exc.body,
+        )
+        if 400 <= exc.status_code < 500:
+            raise DRFValidationError(_mds_rejection_detail(exc.body)) from exc
         raise MasterServiceUnavailable() from exc

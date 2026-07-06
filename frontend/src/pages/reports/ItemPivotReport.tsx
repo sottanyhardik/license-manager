@@ -6,12 +6,12 @@ import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
 import {formatIndianNumber} from "../../utils/numberFormatter";
-import {openPdfPreview} from "../../utils/pdfPreview";
 import {toast} from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeftRight, Bell, Building2, Calculator, CalendarCheck, CalendarDays, CalendarRange, DollarSign, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, MinusCircle, Package, RefreshCw, ShoppingCart, SlidersHorizontal, StickyNote, Tag, TriangleAlert, XCircle } from "lucide-react";
+import { ArrowLeftRight, Bell, Building2, Calculator, CalendarCheck, CalendarDays, CalendarRange, DollarSign, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, MinusCircle, Package, RefreshCw, ShoppingCart, SlidersHorizontal, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
+import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
 import ItemPivotFilters from "./ItemPivotFilters";
@@ -19,6 +19,37 @@ import ItemPivotFilters from "./ItemPivotFilters";
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
 const DEFAULT_PURCHASE_STATUS = ['GE', 'MI', 'CO'];
+
+// Distinct, subtle background tints cycled per item so each item's column
+// group (and its name header) is easy to tell apart at a glance.
+const ITEM_BG_COLORS = [
+    'rgba(59,130,246,0.10)',   // blue
+    'rgba(16,185,129,0.10)',   // green
+    'rgba(249,115,22,0.10)',   // orange
+    'rgba(139,92,246,0.10)',   // purple
+    'rgba(236,72,153,0.10)',   // pink
+    'rgba(234,179,8,0.12)',    // amber
+    'rgba(6,182,212,0.10)',    // cyan
+    'rgba(107,114,128,0.10)',  // gray
+];
+const itemBgColor = (idx) => ITEM_BG_COLORS[idx % ITEM_BG_COLORS.length];
+
+// Shared style for the compact Condition / Transfer / Note action pills that
+// sit next to each DFIA number. Soft tint + coloured text/border, icon inline.
+const ACTION_PILL_BASE = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 5,
+    width: '100%',
+    fontSize: 11,
+    fontWeight: 600,
+    lineHeight: 1.3,
+    padding: '3px 8px',
+    borderRadius: 6,
+    whiteSpace: 'nowrap',
+    cursor: 'pointer',
+};
 
 // Purchase-status badge palette now lives in theme/tokens.js (single source of truth).
 const PURCHASE_STATUS_STYLES = PURCHASE_STATUS_PALETTE;
@@ -68,6 +99,11 @@ export default function ItemPivotReport() {
     const [purchaseStatus, setPurchaseStatus] = useState(DEFAULT_PURCHASE_STATUS);
     const [purchaseStatusOptions, setPurchaseStatusOptions] = useState([]);
     const [conditionModal, setConditionModal] = useState(null); // { licenseNumber, content }
+    const [transferModal, setTransferModal] = useState(null); // { licenseNumber, content }
+    const [noteModal, setNoteModal] = useState(null); // { licenseNumber, content }
+    // Utilization planning panel (same component the licenses page uses).
+    const [showPlanModal, setShowPlanModal] = useState(false);
+    const [planLicense, setPlanLicense] = useState(null); // { id, number, balance }
 
     useEffect(() => {
         loadFilterOptions();
@@ -594,7 +630,7 @@ export default function ItemPivotReport() {
                                         </div>
                                         <div className="card-body" style={{padding:0}}>
                                             <div className="table-responsive" style={{overflowX: 'auto'}}>
-                                                <table className="table table-hover table-sm mb-0"
+                                                <table className="table table-hover table-sm table-bordered mb-0"
                                                        style={{tableLayout: 'auto', minWidth: '860px'}}>
                                                     <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                                                     <tr className="table-light">
@@ -620,35 +656,19 @@ export default function ItemPivotReport() {
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
-                                                        }}>DFIA Dt
+                                                        }}>Expiry Dt
                                                         </th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '280px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '100px'
-                                                        }}>Expiry Dt
-                                                        </th>
-                                                        <th style={{
-                                                            position: 'sticky',
-                                                            left: '380px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '150px'
                                                         }}>Exporter
                                                         </th>
-                                                        <th style={{
-                                                            position: 'sticky',
-                                                            left: '530px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '120px'
-                                                        }}>Notif No
-                                                        </th>
                                                         <th className="text-end" style={{
                                                             position: 'sticky',
-                                                            left: '650px',
+                                                            left: '430px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
@@ -656,7 +676,7 @@ export default function ItemPivotReport() {
                                                         </th>
                                                         <th className="text-end" style={{
                                                             position: 'sticky',
-                                                            left: '750px',
+                                                            left: '530px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
@@ -664,7 +684,7 @@ export default function ItemPivotReport() {
                                                         </th>
                                                         <th className="text-end" style={{
                                                             position: 'sticky',
-                                                            left: '850px',
+                                                            left: '630px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
@@ -672,7 +692,7 @@ export default function ItemPivotReport() {
                                                         </th>
                                                         <th className="text-end" style={{
                                                             position: 'sticky',
-                                                            left: '950px',
+                                                            left: '730px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '110px',
@@ -680,7 +700,11 @@ export default function ItemPivotReport() {
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}>Balance CIF
                                                         </th>
-                                                        {reportData.items.filter(item => item.name).map(item => {
+                                                        {/* DFIA Dt / Notif No temporarily hidden
+                                                        <th style={{ minWidth: '100px' }}>DFIA Dt</th>
+                                                        <th style={{ minWidth: '120px' }}>Notif No</th>
+                                                        */}
+                                                        {reportData.items.filter(item => item.name).map((item, itemIdx) => {
                                                             // Sub-cols per item: HSN, Description, Total, Allotted,
                                                             // Debited, Balance, Plan Qty, Plan CIF
                                                             // + 2 optional restriction cols when applicable
@@ -691,8 +715,8 @@ export default function ItemPivotReport() {
                                                                 + (isRutile ? 1 : 0);
                                                             return (
                                                                 <th key={`${item.id}-qty`} colSpan={colSpan}
-                                                                    className="text-center bg-info bg-opacity-10"
-                                                                    style={{minWidth: '200px'}}>
+                                                                    className="text-center"
+                                                                    style={{minWidth: '200px', backgroundColor: itemBgColor(itemIdx)}}>
                                                                     <Package className="size-4" aria-hidden="true" />
                                                                     {item.name}
                                                                 </th>
@@ -726,7 +750,7 @@ export default function ItemPivotReport() {
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
-                                                            left: '380px',
+                                                            left: '430px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
@@ -738,24 +762,19 @@ export default function ItemPivotReport() {
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
-                                                            left: '650px',
+                                                            left: '630px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
-                                                            left: '750px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th style={{
-                                                            position: 'sticky',
-                                                            left: '850px',
+                                                            left: '730px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}></th>
+                                                        {/* DFIA Dt / Notif No spacers temporarily hidden */}
                                                         {reportData.items.filter(item => item.name).map(item => (
                                                             <React.Fragment key={`${item.id}-headers`}>
                                                                 <th style={{minWidth: '90px', fontSize: 13.5}}>HSN
@@ -831,70 +850,85 @@ export default function ItemPivotReport() {
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>
                                                                 <div className="flex items-center gap-2" style={{ flexWrap: 'nowrap' }}>
-                                                                    <span>{license.license_number}</span>
-                                                                    <PurchaseStatusBadge
-                                                                        code={license.purchase_status_code}
-                                                                        label={license.purchase_status_label}
-                                                                    />
-                                                                    {(license.has_tl || license.has_copy) && (
-                                                                        <a
-                                                                            href="#"
-                                                                            title="View merged documents"
-                                                                            onClick={async (e) => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                try {
-                                                                                    const response = await api.get(`licenses/${license.id}/merged-documents/`, {
-                                                                                        responseType: 'blob',
-                                                                                        headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
-                                                                                    });
-                                                                                    openPdfPreview(response.data, `${license.license_number || license.id}-copy.pdf`);
-                                                                                } catch {
-                                                                                    toast.error('Failed to load merged documents');
-                                                                                }
-                                                                            }}
-                                                                            style={{
-                                                                                fontSize: 11,
-                                                                                color: 'var(--success-color)',
-                                                                                textDecoration: 'none',
-                                                                                padding: '1px 4px',
-                                                                                backgroundColor: 'var(--success-bg)',
-                                                                                borderRadius: '2px',
-                                                                                fontWeight: '500',
-                                                                                whiteSpace: 'nowrap'
-                                                                            }}
-                                                                        >
-                                                                            Copy
-                                                                        </a>
-                                                                    )}
-                                                                    {license.condition_sheet && (
-                                                                        <button
-                                                                            type="button"
-                                                                            title="View condition sheet"
-                                                                            onClick={(e) => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                setConditionModal({
-                                                                                    licenseNumber: license.license_number,
-                                                                                    content: license.condition_sheet,
-                                                                                });
-                                                                            }}
-                                                                            style={{
-                                                                                fontSize: 11,
-                                                                                color: 'var(--tb-warning-text)',
-                                                                                border: 'none',
-                                                                                padding: '1px 6px',
-                                                                                backgroundColor: 'var(--row-yellow-bg)',
-                                                                                borderRadius: '2px',
-                                                                                fontWeight: 500,
-                                                                                whiteSpace: 'nowrap',
-                                                                                lineHeight: 1.4,
-                                                                            }}
-                                                                        >
-                                                                            <FileText className="size-4" aria-hidden="true" />
-                                                                            Condition
-                                                                        </button>
-                                                                    )}
+                                                                    <div>
+                                                                        {(license.has_tl || license.has_copy) ? (
+                                                                            <a
+                                                                                href="#"
+                                                                                title="Open DFIA documents in a new tab"
+                                                                                onClick={async (e) => {
+                                                                                    e.preventDefault();
+                                                                                    e.stopPropagation();
+                                                                                    try {
+                                                                                        const response = await api.get(`licenses/${license.id}/merged-documents/`, {
+                                                                                            responseType: 'blob',
+                                                                                            headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                                                                        });
+                                                                                        window.open(URL.createObjectURL(response.data), '_blank', 'noopener');
+                                                                                    } catch {
+                                                                                        toast.error('Failed to open DFIA documents');
+                                                                                    }
+                                                                                }}
+                                                                                style={{ fontWeight: 600, color: 'var(--tb-brand)', textDecoration: 'underline', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                                            >
+                                                                                {license.license_number}
+                                                                            </a>
+                                                                        ) : (
+                                                                            <span style={{ fontWeight: 600 }}>{license.license_number}</span>
+                                                                        )}
+                                                                        <div className="mt-1">
+                                                                            <PurchaseStatusBadge
+                                                                                code={license.purchase_status_code}
+                                                                                label={license.purchase_status_label}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    {/* Condition / Transfer / Note — one vertical, centered column of
+                                                                        buttons that open their content in a modal (saves row width). */}
+                                                                    {(
+                                                                        <div className="flex flex-col items-stretch justify-center gap-1" style={{ minWidth: 96 }}>
+                                                                            {license.condition_sheet && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    title="View condition sheet"
+                                                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConditionModal({ licenseNumber: license.license_number, content: license.condition_sheet }); }}
+                                                                                    style={{ ...ACTION_PILL_BASE, color: '#92610a', backgroundColor: 'rgba(234,179,8,0.13)', border: '1px solid rgba(234,179,8,0.45)' }}
+                                                                                >
+                                                                                    <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+                                                                                    Condition
+                                                                                </button>
+                                                                            )}
+                                                                            {license.latest_transfer && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    title="View transfer status"
+                                                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTransferModal({ licenseNumber: license.license_number, content: license.latest_transfer }); }}
+                                                                                    style={{ ...ACTION_PILL_BASE, color: '#1d4ed8', backgroundColor: 'rgba(59,130,246,0.13)', border: '1px solid rgba(59,130,246,0.45)' }}
+                                                                                >
+                                                                                    <ArrowLeftRight className="size-3.5 shrink-0" aria-hidden="true" />
+                                                                                    Transfer
+                                                                                </button>
+                                                                            )}
+                                                                            {license.balance_report_notes && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    title="View notes"
+                                                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setNoteModal({ licenseNumber: license.license_number, content: license.balance_report_notes }); }}
+                                                                                    style={{ ...ACTION_PILL_BASE, color: '#b91c1c', backgroundColor: 'rgba(239,68,68,0.13)', border: '1px solid rgba(239,68,68,0.45)' }}
+                                                                                >
+                                                                                    <StickyNote className="size-3.5 shrink-0" aria-hidden="true" />
+                                                                                    Note
+                                                                                </button>
+                                                                            )}
+                                                                            <button
+                                                                                type="button"
+                                                                                title={license.plan_source === 'manual' ? 'Re-plan utilization (already planned)' : 'Plan utilization'}
+                                                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPlanLicense({ id: license.id, number: license.license_number, balance: Number(license.balance_cif || 0) }); setShowPlanModal(true); }}
+                                                                                style={{ ...ACTION_PILL_BASE, color: 'var(--tb-brand-active)', backgroundColor: 'var(--tb-brand-50)', border: '1px solid #a5b4fc' }}
+                                                                            >
+                                                                                <Target className="size-3.5 shrink-0" aria-hidden="true" />
+                                                                                {license.plan_source === 'manual' ? 'Re Plan me' : 'Plan me'}
+                                                                            </button>
+                                                                        </div>)}
                                                                 </div>
                                                             </td>
                                                             <td className="text-nowrap" style={{
@@ -902,118 +936,108 @@ export default function ItemPivotReport() {
                                                                 left: '180px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
-                                                            }}>{formatDate(license.license_date)}</td>
-                                                            <td className="text-nowrap" style={{
-                                                                position: 'sticky',
-                                                                left: '280px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{formatDate(license.license_expiry_date)}</td>
                                                             <td className="text-truncate" style={{
                                                                 position: 'sticky',
-                                                                left: '380px',
+                                                                left: '280px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)',
                                                                 maxWidth: '150px'
                                                             }} title={license.exporter}>
                                                                 {license.exporter}
                                                             </td>
-                                                            <td className="text-nowrap" style={{
-                                                                position: 'sticky',
-                                                                left: '530px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)'
-                                                            }}>
-                                                                {license.notification_number}
-                                                                {license.notification_number === 'Unknown' && (
-                                                                    <TriangleAlert className="size-4" aria-hidden="true" />
-                                                                )}
-                                                            </td>
                                                             <td className="text-end font-semibold" style={{
                                                                 position: 'sticky',
-                                                                left: '650px',
+                                                                left: '430px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{license.total_cif.toFixed(2)}</td>
                                                             <td className="text-end font-semibold text-warning" style={{
                                                                 position: 'sticky',
-                                                                left: '750px',
+                                                                left: '530px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{(license.debited_cif || 0).toFixed(2)}</td>
                                                             <td className="text-end font-semibold text-info" style={{
                                                                 position: 'sticky',
-                                                                left: '850px',
+                                                                left: '630px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{(license.alloted_cif || 0).toFixed(2)}</td>
                                                             <td className="text-end font-semibold text-success" style={{
                                                                 position: 'sticky',
-                                                                left: '950px',
+                                                                left: '730px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)',
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                                 borderRight: '2px solid var(--tb-border)'
                                                             }}>{license.balance_cif.toFixed(2)}</td>
-                                                            {reportData.items.filter(item => item.name).map(item => {
+                                                            {/* DFIA Dt / Notif No temporarily hidden
+                                                            <td className="text-nowrap">{formatDate(license.license_date)}</td>
+                                                            <td className="text-nowrap">{license.notification_number}</td>
+                                                            */}
+                                                            {reportData.items.filter(item => item.name).map((item, itemIdx) => {
                                                                 const itemData = license.items[item.name] || {};
                                                                 const hasData = itemData.quantity > 0;
                                                                 // Per license: if the license is manually planned show the
                                                                 // manual plan; otherwise show the norm-derived unit price /
                                                                 // planned CIF. Never both for the same license.
                                                                 const hasManualPlan = license.plan_source === 'manual';
+                                                                // Each item's cells share one background tint so the item's
+                                                                // column group is visually distinct from its neighbours.
+                                                                const itemBg = itemBgColor(itemIdx);
                                                                 return (
                                                                     <React.Fragment
                                                                         key={`${license.license_number}-${item.id}`}>
-                                                                        <td className={hasData ? 'bg-light' : ''}>
+                                                                        <td style={{backgroundColor: itemBg}}>
                                                                             {itemData.hs_code || '-'}
                                                                             {itemData.condition_type && (
                                                                                 <ConditionBadge type={itemData.condition_type} size="xs" />
                                                                             )}
                                                                         </td>
-                                                                        <td className={`text-truncate ${hasData ? 'bg-light' : ''}`}
-                                                                            style={{maxWidth: '180px'}}
+                                                                        <td className="text-truncate"
+                                                                            style={{maxWidth: '180px', backgroundColor: itemBg}}
                                                                             title={itemData.description || ''}>
                                                                             {itemData.description || '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light' : ''}`}>
+                                                                        <td className="text-end" style={{backgroundColor: itemBg}}>
                                                                             {itemData.quantity ? itemData.quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light font-semibold text-primary' : ''}`}>
+                                                                        <td className={`text-end ${hasData ? 'font-semibold text-primary' : ''}`} style={{backgroundColor: itemBg}}>
                                                                             {itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light' : ''}`} style={hasData ? {color: 'var(--warning-color)'} : {}}>
+                                                                        <td className="text-end" style={{backgroundColor: itemBg, ...(hasData ? {color: 'var(--warning-color)'} : {})}}>
                                                                             {itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light text-success font-semibold' : ''}`}>
+                                                                        <td className={`text-end ${hasData ? 'text-success font-semibold' : ''}`} style={{backgroundColor: itemBg}}>
                                                                             {itemData.available_quantity ? itemData.available_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         {item.has_restriction && (
                                                                             <>
-                                                                                <td className={`text-center ${hasData ? 'bg-light' : ''}`}>
+                                                                                <td className="text-center" style={{backgroundColor: itemBg}}>
                                                                                     {itemData.restriction !== null && itemData.restriction !== undefined ? (
                                                                                         <span
                                                                                             className="chip chip-info">{itemData.restriction}%</span>
                                                                                     ) : '-'}
                                                                                 </td>
-                                                                                <td className={`text-end ${hasData ? 'bg-light font-semibold' : ''}`}>
+                                                                                <td className={`text-end ${hasData ? 'font-semibold' : ''}`} style={{backgroundColor: itemBg}}>
                                                                                     {itemData.restriction_value ? itemData.restriction_value.toFixed(2) : '-'}
                                                                                 </td>
                                                                             </>
                                                                         )}
                                                                         {/* Manual plan if present, else norm unit price / planned CIF */}
-                                                                        <td className={`text-end ${hasData ? 'bg-light' : ''}`}>
+                                                                        <td className="text-end" style={{backgroundColor: itemBg}}>
                                                                             {hasManualPlan
                                                                                 ? Number(itemData.plan_quantity || 0).toFixed(3)
                                                                                 : (itemData.unit_price ? Number(itemData.unit_price).toFixed(2) : '-')}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light font-semibold' : ''}`}>
+                                                                        <td className={`text-end ${hasData ? 'font-semibold' : ''}`} style={{backgroundColor: itemBg}}>
                                                                             {hasManualPlan
                                                                                 ? Number(itemData.plan_cif || 0).toFixed(2)
                                                                                 : (itemData.planned_cif ? Number(itemData.planned_cif).toFixed(2) : '-')}
                                                                         </td>
                                                                         {item.name === 'RUTILE - A3627' && (
-                                                                            <td className={`text-end ${hasData ? 'bg-light font-semibold text-warning' : ''}`}>
+                                                                            <td className={`text-end ${hasData ? 'font-semibold text-warning' : ''}`} style={{backgroundColor: itemBg}}>
                                                                                 {itemData.unit_price ? itemData.unit_price.toFixed(4) : '-'}
                                                                             </td>
                                                                         )}
@@ -1021,49 +1045,8 @@ export default function ItemPivotReport() {
                                                                 );
                                                             })}
                                                         </tr>
-                                                        {/* Notes and Latest Transfer Row (Condition Sheet moved to button + modal) */}
-                                                        {(license.balance_report_notes || license.latest_transfer) && (
-                                                            <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--tb-sunken)' }}>
-                                                                <td colSpan={9 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 10 : 8))} style={{
-                                                                    padding: '10px 15px',
-                                                                    borderTop: 'none'
-                                                                }}>
-                                                                    <div style={{ fontSize: 13.5, lineHeight: '1.5' }}>
-                                                                        {license.balance_report_notes && (
-                                                                            <div style={{
-                                                                                marginBottom: license.latest_transfer ? '8px' : '0',
-                                                                                backgroundColor: 'var(--danger-color)',
-                                                                                padding: '6px 10px',
-                                                                                borderRadius: 'var(--tb-r-sm)'
-                                                                            }}>
-                                                                                <strong style={{ color: '#000' }}>
-                                                                                    <StickyNote className="size-4" aria-hidden="true" />
-                                                                                    Notes:
-                                                                                </strong>
-                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
-                                                                                    {license.balance_report_notes}
-                                                                                </span>
-                                                                            </div>
-                                                                        )}
-                                                                        {license.latest_transfer && (
-                                                                            <div style={{
-                                                                                backgroundColor: 'var(--info-color)',
-                                                                                padding: '6px 10px',
-                                                                                borderRadius: 'var(--tb-r-sm)'
-                                                                            }}>
-                                                                                <strong style={{ color: '#000' }}>
-                                                                                    <ArrowLeftRight className="size-4" aria-hidden="true" />
-                                                                                    Latest Transfer:
-                                                                                </strong>
-                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
-                                                                                    {license.latest_transfer}
-                                                                                </span>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )}
+                                                        {/* Notes & Latest Transfer now open from the Note / Transfer buttons
+                                                            in the DFIA cell (see above) — bottom detail row removed. */}
                                                         </React.Fragment>
                                                     ))}
                                                     <tr className="table-warning font-bold" style={{
@@ -1076,19 +1059,13 @@ export default function ItemPivotReport() {
                                                             left: 0,
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)'
-                                                        }} colSpan={5}>
+                                                        }} colSpan={4}>
                                                             <Calculator className="size-4" aria-hidden="true" />
                                                             TOTAL
                                                         </td>
-                                                        <td style={{
-                                                            position: 'sticky',
-                                                            left: '530px',
-                                                            zIndex: 1,
-                                                            backgroundColor: 'var(--warning-bg)'
-                                                        }}></td>
                                                         <td className="text-end text-primary" style={{
                                                             position: 'sticky',
-                                                            left: '650px',
+                                                            left: '430px',
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)'
                                                         }}>
@@ -1096,7 +1073,7 @@ export default function ItemPivotReport() {
                                                         </td>
                                                         <td className="text-end text-warning" style={{
                                                             position: 'sticky',
-                                                            left: '750px',
+                                                            left: '530px',
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)'
                                                         }}>
@@ -1104,7 +1081,7 @@ export default function ItemPivotReport() {
                                                         </td>
                                                         <td className="text-end text-info" style={{
                                                             position: 'sticky',
-                                                            left: '850px',
+                                                            left: '630px',
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)'
                                                         }}>
@@ -1112,7 +1089,7 @@ export default function ItemPivotReport() {
                                                         </td>
                                                         <td className="text-end text-success" style={{
                                                             position: 'sticky',
-                                                            left: '950px',
+                                                            left: '730px',
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -1120,6 +1097,7 @@ export default function ItemPivotReport() {
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + lic.balance_cif, 0).toFixed(2)}
                                                         </td>
+                                                        {/* DFIA Dt / Notif No totals temporarily hidden */}
                                                         {reportData.items.filter(item => item.name).map(item => {
                                                             const totalQty = licenses.reduce((sum, lic) => {
                                                                 return sum + (lic.items[item.name]?.quantity || 0);
@@ -1407,6 +1385,58 @@ export default function ItemPivotReport() {
                     </DialogContent>
                 </Dialog>
             )}
+
+            {transferModal && (
+                <Dialog open={!!transferModal} onOpenChange={(o) => !o && setTransferModal(null)}>
+                    <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <ArrowLeftRight className="size-4" />
+                                Transfer Status — {transferModal.licenseNumber}
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="max-h-[65vh] overflow-y-auto">
+                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 14.5, margin: 0, color: 'var(--tb-text)' }}>
+                                {transferModal.content}
+                            </pre>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setTransferModal(null)}>Close</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {noteModal && (
+                <Dialog open={!!noteModal} onOpenChange={(o) => !o && setNoteModal(null)}>
+                    <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <StickyNote className="size-4" />
+                                Notes — {noteModal.licenseNumber}
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="max-h-[65vh] overflow-y-auto">
+                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 14.5, margin: 0, color: 'var(--tb-text)' }}>
+                                {noteModal.content}
+                            </pre>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setNoteModal(null)}>Close</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {/* Utilization planning — same panel the licenses page uses. */}
+            <LicensePlanningPanel
+                show={showPlanModal}
+                onHide={() => { setShowPlanModal(false); setPlanLicense(null); }}
+                licenseId={planLicense?.id}
+                licenseNumber={planLicense?.number}
+                balanceCif={planLicense?.balance || 0}
+                onSaved={() => { if (activeNormTab) loadReport(activeNormTab); }}
+            />
         </div>
     );
 }

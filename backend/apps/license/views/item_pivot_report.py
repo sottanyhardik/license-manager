@@ -158,7 +158,12 @@ class ItemPivotReportView(View):
         # Build filtered prefetch querysets based on sion_norm
         import_items_qs = LicenseImportItemsModel.objects.select_related('hs_code')
         export_items_qs = LicenseExportItemModel.objects.select_related('norm_class')
-        item_names_qs = ItemNameModel.objects.filter(is_active=True).select_related('sion_norm_class')
+        # NOTE: do NOT filter is_active here. Inactive item names are still needed
+        # so a manually-planned-but-inactive item (e.g. WALNUT planned on an E132
+        # DFIA) gets its quantities into item_quantities and renders. The column
+        # set (all_items) still hides inactive items via its own is_active check,
+        # except those that are explicitly planned (added back below).
+        item_names_qs = ItemNameModel.objects.select_related('sion_norm_class')
 
         # If sion_norm specified, filter prefetch queries to only that norm.
         if sion_norm:
@@ -237,6 +242,7 @@ class ItemPivotReportView(View):
         plan_totals_by_license = defaultdict(
             lambda: defaultdict(lambda: {'q': Decimal('0.000'), 'cif': Decimal('0.00')})
         )
+        planned_item_ids_all = set()
         for _pl in (LicenseItemPlan.objects
                     .filter(license_id__in=[_lo.id for _lo in valid_licenses])
                     .values('license_id', 'import_item_id', 'item_name_id',
@@ -247,6 +253,20 @@ class ItemPivotReportView(View):
             _cell = plan_totals_by_license[_pl['license_id']][_iname]
             _cell['q'] += _pl['planned_quantity'] or Decimal('0')
             _cell['cif'] += _pl['planned_cif_fc'] or Decimal('0')
+            planned_item_ids_all.add(_iname)
+
+        # A manually-planned item must appear as a column even if it is INACTIVE
+        # in the master (is_active=False) — the user explicitly planned it, so it
+        # would otherwise vanish (the column builder above skips inactive items).
+        # Add any planned item ids missing from all_items, honouring the norm filter.
+        _missing_planned = [iid for iid in planned_item_ids_all if iid not in all_items]
+        if _missing_planned:
+            for _it in ItemNameModel.objects.filter(id__in=_missing_planned).select_related('sion_norm_class'):
+                if not _it.name:
+                    continue
+                if sion_norm and not (_it.sion_norm_class and _it.sion_norm_class.norm_class == sion_norm):
+                    continue
+                all_items[_it.id] = _it
 
         # Sort items by display_order first, then by name for consistent column order
         sorted_items = sorted(
@@ -719,14 +739,27 @@ class ItemPivotReportView(View):
             for _r132 in _e132_res['rows']:
                 item_e132_data[_r132['item_name']] = _r132
 
+        # "As per planning" (AUTOMATED): for E132 the sequential debit is the
+        # plan — only items it actually applied (a "Success" row, i.e. one plan
+        # entry) count as planned. Every other item is hidden so the table shows
+        # just the planned line-up (easier to read the summary / decide fast).
+        # A manual plan, when present, takes precedence over this.
+        e132_planned_names = None
+        if primary_norm == 'E132' and item_plan_totals is None:
+            e132_planned_names = {
+                nm for nm, r in item_e132_data.items() if r.get('status') == 'Success'
+            }
+
         # Add item columns
         # A manually-planned DFIA only shows the items it planned; the plan
         # map's keys are that set.
         planned_item_ids = set(item_plan_totals) if item_plan_totals is not None else None
         for item_id, item_name in all_items:
-            # "As per planning": a manually-planned DFIA only shows the items it
-            # planned; every other item is emitted as an empty cell for this row.
+            # "As per planning": show only planned items. Manual plan first, else
+            # the E132 automated plan; every other item is an empty cell.
             if planned_item_ids is not None and item_id not in planned_item_ids:
+                show_item = False
+            elif e132_planned_names is not None and item_name not in e132_planned_names:
                 show_item = False
             else:
                 show_item = item_id in item_quantities

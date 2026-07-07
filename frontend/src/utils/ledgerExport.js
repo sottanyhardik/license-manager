@@ -103,7 +103,8 @@ function buildPdfBody(license, companiesGrouped) {
         const txns = company.transactions;
         const totalDebit = txns.reduce((s, t) => s + (t.debit_amount || 0), 0);
         const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
-        const companyPL = txns.filter(t => t.type === 'SALE').reduce((s, t) => s + (t.profit_loss || 0), 0);
+        // Bottom-line P/L = all credits (sales) − all debits (purchases/costs).
+        const companyPL = totalCredit - totalDebit;
         const sortedTxns2 = sortTxns(txns);
         const lastBal = sortedTxns2.length > 0 ? (balMap.get(sortedTxns2[sortedTxns2.length - 1]) ?? 0) : 0;
 
@@ -185,11 +186,14 @@ function writeSummaryPageToPdf(doc, licensesData) {
         for (const company of groupByCompany(license.transactions)) {
             if (!companyMap.has(company.company_name)) companyMap.set(company.company_name, []);
             const txns = company.transactions;
+            const _tPurchase = txns.filter(t => t.type === 'PURCHASE' || t.type === 'OPENING').reduce((s, t) => s + (t.debit_amount || 0), 0);
+            const _tSale = txns.filter(t => t.type === 'SALE').reduce((s, t) => s + (t.credit_amount || 0), 0);
             companyMap.get(company.company_name).push({
                 license,
-                totalPurchase: txns.filter(t => t.type === 'PURCHASE' || t.type === 'OPENING').reduce((s, t) => s + (t.debit_amount || 0), 0),
-                totalSale: txns.filter(t => t.type === 'SALE').reduce((s, t) => s + (t.credit_amount || 0), 0),
-                pl: txns.filter(t => t.type === 'SALE').reduce((s, t) => s + (t.profit_loss || 0), 0),
+                totalPurchase: _tPurchase,
+                totalSale: _tSale,
+                // Bottom-line P/L = sales − purchases (subtracts full purchase cost).
+                pl: _tSale - _tPurchase,
             });
         }
     }
@@ -376,8 +380,8 @@ function buildSummarySheet(wb, licensesData) {
                 .reduce((s, t) => s + (t.debit_amount || 0), 0);
             const totalSale = txns.filter(t => t.type === 'SALE')
                 .reduce((s, t) => s + (t.credit_amount || 0), 0);
-            const pl = txns.filter(t => t.type === 'SALE')
-                .reduce((s, t) => s + (t.profit_loss || 0), 0);
+            // Bottom-line P/L = sales − purchases (subtracts full purchase cost).
+            const pl = totalSale - totalPurchase;
             companyMap.get(company.company_name).push({ license, totalPurchase, totalSale, pl });
         }
     }
@@ -622,7 +626,8 @@ export async function generateExcel(licensesData, filename) {
             rowNum = ws.rowCount + 1;
             const totalDebit = txns.reduce((s, t) => s + (t.debit_amount || 0), 0);
             const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
-            const companyPL = txns.filter(t => t.type === 'SALE').reduce((s, t) => s + (t.profit_loss || 0), 0);
+            // Bottom-line P/L = all credits (sales) − all debits (purchases/costs).
+            const companyPL = totalCredit - totalDebit;
             const lastBal = txns.length > 0 ? (balMap.get(txns[txns.length - 1]) ?? 0) : 0;
 
             const labelMergeCols = isDFIA ? 6 : 5; // 1-indexed: merge cols 1..labelMergeCols

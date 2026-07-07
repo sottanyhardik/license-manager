@@ -4,6 +4,17 @@
 from __future__ import annotations
 
 import os
+import sys
+
+# macOS fork-safety: the prefork pool forks worker processes, and on macOS a
+# forked child crashes (SIGSEGV/SIGABRT) the moment it touches an Objective-C /
+# system framework unless this flag is set BEFORE the fork. Set it here (in the
+# worker's main process, before workers fork) so local dev on macOS doesn't
+# segfault. On Linux (production) the variable is meaningless and ignored, so
+# this is a no-op there. If workers still crash on macOS/Python 3.14, run the
+# worker with a non-forking pool: `--pool=solo` (see run-celery-dev.sh).
+if sys.platform == "darwin":
+    os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
 
 from celery import Celery, signals
 from celery.schedules import crontab

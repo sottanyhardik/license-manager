@@ -64,6 +64,17 @@ MDS_ENABLED="${MDS_ENABLED:-false}"
 MDS_BASE_URL="${MDS_BASE_URL:-}"
 MDS_TOKEN="${MDS_TOKEN:-}"
 
+# ── Secure media (opt-in) ────────────────────────────────────
+# SECURE_MEDIA=true closes the public /media/ exposure: uploads are served only
+# via the authenticated /api/media/<path> view + nginx X-Accel-Redirect. It writes
+# MEDIA_X_ACCEL_REDIRECT=/protected-media/ into each server's backend/.env.
+# PREREQS (do them in the SAME window — see docs/media-security-cutover.md):
+#   1. nginx has the internal `location /protected-media/` block
+#      (nginx-protected-media.conf) and the public `location /media/` removed;
+#   2. the frontend no longer links /media/ directly or uses ?access_token=.
+# Defaults to false = current public /media/ behavior (byte-for-byte unchanged).
+SECURE_MEDIA="${SECURE_MEDIA:-false}"
+
 # Map server IP → short name (used to pick the right .env file)
 get_server_name() {
     case "$1" in
@@ -211,6 +222,20 @@ if ! python manage.py migrate --no-input 2>&1 | tee /tmp/migration.log; then
 fi
 rm -f /tmp/migration.log
 echo_ok "Migrations applied"
+
+# ── 2b. Secure media (opt-in) ────────────────────────────────
+# Activate authenticated media serving only when SECURE_MEDIA=true AND the nginx
+# internal block + frontend cutover are in place (docs/media-security-cutover.md).
+if [ "$SECURE_MEDIA" = "true" ]; then
+    echo_info "Enabling secure media (MEDIA_X_ACCEL_REDIRECT) in backend/.env..."
+    touch .env
+    sed -i '/^MEDIA_X_ACCEL_REDIRECT=/d' .env
+    echo 'MEDIA_X_ACCEL_REDIRECT=/protected-media/' >> .env
+    echo_ok "MEDIA_X_ACCEL_REDIRECT=/protected-media/ written to .env"
+    echo_warn "Verify nginx has the internal 'location /protected-media/' block and the public /media/ block is removed — otherwise document downloads will 404."
+else
+    echo_info "Secure media OFF (public /media/). Set SECURE_MEDIA=true after the nginx + frontend cutover (docs/media-security-cutover.md)."
+fi
 
 # ── 2b. Master-Data Service: enable + client + mirror sync ───────────────
 # When MDS_ENABLED=true (script config), write MDS_ENABLED/URL/TOKEN into this

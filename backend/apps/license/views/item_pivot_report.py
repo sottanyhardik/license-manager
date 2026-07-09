@@ -29,6 +29,31 @@ def _safe_int(value, default):
         return default
 
 
+def _xlsx_safe_row(row):
+    """Strip XML-illegal control characters from string cells before writing.
+
+    Condition-sheet / description text extracted from DGFT PDFs can contain
+    control chars (e.g. form-feed) that openpyxl rejects with IllegalCharacterError,
+    which would 500 the whole Excel export. Cleans plain string values and the
+    value of WriteOnlyCell objects in place; passes numbers/None through.
+    """
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+
+    cleaned = []
+    for cell in row:
+        val = getattr(cell, "value", cell)  # WriteOnlyCell -> its value; else the cell itself
+        if isinstance(val, str):
+            safe = ILLEGAL_CHARACTERS_RE.sub("", val)
+            if val is not cell:  # it's a WriteOnlyCell — clean in place, keep styling
+                cell.value = safe
+                cleaned.append(cell)
+            else:
+                cleaned.append(safe)
+        else:
+            cleaned.append(cell)
+    return cleaned
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -920,7 +945,7 @@ class ItemPivotReportView(View):
                     title_cell = WriteOnlyCell(worksheet, value=title)
                     title_cell.font = Font(bold=True, size=14)
                     title_cell.alignment = Alignment(horizontal='center')
-                    worksheet.append([title_cell] + [None] * 25)  # Span across columns
+                    worksheet.append(_xlsx_safe_row([title_cell] + [None] * 25))  # Span across columns
                     worksheet.append([])  # Empty row
 
                     # Build headers
@@ -971,7 +996,7 @@ class ItemPivotReportView(View):
                         cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
                         cell.alignment = Alignment(horizontal='center', wrap_text=True)
                         header_row.append(cell)
-                    worksheet.append(header_row)
+                    worksheet.append(_xlsx_safe_row(header_row))
 
                     # Write data rows for this norm-notification combination
                     for idx, license_data in enumerate(licenses_list, 1):
@@ -1046,7 +1071,7 @@ class ItemPivotReportView(View):
                                 row_data.append(_pc if _pc else '')
 
                         # Append row to worksheet
-                        worksheet.append(row_data)
+                        worksheet.append(_xlsx_safe_row(row_data))
 
                     # Add totals row for this norm-notification
                     totals_row = []
@@ -1130,7 +1155,7 @@ class ItemPivotReportView(View):
                         if is_rutile:
                             totals_row.append(None)
 
-                    worksheet.append(totals_row)
+                    worksheet.append(_xlsx_safe_row(totals_row))
 
             # Save workbook to temp file
             workbook.save(temp_file.name)
@@ -1216,7 +1241,7 @@ class ItemPivotReportView(View):
                     title_cell = WriteOnlyCell(worksheet, value=f"Item Pivot Report - {norm_class} - {notification}")
                     title_cell.font = Font(bold=True, size=14)
                     title_cell.alignment = Alignment(horizontal='center')
-                    worksheet.append([title_cell] + [None] * 25)
+                    worksheet.append(_xlsx_safe_row([title_cell] + [None] * 25))
                     worksheet.append([])
 
                     # Headers
@@ -1256,7 +1281,7 @@ class ItemPivotReportView(View):
                         cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
                         cell.alignment = Alignment(horizontal='center', wrap_text=True)
                         header_row.append(cell)
-                    worksheet.append(header_row)
+                    worksheet.append(_xlsx_safe_row(header_row))
 
                     # Data rows
                     for idx, lic in enumerate(licenses_list, 1):
@@ -1302,7 +1327,7 @@ class ItemPivotReportView(View):
                             row_data.append(item_data.get('unit_price') or 0)
                             row_data.append(item_data.get('planned_cif') or 0)
 
-                        worksheet.append(row_data)
+                        worksheet.append(_xlsx_safe_row(row_data))
 
                     # Totals row
                     totals_row = [WriteOnlyCell(worksheet, value='TOTAL')]
@@ -1349,7 +1374,7 @@ class ItemPivotReportView(View):
                         cell.font = Font(bold=True)
                         totals_row.append(cell)
 
-                    worksheet.append(totals_row)
+                    worksheet.append(_xlsx_safe_row(totals_row))
 
             # Save workbook
             workbook.save(temp_file.name)

@@ -106,4 +106,26 @@ describe("MasterList smoke", () => {
     expect(await screen.findByText("INC-TEST-777")).toBeInTheDocument();
     expect(screen.getByText("RODTEP")).toBeInTheDocument();
   });
+
+  it("renders allotments rows with their data (gates EntityTable extraction)", async () => {
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        ...META,
+        results: [
+          {
+            id: 3,
+            invoice: "INV-ALLOT-3",
+            item_name: "Crude Palm Oil",
+            is_boe: false,
+            is_approved: true,
+            required_quantity: 1000,
+            allotment_details: [],
+          },
+        ],
+      },
+    });
+    renderAt("allotments");
+    expect(await screen.findByText("INV-ALLOT-3")).toBeInTheDocument();
+    expect(screen.getByText("Crude Palm Oil")).toBeInTheDocument();
+  });
 });

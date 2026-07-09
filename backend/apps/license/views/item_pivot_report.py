@@ -274,6 +274,15 @@ class ItemPivotReportView(View):
             key=lambda x: (all_items[x[0]].display_order, x[1] or '')
         )
 
+        # Batch document-type lookups: one query for the whole page instead of two
+        # .exists() calls per licence inside _build_license_row (an N+1 over the report).
+        from apps.license.models import LicenseDocumentModel
+        doc_types_by_license = defaultdict(set)
+        for _lid, _dt in (LicenseDocumentModel.objects
+                          .filter(license_id__in=[_lo.id for _lo in valid_licenses])
+                          .values_list('license_id', 'type')):
+            doc_types_by_license[_lid].add(_dt)
+
         # Build license data with item columns, grouped by norm first, then notification
         # (defaultdict is imported at module level).
         licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
@@ -282,6 +291,7 @@ class ItemPivotReportView(View):
             license_row = self._build_license_row(
                 license_obj, sorted_items,
                 item_plan_totals=plan_totals_by_license.get(license_obj.id),
+                document_types=doc_types_by_license.get(license_obj.id, frozenset()),
             )
 
             if license_row:
@@ -409,7 +419,7 @@ class ItemPivotReportView(View):
         }
 
     def _build_license_row(self, license_obj: LicenseDetailsModel, all_items: List[tuple],
-                           item_plan_totals=None) -> Dict[str, Any]:
+                           item_plan_totals=None, document_types=None) -> Dict[str, Any]:
         """
         Build a single license row with item columns.
 
@@ -563,9 +573,12 @@ class ItemPivotReportView(View):
         if not notification_display:
             notification_display = 'Unknown'
 
-        # Check for document types
-        has_tl = license_obj.license_documents.filter(type='TRANSFER LETTER').exists()
-        has_copy = license_obj.license_documents.filter(type='LICENSE COPY').exists()
+        # Check for document types — use the batched map when the report supplies it,
+        # else fall back to a per-object query (standalone callers).
+        if document_types is None:
+            document_types = {d.type for d in license_obj.license_documents.all()}
+        has_tl = 'TRANSFER LETTER' in document_types
+        has_copy = 'LICENSE COPY' in document_types
 
         # Get latest transfer
         latest_transfer_text = ''

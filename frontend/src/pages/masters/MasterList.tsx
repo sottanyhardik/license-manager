@@ -17,6 +17,7 @@ import {openPdfPreview} from "../../utils/pdfPreview";
 import {clickable} from "../../utils/clickable";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
+import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
@@ -75,28 +76,7 @@ export default function MasterList() {
     const [hasPrevious, setHasPrevious] = useState(false);
 
     // Filter state with default filters for allotments, bill-of-entries, and incentive-licenses
-    const getDefaultFilters = () => {
-        if (entityName === 'allotments') {
-            return {
-                type: 'AT',
-                is_boe: 'False',
-                is_allotted: 'all'
-            };
-        }
-        if (entityName === 'bill-of-entries') {
-            return {
-                is_invoice: 'False'
-            };
-        }
-        if (entityName === 'incentive-licenses') {
-            return {
-                sold_status: ''  // Empty string = "All" (shows both sold and unsold)
-            };
-        }
-        return {};
-    };
-
-    const [filterParams, setFilterParams] = useState(getDefaultFilters());
+    const [filterParams, setFilterParams] = useState(() => getDefaultFilters(entityName));
     const backendDefaultsApplied = useRef(false);
     const pendingRequestRef = useRef(null);
     const abortControllerRef = useRef(null);
@@ -415,7 +395,7 @@ export default function MasterList() {
             // Check if we should restore filters from previous session
             const shouldRestore = shouldRestoreFilters();
             const restored = shouldRestore ? restoreFilterState(entityName) : null;
-            const defaultFilters = getDefaultFilters();
+            const defaultFilters = getDefaultFilters(entityName);
 
             if (restored) {
                 // Merge restored filters with default filters
@@ -449,7 +429,7 @@ export default function MasterList() {
         if (backendDefaultsApplied.current && Object.keys(filterParams).length > 0) return;
 
         const backendDefaults = metadata.default_filters || {};
-        const hardcodedDefaults = getDefaultFilters();
+        const hardcodedDefaults = getDefaultFilters(entityName);
 
         // Only update UI state if we have backend defaults and no hardcoded defaults
         if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {

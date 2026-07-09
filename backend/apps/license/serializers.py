@@ -628,10 +628,16 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         return data
 
     def get_get_balance_cif(self, obj):
-        """Return balance_cif field directly instead of computing it."""
-        # Use the model field directly, not the computed property
-        # The property runs expensive queries which causes performance issues in list views
-        return obj.balance_cif
+        """Return the stored balance_cif column directly (O(1)) instead of the
+        expensive live property, which runs 4 aggregate queries per row and kills
+        list-view performance. Clamp negatives to zero so this matches the live
+        calculator's semantics exactly (it returns max(balance, 0)); the stored
+        column can hold a negative-zero that would otherwise serialize as '-0.00'."""
+        from decimal import Decimal
+        bal = obj.balance_cif
+        if bal is None:
+            return bal
+        return bal if bal > 0 else Decimal('0.00')
 
     def __init__(self, *args, **kwargs):
         """
@@ -691,9 +697,20 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             if 'license_documents_read' in rep:
                 rep['license_documents'] = rep.pop('license_documents_read')
 
-        # Replace the stale balance_cif database field with fresh calculated value
-        if 'get_balance_cif' in rep:
-            rep['balance_cif'] = rep['get_balance_cif']
+        # balance_cif: the DETAIL view recomputes the live value (single object, cheap,
+        # and keeps the "fresh" guarantee); the LIST view keeps the stored column, which
+        # signals keep in sync and which avoids N balance-aggregate queries per row.
+        # (The stored column is what get_get_balance_cif() returns.)
+        if not is_list_view:
+            from decimal import Decimal
+            fresh = instance.get_balance_cif
+            # Clamp to match the list path (stored column) so both views agree; the
+            # live calculator can yield a negative-zero that serializes as '-0.00'.
+            if fresh is not None and fresh <= 0:
+                fresh = Decimal('0.00')
+            rep['balance_cif'] = fresh
+            if 'get_balance_cif' in rep:
+                rep['get_balance_cif'] = fresh
 
         def walk(obj):
             if isinstance(obj, dict):
@@ -703,10 +720,6 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             return _safe_iso(obj)
 
         return walk(rep)
-
-    def get_get_balance_cif(self, obj):
-        """Get fresh balance_cif (always calculated from property, not cached field)"""
-        return obj.get_balance_cif
 
     def get_is_manually_planned(self, obj):
         """True when the license has at least one manual utilization plan line.

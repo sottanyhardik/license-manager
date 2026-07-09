@@ -18,8 +18,9 @@ BUSINESS-RULE DECISIONS (made explicit — not silent assumptions)
    correction, so Yeast is evaluated FIRST as a high-priority special case.
    ⚠ Requires business confirmation. Flip PRIORITY_YEAST_FIRST to revert.
 
-2. MILK unit price is UNDEFINED. Left as None ("To Be Defined") — never
-   invented. Planning Value for Milk is None and flagged as a missing input.
+2. MILK unit price may range 0–22 USD. The ceiling (22, MILK_MAX_PRICE) is used
+   as the planning unit price so Planning Value computes; adjust that one
+   constant to change it. (Previously To-Be-Defined.)
 
 3. "oil" (Item 1 keyword) is BROAD. By priority, descriptions like
    "palm kernel oil" or "RBD palmolein oil" classify to Cheese (Item 1) before
@@ -56,14 +57,19 @@ YEAST = "Yeast - E132"
 ALUMINIUM = "Aluminium Foil - E132"
 MILK = "Milk - E132"
 
-# ── Fixed planning unit prices (USD). MILK is intentionally undefined. ────────
+# Milk's unit price may range 0–22 USD; the ceiling (22) is used as the planning
+# unit price (editable down in the sheet if a lower value is agreed). Change this
+# one constant to adjust.
+MILK_MAX_PRICE = Decimal("22.00")
+
+# ── Fixed planning unit prices (USD). ────────────────────────────────────────
 UNIT_PRICE: dict[str, Optional[Decimal]] = {
     YEAST: Decimal("3.00"),
     CHEESE: Decimal("5.00"),
     PKO: Decimal("2.30"),
     RBD: Decimal("1.20"),
     ALUMINIUM: Decimal("4.50"),
-    MILK: None,  # TO BE DEFINED — missing business input
+    MILK: MILK_MAX_PRICE,  # ceiling of the permitted 0–22 range
 }
 
 # Toggle the Yeast/2106 overlap resolution (decision #1). True = corrected
@@ -149,6 +155,10 @@ def _rule_aluminium(hsn: str, desc: str) -> Optional[str]:
 
 
 def _rule_milk(hsn: str, desc: str) -> Optional[str]:
+    # Explicit guard: a "yeast" + HSN-2106 record is Yeast, never Milk (already
+    # guaranteed by the Yeast-first priority, but kept here as defensive intent).
+    if "yeast" in desc and _hsn_matches(hsn, "2106"):
+        return None
     if "milk solid" in desc:
         return "Description contains 'milk solid'"
     if "milk" in desc:

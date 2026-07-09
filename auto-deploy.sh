@@ -223,6 +223,13 @@ fi
 rm -f /tmp/migration.log
 echo_ok "Migrations applied"
 
+# ── 2a. Seed E132 planning-item masters (idempotent) ────────────────
+# The data migration already seeds these on migrate; this is a belt-and-suspenders
+# re-run so the six E132 planning-item masters always exist and are active.
+echo_info "Seeding E132 planning-item masters..."
+python manage.py seed_e132_plan_items || echo_warn "seed_e132_plan_items failed (non-fatal)"
+echo_ok "E132 planning-item masters seeded"
+
 # ── 2b. Secure media (opt-in) ────────────────────────────────
 # Activate authenticated media serving only when SECURE_MEDIA=true AND the nginx
 # internal block + frontend cutover are in place (docs/media-security-cutover.md).

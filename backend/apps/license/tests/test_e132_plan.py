@@ -75,6 +75,12 @@ class TestOverlapAndPriority(unittest.TestCase):
         # HSN 1513 (PKO) wins even if description mentions palmolein (RBD).
         self.assertEqual(classify_e132_record("1513", "palmolein")[0], PKO)
 
+    def test_milk_desc_with_yeast_2106_goes_to_yeast_not_milk(self):
+        # 'milk' + 'yeast' + HSN 2106 → Yeast (explicit Milk guard + priority),
+        # never Milk.
+        item, _ = classify_e132_record("2106", "milk powder with yeast")
+        self.assertEqual(item, YEAST)
+
 
 class TestNullAndBlankSafe(unittest.TestCase):
     def test_both_null(self):
@@ -137,13 +143,14 @@ class TestAggregation(unittest.TestCase):
         self.assertEqual(by[CHEESE]["planning_value"], Decimal("15.5") * Decimal("5.00"))
         self.assertEqual(by[ALUMINIUM]["planning_value"], Decimal("100") * Decimal("4.50"))
 
-    def test_milk_price_is_undefined_and_reported(self):
+    def test_milk_priced_at_ceiling(self):
+        # Milk price = 22 (ceiling of 0–22 range); value = qty × 22; not missing.
         result = plan_e132(self._recs())
         by = {i["planning_item_name"]: i for i in result["items"]}
-        self.assertIsNone(by[MILK]["unit_price"])
-        self.assertIsNone(by[MILK]["planning_value"])
-        self.assertFalse(by[MILK]["unit_price_defined"])
-        self.assertIn(MILK, result["missing_inputs"])
+        self.assertEqual(by[MILK]["unit_price"], Decimal("22.00"))
+        self.assertEqual(by[MILK]["planning_value"], Decimal("3") * Decimal("22.00"))
+        self.assertTrue(by[MILK]["unit_price_defined"])
+        self.assertNotIn(MILK, result["missing_inputs"])
 
     def test_exceptions_reported(self):
         result = plan_e132(self._recs())
@@ -169,10 +176,10 @@ class TestPerItemPlanning(unittest.TestCase):
         self.assertEqual(per[1]["planning_item"], CHEESE)
         self.assertEqual(per[1]["unit_price"], Decimal("5.00"))
         self.assertEqual(per[1]["planned_cif"], Decimal("50.00"))
-        # Milk: price undefined → planned_cif None (never invented)
+        # Milk: priced at the 22 ceiling → planned_cif = qty × 22
         self.assertEqual(per[2]["planning_item"], MILK)
-        self.assertIsNone(per[2]["unit_price"])
-        self.assertIsNone(per[2]["planned_cif"])
+        self.assertEqual(per[2]["unit_price"], Decimal("22.00"))
+        self.assertEqual(per[2]["planned_cif"], Decimal("4") * Decimal("22.00"))
 
 
 class TestFixedPrices(unittest.TestCase):
@@ -182,7 +189,7 @@ class TestFixedPrices(unittest.TestCase):
         self.assertEqual(UNIT_PRICE[RBD], Decimal("1.20"))
         self.assertEqual(UNIT_PRICE[YEAST], Decimal("3.00"))
         self.assertEqual(UNIT_PRICE[ALUMINIUM], Decimal("4.50"))
-        self.assertIsNone(UNIT_PRICE[MILK])
+        self.assertEqual(UNIT_PRICE[MILK], Decimal("22.00"))
 
 
 if __name__ == "__main__":

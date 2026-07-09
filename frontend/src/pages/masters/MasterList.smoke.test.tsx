@@ -44,6 +44,7 @@ vi.mock("../../services/api", () => ({
 }));
 
 import MasterList from "./MasterList";
+import api from "../../api/axios";
 
 const authValue = {
   user: { id: 1, username: "t", is_superuser: true, roles: [] },
@@ -80,5 +81,29 @@ describe("MasterList smoke", () => {
   it("renders the licenses entity without crashing", async () => {
     const { container } = renderAt("licenses");
     await waitFor(() => expect(container).not.toBeEmptyDOMElement());
+  });
+
+  it("renders incentive-licenses rows with their data (gates EntityTable extraction)", async () => {
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        ...META,
+        results: [
+          {
+            id: 7,
+            license_number: "INC-TEST-777",
+            license_type: "RODTEP",
+            license_value: 100000,
+            sold_value: 0,
+            balance_value: 100000,
+            sold_status: "NO",
+            is_active: true,
+          },
+        ],
+      },
+    });
+    renderAt("incentive-licenses");
+    // The row must render its identifying content.
+    expect(await screen.findByText("INC-TEST-777")).toBeInTheDocument();
+    expect(screen.getByText("RODTEP")).toBeInTheDocument();
   });
 });

@@ -760,59 +760,58 @@ def build_balance_excel(license_obj):
         _cell(ws, r, 5, _e5_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
         r += 1
     elif _is_e132:
-        # Sequential hard-stop debit (Download License spec). Each matched
-        # item debits the full qty×rate from the running Balance CIF; on
-        # overflow it is flagged "Insufficient Balance" and the run stops.
-        from apps.license.services.e132_debit import (
-            EXHAUSTED as _E132_EXHAUSTED,
-            NO_MATCH_MESSAGE as _E132_NO_MATCH,
-            compute_e132_debit as _compute_e132_debit,
-        )
-        _e132_items = []
-        for _ik in sorted(_bal_agg.keys(),
-                          key=lambda k: min(_bal_agg[k]['sr_ids'] or [0])):
-            _agg = _bal_agg[_ik]
-            _e132_items.append({
-                'item_name': _ik,
-                'quantity': _agg['qty'],
-                'hs_code': _agg['hs_code'] or '',
-                'description': _agg['description'] or _ik,
-            })
-        _e132_result = _compute_e132_debit(_e132_items, _license_balance)
+        # E132 planning classification (services/e132_plan.py): each balance item
+        # is classified into exactly one planning item; quantity is summed per item
+        # and priced at the item's fixed unit price (Milk price is To-Be-Defined).
+        from apps.license.services.e132_plan import plan_e132 as _plan_e132_be
+        _e132_records = [
+            {'record_id': _ik, 'quantity': _bal_agg[_ik]['qty'],
+             'hs_code': _bal_agg[_ik]['hs_code'] or '',
+             'description': _bal_agg[_ik]['description'] or _ik}
+            for _ik in sorted(_bal_agg.keys(),
+                              key=lambda k: min(_bal_agg[k]['sr_ids'] or [0]))
+        ]
+        _e132_plan = _plan_e132_be(_e132_records)
 
-        if not _e132_result['any_match']:
+        if not _e132_plan['items']:
             ws.merge_cells(f'A{r}:I{r}')
             _nm = ws[f'A{r}']
-            _nm.value = _E132_NO_MATCH
+            _nm.value = 'No applicable E132 planning item matched the balance items.'
             _nm.font = Font(bold=True, size=9)
             _nm.alignment = Alignment(horizontal='center', vertical='center')
             r += 1
         else:
-            for col, h in enumerate(['Product Code', 'Description', 'HSN Code', 'Total Qty', 'Unit Rate ($)', 'Debit Amount ($)', 'Previous Balance ($)', 'New Balance ($)', 'Status'], 1):
+            for col, h in enumerate(['Planning Item', 'Total Qty', 'Unit Price ($)', 'Planning Value ($)', 'Source Records'], 1):
                 _hdr(ws, r, col, h)
             r += 1
-            for _idx, _row in enumerate(_e132_result['rows']):
-                _bad = _row['status'] == _E132_EXHAUSTED
-                _rf = (PatternFill(start_color="F8CBAD", end_color="F8CBAD", fill_type="solid")
-                       if _bad else (None if _idx % 2 == 0 else ALT_FILL))
-                _cell(ws, r, 1, _row['product_code'], fill=_rf)
-                _cell(ws, r, 2, _row['description'], fill=_rf)
-                _cell(ws, r, 3, _row['hs_code'], fill=_rf)
-                _cell(ws, r, 4, _row['total_quantity'], fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 5, _row['unit_rate'], fill=_rf, align='right', num_fmt='#,##0.0000')
-                _cell(ws, r, 6, _row['debit_amount'], fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 7, _row['previous_balance'], fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 8, _row['new_balance'], fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 9, _row['status'], fill=_rf, align='center', bold=_bad)
+            _tot_qty = 0.0
+            _tot_val = 0.0
+            for _idx, _pi in enumerate(_e132_plan['items']):
+                _rf = None if _idx % 2 == 0 else ALT_FILL
+                _price = _pi['unit_price']
+                _val = _pi['planning_value']
+                _cell(ws, r, 1, _pi['planning_item_name'], fill=_rf, bold=True)
+                _cell(ws, r, 2, float(_pi['total_quantity']), fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 3, (float(_price) if _price is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, (float(_val) if _val is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, _pi['num_source_records'], fill=_rf, align='center')
+                _tot_qty += float(_pi['total_quantity'])
+                _tot_val += float(_val) if _val is not None else 0.0
                 r += 1
-
+            _cell(ws, r, 1, 'TOTAL', fill=TOTAL_FILL, bold=True)
+            _cell(ws, r, 2, _tot_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 3, '', fill=TOTAL_FILL)
+            _cell(ws, r, 4, _tot_val, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 5, '', fill=TOTAL_FILL)
             r += 1
-            for _ci in range(1, 7):
-                _cell(ws, r, _ci, '', fill=TOTAL_FILL)
-            _cell(ws, r, 7, 'FINAL BALANCE CIF $', fill=TOTAL_FILL, bold=True, align='right')
-            _cell(ws, r, 8, _e132_result['final_balance'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            _cell(ws, r, 9, 'Fully debited' if _e132_result['fully_consumed'] else 'Balance remaining', fill=TOTAL_FILL, bold=True, align='center')
-            r += 1
+            if _e132_plan['exceptions']:
+                ws.merge_cells(f'A{r}:E{r}')
+                _ex = ws[f'A{r}']
+                _ex.value = (f"{len(_e132_plan['exceptions'])} balance item(s) matched no E132 "
+                             f"planning rule and are excluded (see exception report).")
+                _ex.font = Font(italic=True, size=8, color="C00000")
+                _ex.alignment = Alignment(horizontal='left', vertical='center')
+                r += 1
     else:
         from apps.license.utils.condition_excel import annotate_cell as _annotate_cond_be
         # Column headers
@@ -1208,24 +1207,23 @@ def build_bulk_balance_excel(request):
                     _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
                     _e5_unclassified.append((_ik, _sr_str, _bal_agg[_ik]['hs_code'], _de, _bq))
         elif _is_e132:
-            # Build the per-item input for the sequential debit (rendered
-            # below), ordered by serial no for a stable within-step order.
-            _e132_items = []
-            for _ik in sorted(_bal_agg.keys(),
-                              key=lambda k: min(_bal_agg[k]['sr_ids'] or [0])):
-                _agg = _bal_agg[_ik]
-                _e132_items.append({
-                    'item_name': _ik,
-                    'quantity': _agg['qty'],
-                    'hs_code': _agg['hs_code'] or '',
-                    'description': _agg['description'] or _ik,
-                })
+            # E132 planning classification (rendered below): classify each balance
+            # item into one planning item, sum quantity, price at the fixed rate.
+            from apps.license.services.e132_plan import plan_e132 as _plan_e132_bulk
+            _e132_records = [
+                {'record_id': _ik, 'quantity': _bal_agg[_ik]['qty'],
+                 'hs_code': _bal_agg[_ik]['hs_code'] or '',
+                 'description': _bal_agg[_ik]['description'] or _ik}
+                for _ik in sorted(_bal_agg.keys(),
+                                  key=lambda k: min(_bal_agg[k]['sr_ids'] or [0]))
+            ]
+            _e132_plan = _plan_e132_bulk(_e132_records)
 
         # E1's utilisation table is 8 cols wide (extra Util Qty column);
-        # E5/"other" stay 7 cols; E132's debit table is 9 cols.
-        _util_span = 'H' if _is_e1 else ('I' if _is_e132 else 'G')
-        _balcif_label_span = 'E' if _is_e1 else ('H' if _is_e132 else 'D')
-        _balcif_value_col = 6 if _is_e1 else (9 if _is_e132 else 5)
+        # E5/"other" stay 7 cols; E132's planning table is 5 cols.
+        _util_span = 'H' if _is_e1 else ('E' if _is_e132 else 'G')
+        _balcif_label_span = 'E' if _is_e1 else ('D' if _is_e132 else 'D')
+        _balcif_value_col = 6 if _is_e1 else (5 if _is_e132 else 5)
         ws.merge_cells(f'A{r}:{_util_span}{r}')
         bh = ws[f'A{r}']
         bh.value = 'Utilization Planning' if (_is_e1 or _is_e5 or _is_e132) else 'Summary (Balance Quantity)'
@@ -1463,67 +1461,62 @@ def build_bulk_balance_excel(request):
                 'condition_per_cat': dict(_e5_cond_per_cat),
             })
         elif _is_e132:
-            # Sequential balance-consuming debit (Download License spec). The
-            # per-licence table below renders the debit rows; `_util_return` is
-            # tagged as E132 (with the debit outcome) so the cross-licence
-            # "Utilization Planning Summary" sheet gets its own E132 section,
-            # alongside E1 and E5.
-            from apps.license.services.e132_debit import (
-                EXHAUSTED as _E132_EXHAUSTED,
-                NO_MATCH_MESSAGE as _E132_NO_MATCH,
-                compute_e132_debit as _compute_e132_debit,
-            )
-            _e132_result = _compute_e132_debit(_e132_items, _license_balance)
-
-            if not _e132_result['any_match']:
-                ws.merge_cells(f'A{r}:I{r}')
+            # E132 planning classification (services/e132_plan.py). Renders the
+            # per-licence planning table (computed above as `_e132_plan`) and tags
+            # `_util_return` with the per-planning-item aggregates so the
+            # cross-licence "Utilization Planning Summary" sheet gets its E132
+            # section alongside E1 and E5.
+            _e132_tot_qty = 0.0
+            _e132_tot_val = 0.0
+            if not _e132_plan['items']:
+                ws.merge_cells(f'A{r}:E{r}')
                 _nm = ws[f'A{r}']
-                _nm.value = _E132_NO_MATCH
+                _nm.value = 'No applicable E132 planning item matched the balance items.'
                 _nm.font = Font(bold=True, size=9)
                 _nm.alignment = Alignment(horizontal='center', vertical='center')
                 r += 1
             else:
-                for col, h in enumerate(['Product Code', 'Description', 'HSN Code', 'Total Qty', 'Unit Rate ($)', 'Debit Amount ($)', 'Previous Balance ($)', 'New Balance ($)', 'Status'], 1):
+                for col, h in enumerate(['Planning Item', 'Total Qty', 'Unit Price ($)', 'Planning Value ($)', 'Source Records'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
-                for _idx, _row in enumerate(_e132_result['rows']):
-                    _bad = _row['status'] == _E132_EXHAUSTED
-                    _rf = (PatternFill(start_color="F8CBAD", end_color="F8CBAD", fill_type="solid")
-                           if _bad else (None if _idx % 2 == 0 else ALT_FILL))
-                    _cell(ws, r, 1, _row['product_code'], fill=_rf)
-                    _cell(ws, r, 2, _row['description'], fill=_rf)
-                    _cell(ws, r, 3, _row['hs_code'], fill=_rf)
-                    _cell(ws, r, 4, _row['total_quantity'], fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 5, _row['unit_rate'], fill=_rf, align='right', num_fmt='#,##0.0000')
-                    _cell(ws, r, 6, _row['debit_amount'], fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 7, _row['previous_balance'], fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 8, _row['new_balance'], fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 9, _row['status'], fill=_rf, align='center', bold=_bad)
+                for _idx, _pi in enumerate(_e132_plan['items']):
+                    _rf = None if _idx % 2 == 0 else ALT_FILL
+                    _price = _pi['unit_price']
+                    _val = _pi['planning_value']
+                    _cell(ws, r, 1, _pi['planning_item_name'], fill=_rf, bold=True)
+                    _cell(ws, r, 2, float(_pi['total_quantity']), fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 3, (float(_price) if _price is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, (float(_val) if _val is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, _pi['num_source_records'], fill=_rf, align='center')
+                    _e132_tot_qty += float(_pi['total_quantity'])
+                    _e132_tot_val += float(_val) if _val is not None else 0.0
+                    r += 1
+                _cell(ws, r, 1, 'TOTAL', fill=TOTAL_FILL, bold=True)
+                _cell(ws, r, 2, _e132_tot_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 3, '', fill=TOTAL_FILL)
+                _cell(ws, r, 4, _e132_tot_val, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, '', fill=TOTAL_FILL)
+                r += 1
+                if _e132_plan['exceptions']:
+                    ws.merge_cells(f'A{r}:E{r}')
+                    _ex = ws[f'A{r}']
+                    _ex.value = (f"{len(_e132_plan['exceptions'])} balance item(s) matched no E132 "
+                                 f"planning rule and are excluded (see exception report).")
+                    _ex.font = Font(italic=True, size=8, color="C00000")
+                    _ex.alignment = Alignment(horizontal='left', vertical='center')
                     r += 1
 
-                r += 1
-                for _ci in range(1, 7):
-                    _cell(ws, r, _ci, '', fill=TOTAL_FILL)
-                _cell(ws, r, 7, 'FINAL BALANCE CIF $', fill=TOTAL_FILL, bold=True, align='right')
-                _cell(ws, r, 8, _e132_result['final_balance'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 9, 'Fully debited' if _e132_result['fully_consumed'] else 'Balance remaining', fill=TOTAL_FILL, bold=True, align='center')
-                r += 1
-
-            # Tag this licence for the cross-licence E132 summary section, with
-            # per-step (product) aggregates so it renders category columns like
-            # the E1/E5 sections (Qty / Unit Rate / Debit per step).
-            _e132_per_step = {}
-            for _er in _e132_result['rows']:
-                _agg = _e132_per_step.setdefault(_er['label'], {'qty': 0.0, 'debit': 0.0})
-                _agg['qty'] += _er['total_quantity']
-                _agg['debit'] += _er['debit_amount']
             _util_return.update({
                 'norm_type': 'E132',
-                'e132_per_step': _e132_per_step,
-                'e132_total_debited': _e132_result['total_debited'],
-                'e132_final_balance': _e132_result['final_balance'],
-                'e132_fully_consumed': _e132_result['fully_consumed'],
-                'e132_any_match': _e132_result['any_match'],
+                'e132_per_item': {
+                    _pi['planning_item_name']: {
+                        'qty': float(_pi['total_quantity']),
+                        'value': (float(_pi['planning_value']) if _pi['planning_value'] is not None else None),
+                        'unit_price': (float(_pi['unit_price']) if _pi['unit_price'] is not None else None),
+                    }
+                    for _pi in _e132_plan['items']
+                },
+                'e132_total_value': _e132_tot_val,
             })
         else:
             from apps.license.utils.condition_excel import annotate_cell as _annotate_cond
@@ -1673,8 +1666,8 @@ def build_bulk_balance_excel(request):
         '10% Balance' column."""
         return _CAT_START_COL + ci * 3 + (1 if ci > 0 else 0)
     # Other-licenses section has IEC at col 8 and Port at col 9; the E132 section
-    # spans 27 columns (7 fixed + 6 steps × 3 + Total Debited + Final Balance).
-    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 27)
+    # spans 26 columns (7 fixed + 6 planning items × 3 + Total Planning Value).
+    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 26)
 
     # Global Sr No counter, shared across E1 / E5 / Other sections
     _global_sr = [0]
@@ -1946,18 +1939,18 @@ def build_bulk_balance_excel(request):
         _sr += 2
 
     # ── E132 section ───────────────────────────────────────────────────────
-    # E132 debits fixed product "steps" (MILK FATS / PKO / RBD / CASHEW /
-    # ALUMINIUM FOIL / CEREAL FLAKES), so — like E1/E5 — the summary shows a
-    # per-step Qty / Unit Rate / Debit column group, plus Total Debited and
-    # Final Balance, one row per licence with a TOTAL row.
+    # E132 planning classifies each item into one of six planning items (Yeast /
+    # Cheese Cream Butter & Fats / PKO / RBD / Aluminium Foil / Milk). Like E1/E5
+    # the summary shows a per-item Qty / Unit Price / Planning Value column group,
+    # plus TOTAL PLANNING VALUE, one row per licence with a TOTAL row. Milk's price
+    # is To-Be-Defined → shown as 'TBD' and excluded from value sums.
     if _e132_rows:
-        from apps.license.services.e132_debit import E132_STEPS as _E132_STEPS_SUMM
-        _E132_LABELS = [s['label'] for s in _E132_STEPS_SUMM]
+        from apps.license.services.e132_plan import PLANNING_ORDER as _E132_ITEMS
+        _E132_LABELS = list(_E132_ITEMS)   # 6 planning items in priority order
         _E132_CAT_START = _FIXED_SUMMARY_COLS + 1                            # 8
         _E132_TOTAL_COL = _FIXED_SUMMARY_COLS + len(_E132_LABELS) * 3 + 1    # 26
-        _E132_FINAL_COL = _E132_TOTAL_COL + 1                                # 27
 
-        _merge_hdr(_sw, _sr, 1, _E132_FINAL_COL, 'E132 NORM LICENSES', "7030A0")
+        _merge_hdr(_sw, _sr, 1, _E132_TOTAL_COL, 'E132 NORM LICENSES', "7030A0")
         _sr += 1
         _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'Sr No')
         _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License No')
@@ -1971,15 +1964,13 @@ def build_bulk_balance_excel(request):
             _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+2)}{_sr}')
             _shdr(_sw, _sr, _cc, _cat)
         _sw.merge_cells(f'{_gcl(_E132_TOTAL_COL)}{_sr}:{_gcl(_E132_TOTAL_COL)}{_sr+1}')
-        _shdr(_sw, _sr, _E132_TOTAL_COL, 'TOTAL DEBITED CIF $')
-        _sw.merge_cells(f'{_gcl(_E132_FINAL_COL)}{_sr}:{_gcl(_E132_FINAL_COL)}{_sr+1}')
-        _shdr(_sw, _sr, _E132_FINAL_COL, 'FINAL BALANCE $')
+        _shdr(_sw, _sr, _E132_TOTAL_COL, 'TOTAL PLANNING VALUE $')
         _sr += 1
         for _ci in range(len(_E132_LABELS)):
             _cc = _E132_CAT_START + _ci * 3
             _shdr(_sw, _sr, _cc,     'Qty')
-            _shdr(_sw, _sr, _cc + 1, 'Unit Rate')
-            _shdr(_sw, _sr, _cc + 2, 'Debit Amt ($)')
+            _shdr(_sw, _sr, _cc + 1, 'Unit Price')
+            _shdr(_sw, _sr, _cc + 2, 'Planning Value ($)')
         _sr += 1
 
         _e132_data_start = _sr
@@ -1989,7 +1980,7 @@ def build_bulk_balance_excel(request):
             _ld = _row.get('license_date'); _ed = _row.get('license_expiry_date')
             _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
             _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
-            _per_step = _row.get('e132_per_step') or {}
+            _per_item = _row.get('e132_per_item') or {}
             _global_sr[0] += 1
             _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
             _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
@@ -2000,17 +1991,17 @@ def build_bulk_balance_excel(request):
             _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
             for _ci, _cat in enumerate(_E132_LABELS):
                 _cc = _E132_CAT_START + _ci * 3
-                _sd = _per_step.get(_cat) or {}
-                _q = _sd.get('qty', 0.0)
-                _dbt = _sd.get('debit', 0.0)
-                _q_col = _gcl(_cc)
-                _d_col = _gcl(_cc + 2)
-                _rate_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_d_col}{_sr}/{_q_col}{_sr},4))'
-                _scell(_sw, _sr, _cc,     _q,            fill=_rf, align='right', num_fmt='#,##0.00')
-                _scell(_sw, _sr, _cc + 1, _rate_formula, fill=_rf, align='right', num_fmt='#,##0.0000')
-                _scell(_sw, _sr, _cc + 2, _dbt,          fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _E132_TOTAL_COL, _row.get('e132_total_debited') or 0.0, fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _E132_FINAL_COL, _row.get('e132_final_balance') or 0.0, fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
+                _pi = _per_item.get(_cat) or {}
+                _present = _cat in _per_item
+                _q = _pi.get('qty', 0.0)
+                _up = _pi.get('unit_price')   # float, or None for To-Be-Defined (Milk)
+                _val = _pi.get('value')
+                _up_cell = _up if _up is not None else ('TBD' if _present else '')
+                _val_cell = _val if _val is not None else ('TBD' if _present else 0.0)
+                _scell(_sw, _sr, _cc,     _q,       fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 1, _up_cell, fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 2, _val_cell, fill=_rf, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, _E132_TOTAL_COL, _row.get('e132_total_value') or 0.0, fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
             _sr += 1
         _e132_data_end = _sr - 1
 
@@ -2024,14 +2015,11 @@ def build_bulk_balance_excel(request):
         _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
         for _ci in range(len(_E132_LABELS)):
             _cc = _E132_CAT_START + _ci * 3
-            _q_col = _gcl(_cc)
-            _d_col = _gcl(_cc + 2)
-            _tot_rate = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_d_col}{_sr}/{_q_col}{_sr},4))'
+            # SUM ignores 'TBD' text cells, so Milk's undefined value is excluded.
             _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e132_data_start, _e132_data_end),     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _cc + 1, _tot_rate,                                                fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.0000')
+            _scell(_sw, _sr, _cc + 1, '',                                                       fill=TOTAL_FILL)
             _scell(_sw, _sr, _cc + 2, _sum_formula(_cc + 2, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
         _scell(_sw, _sr, _E132_TOTAL_COL, _sum_formula(_E132_TOTAL_COL, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, _E132_FINAL_COL, _sum_formula(_E132_FINAL_COL, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
         _sr += 2
 
     # ── Other licenses section ─────────────────────────────────────────────

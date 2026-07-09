@@ -132,38 +132,26 @@ def norm_plan_for_license(license_obj) -> dict:
             }
 
     elif norm == "E132":
-        from apps.license.services.e132_debit import compute_e132_debit
+        # E132 planning = deterministic classification (services/e132_plan.py):
+        # each import item is classified into one planning item and priced at that
+        # item's fixed unit price. planned_cif = available_qty × price (0.0 when the
+        # price is To-Be-Defined, e.g. Milk). Unclassified items get no plan line.
+        from apps.license.services.e132_plan import plan_e132_per_item
 
-        # Build input keyed by a unique item label, remember which item it maps to.
-        inputs = []
-        label_to_id: dict = {}
-        for ii in import_items:
-            names = list(ii.items.values_list("name", flat=True))
-            label = ", ".join(sorted(names)) if names else (ii.description or "-")
-            # Ensure uniqueness so rows map back 1:1 even if labels repeat.
-            uniq = label
-            _n = 2
-            while uniq in label_to_id:
-                uniq = f"{label} #{_n}"
-                _n += 1
-            label_to_id[uniq] = ii.id
-            inputs.append({
-                "item_name": uniq,
+        records = [
+            {
+                "record_id": ii.id,
                 "quantity": float(ii.available_quantity or 0),
                 "hs_code": ii.hs_code.hs_code if ii.hs_code else "",
-                "description": ii.description or label,
-            })
-
-        res = compute_e132_debit(inputs, balance_cif)
-        for row in res.get("rows", []):
-            iid = label_to_id.get(row.get("item_name"))
-            if not iid:
-                continue
-            applied = row.get("status") == "Success"
+                "description": ii.description or "",
+            }
+            for ii in import_items
+        ]
+        for iid, p in plan_e132_per_item(records).items():
             result[iid] = {
-                "planned_quantity": round(float(row.get("total_quantity") or 0), 3) if applied else 0.0,
-                "unit_price": round(float(row.get("unit_rate") or 0), 2) if applied else 0.0,
-                "planned_cif": round(float(row.get("debit_amount") or 0), 2) if applied else 0.0,
+                "planned_quantity": round(float(p["planned_quantity"]), 3),
+                "unit_price": round(float(p["unit_price"]), 2) if p["unit_price"] is not None else 0.0,
+                "planned_cif": round(float(p["planned_cif"]), 2) if p["planned_cif"] is not None else 0.0,
             }
 
     return result

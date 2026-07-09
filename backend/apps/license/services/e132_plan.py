@@ -220,6 +220,35 @@ class ClassifiedRecord:
     reason: Optional[str]
 
 
+def plan_e132_per_item(records: Iterable[dict]) -> dict:
+    """Per-record planning for E132 (for report views that show one plan line per
+    import item).
+
+    Classifies each record and attaches its planning item's fixed unit price,
+    planned quantity (= the record's own quantity) and planned value
+    (= quantity × price, None when the price is undefined, e.g. Milk).
+
+    Returns ``{record_id: {planning_item, reason, planned_quantity, unit_price,
+    planned_cif}}`` for classified records; unclassified records are omitted (they
+    belong in the exception report).
+    """
+    out: dict = {}
+    for rec in records:
+        item, reason = classify_e132_record(rec.get("hs_code"), rec.get("description"))
+        if item is None:
+            continue
+        qty = _d(rec.get("quantity"))
+        price = UNIT_PRICE.get(item)
+        out[rec.get("record_id")] = {
+            "planning_item": item,
+            "reason": reason,
+            "planned_quantity": qty,
+            "unit_price": price,
+            "planned_cif": (qty * price) if price is not None else None,
+        }
+    return out
+
+
 def plan_e132(records: Iterable[dict]) -> dict:
     """Classify + aggregate E132 records into a planning result.
 

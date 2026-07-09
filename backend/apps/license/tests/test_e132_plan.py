@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from apps.license.services.e132_plan import (
     ALUMINIUM, CHEESE, MILK, PKO, RBD, YEAST, UNIT_PRICE,
-    classify_e132_record, plan_e132,
+    classify_e132_record, plan_e132, plan_e132_per_item,
 )
 
 
@@ -154,6 +154,25 @@ class TestAggregation(unittest.TestCase):
         reasons = {c.record_id: c.reason for c in result["classified"]}
         self.assertEqual(reasons["A"], "HSN=0401")
         self.assertIsNone(reasons["E"])
+
+
+class TestPerItemPlanning(unittest.TestCase):
+    def test_per_item_price_and_value(self):
+        recs = [
+            {"record_id": 1, "hs_code": "0401", "description": "butter", "quantity": Decimal("10")},
+            {"record_id": 2, "hs_code": None, "description": "whole milk", "quantity": Decimal("4")},
+            {"record_id": 3, "hs_code": "8888", "description": "widget", "quantity": Decimal("9")},
+        ]
+        per = plan_e132_per_item(recs)
+        # classified records only (rec 3 unclassified is omitted)
+        self.assertEqual(set(per), {1, 2})
+        self.assertEqual(per[1]["planning_item"], CHEESE)
+        self.assertEqual(per[1]["unit_price"], Decimal("5.00"))
+        self.assertEqual(per[1]["planned_cif"], Decimal("50.00"))
+        # Milk: price undefined → planned_cif None (never invented)
+        self.assertEqual(per[2]["planning_item"], MILK)
+        self.assertIsNone(per[2]["unit_price"])
+        self.assertIsNone(per[2]["planned_cif"])
 
 
 class TestFixedPrices(unittest.TestCase):

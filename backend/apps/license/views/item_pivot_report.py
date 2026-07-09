@@ -765,38 +765,32 @@ class ItemPivotReportView(View):
                     'planned_cif': round(item_plan, 2),
                 }
 
-        # ── Per-item sequential debit (E132) ──────────────────────────────
-        # E132 uses a hard-stop debit sequence (services/e132_debit.py), not the
-        # E1/E5 waterfall: each matched item debits qty×rate from a running
-        # Balance CIF; on overflow it is flagged "Insufficient Balance" and the
-        # run stops. Map the per-item result back by item-name.
+        # ── Per-item classification plan (E132) ────────────────────────────
+        # E132 planning is a deterministic classification (services/e132_plan.py):
+        # each item is classified into one planning item and priced at that item's
+        # fixed unit price. Unit Price / Planned CIF reuse the E1/E5 columns.
+        # Keyed by item name (matching the downstream lookup).
         item_e132_data: Dict[str, Dict[str, Any]] = {}
         if primary_norm == 'E132':
-            from apps.license.services.e132_debit import compute_e132_debit as _compute_e132_debit
+            from apps.license.services.e132_plan import plan_e132_per_item
             _e132_input = []
             for _iid, _inm in all_items:
                 if _iid in item_quantities:
                     _d132 = item_quantities[_iid]
                     _e132_input.append({
-                        'item_name': _inm,
+                        'record_id': _inm,
                         'quantity': float(_d132['available_quantity'] or 0),
                         'hs_code': _d132['hs_code'] or '',
                         'description': _d132['description'] or '',
                     })
-            _e132_res = _compute_e132_debit(_e132_input, float(balance_cif))
-            for _r132 in _e132_res['rows']:
-                item_e132_data[_r132['item_name']] = _r132
+            item_e132_data = plan_e132_per_item(_e132_input)
 
-        # "As per planning" (AUTOMATED): for E132 the sequential debit is the
-        # plan — only items it actually applied (a "Success" row, i.e. one plan
-        # entry) count as planned. Every other item is hidden so the table shows
-        # just the planned line-up (easier to read the summary / decide fast).
-        # A manual plan, when present, takes precedence over this.
+        # "As per planning" (AUTOMATED): for E132 the classification IS the plan —
+        # only items that classified into a planning item are shown; unclassified
+        # items are hidden. A manual plan, when present, takes precedence.
         e132_planned_names = None
         if primary_norm == 'E132' and item_plan_totals is None:
-            e132_planned_names = {
-                nm for nm, r in item_e132_data.items() if r.get('status') == 'Success'
-            }
+            e132_planned_names = set(item_e132_data.keys())
 
         # Add item columns
         # A manually-planned DFIA only shows the items it planned; the plan
@@ -839,15 +833,14 @@ class ItemPivotReportView(View):
                     unit_price = rutile_unit_price
                     planned_cif = planner.get('planned_cif', 0.0)
                 elif _e132:
-                    # E132 reuses the Unit Price / Planned CIF columns to show
-                    # the sequential debit's Unit Rate / Debit Amount. Only a
-                    # *Success* row is actually applied to the balance — an
-                    # "Insufficient Balance" item is NOT debited, so it must
-                    # contribute 0 to the summed Planned CIF (otherwise the
-                    # report total can exceed the opening Balance CIF).
-                    _applied = _e132.get('status') == 'Success'
-                    unit_price = _e132.get('unit_rate') if _applied else None
-                    planned_cif = _e132.get('debit_amount') if _applied else 0.0
+                    # E132 reuses the Unit Price / Planned CIF columns to show the
+                    # classified planning item's fixed unit price and planned value
+                    # (available qty × price). Unit Price is None and Planned CIF 0
+                    # when the price is To-Be-Defined (Milk).
+                    _e132_up = _e132.get('unit_price')
+                    _e132_cif = _e132.get('planned_cif')
+                    unit_price = float(_e132_up) if _e132_up is not None else None
+                    planned_cif = float(_e132_cif) if _e132_cif is not None else 0.0
                 else:
                     unit_price = planner.get('unit_price')
                     planned_cif = planner.get('planned_cif', 0.0)

@@ -5,6 +5,7 @@ import Select from 'react-select';
 import { toast } from "sonner";
 import { formatDate } from '../utils/dateFormatter';
 import { openPdfPreview } from '../utils/pdfPreview';
+import { openAuthedFile } from '../utils/documentDownload';
 import ConditionBadge from './ConditionBadge';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -355,25 +356,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         try {
             toast.info('Generating Excel file...');
 
-            // Call backend to generate Excel using license ID
-            const token = localStorage.getItem('access');
-            const excelUrl = `/api/licenses/${licenseId}/balance-excel/?access_token=${token}`;
-
-            // Fetch the Excel file as blob
-            const response = await fetch(excelUrl);
-            if (!response.ok) {
-                throw new Error('Failed to generate Excel file');
-            }
-
-            const blob = await response.blob();
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = `${licenseData?.license_number || licenseId}-balance.xlsx`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+            // Download via the authenticated axios instance (Authorization header),
+            // not a ?access_token= URL which leaks the JWT into logs/history.
+            await openAuthedFile(
+                `licenses/${licenseId}/balance-excel/`,
+                `${licenseData?.license_number || licenseId}-balance.xlsx`,
+            );
 
             toast.success('Excel file downloaded successfully!');
         } catch (error) {

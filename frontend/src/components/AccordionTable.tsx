@@ -3,6 +3,7 @@ import {Link} from "react-router-dom";
 import {toast} from "sonner";
 import api from "../api/axios";
 import {formatDate} from "../utils/dateFormatter";
+import {openAuthedFile} from "../utils/documentDownload";
 import {
     AlertCircle, ArrowLeftRight, Award, BarChart3, BookOpen, Building2,
     Calendar, CalendarCheck, CalendarX, CalendarRange, Check, CheckCircle,
@@ -472,10 +473,9 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                 // Check if license has documents
                                                 item.license_documents && item.license_documents.length > 0 ? (
                                                     <a
-                                                        href={`/api/licenses/${item.id}/merged-documents/`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
+                                                        onClick={() => openAuthedFile(`licenses/${item.id}/merged-documents/`)}
                                                         className="text-primary text-decoration-none"
+                                                        style={{ cursor: 'pointer' }}
                                                         title="View merged license documents"
                                                     >
                                                         {value || "-"}

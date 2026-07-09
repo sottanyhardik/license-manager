@@ -122,6 +122,106 @@ def compute_condition_pools(license_obj) -> dict[str, Decimal]:
     return pools
 
 
+def compute_condition_pools_bulk(license_ids) -> dict[int, dict[str, Decimal]]:
+    """Batched equivalent of :func:`compute_condition_pools` for many licences.
+
+    Returns ``{license_id: {condition_type: remaining}}``, byte-identical to
+    calling ``compute_condition_pools`` per licence but in a handful of queries
+    instead of ~13 per licence. Used by the Item Pivot Report, which iterates
+    hundreds of licences.
+
+    Correctness: a per-group ``SUM(cif_fc)`` equals the Decimal sum of the
+    per-item ``SUM(cif_fc)`` (Decimal addition is exact), and licence credit is
+    the same ``Coalesce(Sum('cif_fc'), 0)`` over export items — so the arithmetic
+    matches the per-licence path exactly.
+    """
+    from collections import defaultdict
+
+    from apps.license.models import LicenseImportItemsModel, LicenseExportItemModel
+    from apps.bill_of_entry.models import RowDetails
+    from apps.allotment.models import AllotmentItems
+
+    license_ids = list(license_ids)
+    if not license_ids:
+        return {}
+
+    # 1. %-condition items grouped by (license, condition_type).
+    groups: dict[int, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    all_item_ids: list = []
+    for lid, iid, cond in (
+        LicenseImportItemsModel.objects
+        .filter(license_id__in=license_ids)
+        .exclude(condition_type="")
+        .exclude(condition_type__isnull=True)
+        .values_list("license_id", "id", "condition_type")
+    ):
+        p = _parse_pct(cond)
+        if p is not None and p > DEC_0:
+            groups[lid][cond].append(iid)
+            all_item_ids.append(iid)
+
+    # 2. Licence credit (Sum export cif_fc), one grouped query.
+    credit_by_license: dict[int, Decimal] = {}
+    for lid, tot in (
+        LicenseExportItemModel.objects
+        .filter(license_id__in=license_ids)
+        .values("license_id")
+        .annotate(t=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+        .values_list("license_id", "t")
+    ):
+        credit_by_license[lid] = tot or DEC_0
+
+    # 3. Per-item component sums (three grouped queries total).
+    def _per_item(qs, key) -> dict:
+        return {
+            iid: (t or DEC_0)
+            for iid, t in qs.values(key).annotate(
+                t=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+            ).values_list(key, "t")
+        }
+
+    if all_item_ids:
+        debited_map = _per_item(
+            RowDetails.objects.filter(sr_number_id__in=all_item_ids, transaction_type="D"),
+            "sr_number_id",
+        )
+        allotted_map = _per_item(
+            AllotmentItems.objects.filter(
+                item_id__in=all_item_ids, allotment__bill_of_entry__isnull=True
+            ),
+            "item_id",
+        )
+        try:
+            from apps.trade.models import LicenseTradeLine
+            traded_map = _per_item(
+                LicenseTradeLine.objects.filter(sr_number_id__in=all_item_ids),
+                "sr_number_id",
+            )
+        except Exception:
+            traded_map = {}
+    else:
+        debited_map = allotted_map = traded_map = {}
+
+    result: dict[int, dict[str, Decimal]] = {}
+    for lid in license_ids:
+        if lid not in groups:
+            result[lid] = {}
+            continue
+        credit = credit_by_license.get(lid, DEC_0) or DEC_0
+        pools: dict[str, Decimal] = {}
+        for cond, item_ids in groups[lid].items():
+            pct = _parse_pct(cond)
+            pool = credit * pct / Decimal("100")
+            debited = sum((debited_map.get(i, DEC_0) for i in item_ids), DEC_0)
+            allotted = sum((allotted_map.get(i, DEC_0) for i in item_ids), DEC_0)
+            traded = sum((traded_map.get(i, DEC_0) for i in item_ids), DEC_0)
+            used = Decimal(str(debited)) + Decimal(str(allotted)) + Decimal(str(traded))
+            remaining = pool - used
+            pools[cond] = remaining if remaining >= DEC_0 else DEC_0
+        result[lid] = pools
+    return result
+
+
 def remaining_for_condition(license_obj, condition_type: str) -> Decimal | None:
     """Single-condition variant. Returns None for non-%-conditions / empty."""
     pct = _parse_pct(condition_type)

@@ -283,6 +283,11 @@ class ItemPivotReportView(View):
                           .values_list('license_id', 'type')):
             doc_types_by_license[_lid].add(_dt)
 
+        # Batch the condition-pool computation (was ~13 queries PER licence inside
+        # _build_license_row — the report's dominant N+1) into a handful of queries.
+        from apps.license.services.condition_pool import compute_condition_pools_bulk
+        cond_pools_by_license = compute_condition_pools_bulk([_lo.id for _lo in valid_licenses])
+
         # Build license data with item columns, grouped by norm first, then notification
         # (defaultdict is imported at module level).
         licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
@@ -292,6 +297,7 @@ class ItemPivotReportView(View):
                 license_obj, sorted_items,
                 item_plan_totals=plan_totals_by_license.get(license_obj.id),
                 document_types=doc_types_by_license.get(license_obj.id, frozenset()),
+                condition_pools=cond_pools_by_license.get(license_obj.id, {}),
             )
 
             if license_row:
@@ -419,7 +425,8 @@ class ItemPivotReportView(View):
         }
 
     def _build_license_row(self, license_obj: LicenseDetailsModel, all_items: List[tuple],
-                           item_plan_totals=None, document_types=None) -> Dict[str, Any]:
+                           item_plan_totals=None, document_types=None,
+                           condition_pools=None) -> Dict[str, Any]:
         """
         Build a single license row with item columns.
 
@@ -490,8 +497,11 @@ class ItemPivotReportView(View):
         # Per condition_type pool — new restriction model. Each "N%" pool is
         # shared by every import item on this licence with that condition_type,
         # and provides the per-cell `restriction_value` shown in the pivot.
-        from apps.license.services.condition_pool import compute_condition_pools
-        condition_pools = compute_condition_pools(license_obj)
+        # Use the report's batched pools when provided; else compute per-licence
+        # (standalone callers).
+        if condition_pools is None:
+            from apps.license.services.condition_pool import compute_condition_pools
+            condition_pools = compute_condition_pools(license_obj)
         # condition_pools = {"2%": Decimal(...), "3%": Decimal(...), ...}
 
         # (Legacy restriction_groups kept ONLY for backward compatibility with

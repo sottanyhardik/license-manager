@@ -306,11 +306,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'balance', 'flags', 'ownership', 'ownership__current_owner', 'notes',
         )
 
-        # Flag licenses that have a manual utilization plan (drives list colour).
+        # Flag licenses that have a manual utilization plan (drives list colour) and
+        # which document types they carry — annotated so the list serializer doesn't
+        # fire an .exists() query per row (was 2 extra queries/row for has_tl/has_copy).
         from django.db.models import Exists, OuterRef
-        from apps.license.models import LicenseItemPlan
+        from apps.license.models import LicenseItemPlan, LicenseDocumentModel
         qs = qs.annotate(
-            _has_manual_plan=Exists(LicenseItemPlan.objects.filter(license=OuterRef('pk')))
+            _has_manual_plan=Exists(LicenseItemPlan.objects.filter(license=OuterRef('pk'))),
+            _has_tl=Exists(LicenseDocumentModel.objects.filter(license=OuterRef('pk'), type='TRANSFER LETTER')),
+            _has_copy=Exists(LicenseDocumentModel.objects.filter(license=OuterRef('pk'), type='LICENSE COPY')),
         )
 
         # Only prefetch nested items for detail view (single object)

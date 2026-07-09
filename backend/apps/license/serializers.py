@@ -731,11 +731,19 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         return LicenseItemPlan.objects.filter(license=obj).exists()
 
     def get_has_tl(self, obj):
-        """Check if license has Transfer Letter documents"""
+        """Check if license has Transfer Letter documents.
+        Uses the list-view annotation `_has_tl` when present, else queries."""
+        v = getattr(obj, '_has_tl', None)
+        if v is not None:
+            return bool(v)
         return obj.license_documents.filter(type='TRANSFER LETTER').exists()
 
     def get_has_copy(self, obj):
-        """Check if license has License Copy documents"""
+        """Check if license has License Copy documents.
+        Uses the list-view annotation `_has_copy` when present, else queries."""
+        v = getattr(obj, '_has_copy', None)
+        if v is not None:
+            return bool(v)
         return obj.license_documents.filter(type='LICENSE COPY').exists()
 
     def get_has_condition_sheet(self, obj):

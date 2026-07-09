@@ -667,8 +667,18 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         from django.db.models import Count
 
-        # opening_balance is a @cached_property (not a DB column), must sum in Python
-        dfia_total = sum(_get_safe_balance(lic, 'opening_balance') for lic in dfia_qs)
+        # opening_balance == per-licence SUM(export cif_fc) (LicenseBalanceCalculator
+        # .calculate_credit). Previously this summed a @cached_property in a Python loop,
+        # firing one aggregate query PER licence (an N+1 over the whole filtered set).
+        # Compute the same per-licence sums in ONE annotated query and sum them the same
+        # way (float per row) to preserve the exact result.
+        from decimal import Decimal as _Dec
+        from django.db.models import Value, DecimalField
+        from django.db.models.functions import Coalesce
+        _opening_rows = dfia_qs.annotate(
+            _opening=Coalesce(Sum('export_license__cif_fc'), Value(_Dec('0')), output_field=DecimalField())
+        ).values_list('_opening', flat=True)
+        dfia_total = sum(float(v or 0) for v in _opening_rows)
         # balance_cif is a DB column on the LicenseBalance sub-table — aggregate via the OneToOne relation
         dfia_balance = float(dfia_qs.aggregate(balance=Sum('balance__balance_cif'))['balance'] or 0)
         dfia_sold = dfia_total - dfia_balance

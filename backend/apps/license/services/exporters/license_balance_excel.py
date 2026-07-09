@@ -1509,9 +1509,17 @@ def build_bulk_balance_excel(request):
                 _cell(ws, r, 9, 'Fully debited' if _e132_result['fully_consumed'] else 'Balance remaining', fill=TOTAL_FILL, bold=True, align='center')
                 r += 1
 
-            # Tag this licence for the cross-licence E132 summary section.
+            # Tag this licence for the cross-licence E132 summary section, with
+            # per-step (product) aggregates so it renders category columns like
+            # the E1/E5 sections (Qty / Unit Rate / Debit per step).
+            _e132_per_step = {}
+            for _er in _e132_result['rows']:
+                _agg = _e132_per_step.setdefault(_er['label'], {'qty': 0.0, 'debit': 0.0})
+                _agg['qty'] += _er['total_quantity']
+                _agg['debit'] += _er['debit_amount']
             _util_return.update({
                 'norm_type': 'E132',
+                'e132_per_step': _e132_per_step,
                 'e132_total_debited': _e132_result['total_debited'],
                 'e132_final_balance': _e132_result['final_balance'],
                 'e132_fully_consumed': _e132_result['fully_consumed'],
@@ -1665,8 +1673,8 @@ def build_bulk_balance_excel(request):
         '10% Balance' column."""
         return _CAT_START_COL + ci * 3 + (1 if ci > 0 else 0)
     # Other-licenses section has IEC at col 8 and Port at col 9; the E132 section
-    # spans 10 columns (up to Status).
-    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 10)
+    # spans 27 columns (7 fixed + 6 steps × 3 + Total Debited + Final Balance).
+    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 27)
 
     # Global Sr No counter, shared across E1 / E5 / Other sections
     _global_sr = [0]
@@ -1938,18 +1946,40 @@ def build_bulk_balance_excel(request):
         _sr += 2
 
     # ── E132 section ───────────────────────────────────────────────────────
-    # E132 uses a sequential balance-consuming debit over dynamic products (not
-    # the fixed E1/E5 categories), so the summary is one row per licence showing
-    # the debit outcome. Mirrors the E1/E5 sections' fixed columns + TOTAL row.
+    # E132 debits fixed product "steps" (MILK FATS / PKO / RBD / CASHEW /
+    # ALUMINIUM FOIL / CEREAL FLAKES), so — like E1/E5 — the summary shows a
+    # per-step Qty / Unit Rate / Debit column group, plus Total Debited and
+    # Final Balance, one row per licence with a TOTAL row.
     if _e132_rows:
-        _E132_LAST_COL = 10
-        _merge_hdr(_sw, _sr, 1, _E132_LAST_COL, 'E132 NORM LICENSES', "7030A0")
+        from apps.license.services.e132_debit import E132_STEPS as _E132_STEPS_SUMM
+        _E132_LABELS = [s['label'] for s in _E132_STEPS_SUMM]
+        _E132_CAT_START = _FIXED_SUMMARY_COLS + 1                            # 8
+        _E132_TOTAL_COL = _FIXED_SUMMARY_COLS + len(_E132_LABELS) * 3 + 1    # 26
+        _E132_FINAL_COL = _E132_TOTAL_COL + 1                                # 27
+
+        _merge_hdr(_sw, _sr, 1, _E132_FINAL_COL, 'E132 NORM LICENSES', "7030A0")
         _sr += 1
-        for _col, _h in enumerate(
-                ['Sr No', 'License No', 'License Date', 'License Expiry Date',
-                 'Total CIF $', 'Balance CIF $', 'Exporter Name',
-                 'Total Debited $', 'Final Balance $', 'Status'], 1):
-            _shdr(_sw, _sr, _col, _h)
+        _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'Sr No')
+        _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License No')
+        _sw.merge_cells(f'C{_sr}:C{_sr+1}'); _shdr(_sw, _sr, 3, 'License Date')
+        _sw.merge_cells(f'D{_sr}:D{_sr+1}'); _shdr(_sw, _sr, 4, 'License Expiry Date')
+        _sw.merge_cells(f'E{_sr}:E{_sr+1}'); _shdr(_sw, _sr, 5, 'Total CIF $')
+        _sw.merge_cells(f'F{_sr}:F{_sr+1}'); _shdr(_sw, _sr, 6, 'Balance CIF $')
+        _sw.merge_cells(f'G{_sr}:G{_sr+1}'); _shdr(_sw, _sr, 7, 'Exporter Name')
+        for _ci, _cat in enumerate(_E132_LABELS):
+            _cc = _E132_CAT_START + _ci * 3
+            _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+2)}{_sr}')
+            _shdr(_sw, _sr, _cc, _cat)
+        _sw.merge_cells(f'{_gcl(_E132_TOTAL_COL)}{_sr}:{_gcl(_E132_TOTAL_COL)}{_sr+1}')
+        _shdr(_sw, _sr, _E132_TOTAL_COL, 'TOTAL DEBITED CIF $')
+        _sw.merge_cells(f'{_gcl(_E132_FINAL_COL)}{_sr}:{_gcl(_E132_FINAL_COL)}{_sr+1}')
+        _shdr(_sw, _sr, _E132_FINAL_COL, 'FINAL BALANCE $')
+        _sr += 1
+        for _ci in range(len(_E132_LABELS)):
+            _cc = _E132_CAT_START + _ci * 3
+            _shdr(_sw, _sr, _cc,     'Qty')
+            _shdr(_sw, _sr, _cc + 1, 'Unit Rate')
+            _shdr(_sw, _sr, _cc + 2, 'Debit Amt ($)')
         _sr += 1
 
         _e132_data_start = _sr
@@ -1959,12 +1989,7 @@ def build_bulk_balance_excel(request):
             _ld = _row.get('license_date'); _ed = _row.get('license_expiry_date')
             _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
             _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
-            if not _row.get('e132_any_match', True):
-                _status = 'No norm match'
-            elif _row.get('e132_fully_consumed'):
-                _status = 'Fully debited'
-            else:
-                _status = 'Balance remaining'
+            _per_step = _row.get('e132_per_step') or {}
             _global_sr[0] += 1
             _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
             _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
@@ -1973,9 +1998,19 @@ def build_bulk_balance_excel(request):
             _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
             _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
             _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
-            _scell(_sw, _sr, 8, _row.get('e132_total_debited') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 9, _row.get('e132_final_balance') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 10, _status, fill=_rf, align='center', bold=True)
+            for _ci, _cat in enumerate(_E132_LABELS):
+                _cc = _E132_CAT_START + _ci * 3
+                _sd = _per_step.get(_cat) or {}
+                _q = _sd.get('qty', 0.0)
+                _dbt = _sd.get('debit', 0.0)
+                _q_col = _gcl(_cc)
+                _d_col = _gcl(_cc + 2)
+                _rate_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_d_col}{_sr}/{_q_col}{_sr},4))'
+                _scell(_sw, _sr, _cc,     _q,            fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 1, _rate_formula, fill=_rf, align='right', num_fmt='#,##0.0000')
+                _scell(_sw, _sr, _cc + 2, _dbt,          fill=_rf, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, _E132_TOTAL_COL, _row.get('e132_total_debited') or 0.0, fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, _E132_FINAL_COL, _row.get('e132_final_balance') or 0.0, fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
             _sr += 1
         _e132_data_end = _sr - 1
 
@@ -1987,9 +2022,16 @@ def build_bulk_balance_excel(request):
         _scell(_sw, _sr, 5, _sum_formula(5, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
         _scell(_sw, _sr, 6, _sum_formula(6, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
         _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 8, _sum_formula(8, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, 9, _sum_formula(9, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, 10, '', fill=TOTAL_FILL)
+        for _ci in range(len(_E132_LABELS)):
+            _cc = _E132_CAT_START + _ci * 3
+            _q_col = _gcl(_cc)
+            _d_col = _gcl(_cc + 2)
+            _tot_rate = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_d_col}{_sr}/{_q_col}{_sr},4))'
+            _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e132_data_start, _e132_data_end),     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, _cc + 1, _tot_rate,                                                fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.0000')
+            _scell(_sw, _sr, _cc + 2, _sum_formula(_cc + 2, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _scell(_sw, _sr, _E132_TOTAL_COL, _sum_formula(_E132_TOTAL_COL, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _scell(_sw, _sr, _E132_FINAL_COL, _sum_formula(_E132_FINAL_COL, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
         _sr += 2
 
     # ── Other licenses section ─────────────────────────────────────────────

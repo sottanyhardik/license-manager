@@ -783,7 +783,7 @@ class ItemPivotReportView(View):
                         'hs_code': _d132['hs_code'] or '',
                         'description': _d132['description'] or '',
                     })
-            item_e132_data = plan_e132_per_item(_e132_input)
+            item_e132_data = plan_e132_per_item(_e132_input, float(balance_cif))
 
         # "As per planning" (AUTOMATED): for E132 the classification IS the plan —
         # only items that classified into a planning item are shown; unclassified

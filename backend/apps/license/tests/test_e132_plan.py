@@ -182,6 +182,43 @@ class TestPerItemPlanning(unittest.TestCase):
         self.assertEqual(per[2]["planned_cif"], Decimal("4") * Decimal("22.00"))
 
 
+class TestBalanceCap(unittest.TestCase):
+    """Max debit per licence = Balance CIF (waterfall cap, like E1/E5)."""
+
+    def _recs(self):
+        return [
+            {"record_id": 1, "hs_code": "0401", "description": "butter", "quantity": Decimal("10")},  # Cheese 10×5=50
+            {"record_id": 2, "hs_code": "1513", "description": "pko", "quantity": Decimal("10")},      # PKO 10×2.3=23
+        ]
+
+    def test_total_planned_never_exceeds_balance(self):
+        res = plan_e132(self._recs(), balance_cif=Decimal("60"))
+        by = {i["planning_item_name"]: i for i in res["items"]}
+        # Cheese (higher priority) takes its full 50; PKO gets only the remaining 10.
+        self.assertEqual(by[CHEESE]["planning_value"], Decimal("50"))
+        self.assertEqual(by[CHEESE]["unit_price"], Decimal("5.00"))       # uncapped → max
+        self.assertEqual(by[PKO]["planning_value"], Decimal("10"))        # capped
+        self.assertEqual(by[PKO]["unit_price"], Decimal("1"))             # 10/10, rate dropped
+        self.assertEqual(by[PKO]["max_unit_price"], Decimal("2.30"))      # ceiling preserved
+        self.assertEqual(res["total_planned"], Decimal("60"))
+        self.assertEqual(res["wastage"], Decimal("0"))
+        self.assertLessEqual(res["total_planned"], Decimal("60"))
+
+    def test_wastage_when_balance_exceeds_demand(self):
+        recs = [{"record_id": 1, "hs_code": "0401", "description": "b", "quantity": Decimal("2")}]  # 2×5=10
+        res = plan_e132(recs, balance_cif=Decimal("100"))
+        self.assertEqual(res["total_planned"], Decimal("10"))
+        self.assertEqual(res["wastage"], Decimal("90"))
+
+    def test_per_item_uses_capped_effective_rate(self):
+        per = plan_e132_per_item(self._recs(), balance_cif=Decimal("60"))
+        self.assertEqual(per[1]["planned_cif"], Decimal("50"))
+        self.assertEqual(per[2]["unit_price"], Decimal("1"))   # PKO rate capped
+        self.assertEqual(per[2]["planned_cif"], Decimal("10"))
+        # per-item planned values sum to <= balance
+        self.assertLessEqual(sum(p["planned_cif"] for p in per.values()), Decimal("60"))
+
+
 class TestFixedPrices(unittest.TestCase):
     def test_price_table(self):
         self.assertEqual(UNIT_PRICE[CHEESE], Decimal("5.00"))

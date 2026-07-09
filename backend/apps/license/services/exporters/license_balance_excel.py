@@ -771,7 +771,7 @@ def build_balance_excel(license_obj):
             for _ik in sorted(_bal_agg.keys(),
                               key=lambda k: min(_bal_agg[k]['sr_ids'] or [0]))
         ]
-        _e132_plan = _plan_e132_be(_e132_records)
+        _e132_plan = _plan_e132_be(_e132_records, _license_balance)
 
         if not _e132_plan['items']:
             ws.merge_cells(f'A{r}:I{r}')
@@ -1217,7 +1217,7 @@ def build_bulk_balance_excel(request):
                 for _ik in sorted(_bal_agg.keys(),
                                   key=lambda k: min(_bal_agg[k]['sr_ids'] or [0]))
             ]
-            _e132_plan = _plan_e132_bulk(_e132_records)
+            _e132_plan = _plan_e132_bulk(_e132_records, _license_balance)
 
         # E1's utilisation table is 8 cols wide (extra Util Qty column);
         # E5/"other" stay 7 cols; E132's planning table is 5 cols.

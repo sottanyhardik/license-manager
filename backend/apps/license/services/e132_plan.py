@@ -220,6 +220,48 @@ def _d(value: Any) -> Decimal:
         return Decimal("0")
 
 
+def _allocate_step(qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[Decimal, Decimal]:
+    """One waterfall step, capped at the remaining Balance CIF — mirrors the E1/E5
+    allocation so the total planned value can never exceed the licence balance.
+
+    Returns ``(planned_value, effective_unit_price)``:
+      * qty × max_price fits the balance → use max_price;
+      * otherwise → cap at the remaining balance, rate drops to balance / qty.
+    """
+    if qty <= 0 or balance <= 0 or max_price <= 0:
+        return Decimal("0"), max_price
+    requested = qty * max_price
+    if requested <= balance:
+        return requested, max_price
+    return balance, balance / qty
+
+
+def _allocate_buckets(agg: dict, balance_cif) -> dict:
+    """Waterfall-allocate planned value to each planning item in PRIORITY order
+    (Yeast → Cheese → PKO → RBD → Aluminium Foil → Milk), capping the running total
+    at ``balance_cif`` (max debit per licence = Balance CIF). When ``balance_cif`` is
+    None the value is uncapped (qty × max price) — classification-only mode.
+
+    Returns ``{item: (planned_value, effective_unit_price)}``.
+    """
+    remaining = _d(balance_cif) if balance_cif is not None else None
+    out: dict = {}
+    for name in PLANNING_ORDER:
+        if name not in agg:
+            continue
+        qty = agg[name]["qty"]
+        max_price = UNIT_PRICE.get(name)
+        if max_price is None:
+            out[name] = (None, None)
+        elif remaining is None:
+            out[name] = (qty * max_price, max_price)
+        else:
+            planned, eff = _allocate_step(qty, max_price, remaining)
+            remaining -= planned
+            out[name] = (planned, eff)
+    return out
+
+
 @dataclass
 class ClassifiedRecord:
     record_id: Any
@@ -230,42 +272,56 @@ class ClassifiedRecord:
     reason: Optional[str]
 
 
-def plan_e132_per_item(records: Iterable[dict]) -> dict:
+def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
     """Per-record planning for E132 (for report views that show one plan line per
     import item).
 
-    Classifies each record and attaches its planning item's fixed unit price,
-    planned quantity (= the record's own quantity) and planned value
-    (= quantity × price, None when the price is undefined, e.g. Milk).
+    Classifies each record, then applies the balance-capped waterfall at the
+    planning-item level (max debit per licence = Balance CIF): each record is
+    priced at its planning item's EFFECTIVE unit rate (the fixed max, dropped
+    proportionally if the item would overflow the remaining balance), so per-item
+    planned values sum to at most ``balance_cif``. When ``balance_cif`` is None the
+    price is the uncapped fixed rate.
 
     Returns ``{record_id: {planning_item, reason, planned_quantity, unit_price,
     planned_cif}}`` for classified records; unclassified records are omitted (they
     belong in the exception report).
     """
-    out: dict = {}
+    classified = []
+    agg: dict = {}
     for rec in records:
         item, reason = classify_e132_record(rec.get("hs_code"), rec.get("description"))
         if item is None:
             continue
         qty = _d(rec.get("quantity"))
-        price = UNIT_PRICE.get(item)
-        out[rec.get("record_id")] = {
+        classified.append((rec.get("record_id"), item, reason, qty))
+        agg.setdefault(item, {"qty": Decimal("0")})["qty"] += qty
+
+    alloc = _allocate_buckets(agg, balance_cif)  # {item: (planned_value, eff_rate)}
+    out: dict = {}
+    for rid, item, reason, qty in classified:
+        _planned, eff_rate = alloc.get(item, (None, None))
+        out[rid] = {
             "planning_item": item,
             "reason": reason,
             "planned_quantity": qty,
-            "unit_price": price,
-            "planned_cif": (qty * price) if price is not None else None,
+            "unit_price": eff_rate,
+            "planned_cif": (qty * eff_rate) if eff_rate is not None else None,
         }
     return out
 
 
-def plan_e132(records: Iterable[dict]) -> dict:
+def plan_e132(records: Iterable[dict], balance_cif=None) -> dict:
     """Classify + aggregate E132 records into a planning result.
 
     Args:
         records: iterable of dicts with keys ``record_id``, ``hs_code``,
             ``description``, ``quantity``. Records are assumed already filtered
             to Norm E132.
+        balance_cif: licence Balance CIF $. When given, planning value is
+            waterfall-allocated in priority order and capped so the total never
+            exceeds it (max debit per licence = Balance CIF), and ``unit_price`` is
+            the effective rate. When None, value is the uncapped qty × fixed price.
 
     Returns dict with:
         ``items``      – planning rows (in PLANNING_ORDER, only items with
@@ -299,28 +355,37 @@ def plan_e132(records: Iterable[dict]) -> dict:
             bucket["qty"] += qty  # rule #4/#6: quantity into exactly one item
             bucket["count"] += 1
 
+    alloc = _allocate_buckets(agg, balance_cif)  # priority-order, balance-capped
     items = []
     for name in PLANNING_ORDER:
         if name not in agg:
             continue
-        price = UNIT_PRICE.get(name)
+        max_price = UNIT_PRICE.get(name)
         total_qty = agg[name]["qty"]
+        planned, eff_rate = alloc[name]
         items.append({
             "norm": NORM,
             "planning_item_name": name,
             "total_quantity": total_qty,
-            "unit_price": price,
-            "planning_value": (total_qty * price) if price is not None else None,
+            "unit_price": eff_rate,          # effective rate (= max unless capped)
+            "max_unit_price": max_price,     # the fixed ceiling
+            "planning_value": planned,       # capped at remaining Balance CIF
             "num_source_records": agg[name]["count"],
-            "unit_price_defined": price is not None,
+            "unit_price_defined": max_price is not None,
         })
 
     exceptions = [c for c in classified if c.planning_item is None]
     missing_inputs = [i["planning_item_name"] for i in items if not i["unit_price_defined"]]
+    total_planned = sum((i["planning_value"] for i in items if i["planning_value"] is not None),
+                        Decimal("0"))
+    wastage = (_d(balance_cif) - total_planned) if balance_cif is not None else None
 
     return {
         "items": items,
         "classified": classified,
         "exceptions": exceptions,
         "missing_inputs": missing_inputs,
+        "balance_cif": _d(balance_cif) if balance_cif is not None else None,
+        "total_planned": total_planned,
+        "wastage": wastage,
     }

@@ -147,7 +147,7 @@ def norm_plan_for_license(license_obj) -> dict:
             }
             for ii in import_items
         ]
-        for iid, p in plan_e132_per_item(records).items():
+        for iid, p in plan_e132_per_item(records, balance_cif).items():
             result[iid] = {
                 "planned_quantity": round(float(p["planned_quantity"]), 3),
                 "unit_price": round(float(p["unit_price"]), 2) if p["unit_price"] is not None else 0.0,

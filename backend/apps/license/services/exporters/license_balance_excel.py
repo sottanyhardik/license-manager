@@ -784,8 +784,7 @@ def build_balance_excel(license_obj):
             for col, h in enumerate(['Planning Item', 'Total Qty', 'Unit Price ($)', 'Planning Value ($)', 'Source Records'], 1):
                 _hdr(ws, r, col, h)
             r += 1
-            _tot_qty = 0.0
-            _tot_val = 0.0
+            _e132_ds = r
             for _idx, _pi in enumerate(_e132_plan['items']):
                 _rf = None if _idx % 2 == 0 else ALT_FILL
                 _price = _pi['unit_price']
@@ -795,13 +794,14 @@ def build_balance_excel(license_obj):
                 _cell(ws, r, 3, (float(_price) if _price is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 4, (float(_val) if _val is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 5, _pi['num_source_records'], fill=_rf, align='center')
-                _tot_qty += float(_pi['total_quantity'])
-                _tot_val += float(_val) if _val is not None else 0.0
                 r += 1
+            _e132_de = r - 1
+            # TOTAL = live SUM of the column (not a pre-computed value), so it
+            # always matches the (capped) cells above and updates if they change.
             _cell(ws, r, 1, 'TOTAL', fill=TOTAL_FILL, bold=True)
-            _cell(ws, r, 2, _tot_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 2, f'=SUM(B{_e132_ds}:B{_e132_de})', fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _cell(ws, r, 3, '', fill=TOTAL_FILL)
-            _cell(ws, r, 4, _tot_val, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 4, f'=SUM(D{_e132_ds}:D{_e132_de})', fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _cell(ws, r, 5, '', fill=TOTAL_FILL)
             r += 1
             if _e132_plan['exceptions']:
@@ -858,6 +858,12 @@ def build_balance_excel(license_obj):
     ws.freeze_panes = 'A2'
 
     # ── Save ──────────────────────────────────────────────────────────────
+    # Recalculate formulas (e.g. the E132 TOTAL =SUM) on open so viewers show
+    # computed values, not blank cached results.
+    wb.calculation.calcMode = "auto"
+    wb.calculation.fullCalcOnLoad = True
+    wb.calculation.forceFullCalc = True
+
     excel_file = BytesIO()
     wb.save(excel_file)
     excel_file.seek(0)
@@ -1481,6 +1487,7 @@ def build_bulk_balance_excel(request):
                 for col, h in enumerate(['Planning Item', 'Total Qty', 'Unit Price ($)', 'Planning Value ($)', 'Source Records'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
+                _e132_ds = r
                 for _idx, _pi in enumerate(_e132_plan['items']):
                     _rf = None if _idx % 2 == 0 else ALT_FILL
                     _price = _pi['unit_price']
@@ -1498,10 +1505,13 @@ def build_bulk_balance_excel(request):
                     _e132_tot_qty += float(_pi['total_quantity'])
                     _e132_tot_val += float(_val) if _val is not None else 0.0
                     r += 1
+                _e132_de = r - 1
+                # TOTAL = live SUM of the column so it always matches the (capped)
+                # cells above and recalculates if any are edited.
                 _cell(ws, r, 1, 'TOTAL', fill=TOTAL_FILL, bold=True)
-                _cell(ws, r, 2, _e132_tot_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 2, f'=SUM(B{_e132_ds}:B{_e132_de})', fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 3, '', fill=TOTAL_FILL)
-                _tvc = _cell(ws, r, 4, _e132_tot_val, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _tvc = _cell(ws, r, 4, f'=SUM(D{_e132_ds}:D{_e132_de})', fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 _e132_total_ref = _tvc.coordinate
                 _cell(ws, r, 5, '', fill=TOTAL_FILL)
                 r += 1

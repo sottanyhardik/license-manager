@@ -6,6 +6,9 @@ setup-ssl-labdhi.sh
 # Vite cache
 frontend/.vite/
 
+# Golden-master / characterization baselines (machine- and data-snapshot-specific)
+backend/scripts/.golden_master/
+
 # Python
 __pycache__/
 *.py[cod]

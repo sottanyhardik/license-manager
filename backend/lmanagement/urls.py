@@ -5,13 +5,29 @@ from django.views.generic import TemplateView
 from django.views.static import serve
 from django.conf import settings
 
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+    SpectacularRedocView,
+)
+
 from apps.core.views.health import HealthView
 from apps.core.views.mds_status import MDSStatusView
+from apps.core.views.media import ProtectedMediaView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", HealthView.as_view(), name="api-health"),
     path("api/mds/status/", MDSStatusView.as_view(), name="mds-status"),
+
+    # OpenAPI schema + interactive docs (drf-spectacular)
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+
+    # Authenticated media/document downloads (replaces public /media/ — see
+    # apps.core.views.media.ProtectedMediaView and docs/08-security.md).
+    re_path(r"^api/media/(?P<path>.+)$", ProtectedMediaView.as_view(), name="protected-media"),
     path("api/auth/", include("apps.accounts.urls")),
     path("api/", include("apps.license.urls")),
     path("api/", include("apps.allotment.urls")),

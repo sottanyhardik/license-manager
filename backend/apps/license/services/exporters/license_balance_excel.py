@@ -1960,10 +1960,10 @@ def build_bulk_balance_excel(request):
 
     # ── E132 section ───────────────────────────────────────────────────────
     # E132 planning classifies each item into one of six planning items (Yeast /
-    # Cheese Cream Butter & Fats / PKO / RBD / Aluminium Foil / Milk). Like E1/E5
+    # Cheese Cream Butter & Fats / PKO / RBD / Milk / Aluminium Foil). Like E1/E5
     # the summary shows a per-item Qty / Unit Price / Planning Value column group,
-    # plus TOTAL PLANNING VALUE, one row per licence with a TOTAL row. Milk's price
-    # is To-Be-Defined → shown as 'TBD' and excluded from value sums.
+    # plus TOTAL PLANNING VALUE, one row per licence with a TOTAL row. Column order
+    # follows the planning priority.
     if _e132_rows:
         from apps.license.services.e132_plan import PLANNING_ORDER as _E132_ITEMS
         _E132_LABELS = list(_E132_ITEMS)   # 6 planning items in priority order

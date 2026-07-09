@@ -78,7 +78,7 @@ UNIT_PRICE: dict[str, Optional[Decimal]] = {
 PRIORITY_YEAST_FIRST = True
 
 # Planning-item display/priority order for the output.
-PLANNING_ORDER = (YEAST, CHEESE, PKO, RBD, ALUMINIUM, MILK)
+PLANNING_ORDER = (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM)
 
 
 # ── Normalization ────────────────────────────────────────────────────────────
@@ -170,14 +170,15 @@ def _rule_milk(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-# Corrected priority (decision #1). Yeast first so it is reachable.
+# Corrected priority (decision #1). Yeast first so it is reachable; Milk ahead of
+# Aluminium Foil per the confirmed business order.
 _RULES_CORRECTED = (
     (YEAST, _rule_yeast),
     (CHEESE, _rule_cheese),
     (PKO, _rule_pko),
     (RBD, _rule_rbd),
-    (ALUMINIUM, _rule_aluminium),
     (MILK, _rule_milk),
+    (ALUMINIUM, _rule_aluminium),
 )
 # Literal spec order (Yeast after Cheese — provided for completeness/audit).
 _RULES_LITERAL = (
@@ -238,7 +239,7 @@ def _allocate_step(qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[
 
 def _allocate_buckets(agg: dict, balance_cif) -> dict:
     """Waterfall-allocate planned value to each planning item in PRIORITY order
-    (Yeast → Cheese → PKO → RBD → Aluminium Foil → Milk), capping the running total
+    (Yeast → Cheese → PKO → RBD → Milk → Aluminium Foil), capping the running total
     at ``balance_cif`` (max debit per licence = Balance CIF). When ``balance_cif`` is
     None the value is uncapped (qty × max price) — classification-only mode.
 

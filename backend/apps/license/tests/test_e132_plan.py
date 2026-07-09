@@ -6,9 +6,18 @@ import unittest
 from decimal import Decimal
 
 from apps.license.services.e132_plan import (
-    ALUMINIUM, CHEESE, MILK, PKO, RBD, YEAST, UNIT_PRICE,
+    ALUMINIUM, CHEESE, MILK, PKO, RBD, YEAST, UNIT_PRICE, PLANNING_ORDER,
     classify_e132_record, plan_e132, plan_e132_per_item,
 )
+
+
+class TestPriorityOrder(unittest.TestCase):
+    def test_planning_order(self):
+        # Yeast → Cheese → PKO → RBD → Milk → Aluminium Foil
+        self.assertEqual(
+            PLANNING_ORDER,
+            (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM),
+        )
 
 
 class TestClassifyPositive(unittest.TestCase):

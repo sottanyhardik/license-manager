@@ -1463,9 +1463,11 @@ def build_bulk_balance_excel(request):
                 'condition_per_cat': dict(_e5_cond_per_cat),
             })
         elif _is_e132:
-            # Sequential hard-stop debit (Download License spec). `_util_return`
-            # is left at its 'other' default so the cross-licence "Utilization
-            # Planning Summary" sheet (buckets only E1/E5/other) is unaffected.
+            # Sequential balance-consuming debit (Download License spec). The
+            # per-licence table below renders the debit rows; `_util_return` is
+            # tagged as E132 (with the debit outcome) so the cross-licence
+            # "Utilization Planning Summary" sheet gets its own E132 section,
+            # alongside E1 and E5.
             from apps.license.services.e132_debit import (
                 EXHAUSTED as _E132_EXHAUSTED,
                 NO_MATCH_MESSAGE as _E132_NO_MATCH,
@@ -1506,6 +1508,15 @@ def build_bulk_balance_excel(request):
                 _cell(ws, r, 8, _e132_result['final_balance'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 9, 'Fully debited' if _e132_result['fully_consumed'] else 'Balance remaining', fill=TOTAL_FILL, bold=True, align='center')
                 r += 1
+
+            # Tag this licence for the cross-licence E132 summary section.
+            _util_return.update({
+                'norm_type': 'E132',
+                'e132_total_debited': _e132_result['total_debited'],
+                'e132_final_balance': _e132_result['final_balance'],
+                'e132_fully_consumed': _e132_result['fully_consumed'],
+                'e132_any_match': _e132_result['any_match'],
+            })
         else:
             from apps.license.utils.condition_excel import annotate_cell as _annotate_cond
             BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC', 'Cond', 'Plan Qty', 'Plan CIF']
@@ -1610,6 +1621,7 @@ def build_bulk_balance_excel(request):
     _E5_CATS_LABELS = list(_E5_CATS_ORDERED_SUMM)
     _e1_rows = [s for s in _util_summaries if s['norm_type'] == 'E1']
     _e5_rows = [s for s in _util_summaries if s['norm_type'] == 'E5']
+    _e132_rows = [s for s in _util_summaries if s['norm_type'] == 'E132']
     _other_rows = [s for s in _util_summaries if s['norm_type'] == 'other']
 
     _sw = wb.create_sheet(title="Utilization Planning Summary")
@@ -1652,8 +1664,9 @@ def build_bulk_balance_excel(request):
         FIBRE (ci > 0) are pushed right by 1 to make room for the inserted
         '10% Balance' column."""
         return _CAT_START_COL + ci * 3 + (1 if ci > 0 else 0)
-    # Other-licenses section has IEC at col 8 and Port at col 9
-    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 9)
+    # Other-licenses section has IEC at col 8 and Port at col 9; the E132 section
+    # spans 10 columns (up to Status).
+    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 10)
 
     # Global Sr No counter, shared across E1 / E5 / Other sections
     _global_sr = [0]
@@ -1922,6 +1935,61 @@ def build_bulk_balance_excel(request):
         _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
         _wt.border = THIN_BORDER; _wt.alignment = Alignment(horizontal='right', vertical='center')
         _wt.number_format = '#,##0.00'
+        _sr += 2
+
+    # ── E132 section ───────────────────────────────────────────────────────
+    # E132 uses a sequential balance-consuming debit over dynamic products (not
+    # the fixed E1/E5 categories), so the summary is one row per licence showing
+    # the debit outcome. Mirrors the E1/E5 sections' fixed columns + TOTAL row.
+    if _e132_rows:
+        _E132_LAST_COL = 10
+        _merge_hdr(_sw, _sr, 1, _E132_LAST_COL, 'E132 NORM LICENSES', "7030A0")
+        _sr += 1
+        for _col, _h in enumerate(
+                ['Sr No', 'License No', 'License Date', 'License Expiry Date',
+                 'Total CIF $', 'Balance CIF $', 'Exporter Name',
+                 'Total Debited $', 'Final Balance $', 'Status'], 1):
+            _shdr(_sw, _sr, _col, _h)
+        _sr += 1
+
+        _e132_data_start = _sr
+        for _i, _row in enumerate(_e132_rows):
+            _rf = None if _i % 2 == 0 else ALT_FILL
+            _refs = _row.get('cell_refs') or {}
+            _ld = _row.get('license_date'); _ed = _row.get('license_expiry_date')
+            _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
+            _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
+            if not _row.get('e132_any_match', True):
+                _status = 'No norm match'
+            elif _row.get('e132_fully_consumed'):
+                _status = 'Fully debited'
+            else:
+                _status = 'Balance remaining'
+            _global_sr[0] += 1
+            _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
+            _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
+            _scell(_sw, _sr, 3, _ld_str, fill=_rf, align='center')
+            _scell(_sw, _sr, 4, _ed_str, fill=_rf, align='center')
+            _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
+            _scell(_sw, _sr, 8, _row.get('e132_total_debited') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, 9, _row.get('e132_final_balance') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, 10, _status, fill=_rf, align='center', bold=True)
+            _sr += 1
+        _e132_data_end = _sr - 1
+
+        # E132 total row
+        _scell(_sw, _sr, 1, '', fill=TOTAL_FILL)
+        _scell(_sw, _sr, 2, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
+        _scell(_sw, _sr, 3, '', fill=TOTAL_FILL)
+        _scell(_sw, _sr, 4, '', fill=TOTAL_FILL)
+        _scell(_sw, _sr, 5, _sum_formula(5, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _scell(_sw, _sr, 6, _sum_formula(6, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
+        _scell(_sw, _sr, 8, _sum_formula(8, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _scell(_sw, _sr, 9, _sum_formula(9, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _scell(_sw, _sr, 10, '', fill=TOTAL_FILL)
         _sr += 2
 
     # ── Other licenses section ─────────────────────────────────────────────

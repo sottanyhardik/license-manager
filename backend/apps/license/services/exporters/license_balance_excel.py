@@ -1468,6 +1468,8 @@ def build_bulk_balance_excel(request):
             # section alongside E1 and E5.
             _e132_tot_qty = 0.0
             _e132_tot_val = 0.0
+            _e132_cell_refs = {}   # planning item -> {qty, unit_price, value} coords
+            _e132_total_ref = None  # coord of the per-licence TOTAL planning-value cell
             if not _e132_plan['items']:
                 ws.merge_cells(f'A{r}:E{r}')
                 _nm = ws[f'A{r}']
@@ -1484,17 +1486,23 @@ def build_bulk_balance_excel(request):
                     _price = _pi['unit_price']
                     _val = _pi['planning_value']
                     _cell(ws, r, 1, _pi['planning_item_name'], fill=_rf, bold=True)
-                    _cell(ws, r, 2, float(_pi['total_quantity']), fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 3, (float(_price) if _price is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 4, (float(_val) if _val is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
+                    _qc = _cell(ws, r, 2, float(_pi['total_quantity']), fill=_rf, align='right', num_fmt='#,##0.00')
+                    _uc = _cell(ws, r, 3, (float(_price) if _price is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
+                    _vc = _cell(ws, r, 4, (float(_val) if _val is not None else 'TBD'), fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 5, _pi['num_source_records'], fill=_rf, align='center')
+                    # Capture coords so the cross-licence summary references these
+                    # cells (edit the per-licence sheet → summary updates live).
+                    _e132_cell_refs[_pi['planning_item_name']] = {
+                        'qty': _qc.coordinate, 'unit_price': _uc.coordinate, 'value': _vc.coordinate,
+                    }
                     _e132_tot_qty += float(_pi['total_quantity'])
                     _e132_tot_val += float(_val) if _val is not None else 0.0
                     r += 1
                 _cell(ws, r, 1, 'TOTAL', fill=TOTAL_FILL, bold=True)
                 _cell(ws, r, 2, _e132_tot_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 3, '', fill=TOTAL_FILL)
-                _cell(ws, r, 4, _e132_tot_val, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _tvc = _cell(ws, r, 4, _e132_tot_val, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _e132_total_ref = _tvc.coordinate
                 _cell(ws, r, 5, '', fill=TOTAL_FILL)
                 r += 1
                 if _e132_plan['exceptions']:
@@ -1517,6 +1525,8 @@ def build_bulk_balance_excel(request):
                     for _pi in _e132_plan['items']
                 },
                 'e132_total_value': _e132_tot_val,
+                'e132_cell_refs': _e132_cell_refs,
+                'e132_total_value_ref': _e132_total_ref,
             })
         else:
             from apps.license.utils.condition_excel import annotate_cell as _annotate_cond
@@ -1981,6 +1991,7 @@ def build_bulk_balance_excel(request):
             _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
             _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
             _per_item = _row.get('e132_per_item') or {}
+            _refs132 = _row.get('e132_cell_refs') or {}
             _global_sr[0] += 1
             _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
             _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
@@ -1998,10 +2009,13 @@ def build_bulk_balance_excel(request):
                 _val = _pi.get('value')
                 _up_cell = _up if _up is not None else ('TBD' if _present else '')
                 _val_cell = _val if _val is not None else ('TBD' if _present else 0.0)
-                _scell(_sw, _sr, _cc,     _q,       fill=_rf, align='right', num_fmt='#,##0.00')
-                _scell(_sw, _sr, _cc + 1, _up_cell, fill=_rf, align='right', num_fmt='#,##0.00')
-                _scell(_sw, _sr, _cc + 2, _val_cell, fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _E132_TOTAL_COL, _row.get('e132_total_value') or 0.0, fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
+                # Reference the per-licence sheet cells (edit there → summary
+                # updates), falling back to the static value when no ref exists.
+                _iref = _refs132.get(_cat) or {}
+                _scell(_sw, _sr, _cc,     _sheet_formula(_row, _iref.get('qty')) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 1, _sheet_formula(_row, _iref.get('unit_price')) or _up_cell, fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _iref.get('value')) or _val_cell, fill=_rf, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, _E132_TOTAL_COL, _sheet_formula(_row, _row.get('e132_total_value_ref')) or (_row.get('e132_total_value') or 0.0), fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
             _sr += 1
         _e132_data_end = _sr - 1
 

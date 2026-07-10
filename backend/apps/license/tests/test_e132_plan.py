@@ -217,6 +217,14 @@ class TestClassifyPositive(unittest.TestCase):
         self.assertEqual(classify_e132_record("7607", "")[0], ALUMINIUM)
         self.assertEqual(classify_e132_record(None, "foil HSN 7607 rolls")[0], ALUMINIUM)
 
+    def test_aluminium_by_description_phrase(self):
+        # Packing material named 'aluminium foil' but declared under a non-7607 HSN
+        # (e.g. PP/foil laminate under 3902) still classifies as Aluminium Foil.
+        self.assertEqual(classify_e132_record("39021000", "Packing Material: PP / Aluminium Foil")[0], ALUMINIUM)
+        self.assertEqual(classify_e132_record(None, "aluminum foil laminate")[0], ALUMINIUM)
+        # 'foil' alone must NOT match (and must not trip the Cheese 'oil' word rule).
+        self.assertNotEqual(classify_e132_record("9999", "plastic foil wrap")[0], ALUMINIUM)
+
     def test_milk(self):
         self.assertEqual(classify_e132_record(None, "whole MILK")[0], MILK)
         self.assertEqual(classify_e132_record(None, "MILK SOLID not fat")[0], MILK)

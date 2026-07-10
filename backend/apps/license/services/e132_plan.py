@@ -174,6 +174,11 @@ def _rule_aluminium(hsn: str, desc: str) -> Optional[str]:
         return "HSN=7607"
     if _has_word(desc, "7607"):
         return "Description contains '7607'"
+    # Aluminium-foil packing material is often declared under a non-7607 HSN
+    # (e.g. PP/foil laminate under 3902) but named in the description. ('foil'
+    # alone is too broad and 'oil' is a Cheese trigger, so match the full phrase.)
+    if "aluminium foil" in desc or "aluminum foil" in desc:
+        return "Description contains 'aluminium foil'"
     return None
 
 

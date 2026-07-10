@@ -66,9 +66,21 @@ class TestNutRaisinCereals(unittest.TestCase):
         self.assertEqual(float(raisin["total_quantity"]), 100.0)
         self.assertEqual(float(raisin["planning_value"]), 400.0)
 
-    def test_cmc_matches_nothing(self):
-        # Placeholder rule — no criteria supplied → CMC never classified.
-        self.assertNotEqual(classify_e132_record("cmc", "cmc powder")[0], CMC)
+    def test_cmc_by_hsn_prefix(self):
+        self.assertEqual(classify_e132_record("39120000", "cellulose")[0], CMC)
+
+    def test_cmc_by_desc_code(self):
+        self.assertEqual(classify_e132_record("9999", "carboxymethyl cellulose 3912")[0], CMC)
+
+    def test_cmc_yields_to_higher_priority(self):
+        # 3912 present but the item is also milk → Milk (higher) wins, not CMC.
+        self.assertEqual(classify_e132_record("9999", "milk powder 3912")[0], MILK)
+
+    def test_cmc_priced_value(self):
+        recs = [{"record_id": 1, "quantity": 10, "hs_code": "39120000", "description": "cmc"}]
+        out = plan_e132(recs, balance_cif=None)
+        cmc = next(i for i in out["items"] if i["planning_item_name"] == CMC)
+        self.assertEqual(float(cmc["planning_value"]), 50.0)  # 10 × $5
 
 
 class TestClassifyPositive(unittest.TestCase):

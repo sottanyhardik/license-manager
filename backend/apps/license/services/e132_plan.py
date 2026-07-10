@@ -215,11 +215,13 @@ def _rule_cereals(hsn: str, desc: str) -> Optional[str]:
 
 
 def _rule_cmc(hsn: str, desc: str) -> Optional[str]:
-    # ⚠ PLACEHOLDER — no classification criteria were given for CMC. Matches
-    #   nothing until a rule (HSN prefix / keyword) is supplied. Add the criteria
-    #   here (mirror the other rules), e.g.:
-    #       if _hsn_matches(hsn, "<code>"): return "HSN=<code>"
-    #       if "cmc" in desc: return "Description contains 'CMC'"
+    # CMC: HSN starts with 3912 (or '3912' in the description). CMC is evaluated
+    # LAST in the priority order, so this only catches items not already claimed
+    # by a higher-priority rule ("not classified elsewhere").
+    if _hsn_matches(hsn, "3912"):
+        return "HSN=3912"
+    if _has_word(desc, "3912"):
+        return "Description contains '3912'"
     return None
 
 

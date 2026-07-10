@@ -1686,11 +1686,12 @@ def build_bulk_balance_excel(request):
         '10% Balance' column."""
         return _CAT_START_COL + ci * 3 + (1 if ci > 0 else 0)
     # The E132 section spans: 7 fixed cols + N planning items × 3 + Total Planning
-    # Value. Compute from PLANNING_ORDER so it grows with the item list (title-row
-    # merge and outer borders below use _MAX_COL).
+    # Value + Wastage. Compute from PLANNING_ORDER so it grows with the item list
+    # (title-row merge and outer borders below use _MAX_COL).
     from apps.license.services.e132_plan import PLANNING_ORDER as _E132_ORDER
     _E132_SUMMARY_TOTAL_COL = _FIXED_SUMMARY_COLS + len(_E132_ORDER) * 3 + 1
-    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, _E132_SUMMARY_TOTAL_COL)
+    _E132_SUMMARY_WASTE_COL = _E132_SUMMARY_TOTAL_COL + 1
+    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, _E132_SUMMARY_WASTE_COL)
 
     # Global Sr No counter, shared across E1 / E5 / Other sections
     _global_sr = [0]
@@ -1971,9 +1972,10 @@ def build_bulk_balance_excel(request):
         from apps.license.services.e132_plan import PLANNING_ORDER as _E132_ITEMS
         _E132_LABELS = list(_E132_ITEMS)   # 6 planning items in priority order
         _E132_CAT_START = _FIXED_SUMMARY_COLS + 1                            # 8
-        _E132_TOTAL_COL = _FIXED_SUMMARY_COLS + len(_E132_LABELS) * 3 + 1    # 26
+        _E132_TOTAL_COL = _FIXED_SUMMARY_COLS + len(_E132_LABELS) * 3 + 1
+        _E132_WASTE_COL = _E132_TOTAL_COL + 1
 
-        _merge_hdr(_sw, _sr, 1, _E132_TOTAL_COL, 'E132 NORM LICENSES', "7030A0")
+        _merge_hdr(_sw, _sr, 1, _E132_WASTE_COL, 'E132 NORM LICENSES', "7030A0")
         _sr += 1
         _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'Sr No')
         _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License No')
@@ -1988,6 +1990,9 @@ def build_bulk_balance_excel(request):
             _shdr(_sw, _sr, _cc, _cat)
         _sw.merge_cells(f'{_gcl(_E132_TOTAL_COL)}{_sr}:{_gcl(_E132_TOTAL_COL)}{_sr+1}')
         _shdr(_sw, _sr, _E132_TOTAL_COL, 'TOTAL PLANNING VALUE $')
+        _sw.merge_cells(f'{_gcl(_E132_WASTE_COL)}{_sr}:{_gcl(_E132_WASTE_COL)}{_sr+1}')
+        _cwh = _sw.cell(row=_sr, column=_E132_WASTE_COL, value='Wastage $')
+        _cwh.fill = WASTE_FILL; _cwh.font = Font(bold=True, size=9)
         _sr += 1
         for _ci in range(len(_E132_LABELS)):
             _cc = _E132_CAT_START + _ci * 3
@@ -2029,6 +2034,10 @@ def build_bulk_balance_excel(request):
                 _scell(_sw, _sr, _cc + 1, _sheet_formula(_row, _iref.get('unit_price')) or _up_cell, fill=_rf, align='right', num_fmt='#,##0.00')
                 _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _iref.get('value')) or _val_cell, fill=_rf, align='right', num_fmt='#,##0.00')
             _scell(_sw, _sr, _E132_TOTAL_COL, _sheet_formula(_row, _row.get('e132_total_value_ref')) or (_row.get('e132_total_value') or 0.0), fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
+            # Wastage $ = Balance CIF (col F) − Total Planning Value. Live formula so
+            # it recalculates if either cell is edited.
+            _scell(_sw, _sr, _E132_WASTE_COL, f'=F{_sr}-{_gcl(_E132_TOTAL_COL)}{_sr}',
+                   fill=WASTE_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _sr += 1
         _e132_data_end = _sr - 1
 
@@ -2047,6 +2056,7 @@ def build_bulk_balance_excel(request):
             _scell(_sw, _sr, _cc + 1, '',                                                       fill=TOTAL_FILL)
             _scell(_sw, _sr, _cc + 2, _sum_formula(_cc + 2, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
         _scell(_sw, _sr, _E132_TOTAL_COL, _sum_formula(_E132_TOTAL_COL, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _scell(_sw, _sr, _E132_WASTE_COL, _sum_formula(_E132_WASTE_COL, _e132_data_start, _e132_data_end), fill=WASTE_FILL, bold=True, align='right', num_fmt='#,##0.00')
         _sr += 2
 
     # ── Other licenses section ─────────────────────────────────────────────

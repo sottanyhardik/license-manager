@@ -413,6 +413,65 @@ def _allocate_buckets(agg: dict, balance_cif) -> dict:
     return out
 
 
+def _agg_from(recs: list) -> dict:
+    """Aggregate classified records into ``{item: {qty, count}}``."""
+    agg: dict = {}
+    for r in recs:
+        if r["item"] is None:
+            continue
+        b = agg.setdefault(r["item"], {"qty": Decimal("0"), "count": 0})
+        b["qty"] += r["qty"]
+        b["count"] += 1
+    return agg
+
+
+def _has_0802(rec: dict) -> bool:
+    """True when a record carries a NUT (0802) signal in its HSN or description."""
+    return _hsn_matches(rec["hsn"], "0802") or _has_word(rec["desc"], "0802")
+
+
+def _promote_raisin_to_nuts(recs: list, balance_cif) -> None:
+    """Wastage-reduction pass (in place): if the plan leaves wastage (Balance CIF
+    not fully used) AND there are RAISIN records that also carry a 0802 (nut)
+    signal, promote them to NUT & NUTS. Nuts is higher-priced ($10 vs $4) and
+    higher-priority, so more balance is utilised and wastage falls. No-op when
+    there is no wastage (the natural RAISIN classification is kept)."""
+    eligible = [r for r in recs if r["item"] == RAISIN_ITEM and _has_0802(r)]
+    if not eligible:
+        return
+    alloc = _allocate_buckets(_agg_from(recs), balance_cif)
+    total = sum((a["value"] for a in alloc.values() if a["value"] is not None), Decimal("0"))
+    if _d(balance_cif) - total <= 0:
+        return  # no wastage → keep RAISIN
+    for r in eligible:
+        r["item"] = NUT_NUTS
+        r["reason"] = "Promoted RAISIN→NUT & NUTS (0802 signal) to reduce wastage"
+
+
+def _classify_records(records: Iterable[dict], balance_cif) -> list:
+    """Classify every record, then apply the wastage-reduction promotion when a
+    Balance CIF is given. Returns a list of dicts with normalized fields:
+    ``{record_id, item, reason, qty, hsn, desc, raw_hs, raw_desc}``."""
+    recs = []
+    for rec in records:
+        raw_hs = rec.get("hs_code")
+        raw_desc = rec.get("description")
+        item, reason = classify_e132_record(raw_hs, raw_desc)
+        recs.append({
+            "record_id": rec.get("record_id"),
+            "item": item,
+            "reason": reason,
+            "qty": _d(rec.get("quantity")),
+            "hsn": _norm_hsn(raw_hs),
+            "desc": _norm_text(raw_desc),
+            "raw_hs": raw_hs,
+            "raw_desc": raw_desc,
+        })
+    if balance_cif is not None:
+        _promote_raisin_to_nuts(recs, balance_cif)
+    return recs
+
+
 @dataclass
 class ClassifiedRecord:
     record_id: Any
@@ -443,29 +502,19 @@ def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
     shape this function guarantees. Callers that want the SWP/DWP/WPC breakdown per
     record use ``plan_e132_per_item_split``.
     """
-    classified = []
-    agg: dict = {}
-    for rec in records:
-        item, reason = classify_e132_record(rec.get("hs_code"), rec.get("description"))
-        if item is None:
-            continue
-        qty = _d(rec.get("quantity"))
-        classified.append((rec.get("record_id"), item, reason, qty))
-        b = agg.setdefault(item, {"qty": Decimal("0"), "count": 0})
-        b["qty"] += qty
-        b["count"] += 1
-
-    alloc = _allocate_buckets(agg, balance_cif)  # {item: {qty,value,price,count}}
+    recs = _classify_records(records, balance_cif)
+    alloc = _allocate_buckets(_agg_from(recs), balance_cif)  # {item: {qty,value,price,count}}
     _milk_rate = _blended_milk_rate(alloc)
     out: dict = {}
-    for rid, item, reason, qty in classified:
-        if item == MILK:
-            eff_rate = _milk_rate
-        else:
-            eff_rate = _effective_rate(alloc.get(item))
-        out[rid] = {
+    for r in recs:
+        item = r["item"]
+        if item is None:
+            continue
+        eff_rate = _milk_rate if item == MILK else _effective_rate(alloc.get(item))
+        qty = r["qty"]
+        out[r["record_id"]] = {
             "planning_item": item,
-            "reason": reason,
+            "reason": r["reason"],
             "planned_quantity": qty,
             "unit_price": eff_rate,
             "planned_cif": (qty * eff_rate) if eff_rate is not None else None,
@@ -502,18 +551,8 @@ def plan_e132_per_item_split(records: Iterable[dict], balance_cif=None) -> dict:
     records yield one entry per split product that carries quantity, apportioning
     the record's quantity by the pool's product fractions.
     """
-    classified = []
-    agg: dict = {}
-    for rec in records:
-        item, reason = classify_e132_record(rec.get("hs_code"), rec.get("description"))
-        if item is None:
-            continue
-        qty = _d(rec.get("quantity"))
-        classified.append((rec.get("record_id"), item, reason, qty))
-        b = agg.setdefault(item, {"qty": Decimal("0"), "count": 0})
-        b["qty"] += qty
-        b["count"] += 1
-
+    recs = _classify_records(records, balance_cif)
+    agg = _agg_from(recs)
     alloc = _allocate_buckets(agg, balance_cif)
     # Pool fractions for apportioning each milk record across the products.
     pool_qty = agg.get(MILK, {}).get("qty", Decimal("0"))
@@ -525,7 +564,11 @@ def plan_e132_per_item_split(records: Iterable[dict], balance_cif=None) -> dict:
                 milk_fracs.append((prod, a["qty"] / pool_qty, a["price"]))
 
     out: dict = {}
-    for rid, item, reason, qty in classified:
+    for r in recs:
+        item = r["item"]
+        if item is None:
+            continue
+        rid, reason, qty = r["record_id"], r["reason"], r["qty"]
         if item == MILK:
             lines = []
             for prod, frac, price in milk_fracs:
@@ -572,28 +615,19 @@ def plan_e132(records: Iterable[dict], balance_cif=None) -> dict:
                          (matched no rule).
         ``missing_inputs`` – planning items whose unit price is undefined.
     """
-    classified: list[ClassifiedRecord] = []
-    agg: dict[str, dict] = {}
-
-    for rec in records:
-        hs = rec.get("hs_code")
-        desc = rec.get("description")
-        qty = _d(rec.get("quantity"))
-        item, reason = classify_e132_record(hs, desc)
-        cr = ClassifiedRecord(
-            record_id=rec.get("record_id"),
-            hs_code=str(hs) if hs is not None else "",
-            description=str(desc) if desc is not None else "",
-            quantity=qty,
-            planning_item=item,
-            reason=reason,
+    recs = _classify_records(records, balance_cif)
+    classified: list[ClassifiedRecord] = [
+        ClassifiedRecord(
+            record_id=r["record_id"],
+            hs_code=str(r["raw_hs"]) if r["raw_hs"] is not None else "",
+            description=str(r["raw_desc"]) if r["raw_desc"] is not None else "",
+            quantity=r["qty"],
+            planning_item=r["item"],
+            reason=r["reason"],
         )
-        classified.append(cr)
-        if item is not None:
-            bucket = agg.setdefault(item, {"qty": Decimal("0"), "count": 0})
-            bucket["qty"] += qty  # rule #4/#6: quantity into exactly one item
-            bucket["count"] += 1
-
+        for r in recs
+    ]
+    agg = _agg_from(recs)
     alloc = _allocate_buckets(agg, balance_cif)  # priority-order, balance-capped
     items = []
     for name in PLANNING_ORDER:

@@ -156,6 +156,38 @@ class TestNutRaisinCereals(unittest.TestCase):
         self.assertEqual(float(cmc["planning_value"]), 50.0)  # 10 × $5
 
 
+class TestWastagePromotion(unittest.TestCase):
+    """When the plan leaves wastage, RAISIN records that also carry a 0802 (nut)
+    signal are promoted to NUT & NUTS to utilise more balance."""
+
+    def _recs(self):
+        # HSN 0806 (raisin) AND '0802' in description → dual-signal, RAISIN by default.
+        return [{"record_id": 1, "quantity": 100, "hs_code": "08061000", "description": "raisin 0802 blend"}]
+
+    def test_default_classification_is_raisin(self):
+        # Pure classification (no balance) keeps RAISIN.
+        self.assertEqual(classify_e132_record("08061000", "raisin 0802 blend")[0], RAISIN_ITEM)
+
+    def test_promoted_when_wastage(self):
+        by = {i["planning_item_name"]: i for i in plan_e132(self._recs(), balance_cif=10000)["items"]}
+        self.assertIn(NUT_NUTS, by)
+        self.assertNotIn(RAISIN_ITEM, by)
+        self.assertEqual(float(by[NUT_NUTS]["planning_value"]), 1000.0)  # 100 × $10 (was 400 as raisin)
+
+    def test_not_promoted_without_wastage(self):
+        # Tight balance (= raisin value) → no wastage → keep RAISIN.
+        by = {i["planning_item_name"]: i for i in plan_e132(self._recs(), balance_cif=400)["items"]}
+        self.assertIn(RAISIN_ITEM, by)
+        self.assertNotIn(NUT_NUTS, by)
+
+    def test_not_promoted_without_0802(self):
+        # Plain raisin (no 0802 signal) stays RAISIN even with wastage.
+        recs = [{"record_id": 1, "quantity": 100, "hs_code": "08061000", "description": "raisins"}]
+        by = {i["planning_item_name"]: i for i in plan_e132(recs, balance_cif=10000)["items"]}
+        self.assertIn(RAISIN_ITEM, by)
+        self.assertNotIn(NUT_NUTS, by)
+
+
 class TestClassifyPositive(unittest.TestCase):
     """Each item matches on each of its stated conditions."""
 

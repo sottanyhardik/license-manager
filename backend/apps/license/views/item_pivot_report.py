@@ -835,8 +835,8 @@ class ItemPivotReportView(View):
                 elif _e132:
                     # E132 reuses the Unit Price / Planned CIF columns to show the
                     # classified planning item's fixed unit price and planned value
-                    # (available qty × price). Unit Price is None and Planned CIF 0
-                    # when the price is To-Be-Defined (Milk).
+                    # (balance-capped). Unit Price is None and Planned CIF 0 for any
+                    # item whose price is still To-Be-Defined.
                     _e132_up = _e132.get('unit_price')
                     _e132_cif = _e132.get('planned_cif')
                     unit_price = float(_e132_up) if _e132_up is not None else None

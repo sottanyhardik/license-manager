@@ -41,17 +41,26 @@ class Command(BaseCommand):
                         name=name, is_active=True, sion_norm_class=norm, display_order=order)
                 continue
             changed = []
+            fields = []
             if not obj.is_active:
                 obj.is_active = True
                 changed.append("active")
+                fields.append("is_active")
             if norm is not None and obj.sion_norm_class_id != norm.id:
                 obj.sion_norm_class = norm
                 changed.append("norm=E132")
+                fields.append("sion_norm_class")
+            # Keep display_order aligned with PLANNING_ORDER so reports that sort by
+            # it (Item Pivot, MasterList) show the planning priority order.
+            if obj.display_order != order:
+                obj.display_order = order
+                changed.append(f"order={order}")
+                fields.append("display_order")
             if changed:
                 self.stdout.write(f"  ~ update  {name} ({', '.join(changed)})")
                 updated += 1
                 if not dry:
-                    obj.save(update_fields=["is_active", "sion_norm_class"])
+                    obj.save(update_fields=fields)
             else:
                 self.stdout.write(f"  = ok      {name}")
 

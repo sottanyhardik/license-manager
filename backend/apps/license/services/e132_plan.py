@@ -59,6 +59,7 @@ MILK = "Milk - E132"
 NUT_NUTS = "NUT & NUTS - E132"
 RAISIN_ITEM = "RAISIN - E132"
 CEREALS_FLAKES = "CEREALS FLAKES - E132"
+CMC = "CMC - E132"
 
 # Milk's unit price may range 0–22 USD; the ceiling (22) is used as the planning
 # unit price (editable down in the sheet if a lower value is agreed). Change this
@@ -73,12 +74,13 @@ UNIT_PRICE: dict[str, Optional[Decimal]] = {
     RBD: Decimal("1.20"),
     ALUMINIUM: Decimal("4.50"),
     MILK: MILK_MAX_PRICE,  # ceiling of the permitted 0–22 range
-    # ⚠ Unit prices To-Be-Defined (no price supplied yet). Until set, these items
-    #   classify and aggregate quantity but show 'TBD' and contribute 0 to value
-    #   (same handling Milk had before its ceiling was agreed). Set a Decimal here.
-    NUT_NUTS: None,
-    RAISIN_ITEM: None,
-    CEREALS_FLAKES: None,
+    NUT_NUTS: Decimal("10.00"),
+    RAISIN_ITEM: Decimal("4.00"),
+    CEREALS_FLAKES: Decimal("0.60"),
+    # ⚠ CMC price To-Be-Defined (no price supplied yet). Until set, it classifies
+    #   and aggregates quantity but shows 'TBD' and contributes 0 to value (same
+    #   handling Milk had pre-ceiling). Set a Decimal here.
+    CMC: None,
 }
 
 # Toggle the Yeast/2106 overlap resolution (decision #1). True = corrected
@@ -89,7 +91,7 @@ PRIORITY_YEAST_FIRST = True
 # Planning-item display/priority order for the output. The three additions
 # (NUT & NUTS, RAISIN, CEREALS FLAKES) are appended after the confirmed six, so
 # existing higher-priority classifications are unchanged.
-PLANNING_ORDER = (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM, NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES)
+PLANNING_ORDER = (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM, NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC)
 
 
 # ── Normalization ────────────────────────────────────────────────────────────
@@ -213,6 +215,15 @@ def _rule_cereals(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
+def _rule_cmc(hsn: str, desc: str) -> Optional[str]:
+    # ⚠ PLACEHOLDER — no classification criteria were given for CMC. Matches
+    #   nothing until a rule (HSN prefix / keyword) is supplied. Add the criteria
+    #   here (mirror the other rules), e.g.:
+    #       if _hsn_matches(hsn, "<code>"): return "HSN=<code>"
+    #       if "cmc" in desc: return "Description contains 'CMC'"
+    return None
+
+
 # Corrected priority (decision #1). Yeast first so it is reachable; Milk ahead of
 # Aluminium Foil per the confirmed business order. NUT & NUTS / RAISIN / CEREALS
 # FLAKES appended last (lowest priority).
@@ -226,6 +237,7 @@ _RULES_CORRECTED = (
     (NUT_NUTS, _rule_nut),
     (RAISIN_ITEM, _rule_raisin),
     (CEREALS_FLAKES, _rule_cereals),
+    (CMC, _rule_cmc),
 )
 # Literal spec order (Yeast after Cheese — provided for completeness/audit).
 _RULES_LITERAL = (
@@ -238,6 +250,7 @@ _RULES_LITERAL = (
     (NUT_NUTS, _rule_nut),
     (RAISIN_ITEM, _rule_raisin),
     (CEREALS_FLAKES, _rule_cereals),
+    (CMC, _rule_cmc),
 )
 
 

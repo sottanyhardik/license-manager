@@ -5,9 +5,11 @@ Unit + edge-case tests for the E132 planning classification engine
 import unittest
 from decimal import Decimal
 
+from decimal import Decimal as _Dec
+
 from apps.license.services.e132_plan import (
     ALUMINIUM, CHEESE, MILK, PKO, RBD, YEAST, UNIT_PRICE, PLANNING_ORDER,
-    NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES,
+    NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC,
     classify_e132_record, plan_e132, plan_e132_per_item,
 )
 
@@ -15,11 +17,11 @@ from apps.license.services.e132_plan import (
 class TestPriorityOrder(unittest.TestCase):
     def test_planning_order(self):
         # Yeast → Cheese → PKO → RBD → Milk → Aluminium Foil → NUT & NUTS →
-        # RAISIN → CEREALS FLAKES
+        # RAISIN → CEREALS FLAKES → CMC
         self.assertEqual(
             PLANNING_ORDER,
             (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM,
-             NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES),
+             NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC),
         )
 
 
@@ -50,17 +52,23 @@ class TestNutRaisinCereals(unittest.TestCase):
         # ⚠ ASSUMED rule: HSN 1104 (confirm with business).
         self.assertEqual(classify_e132_record("11041200", "rolled oats")[0], CEREALS_FLAKES)
 
-    def test_new_items_prices_are_tbd(self):
-        # No prices supplied yet → None (TBD).
-        for item in (NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES):
-            self.assertIsNone(UNIT_PRICE[item])
+    def test_new_item_prices(self):
+        self.assertEqual(UNIT_PRICE[NUT_NUTS], _Dec("10.00"))
+        self.assertEqual(UNIT_PRICE[RAISIN_ITEM], _Dec("4.00"))
+        self.assertEqual(UNIT_PRICE[CEREALS_FLAKES], _Dec("0.60"))
+        self.assertIsNone(UNIT_PRICE[CMC])  # CMC price still TBD
 
-    def test_tbd_item_plans_qty_but_no_value(self):
+    def test_raisin_priced_value(self):
+        # 100 × $4 = 400, within a generous balance.
         recs = [{"record_id": 1, "quantity": 100, "hs_code": "08061000", "description": "raisins"}]
         out = plan_e132(recs, balance_cif=None)
         raisin = next(i for i in out["items"] if i["planning_item_name"] == RAISIN_ITEM)
         self.assertEqual(float(raisin["total_quantity"]), 100.0)
-        self.assertIsNone(raisin["planning_value"])
+        self.assertEqual(float(raisin["planning_value"]), 400.0)
+
+    def test_cmc_matches_nothing(self):
+        # Placeholder rule — no criteria supplied → CMC never classified.
+        self.assertNotEqual(classify_e132_record("cmc", "cmc powder")[0], CMC)
 
 
 class TestClassifyPositive(unittest.TestCase):

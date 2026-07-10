@@ -7,17 +7,60 @@ from decimal import Decimal
 
 from apps.license.services.e132_plan import (
     ALUMINIUM, CHEESE, MILK, PKO, RBD, YEAST, UNIT_PRICE, PLANNING_ORDER,
+    NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES,
     classify_e132_record, plan_e132, plan_e132_per_item,
 )
 
 
 class TestPriorityOrder(unittest.TestCase):
     def test_planning_order(self):
-        # Yeast → Cheese → PKO → RBD → Milk → Aluminium Foil
+        # Yeast → Cheese → PKO → RBD → Milk → Aluminium Foil → NUT & NUTS →
+        # RAISIN → CEREALS FLAKES
         self.assertEqual(
             PLANNING_ORDER,
-            (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM),
+            (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM,
+             NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES),
         )
+
+
+class TestNutRaisinCereals(unittest.TestCase):
+    """The three added planning items (NUT & NUTS / RAISIN / CEREALS FLAKES)."""
+
+    def test_nut_by_hsn_prefix(self):
+        self.assertEqual(classify_e132_record("08021100", "almonds")[0], NUT_NUTS)
+
+    def test_nut_by_desc_code(self):
+        self.assertEqual(classify_e132_record("9999", "cashew 0802 grade a")[0], NUT_NUTS)
+
+    def test_nut_excluded_when_milk(self):
+        # 0802 present but description mentions milk → NOT nuts.
+        self.assertNotEqual(classify_e132_record("08021100", "milk coated nut")[0], NUT_NUTS)
+
+    def test_nut_excluded_when_0806(self):
+        # both 0802 and 0806 signals → nuts rule bows out (0806 wins → RAISIN).
+        self.assertEqual(classify_e132_record("08021100", "mix 0806")[0], RAISIN_ITEM)
+
+    def test_raisin_by_hsn_prefix(self):
+        self.assertEqual(classify_e132_record("08061000", "raisins")[0], RAISIN_ITEM)
+
+    def test_raisin_by_desc_code(self):
+        self.assertEqual(classify_e132_record("9999", "dried grapes 0806")[0], RAISIN_ITEM)
+
+    def test_cereals_by_hsn_prefix(self):
+        # ⚠ ASSUMED rule: HSN 1104 (confirm with business).
+        self.assertEqual(classify_e132_record("11041200", "rolled oats")[0], CEREALS_FLAKES)
+
+    def test_new_items_prices_are_tbd(self):
+        # No prices supplied yet → None (TBD).
+        for item in (NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES):
+            self.assertIsNone(UNIT_PRICE[item])
+
+    def test_tbd_item_plans_qty_but_no_value(self):
+        recs = [{"record_id": 1, "quantity": 100, "hs_code": "08061000", "description": "raisins"}]
+        out = plan_e132(recs, balance_cif=None)
+        raisin = next(i for i in out["items"] if i["planning_item_name"] == RAISIN_ITEM)
+        self.assertEqual(float(raisin["total_quantity"]), 100.0)
+        self.assertIsNone(raisin["planning_value"])
 
 
 class TestClassifyPositive(unittest.TestCase):

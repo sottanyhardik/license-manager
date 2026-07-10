@@ -1685,9 +1685,12 @@ def build_bulk_balance_excel(request):
         FIBRE (ci > 0) are pushed right by 1 to make room for the inserted
         '10% Balance' column."""
         return _CAT_START_COL + ci * 3 + (1 if ci > 0 else 0)
-    # Other-licenses section has IEC at col 8 and Port at col 9; the E132 section
-    # spans 26 columns (7 fixed + 6 planning items × 3 + Total Planning Value).
-    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 26)
+    # The E132 section spans: 7 fixed cols + N planning items × 3 + Total Planning
+    # Value. Compute from PLANNING_ORDER so it grows with the item list (title-row
+    # merge and outer borders below use _MAX_COL).
+    from apps.license.services.e132_plan import PLANNING_ORDER as _E132_ORDER
+    _E132_SUMMARY_TOTAL_COL = _FIXED_SUMMARY_COLS + len(_E132_ORDER) * 3 + 1
+    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, _E132_SUMMARY_TOTAL_COL)
 
     # Global Sr No counter, shared across E1 / E5 / Other sections
     _global_sr = [0]

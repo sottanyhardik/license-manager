@@ -1,4 +1,4 @@
-"""Seed the six E132 planning-item masters (idempotent).
+"""Seed the E132 planning-item masters (idempotent).
 
 Creates/activates the ItemNameModel rows the E132 planning classification uses and
 links them to the E132 SION norm class. Item names come from

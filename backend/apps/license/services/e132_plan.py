@@ -56,6 +56,9 @@ RBD = "RBD - E132"
 YEAST = "Yeast - E132"
 ALUMINIUM = "Aluminium Foil - E132"
 MILK = "Milk - E132"
+NUT_NUTS = "NUT & NUTS - E132"
+RAISIN_ITEM = "RAISIN - E132"
+CEREALS_FLAKES = "CEREALS FLAKES - E132"
 
 # Milk's unit price may range 0–22 USD; the ceiling (22) is used as the planning
 # unit price (editable down in the sheet if a lower value is agreed). Change this
@@ -70,6 +73,12 @@ UNIT_PRICE: dict[str, Optional[Decimal]] = {
     RBD: Decimal("1.20"),
     ALUMINIUM: Decimal("4.50"),
     MILK: MILK_MAX_PRICE,  # ceiling of the permitted 0–22 range
+    # ⚠ Unit prices To-Be-Defined (no price supplied yet). Until set, these items
+    #   classify and aggregate quantity but show 'TBD' and contribute 0 to value
+    #   (same handling Milk had before its ceiling was agreed). Set a Decimal here.
+    NUT_NUTS: None,
+    RAISIN_ITEM: None,
+    CEREALS_FLAKES: None,
 }
 
 # Toggle the Yeast/2106 overlap resolution (decision #1). True = corrected
@@ -77,8 +86,10 @@ UNIT_PRICE: dict[str, Optional[Decimal]] = {
 # for HSN-2106 records). Default True per the spec's own recommendation.
 PRIORITY_YEAST_FIRST = True
 
-# Planning-item display/priority order for the output.
-PLANNING_ORDER = (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM)
+# Planning-item display/priority order for the output. The three additions
+# (NUT & NUTS, RAISIN, CEREALS FLAKES) are appended after the confirmed six, so
+# existing higher-priority classifications are unchanged.
+PLANNING_ORDER = (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM, NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES)
 
 
 # ── Normalization ────────────────────────────────────────────────────────────
@@ -170,8 +181,41 @@ def _rule_milk(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
+def _rule_nut(hsn: str, desc: str) -> Optional[str]:
+    # NUT & NUTS: HSN starts with 0802 (or '0802' in the description) — but NOT
+    # when the record is milk or a 0806 (raisin) item, per the stated exclusions.
+    if not (_hsn_matches(hsn, "0802") or _has_word(desc, "0802")):
+        return None
+    if "milk" in desc:                                    # exclusion: no milk
+        return None
+    if _hsn_matches(hsn, "0806") or _has_word(desc, "0806"):  # exclusion: no 0806
+        return None
+    return "HSN=0802 / desc contains '0802' (excl. milk & 0806)"
+
+
+def _rule_raisin(hsn: str, desc: str) -> Optional[str]:
+    # RAISIN: HSN starts with 0806 (or '0806' in the description).
+    if _hsn_matches(hsn, "0806"):
+        return "HSN=0806"
+    if _has_word(desc, "0806"):
+        return "Description contains '0806'"
+    return None
+
+
+def _rule_cereals(hsn: str, desc: str) -> Optional[str]:
+    # ⚠ ASSUMED rule — no classification criteria were given for CEREALS FLAKES.
+    #   Uses HSN 1104 (this codebase's historical cereal-flakes code). CONFIRM /
+    #   replace the code or keyword below with the real rule.
+    if _hsn_matches(hsn, "1104"):
+        return "HSN=1104"
+    if _has_word(desc, "1104"):
+        return "Description contains '1104'"
+    return None
+
+
 # Corrected priority (decision #1). Yeast first so it is reachable; Milk ahead of
-# Aluminium Foil per the confirmed business order.
+# Aluminium Foil per the confirmed business order. NUT & NUTS / RAISIN / CEREALS
+# FLAKES appended last (lowest priority).
 _RULES_CORRECTED = (
     (YEAST, _rule_yeast),
     (CHEESE, _rule_cheese),
@@ -179,6 +223,9 @@ _RULES_CORRECTED = (
     (RBD, _rule_rbd),
     (MILK, _rule_milk),
     (ALUMINIUM, _rule_aluminium),
+    (NUT_NUTS, _rule_nut),
+    (RAISIN_ITEM, _rule_raisin),
+    (CEREALS_FLAKES, _rule_cereals),
 )
 # Literal spec order (Yeast after Cheese — provided for completeness/audit).
 _RULES_LITERAL = (
@@ -188,6 +235,9 @@ _RULES_LITERAL = (
     (YEAST, _rule_yeast),
     (ALUMINIUM, _rule_aluminium),
     (MILK, _rule_milk),
+    (NUT_NUTS, _rule_nut),
+    (RAISIN_ITEM, _rule_raisin),
+    (CEREALS_FLAKES, _rule_cereals),
 )
 
 
@@ -239,7 +289,8 @@ def _allocate_step(qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[
 
 def _allocate_buckets(agg: dict, balance_cif) -> dict:
     """Waterfall-allocate planned value to each planning item in PRIORITY order
-    (Yeast → Cheese → PKO → RBD → Milk → Aluminium Foil), capping the running total
+    (Yeast → Cheese → PKO → RBD → Milk → Aluminium Foil → NUT & NUTS → RAISIN →
+    CEREALS FLAKES), capping the running total
     at ``balance_cif`` (max debit per licence = Balance CIF). When ``balance_cif`` is
     None the value is uncapped (qty × max price) — classification-only mode.
 

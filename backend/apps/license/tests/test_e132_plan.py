@@ -26,32 +26,52 @@ class TestPriorityOrder(unittest.TestCase):
 
 
 class TestMilkSplit(unittest.TestCase):
-    """Milk pool is split into SWP $1.5 / DWP $5 / WPC $22 (cheap-first): all
-    quantity used and planned value == balance available at milk's turn."""
+    """Milk pool is split into SWP $1.5 / DWP $5 / WPC $22 by the target average
+    price (avg = milk balance ÷ milk qty): <1.5 all SWP; 1.5-5 SWP+DWP; 5-22
+    SWP+WPC; ≥22 all WPC. All qty used and value == balance in the split bands."""
 
     def _milk(self, qty, bal):
         recs = [{"record_id": 1, "quantity": qty, "hs_code": "", "description": "milk powder"}]
         return {i["planning_item_name"]: i for i in plan_e132(recs, balance_cif=bal)["items"]}
 
+    def _check_full(self, by, qty, bal):
+        self.assertAlmostEqual(sum(float(by[p]["total_quantity"]) for p in (SWP, DWP, WPC)), float(qty), places=2)
+        self.assertAlmostEqual(sum(float(by[p]["planning_value"]) for p in (SWP, DWP, WPC)), float(bal), places=2)
+
     def test_classify_milk_to_pool(self):
         # Detection unchanged: milk records classify to the internal MILK pool.
         self.assertEqual(classify_e132_record(None, "whole milk")[0], MILK)
 
-    def test_value_bound_split(self):
-        # Q=1000, B=10000 (avg $10). Cheap-first → SWP + WPC, DWP=0.
+    def test_band_below_1_5_all_swp(self):
+        # avg = 1.0 (< 1.5) → all SWP, full qty & value (effective rate = avg).
+        by = self._milk(1000, 1000)
+        self.assertEqual(float(by[SWP]["total_quantity"]), 1000.0)
+        self.assertAlmostEqual(float(by[SWP]["planning_value"]), 1000.0, places=2)
+        self.assertAlmostEqual(float(by[SWP]["unit_price"]), 1.0, places=4)
+        self.assertEqual(float(by[DWP]["total_quantity"]), 0.0)
+        self.assertEqual(float(by[WPC]["total_quantity"]), 0.0)
+
+    def test_band_1_5_to_5_swp_dwp(self):
+        # avg = 3.0 → SWP + DWP; DWP populated, WPC = 0.
+        by = self._milk(1000, 3000)
+        self.assertAlmostEqual(float(by[DWP]["total_quantity"]), (3000 - 1500) / 3.5, places=2)  # 428.57
+        self.assertAlmostEqual(float(by[SWP]["total_quantity"]), 1000 - (3000 - 1500) / 3.5, places=2)
+        self.assertEqual(float(by[WPC]["total_quantity"]), 0.0)
+        self._check_full(by, 1000, 3000)
+
+    def test_band_5_to_22_swp_wpc(self):
+        # avg = 10 → SWP + WPC, DWP = 0.
         by = self._milk(1000, 10000)
         self.assertAlmostEqual(float(by[SWP]["total_quantity"]), 585.3659, places=3)
         self.assertAlmostEqual(float(by[WPC]["total_quantity"]), 414.6341, places=3)
         self.assertEqual(float(by[DWP]["total_quantity"]), 0.0)
-        # all quantity used, value == balance (0 left)
-        self.assertAlmostEqual(sum(float(by[p]["total_quantity"]) for p in (SWP, DWP, WPC)), 1000.0, places=3)
-        self.assertAlmostEqual(sum(float(by[p]["planning_value"]) for p in (SWP, DWP, WPC)), 10000.0, places=2)
+        self._check_full(by, 1000, 10000)
 
-    def test_quantity_bound_all_wpc(self):
-        # Balance ample (>= 22*Q) → all WPC, all quantity used, value = 22*Q.
-        by = self._milk(100, 100000)
-        self.assertEqual(float(by[WPC]["total_quantity"]), 100.0)
-        self.assertEqual(float(by[WPC]["planning_value"]), 2200.0)
+    def test_band_above_22_all_wpc(self):
+        # avg = 25 (>= 22) → all WPC, value = 22*Q (leftover balance flows on).
+        by = self._milk(1000, 25000)
+        self.assertEqual(float(by[WPC]["total_quantity"]), 1000.0)
+        self.assertEqual(float(by[WPC]["planning_value"]), 22000.0)
         self.assertEqual(float(by[SWP]["total_quantity"]), 0.0)
 
     def test_uncapped_defaults_to_wpc(self):

@@ -312,14 +312,17 @@ def _allocate_step(qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[
 
 
 def _split_milk(pool_qty: Decimal, remaining) -> dict:
-    """Split the pooled milk quantity across SWP / DWP / WPC (cheap-first).
+    """Split the pooled milk quantity across SWP / DWP / WPC by the target average
+    price (avg = balance available at milk's turn ÷ milk quantity):
 
-    Goal: use ALL milk quantity AND make the planned value equal the balance
-    available at milk's turn ("0 $ left"). Cheap-first = maximise the cheapest
-    product (SWP): start with every unit as SWP, then upgrade the FEWEST units to
-    WPC (the largest price jump) needed to reach the balance. DWP is therefore 0
-    in the normal range — populating it would require more upgraded units and less
-    SWP, which the cheap-first rule forbids.
+        avg < 1.5      → all SWP (full qty & value; effective rate = avg)
+        1.5 ≤ avg < 5  → split SWP + DWP
+        5   ≤ avg < 22 → split SWP + WPC
+        avg ≥ 22       → all WPC (value = 22 × qty; any balance beyond flows on)
+
+    In the split bands the two quantities are chosen so ALL milk quantity is used
+    AND the planned value equals the balance available to milk ("0 $ left"). Each
+    product keeps its fixed unit price; only the quantities move.
 
     Returns ``{SWP|DWP|WPC: (qty, unit_price, planned_value)}``.
     """
@@ -335,22 +338,27 @@ def _split_milk(pool_qty: Decimal, remaining) -> dict:
     B = remaining
     if B <= 0:
         return empty  # no balance left → milk cannot be planned here
-    min_val, max_val = p_swp * Q, p_wpc * Q
-    if B >= max_val:
-        # Balance exceeds even all-WPC → all WPC; the remainder flows to later items.
-        return {SWP: (z, p_swp, z), DWP: (z, p_dwp, z), WPC: (Q, p_wpc, max_val)}
-    if B <= min_val:
-        # Even all-SWP overflows the balance → use only what the balance affords at
-        # the cheapest rate (maximise utilised quantity); the rest is unutilised.
-        return {SWP: (B / p_swp, p_swp, B), DWP: (z, p_dwp, z), WPC: (z, p_wpc, z)}
-    # Normal range: baseline all-SWP, upgrade q_wpc units SWP→WPC to add (B − min_val).
-    q_wpc = (B - min_val) / (p_wpc - p_swp)
-    q_swp = Q - q_wpc
-    return {
-        SWP: (q_swp, p_swp, q_swp * p_swp),
-        DWP: (z, p_dwp, z),
-        WPC: (q_wpc, p_wpc, q_wpc * p_wpc),
-    }
+    avg = B / Q
+    if avg < p_swp:
+        # Below the cheapest product: all SWP at the effective (dropped) rate so the
+        # full quantity and the full available value are shown on the SWP line.
+        return {SWP: (Q, B / Q, B), DWP: (z, p_dwp, z), WPC: (z, p_wpc, z)}
+    if avg < p_dwp:
+        # SWP + DWP: q_dwp units moved up from SWP so the value reaches the balance.
+        q_dwp = (B - p_swp * Q) / (p_dwp - p_swp)
+        q_swp = Q - q_dwp
+        return {SWP: (q_swp, p_swp, q_swp * p_swp),
+                DWP: (q_dwp, p_dwp, q_dwp * p_dwp),
+                WPC: (z, p_wpc, z)}
+    if avg < p_wpc:
+        # SWP + WPC.
+        q_wpc = (B - p_swp * Q) / (p_wpc - p_swp)
+        q_swp = Q - q_wpc
+        return {SWP: (q_swp, p_swp, q_swp * p_swp),
+                DWP: (z, p_dwp, z),
+                WPC: (q_wpc, p_wpc, q_wpc * p_wpc)}
+    # avg ≥ 22 → only WPC; any balance above 22 × qty flows to later items.
+    return {SWP: (z, p_swp, z), DWP: (z, p_dwp, z), WPC: (Q, p_wpc, Q * p_wpc)}
 
 
 def _allocate_buckets(agg: dict, balance_cif) -> dict:

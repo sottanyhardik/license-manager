@@ -9,20 +9,73 @@ from decimal import Decimal as _Dec
 
 from apps.license.services.e132_plan import (
     ALUMINIUM, CHEESE, MILK, PKO, RBD, YEAST, UNIT_PRICE, PLANNING_ORDER,
-    NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC,
-    classify_e132_record, plan_e132, plan_e132_per_item,
+    NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC, SWP, DWP, WPC,
+    classify_e132_record, plan_e132, plan_e132_per_item, plan_e132_per_item_split,
 )
 
 
 class TestPriorityOrder(unittest.TestCase):
     def test_planning_order(self):
-        # Yeast → Cheese → PKO → RBD → Milk → NUT & NUTS → RAISIN →
-        # CEREALS FLAKES → CMC → Aluminium Foil (last)
+        # Yeast → Cheese → PKO → RBD → [milk: SWP, DWP, WPC] → NUT & NUTS →
+        # RAISIN → CEREALS FLAKES → CMC → Aluminium Foil (last)
         self.assertEqual(
             PLANNING_ORDER,
-            (YEAST, CHEESE, PKO, RBD, MILK,
+            (YEAST, CHEESE, PKO, RBD, SWP, DWP, WPC,
              NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC, ALUMINIUM),
         )
+
+
+class TestMilkSplit(unittest.TestCase):
+    """Milk pool is split into SWP $1.5 / DWP $5 / WPC $22 (cheap-first): all
+    quantity used and planned value == balance available at milk's turn."""
+
+    def _milk(self, qty, bal):
+        recs = [{"record_id": 1, "quantity": qty, "hs_code": "", "description": "milk powder"}]
+        return {i["planning_item_name"]: i for i in plan_e132(recs, balance_cif=bal)["items"]}
+
+    def test_classify_milk_to_pool(self):
+        # Detection unchanged: milk records classify to the internal MILK pool.
+        self.assertEqual(classify_e132_record(None, "whole milk")[0], MILK)
+
+    def test_value_bound_split(self):
+        # Q=1000, B=10000 (avg $10). Cheap-first → SWP + WPC, DWP=0.
+        by = self._milk(1000, 10000)
+        self.assertAlmostEqual(float(by[SWP]["total_quantity"]), 585.3659, places=3)
+        self.assertAlmostEqual(float(by[WPC]["total_quantity"]), 414.6341, places=3)
+        self.assertEqual(float(by[DWP]["total_quantity"]), 0.0)
+        # all quantity used, value == balance (0 left)
+        self.assertAlmostEqual(sum(float(by[p]["total_quantity"]) for p in (SWP, DWP, WPC)), 1000.0, places=3)
+        self.assertAlmostEqual(sum(float(by[p]["planning_value"]) for p in (SWP, DWP, WPC)), 10000.0, places=2)
+
+    def test_quantity_bound_all_wpc(self):
+        # Balance ample (>= 22*Q) → all WPC, all quantity used, value = 22*Q.
+        by = self._milk(100, 100000)
+        self.assertEqual(float(by[WPC]["total_quantity"]), 100.0)
+        self.assertEqual(float(by[WPC]["planning_value"]), 2200.0)
+        self.assertEqual(float(by[SWP]["total_quantity"]), 0.0)
+
+    def test_uncapped_defaults_to_wpc(self):
+        # No balance target → qty × top rate on WPC.
+        by = self._milk(3, None)
+        self.assertEqual(float(by[WPC]["planning_value"]), 66.0)
+
+    def test_prices(self):
+        self.assertEqual(UNIT_PRICE[SWP], Decimal("1.50"))
+        self.assertEqual(UNIT_PRICE[DWP], Decimal("5.00"))
+        self.assertEqual(UNIT_PRICE[WPC], Decimal("22.00"))
+
+    def test_per_item_split_sublines(self):
+        recs = [{"record_id": 1, "quantity": 1000, "hs_code": "", "description": "milk"}]
+        lines = plan_e132_per_item_split(recs, 10000)[1]
+        prods = {L["planning_item"]: L for L in lines}
+        self.assertEqual(set(prods), {SWP, WPC})  # DWP=0 dropped from sublines
+        self.assertAlmostEqual(sum(float(L["planned_cif"]) for L in lines), 10000.0, places=2)
+
+    def test_per_item_blended_rate(self):
+        recs = [{"record_id": 1, "quantity": 1000, "hs_code": "", "description": "milk"}]
+        per = plan_e132_per_item(recs, 10000)[1]
+        self.assertEqual(per["planning_item"], MILK)
+        self.assertAlmostEqual(float(per["unit_price"]), 10.0, places=4)  # 10000/1000
 
 
 class TestNutRaisinCereals(unittest.TestCase):
@@ -215,14 +268,13 @@ class TestAggregation(unittest.TestCase):
         self.assertEqual(by[CHEESE]["planning_value"], Decimal("15.5") * Decimal("5.00"))
         self.assertEqual(by[ALUMINIUM]["planning_value"], Decimal("100") * Decimal("4.50"))
 
-    def test_milk_priced_at_ceiling(self):
-        # Milk price = 22 (ceiling of 0–22 range); value = qty × 22; not missing.
+    def test_milk_uncapped_goes_to_wpc(self):
+        # No balance → milk pool (qty 3) defaults to WPC at $22; value = 3 × 22.
         result = plan_e132(self._recs())
         by = {i["planning_item_name"]: i for i in result["items"]}
-        self.assertEqual(by[MILK]["unit_price"], Decimal("22.00"))
-        self.assertEqual(by[MILK]["planning_value"], Decimal("3") * Decimal("22.00"))
-        self.assertTrue(by[MILK]["unit_price_defined"])
-        self.assertNotIn(MILK, result["missing_inputs"])
+        self.assertEqual(by[WPC]["unit_price"], Decimal("22.00"))
+        self.assertEqual(by[WPC]["planning_value"], Decimal("3") * Decimal("22.00"))
+        self.assertNotIn(MILK, by)  # Milk pool is never an output item
 
     def test_exceptions_reported(self):
         result = plan_e132(self._recs())
@@ -298,7 +350,7 @@ class TestFixedPrices(unittest.TestCase):
         self.assertEqual(UNIT_PRICE[RBD], Decimal("1.20"))
         self.assertEqual(UNIT_PRICE[YEAST], Decimal("3.00"))
         self.assertEqual(UNIT_PRICE[ALUMINIUM], Decimal("4.50"))
-        self.assertEqual(UNIT_PRICE[MILK], Decimal("22.00"))
+        self.assertEqual(UNIT_PRICE[WPC], Decimal("22.00"))
 
 
 if __name__ == "__main__":

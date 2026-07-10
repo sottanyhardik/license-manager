@@ -55,16 +55,21 @@ PKO = "PKO - E132"
 RBD = "RBD - E132"
 YEAST = "Yeast - E132"
 ALUMINIUM = "Aluminium Foil - E132"
-MILK = "Milk - E132"
 NUT_NUTS = "NUT & NUTS - E132"
 RAISIN_ITEM = "RAISIN - E132"
 CEREALS_FLAKES = "CEREALS FLAKES - E132"
 CMC = "CMC - E132"
 
-# Milk's unit price may range 0–22 USD; the ceiling (22) is used as the planning
-# unit price (editable down in the sheet if a lower value is agreed). Change this
-# one constant to adjust.
-MILK_MAX_PRICE = Decimal("22.00")
+# ── Milk split ───────────────────────────────────────────────────────────────
+# Milk is detected by classification (see _rule_milk) into a single internal pool
+# (MILK), then the pooled milk quantity is SPLIT across three whey products at
+# fixed prices so that (a) all milk quantity is utilised and (b) the planned value
+# equals the balance available at milk's turn ("0 $ left"). See _split_milk.
+MILK = "Milk - E132"          # internal classification pool only — NOT an output item
+SWP = "SWP - E132"            # Skimmed Whey Powder
+DWP = "DWP - E132"            # Demineralised Whey Powder
+WPC = "WPC - E132"            # Whey Protein Concentrate
+MILK_PRODUCTS = (SWP, DWP, WPC)   # display order of the three split products
 
 # ── Fixed planning unit prices (USD). ────────────────────────────────────────
 UNIT_PRICE: dict[str, Optional[Decimal]] = {
@@ -73,7 +78,9 @@ UNIT_PRICE: dict[str, Optional[Decimal]] = {
     PKO: Decimal("2.30"),
     RBD: Decimal("1.20"),
     ALUMINIUM: Decimal("4.50"),
-    MILK: MILK_MAX_PRICE,  # ceiling of the permitted 0–22 range
+    SWP: Decimal("1.50"),
+    DWP: Decimal("5.00"),
+    WPC: Decimal("22.00"),
     NUT_NUTS: Decimal("10.00"),
     RAISIN_ITEM: Decimal("4.00"),
     CEREALS_FLAKES: Decimal("0.60"),
@@ -87,10 +94,14 @@ UNIT_PRICE: dict[str, Optional[Decimal]] = {
 # for HSN-2106 records). Default True per the spec's own recommendation.
 PRIORITY_YEAST_FIRST = True
 
-# Planning-item display/priority order for the output. The three additions
-# (NUT & NUTS, RAISIN, CEREALS FLAKES) are appended after the confirmed six, so
-# existing higher-priority classifications are unchanged.
-PLANNING_ORDER = (YEAST, CHEESE, PKO, RBD, MILK, NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC, ALUMINIUM)
+# Planning-item display/priority order for the OUTPUT. The milk pool occupies rank
+# 5 as three products (SWP, DWP, WPC). Records still classify to the MILK pool;
+# _allocate_buckets expands that pool into these three at planning time.
+PLANNING_ORDER = (
+    YEAST, CHEESE, PKO, RBD,
+    SWP, DWP, WPC,
+    NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC, ALUMINIUM,
+)
 
 
 # ── Normalization ────────────────────────────────────────────────────────────
@@ -300,30 +311,97 @@ def _allocate_step(qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[
     return balance, balance / qty
 
 
+def _split_milk(pool_qty: Decimal, remaining) -> dict:
+    """Split the pooled milk quantity across SWP / DWP / WPC (cheap-first).
+
+    Goal: use ALL milk quantity AND make the planned value equal the balance
+    available at milk's turn ("0 $ left"). Cheap-first = maximise the cheapest
+    product (SWP): start with every unit as SWP, then upgrade the FEWEST units to
+    WPC (the largest price jump) needed to reach the balance. DWP is therefore 0
+    in the normal range — populating it would require more upgraded units and less
+    SWP, which the cheap-first rule forbids.
+
+    Returns ``{SWP|DWP|WPC: (qty, unit_price, planned_value)}``.
+    """
+    p_swp, p_dwp, p_wpc = UNIT_PRICE[SWP], UNIT_PRICE[DWP], UNIT_PRICE[WPC]
+    z = Decimal("0")
+    empty = {SWP: (z, p_swp, z), DWP: (z, p_dwp, z), WPC: (z, p_wpc, z)}
+    Q = pool_qty
+    if Q <= 0:
+        return empty
+    if remaining is None:
+        # Classification-only mode (no balance target): show qty × the top rate.
+        return {SWP: (z, p_swp, z), DWP: (z, p_dwp, z), WPC: (Q, p_wpc, Q * p_wpc)}
+    B = remaining
+    if B <= 0:
+        return empty  # no balance left → milk cannot be planned here
+    min_val, max_val = p_swp * Q, p_wpc * Q
+    if B >= max_val:
+        # Balance exceeds even all-WPC → all WPC; the remainder flows to later items.
+        return {SWP: (z, p_swp, z), DWP: (z, p_dwp, z), WPC: (Q, p_wpc, max_val)}
+    if B <= min_val:
+        # Even all-SWP overflows the balance → use only what the balance affords at
+        # the cheapest rate (maximise utilised quantity); the rest is unutilised.
+        return {SWP: (B / p_swp, p_swp, B), DWP: (z, p_dwp, z), WPC: (z, p_wpc, z)}
+    # Normal range: baseline all-SWP, upgrade q_wpc units SWP→WPC to add (B − min_val).
+    q_wpc = (B - min_val) / (p_wpc - p_swp)
+    q_swp = Q - q_wpc
+    return {
+        SWP: (q_swp, p_swp, q_swp * p_swp),
+        DWP: (z, p_dwp, z),
+        WPC: (q_wpc, p_wpc, q_wpc * p_wpc),
+    }
+
+
 def _allocate_buckets(agg: dict, balance_cif) -> dict:
-    """Waterfall-allocate planned value to each planning item in PRIORITY order
-    (Yeast → Cheese → PKO → RBD → Milk → NUT & NUTS → RAISIN → CEREALS FLAKES →
-    CMC → Aluminium Foil), capping the running total
-    at ``balance_cif`` (max debit per licence = Balance CIF). When ``balance_cif`` is
+    """Waterfall-allocate planned value to each OUTPUT planning item in PRIORITY
+    order (Yeast → Cheese → PKO → RBD → [milk: SWP/DWP/WPC] → NUT & NUTS → RAISIN →
+    CEREALS FLAKES → CMC → Aluminium Foil), capping the running total at
+    ``balance_cif`` (max debit per licence = Balance CIF). When ``balance_cif`` is
     None the value is uncapped (qty × max price) — classification-only mode.
 
-    Returns ``{item: (planned_value, effective_unit_price)}``.
+    The milk pool (agg[MILK]) is expanded into SWP/DWP/WPC via _split_milk using the
+    balance remaining when milk's turn is reached.
+
+    Returns ``{item: {"qty", "value", "price", "count"}}`` for every output item
+    that carries quantity.
     """
     remaining = _d(balance_cif) if balance_cif is not None else None
     out: dict = {}
+    milk_done = False
     for name in PLANNING_ORDER:
+        if name in MILK_PRODUCTS:
+            if milk_done:
+                continue
+            milk_done = True
+            pool = agg.get(MILK)
+            pool_qty = pool["qty"] if pool else Decimal("0")
+            pool_count = pool.get("count", 0) if pool else 0
+            if pool_qty <= 0:
+                continue
+            split = _split_milk(pool_qty, remaining)
+            total_val = sum((v for (_q, _p, v) in split.values()), Decimal("0"))
+            if remaining is not None:
+                remaining -= total_val
+            for i, prod in enumerate(MILK_PRODUCTS):
+                q, p, v = split[prod]
+                # Attribute the source-record count to the first product row only,
+                # so the total record count is not triple-counted.
+                out[prod] = {"qty": q, "value": v, "price": p, "count": pool_count if i == 0 else 0}
+            continue
         if name not in agg:
             continue
         qty = agg[name]["qty"]
+        cnt = agg[name].get("count", 0)
         max_price = UNIT_PRICE.get(name)
         if max_price is None:
-            out[name] = (None, None)
+            out[name] = {"qty": qty, "value": None, "price": None, "count": cnt}
         elif remaining is None:
-            out[name] = (qty * max_price, max_price)
+            out[name] = {"qty": qty, "value": qty * max_price, "price": max_price, "count": cnt}
         else:
             planned, eff = _allocate_step(qty, max_price, remaining)
             remaining -= planned
-            out[name] = (planned, eff)
+            out[name] = {"qty": qty, "value": planned, "price": eff, "count": cnt}
     return out
 
 
@@ -351,6 +429,11 @@ def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
     Returns ``{record_id: {planning_item, reason, planned_quantity, unit_price,
     planned_cif}}`` for classified records; unclassified records are omitted (they
     belong in the exception report).
+
+    Milk records are priced at the BLENDED effective milk rate (total split value ÷
+    total milk quantity) and reported as one line each — the one-line-per-record
+    shape this function guarantees. Callers that want the SWP/DWP/WPC breakdown per
+    record use ``plan_e132_per_item_split``.
     """
     classified = []
     agg: dict = {}
@@ -360,12 +443,19 @@ def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
             continue
         qty = _d(rec.get("quantity"))
         classified.append((rec.get("record_id"), item, reason, qty))
-        agg.setdefault(item, {"qty": Decimal("0")})["qty"] += qty
+        b = agg.setdefault(item, {"qty": Decimal("0"), "count": 0})
+        b["qty"] += qty
+        b["count"] += 1
 
-    alloc = _allocate_buckets(agg, balance_cif)  # {item: (planned_value, eff_rate)}
+    alloc = _allocate_buckets(agg, balance_cif)  # {item: {qty,value,price,count}}
+    _milk_rate = _blended_milk_rate(alloc)
     out: dict = {}
     for rid, item, reason, qty in classified:
-        _planned, eff_rate = alloc.get(item, (None, None))
+        if item == MILK:
+            eff_rate = _milk_rate
+        else:
+            a = alloc.get(item)
+            eff_rate = a["price"] if a else None
         out[rid] = {
             "planning_item": item,
             "reason": reason,
@@ -373,6 +463,73 @@ def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
             "unit_price": eff_rate,
             "planned_cif": (qty * eff_rate) if eff_rate is not None else None,
         }
+    return out
+
+
+def _blended_milk_rate(alloc: dict):
+    """Effective single milk rate = total split value ÷ total milk quantity, or None
+    if there is no milk / no priced milk value."""
+    qty = sum((alloc[p]["qty"] for p in MILK_PRODUCTS if p in alloc), Decimal("0"))
+    val = sum((alloc[p]["value"] for p in MILK_PRODUCTS
+               if p in alloc and alloc[p]["value"] is not None), Decimal("0"))
+    return (val / qty) if qty > 0 else None
+
+
+def plan_e132_per_item_split(records: Iterable[dict], balance_cif=None) -> dict:
+    """Like ``plan_e132_per_item`` but returns a LIST of plan lines per record so a
+    single milk import item can be shown as its SWP/DWP/WPC split (decision 3.B).
+
+    Returns ``{record_id: [ {planning_item, reason, planned_quantity, unit_price,
+    planned_cif}, ... ]}``. Non-milk records yield a single-element list; milk
+    records yield one entry per split product that carries quantity, apportioning
+    the record's quantity by the pool's product fractions.
+    """
+    classified = []
+    agg: dict = {}
+    for rec in records:
+        item, reason = classify_e132_record(rec.get("hs_code"), rec.get("description"))
+        if item is None:
+            continue
+        qty = _d(rec.get("quantity"))
+        classified.append((rec.get("record_id"), item, reason, qty))
+        b = agg.setdefault(item, {"qty": Decimal("0"), "count": 0})
+        b["qty"] += qty
+        b["count"] += 1
+
+    alloc = _allocate_buckets(agg, balance_cif)
+    # Pool fractions for apportioning each milk record across the products.
+    pool_qty = agg.get(MILK, {}).get("qty", Decimal("0"))
+    milk_fracs = []
+    if pool_qty > 0:
+        for prod in MILK_PRODUCTS:
+            a = alloc.get(prod)
+            if a and a["qty"] > 0:
+                milk_fracs.append((prod, a["qty"] / pool_qty, a["price"]))
+
+    out: dict = {}
+    for rid, item, reason, qty in classified:
+        if item == MILK:
+            lines = []
+            for prod, frac, price in milk_fracs:
+                pq = qty * frac
+                lines.append({
+                    "planning_item": prod,
+                    "reason": reason,
+                    "planned_quantity": pq,
+                    "unit_price": price,
+                    "planned_cif": (pq * price) if price is not None else None,
+                })
+            out[rid] = lines
+        else:
+            a = alloc.get(item)
+            eff_rate = a["price"] if a else None
+            out[rid] = [{
+                "planning_item": item,
+                "reason": reason,
+                "planned_quantity": qty,
+                "unit_price": eff_rate,
+                "planned_cif": (qty * eff_rate) if eff_rate is not None else None,
+            }]
     return out
 
 
@@ -423,19 +580,18 @@ def plan_e132(records: Iterable[dict], balance_cif=None) -> dict:
     alloc = _allocate_buckets(agg, balance_cif)  # priority-order, balance-capped
     items = []
     for name in PLANNING_ORDER:
-        if name not in agg:
+        a = alloc.get(name)
+        if a is None:
             continue
         max_price = UNIT_PRICE.get(name)
-        total_qty = agg[name]["qty"]
-        planned, eff_rate = alloc[name]
         items.append({
             "norm": NORM,
             "planning_item_name": name,
-            "total_quantity": total_qty,
-            "unit_price": eff_rate,          # effective rate (= max unless capped)
+            "total_quantity": a["qty"],
+            "unit_price": a["price"],        # effective rate (= max unless capped)
             "max_unit_price": max_price,     # the fixed ceiling
-            "planning_value": planned,       # capped at remaining Balance CIF
-            "num_source_records": agg[name]["count"],
+            "planning_value": a["value"],    # capped at remaining Balance CIF
+            "num_source_records": a["count"],
             "unit_price_defined": max_price is not None,
         })
 

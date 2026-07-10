@@ -12,7 +12,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.core.models import ItemNameModel, SionNormClassModel
-from apps.license.services.e132_plan import NORM, PLANNING_ORDER
+from apps.license.services.e132_plan import MILK, NORM, PLANNING_ORDER
 
 
 class Command(BaseCommand):
@@ -63,6 +63,16 @@ class Command(BaseCommand):
                     obj.save(update_fields=fields)
             else:
                 self.stdout.write(f"  = ok      {name}")
+
+        # Milk is now an internal classification pool only (split into SWP/DWP/WPC),
+        # never an output planning item — hide its master.
+        milk = ItemNameModel.objects.filter(name=MILK).first()
+        if milk is not None and milk.is_active:
+            self.stdout.write(f"  ~ hide    {MILK} (now internal pool)")
+            updated += 1
+            if not dry:
+                milk.is_active = False
+                milk.save(update_fields=["is_active"])
 
         self.stdout.write(self.style.SUCCESS(
             f"E132 planning items: {created} created, {updated} updated"

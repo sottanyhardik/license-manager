@@ -56,7 +56,7 @@ class TestNutRaisinCereals(unittest.TestCase):
         self.assertEqual(UNIT_PRICE[NUT_NUTS], _Dec("10.00"))
         self.assertEqual(UNIT_PRICE[RAISIN_ITEM], _Dec("4.00"))
         self.assertEqual(UNIT_PRICE[CEREALS_FLAKES], _Dec("0.60"))
-        self.assertIsNone(UNIT_PRICE[CMC])  # CMC price still TBD
+        self.assertEqual(UNIT_PRICE[CMC], _Dec("5.00"))
 
     def test_raisin_priced_value(self):
         # 100 × $4 = 400, within a generous balance.

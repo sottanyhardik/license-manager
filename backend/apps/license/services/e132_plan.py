@@ -77,10 +77,9 @@ UNIT_PRICE: dict[str, Optional[Decimal]] = {
     NUT_NUTS: Decimal("10.00"),
     RAISIN_ITEM: Decimal("4.00"),
     CEREALS_FLAKES: Decimal("0.60"),
-    # ⚠ CMC price To-Be-Defined (no price supplied yet). Until set, it classifies
-    #   and aggregates quantity but shows 'TBD' and contributes 0 to value (same
-    #   handling Milk had pre-ceiling). Set a Decimal here.
-    CMC: None,
+    # ⚠ CMC price is set, but _rule_cmc is still a placeholder that matches nothing
+    #   — CMC will not classify any record until a real rule is supplied.
+    CMC: Decimal("5.00"),
 }
 
 # Toggle the Yeast/2106 overlap resolution (decision #1). True = corrected

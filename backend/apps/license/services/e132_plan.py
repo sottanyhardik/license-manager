@@ -454,8 +454,7 @@ def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
         if item == MILK:
             eff_rate = _milk_rate
         else:
-            a = alloc.get(item)
-            eff_rate = a["price"] if a else None
+            eff_rate = _effective_rate(alloc.get(item))
         out[rid] = {
             "planning_item": item,
             "reason": reason,
@@ -464,6 +463,17 @@ def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
             "planned_cif": (qty * eff_rate) if eff_rate is not None else None,
         }
     return out
+
+
+def _effective_rate(a):
+    """True per-unit rate for a bucket = allocated value ÷ quantity. Correct in all
+    cases: uncapped (= max price), partially balance-capped (dropped rate), and
+    fully exhausted (0 — no balance left), unlike the raw ceiling price which stays
+    at max even when nothing was allocated."""
+    if not a or a.get("value") is None:
+        return None
+    q = a["qty"]
+    return (a["value"] / q) if q and q > 0 else a["price"]
 
 
 def _blended_milk_rate(alloc: dict):
@@ -521,8 +531,7 @@ def plan_e132_per_item_split(records: Iterable[dict], balance_cif=None) -> dict:
                 })
             out[rid] = lines
         else:
-            a = alloc.get(item)
-            eff_rate = a["price"] if a else None
+            eff_rate = _effective_rate(alloc.get(item))
             out[rid] = [{
                 "planning_item": item,
                 "reason": reason,

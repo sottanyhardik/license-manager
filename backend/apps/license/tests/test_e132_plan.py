@@ -16,12 +16,12 @@ from apps.license.services.e132_plan import (
 
 class TestPriorityOrder(unittest.TestCase):
     def test_planning_order(self):
-        # Yeast → Cheese → PKO → RBD → Milk → Aluminium Foil → NUT & NUTS →
-        # RAISIN → CEREALS FLAKES → CMC
+        # Yeast → Cheese → PKO → RBD → Milk → NUT & NUTS → RAISIN →
+        # CEREALS FLAKES → CMC → Aluminium Foil (last)
         self.assertEqual(
             PLANNING_ORDER,
-            (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM,
-             NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC),
+            (YEAST, CHEESE, PKO, RBD, MILK,
+             NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC, ALUMINIUM),
         )
 
 

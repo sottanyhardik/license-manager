@@ -90,7 +90,7 @@ PRIORITY_YEAST_FIRST = True
 # Planning-item display/priority order for the output. The three additions
 # (NUT & NUTS, RAISIN, CEREALS FLAKES) are appended after the confirmed six, so
 # existing higher-priority classifications are unchanged.
-PLANNING_ORDER = (YEAST, CHEESE, PKO, RBD, MILK, ALUMINIUM, NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC)
+PLANNING_ORDER = (YEAST, CHEESE, PKO, RBD, MILK, NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC, ALUMINIUM)
 
 
 # ── Normalization ────────────────────────────────────────────────────────────
@@ -225,20 +225,19 @@ def _rule_cmc(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-# Corrected priority (decision #1). Yeast first so it is reachable; Milk ahead of
-# Aluminium Foil per the confirmed business order. NUT & NUTS / RAISIN / CEREALS
-# FLAKES appended last (lowest priority).
+# Corrected priority (decision #1). Yeast first so it is reachable. Aluminium Foil
+# is evaluated LAST per the confirmed business order.
 _RULES_CORRECTED = (
     (YEAST, _rule_yeast),
     (CHEESE, _rule_cheese),
     (PKO, _rule_pko),
     (RBD, _rule_rbd),
     (MILK, _rule_milk),
-    (ALUMINIUM, _rule_aluminium),
     (NUT_NUTS, _rule_nut),
     (RAISIN_ITEM, _rule_raisin),
     (CEREALS_FLAKES, _rule_cereals),
     (CMC, _rule_cmc),
+    (ALUMINIUM, _rule_aluminium),
 )
 # Literal spec order (Yeast after Cheese — provided for completeness/audit).
 _RULES_LITERAL = (
@@ -246,12 +245,12 @@ _RULES_LITERAL = (
     (PKO, _rule_pko),
     (RBD, _rule_rbd),
     (YEAST, _rule_yeast),
-    (ALUMINIUM, _rule_aluminium),
     (MILK, _rule_milk),
     (NUT_NUTS, _rule_nut),
     (RAISIN_ITEM, _rule_raisin),
     (CEREALS_FLAKES, _rule_cereals),
     (CMC, _rule_cmc),
+    (ALUMINIUM, _rule_aluminium),
 )
 
 
@@ -303,8 +302,8 @@ def _allocate_step(qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[
 
 def _allocate_buckets(agg: dict, balance_cif) -> dict:
     """Waterfall-allocate planned value to each planning item in PRIORITY order
-    (Yeast → Cheese → PKO → RBD → Milk → Aluminium Foil → NUT & NUTS → RAISIN →
-    CEREALS FLAKES), capping the running total
+    (Yeast → Cheese → PKO → RBD → Milk → NUT & NUTS → RAISIN → CEREALS FLAKES →
+    CMC → Aluminium Foil), capping the running total
     at ``balance_cif`` (max debit per licence = Balance CIF). When ``balance_cif`` is
     None the value is uncapped (qty × max price) — classification-only mode.
 

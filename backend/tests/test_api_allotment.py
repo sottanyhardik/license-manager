@@ -13,7 +13,7 @@ class TestAllotmentAPI:
     
     def test_list_allotments(self, authenticated_client, test_allotment):
         """Test GET /allotments/"""
-        url = reverse('allotment-list')
+        url = reverse('allotment:allotment-list')
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
@@ -21,7 +21,7 @@ class TestAllotmentAPI:
     
     def test_create_allotment(self, authenticated_client, fake_allotment_data):
         """Test POST /allotments/"""
-        url = reverse('allotment-list')
+        url = reverse('allotment:allotment-list')
         response = authenticated_client.post(url, fake_allotment_data, format='json')
         
         assert response.status_code == status.HTTP_201_CREATED
@@ -29,7 +29,7 @@ class TestAllotmentAPI:
     
     def test_retrieve_allotment(self, authenticated_client, test_allotment):
         """Test GET /allotments/{id}/"""
-        url = reverse('allotment-detail', kwargs={'pk': test_allotment.id})
+        url = reverse('allotment:allotment-detail', kwargs={'pk': test_allotment.id})
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
@@ -37,7 +37,7 @@ class TestAllotmentAPI:
     
     def test_update_allotment(self, authenticated_client, test_allotment):
         """Test PATCH /allotments/{id}/"""
-        url = reverse('allotment-detail', kwargs={'pk': test_allotment.id})
+        url = reverse('allotment:allotment-detail', kwargs={'pk': test_allotment.id})
         data = {'required_quantity': 2000.0}
         response = authenticated_client.patch(url, data, format='json')
         
@@ -46,21 +46,21 @@ class TestAllotmentAPI:
     
     def test_delete_allotment(self, authenticated_client, test_allotment):
         """Test DELETE /allotments/{id}/"""
-        url = reverse('allotment-detail', kwargs={'pk': test_allotment.id})
+        url = reverse('allotment:allotment-detail', kwargs={'pk': test_allotment.id})
         response = authenticated_client.delete(url)
         
         assert response.status_code == status.HTTP_204_NO_CONTENT
     
     def test_filter_allotments_by_company(self, authenticated_client, test_allotment):
         """Test GET /allotments/?company={id}"""
-        url = reverse('allotment-list')
+        url = reverse('allotment:allotment-list')
         response = authenticated_client.get(url, {'company': test_allotment.company.id})
         
         assert response.status_code == status.HTTP_200_OK
     
     def test_filter_allotments_by_approved(self, authenticated_client, test_allotment):
         """Test GET /allotments/?is_approved=false"""
-        url = reverse('allotment-list')
+        url = reverse('allotment:allotment-list')
         response = authenticated_client.get(url, {'is_approved': 'false'})
         
         assert response.status_code == status.HTTP_200_OK

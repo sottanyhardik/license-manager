@@ -33,6 +33,27 @@ print_error()   { echo -e "${RED}❌ $1${NC}"; }
 print_warn()    { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_info()    { echo -e "${BLUE}→ $1${NC}"; }
 
+# ── Health gate ──────────────────────────────────────────────
+# Polls /api/health/ on the deploy target from this machine.
+# Called after each server's SSH block so we validate network
+# reachability, nginx, and the Django app together.
+wait_for_health() {
+    local host="${1:-localhost}"
+    local max_attempts=5
+    local status
+    for i in $(seq 1 $max_attempts); do
+        status=$(curl -s -o /dev/null -w "%{http_code}" "http://${host}/api/health/" 2>/dev/null || echo "000")
+        if [ "$status" = "200" ]; then
+            print_success "Health check passed (HTTP 200)"
+            return 0
+        fi
+        print_warn "Health check attempt $i/$max_attempts failed (HTTP $status), retrying in 3s..."
+        sleep 3
+    done
+    print_error "Deploy failed: /api/health/ not 200 after $max_attempts attempts"
+    return 1
+}
+
 # ── Configuration ───────────────────────────────────────────
 SERVER_USER="django"
 ALL_SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
@@ -443,6 +464,10 @@ echo -e "\${GREEN}================================================\${NC}"
 echo_info "URL: https://${SERVER_DOMAIN}"
 echo '$PASSWORD' | sudo -S supervisorctl status | grep license-manager
 ENDSSH
+
+    # ── Health gate (runs from deploy machine against server IP) ─
+    print_info "Running post-deploy health check against http://${SERVER_IP}/api/health/ ..."
+    wait_for_health "$SERVER_IP"
 }
 
 # ── Run deployment ───────────────────────────────────────────

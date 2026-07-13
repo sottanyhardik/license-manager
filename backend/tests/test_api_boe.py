@@ -13,15 +13,15 @@ class TestBillOfEntryAPI:
     
     def test_list_boe(self, authenticated_client, test_bill_of_entry):
         """Test GET /bill-of-entries/"""
-        url = reverse('billofentry-list')
+        url = reverse('bill_of_entry:bill-of-entries-list')
         response = authenticated_client.get(url)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert 'results' in response.data or isinstance(response.data, list)
-    
+
     def test_retrieve_boe(self, authenticated_client, test_bill_of_entry):
         """Test GET /bill-of-entries/{id}/"""
-        url = reverse('billofentry-detail', kwargs={'pk': test_bill_of_entry.id})
+        url = reverse('bill_of_entry:bill-of-entries-detail', kwargs={'pk': test_bill_of_entry.id})
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
@@ -30,33 +30,33 @@ class TestBillOfEntryAPI:
     
     def test_boe_has_item_details(self, authenticated_client, test_bill_of_entry):
         """Test BOE includes item details"""
-        url = reverse('billofentry-detail', kwargs={'pk': test_bill_of_entry.id})
+        url = reverse('bill_of_entry:bill-of-entries-detail', kwargs={'pk': test_bill_of_entry.id})
         response = authenticated_client.get(url)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data['item_details']) >= 3
-    
+
     def test_filter_boe_by_invoice_null(self, authenticated_client, test_bill_of_entry):
         """Test GET /bill-of-entries/?invoice_no__isnull=true"""
         # Make BOE available (no invoice)
         test_bill_of_entry.invoice_no = None
         test_bill_of_entry.save()
-        
-        url = reverse('billofentry-list')
+
+        url = reverse('bill_of_entry:bill-of-entries-list')
         response = authenticated_client.get(url, {'invoice_no__isnull': 'true'})
         
         assert response.status_code == status.HTTP_200_OK
     
     def test_filter_boe_by_license(self, authenticated_client, test_bill_of_entry):
         """Test GET /bill-of-entries/?license={id}"""
-        url = reverse('billofentry-list')
+        url = reverse('bill_of_entry:bill-of-entries-list')
         response = authenticated_client.get(url, {'license': test_bill_of_entry.license.id})
         
         assert response.status_code == status.HTTP_200_OK
 
     def test_search_boe_by_license_number(self, authenticated_client, test_bill_of_entry):
         """Test GET /bill-of-entries/?search={license_number}"""
-        url = reverse('billofentry-list')
+        url = reverse('bill_of_entry:bill-of-entries-list')
         response = authenticated_client.get(url, {'search': test_bill_of_entry.license.license_number})
 
         assert response.status_code == status.HTTP_200_OK
@@ -75,7 +75,7 @@ class TestBOEIntegration:
         assert boe.invoice_no == test_trade.invoice_number
         
         # Verify via API
-        url = reverse('billofentry-detail', kwargs={'pk': boe.id})
+        url = reverse('bill_of_entry:bill-of-entries-detail', kwargs={'pk': boe.id})
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK

@@ -2,6 +2,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
+app_name = "masters"
+
 from .views.activity_log import ActivityLogViewSet
 from .views.views import (CompanyViewSet, PortViewSet, HSCodeViewSet, HeadSIONNormsViewSet, SionNormClassViewSet,
                           ProductDescriptionViewSet, UnitPriceViewSet, ItemNameViewSet, GroupViewSet,

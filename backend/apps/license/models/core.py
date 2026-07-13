@@ -157,7 +157,7 @@ class LicenseDetailsModel(AuditModel):
         return self.license_number
 
     def get_absolute_url(self) -> str:
-        return reverse("license-detail", kwargs={"license": self.license_number})
+        return reverse("license:licenses-detail", kwargs={"pk": self.pk})
 
     # Backward-compat shims for templates that previously used Django's auto-generated
     # `get_<field>_display()` (only present on CharField(choices=...)). After the FK

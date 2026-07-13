@@ -8,10 +8,14 @@ Usage:
     python pdf_coordinate_finder.py path/to/template.pdf
 """
 
+import logging
 import sys
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
+
+logger = logging.getLogger(__name__)
+
 
 def create_coordinate_grid(output_path):
     """Create a PDF with coordinate grid overlay"""
@@ -29,19 +33,16 @@ def create_coordinate_grid(output_path):
         c.line(0, y, width, y)
 
     c.save()
-    print(f"Grid overlay created at: {output_path}")
-    print(f"Page size: {width} x {height}")
-    print("\nTo find coordinates:")
-    print("1. Open the grid PDF")
-    print("2. Find where you want to place text")
-    print("3. Read the x coordinate from bottom axis")
-    print("4. Read the y coordinate from left axis")
-    print("\nNote: (0,0) is at bottom-left corner")
+    logger.info("Grid overlay created at: %s", output_path)
+    logger.info("Page size: %s x %s", width, height)
+    logger.info("To find coordinates: Open the grid PDF, find where you want to place text, "
+                "read x from bottom axis, read y from left axis. Note: (0,0) is at bottom-left corner.")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     create_coordinate_grid("coordinate_grid.pdf")
-    print("\nCurrent field positions in aro.py:")
-    print("""
+    logger.info("Current field positions in aro.py:")
+    logger.info("""
     fields = {
         'company': (150, 720),
         'company_address_1': (150, 705),

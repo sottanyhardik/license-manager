@@ -1,6 +1,9 @@
 import datetime
+import logging
 
 from django.db.models import Q
+
+logger = logging.getLogger(__name__)
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 from apps.core.models import CompanyModel, PortModel
@@ -88,7 +91,7 @@ def parse_file(data):
                     if extract_data(line, phrase) != 'Qty':
                         data_dict[key] = extract_data(line, phrase)
                 except Exception as e:
-                    print(e)
+                    logger.exception("Error extracting data for phrase %s in line", phrase)
 
         if 'Debit-' in line or 'Credit-' in line:
             split_line = line.split('\t')

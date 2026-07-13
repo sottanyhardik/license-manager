@@ -1,6 +1,10 @@
+# Moved from backend/data_script/fetch_ownership.py
+import logging
 import os
 import time
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 def fetch_scrip_ownership(
@@ -86,7 +90,7 @@ def fetch_scrip_ownership(
             )
             if response.status_code == 429:
                 wait = 2 ** attempt * 5  # 5s, 10s, 20s, 40s
-                print(f"⏳ Rate limited (429). Retrying in {wait}s... (attempt {attempt + 1}/4)")
+                logger.warning("Rate limited (429). Retrying in %ds... (attempt %d/4)", wait, attempt + 1)
                 time.sleep(wait)
                 continue
             response.raise_for_status()
@@ -94,9 +98,9 @@ def fetch_scrip_ownership(
         except requests.RequestException as e:
             if attempt < 3:
                 wait = 2 ** attempt * 5
-                print(f"⚠️  Request error: {e}. Retrying in {wait}s... (attempt {attempt + 1}/4)")
+                logger.warning("Request error: %s. Retrying in %ds... (attempt %d/4)", e, wait, attempt + 1)
                 time.sleep(wait)
             else:
-                print(f"❌ Error fetching scrip ownership: {e}")
+                logger.error("Error fetching scrip ownership: %s", e)
                 return None
     return None

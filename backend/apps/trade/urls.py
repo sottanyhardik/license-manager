@@ -4,6 +4,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import LicenseTradeViewSet, TradeLineViewSet, TradePaymentViewSet
 
+app_name = "trade"
+
 router = DefaultRouter()
 router.register(r'trades', LicenseTradeViewSet, basename='trade')
 router.register(r'lines', TradeLineViewSet, basename='trade-line')

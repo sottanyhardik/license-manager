@@ -277,7 +277,7 @@ class CompanyModel(AuditModel):
         return self.name if self.name else self.iec
 
     def get_absolute_url(self):
-        return reverse('company-list')
+        return reverse('masters:company-list')
 
     def full_address(self):
         parts = [self.address_line_1, self.address_line_2]
@@ -378,7 +378,7 @@ class ItemNameModel(AuditModel):
         return self.name
 
     def get_absolute_url(self):
-        return reverse('item-list')
+        return reverse('masters:itemname-list')
 
 
 class HSCodeModel(AuditModel):
@@ -423,7 +423,7 @@ class SionNormClassModel(AuditModel):
         return f"{self.norm_class}"
 
     def get_absolute_url(self):
-        return reverse('Sion-detail', kwargs={'pk': self.pk})
+        return reverse('masters:sionnormclass-detail', kwargs={'pk': self.pk})
 
 
 class SIONExportModel(SyntheticUidMixin, SyncTimestampModel):

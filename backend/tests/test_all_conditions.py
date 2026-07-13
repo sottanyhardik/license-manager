@@ -47,7 +47,7 @@ class TestAuthentication:
         User.objects.create_user(username="auth_valid", password="pass1234!")
         client = APIClient()
         resp = client.post(
-            reverse("api-login"),
+            reverse("accounts:api-login"),
             {"username": "auth_valid", "password": "pass1234!"},
             format="json",
         )
@@ -58,7 +58,7 @@ class TestAuthentication:
         User.objects.create_user(username="auth_wrong", password="correct!")
         client = APIClient()
         resp = client.post(
-            reverse("api-login"),
+            reverse("accounts:api-login"),
             {"username": "auth_wrong", "password": "wrong!"},
             format="json",
         )
@@ -70,7 +70,7 @@ class TestAuthentication:
     def test_login_nonexistent_user_returns_4xx(self):
         client = APIClient()
         resp = client.post(
-            reverse("api-login"),
+            reverse("accounts:api-login"),
             {"username": "nobody", "password": "x"},
             format="json",
         )
@@ -81,39 +81,39 @@ class TestAuthentication:
 
     def test_login_missing_fields_returns_400(self):
         client = APIClient()
-        resp = client.post(reverse("api-login"), {}, format="json")
+        resp = client.post(reverse("accounts:api-login"), {}, format="json")
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_protected_license_endpoint_requires_auth(self):
         client = APIClient()
-        resp = client.get(reverse("licenses-list"))
+        resp = client.get(reverse("license:licenses-list"))
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_protected_boe_endpoint_requires_auth(self):
         client = APIClient()
-        resp = client.get(reverse("bill-of-entries-list"))
+        resp = client.get(reverse("bill_of_entry:bill-of-entries-list"))
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_protected_trade_endpoint_requires_auth(self):
         client = APIClient()
-        resp = client.get(reverse("trade-list"))
+        resp = client.get(reverse("trade:trade-list"))
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_protected_allotment_endpoint_requires_auth(self):
         client = APIClient()
-        resp = client.get(reverse("allotment-list"))
+        resp = client.get(reverse("allotment:allotment-list"))
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_valid_jwt_grants_access_to_licenses(self, test_user):
         client = _auth_client(test_user)
-        resp = client.get(reverse("licenses-list"))
+        resp = client.get(reverse("license:licenses-list"))
         assert resp.status_code == status.HTTP_200_OK
 
     def test_refresh_token_endpoint_exists(self, test_user):
         refresh = RefreshToken.for_user(test_user)
         client = APIClient()
         resp = client.post(
-            reverse("token_refresh"), {"refresh": str(refresh)}, format="json"
+            reverse("accounts:token_refresh"), {"refresh": str(refresh)}, format="json"
         )
         assert resp.status_code in [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
 
@@ -126,25 +126,25 @@ class TestAuthentication:
 class TestLicenseEndpoints:
 
     def test_list_licenses_returns_200(self, authenticated_client):
-        resp = authenticated_client.get(reverse("licenses-list"))
+        resp = authenticated_client.get(reverse("license:licenses-list"))
         assert resp.status_code == status.HTTP_200_OK
 
     def test_list_licenses_response_is_list_or_paginated(self, authenticated_client, test_license):
-        resp = authenticated_client.get(reverse("licenses-list"))
+        resp = authenticated_client.get(reverse("license:licenses-list"))
         assert resp.status_code == status.HTTP_200_OK
         # Either paginated dict with 'results' or a bare list
         assert "results" in resp.data or isinstance(resp.data, list)
 
     def test_retrieve_license_returns_correct_number(self, authenticated_client, test_license):
         resp = authenticated_client.get(
-            reverse("licenses-detail", kwargs={"pk": test_license.id})
+            reverse("license:licenses-detail", kwargs={"pk": test_license.id})
         )
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["license_number"] == test_license.license_number
 
     def test_retrieve_license_includes_import_items(self, authenticated_client, test_license):
         resp = authenticated_client.get(
-            reverse("licenses-detail", kwargs={"pk": test_license.id})
+            reverse("license:licenses-detail", kwargs={"pk": test_license.id})
         )
         assert resp.status_code == status.HTTP_200_OK
         # import_items must be present and have 3 items (from conftest fixture)
@@ -153,29 +153,29 @@ class TestLicenseEndpoints:
 
     def test_retrieve_nonexistent_license_returns_404(self, authenticated_client):
         resp = authenticated_client.get(
-            reverse("licenses-detail", kwargs={"pk": 999999})
+            reverse("license:licenses-detail", kwargs={"pk": 999999})
         )
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
     def test_filter_licenses_by_scheme_code(self, authenticated_client, test_license):
         resp = authenticated_client.get(
-            reverse("licenses-list"), {"scheme_code": "DFIA"}
+            reverse("license:licenses-list"), {"scheme_code": "DFIA"}
         )
         assert resp.status_code == status.HTTP_200_OK
 
     def test_search_licenses_by_partial_number(self, authenticated_client, test_license):
         resp = authenticated_client.get(
-            reverse("licenses-list"), {"search": test_license.license_number[:5]}
+            reverse("license:licenses-list"), {"search": test_license.license_number[:5]}
         )
         assert resp.status_code == status.HTTP_200_OK
 
     def test_list_license_items_returns_200(self, authenticated_client, test_license):
-        resp = authenticated_client.get(reverse("license-items-list"))
+        resp = authenticated_client.get(reverse("license:license-items-list"))
         assert resp.status_code == status.HTTP_200_OK
 
     def test_filter_license_items_by_license_id(self, authenticated_client, test_license):
         resp = authenticated_client.get(
-            reverse("license-items-list"), {"license": test_license.id}
+            reverse("license:license-items-list"), {"license": test_license.id}
         )
         assert resp.status_code == status.HTTP_200_OK
         results = resp.data.get("results", resp.data)
@@ -190,12 +190,12 @@ class TestLicenseEndpoints:
 class TestBillOfEntryEndpoints:
 
     def test_list_boes_returns_200(self, authenticated_client):
-        resp = authenticated_client.get(reverse("bill-of-entries-list"))
+        resp = authenticated_client.get(reverse("bill_of_entry:bill-of-entries-list"))
         assert resp.status_code == status.HTTP_200_OK
 
     def test_retrieve_boe_returns_correct_number(self, authenticated_client, test_bill_of_entry):
         resp = authenticated_client.get(
-            reverse("bill-of-entries-detail", kwargs={"pk": test_bill_of_entry.id})
+            reverse("bill_of_entry:bill-of-entries-detail", kwargs={"pk": test_bill_of_entry.id})
         )
         assert resp.status_code == status.HTTP_200_OK
         assert (
@@ -205,7 +205,7 @@ class TestBillOfEntryEndpoints:
 
     def test_retrieve_boe_includes_item_details(self, authenticated_client, test_bill_of_entry):
         resp = authenticated_client.get(
-            reverse("bill-of-entries-detail", kwargs={"pk": test_bill_of_entry.id})
+            reverse("bill_of_entry:bill-of-entries-detail", kwargs={"pk": test_bill_of_entry.id})
         )
         assert resp.status_code == status.HTTP_200_OK
         # The nested items key may be 'item_details' or 'items'
@@ -214,18 +214,18 @@ class TestBillOfEntryEndpoints:
 
     def test_retrieve_nonexistent_boe_returns_404(self, authenticated_client):
         resp = authenticated_client.get(
-            reverse("bill-of-entries-detail", kwargs={"pk": 999999})
+            reverse("bill_of_entry:bill-of-entries-detail", kwargs={"pk": 999999})
         )
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
     def test_create_boe_missing_required_fields_returns_400(self, authenticated_client):
         resp = authenticated_client.post(
-            reverse("bill-of-entries-list"), {}, format="json"
+            reverse("bill_of_entry:bill-of-entries-list"), {}, format="json"
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_boe_list_response_structure(self, authenticated_client, test_bill_of_entry):
-        resp = authenticated_client.get(reverse("bill-of-entries-list"))
+        resp = authenticated_client.get(reverse("bill_of_entry:bill-of-entries-list"))
         assert resp.status_code == status.HTTP_200_OK
         assert "results" in resp.data or isinstance(resp.data, list)
 
@@ -238,26 +238,26 @@ class TestBillOfEntryEndpoints:
 class TestTradeEndpoints:
 
     def test_list_trades_returns_200(self, authenticated_client):
-        resp = authenticated_client.get(reverse("trade-list"))
+        resp = authenticated_client.get(reverse("trade:trade-list"))
         assert resp.status_code == status.HTTP_200_OK
 
     def test_retrieve_nonexistent_trade_returns_404(self, authenticated_client):
         resp = authenticated_client.get(
-            reverse("trade-detail", kwargs={"pk": 999999})
+            reverse("trade:trade-detail", kwargs={"pk": 999999})
         )
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
     def test_create_trade_missing_all_fields_returns_400(self, authenticated_client):
-        resp = authenticated_client.post(reverse("trade-list"), {}, format="json")
+        resp = authenticated_client.post(reverse("trade:trade-list"), {}, format="json")
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_trade_list_response_structure(self, authenticated_client):
-        resp = authenticated_client.get(reverse("trade-list"))
+        resp = authenticated_client.get(reverse("trade:trade-list"))
         assert resp.status_code == status.HTTP_200_OK
         assert "results" in resp.data or isinstance(resp.data, list)
 
     def test_trade_list_supports_pagination(self, authenticated_client):
-        resp = authenticated_client.get(reverse("trade-list"), {"page": 1})
+        resp = authenticated_client.get(reverse("trade:trade-list"), {"page": 1})
         assert resp.status_code == status.HTTP_200_OK
 
 
@@ -269,29 +269,29 @@ class TestTradeEndpoints:
 class TestAllotmentEndpoints:
 
     def test_list_allotments_returns_200(self, authenticated_client):
-        resp = authenticated_client.get(reverse("allotment-list"))
+        resp = authenticated_client.get(reverse("allotment:allotment-list"))
         assert resp.status_code == status.HTTP_200_OK
 
     def test_retrieve_allotment_returns_correct_data(self, authenticated_client, test_allotment):
         resp = authenticated_client.get(
-            reverse("allotment-detail", kwargs={"pk": test_allotment.id})
+            reverse("allotment:allotment-detail", kwargs={"pk": test_allotment.id})
         )
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["item_name"] == test_allotment.item_name
 
     def test_retrieve_nonexistent_allotment_returns_404(self, authenticated_client):
         resp = authenticated_client.get(
-            reverse("allotment-detail", kwargs={"pk": 999999})
+            reverse("allotment:allotment-detail", kwargs={"pk": 999999})
         )
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
     def test_create_allotment_missing_required_fields_returns_400(self, authenticated_client):
-        resp = authenticated_client.post(reverse("allotment-list"), {}, format="json")
+        resp = authenticated_client.post(reverse("allotment:allotment-list"), {}, format="json")
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_create_allotment_with_valid_data(self, authenticated_client, fake_allotment_data):
         resp = authenticated_client.post(
-            reverse("allotment-list"), fake_allotment_data, format="json"
+            reverse("allotment:allotment-list"), fake_allotment_data, format="json"
         )
         # 201 on success; 400 if serializer validation fails due to extra constraints
         assert resp.status_code in [
@@ -300,13 +300,13 @@ class TestAllotmentEndpoints:
         ]
 
     def test_allotment_list_response_structure(self, authenticated_client, test_allotment):
-        resp = authenticated_client.get(reverse("allotment-list"))
+        resp = authenticated_client.get(reverse("allotment:allotment-list"))
         assert resp.status_code == status.HTTP_200_OK
         assert "results" in resp.data or isinstance(resp.data, list)
 
     def test_allotment_required_quantity_is_positive(self, authenticated_client, test_allotment):
         resp = authenticated_client.get(
-            reverse("allotment-detail", kwargs={"pk": test_allotment.id})
+            reverse("allotment:allotment-detail", kwargs={"pk": test_allotment.id})
         )
         assert resp.status_code == status.HTTP_200_OK
         qty = Decimal(str(resp.data["required_quantity"]))
@@ -321,12 +321,12 @@ class TestAllotmentEndpoints:
 class TestDashboard:
 
     def test_dashboard_returns_200_when_authenticated(self, authenticated_client):
-        resp = authenticated_client.get(reverse("dashboard"))
+        resp = authenticated_client.get(reverse("license:dashboard"))
         assert resp.status_code == status.HTTP_200_OK
 
     def test_dashboard_requires_authentication(self):
         client = APIClient()
-        resp = client.get(reverse("dashboard"))
+        resp = client.get(reverse("license:dashboard"))
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
 

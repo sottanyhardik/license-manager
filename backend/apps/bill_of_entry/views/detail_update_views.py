@@ -37,7 +37,8 @@ class BillOfEntryUpdateDetailView(UpdateView):
 
     def get_success_url(self):
         boe = self.object.bill_of_entry_number
-        return reverse('bill-of-entry-ajax-list') + '?bill_of_entry_number=' + str(boe)
+        # Legacy template-view URL; redirects to REST list as fallback.
+        return f"/api/bill-of-entries/?bill_of_entry_number={boe}"
 
 
 class BillOfEntryUpdateView(UpdateWithInlinesView):
@@ -48,7 +49,8 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
 
     def get_success_url(self):
         boe = self.object.bill_of_entry_number
-        return reverse('bill-of-entry-ajax-list') + '?bill_of_entry_number=' + str(boe)
+        # Legacy template-view URL; redirects to REST list as fallback.
+        return f"/api/bill-of-entries/?bill_of_entry_number={boe}"
 
     def dispatch(self, request, *args, **kwargs):
         license = self.get_object()

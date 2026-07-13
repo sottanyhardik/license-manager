@@ -8,6 +8,10 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
+from apps.allotment.models import AllotmentItems
+from apps.bill_of_entry.models import RowDetails
+from apps.trade.models import LicenseTradeLine
+from apps.core.models import CompanyModel
 
 
 # ── Bulk-operation guard ─────────────────────────────────────────────────────
@@ -334,8 +338,8 @@ def update_license_on_import_item_delete(sender, instance, **kwargs):
 
 
 # Signals for balance updates on allotment items
-@receiver(post_save, sender='allotment.AllotmentItems')
-@receiver(post_delete, sender='allotment.AllotmentItems')
+@receiver(post_save, sender=AllotmentItems)
+@receiver(post_delete, sender=AllotmentItems)
 def update_license_on_allotment_item_change(sender, instance, **kwargs):
     """
     Update license flags when allotment items are added/modified/deleted.
@@ -351,8 +355,8 @@ def update_license_on_allotment_item_change(sender, instance, **kwargs):
 
 
 # Signals for balance updates on BOE items
-@receiver(post_save, sender='bill_of_entry.RowDetails')
-@receiver(post_delete, sender='bill_of_entry.RowDetails')
+@receiver(post_save, sender=RowDetails)
+@receiver(post_delete, sender=RowDetails)
 def update_license_on_boe_item_change(sender, instance, **kwargs):
     """
     Update license flags when BOE row details are added/modified/deleted.
@@ -368,8 +372,8 @@ def update_license_on_boe_item_change(sender, instance, **kwargs):
 
 
 # Signals for balance updates on Trade Line items
-@receiver(post_save, sender='trade.LicenseTradeLine')
-@receiver(post_delete, sender='trade.LicenseTradeLine')
+@receiver(post_save, sender=LicenseTradeLine)
+@receiver(post_delete, sender=LicenseTradeLine)
 def update_license_on_trade_line_change(sender, instance, **kwargs):
     """
     Update license flags when trade lines are added/modified/deleted.
@@ -387,7 +391,7 @@ def update_license_on_trade_line_change(sender, instance, **kwargs):
 # Snapshot the exporter name onto each license BEFORE the company is deleted.
 # With exporter.on_delete=SET_NULL, the FK becomes NULL post-delete; this signal
 # preserves the human-readable name in `archived_exporter_name`.
-@receiver(pre_delete, sender='core.CompanyModel')
+@receiver(pre_delete, sender=CompanyModel)
 def snapshot_exporter_name_on_company_delete(sender, instance, **kwargs):
     LicenseDetailsModel.objects.filter(exporter=instance).update(
         archived_exporter_name=instance.name or ""

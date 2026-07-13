@@ -87,3 +87,6 @@ server-envs/
 .claude/index/dependents.tsv
 .claude/index/CODE_MAP.md
 .claude/index/index.log
+
+# DFIA PDF copies — stored on disk, not tracked in git
+backend/DFIA_COPY/

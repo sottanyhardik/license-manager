@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AuthContext } from "../context/AuthContext";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
@@ -16,6 +17,10 @@ import {
     reopenTask,
     updateTask,
 } from "../api/tasks";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
 const STATUS_LABEL = {
     [TASK_STATUS.PENDING]: "Pending",
@@ -45,6 +50,17 @@ const STATUS_FILTERS = [
     { value: TASK_STATUS.COMPLETED, label: "Completed" },
     { value: TASK_STATUS.REJECTED, label: "Rejected" },
 ];
+
+// ---------------------------------------------------------------------------
+// Query keys
+// ---------------------------------------------------------------------------
+
+const TASKS_KEY = (params: Record<string, string>) => ["tasks", params] as const;
+const USERS_KEY = ["tasks-assignable-users"] as const;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function formatDate(value) {
     if (!value) return "";
@@ -131,13 +147,16 @@ function parseVoiceCommand(rawText, users) {
     return { title, priority, assigned_to: assignedTo };
 }
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export default function TaskDrawer({ show, onClose }) {
     const { user } = useContext(AuthContext) || {};
-    const [tasks, setTasks] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const qc = useQueryClient();
+
     const [statusFilter, setStatusFilter] = useState("open");
     const [search, setSearch] = useState("");
-    const [users, setUsers] = useState([]);
     const [expanded, setExpanded] = useState(null);
     const [remarkDrafts, setRemarkDrafts] = useState({});
 
@@ -152,13 +171,114 @@ export default function TaskDrawer({ show, onClose }) {
     const [saving, setSaving] = useState(false);
     const titleInputRef = useRef(null);
 
+    // Build API params — used both for the query key and the fetch call
+    const queryParams = useMemo<Record<string, string>>(() => {
+        const p: Record<string, string> = {};
+        if (search.trim()) p.search = search.trim();
+        if (statusFilter && statusFilter !== "open") p.status = statusFilter;
+        return p;
+    }, [search, statusFilter]);
+
+    // ---------------------------------------------------------------------------
+    // Queries
+    // ---------------------------------------------------------------------------
+
+    const { data: rawTaskData, isLoading } = useQuery({
+        queryKey: TASKS_KEY(queryParams),
+        queryFn: () => listTasks(queryParams),
+        enabled: show,
+    });
+
+    const { data: users = [] } = useQuery({
+        queryKey: USERS_KEY,
+        queryFn: listAssignableUsers,
+        enabled: show,
+        staleTime: Infinity, // assignable users don't change mid-session
+    });
+
+    // Derive the filtered task list from raw server data (client-side "open" filter)
+    const tasks = useMemo(() => {
+        const rows = Array.isArray(rawTaskData)
+            ? rawTaskData
+            : (rawTaskData?.results || []);
+        if (statusFilter !== "open") return rows;
+        const myId = user?.id;
+        return rows.filter(t => {
+            if (t.status === TASK_STATUS.PENDING || t.status === TASK_STATUS.IN_PROGRESS) return true;
+            // Bounced-back: rejected by someone else, I'm the creator → still "open" for me
+            if (
+                t.status === TASK_STATUS.REJECTED &&
+                myId &&
+                t.created_by === myId &&
+                t.rejected_by &&
+                t.rejected_by !== myId
+            ) return true;
+            return false;
+        });
+    }, [rawTaskData, statusFilter, user?.id]);
+
+    // ---------------------------------------------------------------------------
+    // Mutations — all invalidate ['tasks'] on success so the list refreshes
+    // ---------------------------------------------------------------------------
+
+    const invalidateTasks = () => qc.invalidateQueries({ queryKey: ["tasks"] });
+
+    const createMutation = useMutation({
+        mutationFn: createTask,
+        onSuccess: () => { invalidateTasks(); },
+        onError: (err) => toast.error(extractApiError(err, "Failed to create task")),
+    });
+
+    const completeMutation = useMutation({
+        mutationFn: (id: number) => completeTask(id),
+        onSuccess: () => { invalidateTasks(); toast.success("Marked completed"); },
+        onError: () => toast.error("Failed to update"),
+    });
+
+    const rejectMutation = useMutation({
+        mutationFn: ({ id, reason }: { id: number; reason: string }) => rejectTask(id, reason),
+        onSuccess: () => { invalidateTasks(); toast.success("Task rejected"); },
+        onError: () => toast.error("Failed to reject"),
+    });
+
+    const reopenMutation = useMutation({
+        mutationFn: (id: number) => reopenTask(id),
+        onSuccess: () => { invalidateTasks(); },
+        onError: () => toast.error("Failed to reopen"),
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: number) => deleteTask(id),
+        onSuccess: () => { invalidateTasks(); toast.success("Deleted"); },
+        onError: () => toast.error("Failed to delete"),
+    });
+
+    const remarkMutation = useMutation({
+        mutationFn: ({ id, text }: { id: number; text: string }) => addRemark(id, text),
+        onSuccess: (_data, { id }) => {
+            invalidateTasks();
+            setRemarkDrafts(prev => ({ ...prev, [id]: "" }));
+        },
+        onError: () => toast.error("Failed to add remark"),
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: ({ id, patch }: { id: number; patch: Record<string, unknown> }) =>
+            updateTask(id, patch),
+        onSuccess: () => { invalidateTasks(); },
+        onError: () => toast.error("Failed to update"),
+    });
+
+    // ---------------------------------------------------------------------------
+    // Speech / voice
+    // ---------------------------------------------------------------------------
+
     // Keep latest users list reachable from speech callback without re-creating the recognizer
     const usersRef = useRef(users);
     useEffect(() => { usersRef.current = users; }, [users]);
 
     const speech = useSpeechRecognition({
         onSegment: (text) => {
-            // Each completed segment becomes a new task auto-saved.
             handleQuickCreate(text);
         },
     });
@@ -169,52 +289,19 @@ export default function TaskDrawer({ show, onClose }) {
         toast.error(speech.error.message);
     }, [speech.error]);
 
-    const fetchTasks = useMemo(() => async () => {
-        setLoading(true);
-        try {
-            const params: Record<string, string> = {};
-            if (search.trim()) params.search = search.trim();
-            if (statusFilter && statusFilter !== "open") params.status = statusFilter;
-            const data = await listTasks(params);
-            // DRF default pagination returns {results: []} when paginator is global; otherwise array.
-            const rows = Array.isArray(data) ? data : (data.results || []);
-            const myId = user?.id;
-            const filtered = statusFilter === "open"
-                ? rows.filter(t => {
-                    if (t.status === TASK_STATUS.PENDING || t.status === TASK_STATUS.IN_PROGRESS) return true;
-                    // Bounced-back: rejected by someone else, I'm the creator → still "open" for me
-                    if (
-                        t.status === TASK_STATUS.REJECTED &&
-                        myId &&
-                        t.created_by === myId &&
-                        t.rejected_by &&
-                        t.rejected_by !== myId
-                    ) return true;
-                    return false;
-                })
-                : rows;
-            setTasks(filtered);
-        } catch {
-            // axios interceptor already toasts most errors
-        } finally {
-            setLoading(false);
-        }
-    }, [search, statusFilter, user?.id]);
-
+    // Focus and stop speech on drawer open/close
     useEffect(() => {
         if (show) {
-            fetchTasks();
-            // Lazy load assignable users once per open
-            if (users.length === 0) {
-                listAssignableUsers().then(setUsers).catch(() => {});
-            }
             setTimeout(() => titleInputRef.current?.focus(), 150);
         } else {
-            // Stop dictation when closing
             if (speech.listening) speech.stop();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [show, fetchTasks]);
+    }, [show]);
+
+    // ---------------------------------------------------------------------------
+    // Handlers
+    // ---------------------------------------------------------------------------
 
     const handleQuickCreate = async (rawText) => {
         const text = (rawText || "").trim();
@@ -223,8 +310,7 @@ export default function TaskDrawer({ show, onClose }) {
         const payload: Record<string, any> = { title: parsed.title, priority: parsed.priority };
         if (parsed.assigned_to) payload.assigned_to = parsed.assigned_to;
         try {
-            const created = await createTask(payload);
-            setTasks(prev => [created, ...prev]);
+            await createMutation.mutateAsync(payload);
             const bits = [`Task added${parsed.priority === TASK_PRIORITY.HIGH ? " (high)" : ""}`];
             if (parsed.assigned_to) {
                 const u = usersRef.current.find(x => x.id === parsed.assigned_to);
@@ -232,7 +318,7 @@ export default function TaskDrawer({ show, onClose }) {
             }
             toast.success(bits.join(" "));
         } catch (err) {
-            toast.error(extractApiError(err, "Failed to add task"));
+            // error already handled by mutation onError
         }
     };
 
@@ -251,100 +337,42 @@ export default function TaskDrawer({ show, onClose }) {
             };
             if (draft.assigned_to) payload.assigned_to = parseInt(draft.assigned_to, 10);
             if (draft.due_date) payload.due_date = draft.due_date;
-            const created = await createTask(payload);
-            setTasks(prev => [created, ...prev]);
+            await createMutation.mutateAsync(payload);
             setDraft({ title: "", description: "", priority: TASK_PRIORITY.NORMAL, assigned_to: "", due_date: "" });
             toast.success("Task created");
-        } catch (err) {
-            toast.error(extractApiError(err, "Failed to create task"));
+        } catch {
+            // error already handled by mutation onError
         } finally {
             setSaving(false);
         }
     };
 
-    // After an action mutates a task, drop it from the current list if it no longer matches the filter.
-    const rowMatchesFilter = (row) => {
-        if (statusFilter !== "open") {
-            if (!statusFilter) return true;
-            return row.status === statusFilter;
-        }
-        if (row.status === TASK_STATUS.PENDING || row.status === TASK_STATUS.IN_PROGRESS) return true;
-        if (
-            row.status === TASK_STATUS.REJECTED &&
-            user?.id && row.created_by === user.id &&
-            row.rejected_by && row.rejected_by !== user.id
-        ) return true;
-        return false;
-    };
-
-    const replaceAndFilter = (updated) =>
-        setTasks(prev => prev
-            .map(t => t.id === updated.id ? updated : t)
-            .filter(rowMatchesFilter)
-        );
-
-    const handleComplete = async (task) => {
-        try {
-            const updated = await completeTask(task.id);
-            replaceAndFilter(updated);
-            toast.success("Marked completed");
-        } catch {
-            toast.error("Failed to update");
+    const handleComplete = (task) => {
+        if (task.status === TASK_STATUS.COMPLETED) {
+            reopenMutation.mutate(task.id);
+        } else {
+            completeMutation.mutate(task.id);
         }
     };
 
-    const handleReject = async (task) => {
+    const handleReject = (task) => {
         const reason = window.prompt("Reason for rejection (optional):", "") || "";
-        try {
-            const updated = await rejectTask(task.id, reason);
-            replaceAndFilter(updated);
-            toast.success("Task rejected");
-        } catch {
-            toast.error("Failed to reject");
-        }
+        rejectMutation.mutate({ id: task.id, reason });
     };
 
-    const handleReopen = async (task) => {
-        try {
-            const updated = await reopenTask(task.id);
-            replaceAndFilter(updated);
-        } catch {
-            toast.error("Failed to reopen");
-        }
-    };
-
-    const handleDelete = async (task) => {
+    const handleDelete = (task) => {
         if (!window.confirm("Delete this task?")) return;
-        try {
-            await deleteTask(task.id);
-            setTasks(prev => prev.filter(t => t.id !== task.id));
-            toast.success("Deleted");
-        } catch {
-            toast.error("Failed to delete");
-        }
+        deleteMutation.mutate(task.id);
     };
 
-    const handleAddRemark = async (task) => {
+    const handleAddRemark = (task) => {
         const text = (remarkDrafts[task.id] || "").trim();
         if (!text) return;
-        try {
-            const remark = await addRemark(task.id, text);
-            setTasks(prev => prev.map(t => (
-                t.id === task.id ? { ...t, remarks: [remark, ...(t.remarks || [])] } : t
-            )));
-            setRemarkDrafts(prev => ({ ...prev, [task.id]: "" }));
-        } catch {
-            toast.error("Failed to add remark");
-        }
+        remarkMutation.mutate({ id: task.id, text });
     };
 
-    const handleInlineUpdate = async (task, patch) => {
-        try {
-            const updated = await updateTask(task.id, patch);
-            setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
-        } catch {
-            toast.error("Failed to update");
-        }
+    const handleInlineUpdate = (task, patch) => {
+        updateMutation.mutate({ id: task.id, patch });
     };
 
     const toggleSpeech = () => {
@@ -585,7 +613,6 @@ export default function TaskDrawer({ show, onClose }) {
                         placeholder="Search…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && fetchTasks()}
                     />
                     <select
                         className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
@@ -601,13 +628,13 @@ export default function TaskDrawer({ show, onClose }) {
 
                 {/* List */}
                 <div className="flex-grow-1" style={{ overflowY: "auto" }}>
-                    {loading && (
+                    {isLoading && (
                         <div style={{ padding: "16px 20px" }}>
                             <div className="skeleton" style={{ height: 14, width: "70%", marginBottom: 10 }} />
                             <div className="skeleton" style={{ height: 12, width: "45%" }} />
                         </div>
                     )}
-                    {!loading && tasks.length === 0 && (
+                    {!isLoading && tasks.length === 0 && (
                         <div className="empty-state">
                             <div className="empty-icon"><ClipboardCheck className="size-9" /></div>
                             <div className="empty-title">No tasks yet</div>
@@ -637,7 +664,7 @@ export default function TaskDrawer({ show, onClose }) {
                                         type="checkbox"
                                         className="form-check-input mt-1"
                                         checked={task.status === TASK_STATUS.COMPLETED}
-                                        onChange={() => task.status === TASK_STATUS.COMPLETED ? handleReopen(task) : handleComplete(task)}
+                                        onChange={() => handleComplete(task)}
                                         title={task.status === TASK_STATUS.COMPLETED ? "Reopen" : "Mark complete"}
                                     />
                                     <div className="flex-grow-1" style={{ minWidth: 0 }}>
@@ -681,7 +708,7 @@ export default function TaskDrawer({ show, onClose }) {
                                                 <button
                                                     type="button"
                                                     className="ml-2 cursor-pointer text-xs text-primary underline-offset-2 hover:underline"
-                                                    onClick={() => handleReopen(task)}
+                                                    onClick={() => reopenMutation.mutate(task.id)}
                                                 >
                                                     Reopen
                                                 </button>

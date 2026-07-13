@@ -10,16 +10,16 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         total_deleted = 0
 
-        # ✅ 1. Delete rows where bill_of_entry is NULL and transaction_type is 'D'
+        # 1. Delete rows where bill_of_entry is NULL and transaction_type is 'D'
         null_be_qs = RowDetails.objects.filter(bill_of_entry__isnull=True, transaction_type='D')
         null_be_count = null_be_qs.count()
         if null_be_count > 0:
             null_be_qs.delete()
             total_deleted += null_be_count
-            print(f"🗑 Deleted {null_be_count} rows with null bill_of_entry and transaction_type='D'.")
+            self.stdout.write(f"Deleted {null_be_count} rows with null bill_of_entry and transaction_type='D'.")
 
-        # ✅ 2. Handle duplicates (keep only 1 per group)
-        print("🔍 Finding duplicate RowDetails...")
+        # 2. Handle duplicates (keep only 1 per group)
+        self.stdout.write("Finding duplicate RowDetails...")
 
         duplicates = (
             RowDetails.objects.values('bill_of_entry', 'sr_number', 'transaction_type')
@@ -28,7 +28,7 @@ class Command(BaseCommand):
         )
 
         if not duplicates:
-            print("✅ No duplicates found.")
+            self.stdout.write("No duplicates found.")
         else:
             duplicate_keys = {
                 (d['bill_of_entry'], d['sr_number'], d['transaction_type'])
@@ -57,6 +57,6 @@ class Command(BaseCommand):
             if delete_ids:
                 deleted_count, _ = RowDetails.objects.filter(id__in=delete_ids).delete()
                 total_deleted += deleted_count
-                print(f"🗑 Deleted {deleted_count} duplicate rows.")
+                self.stdout.write(f"Deleted {deleted_count} duplicate rows.")
 
-        print(f"\n✅ Done. Total rows deleted: {total_deleted}")
+        self.stdout.write(f"Done. Total rows deleted: {total_deleted}")

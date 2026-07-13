@@ -13,7 +13,7 @@ class TestCompanyAPI:
     
     def test_list_companies(self, authenticated_client, test_company):
         """Test GET /masters/companies/"""
-        url = reverse('company-list')
+        url = reverse('masters:company-list')
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
@@ -21,7 +21,7 @@ class TestCompanyAPI:
     
     def test_create_company(self, authenticated_client):
         """Test POST /masters/companies/"""
-        url = reverse('company-list')
+        url = reverse('masters:company-list')
         data = {
             'name': 'Test Company Ltd',
             'pan': 'ABCDE1234F',
@@ -39,7 +39,7 @@ class TestCompanyAPI:
     
     def test_retrieve_company(self, authenticated_client, test_company):
         """Test GET /masters/companies/{id}/"""
-        url = reverse('company-detail', kwargs={'pk': test_company.id})
+        url = reverse('masters:company-detail', kwargs={'pk': test_company.id})
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
@@ -47,7 +47,7 @@ class TestCompanyAPI:
     
     def test_update_company(self, authenticated_client, test_company):
         """Test PATCH /masters/companies/{id}/"""
-        url = reverse('company-detail', kwargs={'pk': test_company.id})
+        url = reverse('masters:company-detail', kwargs={'pk': test_company.id})
         data = {'name': 'Updated Company Name'}
         response = authenticated_client.patch(url, data, format='json')
         
@@ -56,7 +56,7 @@ class TestCompanyAPI:
     
     def test_delete_company(self, authenticated_client, test_company_2):
         """Test DELETE /masters/companies/{id}/"""
-        url = reverse('company-detail', kwargs={'pk': test_company_2.id})
+        url = reverse('masters:company-detail', kwargs={'pk': test_company_2.id})
         response = authenticated_client.delete(url)
         
         assert response.status_code == status.HTTP_204_NO_CONTENT
@@ -69,14 +69,14 @@ class TestPortAPI:
     
     def test_list_ports(self, authenticated_client, test_port):
         """Test GET /masters/ports/"""
-        url = reverse('port-list')
+        url = reverse('masters:port-list')
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
     
     def test_create_port(self, authenticated_client):
         """Test POST /masters/ports/"""
-        url = reverse('port-list')
+        url = reverse('masters:port-list')
         data = {
             'code': 'INMUN1',
             'name': 'Mumbai Port',
@@ -95,7 +95,7 @@ class TestExchangeRateAPI:
     
     def test_list_exchange_rates(self, authenticated_client, test_exchange_rate):
         """Test GET /masters/exchange-rates/"""
-        url = reverse('exchangerate-list')
+        url = reverse('masters:exchangerate-list')
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
@@ -103,7 +103,7 @@ class TestExchangeRateAPI:
     def test_create_exchange_rate(self, authenticated_client):
         """Test POST /masters/exchange-rates/"""
         from datetime import datetime
-        url = reverse('exchangerate-list')
+        url = reverse('masters:exchangerate-list')
         data = {
             'date': datetime.now().date().isoformat(),
             'usd': 84.50,

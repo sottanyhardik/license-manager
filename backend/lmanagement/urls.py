@@ -41,13 +41,13 @@ urlpatterns = [
     # Authenticated media/document downloads (replaces public /media/ — see
     # apps.core.views.media.ProtectedMediaView and docs/08-security.md).
     re_path(r"^api/media/(?P<path>.+)$", ProtectedMediaView.as_view(), name="protected-media"),
-    path("api/auth/", include("apps.accounts.urls")),
-    path("api/", include("apps.license.urls")),
-    path("api/", include("apps.allotment.urls")),
-    path("api/", include("apps.bill_of_entry.urls")),
-    path("api/", include("apps.trade.urls")),
-    path("api/", include("apps.tasks.urls")),
-    path("api/masters/", include("apps.core.urls")),
+    path("api/auth/", include("apps.accounts.urls", namespace="accounts")),
+    path("api/", include("apps.license.urls", namespace="license")),
+    path("api/", include("apps.allotment.urls", namespace="allotment")),
+    path("api/", include("apps.bill_of_entry.urls", namespace="bill_of_entry")),
+    path("api/", include("apps.trade.urls", namespace="trade")),
+    path("api/", include("apps.tasks.urls", namespace="tasks")),
+    path("api/masters/", include("apps.core.urls", namespace="masters")),
 
     # JSON 404 for any unmatched /api/ path (must come after all real api/ patterns,
     # before the SPA catch-all)

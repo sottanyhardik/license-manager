@@ -1,6 +1,8 @@
 from django.urls import path, include
 from rest_framework import routers
 
+app_name = "license"
+
 from apps.license.views import LicenseDetailsViewSet
 from apps.license.views.expiring_licenses_report import ExpiringLicensesViewSet, ExpiringLicensesReportView
 from apps.license.views.active_licenses_report import ActiveLicensesViewSet, ActiveLicensesReportView

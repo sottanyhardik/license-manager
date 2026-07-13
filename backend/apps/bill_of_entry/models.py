@@ -131,7 +131,7 @@ class BillOfEntryModel(AuditModel):
 
     @cached_property
     def get_absolute_url(self) -> str:
-        return reverse("bill-of-entry-detail", kwargs={"pk": self.pk})
+        return reverse("bill_of_entry:bill-of-entries-detail", kwargs={"pk": self.pk})
 
     # --- Computed properties ---
     @cached_property

@@ -4,6 +4,8 @@ from rest_framework import routers
 from apps.bill_of_entry.views.boe import BillOfEntryViewSet
 from apps.bill_of_entry.views.parse_pdf import BOEPdfParseView
 
+app_name = "bill_of_entry"
+
 router = routers.DefaultRouter()
 router.register(r"bill-of-entries", BillOfEntryViewSet, basename="bill-of-entries")
 

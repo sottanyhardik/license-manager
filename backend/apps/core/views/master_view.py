@@ -4,6 +4,7 @@ import math
 from typing import Any, Dict, Optional, Type
 from datetime import datetime
 
+from django.conf import settings
 from django.db import models
 from django.db.models import F
 from django.http import HttpResponse
@@ -101,21 +102,70 @@ class MasterViewSet(viewsets.ModelViewSet):
     serializer_class = None
     queryset = None
 
+    def _serializer_model(self, serializer):
+        """The model class a serializer writes (for the MDS gate check)."""
+        meta = getattr(serializer, "Meta", None)
+        return getattr(meta, "model", None)
+
+    def _mds_active(self, model) -> bool:
+        """Whether the MDS write cutover should intercept writes for ``model``.
+
+        Single interception point for all 17 masters (ADR-001 Phase 6). Gated on
+        settings.MDS_ENABLED AND the model being one of the configured MDS
+        masters. When either is false, the local-only paths below run unchanged.
+        Import is lazy so a project without mds_client is never affected."""
+        if not model or not getattr(settings, "MDS_ENABLED", False):
+            return False
+        try:
+            from apps.core.mds_write import mds_active_for
+        except Exception:  # noqa: BLE001 - mds_client not installed -> local behavior
+            return False
+        return mds_active_for(model)
+
     def perform_create(self, serializer):
-        """Attach created_by when possible."""
+        """Attach created_by when possible; route to MDS when the cutover is on."""
         user = getattr(self.request, "user", None)
+        extra = {}
         if user and getattr(user, "is_authenticated", False):
-            serializer.save(created_by=user)
-        else:
-            serializer.save()
+            extra["created_by"] = user
+
+        model = self._serializer_model(serializer)
+        if self._mds_active(model):
+            # MDS is the write authority: persist -> push to MDS -> reflect back
+            # into the local mirror. A 503 (MDS down) rolls back the local write.
+            from apps.core.mds_write import save_through_mds
+            save_through_mds(serializer, extra_save_kwargs=extra)
+            return
+
+        # Local-only (default): unchanged behavior.
+        serializer.save(**extra)
 
     def perform_update(self, serializer):
-        """Attach modified_by when possible."""
+        """Attach modified_by when possible; route to MDS when the cutover is on."""
         user = getattr(self.request, "user", None)
+        extra = {}
         if user and getattr(user, "is_authenticated", False):
-            serializer.save(modified_by=user)
-        else:
-            serializer.save()
+            extra["modified_by"] = user
+
+        model = self._serializer_model(serializer)
+        if self._mds_active(model):
+            from apps.core.mds_write import save_through_mds
+            save_through_mds(serializer, extra_save_kwargs=extra)
+            return
+
+        serializer.save(**extra)
+
+    def perform_destroy(self, instance):
+        """Delete locally by default; when the cutover is on, delete on MDS first
+        (the write authority) and then the local mirror. MDS down -> 503 and the
+        local row is left intact (no half-delete)."""
+        if self._mds_active(type(instance)):
+            from apps.core.mds_write import delete_through_mds
+            delete_through_mds(instance)
+            return
+
+        # Local-only (default): unchanged DRF behavior.
+        instance.delete()
 
     # --- Factory Method ---
     @classmethod

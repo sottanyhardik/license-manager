@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "django_filters",
     "corsheaders",
     "whitenoise.runserver_nostatic",
+    "drf_spectacular",
 
     # Local apps (modules under backend/apps/; app_label preserved via AppConfig)
     "apps.accounts",
@@ -168,6 +169,11 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Authenticated media downloads (see apps.core.views.media.ProtectedMediaView).
+# In production set this to nginx's internal location prefix (e.g. "/protected-media/")
+# so nginx serves the bytes via X-Accel-Redirect. Leave empty in dev to stream via Django.
+MEDIA_X_ACCEL_REDIRECT = os.getenv("MEDIA_X_ACCEL_REDIRECT", "")
+
 # ---------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------
@@ -194,6 +200,8 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.StandardPagination",
     "PAGE_SIZE": 25,
+    # OpenAPI schema generation (drf-spectacular).
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DATETIME_FORMAT": "%d-%m-%Y %H:%M",
     "DATE_FORMAT": "%d-%m-%Y",
     # Disable CSRF for API endpoints when using JWT authentication
@@ -228,16 +236,19 @@ REST_FRAMEWORK = {
         # Security-sensitive operations
         "login": "10/minute",         # 10 login attempts per minute
         "strict": "30/hour",          # 30 sensitive operations per hour (delete, bulk ops)
+        "password_reset": "5/hour",   # password reset request/confirm (anti-abuse + anti-enumeration)
     },
     # Return throttle information in response headers
     "NUM_PROXIES": 1,  # Number of proxies (for accurate IP detection)
 }
 
 SIMPLE_JWT = {
-    # Access token lasts 4 hours — long enough for a full working session.
-    # The frontend proactively refreshes 5 min before expiry, so users never
-    # hit a 401 mid-request during normal use.
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=4),
+    # Access tokens are stateless and CANNOT be revoked (only refresh tokens can be
+    # blacklisted), so a long-lived access token is a long-lived bearer credential if
+    # it ever leaks. Keep it short (default 30 min) — the frontend proactively
+    # refreshes ~5 min before expiry via the (rotating, blacklist-on-rotation) refresh
+    # token, so sessions still last as long as the refresh token. Tunable via env.
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("ACCESS_TOKEN_MINUTES", "30"))),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 
     # Enable refresh rotation
@@ -265,6 +276,16 @@ CACHES = {
         "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
         "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
     }
+}
+
+# ---------------------------------------------------------------------
+# OpenAPI / API documentation (drf-spectacular)
+# ---------------------------------------------------------------------
+SPECTACULAR_SETTINGS = {
+    "TITLE": "License Manager API",
+    "DESCRIPTION": "DGFT import/export licence, allotment, BOE and trade management API.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
 }
 
 # ---------------------------------------------------------------------
@@ -372,3 +393,25 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 # (used in LicenseDetailsModel.get_glass_formers to scope BOE+allotment debits).
 # Override per environment via env var if the owning company differs.
 BISCUIT_COMPANY_ID = int(os.getenv("BISCUIT_COMPANY_ID", "567"))
+
+# ---------------------------------------------------------------------
+# Master-Data Service integration (ADR-001) — OFF by default
+# ---------------------------------------------------------------------
+# When MDS_ENABLED=true and the `mds_client` package is importable, register it
+# and adopt the full 17-master mapping. This does NOT change read behavior (reads
+# still hit the local tables); it enables the sync worker + write client. The
+# write cutover (routing master writes to MDS) is a later, explicit step.
+MDS_ENABLED = os.getenv("MDS_ENABLED", "False").lower() == "true"
+MDS_BASE_URL = os.getenv("MDS_BASE_URL", "")
+MDS_TOKEN = os.getenv("MDS_TOKEN", "")
+if MDS_ENABLED:
+    try:
+        import mds_client  # noqa: F401
+
+        INSTALLED_APPS += ["mds_client"]
+        from mds_client import DEFAULT_MDS_MODELS
+
+        MDS_MODELS = DEFAULT_MDS_MODELS
+    except ImportError:
+        # package not installed in this environment — stay disabled, don't crash
+        MDS_ENABLED = False

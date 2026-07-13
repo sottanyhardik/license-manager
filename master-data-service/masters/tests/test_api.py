@@ -73,6 +73,46 @@ class TestBulkUpsert:
 
 
 @pytest.mark.django_db
+class TestDeleteByKey:
+    def test_deletes_row_and_records_delete_change(self, api):
+        _auth(api)
+        Company.objects.create(iec="IEC1", name="Acme")
+        r = api.post("/api/v1/companies/delete_by_key/", {"iec": "IEC1"}, format="json")
+        assert r.status_code == 200
+        assert r.data == {"deleted": 1}
+        assert not Company.objects.filter(iec="IEC1").exists()
+        # the change feed carries the delete so it propagates to mirrors.
+        assert MasterChange.objects.filter(
+            natural_key="IEC1", op=MasterChange.OP_DELETE
+        ).exists()
+
+    def test_accepts_generic_key_field(self, api):
+        _auth(api)
+        Company.objects.create(iec="IEC9", name="Zed")
+        r = api.post("/api/v1/companies/delete_by_key/", {"key": "IEC9"}, format="json")
+        assert r.status_code == 200
+        assert r.data == {"deleted": 1}
+
+    def test_absent_key_is_idempotent_success(self, api):
+        _auth(api)
+        r = api.post("/api/v1/companies/delete_by_key/", {"iec": "GHOST"}, format="json")
+        assert r.status_code == 200
+        assert r.data == {"deleted": 0}
+
+    def test_missing_key_is_rejected(self, api):
+        _auth(api)
+        r = api.post("/api/v1/companies/delete_by_key/", {}, format="json")
+        assert r.status_code == 400
+
+    def test_read_token_cannot_delete(self, api):
+        _auth(api, READ)
+        Company.objects.create(iec="IEC1", name="Acme")
+        r = api.post("/api/v1/companies/delete_by_key/", {"iec": "IEC1"}, format="json")
+        assert r.status_code == 403
+        assert Company.objects.filter(iec="IEC1").exists()
+
+
+@pytest.mark.django_db
 class TestDeltaAndEtag:
     def test_updated_since_filters(self, api):
         _auth(api)

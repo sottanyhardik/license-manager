@@ -6,6 +6,9 @@ setup-ssl-labdhi.sh
 # Vite cache
 frontend/.vite/
 
+# Golden-master / characterization baselines (machine- and data-snapshot-specific)
+backend/scripts/.golden_master/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -15,6 +18,9 @@ __pycache__/
 venv/
 env/
 ENV/
+
+# Local deploy secrets (DEPLOY_PASSWORD / MDS_BASE_URL / MDS_TOKEN) — never commit.
+deploy-secrets.env
 
 # Django
 *.log

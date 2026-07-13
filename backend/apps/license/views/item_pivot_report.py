@@ -29,6 +29,31 @@ def _safe_int(value, default):
         return default
 
 
+def _xlsx_safe_row(row):
+    """Strip XML-illegal control characters from string cells before writing.
+
+    Condition-sheet / description text extracted from DGFT PDFs can contain
+    control chars (e.g. form-feed) that openpyxl rejects with IllegalCharacterError,
+    which would 500 the whole Excel export. Cleans plain string values and the
+    value of WriteOnlyCell objects in place; passes numbers/None through.
+    """
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+
+    cleaned = []
+    for cell in row:
+        val = getattr(cell, "value", cell)  # WriteOnlyCell -> its value; else the cell itself
+        if isinstance(val, str):
+            safe = ILLEGAL_CHARACTERS_RE.sub("", val)
+            if val is not cell:  # it's a WriteOnlyCell — clean in place, keep styling
+                cell.value = safe
+                cleaned.append(cell)
+            else:
+                cleaned.append(safe)
+        else:
+            cleaned.append(cell)
+    return cleaned
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +183,12 @@ class ItemPivotReportView(View):
         # Build filtered prefetch querysets based on sion_norm
         import_items_qs = LicenseImportItemsModel.objects.select_related('hs_code')
         export_items_qs = LicenseExportItemModel.objects.select_related('norm_class')
-        item_names_qs = ItemNameModel.objects.filter(is_active=True).select_related('sion_norm_class')
+        # NOTE: do NOT filter is_active here. Inactive item names are still needed
+        # so a manually-planned-but-inactive item (e.g. WALNUT planned on an E132
+        # DFIA) gets its quantities into item_quantities and renders. The column
+        # set (all_items) still hides inactive items via its own is_active check,
+        # except those that are explicitly planned (added back below).
+        item_names_qs = ItemNameModel.objects.select_related('sion_norm_class')
 
         # If sion_norm specified, filter prefetch queries to only that norm.
         if sion_norm:
@@ -206,18 +236,94 @@ class ItemPivotReportView(View):
                         else:
                             all_items[item.id] = item
 
+        # ── "As per planning" per-DFIA item map ────────────────────────────
+        # When a DFIA carries a manual utilization plan (LicenseItemPlan), the
+        # pivot must show that licence's items *as planned* rather than every
+        # import item present on the licence: each row shows only the items that
+        # DFIA actually planned, blanking the rest (e.g. BORAX is hidden on the
+        # A3627 DFIAs that did not plan it, but still shown on those that did).
+        #
+        # Licences with NO manual plan are left untouched — they show all their
+        # import items as before — so norm-driven norms (E1 / E5 / E132) are
+        # unaffected. Column headers remain the union across the report; the
+        # filtering is per row/cell in _build_license_row().
+        from apps.license.models import LicenseItemPlan
+
+        # import_item_id -> first attached item id, mirroring how a plan's
+        # totals are attributed to a single item name in _build_license_row().
+        first_item_of_import = {}
+        for _lo in valid_licenses:
+            for _ii in _lo.import_license.all():
+                for _it in _ii.items.all():
+                    first_item_of_import[_ii.id] = _it.id
+                    break
+
+        # license_id -> {item_id: {'q': planned qty, 'cif': planned CIF-FC}}.
+        # Attributed to the plan LINE's own item_name (not the import item's
+        # first attached name) so e.g. a RUTILE plan line on a BORAX+RUTILE
+        # import item lands on RUTILE. Untagged split lines fall back to the
+        # import item's first attached name. The key set doubles as "which
+        # items this DFIA planned" for the per-row filter below.
+        plan_totals_by_license = defaultdict(
+            lambda: defaultdict(lambda: {'q': Decimal('0.000'), 'cif': Decimal('0.00')})
+        )
+        planned_item_ids_all = set()
+        for _pl in (LicenseItemPlan.objects
+                    .filter(license_id__in=[_lo.id for _lo in valid_licenses])
+                    .values('license_id', 'import_item_id', 'item_name_id',
+                            'planned_quantity', 'planned_cif_fc')):
+            _iname = _pl['item_name_id'] or first_item_of_import.get(_pl['import_item_id'])
+            if _iname is None:
+                continue
+            _cell = plan_totals_by_license[_pl['license_id']][_iname]
+            _cell['q'] += _pl['planned_quantity'] or Decimal('0')
+            _cell['cif'] += _pl['planned_cif_fc'] or Decimal('0')
+            planned_item_ids_all.add(_iname)
+
+        # A manually-planned item must appear as a column even if it is INACTIVE
+        # in the master (is_active=False) — the user explicitly planned it, so it
+        # would otherwise vanish (the column builder above skips inactive items).
+        # Add any planned item ids missing from all_items, honouring the norm filter.
+        _missing_planned = [iid for iid in planned_item_ids_all if iid not in all_items]
+        if _missing_planned:
+            for _it in ItemNameModel.objects.filter(id__in=_missing_planned).select_related('sion_norm_class'):
+                if not _it.name:
+                    continue
+                if sion_norm and not (_it.sion_norm_class and _it.sion_norm_class.norm_class == sion_norm):
+                    continue
+                all_items[_it.id] = _it
+
         # Sort items by display_order first, then by name for consistent column order
         sorted_items = sorted(
             [(item.id, item.name) for item in all_items.values()],
             key=lambda x: (all_items[x[0]].display_order, x[1] or '')
         )
 
+        # Batch document-type lookups: one query for the whole page instead of two
+        # .exists() calls per licence inside _build_license_row (an N+1 over the report).
+        from apps.license.models import LicenseDocumentModel
+        doc_types_by_license = defaultdict(set)
+        for _lid, _dt in (LicenseDocumentModel.objects
+                          .filter(license_id__in=[_lo.id for _lo in valid_licenses])
+                          .values_list('license_id', 'type')):
+            doc_types_by_license[_lid].add(_dt)
+
+        # Batch the condition-pool computation (was ~13 queries PER licence inside
+        # _build_license_row — the report's dominant N+1) into a handful of queries.
+        from apps.license.services.condition_pool import compute_condition_pools_bulk
+        cond_pools_by_license = compute_condition_pools_bulk([_lo.id for _lo in valid_licenses])
+
         # Build license data with item columns, grouped by norm first, then notification
-        from collections import defaultdict
+        # (defaultdict is imported at module level).
         licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
 
         for license_obj in valid_licenses:
-            license_row = self._build_license_row(license_obj, sorted_items)
+            license_row = self._build_license_row(
+                license_obj, sorted_items,
+                item_plan_totals=plan_totals_by_license.get(license_obj.id),
+                document_types=doc_types_by_license.get(license_obj.id, frozenset()),
+                condition_pools=cond_pools_by_license.get(license_obj.id, {}),
+            )
 
             if license_row:
                 # Handle blank/empty notification numbers
@@ -274,6 +380,16 @@ class ItemPivotReportView(View):
                 else:
                     # Regular grouping by notification for other norms
                     notification_key = notification
+
+                # Split every pivot table by PURCHASE STATUS: prefix the group
+                # key with the licence's purchase-status label so each rendered
+                # table (and its summary / totals / Excel sheet, which all key off
+                # this group) contains a single purchase status. The " — " (em
+                # dash) delimiter is distinct from the " - " used inside
+                # notification_key, so the frontend can split it back apart.
+                ps_label = (license_row.get('purchase_status_label')
+                            or license_row.get('purchase_status_code') or 'Unknown')
+                notification_key = f"{ps_label} — {notification_key}"
 
                 licenses_by_norm_notification[norm_class][notification_key].append(license_row)
 
@@ -333,13 +449,21 @@ class ItemPivotReportView(View):
             'report_date': today.isoformat(),
         }
 
-    def _build_license_row(self, license_obj: LicenseDetailsModel, all_items: List[tuple]) -> Dict[str, Any]:
+    def _build_license_row(self, license_obj: LicenseDetailsModel, all_items: List[tuple],
+                           item_plan_totals=None, document_types=None,
+                           condition_pools=None) -> Dict[str, Any]:
         """
         Build a single license row with item columns.
 
         Args:
             license_obj: LicenseDetailsModel instance
             all_items: List of (item_id, item_name) tuples
+            item_plan_totals: When the DFIA is manually planned, a map
+                {item_id: {'q': planned qty, 'cif': planned CIF-FC}} of the items
+                it actually planned. Drives the per-cell Planned QTY / Planned
+                CIF and the "as per planning" filter: items outside this map are
+                emitted as empty cells. None => not manually planned, so every
+                import item is shown as before.
 
         Returns:
             Dictionary with license data and item quantities
@@ -366,6 +490,13 @@ class ItemPivotReportView(View):
         for allot_item in allotment_items:
             alloted_cif += Decimal(str(allot_item.cif_fc)) if allot_item.cif_fc is not None else Decimal('0')
 
+        # Debited CIF = CIF already debited (via BOE) across this licence's import
+        # items — the same `debited_value` field the restriction pools treat as
+        # debited_cif below. import_license is prefetched, so no extra query.
+        debited_cif = Decimal('0')
+        for import_item in license_obj.import_license.all():
+            debited_cif += Decimal(str(import_item.debited_value)) if import_item.debited_value is not None else DEC_0
+
         # Aggregate quantities by item (sum across all serial numbers)
         item_quantities = defaultdict(lambda: {
             'quantity': Decimal('0.000'),
@@ -391,8 +522,11 @@ class ItemPivotReportView(View):
         # Per condition_type pool — new restriction model. Each "N%" pool is
         # shared by every import item on this licence with that condition_type,
         # and provides the per-cell `restriction_value` shown in the pivot.
-        from apps.license.services.condition_pool import compute_condition_pools
-        condition_pools = compute_condition_pools(license_obj)
+        # Use the report's batched pools when provided; else compute per-licence
+        # (standalone callers).
+        if condition_pools is None:
+            from apps.license.services.condition_pool import compute_condition_pools
+            condition_pools = compute_condition_pools(license_obj)
         # condition_pools = {"2%": Decimal(...), "3%": Decimal(...), ...}
 
         # (Legacy restriction_groups kept ONLY for backward compatibility with
@@ -407,15 +541,11 @@ class ItemPivotReportView(View):
         })
 
         for import_item in license_obj.import_license.all():
-            # Attribute this import item's plan totals to its FIRST attached item
-            # name only, so a multi-name item isn't double-counted across columns.
-            _pl = _plan_map.get(import_item.id)
-            _pl_pending = _pl is not None
+            # Plan totals are now sourced per plan-line item_name via
+            # `item_plan_totals` (see the item-columns loop below); the old
+            # first-attached-name attribution is gone as it mis-assigned plans
+            # on multi-name import items (e.g. RUTILE on a BORAX+RUTILE item).
             for item in import_item.items.all():
-                if _pl_pending:
-                    item_quantities[item.id]['plan_quantity'] += Decimal(str(_pl['total_planned_quantity']))
-                    item_quantities[item.id]['plan_cif'] += Decimal(str(_pl['total_planned_cif']))
-                    _pl_pending = False
                 # Convert all numeric fields to Decimal to handle potential float values from database
                 item_quantities[item.id]['quantity'] += Decimal(str(import_item.quantity)) if import_item.quantity is not None else DEC_000
                 item_quantities[item.id]['allotted_quantity'] += Decimal(str(import_item.allotted_quantity)) if import_item.allotted_quantity is not None else DEC_000
@@ -478,9 +608,12 @@ class ItemPivotReportView(View):
         if not notification_display:
             notification_display = 'Unknown'
 
-        # Check for document types
-        has_tl = license_obj.license_documents.filter(type='TRANSFER LETTER').exists()
-        has_copy = license_obj.license_documents.filter(type='LICENSE COPY').exists()
+        # Check for document types — use the batched map when the report supplies it,
+        # else fall back to a per-object query (standalone callers).
+        if document_types is None:
+            document_types = {d.type for d in license_obj.license_documents.all()}
+        has_tl = 'TRANSFER LETTER' in document_types
+        has_copy = 'LICENSE COPY' in document_types
 
         # Get latest transfer
         latest_transfer_text = ''
@@ -513,6 +646,7 @@ class ItemPivotReportView(View):
             'purchase_status_code': ps_code,
             'purchase_status_label': ps_label,
             'total_cif': float(total_cif),
+            'debited_cif': float(debited_cif),
             'alloted_cif': float(alloted_cif),
             'balance_cif': float(balance_cif),  # Reuse already calculated balance
             'balance_report_notes': license_obj.balance_report_notes or '',
@@ -631,32 +765,51 @@ class ItemPivotReportView(View):
                     'planned_cif': round(item_plan, 2),
                 }
 
-        # ── Per-item sequential debit (E132) ──────────────────────────────
-        # E132 uses a hard-stop debit sequence (services/e132_debit.py), not the
-        # E1/E5 waterfall: each matched item debits qty×rate from a running
-        # Balance CIF; on overflow it is flagged "Insufficient Balance" and the
-        # run stops. Map the per-item result back by item-name.
+        # ── Per-item classification plan (E132) ────────────────────────────
+        # E132 planning is a deterministic classification (services/e132_plan.py):
+        # each item is classified into one planning item and priced at that item's
+        # fixed unit price. Unit Price / Planned CIF reuse the E1/E5 columns.
+        # Keyed by item name (matching the downstream lookup).
         item_e132_data: Dict[str, Dict[str, Any]] = {}
         if primary_norm == 'E132':
-            from apps.license.services.e132_debit import compute_e132_debit as _compute_e132_debit
+            from apps.license.services.e132_plan import plan_e132_per_item
             _e132_input = []
             for _iid, _inm in all_items:
                 if _iid in item_quantities:
                     _d132 = item_quantities[_iid]
                     _e132_input.append({
-                        'item_name': _inm,
+                        'record_id': _inm,
                         'quantity': float(_d132['available_quantity'] or 0),
                         'hs_code': _d132['hs_code'] or '',
                         'description': _d132['description'] or '',
                     })
-            _e132_res = _compute_e132_debit(_e132_input, float(balance_cif))
-            for _r132 in _e132_res['rows']:
-                item_e132_data[_r132['item_name']] = _r132
+            item_e132_data = plan_e132_per_item(_e132_input, float(balance_cif))
+
+        # "As per planning" (AUTOMATED): for E132 the classification IS the plan —
+        # only items that classified into a planning item are shown; unclassified
+        # items are hidden. A manual plan, when present, takes precedence.
+        e132_planned_names = None
+        if primary_norm == 'E132' and item_plan_totals is None:
+            e132_planned_names = set(item_e132_data.keys())
 
         # Add item columns
+        # A manually-planned DFIA only shows the items it planned; the plan
+        # map's keys are that set.
+        planned_item_ids = set(item_plan_totals) if item_plan_totals is not None else None
         for item_id, item_name in all_items:
-            if item_id in item_quantities:
+            # "As per planning": show only planned items. Manual plan first, else
+            # the E132 automated plan; every other item is an empty cell.
+            if planned_item_ids is not None and item_id not in planned_item_ids:
+                show_item = False
+            elif e132_planned_names is not None and item_name not in e132_planned_names:
+                show_item = False
+            else:
+                show_item = item_id in item_quantities
+
+            if show_item:
                 item_data = item_quantities[item_id]
+                # Per-item manual plan totals (empty for norm-driven licences).
+                _item_plan = (item_plan_totals or {}).get(item_id) or {}
 
                 # NEW model: restriction is determined by condition_type set
                 # on the licence's import item (from the parsed condition
@@ -680,15 +833,14 @@ class ItemPivotReportView(View):
                     unit_price = rutile_unit_price
                     planned_cif = planner.get('planned_cif', 0.0)
                 elif _e132:
-                    # E132 reuses the Unit Price / Planned CIF columns to show
-                    # the sequential debit's Unit Rate / Debit Amount. Only a
-                    # *Success* row is actually applied to the balance — an
-                    # "Insufficient Balance" item is NOT debited, so it must
-                    # contribute 0 to the summed Planned CIF (otherwise the
-                    # report total can exceed the opening Balance CIF).
-                    _applied = _e132.get('status') == 'Success'
-                    unit_price = _e132.get('unit_rate') if _applied else None
-                    planned_cif = _e132.get('debit_amount') if _applied else 0.0
+                    # E132 reuses the Unit Price / Planned CIF columns to show the
+                    # classified planning item's fixed unit price and planned value
+                    # (balance-capped). Unit Price is None and Planned CIF 0 for any
+                    # item whose price is still To-Be-Defined.
+                    _e132_up = _e132.get('unit_price')
+                    _e132_cif = _e132.get('planned_cif')
+                    unit_price = float(_e132_up) if _e132_up is not None else None
+                    planned_cif = float(_e132_cif) if _e132_cif is not None else 0.0
                 else:
                     unit_price = planner.get('unit_price')
                     planned_cif = planner.get('planned_cif', 0.0)
@@ -704,9 +856,10 @@ class ItemPivotReportView(View):
                     'restriction_value': float(available_cif),
                     'unit_price': unit_price,
                     'planned_cif': planned_cif,
-                    # User-authored plan (distinct from the norm-derived planned_cif).
-                    'plan_quantity': float(item_data.get('plan_quantity') or 0),
-                    'plan_cif': float(item_data.get('plan_cif') or 0),
+                    # User-authored plan (distinct from the norm-derived
+                    # planned_cif), sourced per plan-line item_name.
+                    'plan_quantity': float(_item_plan.get('q') or 0),
+                    'plan_cif': float(_item_plan.get('cif') or 0),
                     'condition_type': cond_type,
                     # E132 sequential-debit fields (None for non-E132 norms).
                     'product_code': _e132.get('product_code'),
@@ -785,13 +938,13 @@ class ItemPivotReportView(View):
                     title_cell = WriteOnlyCell(worksheet, value=title)
                     title_cell.font = Font(bold=True, size=14)
                     title_cell.alignment = Alignment(horizontal='center')
-                    worksheet.append([title_cell] + [None] * 25)  # Span across columns
+                    worksheet.append(_xlsx_safe_row([title_cell] + [None] * 25))  # Span across columns
                     worksheet.append([])  # Empty row
 
                     # Build headers
                     base_headers = [
                         'Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter',
-                        'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet',
+                        'Total CIF', 'Debited CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet',
                         'Ledger Date'
                     ]
 
@@ -836,7 +989,7 @@ class ItemPivotReportView(View):
                         cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
                         cell.alignment = Alignment(horizontal='center', wrap_text=True)
                         header_row.append(cell)
-                    worksheet.append(header_row)
+                    worksheet.append(_xlsx_safe_row(header_row))
 
                     # Write data rows for this norm-notification combination
                     for idx, license_data in enumerate(licenses_list, 1):
@@ -849,6 +1002,7 @@ class ItemPivotReportView(View):
                         row_data.append(license_data['license_expiry_date'])
                         row_data.append(license_data['exporter'])
                         row_data.append(license_data['total_cif'])
+                        row_data.append(license_data.get('debited_cif', 0))
                         row_data.append(license_data['alloted_cif'])
                         row_data.append(license_data['balance_cif'])
                         row_data.append(license_data.get('balance_report_notes', ''))
@@ -910,7 +1064,7 @@ class ItemPivotReportView(View):
                                 row_data.append(_pc if _pc else '')
 
                         # Append row to worksheet
-                        worksheet.append(row_data)
+                        worksheet.append(_xlsx_safe_row(row_data))
 
                     # Add totals row for this norm-notification
                     totals_row = []
@@ -994,7 +1148,7 @@ class ItemPivotReportView(View):
                         if is_rutile:
                             totals_row.append(None)
 
-                    worksheet.append(totals_row)
+                    worksheet.append(_xlsx_safe_row(totals_row))
 
             # Save workbook to temp file
             workbook.save(temp_file.name)
@@ -1080,11 +1234,11 @@ class ItemPivotReportView(View):
                     title_cell = WriteOnlyCell(worksheet, value=f"Item Pivot Report - {norm_class} - {notification}")
                     title_cell.font = Font(bold=True, size=14)
                     title_cell.alignment = Alignment(horizontal='center')
-                    worksheet.append([title_cell] + [None] * 25)
+                    worksheet.append(_xlsx_safe_row([title_cell] + [None] * 25))
                     worksheet.append([])
 
                     # Headers
-                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet']
+                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Debited CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet']
                     item_headers = []
                     for item in items_with_data:
                         item_name = item['name']
@@ -1120,7 +1274,7 @@ class ItemPivotReportView(View):
                         cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
                         cell.alignment = Alignment(horizontal='center', wrap_text=True)
                         header_row.append(cell)
-                    worksheet.append(header_row)
+                    worksheet.append(_xlsx_safe_row(header_row))
 
                     # Data rows
                     for idx, lic in enumerate(licenses_list, 1):
@@ -1131,6 +1285,7 @@ class ItemPivotReportView(View):
                             lic['license_expiry_date'],
                             lic['exporter'],
                             lic['total_cif'],
+                            lic.get('debited_cif', 0),
                             lic['alloted_cif'],
                             lic['balance_cif'],
                             lic.get('balance_report_notes', ''),
@@ -1165,7 +1320,7 @@ class ItemPivotReportView(View):
                             row_data.append(item_data.get('unit_price') or 0)
                             row_data.append(item_data.get('planned_cif') or 0)
 
-                        worksheet.append(row_data)
+                        worksheet.append(_xlsx_safe_row(row_data))
 
                     # Totals row
                     totals_row = [WriteOnlyCell(worksheet, value='TOTAL')]
@@ -1175,6 +1330,10 @@ class ItemPivotReportView(View):
                     total_cif_cell = WriteOnlyCell(worksheet, value=sum(l['total_cif'] for l in licenses_list))
                     total_cif_cell.font = Font(bold=True)
                     totals_row.append(total_cif_cell)
+
+                    debited_cif_cell = WriteOnlyCell(worksheet, value=sum(l.get('debited_cif', 0) for l in licenses_list))
+                    debited_cif_cell.font = Font(bold=True)
+                    totals_row.append(debited_cif_cell)
 
                     alloted_cif_cell = WriteOnlyCell(worksheet, value=sum(l['alloted_cif'] for l in licenses_list))
                     alloted_cif_cell.font = Font(bold=True)
@@ -1208,7 +1367,7 @@ class ItemPivotReportView(View):
                         cell.font = Font(bold=True)
                         totals_row.append(cell)
 
-                    worksheet.append(totals_row)
+                    worksheet.append(_xlsx_safe_row(totals_row))
 
             # Save workbook
             workbook.save(temp_file.name)

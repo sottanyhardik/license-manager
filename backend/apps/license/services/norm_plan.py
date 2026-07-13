@@ -36,19 +36,33 @@ def detect_norm(license_obj) -> str:
 
 def effective_plan_for_license(license_obj):
     """
-    The plan a license should show in reports, choosing EXCLUSIVELY:
-      * if the license has ANY manual plan line  -> use the manual plan only
-      * otherwise                                -> use the norm (E1/E5/E132) plan
+    Per-import-item effective plan, net of allotments.
+
+    Composition (per item, not per license):
+      * MANUAL FIRST — if an import item has a manual plan line, that line is used
+        and is FIXED: the automated norm logic never overrides it.
+      * NORM FILLS THE REST — items without a manual line use the norm (E1/E5/E132)
+        plan.
+      * REMAINING = plan − allotted — the planned quantity and CIF are then reduced
+        by what has already been ALLOTTED for that item (floored at 0). Because the
+        item's allotted_quantity / allotted_value are maintained by the allotment
+        signals, this figure shrinks when an allotment is made and grows back when
+        one is removed, with no stored-plan mutation.
 
     Returns (source, {import_item_id: {planned_quantity, unit_price, planned_cif}})
-    where source is 'manual', 'norm', or '' (neither).
+    where source is 'manual' (any manual line present), 'norm', or '' (neither).
     """
     from apps.license.services.plan_reporting import plan_map_for_license
+    from apps.license.models import LicenseImportItemsModel
 
     manual = plan_map_for_license(license_obj.id)
-    if manual:  # at least one manual plan line exists for this license
-        out = {}
-        for iid, d in manual.items():
+    norm = norm_plan_for_license(license_obj)
+
+    # Per-item merge: manual line wins for its item; norm fills every other item.
+    out = {}
+    for iid in set(norm) | set(manual):
+        if iid in manual:
+            d = manual[iid]
             q = float(d["total_planned_quantity"] or 0)
             c = float(d["total_planned_cif"] or 0)
             out[iid] = {
@@ -56,10 +70,32 @@ def effective_plan_for_license(license_obj):
                 "unit_price": round(c / q, 2) if q else 0.0,
                 "planned_cif": c,
             }
-        return "manual", out
+        else:
+            n = norm[iid]
+            out[iid] = {
+                "planned_quantity": float(n["planned_quantity"]),
+                "unit_price": float(n["unit_price"]),
+                "planned_cif": float(n["planned_cif"]),
+            }
 
-    norm = norm_plan_for_license(license_obj)
-    return ("norm" if norm else ""), norm
+    # Remaining = plan − allotted (per item), floored at 0.
+    if out:
+        allot = {
+            row["id"]: (float(row["allotted_quantity"] or 0), float(row["allotted_value"] or 0))
+            for row in LicenseImportItemsModel.objects
+            .filter(license=license_obj, id__in=list(out.keys()))
+            .values("id", "allotted_quantity", "allotted_value")
+        }
+        for iid, p in out.items():
+            aq, av = allot.get(iid, (0.0, 0.0))
+            rq = max(p["planned_quantity"] - aq, 0.0)
+            rc = max(p["planned_cif"] - av, 0.0)
+            p["planned_quantity"] = rq
+            p["planned_cif"] = rc
+            p["unit_price"] = round(rc / rq, 2) if rq else 0.0
+
+    source = "manual" if manual else ("norm" if norm else "")
+    return source, out
 
 
 def norm_plan_for_license(license_obj) -> dict:
@@ -132,38 +168,26 @@ def norm_plan_for_license(license_obj) -> dict:
             }
 
     elif norm == "E132":
-        from apps.license.services.e132_debit import compute_e132_debit
+        # E132 planning = deterministic classification (services/e132_plan.py):
+        # each import item is classified into one planning item and priced at that
+        # item's fixed unit price. planned_cif = available_qty × price (0.0 when the
+        # price is To-Be-Defined, e.g. Milk). Unclassified items get no plan line.
+        from apps.license.services.e132_plan import plan_e132_per_item
 
-        # Build input keyed by a unique item label, remember which item it maps to.
-        inputs = []
-        label_to_id: dict = {}
-        for ii in import_items:
-            names = list(ii.items.values_list("name", flat=True))
-            label = ", ".join(sorted(names)) if names else (ii.description or "-")
-            # Ensure uniqueness so rows map back 1:1 even if labels repeat.
-            uniq = label
-            _n = 2
-            while uniq in label_to_id:
-                uniq = f"{label} #{_n}"
-                _n += 1
-            label_to_id[uniq] = ii.id
-            inputs.append({
-                "item_name": uniq,
+        records = [
+            {
+                "record_id": ii.id,
                 "quantity": float(ii.available_quantity or 0),
                 "hs_code": ii.hs_code.hs_code if ii.hs_code else "",
-                "description": ii.description or label,
-            })
-
-        res = compute_e132_debit(inputs, balance_cif)
-        for row in res.get("rows", []):
-            iid = label_to_id.get(row.get("item_name"))
-            if not iid:
-                continue
-            applied = row.get("status") == "Success"
+                "description": ii.description or "",
+            }
+            for ii in import_items
+        ]
+        for iid, p in plan_e132_per_item(records, balance_cif).items():
             result[iid] = {
-                "planned_quantity": round(float(row.get("total_quantity") or 0), 3) if applied else 0.0,
-                "unit_price": round(float(row.get("unit_rate") or 0), 2) if applied else 0.0,
-                "planned_cif": round(float(row.get("debit_amount") or 0), 2) if applied else 0.0,
+                "planned_quantity": round(float(p["planned_quantity"]), 3),
+                "unit_price": round(float(p["unit_price"]), 2) if p["unit_price"] is not None else 0.0,
+                "planned_cif": round(float(p["planned_cif"]), 2) if p["planned_cif"] is not None else 0.0,
             }
 
     return result

@@ -17,6 +17,9 @@ import {openPdfPreview} from "../../utils/pdfPreview";
 import {clickable} from "../../utils/clickable";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
+import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
+import AllotmentsTable from "./tables/AllotmentsTable";
+import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
@@ -75,28 +78,7 @@ export default function MasterList() {
     const [hasPrevious, setHasPrevious] = useState(false);
 
     // Filter state with default filters for allotments, bill-of-entries, and incentive-licenses
-    const getDefaultFilters = () => {
-        if (entityName === 'allotments') {
-            return {
-                type: 'AT',
-                is_boe: 'False',
-                is_allotted: 'all'
-            };
-        }
-        if (entityName === 'bill-of-entries') {
-            return {
-                is_invoice: 'False'
-            };
-        }
-        if (entityName === 'incentive-licenses') {
-            return {
-                sold_status: ''  // Empty string = "All" (shows both sold and unsold)
-            };
-        }
-        return {};
-    };
-
-    const [filterParams, setFilterParams] = useState(getDefaultFilters());
+    const [filterParams, setFilterParams] = useState(() => getDefaultFilters(entityName));
     const backendDefaultsApplied = useRef(false);
     const pendingRequestRef = useRef(null);
     const abortControllerRef = useRef(null);
@@ -415,7 +397,7 @@ export default function MasterList() {
             // Check if we should restore filters from previous session
             const shouldRestore = shouldRestoreFilters();
             const restored = shouldRestore ? restoreFilterState(entityName) : null;
-            const defaultFilters = getDefaultFilters();
+            const defaultFilters = getDefaultFilters(entityName);
 
             if (restored) {
                 // Merge restored filters with default filters
@@ -449,7 +431,7 @@ export default function MasterList() {
         if (backendDefaultsApplied.current && Object.keys(filterParams).length > 0) return;
 
         const backendDefaults = metadata.default_filters || {};
-        const hardcodedDefaults = getDefaultFilters();
+        const hardcodedDefaults = getDefaultFilters(entityName);
 
         // Only update UI state if we have backend defaults and no hardcoded defaults
         if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
@@ -966,121 +948,19 @@ export default function MasterList() {
 
                     {/* Allotments Card Layout */}
                     {entityName === 'allotments' && (
-                        loading ? (
-                            <div className="text-center py-5">
-                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted-foreground">Loading Allotments...</div>
-                            </div>
-                        ) : data.length === 0 ? (
-                            <div className="empty-state">
-                                <div className="empty-icon"><Inbox className="size-4" aria-hidden="true" /></div>
-                                <div className="empty-title">No allotments found</div>
-                                <div className="empty-sub">Try adjusting filters or create a new allotment.</div>
-                            </div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—';
-                                    const fmtQty = (val) => val ? Number(val).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—';
-                                    const detailRows = item.allotment_details || [];
-                                    return (
-                                        <EntityCard
-                                            key={item.id}
-                                            accent={item.is_boe ? 'success' : 'primary'}
-                                            title={item.invoice || <span style={{ fontStyle: 'italic', color: 'var(--text-tertiary)', fontWeight: 400 }}>No Invoice</span>}
-                                            headerChips={[
-                                                item.estimated_arrival_date && { icon: 'calendar3', label: item.estimated_arrival_date },
-                                                item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
-                                                item.company_name        && { icon: 'building', label: item.company_name, tone: 'primary' },
-                                            ].filter(Boolean)}
-                                            statusBadges={[
-                                                item.is_boe      && { tone: 'success', label: 'BOE ✓' },
-                                                item.is_approved && { tone: 'info',    label: 'Approved' },
-                                            ].filter(Boolean)}
-                                            summary={[
-                                                { label: 'Req Qty',      value: fmtQty(item.required_quantity) },
-                                                { label: 'Req Value',    value: fmtInr(item.required_value) },
-                                                { label: 'Balanced Qty', value: fmtQty(item.balanced_quantity), tone: (item.balanced_quantity > 0 ? 'success' : undefined) },
-                                            ]}
-                                            actions={[
-                                                canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
-                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/edit`); } },
-                                                canWrite && { icon: 'copy', title: 'Copy', tone: 'info',
-                                                    onClick: async () => {
-                                                        if (!window.confirm(`Create a copy of allotment ${item.invoice || 'this allotment'}?`)) return;
-                                                        try {
-                                                            const r = await api.post(`allotments/${item.id}/copy/`);
-                                                            toast.success('Allotment copied. Opening in edit mode...');
-                                                            saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
-                                                            navigate(`/allotments/${r.data.id}/edit`);
-                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to copy'); }
-                                                    } },
-                                                canWrite && { icon: 'box-arrow-in-down', title: 'Allocate', tone: 'success',
-                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/allocate`); } },
-                                                { icon: 'file-pdf', title: 'Preview PDF', tone: 'warning',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            openPdfPreview(r.data, `${item.invoice_number || item.id}.pdf`);
-                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to generate PDF'); }
-                                                    } },
-                                                { icon: 'download', title: 'Download',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            const a = document.createElement('a');
-                                                            a.href = url;
-                                                            a.download = `Allotment-${item.invoice || item.id}.pdf`;
-                                                            document.body.appendChild(a); a.click(); a.remove();
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
-                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to download PDF'); }
-                                                    } },
-                                                canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => handleDelete(item) },
-                                            ].filter(Boolean)}
-                                            viewOpen={expandedAllotments.has(item.id)}
-                                            onView={() => toggleAllotment(item.id)}
-                                            detailLabel={detailRows.length ? `${detailRows.length} Item${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
-                                            detail={() => (
-                                                <DetailTable
-                                                    columns={[
-                                                        { key: 'license_number',     label: 'License',     bold: true, nowrap: true,
-                                                            render: v => v ? <span style={{ color: 'var(--primary-color)' }}>{v}</span> : '—' },
-                                                        { key: 'serial_number',      label: 'Sl#',         align: 'right', nowrap: true },
-                                                        { key: 'product_description', label: 'Item',       muted: true },
-                                                        { key: 'qty',                 label: 'Qty',        align: 'right', nowrap: true,
-                                                            render: v => fmtQty(v) },
-                                                        { key: 'cif_fc',              label: 'CIF (FC)',   align: 'right', nowrap: true,
-                                                            render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
-                                                        { key: 'cif_inr',             label: 'CIF (INR)',  align: 'right', nowrap: true, bold: true,
-                                                            render: v => fmtInr(v) },
-                                                    ]}
-                                                    rows={detailRows}
-                                                    emptyMessage="No items have been allotted yet."
-                                                />
-                                            )}
-                                        >
-                                            {(item.item_name || item.dfia_list) && (
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-                                                    <div style={{ flex: 1, minWidth: 200 }}>
-                                                        <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Item</div>
-                                                        <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>
-                                                            {item.item_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No item name</span>}
-                                                        </div>
-                                                    </div>
-                                                    {item.dfia_list && (
-                                                        <div style={{ flex: 1, minWidth: 140 }}>
-                                                            <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
-                                                            <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.dfia_list}</div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </EntityCard>
-                                    );
-                                })}
-                            </div>
-                        )
+                        <AllotmentsTable
+                            loading={loading}
+                            data={data}
+                            canWrite={canWrite}
+                            entityName={entityName}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                            expandedAllotments={expandedAllotments}
+                            toggleAllotment={toggleAllotment}
+                        />
                     )}
 
                     {/* Licenses Card Layout */}
@@ -1474,81 +1354,17 @@ export default function MasterList() {
 
                     {/* Incentive Licenses Card Layout */}
                     {entityName === 'incentive-licenses' && (
-                        loading ? (
-                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted-foreground">Loading Incentive Licenses...</div></div>
-                        ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted-foreground"><Inbox className="size-4" aria-hidden="true" /><div className="mt-2">No incentive licenses found</div></div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
-                                    const parseIndianDate = (s) => { if (!s) return null; const p = s.split('-'); return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null; };
-                                    const isExpired = item.license_expiry_date && parseIndianDate(item.license_expiry_date) < new Date();
-                                    const soldStyle = item.sold_status === 'YES' ? { border: 'var(--tb-danger-border)', left: 'var(--tb-danger)', badge: 'var(--tb-danger-soft)', badgeText: 'var(--tb-danger-text)', label: 'Sold' }
-                                        : item.sold_status === 'PARTIAL' ? { border: 'var(--tb-warning-border)', left: 'var(--tb-warning)', badge: 'var(--tb-warning-soft)', badgeText: 'var(--tb-warning-text)', label: 'Partial' }
-                                        : { border: 'var(--tb-success-border)', left: 'var(--tb-success)', badge: 'var(--tb-success-soft)', badgeText: 'var(--tb-success-text)', label: 'Available' };
-                                    return (
-                                        <div key={item.id} style={{ display: 'block', background: 'var(--tb-card-bg)', border: `1px solid ${soldStyle.border}`, borderLeft: `4px solid ${soldStyle.left}`, borderRadius: 'var(--tb-r-md)', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                                            {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid var(--tb-border)', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: '700', fontSize: 16, color: 'var(--tb-brand-active)', marginRight: '4px' }}>{item.license_number || '-'}</span>
-                                                {item.license_type && (
-                                                    <span style={{ fontSize: 12, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>{item.license_type}</span>
-                                                )}
-                                                {item.license_date && (
-                                                    <span className="chip chip-neutral" style={{}}>
-                                                        <Calendar className="size-3" aria-hidden="true" />{item.license_date}
-                                                    </span>
-                                                )}
-                                                {item.license_expiry_date && (
-                                                    <span className={`chip ${isExpired ? 'chip-danger' : 'chip-neutral'}`} style={{}}>
-                                                        <CalendarX className="size-3" aria-hidden="true" />Exp: {item.license_expiry_date}
-                                                    </span>
-                                                )}
-                                                {item.port_name && (
-                                                    <span className="chip chip-info" style={{}}>
-                                                        <MapPin className="size-3" aria-hidden="true" />{item.port_name}
-                                                    </span>
-                                                )}
-                                                {item.exporter_name && (
-                                                    <span className="chip chip-neutral" style={{}}>
-                                                        <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
-                                                    </span>
-                                                )}
-                                                {item.exporter_iec && (
-                                                    <span className="chip chip-warning" style={{}}>
-                                                        <Fingerprint className="size-3" aria-hidden="true" />IEC: {item.exporter_iec}
-                                                    </span>
-                                                )}
-                                                <span style={{ fontSize: 12, color: soldStyle.badgeText, background: soldStyle.badge, padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
-                                                    {soldStyle.label}
-                                                </span>
-                                                {!item.is_active && (
-                                                    <span style={{ fontSize: 11, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 6px', borderRadius: 'var(--tb-r-sm)' }}>Inactive</span>
-                                                )}
-                                            </div>
-
-                                            {/* Row 3: Stats + Actions */}
-                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: 'var(--tb-sunken)', gap: '8px', flexWrap: 'wrap' }}>
-                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-                                                    <div><div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>License Value</div><div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '700' }}>{fmtInr(item.license_value)}</div></div>
-                                                    <div><div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Sold Value</div><div style={{ fontSize: 14, color: 'var(--tb-danger-text)', fontWeight: '600' }}>{fmtInr(item.sold_value)}</div></div>
-                                                    <div><div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Balance</div><div style={{ fontSize: 14, color: item.balance_value > 0 ? 'var(--tb-success)' : 'var(--tb-text-tertiary)', fontWeight: '600' }}>{fmtInr(item.balance_value)}</div></div>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/incentive-licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <Pencil className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <Trash2 className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )
+                        <IncentiveLicensesTable
+                            loading={loading}
+                            data={data}
+                            canWrite={canWrite}
+                            entityName={entityName}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                        />
                     )}
 
                     {/* Use AccordionTable for entities with nested fields (except licenses, allotments, bill-of-entries), regular DataTable for others */}

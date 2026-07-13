@@ -12,6 +12,13 @@
 #    sshpass  →  sudo apt install sshpass   (or brew install sshpass)
 #    DuckDNS token stored on each server at ~/duckdns.env:
 #      DUCKDNS_TOKEN=your_token_here
+#
+#  Master-Data Service (ADR-001): when a server's backend/.env sets
+#  MDS_ENABLED=true (+ MDS_BASE_URL / MDS_TOKEN), this deploy also installs the
+#  mds-client package, applies its migration, and syncs master data from the
+#  central MDS into the server's local mirror (best-effort — reads always come
+#  from the local mirror, so a sync hiccup never blocks the deploy). The MDS
+#  *service* itself is deployed separately: master-data-service/deploy/deploy-mds.sh
 # ============================================================
 
 set -e
@@ -30,13 +37,43 @@ print_info()    { echo -e "${BLUE}→ $1${NC}"; }
 SERVER_USER="django"
 ALL_SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
-BRANCH="${1:-develop}"
+BRANCH="${1:-feature/Phase2}"
 PASSWORD="${DEPLOY_PASSWORD:-}"          # set: export DEPLOY_PASSWORD=admin
 
 if [ -z "$PASSWORD" ]; then
     print_error "DEPLOY_PASSWORD is not set. Run: export DEPLOY_PASSWORD=yourpassword"
     exit 1
 fi
+
+# ── Master-Data Service (ADR-001) ────────────────────────────
+# MDS_ENABLED=true makes this deploy write MDS_ENABLED into each server's
+# backend/.env, install mds-client, migrate it, and sync master data from the
+# central MDS into the local mirror. Defaults to true (the goal state).
+#
+# For the SYNC to actually run, the MDS service must be deployed + reachable and
+# a token supplied — pass them via env (never hardcode a token in this script):
+#   export MDS_BASE_URL="https://masters.<host>/api/v1/"
+#   export MDS_TOKEN="<this server's write-scoped token>"
+# Without them, MDS is enabled but the sync step is skipped with a warning; the
+# app still works fully (reads come from the local mirror tables).
+# MDS is DISABLED by default: master writes stay local-only (the pre-MDS,
+# byte-for-byte behavior). Set MDS_ENABLED=true explicitly to turn the cutover
+# back on. When false, the deploy actively writes MDS_ENABLED=false into each
+# server's backend/.env so a previously-enabled server is turned off.
+MDS_ENABLED="${MDS_ENABLED:-false}"
+MDS_BASE_URL="${MDS_BASE_URL:-}"
+MDS_TOKEN="${MDS_TOKEN:-}"
+
+# ── Secure media (opt-in) ────────────────────────────────────
+# SECURE_MEDIA=true closes the public /media/ exposure: uploads are served only
+# via the authenticated /api/media/<path> view + nginx X-Accel-Redirect. It writes
+# MEDIA_X_ACCEL_REDIRECT=/protected-media/ into each server's backend/.env.
+# PREREQS (do them in the SAME window — see docs/media-security-cutover.md):
+#   1. nginx has the internal `location /protected-media/` block
+#      (nginx-protected-media.conf) and the public `location /media/` removed;
+#   2. the frontend no longer links /media/ directly or uses ?access_token=.
+# Defaults to false = current public /media/ behavior (byte-for-byte unchanged).
+SECURE_MEDIA="${SECURE_MEDIA:-false}"
 
 # Map server IP → short name (used to pick the right .env file)
 get_server_name() {
@@ -185,6 +222,69 @@ if ! python manage.py migrate --no-input 2>&1 | tee /tmp/migration.log; then
 fi
 rm -f /tmp/migration.log
 echo_ok "Migrations applied"
+
+# ── 2a. Seed E132 planning-item masters (idempotent) ────────────────
+# The data migration already seeds these on migrate; this is a belt-and-suspenders
+# re-run so the six E132 planning-item masters always exist and are active.
+echo_info "Seeding E132 planning-item masters..."
+python manage.py seed_e132_plan_items || echo_warn "seed_e132_plan_items failed (non-fatal)"
+echo_ok "E132 planning-item masters seeded"
+
+# ── 2b. Secure media (opt-in) ────────────────────────────────
+# Activate authenticated media serving only when SECURE_MEDIA=true AND the nginx
+# internal block + frontend cutover are in place (docs/media-security-cutover.md).
+if [ "$SECURE_MEDIA" = "true" ]; then
+    echo_info "Enabling secure media (MEDIA_X_ACCEL_REDIRECT) in backend/.env..."
+    touch .env
+    sed -i '/^MEDIA_X_ACCEL_REDIRECT=/d' .env
+    echo 'MEDIA_X_ACCEL_REDIRECT=/protected-media/' >> .env
+    echo_ok "MEDIA_X_ACCEL_REDIRECT=/protected-media/ written to .env"
+    echo_warn "Verify nginx has the internal 'location /protected-media/' block and the public /media/ block is removed — otherwise document downloads will 404."
+else
+    echo_info "Secure media OFF (public /media/). Set SECURE_MEDIA=true after the nginx + frontend cutover (docs/media-security-cutover.md)."
+fi
+
+# ── 2b. Master-Data Service: enable + client + mirror sync ───────────────
+# When MDS_ENABLED=true (script config), write MDS_ENABLED/URL/TOKEN into this
+# server's backend/.env, install mds-client, apply its migration, and pull master
+# data from the central MDS into the local mirror. Best-effort — reads always come
+# from the local mirror, so a sync hiccup never blocks the deploy. The MDS service
+# itself deploys via master-data-service/deploy/deploy-mds.sh.
+if [ "$MDS_ENABLED" = "true" ]; then
+    echo_info "Enabling MDS in backend/.env..."
+    cd $SERVER_PATH/backend
+    touch .env
+    sed -i '/^MDS_ENABLED=/d' .env; echo 'MDS_ENABLED=true' >> .env
+    if [ -n '$MDS_BASE_URL' ]; then sed -i '/^MDS_BASE_URL=/d' .env; echo 'MDS_BASE_URL=$MDS_BASE_URL' >> .env; fi
+    if [ -n '$MDS_TOKEN' ]; then sed -i '/^MDS_TOKEN=/d' .env; echo 'MDS_TOKEN=$MDS_TOKEN' >> .env; fi
+    export MDS_ENABLED=true MDS_BASE_URL='$MDS_BASE_URL' MDS_TOKEN='$MDS_TOKEN'
+    echo_ok "MDS_ENABLED=true written to .env"
+
+    echo_info "Installing mds-client + applying its migration..."
+    pip install -e $SERVER_PATH/mds-client --quiet || echo_warn "mds-client install failed"
+    python manage.py migrate mds_client --no-input || echo_warn "mds_client migrate failed"
+
+    if [ -n '$MDS_BASE_URL' ] && [ -n '$MDS_TOKEN' ]; then
+        echo_info "Syncing master data from central MDS..."
+        if python manage.py mds_sync 2>&1 | tail -8; then
+            echo_ok "Master data synced from central MDS"
+        else
+            echo_warn "mds_sync failed — local mirror still serving reads; check MDS URL/token/reachability"
+        fi
+    else
+        echo_warn "MDS enabled but MDS_BASE_URL/MDS_TOKEN not provided — skipping sync."
+        echo_warn "  Set them: export MDS_BASE_URL=... MDS_TOKEN=...  (needs the MDS service deployed)"
+    fi
+else
+    # MDS removed/disabled: force it OFF in this server's .env so master writes
+    # go local-only. Reads already come from the local mirror tables, so nothing
+    # else changes. This actively turns off a server that was previously enabled.
+    echo_info "Disabling MDS in backend/.env (master writes local-only)..."
+    cd $SERVER_PATH/backend
+    touch .env
+    sed -i '/^MDS_ENABLED=/d' .env; echo 'MDS_ENABLED=false' >> .env
+    echo_ok "MDS_ENABLED=false written to .env — master edits no longer route through MDS"
+fi
 
 # ── 3. Static files ─────────────────────────────────────────
 python manage.py collectstatic --no-input -v 0

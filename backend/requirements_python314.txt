@@ -1,5 +1,4 @@
 amqp==5.3.1
-appscript==1.4.0
 asgiref==3.10.0
 billiard==4.2.2
 celery==5.6.3
@@ -16,14 +15,12 @@ django-redis==6.0.0
 djangorestframework==3.17.1
 djangorestframework_simplejwt==5.5.1
 docopt==0.6.2
-docx2pdf==0.1.8
 docxtpl==0.20.2
 et_xmlfile==2.0.0
 Jinja2==3.1.6
 kombu==5.6.0
 lxml==6.0.2
 MarkupSafe==3.0.3
-num2words==0.5.14
 numpy==2.4.4
 openpyxl==3.1.5
 packaging==25.0

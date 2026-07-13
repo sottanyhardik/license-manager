@@ -6,10 +6,14 @@ a **local read-mirror** and talk to MDS for **writes** and **delta pulls**.
 
 See the full design: `docs/architecture/ADR-001-master-data-service.md` (main repo).
 
-> **Status: Phase 2 skeleton.** A working vertical slice — `Company`, `Port`,
-> `ExchangeRate` — proving the whole API pattern. The remaining 14 masters are
-> added mechanically (see "Adding a master" below). It lives as a subdirectory
-> for now and is extractable to its own repo.
+> **Status: Phase 2 complete — all 17 masters implemented.** Company, Port,
+> ItemHead, ItemGroup, ItemName, HSCode, HeadSIONNorm, SIONNormClass, SIONExport,
+> SIONImport, SIONNormNote, SIONNormCondition, ProductDescription, UnitPrice,
+> SchemeCode, NotificationNumber, ExchangeRate — all driven by `MASTER_REGISTRY`
+> so serializers/viewsets/routes/change-feed/admin are generated from one list.
+> Keyless masters use a synthetic `uid` natural key (ADR Decision 6). Media is an
+> object-storage key (django-storages wired in a later phase). Lives as a
+> subdirectory for now, extractable to its own repo.
 
 ## What the API gives every master
 

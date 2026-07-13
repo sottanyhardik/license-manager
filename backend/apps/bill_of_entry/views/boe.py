@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from apps.accounts.permissions import BillOfEntryPermission
 from apps.bill_of_entry.models import BillOfEntryModel
 from apps.bill_of_entry.serializers import BillOfEntrySerializer
+from apps.bill_of_entry.services import boe_service
 from apps.bill_of_entry.views_export import add_grouped_export_action
 from apps.core.constants import TYPE_CHOICES, ROW_TYPE_CHOICES
 from apps.core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
@@ -179,32 +180,7 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
         - skipped: Count of BOEs skipped (no items found)
         - message: Summary message
         """
-        # Get all BOEs with empty product_name
-        empty_product_boes = BillOfEntryModel.objects.filter(
-            Q(Q(product_name__isnull=True) | Q(product_name='')) & Q(invoice_no__isnull=True)
-        ).prefetch_related('item_details__sr_number__items')
-
-        total_count = empty_product_boes.count()
-        updated_count = 0
-        skipped_count = 0
-
-        for boe in empty_product_boes:
-            generated_name = boe.generate_product_name_from_items()
-
-            if generated_name:
-                boe.product_name = generated_name
-                boe.save(update_fields=['product_name'])
-                updated_count += 1
-            else:
-                skipped_count += 1
-
-        return Response({
-            'success': True,
-            'total': total_count,
-            'updated': updated_count,
-            'skipped': skipped_count,
-            'message': f'Processed {total_count} BOEs: {updated_count} updated, {skipped_count} skipped (no items found)'
-        })
+        return Response(boe_service.bulk_update_product_names())
 
 
 # Add grouped export functionality (attaches methods to existing class — no permission reset)
@@ -215,8 +191,8 @@ BillOfEntryViewSet = add_grouped_export_action(BillOfEntryViewSet)
 @action(detail=False, methods=['get'], url_path='fetch-allotment-details')
 def fetch_allotment_details(self, request):
     """
-    Fetch allotment details by allotment ID
-    Returns: exchange_rate, product_name, port, and item_details
+    Fetch allotment details by allotment ID.
+    Returns: exchange_rate, product_name, port, and item_details.
 
     Excludes items (license items) that are already in the current BOE's item_details
     to avoid duplicates when fetching from multiple allotments.
@@ -228,69 +204,10 @@ def fetch_allotment_details(self, request):
         return Response({'error': 'allotment_id is required'}, status=400)
 
     try:
-        from apps.allotment.models import AllotmentModel
-        allotment = AllotmentModel.objects.select_related('company', 'port').prefetch_related(
-            'allotment_details__item__license__import_license',
-            'allotment_details__item__hs_code'
-        ).get(id=allotment_id)
-
-        # Get existing license item IDs already in the current BOE (if editing)
-        existing_license_item_ids = set()
-        if boe_id:
-            try:
-                boe = BillOfEntryModel.objects.prefetch_related('item_details').get(id=boe_id)
-                existing_license_item_ids = set(
-                    boe.item_details.values_list('sr_number_id', flat=True)
-                )
-            except BillOfEntryModel.DoesNotExist:
-                pass  # New BOE, no existing items
-
-        # Get allotment items (license items linked to this allotment)
-        allotment_items = allotment.allotment_details.select_related(
-            'item__license', 'item__hs_code'
-        ).all()
-
-        # Build item details from allotment items, excluding items already in BOE
-        item_details = []
-        exchange_rate = float(allotment.exchange_rate) if allotment.exchange_rate else 0.0
-
-        for allot_item in allotment_items:
-            license_item = allot_item.item
-            if license_item:
-                # Skip if this license item is already in the current BOE
-                if license_item.id in existing_license_item_ids:
-                    continue
-
-                # Use CIF values from allotment_items if available, else calculate
-                cif_fc = float(allot_item.cif_fc) if allot_item.cif_fc else 0.0
-                cif_inr = float(allot_item.cif_inr) if allot_item.cif_inr else (cif_fc * exchange_rate)
-
-                # If no CIF in allotment, calculate from license item
-                if cif_fc == 0.0 and license_item.unit_price and license_item.quantity:
-                    cif_fc = float(license_item.unit_price * license_item.quantity)
-                    cif_inr = cif_fc * exchange_rate
-
-                item_details.append({
-                    'sr_number': license_item.id,
-                    'license_number': license_item.license.license_number if license_item.license else '',
-                    'item_description': license_item.description or '',
-                    'hs_code': license_item.hs_code.hs_code if license_item.hs_code else '',
-                    'qty': float(allot_item.qty) if allot_item.qty else (
-                        float(license_item.quantity) if license_item.quantity else 0.0),
-                    'cif_fc': cif_fc,
-                    'cif_inr': cif_inr,
-                })
-
-        return Response({
-            'exchange_rate': exchange_rate,
-            'product_name': allotment.item_name or '',
-            'port': allotment.port.id if allotment.port else None,
-            'port_name': allotment.port.name if allotment.port else '',
-            'company': allotment.company.id if allotment.company else None,
-            'company_name': allotment.company.name if allotment.company else '',
-            'item_details': item_details,
-        })
-
+        return Response(boe_service.fetch_allotment_item_details(
+            allotment_id=allotment_id,
+            boe_id=boe_id or None,
+        ))
     except Exception as e:
         from apps.core.utils.exceptions import api_error
         return Response(api_error('Failed to fetch allotment details', e, __name__), status=500)
@@ -427,6 +344,8 @@ def generate_transfer_letter(self, request, pk=None):
     from django.shortcuts import get_object_or_404
     from apps.core.utils.transfer_letter import generate_transfer_letter_generic
 
+    # Transfer-letter generation requires the request object (carries auth + payload)
+    # so it remains orchestrated in the view; the generic utility handles the domain work.
     boe = get_object_or_404(BillOfEntryModel.objects.select_related('company'), id=pk)
     return generate_transfer_letter_generic(boe, request, instance_type='boe')
 
@@ -447,37 +366,13 @@ def update_product_name(self, request, pk=None):
     - message: Success or skip message
     """
     from django.shortcuts import get_object_or_404
-    from rest_framework.response import Response
 
     boe = get_object_or_404(BillOfEntryModel, id=pk)
+    result = boe_service.update_product_name_for_boe(boe)
 
-    # Check if product_name is already filled
-    if boe.product_name and boe.product_name.strip():
-        return Response({
-            'success': False,
-            'product_name': boe.product_name,
-            'message': f'Product name already exists: {boe.product_name}. Skipped update.'
-        })
-
-    # Generate product name from items
-    generated_name = boe.generate_product_name_from_items()
-
-    if not generated_name:
-        return Response({
-            'success': False,
-            'message': 'No items found to generate product name',
-            'product_name': boe.product_name
-        }, status=400)
-
-    # Update product_name only if it was empty
-    boe.product_name = generated_name
-    boe.save(update_fields=['product_name'])
-
-    return Response({
-        'success': True,
-        'product_name': generated_name,
-        'message': f'Product name updated successfully to: {generated_name}'
-    })
+    if not result["success"] and result["message"].startswith("No items"):
+        return Response(result, status=400)
+    return Response(result)
 
 
 BillOfEntryViewSet.update_product_name = update_product_name
@@ -495,19 +390,9 @@ def resolve_dispute(self, request, pk=None):
     - cleared: number of rows whose dispute flag was cleared
     """
     from django.shortcuts import get_object_or_404
-    from rest_framework.response import Response
-    from apps.bill_of_entry.models import RowDetails
 
     boe = get_object_or_404(BillOfEntryModel, id=pk)
-    cleared = RowDetails.objects.filter(
-        bill_of_entry=boe, is_dispute=True
-    ).update(is_dispute=False)
-
-    return Response({
-        'success': True,
-        'cleared': cleared,
-        'message': f'Resolved {cleared} dispute row(s) on BOE {boe.bill_of_entry_number}',
-    })
+    return Response(boe_service.resolve_dispute(boe))
 
 
 BillOfEntryViewSet.resolve_dispute = resolve_dispute
@@ -527,67 +412,20 @@ def merge_boe(self, request, pk=None):
     Request body:
     - source_boe_id: ID of the BOE to merge from (will be deleted)
     """
-    from django.db import transaction as db_transaction
     from django.shortcuts import get_object_or_404
 
     target_boe = get_object_or_404(BillOfEntryModel, id=pk)
     source_boe_id = request.data.get('source_boe_id')
 
-    if not source_boe_id:
-        return Response({'error': 'source_boe_id is required'}, status=400)
-
     try:
-        source_boe = BillOfEntryModel.objects.prefetch_related('item_details', 'allotment').get(id=source_boe_id)
-    except BillOfEntryModel.DoesNotExist:
-        return Response({'error': 'Source BOE not found'}, status=404)
+        result = boe_service.merge_boe(target_boe, source_boe_id=source_boe_id)
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg:
+            return Response({'error': msg}, status=404)
+        return Response({'error': msg}, status=400)
 
-    if target_boe.id == source_boe.id:
-        return Response({'error': 'Cannot merge a BOE with itself'}, status=400)
-
-    with db_transaction.atomic():
-        from apps.bill_of_entry.models import RowDetails
-
-        # Find combos already in target to avoid unique-constraint violations
-        existing_combos = set(
-            target_boe.item_details.values_list('sr_number_id', 'transaction_type')
-        )
-
-        rows_to_move = []
-        skipped_count = 0
-        for row in source_boe.item_details.values('id', 'sr_number_id', 'transaction_type'):
-            combo = (row['sr_number_id'], row['transaction_type'])
-            if combo not in existing_combos:
-                rows_to_move.append(row['id'])
-                existing_combos.add(combo)
-            else:
-                skipped_count += 1
-
-        # Use queryset .update() to bypass RowDetails.save() frozen-row guard —
-        # we are only reassigning the BOE FK, not editing financial data.
-        moved_count = RowDetails.objects.filter(id__in=rows_to_move).update(bill_of_entry=target_boe)
-
-        # Transfer allotments
-        for allotment in source_boe.allotment.all():
-            target_boe.allotment.add(allotment)
-
-        # Capture source port before deleting
-        source_port = source_boe.port
-
-        # Delete source BOE (frees unique constraint; duplicate/unmoved rows cascade-delete)
-        source_boe.delete()
-
-        # Update target port to the correct port from source
-        target_boe.port = source_port
-        target_boe.save(update_fields=['port'])
-
-    serializer = BillOfEntrySerializer(
-        BillOfEntryModel.objects.select_related('company', 'port').prefetch_related('item_details').get(id=target_boe.id)
-    )
-    return Response({
-        'success': True,
-        'message': f'Merged successfully. {moved_count} item(s) moved, {skipped_count} skipped (duplicate).',
-        'boe': serializer.data,
-    })
+    return Response(result)
 
 
 BillOfEntryViewSet.merge_boe = merge_boe
@@ -604,14 +442,7 @@ def update_invoice_no(self, request, pk=None):
     from django.shortcuts import get_object_or_404
 
     boe = get_object_or_404(BillOfEntryModel, pk=pk)
-    invoice_no = request.data.get('invoice_no', '').strip()
-    boe.invoice_no = invoice_no
-    boe.save(update_fields=['invoice_no'])
-    return Response({
-        'id': boe.id,
-        'invoice_no': boe.invoice_no,
-        'message': 'Invoice number updated',
-    })
+    return Response(boe_service.update_invoice_no(boe, invoice_no=request.data.get('invoice_no', '')))
 
 
 BillOfEntryViewSet.update_invoice_no = update_invoice_no

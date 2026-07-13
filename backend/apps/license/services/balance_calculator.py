@@ -16,6 +16,12 @@ from django.db.models.functions import Coalesce
 from apps.core.constants import DEC_0, DEBIT
 from apps.core.utils.decimal_utils import to_decimal
 
+# Module-level imports so tests can patch via
+# patch("apps.license.services.balance_calculator.LicenseExportItemModel") etc.
+from apps.license.models import LicenseExportItemModel  # noqa: E402
+from apps.bill_of_entry.models import RowDetails  # noqa: E402
+from apps.allotment.models import AllotmentItems  # noqa: E402
+
 
 def quantize_2dp(value: Decimal) -> Decimal:
     """Quantize decimal to 2 decimal places."""
@@ -44,7 +50,6 @@ class LicenseBalanceCalculator:
         Returns:
             Total export CIF as Decimal
         """
-        from apps.license.models import LicenseExportItemModel
 
         return to_decimal(
             LicenseExportItemModel.objects.filter(
@@ -69,7 +74,6 @@ class LicenseBalanceCalculator:
         Returns:
             Total debit CIF as Decimal
         """
-        from apps.bill_of_entry.models import RowDetails
 
         return to_decimal(
             RowDetails.objects.filter(
@@ -95,7 +99,6 @@ class LicenseBalanceCalculator:
         Returns:
             Total allotment CIF as Decimal
         """
-        from apps.allotment.models import AllotmentItems
 
         return to_decimal(
             AllotmentItems.objects.filter(
@@ -202,9 +205,6 @@ class ItemBalanceCalculator:
         Returns:
             Tuple of (credit, total_debit) as Decimals
         """
-        from apps.license.models import LicenseExportItemModel
-        from apps.bill_of_entry.models import RowDetails
-        from apps.allotment.models import AllotmentItems
 
         # Calculate credit
         if not import_item.cif_fc or import_item.cif_fc == 0:
@@ -284,8 +284,6 @@ class ItemBalanceCalculator:
         Returns:
             Available quantity as Decimal
         """
-        from apps.bill_of_entry.models import RowDetails
-        from apps.allotment.models import AllotmentItems
 
         total_quantity = to_decimal(import_item.quantity, DEC_0)
 

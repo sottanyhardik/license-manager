@@ -21,58 +21,22 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 
 from apps.license.models import LicenseDetailsModel, IncentiveLicense
 
+# Shared PDF infrastructure — no apps.* imports inside shared/
+from shared.pdf.builders import (
+    format_indian_number,
+    make_landscape_doc,
+    make_title_style,
+    make_subtitle_style,
+    make_wrap_style,
+    make_section_title_style,
+    make_header_table_style_commands,
+    make_data_grid_commands,
+    append_generated_footer,
+    pl_color_name,
+    pl_paragraph,
+)
+
 logger = logging.getLogger(__name__)
-
-
-def format_indian_number(num, decimals=2):
-    """
-    Format number in Indian numbering system (lakhs and crores).
-    Example: 1,00,00,000.00 (1 crore)
-    """
-    if num is None:
-        return "0"
-
-    # Handle negative numbers
-    is_negative = num < 0
-    num = abs(num)
-
-    # Split into integer and decimal parts
-    if decimals > 0:
-        format_str = f"{{:,.{decimals}f}}"
-        formatted = format_str.format(num)
-        parts = formatted.split('.')
-        integer_part = parts[0].replace(',', '')
-        decimal_part = parts[1] if len(parts) > 1 else '0' * decimals
-    else:
-        integer_part = str(int(num))
-        decimal_part = None
-
-    # Convert to Indian numbering system
-    if len(integer_part) <= 3:
-        result = integer_part
-    else:
-        # Last 3 digits
-        last_three = integer_part[-3:]
-        remaining = integer_part[:-3]
-
-        # Group remaining digits in pairs from right to left
-        groups = []
-        while remaining:
-            groups.append(remaining[-2:])
-            remaining = remaining[:-2]
-
-        groups.reverse()
-        result = ','.join(groups) + ',' + last_three
-
-    # Add decimal part if needed
-    if decimal_part is not None:
-        result = f"{result}.{decimal_part}"
-
-    # Add negative sign if needed
-    if is_negative:
-        result = f"-{result}"
-
-    return result
 
 
 
@@ -276,31 +240,12 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
     Groups by license and shows purchase/sale transactions chronologically.
     """
     buffer = BytesIO()
-
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=landscape(A4),
-        rightMargin=30,
-        leftMargin=30,
-        topMargin=40,
-        bottomMargin=40
-    )
+    doc = make_landscape_doc(buffer)
 
     elements = []
     styles = getSampleStyleSheet()
 
-    # Title
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#1a1a1a'),
-        spaceAfter=12,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-
-    title = Paragraph("LICENSE LEDGER - DETAILED TRANSACTIONS", title_style)
+    title = Paragraph("LICENSE LEDGER - DETAILED TRANSACTIONS", make_title_style(styles))
     elements.append(title)
     elements.append(Spacer(1, 0.2 * inch))
 
@@ -314,21 +259,12 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
                 elements.append(PageBreak())  # New page for each license
 
             # License Header
-            lic_header_style = ParagraphStyle(
-                'LicHeaderStyle',
-                parent=styles['Heading2'],
-                fontSize=14,
-                textColor=colors.HexColor('#2c3e50'),
-                spaceAfter=8,
-                fontName='Helvetica-Bold'
-            )
-
             lic_number = lic_data.get('license_number', 'N/A')
             exporter = lic_data.get('exporter_name', 'N/A')
             lic_type = lic_data.get('license_type', 'N/A')
 
             header_text = f"License: {lic_number} | Exporter: {exporter} | Type: {lic_type}"
-            lic_header = Paragraph(header_text, lic_header_style)
+            lic_header = Paragraph(header_text, make_section_title_style(styles, spaceAfter=8))
             elements.append(lic_header)
 
             # License Info Table
@@ -382,12 +318,12 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
             pl_text = f"Profit: ₹{format_indian_number(profit_loss, 2)}" if profit_loss >= 0 else f"Loss: ₹{format_indian_number(abs(profit_loss), 2)}"
 
             pl_style = ParagraphStyle(
-                'PLStyle',
+                '_DetailPLStyle',
                 parent=styles['Normal'],
                 fontSize=12,
                 textColor=pl_color,
                 fontName='Helvetica-Bold',
-                alignment=TA_RIGHT
+                alignment=TA_RIGHT,
             )
 
             pl_para = Paragraph(pl_text, pl_style)
@@ -396,26 +332,14 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
 
             if transactions:
                 # Transaction table header
-                txn_title_style = ParagraphStyle(
-                    'TxnTitleStyle',
-                    parent=styles['Heading3'],
-                    fontSize=11,
-                    textColor=colors.HexColor('#34495e'),
-                    spaceAfter=6,
-                    fontName='Helvetica-Bold'
+                txn_title = Paragraph(
+                    "Transaction Details",
+                    make_section_title_style(styles, fontSize=11, spaceAfter=6),
                 )
-                txn_title = Paragraph("Transaction Details", txn_title_style)
                 elements.append(txn_title)
 
                 # Create transaction table with proper wrapping
-                wrap_style = ParagraphStyle(
-                    'WrapStyle',
-                    parent=styles['Normal'],
-                    fontSize=7,
-                    leading=9,
-                    wordWrap='CJK',
-                    splitLongWords=True
-                )
+                wrap_style = make_wrap_style(styles)
 
                 txn_data = [[
                     'Date', 'Type', 'Particulars', 'Invoice No.',
@@ -438,12 +362,8 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
                     pl = txn.get('profit_loss', 0)
 
                     # Color code profit/loss
-                    if pl > 0:
-                        pl_text = f"+{format_indian_number(pl, 2)}"
-                        pl_para = Paragraph(f'<font color="green">{pl_text}</font>', wrap_style)
-                    elif pl < 0:
-                        pl_text = format_indian_number(pl, 2)
-                        pl_para = Paragraph(f'<font color="red">{pl_text}</font>', wrap_style)
+                    if pl != 0:
+                        pl_para = pl_paragraph(pl, wrap_style)
                     else:
                         pl_para = '-'
 
@@ -475,30 +395,16 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
                     0.85*inch   # P/L
                 ], repeatRows=1)
 
-                txn_table.setStyle(TableStyle([
-                    # Header
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 7),
-                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-                    ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-
-                    # Data rows
-                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 1), (-1, -1), 7),
-                    ('ALIGN', (0, 1), (3, -1), 'LEFT'),  # Date, Type, Particulars, Invoice left-aligned
-                    ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),  # All amounts right-aligned
-                    ('VALIGN', (0, 1), (-1, -1), 'TOP'),  # Top align for better text wrapping
-
-                    # Grid
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                    ('TOPPADDING', (0, 0), (-1, -1), 4),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
-                ]))
+                txn_table.setStyle(TableStyle(
+                    make_header_table_style_commands(header_bg='#34495e', header_fontsize=7)
+                    + make_data_grid_commands()
+                    + [
+                        ('ALIGN',  (0, 1), (3, -1), 'LEFT'),
+                        ('ALIGN',  (4, 1), (-1, -1), 'RIGHT'),
+                        ('VALIGN', (0, 1), (-1, -1), 'TOP'),
+                        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+                    ]
+                ))
 
                 elements.append(txn_table)
             else:
@@ -511,16 +417,10 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
     if licenses_data:
         elements.append(PageBreak())
 
-        summary_title_style = ParagraphStyle(
-            'SummaryTitle',
-            parent=styles['Heading1'],
-            fontSize=16,
-            textColor=colors.HexColor('#1a1a1a'),
-            spaceAfter=14,
-            alignment=TA_CENTER,
-            fontName='Helvetica-Bold'
-        )
-        elements.append(Paragraph("LICENSE PROFIT / LOSS SUMMARY", summary_title_style))
+        elements.append(Paragraph(
+            "LICENSE PROFIT / LOSS SUMMARY",
+            make_title_style(styles, fontSize=16, spaceAfter=14),
+        ))
         elements.append(Spacer(1, 0.15 * inch))
 
         summary_header = [
@@ -660,81 +560,28 @@ def generate_all_licenses_pdf(licenses_data, query_params):
     try:
         buffer = BytesIO()
 
-        # Create PDF with landscape orientation for better table fit
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=landscape(A4),
-            rightMargin=30,
-            leftMargin=30,
-            topMargin=40,
-            bottomMargin=40
-        )
+        doc = make_landscape_doc(buffer)
 
         elements = []
         styles = getSampleStyleSheet()
 
-        # Title style
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=18,
-            textColor=colors.HexColor('#1a1a1a'),
-            spaceAfter=12,
-            alignment=TA_CENTER,
-            fontName='Helvetica-Bold'
-        )
-
-        # Subtitle style
-        subtitle_style = ParagraphStyle(
-            'Subtitle',
-            parent=styles['Normal'],
-            fontSize=10,
-            textColor=colors.HexColor('#555555'),
-            spaceAfter=6,
-            alignment=TA_CENTER,
-            fontName='Helvetica'
-        )
-
-        # Title
-        title = Paragraph("LICENSE LEDGER - ALL LICENSES", title_style)
-        elements.append(title)
+        elements.append(Paragraph("LICENSE LEDGER - ALL LICENSES", make_title_style(styles)))
 
         # Add filter information
         license_type = query_params.get('license_type', 'ALL')
         active_only = query_params.get('active_only', 'true').lower() == 'true'
 
         filter_info = f"License Type: {license_type} | Status: {'Active Only' if active_only else 'All'} | Total: {len(licenses_data)} licenses"
-        subtitle = Paragraph(filter_info, subtitle_style)
-        elements.append(subtitle)
+        elements.append(Paragraph(filter_info, make_subtitle_style(styles)))
         elements.append(Spacer(1, 0.2 * inch))
 
         if not licenses_data:
             no_data = Paragraph("<i>No licenses found matching the criteria</i>", styles['Normal'])
             elements.append(no_data)
         else:
-            # Wrap style for text cells - enable multi-line wrapping
-            wrap_style = ParagraphStyle(
-                'WrapStyle',
-                parent=styles['Normal'],
-                fontSize=7,
-                leading=9,
-                wordWrap='CJK',  # Enable word wrapping
-                splitLongWords=True
-            )
-
-            # Green style for profit values
-            profit_style = ParagraphStyle(
-                'ProfitStyle',
-                parent=wrap_style,
-                textColor=colors.green
-            )
-
-            # Red style for loss values
-            loss_style = ParagraphStyle(
-                'LossStyle',
-                parent=wrap_style,
-                textColor=colors.red
-            )
+            wrap_style = make_wrap_style(styles)
+            profit_style = ParagraphStyle('_ProfitStyle', parent=wrap_style, textColor=colors.green)
+            loss_style = ParagraphStyle('_LossStyle', parent=wrap_style, textColor=colors.red)
 
             # Separate licenses into profit and loss groups
             profit_licenses = [lic for lic in licenses_data if lic.get('profit_loss', 0) >= 0]
@@ -904,16 +751,10 @@ def generate_all_licenses_pdf(licenses_data, query_params):
                     return
 
                 # Add section title
-                section_title_style = ParagraphStyle(
-                    'SectionTitle',
-                    parent=styles['Heading2'],
-                    fontSize=14,
-                    textColor=colors.HexColor(title_color),
-                    spaceAfter=10,
-                    fontName='Helvetica-Bold'
-                )
-                section_title = Paragraph(table_title, section_title_style)
-                elements.append(section_title)
+                elements.append(Paragraph(
+                    table_title,
+                    make_section_title_style(styles, color_hex=title_color),
+                ))
 
                 # Create table with appropriate column widths for landscape A4
                 # Landscape A4 width: ~11 inches minus margins = ~10.5 inches available
@@ -1026,16 +867,10 @@ def generate_all_licenses_pdf(licenses_data, query_params):
             total_profit_loss = sum(lic.get('profit_loss', 0) for lic in licenses_data)
 
             # Summary title
-            summary_title_style = ParagraphStyle(
-                'SummaryTitle',
-                parent=styles['Heading2'],
-                fontSize=12,
-                textColor=colors.HexColor('#2c3e50'),
-                spaceAfter=8,
-                fontName='Helvetica-Bold'
-            )
-            summary_title = Paragraph("SUMMARY", summary_title_style)
-            elements.append(summary_title)
+            elements.append(Paragraph(
+                "SUMMARY",
+                make_section_title_style(styles, fontSize=12, spaceAfter=8),
+            ))
 
             # Summary data with Indian number format
             summary_data = [
@@ -1080,12 +915,7 @@ def generate_all_licenses_pdf(licenses_data, query_params):
             elements.append(summary_table)
 
         # Footer
-        elements.append(Spacer(1, 0.3 * inch))
-        footer_text = Paragraph(
-            f"<i>Generated on: {datetime.now().strftime('%d-%b-%Y %H:%M:%S')}</i>",
-            ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=TA_CENTER)
-        )
-        elements.append(footer_text)
+        append_generated_footer(elements, styles)
 
         # Build PDF
         doc.build(elements)
@@ -1111,51 +941,22 @@ def generate_company_ledger_pdf(licenses_data, company_name, query_params):
     try:
         buffer = BytesIO()
 
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=landscape(A4),
-            rightMargin=30,
-            leftMargin=30,
-            topMargin=40,
-            bottomMargin=40
-        )
+        doc = make_landscape_doc(buffer)
 
         elements = []
         styles = getSampleStyleSheet()
 
-        # Title style
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=18,
-            textColor=colors.HexColor('#1a1a1a'),
-            spaceAfter=12,
-            alignment=TA_CENTER,
-            fontName='Helvetica-Bold'
-        )
-
-        # Subtitle style
-        subtitle_style = ParagraphStyle(
-            'Subtitle',
-            parent=styles['Normal'],
-            fontSize=10,
-            textColor=colors.HexColor('#555555'),
-            spaceAfter=6,
-            alignment=TA_CENTER,
-            fontName='Helvetica'
-        )
-
-        # Title
-        title = Paragraph(f"COMPANY LEDGER - {company_name.upper()}", title_style)
-        elements.append(title)
+        elements.append(Paragraph(
+            f"COMPANY LEDGER - {company_name.upper()}",
+            make_title_style(styles),
+        ))
 
         # Filter info
         license_type = query_params.get('license_type', 'ALL')
         active_only = query_params.get('active_only', 'true').lower() == 'true'
 
         filter_info = f"License Type: {license_type} | Status: {'Active Only' if active_only else 'All'} | Total: {len(licenses_data)} licenses"
-        subtitle = Paragraph(filter_info, subtitle_style)
-        elements.append(subtitle)
+        elements.append(Paragraph(filter_info, make_subtitle_style(styles)))
         elements.append(Spacer(1, 0.3 * inch))
 
         # Table data
@@ -1183,20 +984,17 @@ def generate_company_ledger_pdf(licenses_data, company_name, query_params):
 
         # Create table
         table = Table(table_data, colWidths=[90, 50, 150, 70, 70, 100, 100])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a5568')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f7fafc')),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e0')),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')]),
-        ]))
+        table.setStyle(TableStyle(
+            make_header_table_style_commands(header_bg='#4a5568', header_fontsize=10)
+            + make_data_grid_commands(font_size=8)
+            + [
+                ('ALIGN',          (0, 0), (-1, -1), 'CENTER'),
+                ('BOTTOMPADDING',  (0, 0), (-1, 0),  12),
+                ('BACKGROUND',     (0, 1), (-1, -1), colors.HexColor('#f7fafc')),
+                ('VALIGN',         (0, 0), (-1, -1), 'MIDDLE'),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')]),
+            ]
+        ))
 
         elements.append(table)
 
@@ -1216,3 +1014,419 @@ def generate_company_ledger_pdf(licenses_data, company_name, query_params):
             except Exception:
                 pass
 
+
+# ---------------------------------------------------------------------------
+# Ledger-detail transaction builders
+#
+# Extracted from LicenseLedgerViewSet.ledger_detail so the viewset method
+# becomes a thin coordinator.  Both functions return plain dicts — callers
+# wrap them in Response().
+# ---------------------------------------------------------------------------
+
+def build_dfia_ledger_detail(license, company_id=None):
+    """
+    Build the DFIA ledger-detail payload for *license* (LicenseDetailsModel).
+
+    Returns a dict ready for ``Response(…)``.
+
+    *company_id* applies direction-aware filtering:
+    - PURCHASE / COMMISSION_PURCHASE  → company must be the BUYER  (to_company)
+    - SALE / COMMISSION_SALE          → company must be the SELLER (from_company)
+    """
+    from apps.trade.models import LicenseTrade
+    from django.db.models import Q
+
+    trades_query = LicenseTrade.objects.filter(
+        license_type='DFIA',
+        lines__sr_number__license=license,
+    )
+
+    if company_id:
+        trades_query = trades_query.filter(
+            Q(direction__in=['PURCHASE', 'COMMISSION_PURCHASE'], to_company_id=company_id)
+            | Q(direction__in=['SALE', 'COMMISSION_SALE'], from_company_id=company_id)
+        )
+
+    trades = trades_query.prefetch_related(
+        'lines__sr_number__items__sion_norm_class',
+        'from_company',
+        'to_company',
+    ).distinct().order_by('invoice_date', 'id')
+
+    transactions = []
+    running_balance = 0
+    total_purchase_cif = 0
+    total_purchase_amount = 0
+    total_sales_amount = 0
+    company_purchase_cif: dict = {}
+    company_purchase_amount: dict = {}
+
+    all_trans = [
+        (t.direction, t.invoice_date or timezone.now().date(), t)
+        for t in trades
+    ]
+    all_trans.sort(key=lambda x: (x[0] not in ['PURCHASE', 'COMMISSION_PURCHASE'], x[1]))
+
+    # Opening balance (no trades)
+    if not all_trans and float(license.opening_balance or 0) > 0:
+        opening_cif = float(license.opening_balance)
+        running_balance = opening_cif
+        total_purchase_cif = opening_cif
+        transactions.append({
+            'date': license.license_date,
+            'type': 'OPENING',
+            'particular': 'Opening Balance - Original DFIA License',
+            'invoice_number': license.license_number,
+            'cif_usd': opening_cif,
+            'debit_cif': opening_cif,
+            'credit_cif': 0,
+            'rate': 0,
+            'amount': 0,
+            'debit_amount': 0,
+            'credit_amount': 0,
+            'balance': round(running_balance, 2),
+            'profit_loss': 0,
+        })
+
+    for idx, (trans_type, trans_date, trans_obj) in enumerate(all_trans):
+        total_cif_usd = 0
+        total_amount = 0
+        items_desc: list = []
+        sion_norms: list = []
+        qty_kg_total = 0.0
+
+        for line in trans_obj.lines.all():
+            if line.sr_number and line.sr_number.license_id != license.id:
+                continue
+            try:
+                if line.exc_rate and line.cif_inr:
+                    exc_rate = float(line.exc_rate)
+                    cif_usd = float(line.cif_inr) / exc_rate if exc_rate > 0 else float(line.cif_fc or 0)
+                else:
+                    cif_usd = float(line.cif_fc or 0)
+            except (ValueError, TypeError, ZeroDivisionError):
+                cif_usd = 0
+
+            total_cif_usd += cif_usd
+            total_amount += float(line.amount_inr or 0)
+            if line.sr_number:
+                qty_kg_total += float(line.qty_kg or 0)
+                for item in line.sr_number.items.all():
+                    if item.name:
+                        items_desc.append(item.name)
+                    if item.sion_norm_class:
+                        norm = item.sion_norm_class.norm_class
+                        if norm and norm not in sion_norms:
+                            sion_norms.append(norm)
+
+        try:
+            rate = total_amount / total_cif_usd if total_cif_usd > 0 else 0
+        except (ZeroDivisionError, TypeError, ValueError):
+            rate = 0
+
+        if trans_type in ['PURCHASE', 'COMMISSION_PURCHASE']:
+            running_balance += total_cif_usd
+            total_purchase_cif += total_cif_usd
+            total_purchase_amount += total_amount
+
+            _buyer_id = trans_obj.to_company.id if trans_obj.to_company else None
+            if _buyer_id and trans_type == 'PURCHASE':
+                company_purchase_cif[_buyer_id] = company_purchase_cif.get(_buyer_id, 0) + total_cif_usd
+                company_purchase_amount[_buyer_id] = company_purchase_amount.get(_buyer_id, 0) + total_amount
+
+            is_commission = trans_type == 'COMMISSION_PURCHASE'
+            txn_type = 'COMMISSION' if is_commission else 'PURCHASE'
+            particular_prefix = 'Commission Paid to' if is_commission else 'Purchase DFIA -'
+            _co = trans_obj.to_company
+
+            if idx == 0 and not transactions and not is_commission:
+                transactions.append({
+                    'date': trans_date,
+                    'type': 'OPENING',
+                    'particular': f'Opening Balance - Purchase from {trans_obj.from_company.name if trans_obj.from_company else "N/A"}',
+                    'invoice_number': trans_obj.invoice_number or '',
+                    'cif_usd': total_cif_usd,
+                    'debit_cif': total_cif_usd,
+                    'credit_cif': 0,
+                    'rate': round(rate, 2),
+                    'amount': total_amount,
+                    'debit_amount': total_amount,
+                    'credit_amount': 0,
+                    'balance': round(running_balance, 2),
+                    'profit_loss': 0,
+                    'company_id': _co.id if _co else None,
+                    'company_name': _co.name if _co else 'N/A',
+                    'trade_id': trans_obj.id,
+                })
+            else:
+                transactions.append({
+                    'date': trans_date,
+                    'type': txn_type,
+                    'particular': f'{particular_prefix} {trans_obj.from_company.name if trans_obj.from_company else "N/A"}',
+                    'invoice_number': trans_obj.invoice_number or '',
+                    'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
+                    'sion_norms': ', '.join(sion_norms) if sion_norms else '',
+                    'qty': qty_kg_total,
+                    'cif_usd': total_cif_usd,
+                    'debit_cif': total_cif_usd,
+                    'credit_cif': 0,
+                    'rate': round(rate, 2),
+                    'amount': total_amount,
+                    'debit_amount': total_amount,
+                    'credit_amount': 0,
+                    'balance': round(running_balance, 2),
+                    'profit_loss': 0,
+                    'company_id': _co.id if _co else None,
+                    'company_name': _co.name if _co else 'N/A',
+                    'trade_id': trans_obj.id,
+                })
+
+        elif trans_type in ['SALE', 'COMMISSION_SALE']:
+            is_commission = trans_type == 'COMMISSION_SALE'
+            _co = trans_obj.from_company
+
+            if is_commission:
+                running_balance += total_cif_usd
+                total_purchase_amount += total_amount
+                transactions.append({
+                    'date': trans_date,
+                    'type': 'COMMISSION',
+                    'particular': f'Commission Paid to {trans_obj.to_company.name if trans_obj.to_company else "N/A"}',
+                    'invoice_number': trans_obj.invoice_number or '',
+                    'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
+                    'sion_norms': ', '.join(sion_norms) if sion_norms else '',
+                    'qty': qty_kg_total,
+                    'cif_usd': total_cif_usd,
+                    'debit_cif': total_cif_usd,
+                    'credit_cif': 0,
+                    'rate': round(rate, 2),
+                    'amount': total_amount,
+                    'debit_amount': total_amount,
+                    'credit_amount': 0,
+                    'balance': round(running_balance, 2),
+                    'profit_loss': 0,
+                    'company_id': _co.id if _co else None,
+                    'company_name': _co.name if _co else 'N/A',
+                    'trade_id': trans_obj.id,
+                })
+            else:
+                running_balance -= total_cif_usd
+                total_sales_amount += total_amount
+
+                _seller_id = trans_obj.from_company.id if trans_obj.from_company else None
+                _co_cif = company_purchase_cif.get(_seller_id, 0) if _seller_id else 0
+                _co_amt = company_purchase_amount.get(_seller_id, 0) if _seller_id else 0
+                if _co_cif > 0:
+                    avg_rate = _co_amt / _co_cif
+                    sale_profit_loss = round(total_amount - total_cif_usd * avg_rate, 2)
+                elif total_purchase_cif > 0:
+                    avg_rate = total_purchase_amount / total_purchase_cif
+                    sale_profit_loss = round(total_amount - total_cif_usd * avg_rate, 2)
+                else:
+                    sale_profit_loss = round(total_amount, 2)
+
+                transactions.append({
+                    'date': trans_date,
+                    'type': 'SALE',
+                    'particular': f'DFIA Sale - {trans_obj.to_company.name if trans_obj.to_company else "N/A"}',
+                    'invoice_number': trans_obj.invoice_number or '',
+                    'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
+                    'sion_norms': ', '.join(sion_norms) if sion_norms else '',
+                    'qty': qty_kg_total,
+                    'cif_usd': total_cif_usd,
+                    'debit_cif': 0,
+                    'credit_cif': total_cif_usd,
+                    'rate': round(rate, 2),
+                    'amount': total_amount,
+                    'debit_amount': 0,
+                    'credit_amount': total_amount,
+                    'balance': round(running_balance, 2),
+                    'profit_loss': sale_profit_loss,
+                    'company_id': _co.id if _co else None,
+                    'company_name': _co.name if _co else 'N/A',
+                    'trade_id': trans_obj.id,
+                })
+
+    return {
+        'license_type': 'DFIA',
+        'license_number': license.license_number,
+        'license_date': license.license_date,
+        'expiry_date': license.license_expiry_date,
+        'exporter': license.exporter.name if license.exporter else '',
+        'port': license.port.name if license.port else '',
+        'total_value': total_purchase_cif,
+        'available_balance': round(running_balance, 2),
+        'db_balance': float(license.balance_cif or 0),
+        'transactions': transactions,
+    }
+
+
+def build_incentive_ledger_detail(license, company_id=None):
+    """
+    Build the Incentive ledger-detail payload for *license* (IncentiveLicense).
+
+    Returns a dict ready for ``Response(…)``.
+    """
+    from apps.trade.models import LicenseTrade
+    from django.db.models import Q
+
+    trades_query = LicenseTrade.objects.filter(
+        license_type='INCENTIVE',
+        incentive_lines__incentive_license=license,
+    )
+
+    if company_id:
+        trades_query = trades_query.filter(
+            Q(direction__in=['PURCHASE', 'COMMISSION_PURCHASE'], to_company_id=company_id)
+            | Q(direction__in=['SALE', 'COMMISSION_SALE'], from_company_id=company_id)
+        )
+
+    trades = list(
+        trades_query.prefetch_related(
+            'incentive_lines__incentive_license',
+            'from_company',
+            'to_company',
+        ).distinct()
+    )
+    trades.sort(key=lambda t: (
+        t.direction not in ('PURCHASE', 'COMMISSION_PURCHASE'),
+        t.invoice_date or timezone.now().date(),
+        t.id,
+    ))
+
+    transactions = []
+    running_balance = 0
+    total_purchase_value = 0
+    total_purchase_amount = 0
+    total_sales_amount = 0
+    is_first_transaction = True
+
+    for trade in trades:
+        license_line = next(
+            (l for l in trade.incentive_lines.all() if l.incentive_license_id == license.id),
+            None,
+        )
+        if not license_line:
+            continue
+
+        license_value = float(license_line.license_value or 0)
+        rate_pct = float(license_line.rate_pct or 0)
+        amount = float(license_line.amount_inr or 0)
+
+        if trade.direction in ['PURCHASE', 'COMMISSION_PURCHASE']:
+            running_balance += license_value
+            total_purchase_value += license_value
+            total_purchase_amount += amount
+
+            is_commission = trade.direction == 'COMMISSION_PURCHASE'
+            txn_type = 'COMMISSION' if is_commission else 'PURCHASE'
+            particular_prefix = 'Commission Paid to' if is_commission else f'Purchase {license.license_type} -'
+            _co = trade.to_company
+
+            if is_first_transaction and not is_commission:
+                transactions.append({
+                    'date': trade.invoice_date or license.license_date,
+                    'type': 'OPENING',
+                    'particular': f'Opening Balance - Purchase from {trade.from_company.name if trade.from_company else "N/A"}',
+                    'invoice_number': trade.invoice_number or '',
+                    'license_value': license_value,
+                    'debit_license_value': license_value,
+                    'credit_license_value': 0,
+                    'rate': round(rate_pct, 3),
+                    'amount': amount,
+                    'debit_amount': amount,
+                    'credit_amount': 0,
+                    'balance': round(running_balance, 2),
+                    'profit_loss': 0,
+                    'company_id': _co.id if _co else None,
+                    'company_name': _co.name if _co else 'N/A',
+                    'trade_id': trade.id,
+                })
+            else:
+                transactions.append({
+                    'date': trade.invoice_date or license.license_date,
+                    'type': txn_type,
+                    'particular': f'{particular_prefix} {trade.from_company.name if trade.from_company else "N/A"}',
+                    'invoice_number': trade.invoice_number or '',
+                    'license_value': license_value,
+                    'debit_license_value': license_value,
+                    'credit_license_value': 0,
+                    'rate': round(rate_pct, 3),
+                    'amount': amount,
+                    'debit_amount': amount,
+                    'credit_amount': 0,
+                    'balance': round(running_balance, 2),
+                    'profit_loss': 0,
+                    'company_id': _co.id if _co else None,
+                    'company_name': _co.name if _co else 'N/A',
+                    'trade_id': trade.id,
+                })
+            is_first_transaction = False
+
+        elif trade.direction in ['SALE', 'COMMISSION_SALE']:
+            is_commission = trade.direction == 'COMMISSION_SALE'
+            _co = trade.from_company
+
+            if is_commission:
+                running_balance += license_value
+                total_purchase_amount += amount
+                transactions.append({
+                    'date': trade.invoice_date or timezone.now().date(),
+                    'type': 'COMMISSION',
+                    'particular': f'Commission Paid to {trade.to_company.name if trade.to_company else "N/A"}',
+                    'invoice_number': trade.invoice_number or '',
+                    'license_value': license_value,
+                    'debit_license_value': license_value,
+                    'credit_license_value': 0,
+                    'rate': round(rate_pct, 3),
+                    'amount': amount,
+                    'debit_amount': amount,
+                    'credit_amount': 0,
+                    'balance': round(running_balance, 2),
+                    'profit_loss': 0,
+                    'company_id': _co.id if _co else None,
+                    'company_name': _co.name if _co else 'N/A',
+                    'trade_id': trade.id,
+                })
+            else:
+                running_balance -= license_value
+                total_sales_amount += amount
+
+                if total_purchase_value > 0:
+                    avg_rate = total_purchase_amount / total_purchase_value
+                    sale_profit_loss = round(amount - license_value * avg_rate, 2)
+                else:
+                    sale_profit_loss = round(amount, 2)
+
+                transactions.append({
+                    'date': trade.invoice_date or timezone.now().date(),
+                    'type': 'SALE',
+                    'particular': f'{license.license_type} Sale - {trade.to_company.name if trade.to_company else "N/A"}',
+                    'invoice_number': trade.invoice_number or '',
+                    'license_value': license_value,
+                    'debit_license_value': 0,
+                    'credit_license_value': license_value,
+                    'rate': round(rate_pct, 3),
+                    'amount': amount,
+                    'debit_amount': 0,
+                    'credit_amount': amount,
+                    'balance': round(running_balance, 2),
+                    'profit_loss': sale_profit_loss,
+                    'company_id': _co.id if _co else None,
+                    'company_name': _co.name if _co else 'N/A',
+                    'trade_id': trade.id,
+                })
+            is_first_transaction = False
+
+    return {
+        'license_type': license.license_type,
+        'license_number': license.license_number,
+        'license_date': license.license_date,
+        'expiry_date': license.license_expiry_date,
+        'exporter': license.exporter.name if license.exporter else '',
+        'port': license.port_code.name if license.port_code else '',
+        'total_value': total_purchase_value,
+        'available_balance': round(running_balance, 2),
+        'db_balance': float(license.balance_value or 0),
+        'transactions': transactions,
+    }

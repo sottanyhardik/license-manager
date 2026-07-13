@@ -1,6 +1,5 @@
 # trade/views.py
 
-from datetime import datetime, date
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
@@ -13,29 +12,13 @@ from .serializers import (
     TradeLineSimpleSerializer,
     LicenseTradePaymentSerializer
 )
-
-
-def _parse_date_strict(date_str):
-    """
-    Parse date string in strict ISO format (YYYY-MM-DD) only.
-
-    Args:
-        date_str: Date string to parse
-
-    Returns:
-        date object if successful, None otherwise
-
-    Raises:
-        ValueError: If date string is not in YYYY-MM-DD format
-    """
-    if not date_str:
-        return None
-
-    try:
-        # Only accept ISO format YYYY-MM-DD
-        return datetime.strptime(date_str, '%Y-%m-%d').date()
-    except ValueError as e:
-        raise ValueError(f"Invalid date format. Expected YYYY-MM-DD, got: {date_str}") from e
+from .services.trade_service import (
+    parse_date_strict,
+    get_prefilled_invoice_number,
+    build_trade_summary,
+    link_trades,
+    PartnerTradeNotFound,
+)
 
 
 # Trade transactions ViewSet
@@ -413,7 +396,7 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
         Query Parameters:
         - direction: 'PURCHASE', 'SALE', 'COMMISSION_PURCHASE', or 'COMMISSION_SALE' (required)
         - company_id: Company ID (required)
-        - invoice_date: Invoice date in YYYY-MM-DD or dd-mm-yyyy format (optional, defaults to today)
+        - invoice_date: Invoice date in YYYY-MM-DD format (optional, defaults to today)
 
         Returns:
         - invoice_number: Generated invoice number in format:
@@ -422,8 +405,7 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
           COMMISSION_PURCHASE: COM-P-PREFIX/YYYY-YY/NNNN
           COMMISSION_SALE: COM-PREFIX/YYYY-YY/NNNN
         """
-        from datetime import datetime
-        from apps.trade.models import get_next_invoice_number
+        from apps.core.models import CompanyModel
 
         direction = request.query_params.get('direction')
         company_id = request.query_params.get('company_id')
@@ -442,33 +424,26 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Validate direction
-        if direction not in ['PURCHASE', 'SALE', 'COMMISSION_PURCHASE', 'COMMISSION_SALE']:
-            return Response(
-                {"error": "direction must be 'PURCHASE', 'SALE', 'COMMISSION_PURCHASE', or 'COMMISSION_SALE'"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         # Parse invoice_date string to date object (strict ISO format only)
         invoice_date = None
         if invoice_date_str:
             try:
-                invoice_date = _parse_date_strict(invoice_date_str)
+                invoice_date = parse_date_strict(invoice_date_str)
             except ValueError as e:
                 return Response(
                     {"error": str(e)},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        from apps.core.models import CompanyModel
         try:
-            company = CompanyModel.objects.get(pk=company_id)
-            invoice_number = get_next_invoice_number(
+            invoice_number = get_prefilled_invoice_number(
                 direction=direction,
-                company_name=company.name,
-                invoice_date=invoice_date
+                company_id=int(company_id),
+                invoice_date=invoice_date,
             )
             return Response({"invoice_number": invoice_number})
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except CompanyModel.DoesNotExist:
             return Response(
                 {"error": "Company not found"},
@@ -479,19 +454,7 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
     def summary(self, request, pk=None):
         """Get trade summary with computed fields"""
         trade = self.get_object()
-        return Response({
-            "id": trade.id,
-            "direction": trade.direction,
-            "invoice_number": trade.invoice_number,
-            "invoice_date": trade.invoice_date,
-            "subtotal_amount": str(trade.subtotal_amount),
-            "roundoff": str(trade.roundoff),
-            "total_amount": str(trade.total_amount),
-            "paid_or_received": str(trade.paid_or_received),
-            "due_amount": str(trade.due_amount),
-            "lines_count": trade.lines.count(),
-            "payments_count": trade.payments.count()
-        })
+        return Response(build_trade_summary(trade))
 
     @action(detail=True, methods=['post'], url_path='link-trade')
     def link_trade(self, request, pk=None):
@@ -503,39 +466,17 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
         trade = self.get_object()
         partner_id = request.data.get('partner_id')
 
-        # Unlink
-        if partner_id is None:
-            old_partner_id = trade.linked_trade_id
-            LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=None)
-            if old_partner_id:
-                LicenseTrade.objects.filter(pk=old_partner_id, linked_trade=trade.pk).update(linked_trade=None)
-            trade.refresh_from_db()
-            from apps.trade.serializers import LicenseTradeSerializer
-            return Response(LicenseTradeSerializer(trade, context={'request': request}).data)
-
-        # Link
         try:
-            partner = LicenseTrade.objects.get(pk=partner_id)
-        except LicenseTrade.DoesNotExist:
-            return Response({"error": "Partner trade not found"}, status=status.HTTP_404_NOT_FOUND)
+            updated_trade = link_trades(
+                trade_pk=trade.pk,
+                partner_pk=int(partner_id) if partner_id is not None else None,
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except PartnerTradeNotFound as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
 
-        if partner.pk == trade.pk:
-            return Response({"error": "Cannot link a trade to itself"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Clear any old links on both sides first
-        old_trade_partner = trade.linked_trade_id
-        old_partner_partner = partner.linked_trade_id
-        if old_trade_partner and old_trade_partner != partner.pk:
-            LicenseTrade.objects.filter(pk=old_trade_partner).update(linked_trade=None)
-        if old_partner_partner and old_partner_partner != trade.pk:
-            LicenseTrade.objects.filter(pk=old_partner_partner).update(linked_trade=None)
-
-        LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=partner)
-        LicenseTrade.objects.filter(pk=partner.pk).update(linked_trade=trade)
-
-        trade.refresh_from_db()
-        from apps.trade.serializers import LicenseTradeSerializer
-        return Response(LicenseTradeSerializer(trade, context={'request': request}).data)
+        return Response(LicenseTradeSerializer(updated_trade, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='generate-transfer-letter')
     def generate_transfer_letter(self, request, pk=None):

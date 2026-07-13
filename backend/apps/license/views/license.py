@@ -94,7 +94,8 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
                              "filter_field": "port"},
             "export_license__norm_class": {"type": "fk", "fk_endpoint": "/masters/sion-classes/",
                                            "label_field": "norm_class"},
-            "notification_number": {"type": "fk", "fk_endpoint": "/masters/notification-numbers/", "label_field": "code"},
+            "notification_number": {"type": "fk", "fk_endpoint": "/masters/notification-numbers/", "label_field": "code", "value_field": "code"},
+            "scheme_code": {"type": "fk", "fk_endpoint": "/masters/scheme-codes/", "label_field": "code", "value_field": "code"},
             "purchase_status": {"type": "fk", "fk_endpoint": "/masters/purchase-statuses/", "label_field": "label", "filter_params": {"is_active": "true"}},
             "license_date": {"type": "date_range"},
             "license_expiry_date": {"type": "date_range"},
@@ -317,8 +318,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _has_copy=Exists(LicenseDocumentModel.objects.filter(license=OuterRef('pk'), type='LICENSE COPY')),
         )
 
-        # Only prefetch nested items for detail view (single object)
-        # For list view, this causes massive performance issues
+        # Only prefetch deep nested items for detail view (single object).
+        # For list view, those relations cause massive performance issues,
+        # but license_documents is lightweight (0–3 rows per license) and
+        # must be prefetched so the serializer can build the merge-link stub
+        # without firing 2 extra queries per row (.exists() + .all()[:1]).
         if self.action == 'retrieve':
             # Prefetch nested relationships for detail view only
             qs = qs.prefetch_related(
@@ -332,6 +336,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 'import_license__item_details',
                 'license_documents',
             )
+        else:
+            # List view: prefetch only license_documents so the serializer can
+            # read the prefetch cache (zero per-row queries) instead of calling
+            # .exists() + .all()[:1] which fired 2 queries per row.
+            qs = qs.prefetch_related('license_documents')
 
         return qs
 

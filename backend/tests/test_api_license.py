@@ -26,7 +26,7 @@ class TestLicenseAPI:
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data['license_number'] == test_license.license_number
-        assert 'import_items' in response.data
+        assert 'import_license' in response.data
     
     def test_license_has_items(self, authenticated_client, test_license):
         """Test license includes related import items"""
@@ -34,7 +34,7 @@ class TestLicenseAPI:
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['import_items']) == 3
+        assert len(response.data['import_license']) == 3
     
     def test_filter_licenses_by_scheme(self, authenticated_client, test_license):
         """Test GET /licenses/?scheme_code=DFIA"""

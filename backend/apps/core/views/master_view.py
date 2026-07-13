@@ -386,17 +386,23 @@ class MasterViewSet(viewsets.ModelViewSet):
                         value = params.get(field_name)
                         array_values = params.getlist(f"{field_name}[]")  # Handle array format like company[]=29
 
+                        # When value_field is set (e.g. "code"), filter via the related field lookup
+                        # instead of the FK PK, so ?scheme_code=DFIA → scheme_code__code=DFIA.
+                        value_field = config.get("value_field")
+                        lookup_key = f"{field_name}__{value_field}" if value_field else field_name
+                        lookup_key_in = f"{field_name}__{value_field}__in" if value_field else f"{field_name}__in"
+
                         if array_values:
                             # Array format from frontend (e.g., company[]=29)
-                            q_objects.append(Q(**{f"{field_name}__in": array_values}))
+                            q_objects.append(Q(**{lookup_key_in: array_values}))
                         elif value:
                             # Check if value contains comma (multi-select)
                             if ',' in str(value):
                                 values = [v.strip() for v in str(value).split(",") if v.strip()]
-                                q_objects.append(Q(**{f"{field_name}__in": values}))
+                                q_objects.append(Q(**{lookup_key_in: values}))
                             else:
                                 # Single value exact match
-                                q_objects.append(Q(**{field_name: value}))
+                                q_objects.append(Q(**{lookup_key: value}))
 
                     elif filter_type in ("choice", "button_group"):
                         # Choice/button_group field filter - supports multi-select (comma-separated values or array format)
@@ -473,6 +479,13 @@ class MasterViewSet(viewsets.ModelViewSet):
                                                dj_models.DecimalField, dj_models.BooleanField,
                                                dj_models.DateField, dj_models.DateTimeField)):
                             try:
+                                # Convert string boolean values before building Q objects
+                                if isinstance(field, dj_models.BooleanField):
+                                    str_val = str(param_value).lower().strip()
+                                    if str_val in ('true', '1', 'yes'):
+                                        param_value = True
+                                    elif str_val in ('false', '0', 'no'):
+                                        param_value = False
                                 # ALWAYS support multi-select (comma-separated values) for ForeignKey and numeric fields
                                 if ',' in str(param_value):
                                     values = [v.strip() for v in str(param_value).split(",") if v.strip()]

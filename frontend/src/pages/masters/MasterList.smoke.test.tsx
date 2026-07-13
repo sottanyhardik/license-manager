@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthContext } from "../../context/AuthContext";
 
 // Minimal metadata shape the list view expects from the API.
@@ -58,14 +59,19 @@ const authValue = {
 };
 
 function renderAt(entity: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <AuthContext.Provider value={authValue as never}>
-      <MemoryRouter initialEntries={[`/masters/${entity}`]}>
-        <Routes>
-          <Route path="/masters/:entity" element={<MasterList />} />
-        </Routes>
-      </MemoryRouter>
-    </AuthContext.Provider>,
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={authValue as never}>
+        <MemoryRouter initialEntries={[`/masters/${entity}`]}>
+          <Routes>
+            <Route path="/masters/:entity" element={<MasterList />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    </QueryClientProvider>,
   );
 }
 

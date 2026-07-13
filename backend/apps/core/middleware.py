@@ -20,6 +20,7 @@ class DisableCSRFForAPIMiddleware(MiddlewareMixin):
 
 # ── Activity / Audit Log Middleware ──────────────────────────────────────────
 import logging
+import os
 import sys
 import threading
 
@@ -71,7 +72,11 @@ def _infer_resource_id(path):
 
 
 def _activity_logging_disabled():
-    return "test" in sys.argv
+    # Disabled during any test run: manage.py test, pytest, or TESTING=true env var.
+    if os.environ.get("TESTING", "").lower() in ("true", "1", "yes"):
+        return True
+    argv0 = sys.argv[0] if sys.argv else ""
+    return "test" in sys.argv or "pytest" in argv0 or argv0.endswith("py.test")
 
 
 def _write_log_entry(user, request, status_code):

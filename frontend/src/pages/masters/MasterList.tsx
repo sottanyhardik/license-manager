@@ -1,6 +1,7 @@
-import {useContext, useEffect, useState, useCallback, useRef} from "react";
+import {useContext, useEffect, useState, useCallback, useRef, useMemo} from "react";
 import {Link, useParams, useLocation, useNavigate} from "react-router-dom";
 import {AuthContext} from "../../context/AuthContext";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "../../api/axios";
 import {boeApi} from "../../services/api";
@@ -65,23 +66,17 @@ export default function MasterList() {
 
     // ACCOUNT_ACCESS users can edit invoice_no on BOE items only
     const canEditInvoice = canWrite || hasRole('ACCOUNT_ACCESS');
-    const [data, setData] = useState([]);
     const [metadata, setMetadata] = useState<Record<string, any>>({});
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(25);
-    const [totalPages, setTotalPages] = useState(1);
-    const [hasNext, setHasNext] = useState(false);
-    const [hasPrevious, setHasPrevious] = useState(false);
 
     // Filter state with default filters for allotments, bill-of-entries, and incentive-licenses
     const [filterParams, setFilterParams] = useState(() => getDefaultFilters(entityName));
     const backendDefaultsApplied = useRef(false);
-    const pendingRequestRef = useRef(null);
-    const abortControllerRef = useRef(null);
+    const qc = useQueryClient();
 
     // License Balance Modal state
     const [showBalanceModal, setShowBalanceModal] = useState(false);
@@ -128,7 +123,7 @@ export default function MasterList() {
             await api.post(`trades/${linkModalTrade.id}/link-trade/`, { partner_id: partner.id });
             toast.success(`Linked: ${linkModalTrade.invoice_number} ↔ ${partner.invoice_number}`);
             closeLinkModal();
-            fetchData();
+            invalidateList();
         } catch (err) { toast.error(err.response?.data?.error || 'Failed to link trades'); }
     };
 
@@ -177,6 +172,9 @@ export default function MasterList() {
     const [invoiceDraft, setInvoiceDraft] = useState('');
     const [invoiceSaving, setInvoiceSaving] = useState(false);
 
+    // Standalone loading flag for the "Fetch All Products" bulk action (not list loading)
+    const [bulkActionLoading, setBulkActionLoading] = useState(false);
+
     // BOE Merge Modal state
     const [showMergeModal, setShowMergeModal] = useState(false);
     const [mergeBoeTarget, setMergeBoeTarget] = useState(null);
@@ -215,7 +213,7 @@ export default function MasterList() {
             const resp = await boeApi.mergeBOE(mergeBoeTarget.id, mergeBoeSource.id);
             toast.success(resp.message || 'BOE merged successfully');
             closeMergeModal();
-            fetchData(currentPage, pageSize, filterParams);
+            invalidateList();
         } catch (err) {
             toast.error(err.response?.data?.error || 'Failed to merge BOE');
         } finally {
@@ -239,8 +237,8 @@ export default function MasterList() {
             // Dedicated endpoint — accessible to ACCOUNT_ACCESS (and BOE_MANAGER).
             // Does NOT require full BOE edit permission.
             await api.post(`bill-of-entries/${itemId}/update-invoice-no/`, { invoice_no: invoiceDraft.trim() });
-            setData(prev => prev.map(d => d.id === itemId ? { ...d, invoice_no: invoiceDraft.trim() } : d));
             setEditingInvoiceId(null);
+            invalidateList();
         } catch (e) {
             toast.error('Failed to update invoice number');
         } finally {
@@ -251,114 +249,23 @@ export default function MasterList() {
     // Confirmation dialog hook
     const { confirmDelete, confirmDangerousAction, confirmDialog } = useConfirmDialog();
 
-    const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
-        // Abort any pending request and clear its key — the replacement request must always proceed
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            pendingRequestRef.current = null;
-        }
-
-        // Create new AbortController for this request
-        abortControllerRef.current = new AbortController();
-
-        const requestKey = JSON.stringify({page, size, filters, entity: entityName});
-
-        // Mark this request as pending
-        pendingRequestRef.current = requestKey;
-
-        setLoading(true);
-        setError("");
-
-        let aborted = false;
-
-        try {
-            const params = {
-                page,
-                page_size: size,
-                ...filters
-            };
-
-            let response;
-
-            // Use dedicated API service for bill-of-entries
-            if (entityName === 'bill-of-entries') {
-                response = await boeApi.fetchBOEList(params);
-            } else {
-                // Determine API endpoint
-                let apiPath;
-                if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
-                    apiPath = `${entityName}/`;
-                } else if (entityName === 'incentive-licenses') {
-                    apiPath = `incentive-licenses/`;
-                } else {
-                    apiPath = `masters/${entityName}/`;
-                }
-
-                const {data: apiResponse} = await api.get(apiPath, {
-                    params,
-                    signal: abortControllerRef.current.signal
-                });
-                response = apiResponse;
-            }
-
-            setData(response.results || []);
-            setMetadata({
-                list_display: response.list_display || [],
-                form_fields: response.form_fields || [],
-                search_fields: response.search_fields || [],
-                filter_fields: response.filter_fields || [],
-                filter_config: response.filter_config || {},
-                ordering_fields: response.ordering_fields || [],
-                nested_field_defs: response.nested_field_defs || {},
-                nested_list_display: response.nested_list_display || {},
-                field_meta: response.field_meta || {},
-                default_filters: response.default_filters || {},
-                inline_editable: response.inline_editable || []
-            });
-
-            // Pagination
-            setCurrentPage(response.current_page || 1);
-            setTotalPages(response.total_pages || 1);
-            setPageSize(response.page_size || 25);
-            setHasNext(response.has_next || false);
-            setHasPrevious(response.has_previous || false);
-
-        } catch (err) {
-            // Ignore abort errors — they're expected when a new request cancels the previous one.
-            // Mark as aborted so finally doesn't clear loading (the new request is already in flight).
-            if (err.name === 'AbortError' || err.name === 'CanceledError') {
-                aborted = true;
-                return;
-            }
-            const errorMsg = err.response?.data?.detail || "Failed to load data";
-            setError(errorMsg);
-            toast.error(errorMsg);
-        } finally {
-            // Don't stop the loading spinner for aborted requests — the replacement
-            // request has already called setLoading(true) and is still in progress.
-            if (!aborted) {
-                setLoading(false);
-                pendingRequestRef.current = null;
-            }
-        }
-    }, [entityName]);
-
-    // Load data only when entityName changes
+    // ---------------------------------------------------------------------------
+    // Filter initialization — runs once on entity change to resolve the initial
+    // filterParams from URL, session storage, or hardcoded defaults.
+    // The result is stored in state; useQuery below reacts to it automatically.
+    // ---------------------------------------------------------------------------
     useEffect(() => {
         if (!entityName) return;
 
         // Reset flags when entity changes
         backendDefaultsApplied.current = false;
-        pendingRequestRef.current = null;
 
         // Clear filters from other entities to prevent cross-contamination
-        // This ensures each entity starts fresh unless explicitly restoring its own filters
         const allEntities = ['licenses', 'allotments', 'trades', 'bill-of-entries', 'incentive-licenses'];
         allEntities.forEach(entity => {
             if (entity !== entityName) {
                 try {
                     sessionStorage.removeItem(`${entity}ListFilters`);
-                    // Also clear the filter state key used by filterPersistence
                     sessionStorage.removeItem(`filterState_${entity}`);
                 } catch {
                     // Silently handle error
@@ -368,40 +275,29 @@ export default function MasterList() {
 
         // Parse URL query parameters
         const urlParams = new URLSearchParams(location.search);
-        const urlFilters = {};
+        const urlFilters: Record<string, string> = {};
         for (const [key, value] of urlParams.entries()) {
-            // Convert Django-style date filters to UI format
-            // __gte (greater than or equal) -> _from
-            // __lte (less than or equal) -> _to
             if (key.endsWith('__gte')) {
-                const baseField = key.replace('__gte', '');
-                urlFilters[`${baseField}_from`] = value;
+                urlFilters[`${key.replace('__gte', '')}_from`] = value;
             } else if (key.endsWith('__lte')) {
-                const baseField = key.replace('__lte', '');
-                urlFilters[`${baseField}_to`] = value;
+                urlFilters[`${key.replace('__lte', '')}_to`] = value;
             } else {
                 urlFilters[key] = value;
             }
         }
 
-        // Check if URL has filter parameters
         const hasUrlFilters = Object.keys(urlFilters).length > 0;
-
         if (hasUrlFilters) {
-            // Use URL filters (highest priority - from dashboard cards)
             setFilterParams(urlFilters);
             setCurrentPage(1);
+            setPageSize(25);
             backendDefaultsApplied.current = true;
-            fetchData(1, 25, urlFilters);
         } else {
-            // Check if we should restore filters from previous session
             const shouldRestore = shouldRestoreFilters();
             const restored = shouldRestore ? restoreFilterState(entityName) : null;
             const defaultFilters = getDefaultFilters(entityName);
 
             if (restored) {
-                // Merge restored filters with default filters
-                // For incentive-licenses, ensure sold_status is always set (use default if not in restored)
                 const mergedFilters = {
                     ...restored.filters,
                     ...Object.fromEntries(
@@ -412,36 +308,101 @@ export default function MasterList() {
                 setCurrentPage(restored.pagination?.currentPage || 1);
                 setPageSize(restored.pagination?.pageSize || 25);
                 backendDefaultsApplied.current = true;
-                fetchData(restored.pagination?.currentPage || 1, restored.pagination?.pageSize || 25, mergedFilters);
             } else {
-                // Use default filters
-                setCurrentPage(1);
                 setFilterParams(defaultFilters);
+                setCurrentPage(1);
+                setPageSize(25);
                 backendDefaultsApplied.current = true;
-                fetchData(1, 25, defaultFilters);
             }
         }
-
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entityName, location.search]);
 
     // Update filterParams when backend default filters are received (for UI display only)
     useEffect(() => {
-        // Skip if we've already applied backend defaults for this entity
         if (backendDefaultsApplied.current && Object.keys(filterParams).length > 0) return;
-
         const backendDefaults = metadata.default_filters || {};
         const hardcodedDefaults = getDefaultFilters(entityName);
-
-        // Only update UI state if we have backend defaults and no hardcoded defaults
         if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
             setFilterParams(backendDefaults);
+            setCurrentPage(1);
             backendDefaultsApplied.current = true;
-            // Fetch data with the default filters
-            fetchData(1, pageSize, backendDefaults);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [metadata.default_filters]);
+
+    // ---------------------------------------------------------------------------
+    // Main list query — re-runs whenever entity, page, size, or filters change.
+    // TanStack handles request de-duplication and cancellation.
+    // ---------------------------------------------------------------------------
+    const queryParams = useMemo(() => ({
+        page: currentPage,
+        page_size: pageSize,
+        ...filterParams,
+    }), [currentPage, pageSize, filterParams]);
+
+    const {
+        data: listResponse,
+        isLoading: loading,
+        isError: listFailed,
+        error: listError,
+    } = useQuery({
+        queryKey: ['entity-list', entityName, queryParams],
+        queryFn: async ({ signal }) => {
+            if (entityName === 'bill-of-entries') {
+                return boeApi.fetchBOEList(queryParams);
+            }
+            let apiPath: string;
+            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
+                apiPath = `${entityName}/`;
+            } else if (entityName === 'incentive-licenses') {
+                apiPath = `incentive-licenses/`;
+            } else {
+                apiPath = `masters/${entityName}/`;
+            }
+            const { data: apiResponse } = await api.get(apiPath, { params: queryParams, signal });
+            return apiResponse;
+        },
+        enabled: Boolean(entityName),
+        placeholderData: (prev) => prev,
+    });
+
+    // Derive list data and metadata from query result
+    const data = listResponse?.results ?? [];
+    const totalPages = listResponse?.total_pages ?? 1;
+    const hasNext = listResponse?.has_next ?? false;
+    const hasPrevious = listResponse?.has_previous ?? false;
+
+    // Sync metadata from response (needed for filter_fields, list_display, etc.)
+    useEffect(() => {
+        if (!listResponse) return;
+        setMetadata({
+            list_display: listResponse.list_display || [],
+            form_fields: listResponse.form_fields || [],
+            search_fields: listResponse.search_fields || [],
+            filter_fields: listResponse.filter_fields || [],
+            filter_config: listResponse.filter_config || {},
+            ordering_fields: listResponse.ordering_fields || [],
+            nested_field_defs: listResponse.nested_field_defs || {},
+            nested_list_display: listResponse.nested_list_display || {},
+            field_meta: listResponse.field_meta || {},
+            default_filters: listResponse.default_filters || {},
+            inline_editable: listResponse.inline_editable || [],
+        });
+    }, [listResponse]);
+
+    // Surface list load failure to the error banner
+    useEffect(() => {
+        if (listFailed && listError) {
+            const errorMsg = (listError as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Failed to load data";
+            setError(errorMsg);
+            toast.error(errorMsg);
+        }
+    }, [listFailed, listError]);
+
+    // Helper to invalidate the current entity's list — used after mutations
+    const invalidateList = useCallback(() => {
+        qc.invalidateQueries({ queryKey: ['entity-list', entityName] });
+    }, [qc, entityName]);
 
     useEffect(() => {
         if (!linkModalTrade) return;
@@ -452,34 +413,28 @@ export default function MasterList() {
 
     const handleFilterChange = useCallback((filters) => {
         // Convert Django-style date filters back to UI format for state persistence
-        // This ensures date values are preserved when passed back as initialFilters
-        const convertedFilters = {};
+        const convertedFilters: Record<string, string> = {};
         Object.entries(filters).forEach(([key, value]) => {
             if (key.endsWith('__gte')) {
-                const baseField = key.replace('__gte', '');
-                convertedFilters[`${baseField}_from`] = value;
+                convertedFilters[`${key.replace('__gte', '')}_from`] = value as string;
             } else if (key.endsWith('__lte')) {
-                const baseField = key.replace('__lte', '');
-                convertedFilters[`${baseField}_to`] = value;
+                convertedFilters[`${key.replace('__lte', '')}_to`] = value as string;
             } else {
-                convertedFilters[key] = value;
+                convertedFilters[key] = value as string;
             }
         });
-
-        setFilterParams(convertedFilters);
+        // Store the UI-format filters; useQuery will re-run with the raw filters via queryParams
+        setFilterParams(filters); // Use raw API format — queryParams derives from filterParams directly
         setCurrentPage(1);
-        fetchData(1, pageSize, filters); // Send original format to API
-    }, [fetchData, pageSize]);
+    }, []);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
-        fetchData(page, pageSize, filterParams);
     };
 
     const handlePageSizeChange = (size) => {
         setPageSize(size);
         setCurrentPage(1);
-        fetchData(1, size, filterParams);
     };
 
     const handleDelete = async (item) => {
@@ -501,21 +456,25 @@ export default function MasterList() {
                 await api.delete(apiPath);
             }
             toast.success("Record deleted successfully");
-            fetchData(currentPage, pageSize, filterParams);
+            invalidateList();
         } catch (err) {
             toast.error(err.response?.data?.detail || "Failed to delete record");
         }
     };
 
     const handleToggleBoolean = async (item, field, newValue) => {
-        // Optimistic UI update - update local state immediately
-        setData(prevData =>
-            prevData.map(dataItem =>
-                dataItem.id === item.id
-                    ? { ...dataItem, [field]: newValue }
-                    : dataItem
-            )
-        );
+        // Optimistic UI update via query cache
+        const queryKey = ['entity-list', entityName, queryParams];
+        const previous = qc.getQueryData(queryKey);
+        qc.setQueryData(queryKey, (old: typeof listResponse) => {
+            if (!old) return old;
+            return {
+                ...old,
+                results: (old.results || []).map((d: Record<string, unknown>) =>
+                    d.id === item.id ? { ...d, [field]: newValue } : d
+                ),
+            };
+        });
 
         try {
             let apiPath;
@@ -529,19 +488,12 @@ export default function MasterList() {
 
             await api.patch(apiPath, { [field]: newValue });
             toast.success("Field updated successfully");
-            // Refresh data to ensure consistency with backend
-            fetchData(currentPage, pageSize, filterParams);
+            invalidateList();
         } catch (err) {
             // Revert optimistic update on error
-            setData(prevData =>
-                prevData.map(dataItem =>
-                    dataItem.id === item.id
-                        ? { ...dataItem, [field]: !newValue }
-                        : dataItem
-                )
-            );
+            qc.setQueryData(queryKey, previous);
             toast.error(err.response?.data?.detail || `Failed to update ${field}`);
-            throw err; // Re-throw to let component know it failed
+            throw err;
         }
     };
 
@@ -559,7 +511,7 @@ export default function MasterList() {
             await api.patch(apiPath, { [fieldName]: newValue });
             toast.success(`${fieldName} updated successfully`);
             // Refresh data to show updated value
-            fetchData(currentPage, pageSize, filterParams);
+            invalidateList();
         } catch (err) {
             toast.error(err.response?.data?.detail || `Failed to update ${fieldName}`);
             throw err;
@@ -706,26 +658,27 @@ export default function MasterList() {
                             variant="outline"
                             size="sm"
                             title="Update all empty product names in entire database"
+                            disabled={bulkActionLoading}
                             onClick={async () => {
                                 const confirmed = await confirmDangerousAction(
                                     'Bulk Update Product Names',
                                     'This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?'
                                 );
                                 if (!confirmed) return;
-                                setLoading(true); setError("");
+                                setBulkActionLoading(true); setError("");
                                 try {
                                     const response = await api.post(`bill-of-entries/bulk-update-product-names/`);
-                                    setLoading(false);
                                     if (response.data.success) {
                                         toast.success(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
-                                        fetchData(currentPage, pageSize, filterParams);
+                                        invalidateList();
                                     } else {
                                         setError('Failed to update product names');
                                     }
                                 } catch (err) {
-                                    setLoading(false);
                                     setError(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
                                     toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
+                                } finally {
+                                    setBulkActionLoading(false);
                                 }
                             }}
                         >
@@ -864,7 +817,7 @@ export default function MasterList() {
                                                         try {
                                                             const response = await api.post(`bill-of-entries/${item.id}/resolve-dispute/`);
                                                             toast.success(response.data.message || 'Dispute resolved');
-                                                            fetchData(currentPage, pageSize, filterParams);
+                                                            invalidateList();
                                                         } catch (err) {
                                                             toast.error(err.response?.data?.detail || err.response?.data?.message || 'Failed to resolve dispute');
                                                         }
@@ -881,7 +834,7 @@ export default function MasterList() {
                                                         try {
                                                             const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                                             toast.success(response.data.message || 'Product name updated');
-                                                            fetchData(currentPage, pageSize, filterParams);
+                                                            invalidateList();
                                                         } catch (err) {
                                                             toast.error(err.response?.data?.message || 'Failed to update product name');
                                                         }
@@ -1112,7 +1065,7 @@ export default function MasterList() {
                                                                 const r = await api.post(`license-actions/${item.id}/fetch-ownership/`);
                                                                 const owner = r.data?.current_owner?.name || '—';
                                                                 toast.success(`Ownership updated: ${owner} (${r.data?.transfers_count ?? 0} transfers)`);
-                                                                fetchData(currentPage, pageSize, filterParams);
+                                                                invalidateList();
                                                             } catch (err) {
                                                                 toast.error(err?.response?.data?.error || err?.message || 'Failed to fetch ownership');
                                                             } finally {
@@ -1685,7 +1638,7 @@ export default function MasterList() {
                                             const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                             toast.success(response.data.message || 'Product name updated successfully');
                                             // Refresh the list to show updated product name
-                                            fetchData(currentPage, pageSize, filterParams);
+                                            invalidateList();
                                         } catch (err) {
                                             toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
                                         }

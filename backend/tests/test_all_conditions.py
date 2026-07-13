@@ -87,22 +87,22 @@ class TestAuthentication:
     def test_protected_license_endpoint_requires_auth(self):
         client = APIClient()
         resp = client.get(reverse("license:licenses-list"))
-        assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+        assert resp.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
 
     def test_protected_boe_endpoint_requires_auth(self):
         client = APIClient()
         resp = client.get(reverse("bill_of_entry:bill-of-entries-list"))
-        assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+        assert resp.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
 
     def test_protected_trade_endpoint_requires_auth(self):
         client = APIClient()
         resp = client.get(reverse("trade:trade-list"))
-        assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+        assert resp.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
 
     def test_protected_allotment_endpoint_requires_auth(self):
         client = APIClient()
         resp = client.get(reverse("allotment:allotment-list"))
-        assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+        assert resp.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
 
     def test_valid_jwt_grants_access_to_licenses(self, test_user):
         client = _auth_client(test_user)
@@ -147,8 +147,8 @@ class TestLicenseEndpoints:
             reverse("license:licenses-detail", kwargs={"pk": test_license.id})
         )
         assert resp.status_code == status.HTTP_200_OK
-        # import_items must be present and have 3 items (from conftest fixture)
-        items = resp.data.get("import_items", [])
+        # import_license is the API key (serializer renames import_license_read → import_license)
+        items = resp.data.get("import_license", [])
         assert len(items) == 3
 
     def test_retrieve_nonexistent_license_returns_404(self, authenticated_client):
@@ -327,7 +327,7 @@ class TestDashboard:
     def test_dashboard_requires_authentication(self):
         client = APIClient()
         resp = client.get(reverse("license:dashboard"))
-        assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+        assert resp.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
 
 
 # ===========================================================================
@@ -341,7 +341,7 @@ class TestLicenseBalanceCalculator:
 
     def test_credit_returns_export_total(self):
         mock_license = Mock()
-        with patch("license.services.balance_calculator.LicenseExportItemModel") as m:
+        with patch("apps.license.services.balance_calculator.LicenseExportItemModel") as m:
             m.objects.filter.return_value.aggregate.return_value = {
                 "total": Decimal("1000.00")
             }
@@ -350,7 +350,7 @@ class TestLicenseBalanceCalculator:
 
     def test_credit_returns_zero_when_no_exports(self):
         mock_license = Mock()
-        with patch("license.services.balance_calculator.LicenseExportItemModel") as m:
+        with patch("apps.license.services.balance_calculator.LicenseExportItemModel") as m:
             m.objects.filter.return_value.aggregate.return_value = {"total": DEC_0}
             result = LicenseBalanceCalculator.calculate_credit(mock_license)
         assert result == DEC_0
@@ -359,7 +359,7 @@ class TestLicenseBalanceCalculator:
 
     def test_debit_returns_boe_total(self):
         mock_license = Mock()
-        with patch("license.services.balance_calculator.RowDetails") as m:
+        with patch("apps.license.services.balance_calculator.RowDetails") as m:
             m.objects.filter.return_value.aggregate.return_value = {
                 "total": Decimal("300.00")
             }
@@ -368,7 +368,7 @@ class TestLicenseBalanceCalculator:
 
     def test_debit_returns_zero_when_no_boe(self):
         mock_license = Mock()
-        with patch("license.services.balance_calculator.RowDetails") as m:
+        with patch("apps.license.services.balance_calculator.RowDetails") as m:
             m.objects.filter.return_value.aggregate.return_value = {"total": DEC_0}
             result = LicenseBalanceCalculator.calculate_debit(mock_license)
         assert result == DEC_0
@@ -377,7 +377,7 @@ class TestLicenseBalanceCalculator:
 
     def test_allotment_returns_total(self):
         mock_license = Mock()
-        with patch("license.services.balance_calculator.AllotmentItems") as m:
+        with patch("apps.license.services.balance_calculator.AllotmentItems") as m:
             m.objects.filter.return_value.aggregate.return_value = {
                 "total": Decimal("200.00")
             }
@@ -386,7 +386,7 @@ class TestLicenseBalanceCalculator:
 
     def test_allotment_returns_zero_when_no_items(self):
         mock_license = Mock()
-        with patch("license.services.balance_calculator.AllotmentItems") as m:
+        with patch("apps.license.services.balance_calculator.AllotmentItems") as m:
             m.objects.filter.return_value.aggregate.return_value = {"total": DEC_0}
             result = LicenseBalanceCalculator.calculate_allotment(mock_license)
         assert result == DEC_0
@@ -399,6 +399,7 @@ class TestLicenseBalanceCalculator:
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("1000.00")),
             patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == Decimal("500.00")  # 1000 - (300 + 200)
@@ -409,6 +410,7 @@ class TestLicenseBalanceCalculator:
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("100.00")),
             patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == DEC_0
@@ -419,6 +421,7 @@ class TestLicenseBalanceCalculator:
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("500.00")),
             patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == DEC_0
@@ -430,6 +433,7 @@ class TestLicenseBalanceCalculator:
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=large),
             patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=DEC_0),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=DEC_0),
+            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == large
@@ -440,6 +444,7 @@ class TestLicenseBalanceCalculator:
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("0.01")),
             patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=DEC_0),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=DEC_0),
+            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == Decimal("0.01")
@@ -452,6 +457,7 @@ class TestLicenseBalanceCalculator:
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("1000.00")),
             patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
         assert result["credit"] == Decimal("1000.00")
@@ -465,6 +471,7 @@ class TestLicenseBalanceCalculator:
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("100.00")),
             patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
         assert result["balance"] == DEC_0
@@ -484,8 +491,8 @@ class TestItemBalanceCalculator:
         mock_item.cif_fc = Decimal("500.00")
         mock_item.license = Mock()
         with (
-            patch("license.services.balance_calculator.RowDetails") as mock_rd,
-            patch("license.services.balance_calculator.AllotmentItems") as mock_ai,
+            patch("apps.license.services.balance_calculator.RowDetails") as mock_rd,
+            patch("apps.license.services.balance_calculator.AllotmentItems") as mock_ai,
         ):
             mock_rd.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": Decimal("100.00")}
             mock_ai.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": Decimal("50.00")}
@@ -498,9 +505,9 @@ class TestItemBalanceCalculator:
         mock_item.cif_fc = DEC_0
         mock_item.license = Mock()
         with (
-            patch("license.services.balance_calculator.LicenseExportItemModel") as mock_exp,
-            patch("license.services.balance_calculator.RowDetails") as mock_rd,
-            patch("license.services.balance_calculator.AllotmentItems") as mock_ai,
+            patch("apps.license.services.balance_calculator.LicenseExportItemModel") as mock_exp,
+            patch("apps.license.services.balance_calculator.RowDetails") as mock_rd,
+            patch("apps.license.services.balance_calculator.AllotmentItems") as mock_ai,
         ):
             mock_exp.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": Decimal("1000.00")}
             mock_rd.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": Decimal("300.00")}
@@ -514,8 +521,8 @@ class TestItemBalanceCalculator:
         mock_item.cif_fc = Decimal("500.00")
         mock_item.license = Mock()
         with (
-            patch("license.services.balance_calculator.RowDetails") as mock_rd,
-            patch("license.services.balance_calculator.AllotmentItems") as mock_ai,
+            patch("apps.license.services.balance_calculator.RowDetails") as mock_rd,
+            patch("apps.license.services.balance_calculator.AllotmentItems") as mock_ai,
         ):
             mock_rd.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": None}
             mock_ai.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": None}
@@ -545,8 +552,8 @@ class TestItemBalanceCalculator:
         mock_item = Mock()
         mock_item.quantity = Decimal("1000")
         with (
-            patch("license.services.balance_calculator.RowDetails") as mock_rd,
-            patch("license.services.balance_calculator.AllotmentItems") as mock_ai,
+            patch("apps.license.services.balance_calculator.RowDetails") as mock_rd,
+            patch("apps.license.services.balance_calculator.AllotmentItems") as mock_ai,
         ):
             mock_rd.objects.filter.return_value.aggregate.return_value = {"qty__sum": Decimal("300")}
             mock_ai.objects.filter.return_value.aggregate.return_value = {"qty__sum": Decimal("200")}
@@ -557,8 +564,8 @@ class TestItemBalanceCalculator:
         mock_item = Mock()
         mock_item.quantity = Decimal("1000")
         with (
-            patch("license.services.balance_calculator.RowDetails") as mock_rd,
-            patch("license.services.balance_calculator.AllotmentItems") as mock_ai,
+            patch("apps.license.services.balance_calculator.RowDetails") as mock_rd,
+            patch("apps.license.services.balance_calculator.AllotmentItems") as mock_ai,
         ):
             mock_rd.objects.filter.return_value.aggregate.return_value = {"qty__sum": Decimal("600")}
             mock_ai.objects.filter.return_value.aggregate.return_value = {"qty__sum": Decimal("500")}

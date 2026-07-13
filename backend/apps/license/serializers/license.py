@@ -640,8 +640,12 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             # For list view, add empty arrays for nested items (fields were removed in __init__)
             rep['export_license'] = []
             rep['import_license'] = []
-            # For license_documents, check if any exist to show merge link in frontend
-            rep['license_documents'] = [{'id': doc.id} for doc in instance.license_documents.all()[:1]] if instance.license_documents.exists() else []
+            # For license_documents, emit at most one stub so the frontend can
+            # display a merge link.  The queryset is prefetched by the viewset
+            # for both list and retrieve actions, so reading .all() here hits the
+            # prefetch cache — no per-row DB queries.
+            _docs = list(instance.license_documents.all())
+            rep['license_documents'] = [{'id': _docs[0].id}] if _docs else []
         else:
             # Detail view - rename the read-only fields back to their original names for frontend compatibility
             if 'export_license_read' in rep:

@@ -1,5 +1,6 @@
 # trade/serializers.py
 
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import (
@@ -262,8 +263,14 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
 
         return data
 
+    @transaction.atomic
     def create(self, validated_data):
-        """Create trade with nested lines and payments"""
+        """Create trade with nested lines and payments.
+
+        Wrapped in a transaction so the header + lines + incentive lines + payments
+        + BOE invoice_no update + the auto-created paired trade either all commit or
+        all roll back. Previously a mid-loop failure left a partial trade with a
+        half-computed balance."""
         import logging
         logger = logging.getLogger(__name__)
 
@@ -372,8 +379,12 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
 
         return trade
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        """Update trade with nested lines and payments"""
+        """Update trade with nested lines and payments.
+
+        Wrapped in a transaction so header changes, nested line/payment syncs, the
+        recompute, and both old/new BOE invoice_no updates commit atomically."""
         from apps.core.helpers import _sync_nested
 
         lines_data = validated_data.pop('lines', None)

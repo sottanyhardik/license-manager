@@ -6,8 +6,9 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.tasks.models import Task, TaskRemark
+from apps.tasks.models import Task
 from apps.tasks.serializers import TaskRemarkSerializer, TaskSerializer
+from apps.tasks.services import task_service
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -85,7 +86,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         task = self.get_object()
         if not self._can_modify(task):
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
-        task.mark_completed()
+        task_service.complete_task(task)
         return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=["post"])
@@ -93,10 +94,8 @@ class TaskViewSet(viewsets.ModelViewSet):
         task = self.get_object()
         if not self._can_modify(task):
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
-        reason = (request.data.get("reason") or "").strip()
-        task.mark_rejected(by_user=request.user, reason=reason)
-        if reason:
-            TaskRemark.objects.create(task=task, text=f"[Rejected] {reason}", created_by=request.user)
+        reason = request.data.get("reason") or ""
+        task_service.reject_task(task, by_user=request.user, reason=reason)
         return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=["post"])
@@ -104,14 +103,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         task = self.get_object()
         if not self._can_modify(task):
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
-        task.status = Task.STATUS_PENDING
-        task.completed_on = None
-        task.rejected_by = None
-        task.rejection_reason = ""
-        task.save(update_fields=[
-            "status", "completed_on", "rejected_by", "rejection_reason",
-            "modified_on", "modified_by",
-        ])
+        task_service.reopen_task(task)
         return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=["get", "post"], url_path="remarks")
@@ -123,10 +115,10 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         if not self._can_modify(task):
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
-        text = (request.data.get("text") or "").strip()
-        if not text:
+        try:
+            remark = task_service.append_remark(task, text=request.data.get("text"), created_by=request.user)
+        except ValueError:
             return Response({"text": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
-        remark = TaskRemark.objects.create(task=task, text=text, created_by=request.user)
         return Response(TaskRemarkSerializer(remark).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="assignable-users")

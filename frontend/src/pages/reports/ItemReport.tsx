@@ -3,6 +3,7 @@ import {useNavigate} from "react-router-dom";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
+import { openAuthedFile } from "../../utils/documentDownload";
 import {formatDate} from "../../utils/dateFormatter";
 import {clickable} from "../../utils/clickable";
 import {toast} from "sonner";
@@ -980,7 +981,7 @@ export default function ItemReport() {
                                                                                     fontSize: 12
                                                                                 }}
                                                                                 onClick={() => {
-                                                                                    window.open(`/api/licenses/${firstItem.license_id}/merged-documents/`, '_blank');
+                                                                                    openAuthedFile(`licenses/${firstItem.license_id}/merged-documents/`);
                                                                                 }}
                                                                                 title="View/Download merged documents"
                                                                             >

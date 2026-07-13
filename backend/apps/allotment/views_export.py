@@ -430,8 +430,9 @@ def add_grouped_export_action(viewset_class):
                     # Table headers - allotment info + Approved + license subheader
                     main_headers = ['Sr No', 'Allotment Date', 'Port', 'Quantity (KGS)',
                                     'Unit Price ($)', 'Value ($)', 'Total CIF INR', 'Item Name', 'Invoice', 'ETA', 'Approved']
-                    license_headers = ['DFIA No.', 'DFIA Date', 'DFIA Port', 'Item Sr. NO.', 'DFIA Qty.', 'DFIA $.',
-                                       'DFIA CIF']
+                    # 'DFIA CIF' column removed (matches the PDF export and the
+                    # detail dict, which no longer carries dfia_cif).
+                    license_headers = ['DFIA No.', 'DFIA Date', 'DFIA Port', 'Item Sr. NO.', 'DFIA Qty.', 'DFIA $.']
 
                     # Write main headers
                     for col_idx, header in enumerate(main_headers, 1):
@@ -518,7 +519,6 @@ def add_grouped_export_action(viewset_class):
                                 detail['item_sr_no'],
                                 int(detail['dfia_qty']),
                                 detail['dfia_value'],
-                                detail['dfia_cif']
                             ]
 
                             for col_idx, value in enumerate(license_data, len(main_headers) + 1):
@@ -526,8 +526,7 @@ def add_grouped_export_action(viewset_class):
                                 cell.border = border
                                 cell.font = Font(size=12)
                                 cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                                if col_idx in [len(main_headers) + 5, len(main_headers) + 6,
-                                               len(main_headers) + 7]:  # Qty, Value, and CIF columns
+                                if col_idx in [len(main_headers) + 5, len(main_headers) + 6]:  # DFIA Qty, DFIA $.
                                     cell.alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
 
                                 # Apply light green background if approved

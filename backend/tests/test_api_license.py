@@ -13,7 +13,7 @@ class TestLicenseAPI:
     
     def test_list_licenses(self, authenticated_client, test_license):
         """Test GET /licenses/"""
-        url = reverse('license-list')
+        url = reverse('license:licenses-list')
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
@@ -21,31 +21,31 @@ class TestLicenseAPI:
     
     def test_retrieve_license(self, authenticated_client, test_license):
         """Test GET /licenses/{id}/"""
-        url = reverse('license-detail', kwargs={'pk': test_license.id})
+        url = reverse('license:licenses-detail', kwargs={'pk': test_license.id})
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data['license_number'] == test_license.license_number
-        assert 'import_items' in response.data
+        assert 'import_license' in response.data
     
     def test_license_has_items(self, authenticated_client, test_license):
         """Test license includes related import items"""
-        url = reverse('license-detail', kwargs={'pk': test_license.id})
+        url = reverse('license:licenses-detail', kwargs={'pk': test_license.id})
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['import_items']) == 3
+        assert len(response.data['import_license']) == 3
     
     def test_filter_licenses_by_scheme(self, authenticated_client, test_license):
         """Test GET /licenses/?scheme_code=DFIA"""
-        url = reverse('license-list')
+        url = reverse('license:licenses-list')
         response = authenticated_client.get(url, {'scheme_code': 'DFIA'})
         
         assert response.status_code == status.HTTP_200_OK
     
     def test_search_licenses(self, authenticated_client, test_license):
         """Test GET /licenses/?search={license_number}"""
-        url = reverse('license-list')
+        url = reverse('license:licenses-list')
         response = authenticated_client.get(url, {'search': test_license.license_number[:5]})
         
         assert response.status_code == status.HTTP_200_OK
@@ -58,14 +58,14 @@ class TestLicenseItemAPI:
     
     def test_list_license_items(self, authenticated_client, test_license):
         """Test GET /license-items/"""
-        url = reverse('licenseimportitem-list')
+        url = reverse('license:license-items-list')
         response = authenticated_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
     
     def test_filter_items_by_license(self, authenticated_client, test_license):
         """Test GET /license-items/?license={id}"""
-        url = reverse('licenseimportitem-list')
+        url = reverse('license:license-items-list')
         response = authenticated_client.get(url, {'license': test_license.id})
         
         assert response.status_code == status.HTTP_200_OK
@@ -87,7 +87,7 @@ class TestLicenseLedgerUpload:
         csv_file = tmp_path / "test_ledger.csv"
         csv_file.write_text(csv_content)
         
-        url = reverse('upload-ledger')
+        url = reverse('license:upload-ledger')
         with open(csv_file, 'rb') as f:
             response = authenticated_client.post(url, {'ledger': f}, format='multipart')
         

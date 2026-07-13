@@ -1,6 +1,7 @@
-import {useContext, useEffect, useState, useCallback, useRef} from "react";
+import {useContext, useEffect, useState, useCallback, useRef, useMemo} from "react";
 import {Link, useParams, useLocation, useNavigate} from "react-router-dom";
 import {AuthContext} from "../../context/AuthContext";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "../../api/axios";
 import {boeApi} from "../../services/api";
@@ -17,6 +18,9 @@ import {openPdfPreview} from "../../utils/pdfPreview";
 import {clickable} from "../../utils/clickable";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
+import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
+import AllotmentsTable from "./tables/AllotmentsTable";
+import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
@@ -62,44 +66,17 @@ export default function MasterList() {
 
     // ACCOUNT_ACCESS users can edit invoice_no on BOE items only
     const canEditInvoice = canWrite || hasRole('ACCOUNT_ACCESS');
-    const [data, setData] = useState([]);
     const [metadata, setMetadata] = useState<Record<string, any>>({});
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(25);
-    const [totalPages, setTotalPages] = useState(1);
-    const [hasNext, setHasNext] = useState(false);
-    const [hasPrevious, setHasPrevious] = useState(false);
 
     // Filter state with default filters for allotments, bill-of-entries, and incentive-licenses
-    const getDefaultFilters = () => {
-        if (entityName === 'allotments') {
-            return {
-                type: 'AT',
-                is_boe: 'False',
-                is_allotted: 'all'
-            };
-        }
-        if (entityName === 'bill-of-entries') {
-            return {
-                is_invoice: 'False'
-            };
-        }
-        if (entityName === 'incentive-licenses') {
-            return {
-                sold_status: ''  // Empty string = "All" (shows both sold and unsold)
-            };
-        }
-        return {};
-    };
-
-    const [filterParams, setFilterParams] = useState(getDefaultFilters());
+    const [filterParams, setFilterParams] = useState(() => getDefaultFilters(entityName));
     const backendDefaultsApplied = useRef(false);
-    const pendingRequestRef = useRef(null);
-    const abortControllerRef = useRef(null);
+    const qc = useQueryClient();
 
     // License Balance Modal state
     const [showBalanceModal, setShowBalanceModal] = useState(false);
@@ -146,7 +123,7 @@ export default function MasterList() {
             await api.post(`trades/${linkModalTrade.id}/link-trade/`, { partner_id: partner.id });
             toast.success(`Linked: ${linkModalTrade.invoice_number} ↔ ${partner.invoice_number}`);
             closeLinkModal();
-            fetchData();
+            invalidateList();
         } catch (err) { toast.error(err.response?.data?.error || 'Failed to link trades'); }
     };
 
@@ -195,6 +172,9 @@ export default function MasterList() {
     const [invoiceDraft, setInvoiceDraft] = useState('');
     const [invoiceSaving, setInvoiceSaving] = useState(false);
 
+    // Standalone loading flag for the "Fetch All Products" bulk action (not list loading)
+    const [bulkActionLoading, setBulkActionLoading] = useState(false);
+
     // BOE Merge Modal state
     const [showMergeModal, setShowMergeModal] = useState(false);
     const [mergeBoeTarget, setMergeBoeTarget] = useState(null);
@@ -233,7 +213,7 @@ export default function MasterList() {
             const resp = await boeApi.mergeBOE(mergeBoeTarget.id, mergeBoeSource.id);
             toast.success(resp.message || 'BOE merged successfully');
             closeMergeModal();
-            fetchData(currentPage, pageSize, filterParams);
+            invalidateList();
         } catch (err) {
             toast.error(err.response?.data?.error || 'Failed to merge BOE');
         } finally {
@@ -257,8 +237,8 @@ export default function MasterList() {
             // Dedicated endpoint — accessible to ACCOUNT_ACCESS (and BOE_MANAGER).
             // Does NOT require full BOE edit permission.
             await api.post(`bill-of-entries/${itemId}/update-invoice-no/`, { invoice_no: invoiceDraft.trim() });
-            setData(prev => prev.map(d => d.id === itemId ? { ...d, invoice_no: invoiceDraft.trim() } : d));
             setEditingInvoiceId(null);
+            invalidateList();
         } catch (e) {
             toast.error('Failed to update invoice number');
         } finally {
@@ -269,114 +249,23 @@ export default function MasterList() {
     // Confirmation dialog hook
     const { confirmDelete, confirmDangerousAction, confirmDialog } = useConfirmDialog();
 
-    const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
-        // Abort any pending request and clear its key — the replacement request must always proceed
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            pendingRequestRef.current = null;
-        }
-
-        // Create new AbortController for this request
-        abortControllerRef.current = new AbortController();
-
-        const requestKey = JSON.stringify({page, size, filters, entity: entityName});
-
-        // Mark this request as pending
-        pendingRequestRef.current = requestKey;
-
-        setLoading(true);
-        setError("");
-
-        let aborted = false;
-
-        try {
-            const params = {
-                page,
-                page_size: size,
-                ...filters
-            };
-
-            let response;
-
-            // Use dedicated API service for bill-of-entries
-            if (entityName === 'bill-of-entries') {
-                response = await boeApi.fetchBOEList(params);
-            } else {
-                // Determine API endpoint
-                let apiPath;
-                if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
-                    apiPath = `${entityName}/`;
-                } else if (entityName === 'incentive-licenses') {
-                    apiPath = `incentive-licenses/`;
-                } else {
-                    apiPath = `masters/${entityName}/`;
-                }
-
-                const {data: apiResponse} = await api.get(apiPath, {
-                    params,
-                    signal: abortControllerRef.current.signal
-                });
-                response = apiResponse;
-            }
-
-            setData(response.results || []);
-            setMetadata({
-                list_display: response.list_display || [],
-                form_fields: response.form_fields || [],
-                search_fields: response.search_fields || [],
-                filter_fields: response.filter_fields || [],
-                filter_config: response.filter_config || {},
-                ordering_fields: response.ordering_fields || [],
-                nested_field_defs: response.nested_field_defs || {},
-                nested_list_display: response.nested_list_display || {},
-                field_meta: response.field_meta || {},
-                default_filters: response.default_filters || {},
-                inline_editable: response.inline_editable || []
-            });
-
-            // Pagination
-            setCurrentPage(response.current_page || 1);
-            setTotalPages(response.total_pages || 1);
-            setPageSize(response.page_size || 25);
-            setHasNext(response.has_next || false);
-            setHasPrevious(response.has_previous || false);
-
-        } catch (err) {
-            // Ignore abort errors — they're expected when a new request cancels the previous one.
-            // Mark as aborted so finally doesn't clear loading (the new request is already in flight).
-            if (err.name === 'AbortError' || err.name === 'CanceledError') {
-                aborted = true;
-                return;
-            }
-            const errorMsg = err.response?.data?.detail || "Failed to load data";
-            setError(errorMsg);
-            toast.error(errorMsg);
-        } finally {
-            // Don't stop the loading spinner for aborted requests — the replacement
-            // request has already called setLoading(true) and is still in progress.
-            if (!aborted) {
-                setLoading(false);
-                pendingRequestRef.current = null;
-            }
-        }
-    }, [entityName]);
-
-    // Load data only when entityName changes
+    // ---------------------------------------------------------------------------
+    // Filter initialization — runs once on entity change to resolve the initial
+    // filterParams from URL, session storage, or hardcoded defaults.
+    // The result is stored in state; useQuery below reacts to it automatically.
+    // ---------------------------------------------------------------------------
     useEffect(() => {
         if (!entityName) return;
 
         // Reset flags when entity changes
         backendDefaultsApplied.current = false;
-        pendingRequestRef.current = null;
 
         // Clear filters from other entities to prevent cross-contamination
-        // This ensures each entity starts fresh unless explicitly restoring its own filters
         const allEntities = ['licenses', 'allotments', 'trades', 'bill-of-entries', 'incentive-licenses'];
         allEntities.forEach(entity => {
             if (entity !== entityName) {
                 try {
                     sessionStorage.removeItem(`${entity}ListFilters`);
-                    // Also clear the filter state key used by filterPersistence
                     sessionStorage.removeItem(`filterState_${entity}`);
                 } catch {
                     // Silently handle error
@@ -386,40 +275,29 @@ export default function MasterList() {
 
         // Parse URL query parameters
         const urlParams = new URLSearchParams(location.search);
-        const urlFilters = {};
+        const urlFilters: Record<string, string> = {};
         for (const [key, value] of urlParams.entries()) {
-            // Convert Django-style date filters to UI format
-            // __gte (greater than or equal) -> _from
-            // __lte (less than or equal) -> _to
             if (key.endsWith('__gte')) {
-                const baseField = key.replace('__gte', '');
-                urlFilters[`${baseField}_from`] = value;
+                urlFilters[`${key.replace('__gte', '')}_from`] = value;
             } else if (key.endsWith('__lte')) {
-                const baseField = key.replace('__lte', '');
-                urlFilters[`${baseField}_to`] = value;
+                urlFilters[`${key.replace('__lte', '')}_to`] = value;
             } else {
                 urlFilters[key] = value;
             }
         }
 
-        // Check if URL has filter parameters
         const hasUrlFilters = Object.keys(urlFilters).length > 0;
-
         if (hasUrlFilters) {
-            // Use URL filters (highest priority - from dashboard cards)
             setFilterParams(urlFilters);
             setCurrentPage(1);
+            setPageSize(25);
             backendDefaultsApplied.current = true;
-            fetchData(1, 25, urlFilters);
         } else {
-            // Check if we should restore filters from previous session
             const shouldRestore = shouldRestoreFilters();
             const restored = shouldRestore ? restoreFilterState(entityName) : null;
-            const defaultFilters = getDefaultFilters();
+            const defaultFilters = getDefaultFilters(entityName);
 
             if (restored) {
-                // Merge restored filters with default filters
-                // For incentive-licenses, ensure sold_status is always set (use default if not in restored)
                 const mergedFilters = {
                     ...restored.filters,
                     ...Object.fromEntries(
@@ -430,36 +308,101 @@ export default function MasterList() {
                 setCurrentPage(restored.pagination?.currentPage || 1);
                 setPageSize(restored.pagination?.pageSize || 25);
                 backendDefaultsApplied.current = true;
-                fetchData(restored.pagination?.currentPage || 1, restored.pagination?.pageSize || 25, mergedFilters);
             } else {
-                // Use default filters
-                setCurrentPage(1);
                 setFilterParams(defaultFilters);
+                setCurrentPage(1);
+                setPageSize(25);
                 backendDefaultsApplied.current = true;
-                fetchData(1, 25, defaultFilters);
             }
         }
-
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entityName, location.search]);
 
     // Update filterParams when backend default filters are received (for UI display only)
     useEffect(() => {
-        // Skip if we've already applied backend defaults for this entity
         if (backendDefaultsApplied.current && Object.keys(filterParams).length > 0) return;
-
         const backendDefaults = metadata.default_filters || {};
-        const hardcodedDefaults = getDefaultFilters();
-
-        // Only update UI state if we have backend defaults and no hardcoded defaults
+        const hardcodedDefaults = getDefaultFilters(entityName);
         if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
             setFilterParams(backendDefaults);
+            setCurrentPage(1);
             backendDefaultsApplied.current = true;
-            // Fetch data with the default filters
-            fetchData(1, pageSize, backendDefaults);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [metadata.default_filters]);
+
+    // ---------------------------------------------------------------------------
+    // Main list query — re-runs whenever entity, page, size, or filters change.
+    // TanStack handles request de-duplication and cancellation.
+    // ---------------------------------------------------------------------------
+    const queryParams = useMemo(() => ({
+        page: currentPage,
+        page_size: pageSize,
+        ...filterParams,
+    }), [currentPage, pageSize, filterParams]);
+
+    const {
+        data: listResponse,
+        isLoading: loading,
+        isError: listFailed,
+        error: listError,
+    } = useQuery({
+        queryKey: ['entity-list', entityName, queryParams],
+        queryFn: async ({ signal }) => {
+            if (entityName === 'bill-of-entries') {
+                return boeApi.fetchBOEList(queryParams);
+            }
+            let apiPath: string;
+            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
+                apiPath = `${entityName}/`;
+            } else if (entityName === 'incentive-licenses') {
+                apiPath = `incentive-licenses/`;
+            } else {
+                apiPath = `masters/${entityName}/`;
+            }
+            const { data: apiResponse } = await api.get(apiPath, { params: queryParams, signal });
+            return apiResponse;
+        },
+        enabled: Boolean(entityName),
+        placeholderData: (prev) => prev,
+    });
+
+    // Derive list data and metadata from query result
+    const data = listResponse?.results ?? [];
+    const totalPages = listResponse?.total_pages ?? 1;
+    const hasNext = listResponse?.has_next ?? false;
+    const hasPrevious = listResponse?.has_previous ?? false;
+
+    // Sync metadata from response (needed for filter_fields, list_display, etc.)
+    useEffect(() => {
+        if (!listResponse) return;
+        setMetadata({
+            list_display: listResponse.list_display || [],
+            form_fields: listResponse.form_fields || [],
+            search_fields: listResponse.search_fields || [],
+            filter_fields: listResponse.filter_fields || [],
+            filter_config: listResponse.filter_config || {},
+            ordering_fields: listResponse.ordering_fields || [],
+            nested_field_defs: listResponse.nested_field_defs || {},
+            nested_list_display: listResponse.nested_list_display || {},
+            field_meta: listResponse.field_meta || {},
+            default_filters: listResponse.default_filters || {},
+            inline_editable: listResponse.inline_editable || [],
+        });
+    }, [listResponse]);
+
+    // Surface list load failure to the error banner
+    useEffect(() => {
+        if (listFailed && listError) {
+            const errorMsg = (listError as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Failed to load data";
+            setError(errorMsg);
+            toast.error(errorMsg);
+        }
+    }, [listFailed, listError]);
+
+    // Helper to invalidate the current entity's list — used after mutations
+    const invalidateList = useCallback(() => {
+        qc.invalidateQueries({ queryKey: ['entity-list', entityName] });
+    }, [qc, entityName]);
 
     useEffect(() => {
         if (!linkModalTrade) return;
@@ -470,34 +413,28 @@ export default function MasterList() {
 
     const handleFilterChange = useCallback((filters) => {
         // Convert Django-style date filters back to UI format for state persistence
-        // This ensures date values are preserved when passed back as initialFilters
-        const convertedFilters = {};
+        const convertedFilters: Record<string, string> = {};
         Object.entries(filters).forEach(([key, value]) => {
             if (key.endsWith('__gte')) {
-                const baseField = key.replace('__gte', '');
-                convertedFilters[`${baseField}_from`] = value;
+                convertedFilters[`${key.replace('__gte', '')}_from`] = value as string;
             } else if (key.endsWith('__lte')) {
-                const baseField = key.replace('__lte', '');
-                convertedFilters[`${baseField}_to`] = value;
+                convertedFilters[`${key.replace('__lte', '')}_to`] = value as string;
             } else {
-                convertedFilters[key] = value;
+                convertedFilters[key] = value as string;
             }
         });
-
-        setFilterParams(convertedFilters);
+        // Store the UI-format filters; useQuery will re-run with the raw filters via queryParams
+        setFilterParams(filters); // Use raw API format — queryParams derives from filterParams directly
         setCurrentPage(1);
-        fetchData(1, pageSize, filters); // Send original format to API
-    }, [fetchData, pageSize]);
+    }, []);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
-        fetchData(page, pageSize, filterParams);
     };
 
     const handlePageSizeChange = (size) => {
         setPageSize(size);
         setCurrentPage(1);
-        fetchData(1, size, filterParams);
     };
 
     const handleDelete = async (item) => {
@@ -519,21 +456,25 @@ export default function MasterList() {
                 await api.delete(apiPath);
             }
             toast.success("Record deleted successfully");
-            fetchData(currentPage, pageSize, filterParams);
+            invalidateList();
         } catch (err) {
             toast.error(err.response?.data?.detail || "Failed to delete record");
         }
     };
 
     const handleToggleBoolean = async (item, field, newValue) => {
-        // Optimistic UI update - update local state immediately
-        setData(prevData =>
-            prevData.map(dataItem =>
-                dataItem.id === item.id
-                    ? { ...dataItem, [field]: newValue }
-                    : dataItem
-            )
-        );
+        // Optimistic UI update via query cache
+        const queryKey = ['entity-list', entityName, queryParams];
+        const previous = qc.getQueryData(queryKey);
+        qc.setQueryData(queryKey, (old: typeof listResponse) => {
+            if (!old) return old;
+            return {
+                ...old,
+                results: (old.results || []).map((d: Record<string, unknown>) =>
+                    d.id === item.id ? { ...d, [field]: newValue } : d
+                ),
+            };
+        });
 
         try {
             let apiPath;
@@ -547,19 +488,12 @@ export default function MasterList() {
 
             await api.patch(apiPath, { [field]: newValue });
             toast.success("Field updated successfully");
-            // Refresh data to ensure consistency with backend
-            fetchData(currentPage, pageSize, filterParams);
+            invalidateList();
         } catch (err) {
             // Revert optimistic update on error
-            setData(prevData =>
-                prevData.map(dataItem =>
-                    dataItem.id === item.id
-                        ? { ...dataItem, [field]: !newValue }
-                        : dataItem
-                )
-            );
+            qc.setQueryData(queryKey, previous);
             toast.error(err.response?.data?.detail || `Failed to update ${field}`);
-            throw err; // Re-throw to let component know it failed
+            throw err;
         }
     };
 
@@ -577,7 +511,7 @@ export default function MasterList() {
             await api.patch(apiPath, { [fieldName]: newValue });
             toast.success(`${fieldName} updated successfully`);
             // Refresh data to show updated value
-            fetchData(currentPage, pageSize, filterParams);
+            invalidateList();
         } catch (err) {
             toast.error(err.response?.data?.detail || `Failed to update ${fieldName}`);
             throw err;
@@ -724,26 +658,27 @@ export default function MasterList() {
                             variant="outline"
                             size="sm"
                             title="Update all empty product names in entire database"
+                            disabled={bulkActionLoading}
                             onClick={async () => {
                                 const confirmed = await confirmDangerousAction(
                                     'Bulk Update Product Names',
                                     'This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?'
                                 );
                                 if (!confirmed) return;
-                                setLoading(true); setError("");
+                                setBulkActionLoading(true); setError("");
                                 try {
                                     const response = await api.post(`bill-of-entries/bulk-update-product-names/`);
-                                    setLoading(false);
                                     if (response.data.success) {
                                         toast.success(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
-                                        fetchData(currentPage, pageSize, filterParams);
+                                        invalidateList();
                                     } else {
                                         setError('Failed to update product names');
                                     }
                                 } catch (err) {
-                                    setLoading(false);
                                     setError(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
                                     toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
+                                } finally {
+                                    setBulkActionLoading(false);
                                 }
                             }}
                         >
@@ -882,7 +817,7 @@ export default function MasterList() {
                                                         try {
                                                             const response = await api.post(`bill-of-entries/${item.id}/resolve-dispute/`);
                                                             toast.success(response.data.message || 'Dispute resolved');
-                                                            fetchData(currentPage, pageSize, filterParams);
+                                                            invalidateList();
                                                         } catch (err) {
                                                             toast.error(err.response?.data?.detail || err.response?.data?.message || 'Failed to resolve dispute');
                                                         }
@@ -899,7 +834,7 @@ export default function MasterList() {
                                                         try {
                                                             const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                                             toast.success(response.data.message || 'Product name updated');
-                                                            fetchData(currentPage, pageSize, filterParams);
+                                                            invalidateList();
                                                         } catch (err) {
                                                             toast.error(err.response?.data?.message || 'Failed to update product name');
                                                         }
@@ -966,121 +901,19 @@ export default function MasterList() {
 
                     {/* Allotments Card Layout */}
                     {entityName === 'allotments' && (
-                        loading ? (
-                            <div className="text-center py-5">
-                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted-foreground">Loading Allotments...</div>
-                            </div>
-                        ) : data.length === 0 ? (
-                            <div className="empty-state">
-                                <div className="empty-icon"><Inbox className="size-4" aria-hidden="true" /></div>
-                                <div className="empty-title">No allotments found</div>
-                                <div className="empty-sub">Try adjusting filters or create a new allotment.</div>
-                            </div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—';
-                                    const fmtQty = (val) => val ? Number(val).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—';
-                                    const detailRows = item.allotment_details || [];
-                                    return (
-                                        <EntityCard
-                                            key={item.id}
-                                            accent={item.is_boe ? 'success' : 'primary'}
-                                            title={item.invoice || <span style={{ fontStyle: 'italic', color: 'var(--text-tertiary)', fontWeight: 400 }}>No Invoice</span>}
-                                            headerChips={[
-                                                item.estimated_arrival_date && { icon: 'calendar3', label: item.estimated_arrival_date },
-                                                item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
-                                                item.company_name        && { icon: 'building', label: item.company_name, tone: 'primary' },
-                                            ].filter(Boolean)}
-                                            statusBadges={[
-                                                item.is_boe      && { tone: 'success', label: 'BOE ✓' },
-                                                item.is_approved && { tone: 'info',    label: 'Approved' },
-                                            ].filter(Boolean)}
-                                            summary={[
-                                                { label: 'Req Qty',      value: fmtQty(item.required_quantity) },
-                                                { label: 'Req Value',    value: fmtInr(item.required_value) },
-                                                { label: 'Balanced Qty', value: fmtQty(item.balanced_quantity), tone: (item.balanced_quantity > 0 ? 'success' : undefined) },
-                                            ]}
-                                            actions={[
-                                                canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
-                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/edit`); } },
-                                                canWrite && { icon: 'copy', title: 'Copy', tone: 'info',
-                                                    onClick: async () => {
-                                                        if (!window.confirm(`Create a copy of allotment ${item.invoice || 'this allotment'}?`)) return;
-                                                        try {
-                                                            const r = await api.post(`allotments/${item.id}/copy/`);
-                                                            toast.success('Allotment copied. Opening in edit mode...');
-                                                            saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
-                                                            navigate(`/allotments/${r.data.id}/edit`);
-                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to copy'); }
-                                                    } },
-                                                canWrite && { icon: 'box-arrow-in-down', title: 'Allocate', tone: 'success',
-                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/allocate`); } },
-                                                { icon: 'file-pdf', title: 'Preview PDF', tone: 'warning',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            openPdfPreview(r.data, `${item.invoice_number || item.id}.pdf`);
-                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to generate PDF'); }
-                                                    } },
-                                                { icon: 'download', title: 'Download',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            const a = document.createElement('a');
-                                                            a.href = url;
-                                                            a.download = `Allotment-${item.invoice || item.id}.pdf`;
-                                                            document.body.appendChild(a); a.click(); a.remove();
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
-                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to download PDF'); }
-                                                    } },
-                                                canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => handleDelete(item) },
-                                            ].filter(Boolean)}
-                                            viewOpen={expandedAllotments.has(item.id)}
-                                            onView={() => toggleAllotment(item.id)}
-                                            detailLabel={detailRows.length ? `${detailRows.length} Item${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
-                                            detail={() => (
-                                                <DetailTable
-                                                    columns={[
-                                                        { key: 'license_number',     label: 'License',     bold: true, nowrap: true,
-                                                            render: v => v ? <span style={{ color: 'var(--primary-color)' }}>{v}</span> : '—' },
-                                                        { key: 'serial_number',      label: 'Sl#',         align: 'right', nowrap: true },
-                                                        { key: 'product_description', label: 'Item',       muted: true },
-                                                        { key: 'qty',                 label: 'Qty',        align: 'right', nowrap: true,
-                                                            render: v => fmtQty(v) },
-                                                        { key: 'cif_fc',              label: 'CIF (FC)',   align: 'right', nowrap: true,
-                                                            render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
-                                                        { key: 'cif_inr',             label: 'CIF (INR)',  align: 'right', nowrap: true, bold: true,
-                                                            render: v => fmtInr(v) },
-                                                    ]}
-                                                    rows={detailRows}
-                                                    emptyMessage="No items have been allotted yet."
-                                                />
-                                            )}
-                                        >
-                                            {(item.item_name || item.dfia_list) && (
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-                                                    <div style={{ flex: 1, minWidth: 200 }}>
-                                                        <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Item</div>
-                                                        <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>
-                                                            {item.item_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No item name</span>}
-                                                        </div>
-                                                    </div>
-                                                    {item.dfia_list && (
-                                                        <div style={{ flex: 1, minWidth: 140 }}>
-                                                            <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
-                                                            <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.dfia_list}</div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </EntityCard>
-                                    );
-                                })}
-                            </div>
-                        )
+                        <AllotmentsTable
+                            loading={loading}
+                            data={data}
+                            canWrite={canWrite}
+                            entityName={entityName}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                            expandedAllotments={expandedAllotments}
+                            toggleAllotment={toggleAllotment}
+                        />
                     )}
 
                     {/* Licenses Card Layout */}
@@ -1232,7 +1065,7 @@ export default function MasterList() {
                                                                 const r = await api.post(`license-actions/${item.id}/fetch-ownership/`);
                                                                 const owner = r.data?.current_owner?.name || '—';
                                                                 toast.success(`Ownership updated: ${owner} (${r.data?.transfers_count ?? 0} transfers)`);
-                                                                fetchData(currentPage, pageSize, filterParams);
+                                                                invalidateList();
                                                             } catch (err) {
                                                                 toast.error(err?.response?.data?.error || err?.message || 'Failed to fetch ownership');
                                                             } finally {
@@ -1474,81 +1307,17 @@ export default function MasterList() {
 
                     {/* Incentive Licenses Card Layout */}
                     {entityName === 'incentive-licenses' && (
-                        loading ? (
-                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted-foreground">Loading Incentive Licenses...</div></div>
-                        ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted-foreground"><Inbox className="size-4" aria-hidden="true" /><div className="mt-2">No incentive licenses found</div></div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
-                                    const parseIndianDate = (s) => { if (!s) return null; const p = s.split('-'); return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null; };
-                                    const isExpired = item.license_expiry_date && parseIndianDate(item.license_expiry_date) < new Date();
-                                    const soldStyle = item.sold_status === 'YES' ? { border: 'var(--tb-danger-border)', left: 'var(--tb-danger)', badge: 'var(--tb-danger-soft)', badgeText: 'var(--tb-danger-text)', label: 'Sold' }
-                                        : item.sold_status === 'PARTIAL' ? { border: 'var(--tb-warning-border)', left: 'var(--tb-warning)', badge: 'var(--tb-warning-soft)', badgeText: 'var(--tb-warning-text)', label: 'Partial' }
-                                        : { border: 'var(--tb-success-border)', left: 'var(--tb-success)', badge: 'var(--tb-success-soft)', badgeText: 'var(--tb-success-text)', label: 'Available' };
-                                    return (
-                                        <div key={item.id} style={{ display: 'block', background: 'var(--tb-card-bg)', border: `1px solid ${soldStyle.border}`, borderLeft: `4px solid ${soldStyle.left}`, borderRadius: 'var(--tb-r-md)', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                                            {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid var(--tb-border)', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: '700', fontSize: 16, color: 'var(--tb-brand-active)', marginRight: '4px' }}>{item.license_number || '-'}</span>
-                                                {item.license_type && (
-                                                    <span style={{ fontSize: 12, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>{item.license_type}</span>
-                                                )}
-                                                {item.license_date && (
-                                                    <span className="chip chip-neutral" style={{}}>
-                                                        <Calendar className="size-3" aria-hidden="true" />{item.license_date}
-                                                    </span>
-                                                )}
-                                                {item.license_expiry_date && (
-                                                    <span className={`chip ${isExpired ? 'chip-danger' : 'chip-neutral'}`} style={{}}>
-                                                        <CalendarX className="size-3" aria-hidden="true" />Exp: {item.license_expiry_date}
-                                                    </span>
-                                                )}
-                                                {item.port_name && (
-                                                    <span className="chip chip-info" style={{}}>
-                                                        <MapPin className="size-3" aria-hidden="true" />{item.port_name}
-                                                    </span>
-                                                )}
-                                                {item.exporter_name && (
-                                                    <span className="chip chip-neutral" style={{}}>
-                                                        <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
-                                                    </span>
-                                                )}
-                                                {item.exporter_iec && (
-                                                    <span className="chip chip-warning" style={{}}>
-                                                        <Fingerprint className="size-3" aria-hidden="true" />IEC: {item.exporter_iec}
-                                                    </span>
-                                                )}
-                                                <span style={{ fontSize: 12, color: soldStyle.badgeText, background: soldStyle.badge, padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
-                                                    {soldStyle.label}
-                                                </span>
-                                                {!item.is_active && (
-                                                    <span style={{ fontSize: 11, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 6px', borderRadius: 'var(--tb-r-sm)' }}>Inactive</span>
-                                                )}
-                                            </div>
-
-                                            {/* Row 3: Stats + Actions */}
-                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: 'var(--tb-sunken)', gap: '8px', flexWrap: 'wrap' }}>
-                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-                                                    <div><div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>License Value</div><div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '700' }}>{fmtInr(item.license_value)}</div></div>
-                                                    <div><div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Sold Value</div><div style={{ fontSize: 14, color: 'var(--tb-danger-text)', fontWeight: '600' }}>{fmtInr(item.sold_value)}</div></div>
-                                                    <div><div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Balance</div><div style={{ fontSize: 14, color: item.balance_value > 0 ? 'var(--tb-success)' : 'var(--tb-text-tertiary)', fontWeight: '600' }}>{fmtInr(item.balance_value)}</div></div>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/incentive-licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <Pencil className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <Trash2 className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )
+                        <IncentiveLicensesTable
+                            loading={loading}
+                            data={data}
+                            canWrite={canWrite}
+                            entityName={entityName}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                        />
                     )}
 
                     {/* Use AccordionTable for entities with nested fields (except licenses, allotments, bill-of-entries), regular DataTable for others */}
@@ -1869,7 +1638,7 @@ export default function MasterList() {
                                             const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                             toast.success(response.data.message || 'Product name updated successfully');
                                             // Refresh the list to show updated product name
-                                            fetchData(currentPage, pageSize, filterParams);
+                                            invalidateList();
                                         } catch (err) {
                                             toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
                                         }

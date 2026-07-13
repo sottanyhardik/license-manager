@@ -4,6 +4,17 @@
 from __future__ import annotations
 
 import os
+import sys
+
+# macOS fork-safety: the prefork pool forks worker processes, and on macOS a
+# forked child crashes (SIGSEGV/SIGABRT) the moment it touches an Objective-C /
+# system framework unless this flag is set BEFORE the fork. Set it here (in the
+# worker's main process, before workers fork) so local dev on macOS doesn't
+# segfault. On Linux (production) the variable is meaningless and ignored, so
+# this is a no-op there. If workers still crash on macOS/Python 3.14, run the
+# worker with a non-forking pool: `--pool=solo` (see run-celery-dev.sh).
+if sys.platform == "darwin":
+    os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
 
 from celery import Celery, signals
 from celery.schedules import crontab
@@ -77,6 +88,27 @@ app.conf.beat_schedule = {
         }
     },
 }
+
+# ---------------------------------------------------------------------------
+# Master-Data Service mirror sync (ADR-001, Decision 3) — OFF by default.
+#
+# When MDS is enabled, poll the central service every 5 minutes to refresh the
+# local read-only mirror (the "polling backstop" that self-heals a missed
+# webhook nudge). This is registered ONLY when settings.MDS_ENABLED is true, so
+# with MDS off nothing extra is scheduled and behavior is identical to before.
+# The task itself (mds_client.sync_masters) is safe to call — it no-ops if the
+# client isn't installed — but we still guard here to avoid scheduling a task
+# that would never do useful work.
+# ---------------------------------------------------------------------------
+if getattr(settings, "MDS_ENABLED", False):
+    app.conf.beat_schedule["mds-sync-masters-every-5-min"] = {
+        "task": "mds_client.sync_masters",
+        "schedule": crontab(minute="*/5"),  # every 5 minutes
+        "args": (),
+        "options": {
+            "expires": 300,  # skip a run rather than pile up if a beat is late
+        },
+    }
 
 
 @signals.worker_process_init.connect

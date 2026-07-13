@@ -76,4 +76,5 @@ class BillOfEntryFetchView(FormView):
             except Exception as e:
                 logger.exception("Failed to enqueue fetch_data_to_model for pk=%s: %s", data.pk, e)
 
-        return HttpResponseRedirect(reverse('bill-of-entry-list'))
+        # Legacy template-view URL; redirects to REST list as fallback.
+        return HttpResponseRedirect('/api/bill-of-entries/')

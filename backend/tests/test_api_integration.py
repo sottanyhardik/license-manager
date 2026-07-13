@@ -17,12 +17,12 @@ class APIIntegrationTestBase(APITestCase):
     """Base class for API integration tests with common setup"""
 
     def setUp(self):
-        """Set up test client and create test user"""
+        """Set up test client and create superuser (needed for RBAC-gated endpoints)."""
         self.client = APIClient()
-        self.user = User.objects.create_user(
+        self.user = User.objects.create_superuser(
             username='testuser',
             email='test@example.com',
-            password='testpass123'
+            password='testpass123',
         )
         self.client.force_authenticate(user=self.user)
 

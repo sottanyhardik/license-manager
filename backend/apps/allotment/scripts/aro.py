@@ -39,7 +39,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
 
     logger.info(f"Starting PDF conversion: {os.path.basename(docx_path)}")
     logger.debug(f"DOCX path: {docx_path}, PDF path: {pdf_path}")
-    print(f"[CONVERT] Starting: {os.path.basename(docx_path)}", flush=True)
+    logger.info("[CONVERT] Starting: %s", os.path.basename(docx_path))
 
     # Method 0: Try Microsoft Office on macOS first (using AppleScript)
     try:
@@ -80,8 +80,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                         f.flush()
                 except OSError:
                     pass
-                logger.info(f"✓ Successfully converted with Microsoft Word: {os.path.basename(docx_path)}")
-                print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF (Microsoft Word)")
+                logger.info("Successfully converted with Microsoft Word: %s", os.path.basename(docx_path))
                 return True
             else:
                 logger.warning(f"Microsoft Word conversion failed, trying other methods...")
@@ -111,8 +110,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                     f.flush()
             except OSError:
                 pass
-            logger.info(f"✓ Successfully converted with unoconv: {os.path.basename(docx_path)}")
-            print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF")
+            logger.info("Successfully converted with unoconv: %s", os.path.basename(docx_path))
             return True
         else:
             logger.warning(f"unoconv failed (exit code: {result.returncode}), trying LibreOffice...")
@@ -143,9 +141,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                 break
 
         if not soffice_path:
-            msg = f"✗ LibreOffice (soffice) not found in PATH"
-            logger.error(msg)
-            print(msg)
+            logger.error("LibreOffice (soffice) not found in PATH")
             return False
 
         logger.debug(f"Running soffice command from: {soffice_path}")
@@ -192,9 +188,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                     f.flush()
             except OSError:
                 pass
-            msg = f"✓ Successfully converted {os.path.basename(docx_path)} to PDF"
-            logger.info(msg)
-            print(msg)
+            logger.info("Successfully converted %s to PDF", os.path.basename(docx_path))
             return True
         else:
             try:
@@ -206,29 +200,21 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                     f.flush()
             except OSError:
                 pass
-            msg = f"✗ PDF not created: {os.path.basename(docx_path)}"
-            logger.error(msg)
-            print(msg)
+            logger.error("PDF not created: %s", os.path.basename(docx_path))
             if result.stdout:
-                print(f"  stdout: {result.stdout}")
+                logger.debug("soffice stdout: %s", result.stdout)
             if result.stderr:
-                print(f"  stderr: {result.stderr}")
+                logger.debug("soffice stderr: %s", result.stderr)
             return False
 
     except subprocess.TimeoutExpired:
-        msg = f"✗ Conversion timeout for {os.path.basename(docx_path)}"
-        logger.error(msg)
-        print(msg)
+        logger.error("Conversion timeout for %s", os.path.basename(docx_path))
         return False
     except FileNotFoundError:
-        msg = f"✗ LibreOffice (soffice) not found in PATH"
-        logger.error(msg)
-        print(msg)
+        logger.error("LibreOffice (soffice) not found in PATH")
         return False
     except Exception as e:
-        msg = f"✗ Conversion error for {os.path.basename(docx_path)}: {type(e).__name__}: {str(e)}"
-        logger.exception(msg)
-        print(msg)
+        logger.exception("Conversion error for %s: %s: %s", os.path.basename(docx_path), type(e).__name__, str(e))
         return False
     finally:
         shutil.rmtree(profile_dir, ignore_errors=True)
@@ -328,14 +314,15 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
                 generated_files.append(pdf_p)
             else:
                 conversion_failed_count += 1
-                print(f"Warning: Could not convert {os.path.basename(docx_p)} to PDF. Keeping DOCX file.")
+                logger.warning("Could not convert %s to PDF. Keeping DOCX file.", os.path.basename(docx_p))
                 generated_files.append(docx_p)  # keep DOCX in output
 
     if conversion_failed_count > 0:
-        print(f"\nWarning: {conversion_failed_count} file(s) could not be converted to PDF.")
-        print("To enable PDF conversion, install one of the following:")
-        print("  macOS: Microsoft Office (preferred) or LibreOffice (brew install --cask libreoffice)")
-        print("  Ubuntu/Debian: sudo apt-get install libreoffice")
-        print("  RHEL/CentOS: sudo yum install libreoffice")
+        logger.warning(
+            "%d file(s) could not be converted to PDF. "
+            "To enable PDF conversion, install Microsoft Office (macOS), "
+            "LibreOffice (brew install --cask libreoffice / apt-get install libreoffice / yum install libreoffice).",
+            conversion_failed_count,
+        )
 
     return generated_files

@@ -4,6 +4,7 @@ import math
 from typing import Any, Dict, Optional, Type
 from datetime import datetime
 
+from django.conf import settings
 from django.db import models
 from django.db.models import F
 from django.http import HttpResponse
@@ -101,21 +102,70 @@ class MasterViewSet(viewsets.ModelViewSet):
     serializer_class = None
     queryset = None
 
+    def _serializer_model(self, serializer):
+        """The model class a serializer writes (for the MDS gate check)."""
+        meta = getattr(serializer, "Meta", None)
+        return getattr(meta, "model", None)
+
+    def _mds_active(self, model) -> bool:
+        """Whether the MDS write cutover should intercept writes for ``model``.
+
+        Single interception point for all 17 masters (ADR-001 Phase 6). Gated on
+        settings.MDS_ENABLED AND the model being one of the configured MDS
+        masters. When either is false, the local-only paths below run unchanged.
+        Import is lazy so a project without mds_client is never affected."""
+        if not model or not getattr(settings, "MDS_ENABLED", False):
+            return False
+        try:
+            from apps.core.mds_write import mds_active_for
+        except Exception:  # noqa: BLE001 - mds_client not installed -> local behavior
+            return False
+        return mds_active_for(model)
+
     def perform_create(self, serializer):
-        """Attach created_by when possible."""
+        """Attach created_by when possible; route to MDS when the cutover is on."""
         user = getattr(self.request, "user", None)
+        extra = {}
         if user and getattr(user, "is_authenticated", False):
-            serializer.save(created_by=user)
-        else:
-            serializer.save()
+            extra["created_by"] = user
+
+        model = self._serializer_model(serializer)
+        if self._mds_active(model):
+            # MDS is the write authority: persist -> push to MDS -> reflect back
+            # into the local mirror. A 503 (MDS down) rolls back the local write.
+            from apps.core.mds_write import save_through_mds
+            save_through_mds(serializer, extra_save_kwargs=extra)
+            return
+
+        # Local-only (default): unchanged behavior.
+        serializer.save(**extra)
 
     def perform_update(self, serializer):
-        """Attach modified_by when possible."""
+        """Attach modified_by when possible; route to MDS when the cutover is on."""
         user = getattr(self.request, "user", None)
+        extra = {}
         if user and getattr(user, "is_authenticated", False):
-            serializer.save(modified_by=user)
-        else:
-            serializer.save()
+            extra["modified_by"] = user
+
+        model = self._serializer_model(serializer)
+        if self._mds_active(model):
+            from apps.core.mds_write import save_through_mds
+            save_through_mds(serializer, extra_save_kwargs=extra)
+            return
+
+        serializer.save(**extra)
+
+    def perform_destroy(self, instance):
+        """Delete locally by default; when the cutover is on, delete on MDS first
+        (the write authority) and then the local mirror. MDS down -> 503 and the
+        local row is left intact (no half-delete)."""
+        if self._mds_active(type(instance)):
+            from apps.core.mds_write import delete_through_mds
+            delete_through_mds(instance)
+            return
+
+        # Local-only (default): unchanged DRF behavior.
+        instance.delete()
 
     # --- Factory Method ---
     @classmethod
@@ -336,17 +386,23 @@ class MasterViewSet(viewsets.ModelViewSet):
                         value = params.get(field_name)
                         array_values = params.getlist(f"{field_name}[]")  # Handle array format like company[]=29
 
+                        # When value_field is set (e.g. "code"), filter via the related field lookup
+                        # instead of the FK PK, so ?scheme_code=DFIA → scheme_code__code=DFIA.
+                        value_field = config.get("value_field")
+                        lookup_key = f"{field_name}__{value_field}" if value_field else field_name
+                        lookup_key_in = f"{field_name}__{value_field}__in" if value_field else f"{field_name}__in"
+
                         if array_values:
                             # Array format from frontend (e.g., company[]=29)
-                            q_objects.append(Q(**{f"{field_name}__in": array_values}))
+                            q_objects.append(Q(**{lookup_key_in: array_values}))
                         elif value:
                             # Check if value contains comma (multi-select)
                             if ',' in str(value):
                                 values = [v.strip() for v in str(value).split(",") if v.strip()]
-                                q_objects.append(Q(**{f"{field_name}__in": values}))
+                                q_objects.append(Q(**{lookup_key_in: values}))
                             else:
                                 # Single value exact match
-                                q_objects.append(Q(**{field_name: value}))
+                                q_objects.append(Q(**{lookup_key: value}))
 
                     elif filter_type in ("choice", "button_group"):
                         # Choice/button_group field filter - supports multi-select (comma-separated values or array format)
@@ -423,6 +479,13 @@ class MasterViewSet(viewsets.ModelViewSet):
                                                dj_models.DecimalField, dj_models.BooleanField,
                                                dj_models.DateField, dj_models.DateTimeField)):
                             try:
+                                # Convert string boolean values before building Q objects
+                                if isinstance(field, dj_models.BooleanField):
+                                    str_val = str(param_value).lower().strip()
+                                    if str_val in ('true', '1', 'yes'):
+                                        param_value = True
+                                    elif str_val in ('false', '0', 'no'):
+                                        param_value = False
                                 # ALWAYS support multi-select (comma-separated values) for ForeignKey and numeric fields
                                 if ',' in str(param_value):
                                     values = [v.strip() for v in str(param_value).split(",") if v.strip()]

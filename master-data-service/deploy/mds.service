@@ -1,0 +1,68 @@
+# systemd unit for the Master-Data Service (ADR-001).
+#
+# Install:
+#   sudo cp master-data-service/deploy/mds.service /etc/systemd/system/mds.service
+#   sudo mkdir -p /etc/mds && sudo cp master-data-service/.env.production.example /etc/mds/mds.env
+#   sudo chown root:mds /etc/mds/mds.env && sudo chmod 640 /etc/mds/mds.env   # secrets: not world-readable
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mds.service
+#   sudo systemctl status mds.service
+#
+# Adjust User/Group/WorkingDirectory/venv path to match the target host.
+# This unit assumes a dedicated service user `mds` and a checkout at
+# /home/mds/master-data-service with a venv at .venv.
+
+[Unit]
+Description=Master-Data Service (gunicorn / ADR-001)
+Documentation=https://github.com/ (repo)/docs/operations/mds-deployment.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=notify
+User=mds
+Group=mds
+WorkingDirectory=/home/mds/master-data-service
+
+# Secrets and config live ONLY here, mode 640 root:mds. Never in the unit.
+EnvironmentFile=/etc/mds/mds.env
+
+# gunicorn reads deploy/gunicorn.conf.py (workers, bind, timeouts, logs).
+ExecStart=/home/mds/master-data-service/.venv/bin/gunicorn \
+    --config /home/mds/master-data-service/deploy/gunicorn.conf.py \
+    mds.wsgi:application
+
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=30
+
+# Restart policy — recover from crashes, but back off so a crash-loop does not
+# hammer Postgres.
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# If GUNICORN_BIND is a unix socket under /run/mds, systemd creates & owns it.
+RuntimeDirectory=mds
+RuntimeDirectoryMode=0750
+
+# --- Least-privilege / hardening ------------------------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+# The app must be able to write logs and (until media moves to S3) media.
+ReadWritePaths=/home/mds/master-data-service/logs /home/mds/master-data-service/media
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictNamespaces=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

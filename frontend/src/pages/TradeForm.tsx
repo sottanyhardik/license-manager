@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
@@ -132,8 +133,13 @@ export default function TradeForm() {
     const formDataRef = useRef(formData);
     formDataRef.current = formData;
 
-    const fetchTrade = useCallback(async () => {
-        try {
+    // ---------------------------------------------------------------------------
+    // Fetch existing trade (edit mode) with useQuery
+    // ---------------------------------------------------------------------------
+
+    const { data: tradeData, isError: tradeLoadFailed } = useQuery({
+        queryKey: ['trades', id],
+        queryFn: async () => {
             const { data } = await api.get(`trades/${id}/`);
 
             // Parse date fields using centralized date parser
@@ -143,9 +149,9 @@ export default function TradeForm() {
 
             // Parse payment dates
             if (data.payments) {
-                data.payments = data.payments.map(payment => ({
+                data.payments = data.payments.map((payment: Record<string, unknown>) => ({
                     ...payment,
-                    date: payment.date ? parseDate(payment.date) || new Date() : new Date()
+                    date: payment.date ? parseDate(payment.date as string) || new Date() : new Date(),
                 }));
             }
 
@@ -155,25 +161,21 @@ export default function TradeForm() {
             }
 
             // For edit mode: if incentive_lines exist and have incentive_license IDs,
-            // fetch the full license objects so HybridSelect can display them
-            // Gracefully handle deleted/missing licenses
+            // fetch the full license objects so HybridSelect can display them.
+            // Gracefully handle deleted/missing licenses.
             if (data.incentive_lines && data.incentive_lines.length > 0) {
                 const enrichedLines = await Promise.all(
-                    data.incentive_lines.map(async (line) => {
+                    data.incentive_lines.map(async (line: Record<string, unknown>) => {
                         if (line.incentive_license && typeof line.incentive_license === 'number') {
                             try {
                                 const { data: licenseData } = await api.get(`incentive-licenses/${line.incentive_license}/`);
-                                return {
-                                    ...line,
-                                    incentive_license: licenseData.id // Keep as ID for HybridSelect
-                                };
-                            } catch (err) {
-                                // License was deleted or doesn't exist
+                                return { ...line, incentive_license: licenseData.id };
+                            } catch {
                                 console.warn(`Incentive license ${line.incentive_license} not found (may have been deleted)`);
                                 return {
                                     ...line,
-                                    incentive_license: null, // Clear the invalid reference
-                                    _deletedLicenseNote: `Previously linked to license ID ${line.incentive_license} (deleted)`
+                                    incentive_license: null,
+                                    _deletedLicenseNote: `Previously linked to license ID ${line.incentive_license} (deleted)`,
                                 };
                             }
                         }
@@ -183,30 +185,40 @@ export default function TradeForm() {
                 data.incentive_lines = enrichedLines;
             }
 
-            setFormData(data);
-            setInitialFormData(JSON.parse(JSON.stringify(data))); // Deep clone for initial snapshot
+            return data;
+        },
+        enabled: isEdit && Boolean(id),
+        // Don't re-fetch automatically — the user is editing the form
+        staleTime: Infinity,
+        gcTime: 0,
+    });
 
-            // Set billing mode from first line if exists
-            if (data.lines && data.lines.length > 0) {
-                setBillingMode(data.lines[0].mode);
+    // Seed local form state once trade data arrives (edit mode only)
+    useEffect(() => {
+        if (tradeData) {
+            setFormData(tradeData);
+            setInitialFormData(JSON.parse(JSON.stringify(tradeData)));
+            if (tradeData.lines && tradeData.lines.length > 0) {
+                setBillingMode(tradeData.lines[0].mode);
             }
-
-            // Mark initial load as complete to enable BOE auto-prefill
             isInitialLoadRef.current = false;
-        } catch (err) {
+        }
+    }, [tradeData]);
+
+    // Surface trade load failure
+    useEffect(() => {
+        if (tradeLoadFailed) {
             setError("Failed to load trade");
         }
-    }, [id]);
+    }, [tradeLoadFailed]);
 
-    // Fetch existing trade if editing
+    // For create mode, mark initial load complete immediately
     useEffect(() => {
-        if (isEdit) {
-            fetchTrade();
-        } else {
+        if (!isEdit) {
             isInitialLoadRef.current = false;
             setInitialFormData(JSON.parse(JSON.stringify(formDataRef.current)));
         }
-    }, [isEdit, id, fetchTrade]);
+    }, [isEdit]);
 
     // Auto-prefill from BOE when BOE is selected (only if lines are empty)
     useEffect(() => {

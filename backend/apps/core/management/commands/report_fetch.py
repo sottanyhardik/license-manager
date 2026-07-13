@@ -1,7 +1,11 @@
+import logging
+
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 
 from apps.license.models import LicenseDetailsModel
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -376,7 +380,7 @@ def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen
                     }
                     found_other.append(dict_data)
             except Exception as e:
-                print(e)
+                logger.exception("Error processing DFIA %s", dfia)
                 dict_data = {
                     'DFIA': "'" + str(dfia),
                 }

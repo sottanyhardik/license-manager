@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 from datetime import datetime
@@ -7,8 +8,10 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
 
-from data_script.fetch_ownership import fetch_scrip_ownership
+from apps.license.services.dgft_ownership import fetch_scrip_ownership
 from apps.license.models import LicenseDetailsModel
+
+logger = logging.getLogger(__name__)
 
 # === Config ===
 # Use the correct server domain (default, can be overridden by --server option)
@@ -242,8 +245,8 @@ def authenticate(server_url=None):
     for attempt_url in urls_to_try:
         auth_url = f"{attempt_url}/api/auth/login/"
         try:
-            print(f"   Connecting to: {auth_url}")
-            print(f"   Username: {SERVER_USERNAME}")
+            logger.info("Connecting to: %s", auth_url)
+            logger.info("Username: %s", SERVER_USERNAME)
 
             response = requests.post(
                 auth_url,
@@ -254,28 +257,26 @@ def authenticate(server_url=None):
             if response.status_code == 200:
                 data = response.json()
                 auth_token = data.get('access')
-                print(f"✅ Authenticated successfully (via {attempt_url})")
+                logger.info("Authenticated successfully (via %s)", attempt_url)
                 return True, attempt_url
             else:
-                print(f"❌ Authentication failed: {response.status_code}")
-                print(f"   Response: {response.text}")
+                logger.warning("Authentication failed: %s", response.status_code)
+                logger.warning("Response: %s", response.text)
                 return False, attempt_url
 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            print(f"⚠️  Could not reach {attempt_url}: {e}")
+            logger.warning("Could not reach %s: %s", attempt_url, e)
             if attempt_url != urls_to_try[-1]:
-                print(f"   Trying fallback IP...")
+                logger.info("Trying fallback IP...")
             continue
         except requests.exceptions.SSLError as e:
-            print(f"❌ SSL Error on {attempt_url}: {e}")
+            logger.warning("SSL Error on %s: %s", attempt_url, e)
             continue
         except Exception as e:
-            print(f"❌ Authentication error: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Authentication error on %s", attempt_url)
             return False, attempt_url
 
-    print(f"❌ All connection attempts failed for {server_url}")
+    logger.warning("All connection attempts failed for %s", server_url)
     return False, server_url
 
 
@@ -301,33 +302,33 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
             # Find or create company for original owner
             try:
                 exporter_company = CompanyModel.objects.get(iec=original_iec)
-                print(f"   📋 Found exporter: {exporter_company.name} ({original_iec})")
+                logger.info("Found exporter: %s (%s)", exporter_company.name, original_iec)
             except CompanyModel.DoesNotExist:
                 exporter_company = CompanyModel.objects.create(
                     iec=original_iec,
                     name=original_name or f"Company {original_iec}"
                 )
-                print(f"   ➕ Created exporter: {exporter_company.name} ({original_iec})")
+                logger.info("Created exporter: %s (%s)", exporter_company.name, original_iec)
 
             # Update license with exporter
             dfia.exporter = exporter_company
             dfia.save(update_fields=['exporter'])
-            print(f"   ✅ Updated license exporter to {original_iec}")
+            logger.info("Updated license exporter to %s", original_iec)
         elif not dfia.exporter and fetched_iec:
             # Use the IEC that was used to fetch as fallback
             try:
                 exporter_company = CompanyModel.objects.get(iec=fetched_iec)
-                print(f"   📋 Found exporter: {exporter_company.name} ({fetched_iec})")
+                logger.info("Found exporter: %s (%s)", exporter_company.name, fetched_iec)
             except CompanyModel.DoesNotExist:
                 exporter_company = CompanyModel.objects.create(
                     iec=fetched_iec,
                     name=f"Company {fetched_iec}"
                 )
-                print(f"   ➕ Created exporter: {exporter_company.name} ({fetched_iec})")
+                logger.info("Created exporter: %s (%s)", exporter_company.name, fetched_iec)
 
             dfia.exporter = exporter_company
             dfia.save(update_fields=['exporter'])
-            print(f"   ✅ Updated license exporter to {fetched_iec}")
+            logger.info("Updated license exporter to %s", fetched_iec)
 
         # Update license expiry date from validity field if available
         validity_date = original_owner.get("validity")
@@ -343,11 +344,11 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
                     parsed_validity = None
 
                 if parsed_validity and parsed_validity != dfia.license_expiry_date:
-                    print(f"   📅 Updating expiry date: {dfia.license_expiry_date} → {parsed_validity}")
+                    logger.info("Updating expiry date: %s -> %s", dfia.license_expiry_date, parsed_validity)
                     dfia.license_expiry_date = parsed_validity
                     dfia.save(update_fields=['license_expiry_date'])
             except (ValueError, AttributeError) as e:
-                print(f"   ⚠️  Could not parse validity date '{validity_date}': {e}")
+                logger.warning("Could not parse validity date '%s': %s", validity_date, e)
 
         # current_owner / file_transfer_status live on LicenseOwnership (OneToOne).
         # Sub-row is auto-created by post_save signal on LicenseDetailsModel; get_or_create
@@ -456,7 +457,7 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
 
         return True
     except Exception as e:
-        print(f"   ⚠️  Failed to save locally: {e}")
+        logger.exception("Failed to save ownership locally for %s", dfia)
         return False
 
 
@@ -475,7 +476,7 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None,
         iec = dfia.exporter.iec
     elif default_iec:
         iec = default_iec
-        print(f"   ℹ️  Using default IEC to fetch: {iec}")
+        logger.info("Using default IEC to fetch: %s", iec)
     else:
         # If no IEC is available at all, skip but don't fail
         return (False, None, "No IEC available (no exporter, no default IEC)")
@@ -516,7 +517,7 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None,
 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             if attempt < max_retries - 1:
-                print(f"   ⚠️  Connection error, retrying ({attempt + 1}/{max_retries})...")
+                logger.warning("Connection error, retrying (%d/%d)...", attempt + 1, max_retries)
                 time.sleep(5)
                 continue
             return (False, None, f"Network error after {max_retries} attempts: {str(e)}")
@@ -563,7 +564,7 @@ def bulk_sync_to_server(payloads, server_url):
         elif res.status_code == 429:
             import time
             for wait in [10, 30, 60]:
-                print(f"⏳ Rate limited (429). Retrying in {wait}s...")
+                logger.warning("Rate limited (429). Retrying in %ds...", wait)
                 time.sleep(wait)
                 res = requests.post(
                     f"{server_url}/api/license-actions/bulk-update-license-transfer/",

@@ -1,4 +1,5 @@
 import { Check, CheckCircle2, FileText, Paperclip, QrCode, RefreshCw, TriangleAlert, Wand2 } from "lucide-react";
+import { openDocument } from "../../utils/documentDownload";
 
 interface LicenseParsePanelProps {
     licensePdfFile: File | null;
@@ -82,10 +83,8 @@ export default function LicenseParsePanel({
                                             <span style={{ color: 'var(--text-primary)', minWidth: 0 }}>
                                                 Saved Licence Copy:&nbsp;
                                                 <a
-                                                    href={existingLicenseCopy.file}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    style={{ fontWeight: 600, wordBreak: 'break-all' }}
+                                                    onClick={() => openDocument(existingLicenseCopy.file, existingLicenseCopyName)}
+                                                    style={{ fontWeight: 600, wordBreak: 'break-all', cursor: 'pointer' }}
                                                 >
                                                     {existingLicenseCopyName}
                                                 </a>

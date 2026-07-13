@@ -1,6 +1,8 @@
 # core/urls.py
-from django.urls import path
+from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+
+app_name = "masters"
 
 from .views.activity_log import ActivityLogViewSet
 from .views.views import (CompanyViewSet, PortViewSet, HSCodeViewSet, HeadSIONNormsViewSet, SionNormClassViewSet,
@@ -39,4 +41,6 @@ urlpatterns = [
     path('throttle-reset/', ThrottleResetView.as_view(), name='throttle-reset'),
     path('throttle-stats/', ThrottleStatsView.as_view(), name='throttle-stats'),
     path('throttle-health/', ThrottleHealthView.as_view(), name='throttle-health'),
-] + router.urls
+    # Router URLs must come LAST
+    path("", include(router.urls)),
+]

@@ -1,340 +1,258 @@
 """
-Pytest fixtures for License Manager testing
-Provides fake database setup and common test utilities
+Pytest fixtures for License Manager testing.
+Uses the actual model names from the current schema.
 """
+import uuid
 import pytest
 from datetime import datetime, timedelta
 from decimal import Decimal
-from faker import Faker
+
 from django.contrib.auth import get_user_model
-from django.test import Client
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-# Import models
-from apps.core.models import Company, Port, ExchangeRate
-from apps.license.models import License, LicenseImportItem
-from apps.trade.models import Trade, TradeLine
-from apps.bill_of_entry.models import BillOfEntry, BillOfEntryItemDetail
-from apps.allotment.models import Allotment
+# Core models
+from apps.core.models import CompanyModel, PortModel, ExchangeRateModel
+
+# License models
+from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+
+# Domain models
+from apps.trade.models import LicenseTrade, LicenseTradeLine
+from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.allotment.models import AllotmentModel
 
 User = get_user_model()
-fake = Faker()
 
 
-@pytest.fixture(scope='session')
-def django_db_setup(django_db_setup, django_db_blocker):
-    """
-    Setup test database with initial configuration
-    """
-    with django_db_blocker.unblock():
-        pass  # Database migrations handled automatically
+def _unique_iec():
+    """Return a unique 10-char IEC-style code."""
+    return str(uuid.uuid4().int)[:10]
 
+
+def _unique_license_number():
+    return "03" + str(uuid.uuid4().int)[:8]
+
+
+# ---------------------------------------------------------------------------
+# Auth fixtures
+# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def api_client():
-    """
-    DRF API Client for testing endpoints
-    """
     return APIClient()
 
 
 @pytest.fixture
+def test_user(db):
+    return User.objects.create_user(
+        username="testuser",
+        email="test@example.com",
+        password="testpass123!",
+        is_superuser=True,  # superuser sees everything in the API
+    )
+
+
+@pytest.fixture
 def authenticated_client(api_client, test_user):
-    """
-    Authenticated API client with JWT token
-    """
     refresh = RefreshToken.for_user(test_user)
-    api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(refresh.access_token)}")
     return api_client
 
 
 @pytest.fixture
-def test_user(db):
-    """
-    Create a test user
-    """
-    user = User.objects.create_user(
-        username='testuser',
-        email='test@example.com',
-        password='testpass123'
-    )
-    return user
-
-
-@pytest.fixture
 def admin_user(db):
-    """
-    Create an admin user
-    """
-    user = User.objects.create_superuser(
-        username='admin',
-        email='admin@example.com',
-        password='adminpass123'
+    return User.objects.create_superuser(
+        username="admin",
+        email="admin@example.com",
+        password="adminpass123!",
     )
-    return user
 
+
+# ---------------------------------------------------------------------------
+# Master-data fixtures
+# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def test_company(db):
-    """
-    Create a test company
-    """
-    return Company.objects.create(
-        name=fake.company(),
-        pan=fake.bothify(text='??#######?').upper(),
-        gst_number=fake.bothify(text='##???#####?###?').upper(),
-        address_line_1=fake.street_address(),
-        address_line_2=fake.city(),
-        phone=fake.phone_number()[:15],
-        email=fake.company_email()
+    return CompanyModel.objects.create(
+        iec=_unique_iec(),
+        name="Test Exporter Ltd",
+        address_line_1="123 Test Street",
+        address_line_2="Mumbai",
     )
 
 
 @pytest.fixture
 def test_company_2(db):
-    """
-    Create a second test company for trade testing
-    """
-    return Company.objects.create(
-        name=fake.company(),
-        pan=fake.bothify(text='??#######?').upper(),
-        gst_number=fake.bothify(text='##???#####?###?').upper(),
-        address_line_1=fake.street_address(),
-        address_line_2=fake.city(),
-        phone=fake.phone_number()[:15],
-        email=fake.company_email()
+    return CompanyModel.objects.create(
+        iec=_unique_iec(),
+        name="Test Importer Ltd",
+        address_line_1="456 Import Road",
+        address_line_2="Delhi",
     )
 
 
 @pytest.fixture
 def test_port(db):
-    """
-    Create a test port
-    """
-    return Port.objects.create(
-        code=fake.bothify(text='IN???#').upper(),
-        name=fake.city() + ' Port',
-        country='India'
+    return PortModel.objects.create(
+        code="INMUN1",
+        name="Mumbai Port",
     )
 
 
 @pytest.fixture
 def test_exchange_rate(db):
-    """
-    Create a test exchange rate
-    """
-    return ExchangeRate.objects.create(
+    return ExchangeRateModel.objects.create(
         date=datetime.now().date(),
-        usd=Decimal('84.50'),
-        eur=Decimal('91.20'),
-        gbp=Decimal('106.80')
+        usd=Decimal("84.5000"),
+        euro=Decimal("91.2000"),
+        pound_sterling=Decimal("106.8000"),
+        chinese_yuan=Decimal("11.6000"),
     )
 
+
+# ---------------------------------------------------------------------------
+# License fixture — creates 3 import items (tests assert on count)
+# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def test_license(db, test_company, test_port):
-    """
-    Create a test DFIA license with items
-    """
-    license_number = fake.bothify(text='03########').upper()
-    license = License.objects.create(
-        license_number=license_number,
+    license_obj = LicenseDetailsModel.objects.create(
+        license_number=_unique_license_number(),
         license_date=datetime.now().date(),
-        exporter_name=test_company.name,
-        exporter_iec=fake.bothify(text='##########'),
+        license_expiry_date=datetime.now().date() + timedelta(days=365),
+        exporter=test_company,
         port=test_port,
-        scheme_code='DFIA',
-        notification='NOTIFICATION'
     )
-    
-    # Create license items
     for i in range(1, 4):
-        LicenseImportItem.objects.create(
-            license=license,
-            sr_number=i,
-            description=f'Test Item {i}',
-            hs_code='49070000',
-            quantity=Decimal('1000.00'),
-            uqc='KGS',
-            total_quantity=Decimal('1000.00'),
-            fob_value_inr=Decimal('100000.00'),
-            balance_quantity=Decimal('1000.00')
+        LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=i,
+            description=f"Test Import Item {i}",
+            quantity=Decimal("1000.000"),
+            available_quantity=Decimal("1000.000"),
+            cif_fc=Decimal("10000.00"),
+            cif_inr=Decimal("845000.00"),
         )
-    
-    return license
+    return license_obj
 
+
+# ---------------------------------------------------------------------------
+# Bill of Entry fixture
+# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def test_bill_of_entry(db, test_company, test_port, test_license):
-    """
-    Create a test Bill of Entry
-    """
-    boe = BillOfEntry.objects.create(
-        bill_of_entry_number=fake.bothify(text='#######'),
+    boe = BillOfEntryModel.objects.create(
+        company=test_company,
+        bill_of_entry_number=str(uuid.uuid4().int)[:7],
         bill_of_entry_date=datetime.now().date(),
-        importer_name=test_company.name,
         port=test_port,
-        exchange_rate=Decimal('84.50'),
-        total_duty=Decimal('50000.00'),
-        invoice_no=None,  # Not linked to trade yet
-        license=test_license
+        exchange_rate=Decimal("84.50"),
+        product_name="Test Product",
     )
-    
-    # Create BOE items
-    for item in test_license.import_items.all():
-        BillOfEntryItemDetail.objects.create(
+    # Attach RowDetails against each import item
+    for item in test_license.import_license.all():
+        RowDetails.objects.create(
             bill_of_entry=boe,
-            sr_number=item.sr_number,
-            item_description=item.description,
-            hs_code=item.hs_code,
-            qty=Decimal('100.00'),
-            cif_fc=Decimal('1000.00'),
-            cif_inr=Decimal('84500.00'),
-            uqc='KGS'
+            sr_number=item,
+            cif_inr=Decimal("84500.00"),
+            cif_fc=Decimal("1000.00"),
+            qty=Decimal("100.000"),
         )
-    
     return boe
 
 
+# ---------------------------------------------------------------------------
+# Trade fixture
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
 def test_trade(db, test_company, test_company_2, test_bill_of_entry):
-    """
-    Create a test trade (purchase)
-    """
-    trade = Trade.objects.create(
-        direction='PURCHASE',
-        license_type='DFIA',
+    trade = LicenseTrade.objects.create(
+        direction="PURCHASE",
         from_company=test_company,
         to_company=test_company_2,
         boe=test_bill_of_entry,
-        invoice_number=fake.bothify(text='INV-####'),
+        invoice_number=f"INV-TEST-{uuid.uuid4().int % 9999:04d}",
         invoice_date=datetime.now().date(),
-        remarks='Test trade'
+        remarks="Test trade",
     )
-    
-    # Create trade lines
-    for i, item in enumerate(test_bill_of_entry.item_details.all()[:2], 1):
-        TradeLine.objects.create(
+    # Create one trade line per BOE RowDetails
+    for row in test_bill_of_entry.item_details.all():
+        LicenseTradeLine.objects.create(
             trade=trade,
-            sr_number=test_bill_of_entry.license.import_items.filter(sr_number=item.sr_number).first(),
-            description=item.item_description,
-            hsn_code=item.hs_code,
-            mode='CIF_INR',
-            qty_kg=item.qty,
-            cif_inr=item.cif_inr,
-            pct=Decimal('7.9'),
-            amount_inr=item.cif_inr * Decimal('0.079')
+            sr_number=row.sr_number,
+            description=row.sr_number.description or "Test Item",
+            hsn_code="49070000",
+            mode="CIF_INR",
+            qty_kg=row.qty,
+            cif_inr=row.cif_inr,
         )
-    
-    # Update BOE invoice reference
+    # Link BOE to the trade invoice
     test_bill_of_entry.invoice_no = trade.invoice_number
-    test_bill_of_entry.save()
-    
+    test_bill_of_entry.save(update_fields=["invoice_no"])
     return trade
 
 
+# ---------------------------------------------------------------------------
+# Allotment fixture
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
 def test_allotment(db, test_company, test_port):
-    """
-    Create a test allotment
-    """
-    return Allotment.objects.create(
+    return AllotmentModel.objects.create(
         company=test_company,
-        type='AT',
+        type="AT",
         port=test_port,
-        item_name='Crude Palm Oil',
-        required_quantity=Decimal('1000.00'),
-        cif_inr=Decimal('100000.00'),
-        exchange_rate=Decimal('84.50'),
-        cif_fc=Decimal('1183.43'),
-        unit_value_per_unit=Decimal('1.183'),
-        estimated_arrival_date=datetime.now().date() + timedelta(days=30),
+        item_name="Crude Palm Oil",
+        required_quantity=Decimal("1000.00"),
+        cif_inr=Decimal("100000.00"),
+        exchange_rate=Decimal("84.500000"),
+        cif_fc=Decimal("1183.43"),
         is_approved=False,
-        is_boe=False
+        is_boe=False,
     )
 
 
+# ---------------------------------------------------------------------------
+# POST-body fixtures (dicts for API create calls)
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
-def fake_license_data():
-    """
-    Generate fake license data for POST requests
-    """
+def fake_allotment_data(test_company, test_port):
     return {
-        'license_number': fake.bothify(text='03########'),
-        'license_date': datetime.now().date().isoformat(),
-        'exporter_name': fake.company(),
-        'exporter_iec': fake.bothify(text='##########'),
-        'scheme_code': 'DFIA',
-        'notification': 'NOTIFICATION'
+        "company": test_company.id,
+        "type": "AT",
+        "port": test_port.id,
+        "item_name": "Crude Palm Oil",
+        "required_quantity": "1000.00",
+        "cif_inr": "100000.00",
+        "exchange_rate": "84.500000",
+        "cif_fc": "1183.43",
+        "is_approved": False,
+        "is_boe": False,
     }
 
 
 @pytest.fixture
 def fake_trade_data(test_company, test_company_2):
-    """
-    Generate fake trade data for POST requests
-    """
     return {
-        'direction': 'PURCHASE',
-        'license_type': 'DFIA',
-        'from_company': test_company.id,
-        'to_company': test_company_2.id,
-        'invoice_number': fake.bothify(text='INV-####'),
-        'invoice_date': datetime.now().date().isoformat(),
-        'remarks': 'Test trade',
-        'lines': [
+        "direction": "PURCHASE",
+        "from_company": test_company.id,
+        "to_company": test_company_2.id,
+        "invoice_number": f"INV-{uuid.uuid4().int % 9999:04d}",
+        "invoice_date": datetime.now().date().isoformat(),
+        "remarks": "Test trade",
+        "lines": [
             {
-                'description': 'Test Item',
-                'hsn_code': '49070000',
-                'mode': 'CIF_INR',
-                'qty_kg': 100.0,
-                'cif_inr': 10000.0,
-                'pct': 7.9,
-                'amount_inr': 790.0
+                "description": "Test Item",
+                "hsn_code": "49070000",
+                "mode": "CIF_INR",
+                "qty_kg": "100.0000",
+                "cif_inr": "10000.00",
             }
         ],
-        'payments': []
+        "payments": [],
     }
-
-
-@pytest.fixture
-def fake_allotment_data(test_company, test_port):
-    """
-    Generate fake allotment data for POST requests
-    """
-    return {
-        'company': test_company.id,
-        'type': 'AT',
-        'port': test_port.id,
-        'item_name': 'Crude Palm Oil',
-        'required_quantity': 1000.0,
-        'cif_inr': 100000.0,
-        'exchange_rate': 84.50,
-        'cif_fc': 1183.43,
-        'unit_value_per_unit': 1.183,
-        'is_approved': False,
-        'is_boe': False
-    }
-
-
-# Utility fixtures
-@pytest.fixture
-def clear_database(db):
-    """
-    Clear all data from database tables
-    """
-    from django.core.management import call_command
-    call_command('flush', '--no-input')
-
-
-@pytest.fixture
-def load_test_fixtures(db):
-    """
-    Load test fixtures from JSON files if they exist
-    """
-    from django.core.management import call_command
-    try:
-        call_command('loaddata', 'test_fixtures.json')
-    except Exception:
-        pass  # Fixtures file doesn't exist yet

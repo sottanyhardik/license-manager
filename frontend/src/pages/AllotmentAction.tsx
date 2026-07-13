@@ -1,7 +1,7 @@
-import {useEffect, useState, useCallback, useRef} from "react";
+import {useEffect, useState, useMemo} from "react";
 import {useParams, useNavigate, useLocation} from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import Select from "react-select";
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import ConditionBadge from "../components/ConditionBadge";
@@ -12,24 +12,36 @@ import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
 import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
 
+interface AvailableItem {
+    id: number;
+    license_id?: number;
+    license?: number;
+    license_number: string;
+    serial_number: string | number;
+    condition_type?: string;
+    hs_code_label?: string;
+    notification_number?: string;
+    license_expiry_date?: string;
+    description: string;
+    exporter_name?: string;
+    items_detail?: Array<{ name: string }>;
+    available_quantity: string;
+    balance_cif_fc: string;
+}
+
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
     const {id: paramId} = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+    const qc = useQueryClient();
 
     // Use prop ID if provided (for modal), otherwise use URL param (for page)
     const id = propId || paramId;
 
-    const [allotment, setAllotment] = useState(null);
-    const [availableItems, setAvailableItems] = useState([]);
     const [allocationData, setAllocationData] = useState({});
-    const [initialLoading, setInitialLoading] = useState(true);
-    const [tableLoading, setTableLoading] = useState(false);
-    const [saving, setSaving] = useState({});
     // When an allot is rejected for exceeding the utilization plan, we stash the
     // item here so the planning panel can open and retry the allot after editing.
     const [planModal, setPlanModal] = useState(null);
-    const [search] = useState("");
     const [filters, setFilters] = useState({
         description: "",
         exporter: "",
@@ -51,30 +63,100 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         expiry_date_to: ""
     });
     const [isFirstLoad, setIsFirstLoad] = useState(true);
-    const [notificationOptions, setNotificationOptions] = useState([]);
-    const [availableItemNames, setAvailableItemNames] = useState([]);
-    const [pagination, setPagination] = useState({
-        currentPage: 1,
-        pageSize: 20,
-        totalItems: 0,
-        totalPages: 0
-    });
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 20;
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
-    const [deletingItems, setDeletingItems] = useState({});
-    const [initialAllocationData, setInitialAllocationData] = useState({});
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
     // Enable browser back button support with filter preservation
     useBackButton('allotments', !isModal);
 
+    // ---------------------------------------------------------------------------
+    // Queries
+    // ---------------------------------------------------------------------------
+
+    // Notification options — quasi-static, no need to re-fetch per session
+    const { data: rawNotificationOptions = [] } = useQuery({
+        queryKey: ['allotments-notification-options'],
+        queryFn: () =>
+            api.get('masters/notification-numbers/', { params: { page_size: 200, ordering: 'code' } })
+               .then(r => (r.data?.results ?? r.data ?? []).map(({ code, label }) => ({
+                   value: code,
+                   display_name: label ? `${code} — ${label}` : code,
+               }))),
+        staleTime: Infinity,
+    });
+    const notificationOptions = rawNotificationOptions;
+
+    // Available item names — quasi-static per session
+    const { data: rawItemNames = [] } = useQuery({
+        queryKey: ['allotments-item-names'],
+        queryFn: () =>
+            api.get('item-report/available-items/').then(r =>
+                (r.data || []).map((item: { id: unknown; name: string }) => ({ value: item.id, label: item.name }))
+            ),
+        staleTime: Infinity,
+    });
+    const availableItemNames = rawItemNames;
+
+    // Allotment header info (details, progress, allotted items)
+    const {
+        data: allotment,
+        isError: allotmentFailed,
+    } = useQuery({
+        queryKey: ['allotments', id, 'info'],
+        queryFn: () => api.get(`allotments/${id}/`).then(r => r.data),
+        enabled: Boolean(id),
+    });
+
+    // Set description filter from allotment item_name on first load
+    useEffect(() => {
+        if (isFirstLoad && allotment?.item_name) {
+            setFilters(prev => ({ ...prev, description: allotment.item_name }));
+            setIsFirstLoad(false);
+        }
+    }, [allotment, isFirstLoad]);
+
+    // Surface allotment load failure into the error banner
+    useEffect(() => {
+        if (allotmentFailed) {
+            setError("Failed to load allotment info");
+        }
+    }, [allotmentFailed]);
+
+    // Build API params from current filter state (skip empty values)
+    const apiParams = useMemo(() => {
+        const params: Record<string, string | number> = { page: currentPage, page_size: pageSize };
+        Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
+        return params;
+    }, [filters, currentPage, pageSize]);
+
+    // Available licenses list — re-fetches when filters or page changes,
+    // but only after the first-load description filter has been applied.
+    const {
+        data: availableLicensesData,
+        isLoading: initialLoading,
+        isFetching: tableLoading,
+    } = useQuery({
+        queryKey: ['allotments', id, 'available-licenses', apiParams],
+        queryFn: () => api.get(`allotment-actions/${id}/available-licenses/`, { params: apiParams }).then(r => r.data),
+        enabled: Boolean(id) && !isFirstLoad,
+        placeholderData: (prev) => prev,
+    });
+
+    const availableItems: AvailableItem[] = availableLicensesData?.available_items ?? availableLicensesData?.results ?? [];
+    const totalItems: number = availableLicensesData?.count ?? 0;
+    const totalPages: number = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0;
+
     // Track unsaved changes
     useEffect(() => {
-        if (Object.keys(initialAllocationData).length > 0) {
-            const hasChanges = JSON.stringify(allocationData) !== JSON.stringify(initialAllocationData);
-            setHasUnsavedChanges(hasChanges);
+        if (Object.keys(allocationData).length > 0) {
+            setHasUnsavedChanges(true);
+        } else {
+            setHasUnsavedChanges(false);
         }
-    }, [allocationData, initialAllocationData]);
+    }, [allocationData]);
 
     // Warn user before leaving page with unsaved changes
     useEffect(() => {
@@ -88,129 +170,83 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [hasUnsavedChanges]);
 
-    // Refs for state fetchData reads but should not be reactive on
-    const isFirstFetchRef = useRef(true);
-    const initialAllocationDataRef = useRef(initialAllocationData);
-    initialAllocationDataRef.current = initialAllocationData;
-    const pageSizeRef = useRef(pagination.pageSize);
-    pageSizeRef.current = pagination.pageSize;
+    // ---------------------------------------------------------------------------
+    // Mutations
+    // ---------------------------------------------------------------------------
 
-    const fetchNotificationOptions = useCallback(async () => {
-        try {
-            const {data} = await api.get('masters/notification-numbers/', {
-                params: {page_size: 200, ordering: 'code'},
-            });
-            const results = data?.results ?? data ?? [];
-            setNotificationOptions(
-                results.map(({code, label}) => ({
-                    value: code,
-                    display_name: label ? `${code} — ${label}` : code,
-                }))
-            );
-        } catch (err) {
-            // Silently fail for notification options
-        }
-    }, []);
+    const invalidateAllotment = () => {
+        qc.invalidateQueries({ queryKey: ['allotments', id] });
+    };
 
-    const fetchAvailableItemNames = useCallback(async () => {
-        try {
-            const {data} = await api.get('item-report/available-items/');
-            const items = data || [];
-            setAvailableItemNames(items.map(item => ({value: item.id, label: item.name})));
-        } catch (err) {
-            // Silently fail for item names
-        }
-    }, []);
-
-    const fetchAllotmentInfo = useCallback(async () => {
-        try {
-            const {data} = await api.get(`allotments/${id}/`);
-            setAllotment(data);
-        } catch (err) {
-            setError(err.response?.data?.detail || "Failed to load allotment info");
-        }
-    }, [id]);
-
-    const fetchData = useCallback(async (page = 1) => {
-        if (isFirstFetchRef.current) {
-            setInitialLoading(true);
-        } else {
-            setTableLoading(true);
-        }
-        setError("");
-        try {
-            const params = {
-                search,
-                page,
-                page_size: pageSizeRef.current
-            };
-            Object.keys(filters).forEach(key => {
-                if (filters[key]) {
-                    params[key] = filters[key];
+    const allocateMutation = useMutation({
+        mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) =>
+            api.post(`allotment-actions/${id}/allocate-items/`, {
+                allocations: [{
+                    item_id: payload.item.id,
+                    qty: payload.allocation.qty,
+                    cif_fc: payload.allocation.cif_fc,
+                }],
+            }).then(r => r.data),
+        onSuccess: (data, { item, allocation }) => {
+            if (data.errors && data.errors.length > 0) {
+                const firstErr = data.errors[0];
+                if (firstErr.plan_exceeded) {
+                    setPlanModal({ error: firstErr, item });
+                    return;
                 }
-            });
-
-            const {data} = await api.get(`allotment-actions/${id}/available-licenses/`, {
-                params
-            });
-            setAllotment(data.allotment);
-            setAvailableItems(data.available_items || data.results || []);
-
-            if (Object.keys(initialAllocationDataRef.current).length === 0) {
-                setInitialAllocationData({});
+                const errorMsg = `Error: ${firstErr.error}`;
+                setError(errorMsg);
+                toast.error(errorMsg);
+                return;
             }
 
-            if (data.count !== undefined) {
-                setPagination(prev => ({
-                    ...prev,
-                    totalItems: data.count,
-                    totalPages: Math.ceil(data.count / prev.pageSize)
-                }));
+            const successMsg = `Successfully allocated ${allocation.qty} from ${item.license_number}`;
+            setSuccess(successMsg);
+            toast.success(successMsg);
+
+            // Clear this item's allocation from local draft state
+            setAllocationData(prev => {
+                const next = { ...prev };
+                delete next[item.id];
+                return next;
+            });
+
+            // Invalidate so allotment header re-fetches updated balances + available list
+            invalidateAllotment();
+
+            // Scroll to transfer letter if balance is now exactly 0
+            if (data.allotment) {
+                const requiredQty = parseInt(data.allotment.required_quantity || 0);
+                const allotedQty = parseInt(data.allotment.alloted_quantity || 0);
+                if (requiredQty > 0 && (requiredQty - allotedQty) === 0) {
+                    setTimeout(() => {
+                        document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 800);
+                }
             }
-            isFirstFetchRef.current = false;
-        } catch (err) {
-            setError(err.response?.data?.detail || "Failed to load data");
-        } finally {
-            setInitialLoading(false);
-            setTableLoading(false);
-        }
-    }, [id, search, filters]);
+        },
+        onError: (err: unknown) => {
+            const errorMsg = (err as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to allocate item";
+            setError(errorMsg);
+            toast.error(errorMsg);
+        },
+    });
 
-    useEffect(() => {
-        fetchNotificationOptions();
-        fetchAvailableItemNames();
-        fetchAllotmentInfo();
-    }, [fetchNotificationOptions, fetchAvailableItemNames, fetchAllotmentInfo]);
-
-    // Set description from allotment item_name on first load
-    useEffect(() => {
-        if (isFirstLoad && allotment?.item_name) {
-            setFilters(prev => ({...prev, description: allotment.item_name}));
-            setIsFirstLoad(false);
-        }
-    }, [allotment, isFirstLoad]);
-
-    const fetchDataRef = useRef(fetchData);
-    fetchDataRef.current = fetchData;
-
-    useEffect(() => {
-        if (isFirstLoad && !allotment?.item_name) {
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setPagination(prev => ({...prev, currentPage: 1}));
-            fetchDataRef.current(1);
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [id, search, filters, isFirstLoad, allotment?.item_name]);
-
-    useEffect(() => {
-        if (isFirstLoad && !allotment?.item_name) {
-            return;
-        }
-        fetchDataRef.current(pagination.currentPage);
-    }, [pagination.currentPage, isFirstLoad, allotment?.item_name]);
+    const deleteAllocationMutation = useMutation({
+        mutationFn: (allotmentItemId: number) =>
+            api.delete(`allotment-actions/${id}/delete-item/${allotmentItemId}/`).then(r => r.data),
+        onSuccess: (data) => {
+            const successMsg = data.message || "Successfully removed allocation";
+            setSuccess(successMsg);
+            toast.success(successMsg);
+            invalidateAllotment();
+        },
+        onError: (err: unknown) => {
+            const errorMsg = (err as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to delete allocation";
+            setError(errorMsg);
+            toast.error(errorMsg);
+        },
+    });
 
     // Scroll to transfer letter section if navigated from list
     useEffect(() => {
@@ -220,6 +256,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             }, 500);
         }
     }, [location.state, allotment]);
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filters]);
 
     const calculateMaxAllocation = (item) => {
         if (!allotment?.unit_value_per_unit) return { qty: 0, value: 0 };
@@ -234,8 +275,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         // Floor to integer — backend's calculate_available_quantity() rounds DOWN
         // to whole units, so any fractional part of the stored available_quantity
         // would be rejected on submit.
-        const availableQty = Math.floor(parseFloat(item.available_quantity || 0));
-        const availableCifFc = parseFloat(item.balance_cif_fc || 0);
+        const availableQty = Math.floor(parseFloat(item.available_quantity || "0"));
+        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
 
         // Max quantity is the minimum of balanced quantity and available quantity
         let maxQty = Math.floor(Math.min(balancedQty, availableQty));
@@ -284,9 +325,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
         const allottedValue = parseFloat(allotment.allotted_value || 0);
         const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableCifFc = parseFloat(item.balance_cif_fc || 0);
+        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
         // Floor: backend rounds available_quantity DOWN to whole units, so we must too.
-        const availableQty = Math.floor(parseFloat(item.available_quantity || 0));
+        const availableQty = Math.floor(parseFloat(item.available_quantity || "0"));
 
         // Show warning if user tries to exceed limits
         if (inputQty > balancedQty) {
@@ -337,7 +378,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
         const allottedValue = parseFloat(allotment.allotted_value || 0);
         const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableCifFc = parseFloat(item.balance_cif_fc || 0);
+        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
 
         // Constrain to balanced value with buffer
         if (inputValue > balancedValueWithBuffer) {
@@ -391,152 +432,25 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         });
     };
 
-    const handleConfirmAllot = async (item) => {
+    const handleConfirmAllot = (item) => {
         const allocation = allocationData[item.id];
         if (!allocation || parseFloat(allocation.qty) <= 0) {
             toast.error("Please enter a valid quantity");
             setError("Please enter a valid quantity");
             return;
         }
-
-        setSaving({...saving, [item.id]: true});
         setError("");
         setSuccess("");
-
-        try {
-            const {data} = await api.post(`allotment-actions/${id}/allocate-items/`, {
-                allocations: [{
-                    item_id: item.id,
-                    qty: allocation.qty,
-                    cif_fc: allocation.cif_fc
-                }]
-            });
-
-            if (data.errors && data.errors.length > 0) {
-                const firstErr = data.errors[0];
-                // Plan cap hit → open the modify-plan modal instead of just erroring.
-                // After the user raises the plan, we re-run this same allot for the item.
-                if (firstErr.plan_exceeded) {
-                    setPlanModal({ error: firstErr, item });
-                    setSaving({...saving, [item.id]: false});
-                    return;
-                }
-                const errorMsg = `Error: ${firstErr.error}`;
-                setError(errorMsg);
-                toast.error(errorMsg);
-            } else {
-                const successMsg = `Successfully allocated ${allocation.qty} from ${item.license_number}`;
-                setSuccess(successMsg);
-                toast.success(successMsg);
-
-                // Clear this item's allocation
-                const newAllocationData = {...allocationData};
-                delete newAllocationData[item.id];
-                setAllocationData(newAllocationData);
-                setInitialAllocationData(JSON.parse(JSON.stringify(newAllocationData))); // Update initial state after save
-
-                // Update allotment data (for balance quantity/value display)
-                if (data.allotment) {
-                    setAllotment(data.allotment);
-                }
-
-                // Update all items from the same license
-                const allocatedValue = parseFloat(allocation.cif_fc);
-                const licenseNumber = item.license_number;
-
-                setAvailableItems(prevItems => {
-                    // First, update all items from the same license
-                    const updatedItems = prevItems.map(i => {
-                        // Only update items from the same license
-                        if (i.license_number === licenseNumber) {
-                            // For the allocated item, also update quantity
-                            if (i.id === item.id) {
-                                const allocatedQty = parseFloat(allocation.qty);
-                                const itemAvailableQty = parseFloat(i.available_quantity);
-                                const newAvailableQty = itemAvailableQty - allocatedQty;
-
-                                // If fully allocated, mark for removal
-                                if (newAvailableQty <= 0) {
-                                    return null; // Will be filtered out
-                                }
-
-                                // Update both quantity and CIF FC (shared license balance)
-                                const itemAvailableValue = parseFloat(i.balance_cif_fc);
-                                const newAvailableValue = itemAvailableValue - allocatedValue;
-
-                                return {
-                                    ...i,
-                                    available_quantity: newAvailableQty.toFixed(3),
-                                    balance_cif_fc: Math.max(0, newAvailableValue).toFixed(2)
-                                };
-                            } else {
-                                // For other items in same license, only update CIF FC (shared balance)
-                                const itemAvailableValue = parseFloat(i.balance_cif_fc);
-                                const newAvailableValue = itemAvailableValue - allocatedValue;
-
-                                return {
-                                    ...i,
-                                    balance_cif_fc: Math.max(0, newAvailableValue).toFixed(2)
-                                };
-                            }
-                        }
-                        return i;
-                    });
-
-                    // Filter out null entries (fully allocated items)
-                    return updatedItems.filter(i => i !== null);
-                });
-
-                // ONLY scroll to transfer letter section if balance quantity is exactly 0
-                if (data.allotment) {
-                    const requiredQty = parseInt(data.allotment.required_quantity || 0);
-                    const allotedQty = parseInt(data.allotment.alloted_quantity || 0);
-                    const balanceQty = requiredQty - allotedQty;
-
-                    // Strict check: balance must be EXACTLY 0 (not negative, not positive)
-                    if (balanceQty === 0 && requiredQty > 0) {
-                        // Balance is complete, scroll to transfer letter section
-                        setTimeout(() => {
-                            const element = document.getElementById('transfer-letter-section');
-                            if (element) {
-                                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }
-                        }, 800);
-                    }
-                }
-            }
-        } catch (err) {
-            const errorMsg = err.response?.data?.error || "Failed to allocate item";
-            setError(errorMsg);
-            toast.error(errorMsg);
-        } finally{
-            setSaving({...saving, [item.id]: false});
-        }
+        allocateMutation.mutate({ item, allocation });
     };
 
-    const handleDeleteAllotment = async (allotmentItemId) => {
+    const handleDeleteAllotment = (allotmentItemId) => {
         if (!window.confirm("Are you sure you want to remove this allocation?")) {
             return;
         }
-
-        setDeletingItems({...deletingItems, [allotmentItemId]: true});
         setError("");
         setSuccess("");
-
-        try {
-            const {data} = await api.delete(`allotment-actions/${id}/delete-item/${allotmentItemId}/`);
-            const successMsg = data.message || "Successfully removed allocation";
-            setSuccess(successMsg);
-            toast.success(successMsg);
-            // Refresh data immediately to update available quantities and allotted items
-            fetchData(pagination.currentPage);
-        } catch (err) {
-            const errorMsg = err.response?.data?.error || "Failed to delete allocation";
-            setError(errorMsg);
-            toast.error(errorMsg);
-        } finally{
-            setDeletingItems({...deletingItems, [allotmentItemId]: false});
-        }
+        deleteAllocationMutation.mutate(allotmentItemId);
     };
 
     if (initialLoading) return (
@@ -863,10 +777,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <button
                                                 className="flex size-7 items-center justify-center rounded border border-destructive/30 text-destructive/70 hover:bg-destructive/10 hover:border-destructive cursor-pointer transition-colors"
                                                 onClick={() => handleDeleteAllotment(detail.id)}
-                                                disabled={deletingItems[detail.id]}
+                                                disabled={deleteAllocationMutation.isPending && deleteAllocationMutation.variables === detail.id}
                                                 title="Remove this allocation"
                                             >
-                                                {deletingItems[detail.id] ? (
+                                                {deleteAllocationMutation.isPending && deleteAllocationMutation.variables === detail.id ? (
                                                     <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                                 ) : (
                                                     <Trash2 className="size-4" aria-hidden="true" />
@@ -913,8 +827,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     <div className="flex items-center gap-2">
                         <ListChecks className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
                         <span className="text-sm font-bold tracking-tight text-foreground">Available License Items</span>
-                        {pagination.totalItems > 0 && (
-                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand)' }}>{pagination.totalItems} items</span>
+                        {totalItems > 0 && (
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand)' }}>{totalItems} items</span>
                         )}
                     </div>
                 </div>
@@ -947,8 +861,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         {availableItems.map((item) => {
                             const maxAllocation = calculateMaxAllocation(item);
                             const currentAllocation = allocationData[item.id];
-                            const qty = parseFloat(item.available_quantity || 0);
-                            const cifFc = parseFloat(item.balance_cif_fc || 0);
+                            const qty = parseFloat(item.available_quantity || "0");
+                            const cifFc = parseFloat(item.balance_cif_fc || "0");
                             const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
                             const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
 
@@ -1128,9 +1042,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                     cursor: isReady ? 'pointer' : 'not-allowed',
                                                 }}
                                                 onClick={() => handleConfirmAllot(item)}
-                                                disabled={!isReady || saving[item.id]}
+                                                disabled={!isReady || (allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id)}
                                             >
-                                                {saving[item.id] ? (
+                                                {allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id ? (
                                                     <>
                                                         <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-1" aria-hidden="true" />
                                                         Saving…
@@ -1165,67 +1079,67 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     )}
 
                     {/* Pagination */}
-                    {pagination.totalPages > 1 && (
+                    {totalPages > 1 && (
                         <div className="flex justify-between items-center mt-3 pt-3" style={{ borderTop: '1px solid var(--tb-border)' }}>
                             <div className="text-muted" style={{ fontSize: 14.5 }}>
-                                Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1} to {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)} of {pagination.totalItems} items
+                                Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} items
                             </div>
                             <nav>
                                 <ul className="pagination mb-0">
-                                    <li className={`page-item ${pagination.currentPage === 1 ? 'disabled' : ''}`}>
+                                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                                         <button
                                             className="page-link"
                                             style={{
                                                 borderRadius: '6px 0 0 6px',
                                                 fontWeight: '500'
                                             }}
-                                            onClick={() => setPagination(prev => ({...prev, currentPage: prev.currentPage - 1}))}
-                                            disabled={pagination.currentPage === 1}
+                                            onClick={() => setCurrentPage(prev => prev - 1)}
+                                            disabled={currentPage === 1}
                                         >
                                             Previous
                                         </button>
                                     </li>
-                                    {[...Array(pagination.totalPages)].map((_, idx) => {
+                                    {[...Array(totalPages)].map((_, idx) => {
                                         const pageNum = idx + 1;
                                         // Show first, last, current, and pages around current
                                         if (
                                             pageNum === 1 ||
-                                            pageNum === pagination.totalPages ||
-                                            (pageNum >= pagination.currentPage - 2 && pageNum <= pagination.currentPage + 2)
+                                            pageNum === totalPages ||
+                                            (pageNum >= currentPage - 2 && pageNum <= currentPage + 2)
                                         ) {
                                             return (
-                                                <li key={pageNum} className={`page-item ${pagination.currentPage === pageNum ? 'active' : ''}`}>
+                                                <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
                                                     <button
                                                         className="page-link"
                                                         style={{
-                                                            background: pagination.currentPage === pageNum ? 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))' : 'white',
-                                                            border: pagination.currentPage === pageNum ? 'none' : '1px solid var(--tb-border)',
-                                                            color: pagination.currentPage === pageNum ? 'white' : 'var(--primary-color)',
+                                                            background: currentPage === pageNum ? 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))' : 'white',
+                                                            border: currentPage === pageNum ? 'none' : '1px solid var(--tb-border)',
+                                                            color: currentPage === pageNum ? 'white' : 'var(--primary-color)',
                                                             fontWeight: '500'
                                                         }}
-                                                        onClick={() => setPagination(prev => ({...prev, currentPage: pageNum}))}
+                                                        onClick={() => setCurrentPage(pageNum)}
                                                     >
                                                         {pageNum}
                                                     </button>
                                                 </li>
                                             );
                                         } else if (
-                                            pageNum === pagination.currentPage - 3 ||
-                                            pageNum === pagination.currentPage + 3
+                                            pageNum === currentPage - 3 ||
+                                            pageNum === currentPage + 3
                                         ) {
                                             return <li key={pageNum} className="page-item disabled"><span className="page-link">...</span></li>;
                                         }
                                         return null;
                                     })}
-                                    <li className={`page-item ${pagination.currentPage === pagination.totalPages ? 'disabled' : ''}`}>
+                                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
                                         <button
                                             className="page-link"
                                             style={{
                                                 borderRadius: '0 6px 6px 0',
                                                 fontWeight: '500'
                                             }}
-                                            onClick={() => setPagination(prev => ({...prev, currentPage: prev.currentPage + 1}))}
-                                            disabled={pagination.currentPage === pagination.totalPages}
+                                            onClick={() => setCurrentPage(prev => prev + 1)}
+                                            disabled={currentPage === totalPages}
                                         >
                                             Next
                                         </button>

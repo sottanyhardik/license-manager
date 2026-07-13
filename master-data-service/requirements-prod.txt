@@ -1,0 +1,11 @@
+# Master-Data Service — PRODUCTION runtime dependencies.
+# Base runtime pins (Django/DRF/psycopg) come from requirements.txt.
+-r requirements.txt
+
+# WSGI server (see deploy/gunicorn.conf.py + deploy/mds.service).
+gunicorn==23.0.0
+
+# Serve Django admin static files from the app process without a separate
+# static server. Wired into MIDDLEWARE only when DEBUG=False and whitenoise
+# is importable (mds/settings.py), so dev without it still boots.
+whitenoise==6.12.0

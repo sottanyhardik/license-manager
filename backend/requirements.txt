@@ -2,6 +2,7 @@ Django==6.0.4
 djangorestframework==3.17.1
 djangorestframework-simplejwt==5.5.1
 django-filter==25.2
+drf-spectacular==0.30.0
 django-cors-headers==4.9.0
 django-extensions==4.1
 django-redis==6.0.0
@@ -11,7 +12,6 @@ redis==7.4.0
 python-dotenv==1.2.2
 openpyxl==3.1.5
 reportlab==4.4.10
-num2words==0.5.14
 pypdf>=6.0.0
 Pillow==12.2.0
 # OCR + QR-decode fallback for scanned licence PDFs.
@@ -27,3 +27,9 @@ docxtpl==0.20.2
 # (called from apps.license.models.get_glass_formers).
 # 2.1+ has prebuilt wheels for Python 3.14.
 numpy>=2.1,<3
+
+# Master-Data Service client (ADR-001) — local package in this repo.
+# Only needed when MDS_ENABLED=true. Install with:
+#   pip install -e ../mds-client
+# (Left as a comment so default installs don't require the local path.)
+# mds-client

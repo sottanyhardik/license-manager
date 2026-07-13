@@ -277,7 +277,12 @@ export default function LicenseLedgerDetail() {
 
                     const totalDebit = txns.reduce((s, t) => s + (t.debit_amount || 0), 0);
                     const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
-                    const companyPL = txns.filter(t => t.type === 'SALE').reduce((s, t) => s + (t.profit_loss || 0), 0);
+                    // Bottom-line P/L for the party = all sales (credits) minus all
+                    // purchases/costs (debits). This subtracts the FULL purchase cost
+                    // (incl. the still-unsold balance), unlike the per-row realized
+                    // gain (sale − cost of only the CIF sold), so it reconciles to
+                    // Credit − Debit.
+                    const companyPL = totalCredit - totalDebit;
 
                     return (
                         <div key={company.company_id ?? ci} style={{

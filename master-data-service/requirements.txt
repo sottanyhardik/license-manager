@@ -1,0 +1,9 @@
+# Master-Data Service — runtime dependencies
+# Pinned to match the consuming projects' stack (Django 6 / DRF 3.17 / psycopg 3).
+Django==6.0.4
+djangorestframework==3.17.1
+psycopg==3.3.3
+
+# Object storage for media (Decision 5) — wired in a later phase:
+# django-storages==1.14.4
+# boto3==1.35.0

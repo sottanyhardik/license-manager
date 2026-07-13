@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+
+# Test / tooling
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+
+# Env / IDE
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+
+# Local sqlite (test settings use in-memory, but just in case)
+*.sqlite3

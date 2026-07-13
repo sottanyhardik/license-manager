@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mds-client"
+version = "0.1.0"
+description = "Django client for the central Master-Data Service (ADR-001): REST writes, a local read-only mirror kept fresh by delta pulls + the change feed, and graceful degradation."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "License Manager Platform Team" }]
+keywords = ["django", "master-data", "mds", "sync", "mirror"]
+dependencies = [
+    "Django>=6.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+# Celery is optional: the sync/write path works without it; `tasks.py` guards
+# the import so `sync_masters` only registers when Celery is installed.
+celery = ["celery>=5.3"]
+test = [
+    "responses>=0.24",
+    "pytest>=8.0",
+    "pytest-django>=4.8",
+]
+
+[tool.setuptools]
+# Explicit package list — do not auto-discover the top-level `tests/` package.
+packages = [
+    "mds_client",
+    "mds_client.management",
+    "mds_client.management.commands",
+]
+
+[tool.setuptools.package-data]
+mds_client = ["py.typed"]

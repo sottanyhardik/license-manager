@@ -317,7 +317,8 @@ class AllotmentItems(AuditModel):
 
     @cached_property
     def get_delete_url(self) -> str:
-        return f"{reverse('allotment-item-delete', kwargs={'pk': self.pk})}?allotment_id={self.allotment_id}"
+        # Legacy template-view URL; this property is unused by the SPA — returns REST path instead.
+        return f"/api/allotments/{self.allotment_id}/items/{self.pk}/"
 
 
 # -----------------------------

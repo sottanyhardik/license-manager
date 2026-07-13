@@ -1,5 +1,5 @@
 import axios from "axios";
-import React, {createContext, useCallback, useEffect, useRef, useState} from "react";
+import React, {createContext, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import api from "../api/axios";
 import type { AuthContextValue, AuthUser, LoginResponse } from "../types";
 
@@ -156,44 +156,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loadUser();
     }, []);
 
-    const loginSuccess = (data: LoginResponse) => {
+    const loginSuccess = useCallback((data: LoginResponse) => {
         localStorage.setItem("access", data.access);
         localStorage.setItem("refresh", data.refresh);
         localStorage.setItem("user", JSON.stringify(data.user));
         setUser(data.user);
         setLoading(false);
-    };
+    }, []);
 
     // ── Role helpers ──────────────────────────────────────────────────────────
     // These read from the `roles` array that the /me endpoint now returns.
     // Superusers bypass all role checks — check isSuperAdmin() first when gating.
+    // useCallback-stabilized (deps: user) so the context value below stays
+    // referentially stable across renders where user hasn't changed.
 
-    const isSuperAdmin = () => user?.is_superuser === true;
+    const isSuperAdmin = useCallback(() => user?.is_superuser === true, [user]);
 
-    const hasRole = (roleCode: string) => {
+    const hasRole = useCallback((roleCode: string) => {
         if (user?.is_superuser) return true;
         return Array.isArray(user?.roles) && user.roles.includes(roleCode);
-    };
+    }, [user]);
 
-    const hasAnyRole = (roleCodes: string[]) => {
+    const hasAnyRole = useCallback((roleCodes: string[]) => {
         if (user?.is_superuser) return true;
         if (!Array.isArray(user?.roles)) return false;
         return roleCodes.some(r => user.roles.includes(r));
-    };
+    }, [user]);
 
-    const canManageUsers = () => isSuperAdmin() || hasRole('USER_MANAGER');
+    const canManageUsers = useCallback(
+        () => isSuperAdmin() || hasRole('USER_MANAGER'),
+        [isSuperAdmin, hasRole],
+    );
+
+    // Memoize the context value so the ~39 consumers only re-render when auth state
+    // actually changes (user/loading), not on every AuthProvider render. All the
+    // functions below are useCallback-stabilized so this memo is genuinely stable.
+    const contextValue = useMemo(() => ({
+        user,
+        loading,
+        loginSuccess,
+        logout,
+        hasRole,
+        hasAnyRole,
+        isSuperAdmin,
+        canManageUsers,
+    }), [user, loading, loginSuccess, logout, hasRole, hasAnyRole, isSuperAdmin, canManageUsers]);
 
     return (
-        <AuthContext.Provider value={{
-            user,
-            loading,
-            loginSuccess,
-            logout,
-            hasRole,
-            hasAnyRole,
-            isSuperAdmin,
-            canManageUsers,
-        }}>
+        <AuthContext.Provider value={contextValue}>
             {children}
         </AuthContext.Provider>
     );

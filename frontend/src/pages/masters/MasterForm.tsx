@@ -2,6 +2,8 @@ import {useEffect, useMemo, useState} from "react";
 import {useLocation, useNavigate, useParams} from "react-router-dom";
 import { toast } from "sonner";
 import api from "../../api/axios";
+import { openDocument, toProtectedMediaPath } from "../../utils/documentDownload";
+import AuthedImage from "../../components/AuthedImage";
 import NestedFieldArray from "./NestedFieldArray";
 import HybridSelect from "../../components/HybridSelect";
 import { primeFkDetailCache } from "../../components/fkDetailCache";
@@ -481,14 +483,10 @@ export default function MasterForm({
         setLicenseParsing(true);
         setLicenseParseSummary(null);
         try {
-            const access = localStorage.getItem("access");
-            const resp = await fetch(existingLicenseCopy.file, {
-                headers: access ? { Authorization: `Bearer ${access}` } : {},
-            });
-            if (!resp.ok) {
-                throw new Error(`Failed to fetch saved copy (HTTP ${resp.status})`);
-            }
-            const blob = await resp.blob();
+            // Fetch the saved copy through the authenticated media endpoint
+            // (axios attaches the Bearer header) rather than the public /media/ URL.
+            const resp = await api.get(toProtectedMediaPath(existingLicenseCopy.file), { responseType: "blob" });
+            const blob = resp.data as Blob;
             const file = new File(
                 [blob],
                 existingLicenseCopyName || "license-copy.pdf",
@@ -1443,16 +1441,14 @@ export default function MasterForm({
                             <small className="text-muted">Current file:</small>
                             <div className="flex items-center gap-2 mt-1">
                                 <a
-                                    href={existingFileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    onClick={() => openDocument(existingFileUrl)}
                                     className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10"
                                 >
                                     <Eye className="size-4" aria-hidden="true" />
                                     View Current
                                 </a>
-                                <img
-                                    src={existingFileUrl}
+                                <AuthedImage
+                                    path={toProtectedMediaPath(existingFileUrl)}
                                     alt={fieldName}
                                     style={{
                                         maxHeight: '60px',
@@ -1598,12 +1594,10 @@ export default function MasterForm({
                                 : null;
                             return pdfUrl ? (
                                 <a
-                                    href={pdfUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    onClick={() => openDocument(pdfUrl)}
                                     className="ms-2"
                                     title="View BOE copy PDF"
-                                    style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--primary-color)', textDecoration: 'none' }}
+                                    style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--primary-color)', textDecoration: 'none', cursor: 'pointer' }}
                                 >
                                     <FileText className="size-4" aria-hidden="true" />
                                     {formData.bill_of_entry_number}
@@ -1685,10 +1679,8 @@ export default function MasterForm({
                                             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>BOE Copy</div>
                                             {pdfUrl ? (
                                                 <a
-                                                    href={pdfUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ fontSize: 12.5, color: 'var(--primary-color)' }}
+                                                    onClick={() => openDocument(pdfUrl)}
+                                                    style={{ fontSize: 12.5, color: 'var(--primary-color)', cursor: 'pointer' }}
                                                 >
                                                     <ExternalLink className="size-4" aria-hidden="true" />
                                                     View saved BOE PDF

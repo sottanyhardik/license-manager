@@ -1,4 +1,8 @@
+import logging
+
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 def fetch_cookies():
@@ -93,7 +97,7 @@ def request_company(cookies, iec, captcha):
                         dict_data['pan'] = tds[1].text.strip()
             return dict_data
         except Exception as e:
-            print(e)
+            logger.exception("Error parsing company response for IEC %s", iec)
             return None
     else:
         file = open("resp_text.html", "w")
@@ -118,7 +122,7 @@ def fetch_data_to_model(cookies, captcha):
         else:
             data.failed = data.failed + 1
             data.save()
-            print(False)
+            logger.warning("Failed to fetch company data for IEC %s (failed count: %s)", data.iec, data.failed)
             return False
     else:
         return False

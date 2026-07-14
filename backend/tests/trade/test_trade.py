@@ -4,8 +4,9 @@ Tests for the Trade module -- precision-critical arithmetic.
 The 3-decimal-place precision for pct/rate_pct is a business-critical
 hotfix requirement: pct=7.925 must yield 7925.00, not 7930.00.
 """
-import pytest
 from decimal import Decimal
+
+import pytest
 
 
 @pytest.fixture

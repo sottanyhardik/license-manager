@@ -8,14 +8,13 @@ Field names and types must exactly match the legacy DB columns.
 
 Reference: legacy/backend/apps/core/models.py
 """
-import uuid
-
-from django.conf import settings
-from django.core.validators import RegexValidator, MinValueValidator
-from django.db import models
-from django.utils import timezone
 
 from decimal import Decimal
+
+from django.conf import settings
+from django.core.validators import MinValueValidator, RegexValidator
+from django.db import models
+from django.utils import timezone
 
 DEC_0 = Decimal("0")
 

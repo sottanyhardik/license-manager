@@ -9,9 +9,8 @@ Models are imported inside the function to prevent circular import errors
 during app startup.
 """
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +18,12 @@ _DEC_0 = Decimal("0")
 
 
 def generate_item_report(
-    item_name_ids: Optional[list] = None,
-    company_ids: Optional[list] = None,
-    min_balance: Optional[Decimal] = None,
+    item_name_ids: list | None = None,
+    company_ids: list | None = None,
+    min_balance: Decimal | None = None,
     license_status: str = "active",
-    expiry_date_from: Optional[str] = None,
-    expiry_date_to: Optional[str] = None,
+    expiry_date_from: str | None = None,
+    expiry_date_to: str | None = None,
 ) -> dict:
     """
     Build item utilisation report.
@@ -39,7 +38,7 @@ def generate_item_report(
 
     Returns dict with key 'items'.
     """
-    from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+    from apps.license.models import LicenseImportItemsModel
 
     if min_balance is None:
         min_balance = Decimal("200")
@@ -101,5 +100,5 @@ def generate_item_report(
 
     return {
         "items": items,
-        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "generated_at": datetime.now(tz=UTC).isoformat(),
     }

@@ -1,5 +1,6 @@
-from .base import *  # noqa: F401, F403
 import os
+
+from .base import *  # noqa: F401, F403
 
 DEBUG = True
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-not-for-production-use")  # noqa: S105

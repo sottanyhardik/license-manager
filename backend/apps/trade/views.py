@@ -17,7 +17,6 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-
 from shared.pagination import StandardPagination
 from shared.serializers import EnvelopeMixin
 
@@ -25,16 +24,16 @@ from apps.accounts.permissions import TradePermission
 from apps.trade.filters import TradeFilter
 from apps.trade.models import LicenseTrade, LicenseTradeLine, LicenseTradePayment
 from apps.trade.serializers import (
-    LicenseTradeSerializer,
     LicenseTradePaymentSerializer,
+    LicenseTradeSerializer,
     TradeLineSimpleSerializer,
 )
 from apps.trade.services.trade_service import (
+    PartnerTradeNotFound,
     build_trade_summary,
     get_prefilled_invoice_number,
     link_trades,
     parse_date_strict,
-    PartnerTradeNotFound,
 )
 
 logger = logging.getLogger(__name__)

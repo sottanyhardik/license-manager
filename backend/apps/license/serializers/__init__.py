@@ -1,10 +1,10 @@
 from apps.license.serializers.license import (
-    LicenseListSerializer,
-    LicenseDetailSerializer,
-    LicenseCreateSerializer,
     ImportItemSerializer,
-    LicenseDocumentSerializer,
     IncentiveLicenseSerializer,
+    LicenseCreateSerializer,
+    LicenseDetailSerializer,
+    LicenseDocumentSerializer,
+    LicenseListSerializer,
 )
 
 __all__ = [

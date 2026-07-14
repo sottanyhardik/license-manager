@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.allotment.models import AllotmentModel, AllotmentItems
+from apps.allotment.models import AllotmentItems, AllotmentModel
 
 
 @admin.register(AllotmentModel)

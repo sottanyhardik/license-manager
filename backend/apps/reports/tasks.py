@@ -14,7 +14,6 @@ The tracker is managed=False in production; tests must patch managed=True.
 import json
 import logging
 import os
-from datetime import datetime, timezone
 
 from celery import shared_task
 from django.conf import settings

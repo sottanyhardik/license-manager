@@ -1,6 +1,7 @@
 from django.contrib import admin
-from django.urls import path, include
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView as SpectacularSwaggerUIView
+from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView
+from drf_spectacular.views import SpectacularSwaggerView as SpectacularSwaggerUIView
 from shared.views import health_check_view
 
 urlpatterns = [

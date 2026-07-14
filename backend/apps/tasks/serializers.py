@@ -3,7 +3,7 @@ apps/tasks/serializers.py
 
 DRF serializers for Task and TaskRemark.
 """
-from rest_framework.serializers import ModelSerializer, CharField
+from rest_framework.serializers import CharField, ModelSerializer
 
 from apps.tasks.models import Task, TaskRemark
 

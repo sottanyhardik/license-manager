@@ -16,11 +16,9 @@ from datetime import date, timedelta
 
 import factory
 import pytest
+from apps.license.models.license import LicenseBalance, LicenseDetailsModel, LicenseFlags
 from factory.django import DjangoModelFactory
 from rest_framework import status
-
-from apps.license.models.license import LicenseBalance, LicenseDetailsModel, LicenseFlags
-
 
 # ---------------------------------------------------------------------------
 # Factories

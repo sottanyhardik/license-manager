@@ -10,16 +10,14 @@ tests/tasks/test_tasks.py).
 Celery tasks are mocked — we test the HTTP layer only, not the task body.
 """
 import uuid
+from unittest.mock import patch
 
 import pytest
+from apps.core.models import CeleryTaskTracker
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
-from unittest.mock import MagicMock, patch
-
-from apps.core.models import CeleryTaskTracker
-
 
 # ---------------------------------------------------------------------------
 # Patch managed=True so the test DB creates the table

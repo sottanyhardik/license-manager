@@ -10,13 +10,11 @@ Covers:
 - RBAC: permission class blocks wrong role
 """
 import pytest
-from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from tests.accounts.factories import UserFactory, GroupFactory
-
+from tests.accounts.factories import GroupFactory, UserFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -215,7 +213,7 @@ class TestRBACPermissions:
     def _make_request(self, method="GET"):
         """Return a mock-like object that satisfies BaseRolePermission interface."""
         from unittest.mock import MagicMock
-        from rest_framework import permissions as drf_permissions
+
 
         req = MagicMock()
         req.method = method
@@ -231,8 +229,9 @@ class TestRBACPermissions:
         assert perm.has_permission(req, None) is True
 
     def test_unauthenticated_blocked(self):
-        from apps.accounts.permissions import LicensePermission
         from unittest.mock import MagicMock
+
+        from apps.accounts.permissions import LicensePermission
 
         perm = LicensePermission()
         req = self._make_request("GET")
@@ -248,9 +247,9 @@ class TestRBACPermissions:
         group = GroupFactory(name="ALLOTMENT_VIEWER")
         user.groups.add(group)
 
-        from apps.accounts.permissions import LicensePermission
         from unittest.mock import MagicMock
-        from rest_framework import permissions as drf_permissions
+
+        from apps.accounts.permissions import LicensePermission
 
         perm = LicensePermission()
         req = MagicMock()
@@ -265,8 +264,9 @@ class TestRBACPermissions:
         group = GroupFactory(name="LICENSE_VIEWER")
         user.groups.add(group)
 
-        from apps.accounts.permissions import LicensePermission
         from unittest.mock import MagicMock
+
+        from apps.accounts.permissions import LicensePermission
 
         perm = LicensePermission()
         req = MagicMock()
@@ -286,8 +286,9 @@ class TestRBACPermissions:
         group = GroupFactory(name="TRADE_VIEWER")
         user.groups.add(group)
 
-        from apps.accounts.permissions import UserManagementPermission
         from unittest.mock import MagicMock
+
+        from apps.accounts.permissions import UserManagementPermission
 
         perm = UserManagementPermission()
         req = MagicMock()

@@ -6,17 +6,14 @@ All models are managed=False in production; this file patches managed=True
 so that SQLite creates the tables in-memory for the test run (same pattern
 as tests/core/test_masters.py).
 """
+import factory
 import pytest
+from apps.tasks.models import Task, TaskRemark
 from django.urls import reverse
+from factory.django import DjangoModelFactory
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
-
-import factory
-from factory.django import DjangoModelFactory
-
-from apps.tasks.models import Task, TaskRemark
-
 
 # ── Patch managed=True ────────────────────────────────────────────────────────
 

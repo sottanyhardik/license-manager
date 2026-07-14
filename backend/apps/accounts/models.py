@@ -7,11 +7,11 @@ it already exists and is owned by the legacy backend. Field definitions
 must exactly match the legacy schema (legacy/backend/apps/accounts/models.py).
 """
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
-from django.contrib.auth.models import PermissionsMixin, Group, Permission
+from django.contrib.auth.models import Group, Permission, PermissionsMixin
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.core.validators import FileExtensionValidator
 
 
 class UserManager(BaseUserManager):

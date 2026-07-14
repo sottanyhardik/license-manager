@@ -6,10 +6,10 @@ No ORM lives here. All mutations are delegated to the service layer
 (apps.allotment.services.allotment_service). The view is responsible only for
 auth/permission, serialization, filtering, and HTTP responses.
 """
-from rest_framework import viewsets, filters, status
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.accounts.permissions import AllotmentPermission
 from apps.allotment.filters import AllotmentFilter
@@ -17,8 +17,8 @@ from apps.allotment.models import AllotmentModel
 from apps.allotment.serializers import AllotmentSerializer
 from apps.allotment.services.allotment_service import (
     create_allotment,
-    update_allotment,
     delete_allotment,
+    update_allotment,
 )
 
 

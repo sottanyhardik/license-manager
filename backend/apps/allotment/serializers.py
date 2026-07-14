@@ -9,8 +9,7 @@ AllotmentSerializer      — header with nested items, computed balance
 """
 from rest_framework import serializers
 
-from apps.allotment.models import AllotmentModel, AllotmentItems
-
+from apps.allotment.models import AllotmentItems, AllotmentModel
 
 # ---------------------------------------------------------------------------
 # Helpers

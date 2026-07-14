@@ -13,21 +13,18 @@ Endpoints under test:
   GET  /api/v1/masters/exchange-rates/?date_from=... -> 200 filtered
   *    (unauthenticated)                   -> 401
 """
-import pytest
-from django.urls import reverse
-from rest_framework import status
-from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
-
 import factory
-from factory.django import DjangoModelFactory
-
+import pytest
 from apps.core.models import (
     CompanyModel,
     ExchangeRateModel,
     HSCodeModel,
 )
-
+from django.urls import reverse
+from factory.django import DjangoModelFactory
+from rest_framework import status
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 # ---------------------------------------------------------------------------
 # Factories

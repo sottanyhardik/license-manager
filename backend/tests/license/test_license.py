@@ -17,15 +17,13 @@ Tests cover:
   - Permission viewer cannot POST
   - balance_service unit test with mocked DB
 """
-import pytest
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
-from django.urls import reverse
+import pytest
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -271,8 +269,9 @@ def test_recompute_balance_service():
     Verifies: credit - debit - allotment - trade = expected balance,
     clamped to 0 and quantized to 2dp.  Also checks flags are updated.
     """
-    from apps.license.services.balance_service import recompute_license_balance
     from decimal import Decimal
+
+    from apps.license.services.balance_service import recompute_license_balance
 
     license_id = 99
 

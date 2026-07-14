@@ -11,7 +11,7 @@ import logging
 
 from django.db import transaction
 
-from apps.allotment.models import AllotmentModel, AllotmentItems
+from apps.allotment.models import AllotmentItems, AllotmentModel
 
 logger = logging.getLogger(__name__)
 

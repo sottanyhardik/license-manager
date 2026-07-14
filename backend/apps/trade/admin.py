@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import LicenseTrade, LicenseTradeLine, IncentiveTradeLine, LicenseTradePayment
+
+from .models import IncentiveTradeLine, LicenseTrade, LicenseTradeLine, LicenseTradePayment
 
 
 @admin.register(LicenseTrade)

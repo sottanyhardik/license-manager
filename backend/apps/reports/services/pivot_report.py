@@ -11,9 +11,8 @@ during app startup.
 """
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +20,13 @@ _DEC_0 = Decimal("0")
 
 
 def generate_pivot_report(
-    item_name_ids: Optional[list] = None,
-    company_ids: Optional[list] = None,
-    min_balance: Optional[Decimal] = None,
+    item_name_ids: list | None = None,
+    company_ids: list | None = None,
+    min_balance: Decimal | None = None,
     license_status: str = "active",
-    expiry_date_from: Optional[str] = None,
-    expiry_date_to: Optional[str] = None,
-    sion_norm: Optional[str] = None,
+    expiry_date_from: str | None = None,
+    expiry_date_to: str | None = None,
+    sion_norm: str | None = None,
 ) -> dict:
     """
     Build pivot report: import items grouped by SION norm class.
@@ -120,5 +119,5 @@ def generate_pivot_report(
 
     return {
         "norm_classes": norm_classes,
-        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "generated_at": datetime.now(tz=UTC).isoformat(),
     }

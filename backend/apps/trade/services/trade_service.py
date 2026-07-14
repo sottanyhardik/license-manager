@@ -8,15 +8,13 @@ Request objects, no DRF Response objects.  Domain errors are raised as
 ValueError (or subclasses) so the view layer can map them to HTTP status codes.
 """
 
-from datetime import datetime, date
-from typing import Optional
-
+from datetime import date, datetime
 
 # ---------------------------------------------------------------------------
 # Date parsing
 # ---------------------------------------------------------------------------
 
-def parse_date_strict(date_str: Optional[str]) -> Optional[date]:
+def parse_date_strict(date_str: str | None) -> date | None:
     """
     Parse a date string in strict ISO format (YYYY-MM-DD) only.
 
@@ -51,7 +49,7 @@ _VALID_DIRECTIONS = frozenset(
 def get_prefilled_invoice_number(
     direction: str,
     company_id: int,
-    invoice_date: Optional[date] = None,
+    invoice_date: date | None = None,
 ) -> str:
     """
     Compute the next invoice number for a given direction / company / date.
@@ -125,7 +123,7 @@ class PartnerTradeNotFound(LookupError):
     """Raised when the partner trade PK cannot be resolved."""
 
 
-def link_trades(trade_pk: int, partner_pk: Optional[int]):
+def link_trades(trade_pk: int, partner_pk: int | None):
     """
     Bidirectionally link or unlink two LicenseTrade records.
 

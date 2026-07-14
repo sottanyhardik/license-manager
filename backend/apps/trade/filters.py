@@ -1,4 +1,5 @@
 from django_filters import CharFilter, DateFilter, FilterSet, NumberFilter
+
 from apps.trade.models import LicenseTrade
 
 

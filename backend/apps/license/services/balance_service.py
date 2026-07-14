@@ -20,7 +20,6 @@ load time.  All three apps are required to be installed in production.
 """
 import logging
 from decimal import ROUND_DOWN, Decimal
-from typing import Optional
 
 from django.db import transaction
 from django.utils import timezone

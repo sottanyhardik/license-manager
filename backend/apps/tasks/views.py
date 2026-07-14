@@ -16,7 +16,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.tasks.models import Task, TaskRemark
+from apps.tasks.models import Task
 from apps.tasks.serializers import TaskRemarkSerializer, TaskSerializer
 from apps.tasks.services import task_service
 

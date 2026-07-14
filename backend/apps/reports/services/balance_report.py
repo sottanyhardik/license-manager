@@ -11,7 +11,7 @@ Models are imported inside the function to prevent circular import errors
 during app startup.
 """
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def generate_balance_report(license_ids: list, output_format: str) -> dict:
     Currently only JSON data is returned; the caller (task) handles file
     serialisation.
     """
-    from apps.license.models import LicenseBalance, LicenseDetailsModel
+    from apps.license.models import LicenseDetailsModel
 
     logger.info(
         "Generating balance report for %d licenses, format=%s",
@@ -52,6 +52,7 @@ def generate_balance_report(license_ids: list, output_format: str) -> dict:
         # Compute total_authorised from export items (credit side)
         try:
             from django.db.models import Sum
+
             from apps.license.models import LicenseExportItemModel
 
             total_authorised = (
@@ -113,6 +114,6 @@ def generate_balance_report(license_ids: list, output_format: str) -> dict:
 
     return {
         "licenses": licenses,
-        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "generated_at": datetime.now(tz=UTC).isoformat(),
         "output_format": output_format,
     }

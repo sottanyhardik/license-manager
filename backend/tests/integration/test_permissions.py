@@ -27,9 +27,9 @@ What is tested
 - BillOfEntryPermission: BOE_VIEWER read-only, BOE_MANAGER read+write.
 - TradePermission: TRADE_VIEWER read-only, TRADE_MANAGER read+write.
 """
-import pytest
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helper — build a fake request with a mocked user

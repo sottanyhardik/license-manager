@@ -8,7 +8,7 @@ AllotmentItems: line items linking a LicenseImportItemsModel to an AllotmentMode
 The FK to "license.LicenseImportItemsModel" is a string reference; Django
 resolves it lazily so the app can load before apps.license exists.
 """
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from functools import cached_property
 
 from django.core.validators import MinValueValidator

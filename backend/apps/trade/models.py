@@ -1,10 +1,10 @@
 # trade/models.py
 import re
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import models, transaction
-from django.db.models import Sum, Q, F
-from django.db.models.signals import pre_delete, post_save
+from django.db.models import F, Q, Sum
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
 

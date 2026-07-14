@@ -5,8 +5,8 @@ Loaded by dev / prod / test sub-modules via `from .base import *`.
 Never use this module directly as DJANGO_SETTINGS_MODULE.
 """
 import os
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
 
 import dj_database_url
 from dotenv import load_dotenv
@@ -123,6 +123,7 @@ DATABASES = {
 _redis_base = os.environ.get("REDIS_URL", "redis://localhost:6379")
 # Strip any trailing /N from the base URL so we can append our own DB number.
 import re as _re
+
 _redis_base = _re.sub(r"/\d+$", "", _redis_base.rstrip("/"))
 
 CACHES = {

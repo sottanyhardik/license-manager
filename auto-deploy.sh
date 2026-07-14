@@ -34,25 +34,22 @@ print_warn()    { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_info()    { echo -e "${BLUE}→ $1${NC}"; }
 
 # ── Health gate ──────────────────────────────────────────────
-# Polls /api/health/ on the deploy target from this machine.
-# Called after each server's SSH block so we validate network
-# reachability, nginx, and the Django app together.
+# Polls https://<domain>/api/health/ — uses the DuckDNS domain with HTTPS
+# directly so there is no HTTP→HTTPS redirect to chase.
 wait_for_health() {
-    local host="${1:-localhost}"
+    local domain="${1:-localhost}"
     local max_attempts=5
     local status
     for i in $(seq 1 $max_attempts); do
-        # -L follows the HTTP→HTTPS redirect (nginx 301); -k skips cert verify
-        # because the cert is issued for the DuckDNS domain, not the raw IP.
-        status=$(curl -s -L -k -o /dev/null -w "%{http_code}" "http://${host}/api/health/" 2>/dev/null || echo "000")
+        status=$(curl -s -o /dev/null -w "%{http_code}" "https://${domain}/api/health/" 2>/dev/null || echo "000")
         if [ "$status" = "200" ]; then
-            print_success "Health check passed (HTTP 200)"
+            print_success "Health check passed (HTTP 200) — https://${domain}/api/health/"
             return 0
         fi
         print_warn "Health check attempt $i/$max_attempts failed (HTTP $status), retrying in 3s..."
         sleep 3
     done
-    print_error "Deploy failed: /api/health/ not 200 after $max_attempts attempts"
+    print_error "Deploy failed: https://${domain}/api/health/ not 200 after $max_attempts attempts"
     return 1
 }
 
@@ -467,9 +464,9 @@ echo_info "URL: https://${SERVER_DOMAIN}"
 echo '$PASSWORD' | sudo -S supervisorctl status | grep license-manager
 ENDSSH
 
-    # ── Health gate (runs from deploy machine against server IP) ─
-    print_info "Running post-deploy health check against http://${SERVER_IP}/api/health/ ..."
-    wait_for_health "$SERVER_IP"
+    # ── Health gate (runs from deploy machine via DuckDNS domain + HTTPS) ─
+    print_info "Running post-deploy health check against https://${SERVER_DOMAIN}/api/health/ ..."
+    wait_for_health "$SERVER_DOMAIN"
 }
 
 # ── Run deployment ───────────────────────────────────────────

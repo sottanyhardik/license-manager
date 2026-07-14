@@ -49,6 +49,7 @@ export function useUpdateLicense(
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['licenses'] })
+      void queryClient.invalidateQueries({ queryKey: ['licenses', id] })
       toast.success('License updated successfully.')
     },
     onError: (err) => {
@@ -65,8 +66,9 @@ export function useDeleteLicense(): UseMutationResult<void, Error, number> {
     mutationFn: async (id: number) => {
       await apiClient.delete(ENDPOINTS.LICENSES.DETAIL(id))
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       void queryClient.invalidateQueries({ queryKey: ['licenses'] })
+      queryClient.removeQueries({ queryKey: ['licenses', id] })
       toast.success('License deleted successfully.')
     },
     onError: (err) => {
@@ -90,6 +92,7 @@ export function usePatchLicenseField(
       return data
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['licenses'] })
       void queryClient.invalidateQueries({ queryKey: ['licenses', id] })
     },
     onError: (err) => {

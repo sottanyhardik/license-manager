@@ -282,17 +282,20 @@ def test_non_frozen_boe_row_can_be_updated():
 
     with patch(
         "apps.bill_of_entry.models.RowDetails"
-    ) as MockRowDetails, patch(
-        "apps.bill_of_entry.serializers.RowDetailsSerializer"
-    ) as MockSerializer:
+    ) as MockRowDetails:
         MockRowDetails.objects.get.return_value = non_frozen_row
         MockRowDetails.DoesNotExist = Exception
-        mock_serializer_instance = MagicMock()
-        mock_serializer_instance.is_valid.return_value = True
-        mock_serializer_instance.save.return_value = saved_row
-        MockSerializer.return_value = mock_serializer_instance
 
-        result = update_row_detail(row_id=100, data={"qty": "50.000"}, user=user)
+        # RowDetailsSerializer is imported inside update_row_detail() — patch at its origin
+        with patch(
+            "apps.bill_of_entry.serializers.RowDetailsSerializer"
+        ) as MockSerializer:
+            mock_serializer_instance = MagicMock()
+            mock_serializer_instance.is_valid.return_value = True
+            mock_serializer_instance.save.return_value = saved_row
+            MockSerializer.return_value = mock_serializer_instance
+
+            result = update_row_detail(row_id=100, data={"qty": "50.000"}, user=user)
 
     assert result is saved_row
 
@@ -365,9 +368,9 @@ def test_non_expired_license_not_flagged():
     license_id = 6
     future = timezone.now().date() + datetime.timedelta(days=30)
 
-    mock_license = MagicMock()
+    mock_license = MagicMock(spec=["pk", "license_expiry_date"])
     mock_license.pk = license_id
-    mock_license.license_expiry_date = future
+    mock_license.license_expiry_date = future  # real date object
 
     with patch(
         "apps.license.models.LicenseDetailsModel.objects"
@@ -536,7 +539,7 @@ def test_end_to_end_license_workflow():
     from apps.license.services.balance_service import recompute_license_balance
 
     license_id = 8
-    mock_license = MagicMock()
+    mock_license = MagicMock(spec=["pk", "license_expiry_date"])
     mock_license.pk = license_id
     mock_license.license_expiry_date = None
 
@@ -671,7 +674,7 @@ def test_is_null_flag_set_when_balance_below_threshold():
     from apps.license.services.balance_service import recompute_license_balance
 
     license_id = 11
-    mock_license = MagicMock()
+    mock_license = MagicMock(spec=["pk", "license_expiry_date"])
     mock_license.pk = license_id
     mock_license.license_expiry_date = None
 

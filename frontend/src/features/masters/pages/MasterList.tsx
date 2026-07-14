@@ -202,8 +202,8 @@ export default function MasterList() {
     )
   }
 
-  const data = listResult?.data?.results ?? []
-  const totalCount = listResult?.data?.count ?? 0
+  const data = listResult?.data?.data ?? []
+  const totalCount = listResult?.data?.pagination?.count ?? 0
   const isLoading = listResult?.isLoading ?? true
 
   return (

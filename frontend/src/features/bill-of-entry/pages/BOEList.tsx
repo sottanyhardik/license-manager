@@ -113,15 +113,10 @@ export default function BOEList() {
 
   const { data, isLoading, isFetching, isError } = useBOEs(queryParams)
 
-  // Handle both envelope and direct response shapes gracefully.
-  const envelope = data as unknown as {
-    data?: { count: number; results: unknown[] }
-    count?: number
-    results?: unknown[]
-  }
-
-  const results = envelope?.data?.results ?? envelope?.results ?? []
-  const totalCount = envelope?.data?.count ?? envelope?.count ?? 0
+  // After the envelope interceptor in client.ts, data is PaginatedResponse<BOE>:
+  // { data: BOE[], pagination: { count, next, previous, page_size, total_pages } }
+  const results = data?.data ?? []
+  const totalCount = data?.pagination?.count ?? 0
 
   const boes = results as Array<{
     id: number

@@ -116,8 +116,8 @@ export default function AllotmentList() {
     setPage(1)
   }, [])
 
-  const allotments = data?.results ?? []
-  const totalCount = data?.count ?? 0
+  const allotments = data?.data ?? []
+  const totalCount = data?.pagination?.count ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   return (

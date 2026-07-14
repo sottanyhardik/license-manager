@@ -15,13 +15,18 @@ export interface APIResponse<T> {
   errors?: Array<{ field: string; message: string }>
 }
 
+// Shape returned by list endpoints AFTER the envelope interceptor in client.ts
+// has run.  The interceptor sets response.data to { data, pagination } when a
+// top-level "pagination" key is present in the raw envelope.
+// backend/shared/pagination.py emits:
+//   { success, data: T[], message, pagination: { count, next, previous, page_size, total_pages } }
 export interface PaginatedResponse<T> {
-  success: boolean
-  data: {
+  data: T[]
+  pagination: {
     count: number
     next: string | null
     previous: string | null
-    results: T[]
+    page_size: number
+    total_pages: number
   }
-  message: string | null
 }

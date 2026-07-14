@@ -114,8 +114,8 @@ export default function CompanyList() {
       <div className="rounded-lg border bg-card p-4 shadow-sm">
         <MasterDataTable<Company>
           columns={COLUMNS}
-          data={data?.results ?? []}
-          totalCount={data?.count ?? 0}
+          data={data?.data ?? []}
+          totalCount={data?.pagination?.count ?? 0}
           currentPage={page}
           pageSize={pageSize}
           isLoading={isLoading}

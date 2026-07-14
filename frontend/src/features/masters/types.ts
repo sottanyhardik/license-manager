@@ -52,13 +52,9 @@ export interface ExchangeRate {
   date: string
 }
 
-// Generic paginated API response envelope used by all master list endpoints.
-export interface PaginatedResponse<T> {
-  count: number
-  next: string | null
-  previous: string | null
-  results: T[]
-}
+// Re-export the canonical paginated response type from the shared layer.
+// Do not define a local PaginatedResponse here — use shared/types/api.ts.
+export type { PaginatedResponse } from '@/shared/types/api'
 
 // Parameters accepted by paginated list endpoints.
 export interface ListParams {

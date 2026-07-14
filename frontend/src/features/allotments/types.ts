@@ -1,5 +1,8 @@
 // Allotment feature types — shapes match /api/v1/allotments/* DRF responses.
 
+import type { PaginatedResponse } from '@/shared/types/api'
+export type { PaginatedResponse }
+
 export interface AllotmentItem {
   id: number
   item: number | null
@@ -68,12 +71,8 @@ export interface AllotmentListParams {
   ordering?: string
 }
 
-export interface PaginatedAllotments {
-  count: number
-  next: string | null
-  previous: string | null
-  results: Allotment[]
-}
+/** @deprecated Use PaginatedResponse<Allotment> from shared/types/api instead. */
+export type PaginatedAllotments = PaginatedResponse<Allotment>
 
 export type AllotmentFormValues = {
   company: number | null

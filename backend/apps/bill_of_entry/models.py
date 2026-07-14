@@ -15,7 +15,7 @@ from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
 
-from apps.core.models import AuditModel
+from apps.core.models.masters import AuditModel
 
 # ---------------------------------------------------------------------------
 # Constants (defined locally — no constants.py in new backend yet)

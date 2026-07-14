@@ -4,9 +4,12 @@ import { toast } from 'sonner'
 import { ENDPOINTS } from './endpoints'
 
 // ── Base URL resolution ──────────────────────────────────────────────────────
-// When VITE_API_URL is set, call Django directly (dev with separate origins).
-// Otherwise requests flow through Vite's dev proxy (prod: same origin).
-const API_HOST = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
+// docker-compose sets VITE_API_BASE_URL; local dev without Docker may set
+// VITE_API_URL instead. Read either, with a fallback to empty string so that
+// same-origin Vite proxy setups work without any env var at all.
+const API_HOST = (
+  import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_URL ?? ''
+).replace(/\/+$/, '')
 
 const apiClient = axios.create({
   baseURL: API_HOST || undefined,
@@ -178,6 +181,46 @@ apiClient.interceptors.response.use(
 
     return Promise.reject(error)
   },
+)
+
+// ── Envelope unwrap interceptor ───────────────────────────────────────────────
+// Django views return { success, data, message, pagination? }.
+// This interceptor runs AFTER the 401-refresh interceptor above so that auth
+// errors are handled first.  On success it replaces response.data with:
+//   - { data, pagination } when a pagination key is present (list endpoints)
+//   - envelope.data directly for all other responses (detail / mutation endpoints)
+// On failure (success === false) it rejects with a structured error so callers
+// receive envelope.message instead of a generic network error.
+apiClient.interceptors.response.use(
+  (response) => {
+    const envelope = response.data
+    if (
+      envelope !== null &&
+      typeof envelope === 'object' &&
+      'success' in envelope &&
+      'data' in envelope
+    ) {
+      if (!(envelope as { success: boolean }).success) {
+        return Promise.reject({
+          response,
+          message: (envelope as { message?: string }).message ?? 'Request failed',
+          errors: (envelope as { errors?: unknown[] }).errors ?? [],
+        })
+      }
+      // Paginated response: keep items array + pagination together so callers
+      // can access both through a single typed object.
+      if ('pagination' in envelope) {
+        response.data = {
+          data: (envelope as { data: unknown }).data,
+          pagination: (envelope as { pagination: unknown }).pagination,
+        }
+      } else {
+        response.data = (envelope as { data: unknown }).data
+      }
+    }
+    return response
+  },
+  (error) => Promise.reject(error),
 )
 
 export default apiClient

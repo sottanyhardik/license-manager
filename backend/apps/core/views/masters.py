@@ -24,6 +24,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, permissions, status, viewsets
 from rest_framework.response import Response
 from shared.pagination import StandardPagination
+from shared.permissions import IsAdminUser as ActiveAdminUser
 
 from apps.core.filters import (
     ActivityLogFilter,
@@ -39,7 +40,6 @@ from apps.core.filters import (
     TransferLetterFilter,
     UnitPriceFilter,
 )
-from shared.permissions import IsAdminUser as ActiveAdminUser
 from apps.core.models import (
     ActivityLog,
     CeleryTaskTracker,

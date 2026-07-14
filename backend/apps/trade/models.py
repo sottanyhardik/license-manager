@@ -460,9 +460,9 @@ class LicenseTradeLine(models.Model):
         if self.mode == self.MODE_QTY:
             return q2(q4(self.qty_kg) * q2(self.rate_inr_per_kg))
         if self.mode == self.MODE_CIF_INR:
-            return q2(q2(self.cif_inr) * (q2(self.pct) / Decimal("100")))
+            return q2(q2(self.cif_inr) * (Decimal(str(self.pct if self.pct is not None else 0)) / Decimal("100")))
         if self.mode == self.MODE_FOB_INR:
-            return q2(q2(self.fob_inr) * (q2(self.pct) / Decimal("100")))
+            return q2(q2(self.fob_inr) * (Decimal(str(self.pct if self.pct is not None else 0)) / Decimal("100")))
         return Decimal("0.00")
 
     def save(self, *args, **kwargs) -> None:
@@ -533,7 +533,7 @@ class IncentiveTradeLine(models.Model):
 
     def compute_amount(self) -> Decimal:
         """Calculate amount from license_value and rate_pct"""
-        return q2(q2(self.license_value) * (q2(self.rate_pct) / Decimal("100")))
+        return q2(q2(self.license_value) * (Decimal(str(self.rate_pct if self.rate_pct is not None else 0)) / Decimal("100")))
 
     def save(self, *args, **kwargs) -> None:
         # Auto-calculate amount_inr if not manually set

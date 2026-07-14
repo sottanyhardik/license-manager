@@ -1444,6 +1444,7 @@ export default function TradeForm() {
                                                 value={line.pct || ""}
                                                 onChange={(e) => handleLineChange(index, 'pct', parseFloat(e.target.value) || 0)}
                                                 step="0.001"
+                                                placeholder="0.000"
                                             />
                                         </td>
                                     )}

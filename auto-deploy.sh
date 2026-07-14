@@ -58,7 +58,7 @@ wait_for_health() {
 SERVER_USER="django"
 ALL_SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
-BRANCH="${1:-feature/Phase2}"
+BRANCH="${1:-master}"
 PASSWORD="${DEPLOY_PASSWORD:-}"          # set: export DEPLOY_PASSWORD=admin
 
 if [ -z "$PASSWORD" ]; then

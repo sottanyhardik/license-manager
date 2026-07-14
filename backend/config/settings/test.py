@@ -145,3 +145,24 @@ def _patch_allotment_managed():
 
 
 _patch_allotment_managed()
+
+
+def _patch_bill_of_entry_managed():
+    """
+    Override all managed=False bill_of_entry models → managed=True so pytest-django's
+    SQLite test DB can create the tables. In production (PostgreSQL) the tables
+    are owned by the legacy backend and managed=False is correct.
+    """
+    try:
+        from apps.bill_of_entry import models as boe_models
+
+        _managed_models = ["BillOfEntryModel", "RowDetails"]
+        for model_name in _managed_models:
+            model_cls = getattr(boe_models, model_name, None)
+            if model_cls is not None:
+                model_cls._meta.managed = True
+    except Exception:
+        pass
+
+
+_patch_bill_of_entry_managed()

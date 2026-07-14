@@ -39,9 +39,10 @@ def _make_client(user=None):
     return client
 
 
-def _add_group(user, group_name, django_group_model):
+def _add_group(user, group_name):
     """Add *user* to a group with *group_name*, creating the group if needed."""
-    group, _ = django_group_model.objects.get_or_create(name=group_name)
+    from django.contrib.auth.models import Group
+    group, _ = Group.objects.get_or_create(name=group_name)
     user.groups.add(group)
 
 
@@ -50,20 +51,20 @@ def _add_group(user, group_name, django_group_model):
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def license_manager_user(db, django_user_model, django_group_model):
+def license_manager_user(db, django_user_model):
     user = django_user_model.objects.create_user(
         username="lm_user", password="pass123", email="lm@test.com"
     )
-    _add_group(user, "LICENSE_MANAGER", django_group_model)
+    _add_group(user, "LICENSE_MANAGER")
     return user
 
 
 @pytest.fixture
-def license_viewer_user(db, django_user_model, django_group_model):
+def license_viewer_user(db, django_user_model):
     user = django_user_model.objects.create_user(
         username="lv_user", password="pass123", email="lv@test.com"
     )
-    _add_group(user, "LICENSE_VIEWER", django_group_model)
+    _add_group(user, "LICENSE_VIEWER")
     return user
 
 

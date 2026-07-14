@@ -200,12 +200,7 @@ def get_monthly_activity(user: Any) -> list[dict]:
         except Exception:
             boe_by_month = {}
 
-    # ---- Build complete 12-month grid -------------------------------------
-    result = []
-    for i in range(11, -1, -1):
-        # Walk back from 11 months ago to current month (inclusive), oldest-first
-        pass
-
+    # ---- Build complete 12-month grid — oldest first ----------------------
     # Generate months oldest-first
     months = []
     current = today.replace(day=1)

@@ -7,7 +7,7 @@ import { ENDPOINTS } from './endpoints'
 // docker-compose sets VITE_API_BASE_URL; local dev without Docker may set
 // VITE_API_URL instead. Read either, with a fallback to empty string so that
 // same-origin Vite proxy setups work without any env var at all.
-const API_HOST = (
+export const API_HOST = (
   import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_URL ?? ''
 ).replace(/\/+$/, '')
 
@@ -193,6 +193,11 @@ apiClient.interceptors.response.use(
 // receive envelope.message instead of a generic network error.
 apiClient.interceptors.response.use(
   (response) => {
+    // Blob responses (e.g. PDF downloads) must not be unwrapped — pass through.
+    if (response.config.responseType === 'blob') {
+      return response
+    }
+
     const envelope = response.data
     if (
       envelope !== null &&

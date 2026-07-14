@@ -80,12 +80,24 @@ export function useDeleteTrade(): UseMutationResult<void, Error, number> {
 }
 
 // ─── Generate Purchase Invoice PDF ───────────────────────────────────────────
-// Opens the PDF directly in a new tab — no JSON response to handle.
+// Downloads the PDF as a blob so the Authorization header is included.
+// window.open() bypasses request interceptors and receives a 401 from the
+// backend — an authenticated apiClient.get() with responseType:'blob' fixes this.
 
 export function useGeneratePurchaseInvoice(): UseMutationResult<void, Error, number> {
   return useMutation({
     mutationFn: async (id: number) => {
-      window.open(ENDPOINTS.TRADES.PURCHASE_INVOICE_PDF(id), '_blank', 'noopener,noreferrer')
+      const response = await apiClient.get(ENDPOINTS.TRADES.PURCHASE_INVOICE_PDF(id), {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(response.data as Blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `purchase-invoice-${id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
     },
     onError: (err) => {
       toast.error(normaliseApiErrorString(err))
@@ -98,7 +110,17 @@ export function useGeneratePurchaseInvoice(): UseMutationResult<void, Error, num
 export function useGenerateBillOfSupply(): UseMutationResult<void, Error, number> {
   return useMutation({
     mutationFn: async (id: number) => {
-      window.open(ENDPOINTS.TRADES.BILL_OF_SUPPLY_PDF(id), '_blank', 'noopener,noreferrer')
+      const response = await apiClient.get(ENDPOINTS.TRADES.BILL_OF_SUPPLY_PDF(id), {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(response.data as Blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `bill-of-supply-${id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
     },
     onError: (err) => {
       toast.error(normaliseApiErrorString(err))

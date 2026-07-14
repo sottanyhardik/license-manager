@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react'
 import type { ReactNode } from 'react'
-import apiClient from '@/shared/api/client'
+import apiClient, { API_HOST } from '@/shared/api/client'
 import { ENDPOINTS } from '@/shared/api/endpoints'
 import type { Role } from './roles'
 
@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!refresh) return
       try {
         const { data } = await axios.post<{ access: string; refresh?: string }>(
-          ENDPOINTS.AUTH.REFRESH,
+          `${API_HOST}${ENDPOINTS.AUTH.REFRESH}`,
           { refresh },
         )
         localStorage.setItem('access', data.access)

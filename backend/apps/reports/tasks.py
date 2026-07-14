@@ -83,7 +83,7 @@ def _get_tracker(task_id: str):
 # Balance report
 # ---------------------------------------------------------------------------
 
-@shared_task(bind=True, max_retries=2)
+@shared_task(bind=True, max_retries=2, acks_late=True, reject_on_worker_lost=True, name="generate_balance_report_task")
 def generate_balance_report_task(self, license_ids: list, output_format: str, user_id: int):
     """Generate balance report. Store in media/reports/, update CeleryTaskTracker."""
     from apps.reports.services.balance_report import generate_balance_report
@@ -108,7 +108,7 @@ def generate_balance_report_task(self, license_ids: list, output_format: str, us
 # Item utilisation report
 # ---------------------------------------------------------------------------
 
-@shared_task(bind=True, max_retries=2)
+@shared_task(bind=True, max_retries=2, acks_late=True, reject_on_worker_lost=True, name="generate_item_report_task")
 def generate_item_report_task(self, filters: dict, output_format: str, user_id: int):
     """Generate item utilisation report."""
     from apps.reports.services.item_report import generate_item_report
@@ -133,7 +133,7 @@ def generate_item_report_task(self, filters: dict, output_format: str, user_id: 
 # Pivot report
 # ---------------------------------------------------------------------------
 
-@shared_task(bind=True, max_retries=2)
+@shared_task(bind=True, max_retries=2, acks_late=True, reject_on_worker_lost=True, name="generate_pivot_report_task")
 def generate_pivot_report_task(self, filters: dict, output_format: str, user_id: int):
     """Generate item pivot report (grouped by SION norm class)."""
     from apps.reports.services.pivot_report import generate_pivot_report
@@ -158,7 +158,7 @@ def generate_pivot_report_task(self, filters: dict, output_format: str, user_id:
 # Ledger report
 # ---------------------------------------------------------------------------
 
-@shared_task(bind=True, max_retries=2)
+@shared_task(bind=True, max_retries=2, acks_late=True, reject_on_worker_lost=True, name="generate_ledger_report_task")
 def generate_ledger_report_task(self, license_id: int, output_format: str, user_id: int):
     """Generate ledger report for a single license."""
     from apps.reports.services.ledger_report import generate_ledger_report

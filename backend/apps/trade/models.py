@@ -70,6 +70,9 @@ def get_next_invoice_number(direction: str, company_name: str, invoice_date=None
     - SALE: PREFIX/YYYY-YY/NNNN (e.g., LM/2025-26/0001)
     - COMMISSION_PURCHASE: COM-P-PREFIX/YYYY-YY/NNNN
     - COMMISSION_SALE: COM-PREFIX/YYYY-YY/NNNN
+
+    Wrapped in select_for_update() inside transaction.atomic() to prevent
+    concurrent requests from computing the same next number (TOCTOU race).
     """
     base_prefix = company_prefix(company_name)
     fy = indian_fy_label(invoice_date)
@@ -85,20 +88,26 @@ def get_next_invoice_number(direction: str, company_name: str, invoice_date=None
 
     pattern_prefix = f"{prefix}/{fy}/"
 
-    existing_invoices = LicenseTrade.objects.filter(
-        direction=direction,
-        invoice_number__startswith=pattern_prefix,
-    ).values_list("invoice_number", flat=True)
+    with transaction.atomic():
+        existing_invoices = (
+            LicenseTrade.objects
+            .select_for_update()
+            .filter(
+                direction=direction,
+                invoice_number__startswith=pattern_prefix,
+            )
+            .values_list("invoice_number", flat=True)
+        )
 
-    max_number = 0
-    for inv in existing_invoices:
-        match = re.search(r"/(\d+)$", inv)
-        if match:
-            num = int(match.group(1))
-            max_number = max(max_number, num)
+        max_number = 0
+        for inv in existing_invoices:
+            match = re.search(r"/(\d+)$", inv)
+            if match:
+                num = int(match.group(1))
+                max_number = max(max_number, num)
 
-    next_number = max_number + 1
-    return f"{prefix}/{fy}/{next_number:04d}"
+        next_number = max_number + 1
+        return f"{prefix}/{fy}/{next_number:04d}"
 
 
 # -----------------------------------------------------------------------------
@@ -393,8 +402,7 @@ class LicenseTradeLine(models.Model):
         return Decimal("0.00")
 
     def save(self, *args, **kwargs) -> None:
-        if not self.amount_inr or self.amount_inr == 0:
-            self.amount_inr = self.compute_amount()
+        self.amount_inr = self.compute_amount()
         super().save(*args, **kwargs)
         if self.trade_id:
             self.trade.recompute_totals()
@@ -467,8 +475,7 @@ class IncentiveTradeLine(models.Model):
         return q2(q2(self.license_value) * (rate_val / Decimal("100")))
 
     def save(self, *args, **kwargs) -> None:
-        if not self.amount_inr or self.amount_inr == 0:
-            self.amount_inr = self.compute_amount()
+        self.amount_inr = self.compute_amount()
         super().save(*args, **kwargs)
         if self.trade_id:
             self.trade.recompute_totals()

@@ -70,12 +70,12 @@ def authenticated_client(api_client, auth_token):
 @pytest.mark.django_db
 def test_generate_balance_report_dispatches_task(authenticated_client):
     fake_task_id = str(uuid.uuid4())
-    mock_result = MagicMock()
-    mock_result.id = fake_task_id
 
     with patch(
+        "apps.reports.views.uuid.uuid4",
+        return_value=uuid.UUID(fake_task_id),
+    ), patch(
         "apps.reports.tasks.generate_balance_report_task.apply_async",
-        return_value=mock_result,
     ) as mock_delay:
         url = reverse("reports:balance-generate")
         resp = authenticated_client.post(

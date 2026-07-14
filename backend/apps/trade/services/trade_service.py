@@ -121,6 +121,10 @@ def build_trade_summary(trade) -> dict:
 # Bidirectional trade linking
 # ---------------------------------------------------------------------------
 
+class PartnerTradeNotFound(LookupError):
+    """Raised when the partner trade PK cannot be resolved."""
+
+
 def link_trades(trade_pk: int, partner_pk: Optional[int]):
     """
     Bidirectionally link or unlink two LicenseTrade records.
@@ -182,7 +186,3 @@ def link_trades(trade_pk: int, partner_pk: Optional[int]):
 
     trade.refresh_from_db()
     return trade
-
-
-class PartnerTradeNotFound(LookupError):
-    """Raised when the partner trade PK cannot be resolved."""

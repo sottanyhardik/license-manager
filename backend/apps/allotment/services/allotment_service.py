@@ -7,9 +7,13 @@ After commit, the Celery recompute_license_balance_task is dispatched lazily
 via transaction.on_commit() to avoid circular imports and to ensure the task
 only fires after the transaction is durable.
 """
+import logging
+
 from django.db import transaction
 
 from apps.allotment.models import AllotmentModel, AllotmentItems
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -21,17 +25,27 @@ def _dispatch(item_ids):
     Return an on_commit callback that fires recompute_license_balance_task
     for every affected item ID.
 
-    The import is intentionally deferred to runtime to avoid circular imports
-    (apps.license may not be installed yet, or may not have tasks defined).
-    Errors are swallowed so a missing task never rolls back business data.
+    The import is intentionally deferred to runtime to avoid circular imports.
+    ImportError is logged at WARNING (task module genuinely absent).
+    Any other exception is logged at ERROR so broker/connectivity failures
+    are never silently swallowed.
     """
     def _task():
         try:
             from apps.license.tasks import recompute_license_balance_task
             for iid in item_ids:
                 recompute_license_balance_task.delay(iid)
-        except Exception:
-            pass  # degrade gracefully if task not available
+        except ImportError:
+            logger.warning(
+                "recompute_license_balance_task not available — skipping dispatch"
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to dispatch balance recompute for item_ids=%s: %s",
+                item_ids,
+                exc,
+                exc_info=True,
+            )
 
     return _task
 

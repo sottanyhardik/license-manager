@@ -115,12 +115,20 @@ DATABASES = {
 # ---------------------------------------------------------------------------
 # Caches — django-redis
 # ---------------------------------------------------------------------------
-_redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/2")
+# REDIS_URL is the base URL without a DB suffix (e.g. redis://localhost:6379).
+# DB isolation prevents a cache flush from wiping in-flight Celery messages:
+#   /1  — Django cache
+#   /2  — Celery broker
+#   /3  — Celery result backend
+_redis_base = os.environ.get("REDIS_URL", "redis://localhost:6379")
+# Strip any trailing /N from the base URL so we can append our own DB number.
+import re as _re
+_redis_base = _re.sub(r"/\d+$", "", _redis_base.rstrip("/"))
 
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": _redis_url,
+        "LOCATION": f"{_redis_base}/1",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         },
@@ -216,8 +224,8 @@ CORS_ALLOWED_ORIGINS = [
 # ---------------------------------------------------------------------------
 # Celery
 # ---------------------------------------------------------------------------
-CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/2")
-CELERY_RESULT_BACKEND = os.environ.get("REDIS_URL", "redis://localhost:6379/2")
+CELERY_BROKER_URL = f"{_redis_base}/2"
+CELERY_RESULT_BACKEND = f"{_redis_base}/3"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"

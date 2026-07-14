@@ -15,8 +15,8 @@ Where:
 Result is quantized to 2 decimal places.
 
 Cross-app models (RowDetails, AllotmentItems, LicenseTradeLine) are imported
-lazily via django.apps.apps.get_model() so this module stays importable even
-when those apps haven't been installed yet.
+lazily inside each _compute_* function to avoid circular imports at module
+load time.  All three apps are required to be installed in production.
 """
 import logging
 from decimal import ROUND_DOWN, Decimal
@@ -32,25 +32,6 @@ logger = logging.getLogger(__name__)
 _TWO_PLACES = Decimal("0.01")
 _DEC_0 = Decimal("0")
 _NULL_THRESHOLD = Decimal("500")
-
-
-def _safe_get_model(app_label: str, model_name: str):
-    """
-    Return the Django model class or None if the app/model is not yet
-    installed.  Avoids ImportError during Phase 3 when allotment/trade/boe
-    apps are absent.
-    """
-    from django.apps import apps as django_apps
-
-    try:
-        return django_apps.get_model(app_label, model_name)
-    except LookupError:
-        logger.debug(
-            "Model %s.%s not installed — skipping in balance calculation.",
-            app_label,
-            model_name,
-        )
-        return None
 
 
 def _compute_credit(license_id: int) -> Decimal:
@@ -72,9 +53,7 @@ def _compute_debit(license_id: int) -> Decimal:
 
     Path: RowDetails → sr_number (LicenseImportItemsModel) → license_id
     """
-    RowDetails = _safe_get_model("bill_of_entry", "RowDetails")
-    if RowDetails is None:
-        return _DEC_0
+    from apps.bill_of_entry.models import RowDetails
 
     result = (
         RowDetails.objects.filter(
@@ -94,9 +73,7 @@ def _compute_allotment(license_id: int) -> Decimal:
 
     Path: AllotmentItems → item (LicenseImportItemsModel) → license_id
     """
-    AllotmentItems = _safe_get_model("allotment", "AllotmentItems")
-    if AllotmentItems is None:
-        return _DEC_0
+    from apps.allotment.models import AllotmentItems
 
     result = (
         AllotmentItems.objects.filter(
@@ -114,9 +91,7 @@ def _compute_trade(license_id: int) -> Decimal:
 
     Path: LicenseTradeLine → sr_number (LicenseImportItemsModel) → license_id
     """
-    LicenseTradeLine = _safe_get_model("trade", "LicenseTradeLine")
-    if LicenseTradeLine is None:
-        return _DEC_0
+    from apps.trade.models import LicenseTradeLine
 
     result = (
         LicenseTradeLine.objects.filter(

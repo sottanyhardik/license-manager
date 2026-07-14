@@ -635,8 +635,8 @@ def test_compute_allotment_excludes_boe_linked():
     mock_ai_model.objects = mock_ai_qs
 
     with patch(
-        "apps.license.services.balance_service._safe_get_model",
-        return_value=mock_ai_model,
+        "apps.allotment.models.AllotmentItems",
+        mock_ai_model,
     ):
         result = _compute_allotment(license_id=10)
 

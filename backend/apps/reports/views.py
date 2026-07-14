@@ -12,6 +12,7 @@ Permission class: ReportDispatchPermission
   Unauthenticated requests → 401.
 """
 import logging
+import uuid
 
 from django.conf import settings
 from django.utils import timezone as dj_timezone
@@ -200,20 +201,21 @@ class GenerateBalanceReportView(APIView):
         license_ids = ser.validated_data["license_ids"]
         output_format = ser.validated_data["format"]
 
-        # Dispatch first to get the Celery task ID
-        result = generate_balance_report_task.apply_async(
-            kwargs={
-                "license_ids": license_ids,
-                "output_format": output_format,
-                "user_id": request.user.pk,
-            }
-        )
-        task_id = result.id
-
+        # Pre-generate the task ID so the tracker row exists before the worker
+        # can call _mark_started() — prevents a phantom PENDING state on fast workers.
+        task_id = str(uuid.uuid4())
         _make_tracker(
             task_name="generate_balance_report_task",
             task_id=task_id,
             args_payload={"license_ids": license_ids, "format": output_format},
+        )
+        generate_balance_report_task.apply_async(
+            kwargs={
+                "license_ids": license_ids,
+                "output_format": output_format,
+                "user_id": request.user.pk,
+            },
+            task_id=task_id,
         )
 
         return Response({"task_id": task_id}, status=status.HTTP_202_ACCEPTED)
@@ -239,19 +241,19 @@ class GenerateItemReportView(APIView):
             if k in _ITEM_FILTER_KEYS and v not in (None, "", [])
         }
 
-        result = generate_item_report_task.apply_async(
-            kwargs={
-                "filters": filters,
-                "output_format": output_format,
-                "user_id": request.user.pk,
-            }
-        )
-        task_id = result.id
-
+        task_id = str(uuid.uuid4())
         _make_tracker(
             task_name="generate_item_report_task",
             task_id=task_id,
             args_payload={"filters": filters, "format": output_format},
+        )
+        generate_item_report_task.apply_async(
+            kwargs={
+                "filters": filters,
+                "output_format": output_format,
+                "user_id": request.user.pk,
+            },
+            task_id=task_id,
         )
 
         return Response({"task_id": task_id}, status=status.HTTP_202_ACCEPTED)
@@ -276,19 +278,19 @@ class GeneratePivotReportView(APIView):
             if k in _PIVOT_FILTER_KEYS and v not in (None, "", [])
         }
 
-        result = generate_pivot_report_task.apply_async(
-            kwargs={
-                "filters": filters,
-                "output_format": output_format,
-                "user_id": request.user.pk,
-            }
-        )
-        task_id = result.id
-
+        task_id = str(uuid.uuid4())
         _make_tracker(
             task_name="generate_pivot_report_task",
             task_id=task_id,
             args_payload={"filters": filters, "format": output_format},
+        )
+        generate_pivot_report_task.apply_async(
+            kwargs={
+                "filters": filters,
+                "output_format": output_format,
+                "user_id": request.user.pk,
+            },
+            task_id=task_id,
         )
 
         return Response({"task_id": task_id}, status=status.HTTP_202_ACCEPTED)
@@ -308,19 +310,19 @@ class GenerateLedgerReportView(APIView):
         license_id = ser.validated_data["license_id"]
         output_format = ser.validated_data["format"]
 
-        result = generate_ledger_report_task.apply_async(
-            kwargs={
-                "license_id": license_id,
-                "output_format": output_format,
-                "user_id": request.user.pk,
-            }
-        )
-        task_id = result.id
-
+        task_id = str(uuid.uuid4())
         _make_tracker(
             task_name="generate_ledger_report_task",
             task_id=task_id,
             args_payload={"license_id": license_id, "format": output_format},
+        )
+        generate_ledger_report_task.apply_async(
+            kwargs={
+                "license_id": license_id,
+                "output_format": output_format,
+                "user_id": request.user.pk,
+            },
+            task_id=task_id,
         )
 
         return Response({"task_id": task_id}, status=status.HTTP_202_ACCEPTED)

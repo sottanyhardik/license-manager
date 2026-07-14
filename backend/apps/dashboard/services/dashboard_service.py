@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.cache import cache
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncMonth
 
 from apps.allotment.models import AllotmentModel
@@ -60,36 +60,45 @@ def get_dashboard_stats(user: Any) -> dict:
     thirty_days_ago = today - timedelta(days=30)
     thirty_days_ahead = today + timedelta(days=30)
 
-    base_qs = LicenseDetailsModel.objects.all()
+    # Single aggregate call replaces 6 separate COUNT queries against the
+    # same LicenseDetailsModel table, eliminating the N+1 pattern.
+    stats = LicenseDetailsModel.objects.aggregate(
+        total=Count("pk"),
+        active_licenses=Count(
+            "pk",
+            filter=Q(flags__is_expired=False, flags__is_null=False),
+        ),
+        expired_licenses=Count(
+            "pk",
+            filter=Q(flags__is_expired=True, flags__is_null=False),
+        ),
+        null_licenses=Count("pk", filter=Q(flags__is_null=True)),
+        expiring_soon=Count(
+            "pk",
+            filter=Q(
+                flags__is_active=True,
+                license_expiry_date__gte=today,
+                license_expiry_date__lte=thirty_days_ahead,
+                balance__balance_cif__gte=Decimal("100.00"),
+            ),
+        ),
+        total_balance_cif_sum=Sum("balance__balance_cif"),
+        low_balance_licenses=Count(
+            "pk",
+            filter=Q(
+                flags__is_active=True,
+                balance__balance_cif__lt=Decimal("100.00"),
+            ),
+        ),
+    )
 
-    total_licenses = base_qs.count()
-
-    active_licenses = base_qs.filter(
-        flags__is_expired=False,
-        flags__is_null=False,
-    ).count()
-
-    expired_licenses = base_qs.filter(
-        flags__is_expired=True,
-        flags__is_null=False,
-    ).count()
-
-    null_licenses = base_qs.filter(flags__is_null=True).count()
-
-    expiring_soon = base_qs.filter(
-        license_expiry_date__gte=today,
-        license_expiry_date__lte=thirty_days_ahead,
-        flags__is_active=True,
-        balance__balance_cif__gte=Decimal("100.00"),
-    ).count()
-
-    balance_agg = base_qs.aggregate(total=Sum("balance__balance_cif"))
-    total_balance_cif = str(balance_agg["total"] or Decimal("0.00"))
-
-    low_balance_licenses = base_qs.filter(
-        balance__balance_cif__lt=Decimal("100.00"),
-        flags__is_active=True,
-    ).count()
+    total_licenses = stats["total"]
+    active_licenses = stats["active_licenses"]
+    expired_licenses = stats["expired_licenses"]
+    null_licenses = stats["null_licenses"]
+    expiring_soon = stats["expiring_soon"]
+    total_balance_cif = str(stats["total_balance_cif_sum"] or Decimal("0.00"))
+    low_balance_licenses = stats["low_balance_licenses"]
 
     recent_allotments = AllotmentModel.objects.filter(
         modified_on__gte=thirty_days_ago,

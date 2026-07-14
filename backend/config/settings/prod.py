@@ -45,6 +45,11 @@ X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True  # belt-and-suspenders; header deprecated in modern browsers
 
+# Tell Django that the nginx reverse-proxy sets X-Forwarded-Proto when the
+# original request was HTTPS.  Required for SECURE_SSL_REDIRECT to work
+# correctly when gunicorn sits behind nginx.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 # ---------------------------------------------------------------------------
 # Static / media
 # ---------------------------------------------------------------------------
@@ -92,3 +97,18 @@ LOGGING = {
         },
     },
 }
+
+# ---------------------------------------------------------------------------
+# Celery — production broker / backend must come from env (no hardcoded DB)
+# ---------------------------------------------------------------------------
+# base.py computes CELERY_BROKER_URL / CELERY_RESULT_BACKEND from REDIS_URL
+# with fixed DB suffixes /2 and /3.  In production the operator may want to
+# point at a dedicated Redis instance or a different DB number, so we allow
+# full DSN overrides via explicit env vars.
+_celery_broker = os.environ.get("CELERY_BROKER_URL")
+if _celery_broker:
+    CELERY_BROKER_URL = _celery_broker
+
+_celery_backend = os.environ.get("CELERY_RESULT_BACKEND")
+if _celery_backend:
+    CELERY_RESULT_BACKEND = _celery_backend

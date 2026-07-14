@@ -8,16 +8,17 @@ All responses are wrapped in the standard envelope:
 Views contain NO business logic — they delegate to serializers and SimpleJWT.
 """
 from django.contrib.auth import get_user_model
-from rest_framework import status, filters
+from rest_framework import filters, status
 from rest_framework.generics import ListAPIView
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
-
+from shared.pagination import StandardPagination
 from shared.serializers import EnvelopeMixin
+
 from .serializers import LoginSerializer, UserSerializer, UsersListSerializer
 
 User = get_user_model()
@@ -142,6 +143,7 @@ class UsersView(ListAPIView):
     """
 
     serializer_class = UsersListSerializer
+    pagination_class = StandardPagination
     filter_backends = [filters.SearchFilter]
     search_fields = ["username", "email", "first_name", "last_name"]
 

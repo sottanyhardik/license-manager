@@ -5,36 +5,16 @@ License ledger report service.
 Assembles the transaction ledger for a single license:
   - License header (number, dates, balance)
   - Related allotments and trade lines where those apps are installed
-    (uses _safe_get_model to avoid crashing if apps are absent)
-
-Models are imported inside the function to prevent circular import errors
-during app startup.
+    (uses lazy imports inside the function body to avoid circular import
+    errors during app startup and to gracefully skip missing models)
 """
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
 _DEC_0 = Decimal("0")
-
-
-def _safe_get_model(app_label: str, model_name: str):
-    """
-    Return the Django model class or None if the app/model is not yet
-    installed.  Mirrors the pattern in license/services/balance_service.py.
-    """
-    from django.apps import apps as django_apps
-
-    try:
-        return django_apps.get_model(app_label, model_name)
-    except LookupError:
-        logger.debug(
-            "Model %s.%s not installed — skipping in ledger report.",
-            app_label,
-            model_name,
-        )
-        return None
 
 
 def generate_ledger_report(license_id: int) -> dict:
@@ -45,8 +25,12 @@ def generate_ledger_report(license_id: int) -> dict:
       - header  : basic license info
       - balance : current balance snapshot
       - transactions : chronological list of debit/credit/allotment events
+
+    All cross-app model imports are deferred to this function body so that
+    (a) circular-import risks at module load are eliminated, and (b) missing
+    apps degrade gracefully rather than raising ImportError at startup.
     """
-    from apps.license.models import LicenseBalance, LicenseDetailsModel
+    from apps.license.models import LicenseDetailsModel
 
     logger.info("Generating ledger report for license_id=%s", license_id)
 
@@ -73,95 +57,89 @@ def generate_ledger_report(license_id: int) -> dict:
     transactions = []
 
     # --- BOE / RowDetails debit transactions ---
-    RowDetails = _safe_get_model("bill_of_entry", "RowDetails")
-    if RowDetails is not None:
-        try:
-            rows = (
-                RowDetails.objects.filter(
-                    boe__license_id=license_id,
-                )
-                .select_related("boe")
-                .order_by("boe__date")
+    try:
+        from apps.bill_of_entry.models import RowDetails  # type: ignore[import]
+
+        rows = (
+            RowDetails.objects.filter(boe__license_id=license_id)
+            .select_related("boe")
+            .order_by("boe__date")
+        )
+        for row in rows:
+            transactions.append(
+                {
+                    "type": "BOE_DEBIT",
+                    "date": (row.boe.date.isoformat() if row.boe.date else None),
+                    "reference": getattr(row.boe, "boe_number", str(row.boe_id)),
+                    "description": getattr(row, "description", ""),
+                    "cif_fc": row.cif_fc,
+                    "transaction_type": getattr(row, "transaction_type", ""),
+                }
             )
-            for row in rows:
-                transactions.append(
-                    {
-                        "type": "BOE_DEBIT",
-                        "date": (
-                            row.boe.date.isoformat() if row.boe.date else None
-                        ),
-                        "reference": getattr(row.boe, "boe_number", str(row.boe_id)),
-                        "description": getattr(row, "description", ""),
-                        "cif_fc": row.cif_fc,
-                        "transaction_type": getattr(row, "transaction_type", ""),
-                    }
-                )
-        except Exception:
-            logger.exception("Error fetching BOE rows for license_id=%s", license_id)
+    except ImportError:
+        logger.debug("bill_of_entry app not installed — skipping BOE rows in ledger report.")
+    except Exception:
+        logger.exception("Error fetching BOE rows for license_id=%s", license_id)
 
     # --- Allotment transactions ---
-    AllotmentItems = _safe_get_model("allotment", "AllotmentItems")
-    if AllotmentItems is not None:
-        try:
-            allotment_items = (
-                AllotmentItems.objects.filter(
-                    allotment__license_id=license_id,
-                )
-                .select_related("allotment")
-                .order_by("allotment__date")
+    try:
+        from apps.allotment.models import AllotmentItems  # type: ignore[import]
+
+        allotment_items = (
+            AllotmentItems.objects.filter(allotment__license_id=license_id)
+            .select_related("allotment")
+            .order_by("allotment__date")
+        )
+        for ai in allotment_items:
+            allotment = ai.allotment
+            transactions.append(
+                {
+                    "type": "ALLOTMENT",
+                    "date": (
+                        allotment.date.isoformat()
+                        if getattr(allotment, "date", None)
+                        else None
+                    ),
+                    "reference": str(allotment.pk),
+                    "description": getattr(ai, "description", ""),
+                    "cif_fc": ai.cif_fc,
+                    "transaction_type": "ALLOTMENT",
+                }
             )
-            for ai in allotment_items:
-                allotment = ai.allotment
-                transactions.append(
-                    {
-                        "type": "ALLOTMENT",
-                        "date": (
-                            allotment.date.isoformat()
-                            if getattr(allotment, "date", None)
-                            else None
-                        ),
-                        "reference": str(allotment.pk),
-                        "description": getattr(ai, "description", ""),
-                        "cif_fc": ai.cif_fc,
-                        "transaction_type": "ALLOTMENT",
-                    }
-                )
-        except Exception:
-            logger.exception(
-                "Error fetching allotment items for license_id=%s", license_id
-            )
+    except ImportError:
+        logger.debug("allotment app not installed — skipping allotment items in ledger report.")
+    except Exception:
+        logger.exception("Error fetching allotment items for license_id=%s", license_id)
 
     # --- Trade line transactions ---
-    LicenseTradeLine = _safe_get_model("trade", "LicenseTradeLine")
-    if LicenseTradeLine is not None:
-        try:
-            trade_lines = (
-                LicenseTradeLine.objects.filter(
-                    trade__license_id=license_id,
-                )
-                .select_related("trade")
-                .order_by("trade__date")
+    try:
+        from apps.trade.models import LicenseTradeLine  # type: ignore[import]
+
+        trade_lines = (
+            LicenseTradeLine.objects.filter(trade__license_id=license_id)
+            .select_related("trade")
+            .order_by("trade__date")
+        )
+        for tl in trade_lines:
+            trade = tl.trade
+            transactions.append(
+                {
+                    "type": "TRADE",
+                    "date": (
+                        trade.date.isoformat()
+                        if getattr(trade, "date", None)
+                        else None
+                    ),
+                    "reference": str(trade.pk),
+                    "description": getattr(trade, "direction", ""),
+                    "cif_fc": tl.cif_fc,
+                    "transaction_type": getattr(trade, "direction", "TRADE"),
+                }
             )
-            for tl in trade_lines:
-                trade = tl.trade
-                transactions.append(
-                    {
-                        "type": "TRADE",
-                        "date": (
-                            trade.date.isoformat()
-                            if getattr(trade, "date", None)
-                            else None
-                        ),
-                        "reference": str(trade.pk),
-                        "description": getattr(trade, "direction", ""),
-                        "cif_fc": tl.cif_fc,
-                        "transaction_type": getattr(trade, "direction", "TRADE"),
-                    }
-                )
-        except Exception:
-            logger.exception(
-                "Error fetching trade lines for license_id=%s", license_id
-            )
+    except ImportError:
+        logger.debug("trade app not installed — skipping trade lines in ledger report.")
+    except Exception:
+        logger.exception("Error fetching trade lines for license_id=%s", license_id)
 
     # Sort all transactions by date (None dates sort last)
     transactions.sort(key=lambda t: (t["date"] is None, t["date"] or ""))
@@ -169,5 +147,5 @@ def generate_ledger_report(license_id: int) -> dict:
     return {
         "header": header,
         "transactions": transactions,
-        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "generated_at": datetime.now(tz=UTC).isoformat(),
     }

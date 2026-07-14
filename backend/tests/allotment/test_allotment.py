@@ -168,19 +168,32 @@ def test_allotment_type_choices():
 # 4. List endpoint filtered by license_number returns 200
 # ---------------------------------------------------------------------------
 
-def test_list_filter_by_license(settings):
+@pytest.mark.django_db
+def test_list_filter_by_license(db, django_user_model, settings):
     """
     GET /api/v1/allotments/?license_number=DFIA-001 must return HTTP 200.
 
-    The queryset is mocked so no real DB is touched.
+    The queryset is mocked so no real DB is touched beyond user creation.
     """
+    from django.contrib.auth.models import Group
     from rest_framework.test import APIClient
+    from rest_framework_simplejwt.tokens import RefreshToken
     from unittest.mock import patch, MagicMock
 
     # Provide a minimal Django settings override so DRF can resolve URLs
     settings.ROOT_URLCONF = "config.urls"
 
+    # Create a real user with the ALLOTMENT_MANAGER role so auth + permission
+    # both pass without any patching of the auth layer.
+    user = django_user_model.objects.create_user(
+        username="allot_tester", password="pass123"
+    )
+    group, _ = Group.objects.get_or_create(name="ALLOTMENT_MANAGER")
+    user.groups.add(group)
+
+    refresh = RefreshToken.for_user(user)
     client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(refresh.access_token)}")
 
     mock_qs = MagicMock()
     mock_qs.filter.return_value = mock_qs
@@ -194,13 +207,9 @@ def test_list_filter_by_license(settings):
     mock_qs.__getitem__ = MagicMock(return_value=mock_qs)
     mock_qs.__len__ = MagicMock(return_value=0)
 
-    # Force auth by patching the permission class to always allow
     with patch(
         "apps.allotment.views.AllotmentViewSet.get_queryset",
         return_value=mock_qs,
-    ), patch(
-        "apps.accounts.permissions.AllotmentPermission.has_permission",
-        return_value=True,
     ):
         response = client.get(
             "/api/v1/allotments/?license_number=DFIA-001",

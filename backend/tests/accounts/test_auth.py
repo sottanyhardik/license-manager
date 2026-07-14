@@ -267,15 +267,14 @@ class TestRBACPermissions:
 
         from apps.accounts.permissions import LicensePermission
         from unittest.mock import MagicMock
-        from rest_framework import permissions as drf_permissions
 
         perm = LicensePermission()
         req = MagicMock()
         req.method = "GET"
         req.user = user
-        # is_authenticated must be truthy
+        # is_authenticated is a read-only property on AbstractBaseUser;
+        # a real User instance always returns True — no setter needed.
         user.is_superuser = False
-        user.is_authenticated = True
         assert perm.has_permission(req, None) is True
 
     def test_permission_class_blocks_wrong_role(self):
@@ -294,8 +293,9 @@ class TestRBACPermissions:
         req = MagicMock()
         req.method = "GET"
         req.user = user
+        # is_authenticated is a read-only property on AbstractBaseUser;
+        # a real User instance always returns True — no setter needed.
         user.is_superuser = False
-        user.is_authenticated = True
 
         # TRADE_VIEWER is NOT in UserManagementPermission.required_roles_for_read
         assert perm.has_permission(req, None) is False

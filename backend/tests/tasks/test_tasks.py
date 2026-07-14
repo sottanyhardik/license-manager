@@ -126,5 +126,6 @@ def test_list_shows_only_relevant_tasks(auth_client, user, other_user):
     url = reverse("tasks:task-list")
     resp = auth_client.get(url)
     assert resp.status_code == status.HTTP_200_OK
-    ids = [t["id"] for t in resp.json()]
+    # Response is wrapped in a pagination envelope: {"success":…, "data":[…], "pagination":{…}}
+    ids = [t["id"] for t in resp.json()["data"]]
     assert mine.id in ids

@@ -156,16 +156,17 @@ def test_license_filter_by_type(license_viewer_user):
     fake_qs.order_by.return_value = fake_qs
     fake_qs.filter.return_value = fake_qs
 
+    # Patch both get_queryset AND filter_queryset on the viewset so that
+    # django-filters never inspects the mock queryset (which is not a real
+    # QuerySet and fails the FilterSet's issubclass / isinstance guards).
     with patch(
-        "apps.license.views.license.LicenseDetailsModel.objects"
-    ) as mock_manager:
-        mock_manager.select_related.return_value.order_by.return_value = fake_qs
-        with patch(
-            "apps.license.filters.LicenseFilter.qs",
-            new_callable=PropertyMock,
-            return_value=fake_qs,
-        ):
-            response = client.get("/api/v1/licenses/?license_type=ADL")
+        "apps.license.views.license.LicenseViewSet.get_queryset",
+        return_value=fake_qs,
+    ), patch(
+        "apps.license.views.license.LicenseViewSet.filter_queryset",
+        return_value=fake_qs,
+    ):
+        response = client.get("/api/v1/licenses/?license_type=ADL")
 
     # Must not raise a 500; 200 or 404 (empty page) both acceptable
     assert response.status_code in (

@@ -5,10 +5,10 @@ Unit tests for the allotment module.
 All tests mock the ORM and use no real database (no @pytest.mark.django_db).
 This makes the suite fast and independent of migrations/fixtures.
 """
-import pytest
-from unittest.mock import MagicMock, patch, call
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # 1. create_allotment dispatches balance task
@@ -37,7 +37,13 @@ def test_create_allotment_dispatches_balance_task():
         "company_id": 1,
         "item_name": "Test Item",
         "items": [
-            {"item": 42, "qty": Decimal("10.000"), "cif_fc": Decimal("100.00"), "cif_inr": Decimal("8000.00"), "is_boe": False}
+            {
+                "item": 42,
+                "qty": Decimal("10.000"),
+                "cif_fc": Decimal("100.00"),
+                "cif_inr": Decimal("8000.00"),
+                "is_boe": False,
+            }
         ],
     }
     user = MagicMock()
@@ -146,8 +152,6 @@ def test_allotment_type_choices():
     defined in the task spec.
     """
     # Import lazily — Django app registry may not be ready in pure unit tests
-    import importlib
-    import sys
 
     # Patch Django's apps to avoid AppRegistryNotReady in models.py
     with patch("django.db.models.ForeignKey.__init__", return_value=None), \
@@ -175,10 +179,11 @@ def test_list_filter_by_license(db, django_user_model, settings):
 
     The queryset is mocked so no real DB is touched beyond user creation.
     """
+    from unittest.mock import MagicMock, patch
+
     from django.contrib.auth.models import Group
     from rest_framework.test import APIClient
     from rest_framework_simplejwt.tokens import RefreshToken
-    from unittest.mock import patch, MagicMock
 
     # Provide a minimal Django settings override so DRF can resolve URLs
     settings.ROOT_URLCONF = "config.urls"

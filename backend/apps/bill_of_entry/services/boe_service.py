@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Product-name helpers
 # ---------------------------------------------------------------------------
@@ -56,6 +55,7 @@ def bulk_update_product_names() -> dict[str, Any]:
         dict with keys: success, total, updated, skipped, message.
     """
     from django.db.models import Q
+
     from apps.bill_of_entry.models import BillOfEntryModel
 
     empty_product_boes = BillOfEntryModel.objects.filter(
@@ -235,6 +235,7 @@ def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
         ValueError: When source_boe_id is not provided, source == target, or source not found.
     """
     from django.db import transaction as db_transaction
+
     from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
     from apps.bill_of_entry.serializers import BillOfEntrySerializer
 
@@ -328,8 +329,9 @@ def create_boe(data: dict, user) -> Any:
 
     Returns the created BillOfEntryModel instance.
     """
-    from apps.bill_of_entry.serializers import BillOfEntrySerializer
     from django.db import transaction as db_transaction
+
+    from apps.bill_of_entry.serializers import BillOfEntrySerializer
 
     with db_transaction.atomic():
         serializer = BillOfEntrySerializer(data=data)

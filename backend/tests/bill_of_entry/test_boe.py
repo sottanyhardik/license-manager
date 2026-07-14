@@ -7,9 +7,9 @@ the DB models with MagicMock. API-level tests that need DB access use
 """
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Service layer tests (no DB required — models mocked with MagicMock)
@@ -123,10 +123,9 @@ class TestUploadLedgerReturnsTaskId:
 
     def test_upload_ledger_returns_task_id(self):
         """Test LedgerUploadView directly via APIRequestFactory (no DB needed)."""
+        from apps.bill_of_entry.views.ledger import LedgerUploadView
         from django.core.files.uploadedfile import SimpleUploadedFile
         from rest_framework.test import APIRequestFactory
-
-        from apps.bill_of_entry.views.ledger import LedgerUploadView
 
         test_file = SimpleUploadedFile(
             "test_ledger.xlsx",
@@ -162,8 +161,8 @@ class TestUploadLedgerReturnsTaskId:
 
     def test_upload_ledger_no_file_returns_400(self):
         """Missing file returns 400."""
-        from rest_framework.test import APIRequestFactory
         from apps.bill_of_entry.views.ledger import LedgerUploadView
+        from rest_framework.test import APIRequestFactory
 
         factory = APIRequestFactory()
         request = factory.post(

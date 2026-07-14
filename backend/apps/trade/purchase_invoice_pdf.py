@@ -4,9 +4,9 @@ from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Image
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Table, TableStyle
 
 
 def num_to_words_indian(amount):
@@ -60,7 +60,7 @@ def num_to_words_indian(amount):
             return ' '.join(result)
 
         return convert_indian(whole_amount)
-    except Exception as e:
+    except Exception:
         return str(int(amount))
 
 
@@ -77,19 +77,7 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
     """
     buffer = BytesIO()
 
-    # Get company color (default to black)
     to_company = trade.to_company
-    company_color = colors.black
-
-    if to_company and to_company.bill_colour:
-        color_value = to_company.bill_colour.strip()
-        if color_value:
-            if not color_value.startswith('#'):
-                color_value = '#' + color_value
-            try:
-                company_color = colors.HexColor(color_value)
-            except (ValueError, TypeError):
-                company_color = colors.black
 
     doc = SimpleDocTemplate(
         buffer,
@@ -108,6 +96,7 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
 
     # Logo and Title section
     import os
+
     from PIL import Image as PILImage
 
     # Title style
@@ -126,8 +115,13 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
     logger = logging.getLogger(__name__)
 
     if to_company:
+        logo_value = to_company.logo if hasattr(to_company, "logo") else "N/A"
         logger.info(
-            f"Company: {to_company.name}, Has logo attr: {hasattr(to_company, 'logo')}, Logo value: {to_company.logo if hasattr(to_company, 'logo') else 'N/A'}")
+            "Company: %s, Has logo attr: %s, Logo value: %s",
+            to_company.name,
+            hasattr(to_company, "logo"),
+            logo_value,
+        )
 
         if hasattr(to_company, 'logo') and to_company.logo:
             try:
@@ -344,8 +338,9 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
             subtotal += amount
             total_license_value += (line.license_value or 0)
 
-            # Get description from incentive license: License Type - License Number - License Date - Port Code Name - Exporter IEC
-            description = ''
+            # Get description from incentive license:
+            # License Type - License Number - License Date - Port Code Name - Exporter IEC
+            description = ""
             if line.incentive_license:
                 lic = line.incentive_license
                 parts = []
@@ -643,6 +638,7 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
         if hasattr(to_company, 'stamp') and to_company.stamp:
             try:
                 import os
+
                 from PIL import Image as PILImage
                 stamp_path = to_company.stamp.path
                 if os.path.exists(stamp_path):

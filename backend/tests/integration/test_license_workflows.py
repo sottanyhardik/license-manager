@@ -33,10 +33,9 @@ What is tested
 """
 import re
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # BR-02 — Test 1: balance_service produces correct balance after BOE debit
@@ -306,8 +305,9 @@ def test_expired_license_flagged():
     recompute_license_balance() writes the is_expired flag.
     """
     import datetime
-    from django.utils import timezone
+
     from apps.license.services.balance_service import recompute_license_balance
+    from django.utils import timezone
 
     license_id = 5
     yesterday = timezone.now().date() - datetime.timedelta(days=1)
@@ -357,8 +357,9 @@ def test_non_expired_license_not_flagged():
     BR-03: license_expiry_date >= today → is_expired remains False.
     """
     import datetime
-    from django.utils import timezone
+
     from apps.license.services.balance_service import recompute_license_balance
+    from django.utils import timezone
 
     license_id = 6
     future = timezone.now().date() + datetime.timedelta(days=30)

@@ -13,6 +13,19 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP"]
+ignore = [
+    "E402",   # module-import-not-at-top — intentional lazy imports to avoid circular imports
+    "N806",   # non-lowercase-variable-in-function — Django convention (User, Model classes assigned in functions)
+    "N818",   # error-suffix-on-exception-name — domain exception PartnerTradeNotFound is a LookupError variant
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "F841",   # unused-variable — test mocks are often assigned but only used as context managers
+]
+"backend/tests/**" = [
+    "F841",   # same — when ruff is run from repo root rather than backend/
+]
 
 [tool.black]
 line-length = 120

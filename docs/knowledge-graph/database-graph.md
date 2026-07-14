@@ -13,15 +13,15 @@
 
 ## App → Table Ownership
 
-| Django App | Tables (prefix) | Migration Status |
+| Django App | Tables | Migration Status |
 |---|---|---|
-| accounts | accounts_user | legacy-owned |
-| core | core_company, core_port, core_hscode, core_sionnorm*, core_exchangerate, ... | legacy-owned |
-| license | license_*, licensebalance, licenseflags, licenseownership, licensenotes | legacy-owned |
-| allotment | allotment_allotmentmodel, allotment_allotmentitems | legacy-owned |
-| bill_of_entry | bill_of_entry_billofentrymodel, bill_of_entry_rowdetails | legacy-owned |
-| trade | trade_licensetrade, trade_licensetradelline, trade_incentivetradeline, trade_licensetradiepayment | legacy-owned |
-| tasks | tasks_task, tasks_taskremark | legacy-owned |
+| accounts | `accounts_user` | legacy-owned |
+| core | `core_companymodel`, `core_portmodel`, `core_hscodemodel`, `core_itemheadmodel` (deprecated), `core_itemgroupmodel`, `core_itemnamemodel`, `core_headsiononormsmodel`, `core_sionnormclassmodel`, `core_sionexportmodel`, `core_sionimportmodel`, `core_sionnormnote`, `core_sionnormcondition`, `core_productdescriptionmodel`, `core_transferlettermodel`, `core_unitpricemodel`, `core_invoiceentity`, `core_schemecode`, `core_notificationnumber`, `core_purchasestatus`, `core_exchangeratemodel`, `core_celerytasktracker`, `core_activitylog`, `core_masterchange` | legacy-owned |
+| license | `license_licensedetailsmodel`, `license_licensenotes`, `license_licensebalance`, `license_licenseflags`, `license_licenseownership`, `license_licenseexportitemmodel`, `license_licenseimportitemsmodel`, `license_licenseitemplan`, `license_licensedocumentmodel`, `license_statusmodel`, `license_officemodel`, `license_alongwithmodel`, `license_datemodel`, `license_licenseinwardoutwardmodel`, `license_licensetransfermodel`, `license_incentivelicense`, `license_licensepurchase`, `license_invoice`, `license_invoiceitem` | legacy-owned |
+| allotment | `allotment_allotmentmodel`, `allotment_allotmentitems` | legacy-owned |
+| bill_of_entry | `bill_of_entry_billofentrymodel`, `bill_of_entry_rowdetails` | legacy-owned |
+| trade | `trade_licensetrade`, `trade_licensetradelline`, `trade_incentivetradeline`, `trade_licensetradeepayment` | legacy-owned |
+| tasks | `tasks_task`, `tasks_taskremark` | legacy-owned |
 
 ## High-Risk Cascades (from Phase 1 audit)
 

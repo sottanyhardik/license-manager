@@ -191,7 +191,7 @@ export function TaskCard({ task, currentUserId, isExpanded, onToggleExpand, user
             </select>
           </div>
 
-          <TaskRemarks task={task} currentUserId={currentUserId} />
+          <TaskRemarks task={task} />
         </div>
       )}
     </div>

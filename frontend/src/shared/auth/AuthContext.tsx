@@ -74,9 +74,16 @@ export const AuthContext = createContext<AuthContextValue>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const storedUser = localStorage.getItem('user')
-  const [user, setUser] = useState<AuthUser | null>(
-    storedUser ? (JSON.parse(storedUser) as AuthUser) : null,
-  )
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (!storedUser) return null
+    try {
+      return JSON.parse(storedUser) as AuthUser
+    } catch {
+      // Malformed JSON in localStorage — discard and force re-login
+      localStorage.removeItem('user')
+      return null
+    }
+  })
   const [loading, setLoading] = useState(true)
 
   const loadUserCalled = useRef(false)

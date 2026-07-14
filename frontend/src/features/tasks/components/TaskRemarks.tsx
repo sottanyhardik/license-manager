@@ -4,7 +4,6 @@ import type { Task } from '../types'
 
 interface Props {
   task: Task
-  currentUserId: number | null
 }
 
 export function TaskRemarks({ task }: Props) {

@@ -314,7 +314,7 @@ export function TradeLineTable({ lines, onChange, readOnly = false }: TradeLineT
             <tfoot>
               <tr className="border-t bg-muted/20">
                 <td
-                  colSpan={readOnly ? 11 : 11}
+                  colSpan={11}
                   className="px-2 py-2 text-right text-xs font-semibold text-muted-foreground"
                 >
                   Subtotal

@@ -3,7 +3,6 @@ import type { ReportTask } from '../types'
 
 interface Props {
   task: ReportTask | undefined
-  isPolling: boolean
 }
 
 export function ReportTaskStatus({ task }: Props) {

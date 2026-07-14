@@ -57,6 +57,7 @@
   }
 }
 
+/* Base reset rules merged into the single @layer base block above. */
 @layer base {
   * {
     border-color: hsl(var(--border));

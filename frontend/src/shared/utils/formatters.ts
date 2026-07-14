@@ -27,8 +27,19 @@ export function formatINRCompact(value: number | null | undefined): string {
 
 // ── Numbers ───────────────────────────────────────────────────────────────────
 
+/** General number formatter — trims trailing zeros (0–3 dp). */
 const NUMBER_FORMATTER = new Intl.NumberFormat('en-IN', {
   minimumFractionDigits: 0,
+  maximumFractionDigits: 3,
+})
+
+/**
+ * 3dp quantity formatter — always shows exactly 3 decimal places.
+ * Matches the backend's 3dp precision for trade/BOE quantities
+ * (DecimalField max_digits=15, decimal_places=3).
+ */
+const QTY_3DP_FORMATTER = new Intl.NumberFormat('en-IN', {
+  minimumFractionDigits: 3,
   maximumFractionDigits: 3,
 })
 
@@ -37,9 +48,13 @@ export function formatNumber(value: number | null | undefined): string {
   return NUMBER_FORMATTER.format(value)
 }
 
+/**
+ * Format a quantity with exactly 3 decimal places, matching the backend's
+ * 3dp storage precision.  Optionally appends a unit string.
+ */
 export function formatQuantity(value: number | null | undefined, unit?: string): string {
-  const formatted = formatNumber(value)
-  if (formatted === '—') return '—'
+  if (value == null || isNaN(value)) return '—'
+  const formatted = QTY_3DP_FORMATTER.format(value)
   return unit ? `${formatted} ${unit}` : formatted
 }
 

@@ -1,4 +1,5 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, Component } from 'react'
+import type { ReactNode, ErrorInfo } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from '@/shared/auth/ProtectedRoute'
 import { AdminLayout } from '@/layout/AdminLayout'
@@ -60,9 +61,63 @@ function PageLoader() {
   )
 }
 
+// ── Per-route error boundary ──────────────────────────────────────────────────
+// Catches render errors thrown by individual page components so a single
+// broken page does not crash the entire app (which the root boundary in
+// main.tsx would also catch, but this gives a recoverable in-layout fallback).
+
+interface PageErrorBoundaryState {
+  hasError: boolean
+  message: string
+}
+
+class PageErrorBoundary extends Component<
+  { children: ReactNode },
+  PageErrorBoundaryState
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false, message: '' }
+  }
+
+  static getDerivedStateFromError(error: unknown): PageErrorBoundaryState {
+    return {
+      hasError: true,
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.',
+    }
+  }
+
+  componentDidCatch(_error: Error, info: ErrorInfo) {
+    // In production you would forward this to an error-tracking service.
+    if (import.meta.env.DEV) {
+      console.error('[PageErrorBoundary]', _error, info.componentStack)
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8">
+          <p className="text-lg font-semibold text-destructive">This page failed to load.</p>
+          <p className="text-sm text-muted-foreground">{this.state.message}</p>
+          <button
+            type="button"
+            className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground"
+            onClick={() => this.setState({ hasError: false, message: '' })}
+          >
+            Try again
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 export function AppRouter() {
   return (
     <BrowserRouter>
+      <PageErrorBoundary>
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public routes */}
@@ -116,6 +171,7 @@ export function AppRouter() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
+      </PageErrorBoundary>
     </BrowserRouter>
   )
 }

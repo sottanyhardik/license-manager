@@ -4,7 +4,7 @@
 // uses refetchInterval) until status is 'success' or 'failure'.
 // Shows a spinner while polling and success/error messages when done.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Loader2, Upload, XCircle } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/utils/cn'
@@ -35,10 +35,14 @@ export default function LedgerUpload({ onUploadComplete }: LedgerUploadProps) {
   const isFailed = taskStatus?.status === 'failure'
 
   // Notify parent once the task reaches success.
-  if (isComplete && onUploadComplete) {
-    // Use a flag-style ref-based guard if needed; for simplicity call inline.
-    // In practice TanStack Query won't re-render unless the data actually changes.
-  }
+  useEffect(() => {
+    if (isComplete) {
+      onUploadComplete?.()
+    }
+    // We only want this to fire when the task transitions to complete, not on
+    // every render that already has isComplete = true.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isComplete])
 
   function handleFile(file: File) {
     setSelectedFile(file)

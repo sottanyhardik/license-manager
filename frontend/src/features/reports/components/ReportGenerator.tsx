@@ -65,7 +65,7 @@ export function ReportGenerator({ title, description, onGenerate, children }: Pr
         </div>
 
         {taskData && (
-          <ReportTaskStatus task={taskData} isPolling={!!isPolling} />
+          <ReportTaskStatus task={taskData} />
         )}
       </div>
     </div>

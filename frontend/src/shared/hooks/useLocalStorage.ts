@@ -1,15 +1,19 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 export function useLocalStorage<T>(
   key: string,
   initialValue: T,
 ): [T, (value: T | ((prev: T) => T)) => void, () => void] {
+  // Capture the initial value in a ref so removeValue's dep array stays
+  // stable even when the caller passes a new object reference each render.
+  const initialValueRef = useRef<T>(initialValue)
+
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
       const item = localStorage.getItem(key)
-      return item ? (JSON.parse(item) as T) : initialValue
+      return item ? (JSON.parse(item) as T) : initialValueRef.current
     } catch {
-      return initialValue
+      return initialValueRef.current
     }
   })
 
@@ -30,11 +34,11 @@ export function useLocalStorage<T>(
   const removeValue = useCallback(() => {
     try {
       localStorage.removeItem(key)
-      setStoredValue(initialValue)
+      setStoredValue(initialValueRef.current)
     } catch {
       // Ignore
     }
-  }, [key, initialValue])
+  }, [key]) // initialValueRef is stable — no need to list it
 
   return [storedValue, setValue, removeValue]
 }

@@ -20,14 +20,18 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
 
   const reason = searchParams.get('reason')
-  const redirect = searchParams.get('redirect') ?? '/dashboard'
+  // Guard against open-redirect: only allow same-origin relative paths.
+  // A redirect value starting with '//' or a scheme like 'javascript:' would
+  // be dangerous when passed to navigate(), so we validate it here.
+  const rawRedirect = searchParams.get('redirect') ?? '/dashboard'
+  const redirect = /^\/[^/]/.test(rawRedirect) || rawRedirect === '/' ? rawRedirect : '/dashboard'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     try {
       const { data } = await apiClient.post<LoginResponse>(ENDPOINTS.AUTH.LOGIN, {
-        username,
+        username: username.trim(),
         password,
       })
       loginSuccess(data)

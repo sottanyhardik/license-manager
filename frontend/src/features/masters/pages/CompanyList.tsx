@@ -6,7 +6,7 @@
 import { useNavigate, Link } from 'react-router-dom'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { Plus, TriangleAlert } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useAuth } from '@/shared/auth/AuthContext'
 import { Button } from '@/shared/ui/button'
@@ -59,7 +59,7 @@ export default function CompanyList() {
   const [pageSize, setPageSize] = useState(25)
   const [ordering, setOrdering] = useState('')
 
-  const { data, isLoading } = useCompanies({ search, page, page_size: pageSize, ordering })
+  const { data, isLoading, isError } = useCompanies({ search, page, page_size: pageSize, ordering })
   const deleteMutation = useDeleteCompany()
   const canWrite = isSuperAdmin()
 
@@ -110,6 +110,13 @@ export default function CompanyList() {
           </Button>
         )}
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+          Failed to load companies. Please try again.
+        </div>
+      )}
 
       <div className="rounded-lg border bg-card p-4 shadow-sm">
         <MasterDataTable<Company>

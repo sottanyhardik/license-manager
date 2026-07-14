@@ -12,7 +12,7 @@ export interface APIResponse<T> {
   success: boolean
   data: T | null
   message: string | null
-  errors?: Array<{ field: string; message: string }>
+  errors?: Array<{ field?: string; message: string }>
 }
 
 // Shape returned by list endpoints AFTER the envelope interceptor in client.ts

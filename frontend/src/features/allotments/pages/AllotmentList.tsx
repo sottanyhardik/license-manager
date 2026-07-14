@@ -85,7 +85,7 @@ export default function AllotmentList() {
 
   const debouncedSearch = useDebounce(searchInput, 300)
 
-  const { data, isLoading } = useAllotments({
+  const { data, isLoading, isError } = useAllotments({
     search: debouncedSearch || undefined,
     type: typeFilter === 'all' ? undefined : typeFilter,
     page,
@@ -229,6 +229,12 @@ export default function AllotmentList() {
           <tbody>
             {isLoading ? (
               <TableSkeletonRows count={8} />
+            ) : isError ? (
+              <tr>
+                <td colSpan={8} className="py-8 text-center text-sm text-destructive">
+                  Failed to load allotments. Please try again.
+                </td>
+              </tr>
             ) : allotments.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-12 text-center text-sm text-muted-foreground">

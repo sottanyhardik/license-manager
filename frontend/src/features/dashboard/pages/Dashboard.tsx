@@ -10,6 +10,7 @@ import {
   Network,
   ReceiptText,
   RefreshCw,
+  XCircle,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
@@ -66,8 +67,32 @@ export default function Dashboard() {
     activityQuery.isLoading ||
     expiringQuery.isLoading
 
+  const isError =
+    statsQuery.isError ||
+    utilisationQuery.isError ||
+    activityQuery.isError ||
+    expiringQuery.isError
+
   if (isLoading) {
     return <DashboardSkeleton />
+  }
+
+  if (isError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 p-6">
+        <XCircle className="size-10 text-destructive opacity-80" aria-hidden="true" />
+        <p className="text-base font-semibold">Failed to load dashboard data</p>
+        <p className="text-sm text-muted-foreground">Check your connection and try again.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void queryClient.invalidateQueries({ queryKey: ['dashboard'] })}
+        >
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          Retry
+        </Button>
+      </div>
+    )
   }
 
   const stats = statsQuery.data

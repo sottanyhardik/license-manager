@@ -2,7 +2,7 @@
 // Clicking a row expands it to show BOE/allotment usage detail.
 // Isolated from LicenseBalancePanel to keep each component focused.
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { ChevronDown, ChevronRight, Inbox, Loader2 } from 'lucide-react'
 import { cn } from '@/shared/utils/cn'
 import { useLicenseItemUsage } from '../queries'
@@ -29,13 +29,21 @@ function UsageDetail({
   itemId: number
   itemType: 'import'
 }) {
-  const { data: usage, isLoading } = useLicenseItemUsage(licenseId, itemId, itemType)
+  const { data: usage, isLoading, isError } = useLicenseItemUsage(licenseId, itemId, itemType)
 
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" aria-hidden="true" />
         Loading usage details…
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="p-3 text-sm text-destructive">
+        Failed to load usage details.
       </div>
     )
   }
@@ -167,9 +175,8 @@ export function LicenseImportItems({ licenseId, items, className }: LicenseImpor
           {items.map((item, idx) => {
             const isExpanded = expandedId === item.id
             return (
-              <>
+              <Fragment key={item.id}>
                 <tr
-                  key={item.id}
                   className={cn(
                     'cursor-pointer border-b transition-colors hover:bg-accent/40',
                     isExpanded && 'bg-accent/20',
@@ -210,7 +217,7 @@ export function LicenseImportItems({ licenseId, items, className }: LicenseImpor
                   <td className="px-3 py-2 text-right tabular-nums">{fmt(item.balance_cif_fc)}</td>
                 </tr>
                 {isExpanded && (
-                  <tr key={`${item.id}-usage`}>
+                  <tr>
                     <td
                       colSpan={COLS.length + 1}
                       className="border-b border-dashed"
@@ -223,7 +230,7 @@ export function LicenseImportItems({ licenseId, items, className }: LicenseImpor
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             )
           })}
         </tbody>

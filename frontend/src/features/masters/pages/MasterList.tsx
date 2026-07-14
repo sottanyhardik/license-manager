@@ -12,7 +12,7 @@
 import { useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { Plus, TriangleAlert } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useAuth } from '@/shared/auth/AuthContext'
 import { Button } from '@/shared/ui/button'
@@ -205,6 +205,7 @@ export default function MasterList() {
   const data = listResult?.data?.data ?? []
   const totalCount = listResult?.data?.pagination?.count ?? 0
   const isLoading = listResult?.isLoading ?? true
+  const isError = listResult?.isError ?? false
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -229,6 +230,14 @@ export default function MasterList() {
           </Button>
         )}
       </div>
+
+      {/* Error state */}
+      {isError && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+          Failed to load {config.label.toLowerCase()}. Please try again.
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-lg border bg-card p-4 shadow-sm">

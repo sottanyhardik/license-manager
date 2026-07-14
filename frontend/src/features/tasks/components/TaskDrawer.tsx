@@ -33,7 +33,7 @@ export function TaskDrawer({ show, onClose, currentUserId }: Props) {
     return p
   }, [search, statusFilter])
 
-  const { data: rawTasks = [], isLoading } = useTasks(queryParams)
+  const { data: rawTasks = [], isLoading, isError } = useTasks(queryParams)
   const { data: users = [] } = useAssignableUsers()
   const createTask = useCreateTask()
 
@@ -142,14 +142,19 @@ export function TaskDrawer({ show, onClose, currentUserId }: Props) {
               <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
             </div>
           )}
-          {!isLoading && tasks.length === 0 && (
+          {isError && (
+            <div className="p-5 text-center text-sm text-destructive" role="alert">
+              Failed to load tasks. Please try again.
+            </div>
+          )}
+          {!isLoading && !isError && tasks.length === 0 && (
             <div className="flex flex-col items-center gap-2 p-10 text-center text-muted-foreground">
               <CheckSquare className="size-9 opacity-40" />
               <p className="text-sm font-medium">No tasks yet</p>
               <p className="text-xs">Add one above.</p>
             </div>
           )}
-          {tasks.map((task) => (
+          {!isError && tasks.map((task) => (
             <TaskCard
               key={task.id}
               task={task}

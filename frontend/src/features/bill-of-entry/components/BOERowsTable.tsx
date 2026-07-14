@@ -99,17 +99,17 @@ export default function BOERowsTable({
 
               {/* Qty */}
               <td className="px-3 py-2 tabular-nums">
-                {parseFloat(row.qty).toFixed(3)}
+                {row.qty !== '' ? parseFloat(row.qty).toFixed(3) : '—'}
               </td>
 
               {/* CIF FC */}
               <td className="px-3 py-2 tabular-nums font-semibold">
-                {parseFloat(row.cif_fc).toFixed(2)}
+                {row.cif_fc !== '' ? parseFloat(row.cif_fc).toFixed(2) : '—'}
               </td>
 
               {/* CIF INR */}
               <td className="px-3 py-2 tabular-nums font-semibold">
-                {parseFloat(row.cif_inr).toFixed(2)}
+                {row.cif_inr !== '' ? parseFloat(row.cif_inr).toFixed(2) : '—'}
               </td>
 
               {/* Transaction type */}

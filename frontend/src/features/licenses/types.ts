@@ -11,14 +11,18 @@ export type { PaginatedResponse }
 export interface License {
   id: number
   license_number: string
-  license_type: LicenseType
-  license_date: string
-  license_expiry_date: string
-  is_expired: boolean
+  /** License type — present in detail responses. In list responses use
+   * scheme_code_display or parse from license_number prefix. */
+  license_type?: LicenseType
+  /** Scheme code display string (e.g. "DFIA", "RODTEP") — present in list. */
+  scheme_code_display?: string | null
+  license_date: string | null
+  license_expiry_date: string | null
+  is_expired?: boolean | null
   /** Days until expiry. Negative means already expired. */
   days_to_expiry?: number
-  company: number
-  company_label?: string
+  company?: number | null
+  company_label?: string | null
   exporter_name?: string | null
   port_name?: string | null
   purchase_status?: string | null

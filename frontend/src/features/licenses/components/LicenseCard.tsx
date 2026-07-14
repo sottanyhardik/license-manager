@@ -53,14 +53,14 @@ export function LicenseCard({ license, onClick, className }: LicenseCardProps) {
           <span
             className={cn(
               'rounded-full px-2 py-0.5 text-xs font-semibold',
-              getLicenseTypeStyle(license.license_type),
+              getLicenseTypeStyle(license.license_type ?? ''),
             )}
           >
             {license.license_type}
           </span>
           <LicenseStatusBadge
-            isExpired={license.is_expired}
-            expiryDate={license.license_expiry_date}
+            isExpired={license.is_expired ?? false}
+            expiryDate={license.license_expiry_date ?? ''}
           />
         </div>
       </div>

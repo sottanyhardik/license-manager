@@ -213,10 +213,10 @@ export default function LicenseDetail() {
             <div className="mb-1 flex items-center gap-2 flex-wrap">
               <FileText className="size-5 text-muted-foreground" aria-hidden="true" />
               <h1 className="font-mono text-xl font-bold">{merged.license_number}</h1>
-              <LicenseTypePill type={merged.license_type} />
+              <LicenseTypePill type={merged.license_type ?? ''} />
               <LicenseStatusBadge
-                isExpired={merged.is_expired}
-                expiryDate={merged.license_expiry_date}
+                isExpired={merged.is_expired ?? false}
+                expiryDate={merged.license_expiry_date ?? ''}
               />
             </div>
             <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">

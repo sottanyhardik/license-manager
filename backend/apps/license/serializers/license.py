@@ -114,8 +114,8 @@ class LicenseListSerializer(serializers.ModelSerializer):
             "license_number",
             "license_date",
             "license_expiry_date",
-            "exporter_name",
-            "scheme_code_display",
+            "exporter_name",      # company column in list
+            "scheme_code_display",  # serves as license_type (e.g. "DFIA", "RODTEP")
             "balance_cif",
             "is_expired",
             "is_active",

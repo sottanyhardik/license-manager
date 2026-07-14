@@ -98,10 +98,10 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
       if (license) {
         reset({
           license_number: license.license_number,
-          license_type: license.license_type,
-          license_date: license.license_date,
-          license_expiry_date: license.license_expiry_date,
-          company: license.company,
+          license_type: license.license_type ?? 'DFIA',
+          license_date: license.license_date ?? undefined,
+          license_expiry_date: license.license_expiry_date ?? undefined,
+          company: license.company ?? undefined,
           notes: license.balance_report_notes ?? '',
         })
       } else {

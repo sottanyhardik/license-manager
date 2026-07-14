@@ -92,7 +92,19 @@ const TYPE_STYLES: Record<string, string> = {
   INCENTIVE: 'bg-pink-500/10 text-pink-700 dark:text-pink-400',
 }
 
-function LicenseTypePill({ type }: { type: string }) {
+/** Derive the displayable license type from available fields.
+ *  Priority: scheme_code_display → license_type → license_number prefix.
+ */
+function deriveLicenseType(lic: { scheme_code_display?: string | null; license_type?: string; license_number: string }): string | null {
+  if (lic.scheme_code_display) return lic.scheme_code_display
+  if (lic.license_type) return lic.license_type
+  // Parse from license number prefix (e.g. "DFIA/2024/0001" → "DFIA")
+  const m = lic.license_number.match(/^(DFIA|RODTEP|ROSTL|MEIS|INCENTIVE)/i)
+  return m ? m[1].toUpperCase() : null
+}
+
+function LicenseTypePill({ type }: { type: string | null | undefined }) {
+  if (!type) return <span className="text-muted-foreground">—</span>
   return (
     <span
       className={cn(
@@ -145,16 +157,9 @@ export default function LicenseList() {
   const results = data?.data ?? []
   const totalCount = data?.pagination?.count ?? 0
 
-  const licenses = results as Array<{
-    id: number
-    license_number: string
-    license_type: string
-    license_date: string
-    license_expiry_date: string
-    is_expired: boolean
-    company_label?: string
-    balance_cif?: string | null
-  }>
+  // Use the License type directly — useLicenses() already returns License[].
+  // The list serializer returns a subset; optional fields will be undefined.
+  const licenses = results
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -279,10 +284,10 @@ export default function LicenseList() {
                         {lic.license_number}
                       </td>
                       <td className="px-4 py-2.5">
-                        <LicenseTypePill type={lic.license_type} />
+                        <LicenseTypePill type={deriveLicenseType(lic)} />
                       </td>
                       <td className="max-w-[200px] truncate px-4 py-2.5 text-muted-foreground">
-                        {lic.company_label ?? '—'}
+                        {lic.exporter_name ?? lic.company_label ?? '—'}
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground">
                         {formatDate(lic.license_date)}
@@ -297,8 +302,8 @@ export default function LicenseList() {
                       </td>
                       <td className="px-4 py-2.5">
                         <LicenseStatusBadge
-                          isExpired={lic.is_expired}
-                          expiryDate={lic.license_expiry_date}
+                          isExpired={lic.is_expired ?? false}
+                          expiryDate={lic.license_expiry_date ?? ''}
                         />
                       </td>
                     </tr>

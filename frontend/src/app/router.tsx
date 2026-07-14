@@ -28,6 +28,14 @@ const BOEDetail = lazy(() => import('@/features/bill-of-entry/pages/BOEDetail'))
 // Dashboard
 const Dashboard = lazy(() => import('@/features/dashboard/pages/Dashboard'))
 
+// Trades
+const TradeList = lazy(() =>
+  import('@/features/trade/pages/TradeList').then((m) => ({ default: m.TradeList })),
+)
+const TradeForm = lazy(() =>
+  import('@/features/trade/pages/TradeForm').then((m) => ({ default: m.TradeForm })),
+)
+
 // Tasks
 const TaskList = lazy(() => import('@/features/tasks/pages/TaskList'))
 
@@ -86,6 +94,11 @@ export function AppRouter() {
               {/* Bill of Entry */}
               <Route path="/boe" element={<BOEList />} />
               <Route path="/boe/:id" element={<BOEDetail />} />
+
+              {/* Trades */}
+              <Route path="/trades" element={<TradeList />} />
+              <Route path="/trades/new" element={<TradeForm />} />
+              <Route path="/trades/:id" element={<TradeForm />} />
 
               {/* Tasks */}
               <Route path="/tasks" element={<TaskList />} />

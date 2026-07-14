@@ -27,6 +27,13 @@ export const ENDPOINTS = {
   TRADES: {
     LIST: '/api/v1/trades/',
     DETAIL: (id: number | string) => `/api/v1/trades/${id}/`,
+    SUMMARY: (id: number | string) => `/api/v1/trades/${id}/summary/`,
+    PREFILL_INVOICE: '/api/v1/trades/prefill-invoice-number/',
+    PURCHASE_INVOICE_PDF: (id: number | string) => `/api/v1/trades/${id}/generate-purchase-invoice/`,
+    BILL_OF_SUPPLY_PDF: (id: number | string) => `/api/v1/trades/${id}/generate-bill-of-supply/`,
+    LINES: '/api/v1/trades/lines/',
+    PAYMENTS: '/api/v1/trades/payments/',
+    LINK_TRADE: (id: number | string) => `/api/v1/trades/${id}/link-trade/`,
   },
   BILLS_OF_ENTRY: {
     LIST: '/api/v1/bills-of-entry/',

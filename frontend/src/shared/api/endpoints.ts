@@ -8,7 +8,14 @@ export const ENDPOINTS = {
   LICENSES: {
     LIST: '/api/v1/licenses/',
     DETAIL: (id: number | string) => `/api/v1/licenses/${id}/`,
+    ITEMS: (id: number | string) => `/api/v1/licenses/${id}/items/`,
+    BALANCE: (id: number | string) => `/api/v1/licenses/${id}/balance/`,
+    ITEM_USAGE: (id: number | string) => `/api/v1/licenses/${id}/item-usage/`,
+    BALANCE_PDF: (id: number | string) => `/api/v1/licenses/${id}/balance-pdf/`,
     BALANCE_EXCEL: '/api/v1/licenses/balance-excel/',
+    GENERATE_PDF: (id: number | string) => `/api/v1/licenses/${id}/generate-pdf/`,
+    MERGED_DOCUMENTS: (id: number | string) => `/api/v1/licenses/${id}/merged-documents/`,
+    SEARCH: '/api/v1/licenses/search/',
   },
   ALLOTMENTS: {
     LIST: '/api/v1/allotments/',
@@ -41,5 +48,21 @@ export const ENDPOINTS = {
   TRANSFER_LETTERS: {
     LIST: '/api/v1/transfer-letters/',
     GENERATE: '/api/v1/transfer-letters/generate/',
+  },
+  MASTERS: {
+    COMPANIES: '/api/v1/masters/companies/',
+    COMPANY: (id: number) => `/api/v1/masters/companies/${id}/`,
+    PORTS: '/api/v1/masters/ports/',
+    PORT: (id: number) => `/api/v1/masters/ports/${id}/`,
+    HS_CODES: '/api/v1/masters/hs-codes/',
+    HS_CODE: (id: number) => `/api/v1/masters/hs-codes/${id}/`,
+    ITEM_GROUPS: '/api/v1/masters/item-groups/',
+    ITEM_GROUP: (id: number) => `/api/v1/masters/item-groups/${id}/`,
+    ITEM_NAMES: '/api/v1/masters/item-names/',
+    ITEM_NAME: (id: number) => `/api/v1/masters/item-names/${id}/`,
+    SION_NORM_CLASSES: '/api/v1/masters/sion-norm-classes/',
+    SION_NORM_CLASS: (id: number) => `/api/v1/masters/sion-norm-classes/${id}/`,
+    EXCHANGE_RATES: '/api/v1/masters/exchange-rates/',
+    EXCHANGE_RATE: (id: number) => `/api/v1/masters/exchange-rates/${id}/`,
   },
 } as const

@@ -25,7 +25,7 @@
 | bill-of-entry | pending | /boe | BOEList, BOEDetail | useBOEs |
 | trade | pending | /trade | TradeForm | useTrades |
 | reports | pending | /reports/* | ReportViewer | useReport |
-| masters | pending | /masters/* | MasterList | useMasters |
+| masters | in-progress | /masters/companies, /masters/ports, /masters/:entity | CompanyList, PortList, MasterList, MasterSelect, MasterDataTable | useCompanies, useCompaniesAll, usePorts, usePortsAll, useHSCodes, useItemGroups, useItemNames, useSionNormClasses, useExchangeRates (+ *All and CRUD variants) |
 | tasks | pending | /tasks | TaskDrawer | useTasks |
 | dashboard | pending | / | Dashboard | useDashboard |
 | settings | pending | /settings | SettingsPanel | - |

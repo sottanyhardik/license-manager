@@ -15,7 +15,9 @@
 | /trade | TradeList | AdminLayout | JWT | trade-viewer+ |
 | /trade/new | TradeForm | AdminLayout | JWT | trade-manager |
 | /reports/* | ReportPages | AdminLayout | JWT | report-viewer+ |
-| /masters/* | MasterPages | AdminLayout | JWT | master-viewer+ |
+| /masters/companies | CompanyList | AdminLayout | JWT | any (write: superuser) |
+| /masters/ports | PortList | AdminLayout | JWT | any (write: superuser) |
+| /masters/:entity | MasterList (generic) | AdminLayout | JWT | any (write: superuser) |
 | /tasks | TaskDrawer | AdminLayout | JWT | any |
 | /settings | Settings | AdminLayout | JWT | any |
 | * | NotFound | Minimal | none | any |
@@ -36,6 +38,8 @@
 | Card | shadcn/ui | pending |
 | Dropdown | Radix UI via shadcn | pending |
 | DatePicker | React Day Picker | pending |
+| MasterSelect | features/masters (custom) | done — Phase 2 |
+| MasterDataTable | features/masters (TanStack Table) | done — Phase 2 |
 
 ## State Management Strategy
 
@@ -54,5 +58,6 @@
 | useAllotments | AllotmentList |
 | useBOEs | BOEList |
 | useTrades | TradeList |
-| useMasters | All forms (company, port, HS code selectors) |
+| useCompaniesAll, usePortsAll, useHSCodesAll, etc. | MasterSelect (any form that needs a master dropdown) |
+| useCompanies, usePorts, useHSCodes, etc. | CompanyList, PortList, MasterList |
 | useAuth | AuthContext, ProtectedRoute |

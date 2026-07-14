@@ -1,3 +1,13 @@
+// Generic parameters accepted by paginated list endpoints.
+// Extended by feature-specific param interfaces (e.g. LicenseListParams).
+export interface ListParams {
+  search?: string
+  page?: number
+  page_size?: number
+  ordering?: string
+  all?: boolean
+}
+
 export interface APIResponse<T> {
   success: boolean
   data: T | null

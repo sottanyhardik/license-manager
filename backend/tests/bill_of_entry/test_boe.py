@@ -36,7 +36,7 @@ class TestFrozenRowUpdateRejected:
 
                 with pytest.raises(ValueError, match="frozen"):
                     update_row_detail(
-                        row_id=1, data={"cif_inr": "100.000"}, user=MagicMock()
+                        row_id=1, data={"cif_inr": "100.000"}, user=MagicMock(), boe_id=1
                     )
 
 
@@ -58,7 +58,7 @@ class TestFrozenRowDeleteRejected:
                 MockRowDetails.objects.get.return_value = frozen_row
 
                 with pytest.raises(ValueError, match="frozen"):
-                    delete_row_detail(row_id=1, user=MagicMock())
+                    delete_row_detail(row_id=1, user=MagicMock(), boe_id=1)
 
 
 class TestDisputeRowResolve:
@@ -82,7 +82,7 @@ class TestDisputeRowResolve:
                 dispute_row.refresh_from_db.return_value = None
 
                 result = resolve_dispute_row(
-                    row_id=5, license_item_id=42, user=MagicMock()
+                    row_id=5, license_item_id=42, user=MagicMock(), boe_id=1
                 )
 
         # Verify update() was called with the correct arguments

@@ -70,20 +70,82 @@ class BalanceReportRequestSerializer(serializers.Serializer):
     )
 
 
+# ISO date pattern — YYYY-MM-DD, validated before passing to Celery (must remain
+# a plain string so it survives JSON serialisation to Redis without conversion).
+_ISO_DATE_RE = r"^\d{4}-\d{2}-\d{2}$"
+
+
 class ItemReportRequestSerializer(serializers.Serializer):
-    filters = serializers.DictField(default=dict, required=False)
+    """Typed params for item utilisation report.  Replaces free-form DictField."""
+
+    item_name_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=True,
+        required=False,
+        default=list,
+    )
+    company_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=True,
+        required=False,
+        default=list,
+    )
+    min_balance = serializers.FloatField(required=False, allow_null=True)
+    license_status = serializers.ChoiceField(
+        choices=["active", "all"], default="active", required=False
+    )
+    expiry_date_from = serializers.RegexField(
+        _ISO_DATE_RE, required=False, allow_null=True, allow_blank=True
+    )
+    expiry_date_to = serializers.RegexField(
+        _ISO_DATE_RE, required=False, allow_null=True, allow_blank=True
+    )
     format = serializers.ChoiceField(
         choices=["json", "pdf", "excel"],
         default="json",
     )
+
+
+_ITEM_FILTER_KEYS = frozenset(
+    {"item_name_ids", "company_ids", "min_balance", "license_status", "expiry_date_from", "expiry_date_to"}
+)
 
 
 class PivotReportRequestSerializer(serializers.Serializer):
-    filters = serializers.DictField(default=dict, required=False)
+    """Typed params for pivot (norm-class grouped) report.  Replaces free-form DictField."""
+
+    item_name_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=True,
+        required=False,
+        default=list,
+    )
+    company_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=True,
+        required=False,
+        default=list,
+    )
+    min_balance = serializers.FloatField(required=False, allow_null=True)
+    license_status = serializers.ChoiceField(
+        choices=["active", "all"], default="active", required=False
+    )
+    expiry_date_from = serializers.RegexField(
+        _ISO_DATE_RE, required=False, allow_null=True, allow_blank=True
+    )
+    expiry_date_to = serializers.RegexField(
+        _ISO_DATE_RE, required=False, allow_null=True, allow_blank=True
+    )
+    sion_norm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     format = serializers.ChoiceField(
         choices=["json", "pdf", "excel"],
         default="json",
     )
+
+
+_PIVOT_FILTER_KEYS = frozenset(
+    {"item_name_ids", "company_ids", "min_balance", "license_status", "expiry_date_from", "expiry_date_to", "sion_norm"}
+)
 
 
 class LedgerReportRequestSerializer(serializers.Serializer):
@@ -168,8 +230,14 @@ class GenerateItemReportView(APIView):
         ser = ItemReportRequestSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        filters = ser.validated_data.get("filters", {})
         output_format = ser.validated_data["format"]
+        # Build a filters dict from typed validated fields only — no unknown keys possible.
+        # Strip None / empty-list values so service defaults apply cleanly.
+        filters = {
+            k: v
+            for k, v in ser.validated_data.items()
+            if k in _ITEM_FILTER_KEYS and v not in (None, "", [])
+        }
 
         result = generate_item_report_task.apply_async(
             kwargs={
@@ -200,8 +268,13 @@ class GeneratePivotReportView(APIView):
         ser = PivotReportRequestSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        filters = ser.validated_data.get("filters", {})
         output_format = ser.validated_data["format"]
+        # Build a filters dict from typed validated fields only — no unknown keys possible.
+        filters = {
+            k: v
+            for k, v in ser.validated_data.items()
+            if k in _PIVOT_FILTER_KEYS and v not in (None, "", [])
+        }
 
         result = generate_pivot_report_task.apply_async(
             kwargs={

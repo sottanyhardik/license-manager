@@ -232,7 +232,7 @@ def test_frozen_boe_row_update_rejected():
         MockRowDetails.DoesNotExist = Exception
 
         with pytest.raises(ValueError, match="frozen"):
-            update_row_detail(row_id=999, data={"qty": "50.000"}, user=user)
+            update_row_detail(row_id=999, data={"qty": "50.000"}, user=user, boe_id=1)
 
 
 def test_frozen_boe_row_delete_rejected():
@@ -257,7 +257,7 @@ def test_frozen_boe_row_delete_rejected():
         MockRowDetails.DoesNotExist = Exception
 
         with pytest.raises(ValueError, match="frozen"):
-            delete_row_detail(row_id=998, user=user)
+            delete_row_detail(row_id=998, user=user, boe_id=1)
 
 
 def test_non_frozen_boe_row_can_be_updated():
@@ -291,7 +291,7 @@ def test_non_frozen_boe_row_can_be_updated():
             mock_serializer_instance.save.return_value = saved_row
             MockSerializer.return_value = mock_serializer_instance
 
-            result = update_row_detail(row_id=100, data={"qty": "50.000"}, user=user)
+            result = update_row_detail(row_id=100, data={"qty": "50.000"}, user=user, boe_id=1)
 
     assert result is saved_row
 

@@ -185,19 +185,23 @@ def resolve_dispute(boe) -> dict[str, Any]:
     }
 
 
-def resolve_dispute_row(row_id: int, license_item_id: int, user) -> Any:
+def resolve_dispute_row(row_id: int, license_item_id: int, user, boe_id: int) -> Any:
     """
     Link a specific dispute row to a LicenseImportItemsModel by id. Clears is_dispute.
 
+    boe_id is required to scope the lookup — prevents IDOR where a BOE_MANAGER
+    could resolve a row belonging to a different BOE by supplying an arbitrary row_id.
+
     Raises:
-        ValueError: if the row does not exist or does not have is_dispute=True.
+        ValueError: if the row does not exist, does not belong to boe_id, or does not
+                    have is_dispute=True.
     """
     from apps.bill_of_entry.models import RowDetails
 
     try:
-        row = RowDetails.objects.get(pk=row_id)
+        row = RowDetails.objects.get(pk=row_id, bill_of_entry_id=boe_id)
     except RowDetails.DoesNotExist:
-        raise ValueError(f"RowDetails with id={row_id} not found")
+        raise ValueError(f"RowDetails with id={row_id} not found for BOE id={boe_id}")
 
     if not row.is_dispute:
         raise ValueError(f"Row id={row_id} is not flagged as a dispute row")
@@ -334,20 +338,23 @@ def create_boe(data: dict, user) -> Any:
     return boe
 
 
-def update_row_detail(row_id: int, data: dict, user) -> Any:
+def update_row_detail(row_id: int, data: dict, user, boe_id: int) -> Any:
     """
     Update a row detail.
 
+    boe_id is required to scope the lookup — prevents IDOR where a BOE_MANAGER
+    could update a row belonging to a different BOE by supplying an arbitrary row_id.
+
     Raises:
-        ValueError: if the row is frozen (is_frozen=True).
+        ValueError: if the row does not belong to boe_id or is frozen (is_frozen=True).
     """
     from apps.bill_of_entry.models import RowDetails
     from apps.bill_of_entry.serializers import RowDetailsSerializer
 
     try:
-        row = RowDetails.objects.get(pk=row_id)
+        row = RowDetails.objects.get(pk=row_id, bill_of_entry_id=boe_id)
     except RowDetails.DoesNotExist:
-        raise ValueError(f"RowDetails with id={row_id} not found")
+        raise ValueError(f"RowDetails with id={row_id} not found for BOE id={boe_id}")
 
     if row.is_frozen:
         raise ValueError("This row is frozen and cannot be modified.")
@@ -357,19 +364,22 @@ def update_row_detail(row_id: int, data: dict, user) -> Any:
     return serializer.save(modified_by=user)
 
 
-def delete_row_detail(row_id: int, user) -> None:
+def delete_row_detail(row_id: int, user, boe_id: int) -> None:
     """
     Delete a row detail.
 
+    boe_id is required to scope the lookup — prevents IDOR where a BOE_MANAGER
+    could delete a row belonging to a different BOE by supplying an arbitrary row_id.
+
     Raises:
-        ValueError: if the row is frozen (is_frozen=True).
+        ValueError: if the row does not belong to boe_id or is frozen (is_frozen=True).
     """
     from apps.bill_of_entry.models import RowDetails
 
     try:
-        row = RowDetails.objects.get(pk=row_id)
+        row = RowDetails.objects.get(pk=row_id, bill_of_entry_id=boe_id)
     except RowDetails.DoesNotExist:
-        raise ValueError(f"RowDetails with id={row_id} not found")
+        raise ValueError(f"RowDetails with id={row_id} not found for BOE id={boe_id}")
 
     if row.is_frozen:
         raise ValueError("This row is frozen and cannot be modified.")

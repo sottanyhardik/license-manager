@@ -96,6 +96,7 @@ class BillOfEntryViewSet(viewsets.ModelViewSet):
                     row_id=int(row_id),
                     data=request.data,
                     user=request.user,
+                    boe_id=int(pk),
                 )
             except ValueError as exc:
                 if "frozen" in str(exc).lower():
@@ -109,7 +110,7 @@ class BillOfEntryViewSet(viewsets.ModelViewSet):
 
         # DELETE
         try:
-            services.delete_row_detail(row_id=int(row_id), user=request.user)
+            services.delete_row_detail(row_id=int(row_id), user=request.user, boe_id=int(pk))
         except ValueError as exc:
             if "frozen" in str(exc).lower():
                 return Response(
@@ -141,6 +142,7 @@ class BillOfEntryViewSet(viewsets.ModelViewSet):
                 row_id=int(row_id),
                 license_item_id=int(license_item_id),
                 user=request.user,
+                boe_id=int(pk),
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

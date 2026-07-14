@@ -29,13 +29,13 @@ class BaseRolePermission(permissions.BasePermission):
     required_roles_for_write: list = []
 
     def has_permission(self, request, view):
-        # Superusers have all permissions
-        if request.user and request.user.is_superuser:
-            return True
-
-        # Must be authenticated
-        if not request.user or not request.user.is_authenticated:
+        # Reject unauthenticated or inactive users first
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
             return False
+
+        # Superusers have all permissions (only when also active — checked above)
+        if request.user.is_superuser:
+            return True
 
         # Safe methods — read check
         if request.method in permissions.SAFE_METHODS:
@@ -65,10 +65,10 @@ class LicenseReadOnlyPermission(LicensePermission):
     of licence numbers in the request body."""
 
     def has_permission(self, request, view):
-        if request.user and request.user.is_superuser:
-            return True
-        if not request.user or not request.user.is_authenticated:
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
             return False
+        if request.user.is_superuser:
+            return True
         return request.user.has_any_role(self.required_roles_for_read)
 
 
@@ -125,10 +125,10 @@ class LedgerUploadPermission(permissions.BasePermission):
     """Upload and manage ledger files — LICENSE_MANAGER or LEDGER_MANAGER."""
 
     def has_permission(self, request, view):
-        if request.user and request.user.is_superuser:
-            return True
-        if not request.user or not request.user.is_authenticated:
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
             return False
+        if request.user.is_superuser:
+            return True
         return request.user.has_any_role(["LICENSE_MANAGER", "LEDGER_MANAGER"])
 
 
@@ -136,10 +136,10 @@ class LicenseLedgerViewPermission(permissions.BasePermission):
     """View license ledger — trade/license roles or LEDGER_MANAGER."""
 
     def has_permission(self, request, view):
-        if request.user and request.user.is_superuser:
-            return True
-        if not request.user or not request.user.is_authenticated:
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
             return False
+        if request.user.is_superuser:
+            return True
         return request.user.has_any_role(
             [
                 "TRADE_VIEWER",
@@ -160,10 +160,10 @@ class AccountAccessPermission(permissions.BasePermission):
     _roles = ["ACCOUNT_ACCESS", "BOE_MANAGER", "BOE_VIEWER"]
 
     def has_permission(self, request, view):
-        if request.user and request.user.is_superuser:
-            return True
-        if not request.user or not request.user.is_authenticated:
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
             return False
+        if request.user.is_superuser:
+            return True
         return request.user.has_any_role(self._roles)
 
 
@@ -186,8 +186,8 @@ class TransferLetterPermission(permissions.BasePermission):
     ]
 
     def has_permission(self, request, view):
-        if request.user and request.user.is_superuser:
-            return True
-        if not request.user or not request.user.is_authenticated:
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
             return False
+        if request.user.is_superuser:
+            return True
         return request.user.has_any_role(self._allowed)

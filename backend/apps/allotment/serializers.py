@@ -97,7 +97,6 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
 class AllotmentSerializer(serializers.ModelSerializer):
     # Nested items (read-only; items are managed via their own endpoints)
     allotment_details = AllotmentItemSerializer(
-        source="allotment_details",
         many=True,
         read_only=True,
     )

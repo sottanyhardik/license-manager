@@ -43,6 +43,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     roles = serializers.SerializerMethodField()
     is_staff = serializers.BooleanField(read_only=True)
+    is_superuser = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -54,11 +55,11 @@ class UserSerializer(serializers.ModelSerializer):
             "last_name",
             "is_active",
             "is_staff",
+            "is_superuser",
             "roles",
             "date_joined",
         )
-        read_only_fields = ("id", "date_joined", "is_staff", "roles")
-        # Note: is_superuser intentionally omitted — not exposed via /me
+        read_only_fields = ("id", "date_joined", "is_staff", "is_superuser", "roles")
 
     def get_roles(self, obj) -> list:
         return obj.get_role_codes()

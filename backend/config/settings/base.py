@@ -49,9 +49,9 @@ INSTALLED_APPS = [
     "django_filters",
     "corsheaders",
     "simple_history",
+    # django-health-check ≥ 4.x dropped the sub-package structure;
+    # checks are registered as plugins via HEALTH_CHECK setting instead.
     "health_check",
-    "health_check.db",
-    "health_check.cache",
     # Local
     "shared",
     "apps.accounts",

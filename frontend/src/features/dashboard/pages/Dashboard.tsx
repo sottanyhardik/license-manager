@@ -125,7 +125,7 @@ export default function Dashboard() {
       />
 
       {/* Row 1 — primary license KPIs */}
-      <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-3">
         <StatCard
           label="Total Licenses"
           value={stats?.total_licenses ?? '—'}
@@ -145,7 +145,7 @@ export default function Dashboard() {
       </div>
 
       {/* Row 2 — secondary KPIs */}
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
         <StatCard
           label="Expiring Soon"
           value={stats?.expiring_soon ?? '—'}

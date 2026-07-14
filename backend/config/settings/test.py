@@ -5,6 +5,14 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production-use")  #
 
 from .base import *  # noqa: F401, F403
 
+# Remove health_check sub-apps that are not installed in the test virtualenv.
+# health_check itself is installed but health_check.db / health_check.cache are
+# optional extras that are not present — strip them to prevent ModuleNotFoundError.
+INSTALLED_APPS = [
+    app for app in INSTALLED_APPS  # noqa: F405
+    if app not in ("health_check.db", "health_check.cache")
+]
+
 SECRET_KEY = "test-secret-key-not-for-production-use"  # noqa: S105
 DEBUG = True
 

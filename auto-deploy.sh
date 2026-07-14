@@ -21,7 +21,7 @@
 #  *service* itself is deployed separately: master-data-service/deploy/deploy-mds.sh
 # ============================================================
 
-set -e
+set -euo pipefail
 
 # ── Colors ──────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -32,6 +32,9 @@ print_success() { echo -e "${GREEN}✅ $1${NC}"; }
 print_error()   { echo -e "${RED}❌ $1${NC}"; }
 print_warn()    { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_info()    { echo -e "${BLUE}→ $1${NC}"; }
+
+# ── Error trap — print context on unexpected exit ────────────
+trap 'print_error "Script aborted at line ${LINENO} (exit $?). Last server: ${SERVER_IP:-none}"' ERR
 
 # ── Health gate ──────────────────────────────────────────────
 # Polls https://<domain>/api/health/ — uses the DuckDNS domain with HTTPS
@@ -214,9 +217,9 @@ cd $SERVER_PATH
 git stash
 git clean -fd
 git fetch --all --prune
-git checkout $BRANCH || git checkout -b $BRANCH origin/$BRANCH
-git pull origin $BRANCH
-echo_ok "Code updated to latest $BRANCH"
+git checkout "${BRANCH}" || git checkout -b "${BRANCH}" "origin/${BRANCH}"
+git pull origin "${BRANCH}"
+echo_ok "Code updated to latest ${BRANCH}"
 
 # ── 2. Backend: dependencies + migrations ───────────────────
 echo_info "Installing Python dependencies..."
@@ -478,7 +481,7 @@ SUCCESS=0
 
 for IP in "${SERVERS[@]}"; do
     if deploy_to_server "$IP"; then
-        ((SUCCESS++))
+        SUCCESS=$((SUCCESS + 1))   # ((SUCCESS++)) exits non-zero when SUCCESS==0 under set -e
         get_server_meta "$IP"
         print_success "Deployed: $IP → https://$SERVER_DOMAIN"
     else

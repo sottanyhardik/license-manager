@@ -1,14 +1,16 @@
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: lmanagement
       POSTGRES_USER: lmanagement
       POSTGRES_PASSWORD: ${DB_PASSWORD:-lmanagement}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # Port 5432 not published to the host — only backend/celery need it via the
+    # internal Docker network. Exposing it publicly creates an unnecessary attack
+    # surface. If you need psql access from the host: docker compose exec db psql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lmanagement"]
       interval: 5s
@@ -17,8 +19,9 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"   # bind to loopback only; was 0.0.0.0
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -29,6 +32,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
+    restart: unless-stopped
     volumes:
       - ./backend:/app
     ports:
@@ -43,6 +47,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
     command: python manage.py runserver 0.0.0.0:8001
 
   frontend:
@@ -62,6 +70,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
+    restart: unless-stopped
     volumes:
       - ./backend:/app
     environment:
@@ -70,9 +79,14 @@ services:
       REDIS_URL: redis://redis:6379/2
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
     depends_on:
-      - db
-      - redis
-      - backend
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     command: celery -A config worker -l info
 
   mailpit:

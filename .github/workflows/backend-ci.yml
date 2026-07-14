@@ -2,10 +2,20 @@ name: Backend CI
 
 on:
   push:
+    branches:
+      - main
+      - master
+      - develop
+      - 'feature/**'
+      - 'fix/**'
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
   pull_request:
+    branches:
+      - main
+      - master
+      - develop
     paths:
       - 'backend/**'
 
@@ -13,8 +23,11 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39  # v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
       - name: Ruff lint
         run: uv run --directory backend ruff check .
       - name: Black format check
@@ -40,8 +53,11 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 10s
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39  # v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
       - name: Install dependencies
         run: uv pip install --system -r backend/requirements/test.txt
       - name: Run tests
@@ -50,13 +66,16 @@ jobs:
           DATABASE_URL: postgresql://lmanagement:lmanagement@localhost:5432/test_lmanagement
           REDIS_URL: redis://localhost:6379/2
           SECRET_KEY: test-secret-key
-        run: uv run --directory backend pytest --tb=short
+        run: uv run --directory backend pytest --tb=short --no-header -q
 
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39  # v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
       - name: Install dependencies
         run: uv pip install --system -r backend/requirements/base.txt
       - name: Django system check

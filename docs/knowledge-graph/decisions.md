@@ -16,11 +16,15 @@
 | ADR-009 | Production cutover gate — 6 simultaneous criteria | Accepted | Phase 0 |
 | ADR-010 | Legacy read-only rule — no commits except emergency hotfixes | Accepted | Phase 0 |
 
+## Resolved Pre-Phase-1 Decisions
+
+| # | Decision | Rationale |
+|---|---|---|
+| OQ-A | **HS256, shared `SECRET_KEY`** between legacy and `backend/` during transition | Tokens mutually verifiable — no forced re-login when switching. Switch to RS256 at final cutover. |
+| OQ-B | **Separate Redis DB index** — legacy uses `/0`, `backend/` uses `/2` | Same Redis server, zero operational overhead, zero task-queue namespace collision. |
+| OQ-C | **Performance benchmark endpoints** (10): licenses/list, licenses/:id, trades/create, reports/balance, upload-ledger, allotments/list, bill-of-entries/list, masters/companies, licenses/:id/generate-pdf, dashboard | Covers all major access patterns — read-heavy, write, async, PDF, aggregation. |
+| OQ-7 | **`managed=False` proxy** pointing at `accounts_user` table during transition | Zero migration, zero risk. Migrate to `Profile` OneToOne at final cutover. |
+
 ## Pending Decisions
 
-| # | Question | Owner | Needed By |
-|---|---|---|---|
-| OQ-A | JWT signing: HS256 (shared) vs RS256 during transition | PM | Phase 1 start |
-| OQ-B | Celery broker: shared Redis vs separate DB index | PM | Phase 1 start |
-| OQ-C | Performance benchmark endpoint list (10 endpoints) | PM | Phase 1 start |
-| OQ-7 | User model: managed=False proxy vs Profile OneToOne | PM | Phase 1 start |
+*None blocking Phase 1. Phase 1 (Authentication module) may begin once Phase 0 exit gate passes.*

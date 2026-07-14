@@ -20,6 +20,12 @@
 - Created `docs/knowledge-graph/` — 8 living documents scaffolded
 - Updated `docs/05-database.md` — full ER diagram, 42-model table inventory, signal map, cascade register
 
+### Pre-Phase-1 Decisions (all approved)
+- OQ-A: JWT signing → HS256 shared SECRET_KEY during transition, RS256 at cutover
+- OQ-B: Celery broker → Redis DB /2 for backend/ (legacy stays on /0)
+- OQ-C: Performance benchmark endpoints → 10 endpoints confirmed (see decisions.md)
+- OQ-7: User model → managed=False proxy during transition, Profile OneToOne at cutover
+
 ### Tooling (pending)
 - `backend/` Django scaffold (P0.5) — in progress
 - `frontend/` React scaffold (P0.6) — in progress

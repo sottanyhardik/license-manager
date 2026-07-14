@@ -63,17 +63,20 @@ def bulk_update_product_names() -> dict[str, Any]:
     ).prefetch_related("item_details__sr_number__items")
 
     total_count = empty_product_boes.count()
-    updated_count = 0
     skipped_count = 0
 
+    boes_to_update = []
     for boe in empty_product_boes:
         generated_name = boe.generate_product_name_from_items()
         if generated_name:
             boe.product_name = generated_name
-            boe.save(update_fields=["product_name"])
-            updated_count += 1
+            boes_to_update.append(boe)
         else:
             skipped_count += 1
+
+    if boes_to_update:
+        BillOfEntryModel.objects.bulk_update(boes_to_update, ["product_name"])
+    updated_count = len(boes_to_update)
 
     return {
         "success": True,

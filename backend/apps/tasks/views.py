@@ -10,11 +10,11 @@ Mutation:    any of creator / assignee / superuser may update or add remarks;
              only creator or superuser may delete.
 """
 from django.db.models import Q
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.tasks.models import Task, TaskRemark
 from apps.tasks.serializers import TaskRemarkSerializer, TaskSerializer
@@ -145,7 +145,7 @@ class TaskViewSet(viewsets.ModelViewSet):
                 {"text": ["This field is required."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        remark = TaskRemark.objects.create(task=task, text=text, created_by=request.user)
+        remark = task_service.add_remark(task_id=task.pk, text=text, user=request.user)
         return Response(TaskRemarkSerializer(remark).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="assignable-users")

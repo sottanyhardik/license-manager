@@ -28,19 +28,6 @@ CACHE_TTL = 60 * 5  # 5 minutes
 
 
 # ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
-
-def _boe_model():
-    """Return the BillOfEntryModel class, or None if the app is not installed."""
-    try:
-        from apps.bill_of_entry.models import BillOfEntryModel  # type: ignore[import]
-        return BillOfEntryModel
-    except (ImportError, Exception):
-        return None
-
-
-# ---------------------------------------------------------------------------
 # Public service functions
 # ---------------------------------------------------------------------------
 
@@ -106,14 +93,13 @@ def get_dashboard_stats(user: Any) -> dict:
 
     # BOE model may not exist yet
     recent_boes = 0
-    BoeModel = _boe_model()
-    if BoeModel is not None:
-        try:
-            recent_boes = BoeModel.objects.filter(
-                created_on__gte=thirty_days_ago,
-            ).count()
-        except Exception:
-            recent_boes = 0
+    try:
+        from apps.bill_of_entry.models import BillOfEntryModel
+        recent_boes = BillOfEntryModel.objects.filter(
+            created_on__gte=thirty_days_ago,
+        ).count()
+    except ImportError:
+        recent_boes = 0
 
     result = {
         "total_licenses": total_licenses,
@@ -191,23 +177,22 @@ def get_monthly_activity(user: Any) -> list[dict]:
 
     # ---- BOE counts by month (graceful degradation) -----------------------
     boe_by_month: dict[tuple[int, int], int] = {}
-    BoeModel = _boe_model()
-    if BoeModel is not None:
-        try:
-            boe_qs = (
-                BoeModel.objects
-                .filter(created_on__gte=twelve_months_ago)
-                .annotate(month=TruncMonth("created_on"))
-                .values("month")
-                .annotate(count=Count("pk"))
-                .order_by("month")
-            )
-            boe_by_month = {
-                (row["month"].year, row["month"].month): row["count"]
-                for row in boe_qs
-            }
-        except Exception:
-            boe_by_month = {}
+    try:
+        from apps.bill_of_entry.models import BillOfEntryModel
+        boe_qs = (
+            BillOfEntryModel.objects
+            .filter(created_on__gte=twelve_months_ago)
+            .annotate(month=TruncMonth("created_on"))
+            .values("month")
+            .annotate(count=Count("pk"))
+            .order_by("month")
+        )
+        boe_by_month = {
+            (row["month"].year, row["month"].month): row["count"]
+            for row in boe_qs
+        }
+    except ImportError:
+        boe_by_month = {}
 
     # ---- Build complete 12-month grid — oldest first ----------------------
     # Generate months oldest-first

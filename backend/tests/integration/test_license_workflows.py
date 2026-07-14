@@ -82,19 +82,17 @@ def test_license_balance_after_boe_row_creation():
         mock_atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        qs_mock = MagicMock()
-        qs_mock.get.return_value = mock_license
-        mock_ld_mgr.select_related.return_value = qs_mock
+        mock_ld_mgr.select_for_update.return_value.select_related.return_value.get.return_value = mock_license
+        mock_ld_mgr.DoesNotExist = LookupError  # allows the try/except to work
 
         recompute_license_balance(license_id)
 
-    # The balance update call must have been made with the correct value
+    # The balance update_or_create must have been called with the correct value
     # credit=10000, debit=3000, allotment=0, trade=0 → balance=7000.00
-    update_calls = mock_bal_mgr.filter.return_value.update.call_args_list
-    assert len(update_calls) == 1
-    call_kwargs = update_calls[0].kwargs
-    assert call_kwargs["balance_cif"] == Decimal("7000.00"), (
-        f"Expected balance_cif=7000.00 but got {call_kwargs['balance_cif']}"
+    mock_bal_mgr.update_or_create.assert_called_once()
+    bal_kwargs = mock_bal_mgr.update_or_create.call_args
+    assert bal_kwargs.kwargs["defaults"]["balance_cif"] == Decimal("7000.00"), (
+        f"Expected balance_cif=7000.00 but got {bal_kwargs.kwargs['defaults']['balance_cif']}"
     )
 
 
@@ -139,17 +137,16 @@ def test_allotment_reserves_quantity():
         mock_atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        qs_mock = MagicMock()
-        qs_mock.get.return_value = mock_license
-        mock_ld_mgr.select_related.return_value = qs_mock
+        mock_ld_mgr.select_for_update.return_value.select_related.return_value.get.return_value = mock_license
+        mock_ld_mgr.DoesNotExist = LookupError  # allows the try/except to work
 
         recompute_license_balance(license_id)
 
-    update_calls = mock_bal_mgr.filter.return_value.update.call_args_list
-    assert len(update_calls) == 1
+    mock_bal_mgr.update_or_create.assert_called_once()
+    bal_kwargs = mock_bal_mgr.update_or_create.call_args
     # credit=10000, debit=0, allotment=2000, trade=0 → balance=8000.00
-    assert update_calls[0].kwargs["balance_cif"] == Decimal("8000.00"), (
-        f"Expected 8000.00 after allotment reservation"
+    assert bal_kwargs.kwargs["defaults"]["balance_cif"] == Decimal("8000.00"), (
+        f"Expected 8000.00 after allotment reservation, got {bal_kwargs.kwargs['defaults']['balance_cif']}"
     )
 
 
@@ -195,17 +192,16 @@ def test_over_allotment_rejected():
         mock_atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        qs_mock = MagicMock()
-        qs_mock.get.return_value = mock_license
-        mock_ld_mgr.select_related.return_value = qs_mock
+        mock_ld_mgr.select_for_update.return_value.select_related.return_value.get.return_value = mock_license
+        mock_ld_mgr.DoesNotExist = LookupError  # allows the try/except to work
 
         recompute_license_balance(license_id)
 
-    update_calls = mock_bal_mgr.filter.return_value.update.call_args_list
-    assert len(update_calls) == 1
+    mock_bal_mgr.update_or_create.assert_called_once()
+    bal_kwargs = mock_bal_mgr.update_or_create.call_args
     # raw = 500 - 800 = -300; clamped to 0
-    assert update_calls[0].kwargs["balance_cif"] == Decimal("0.00"), (
-        f"Balance must not go below 0, got {update_calls[0].kwargs['balance_cif']}"
+    assert bal_kwargs.kwargs["defaults"]["balance_cif"] == Decimal("0.00"), (
+        f"Balance must not go below 0, got {bal_kwargs.kwargs['defaults']['balance_cif']}"
     )
 
 
@@ -344,15 +340,14 @@ def test_expired_license_flagged():
         mock_atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        qs_mock = MagicMock()
-        qs_mock.get.return_value = mock_license
-        mock_ld_mgr.select_related.return_value = qs_mock
+        mock_ld_mgr.select_for_update.return_value.select_related.return_value.get.return_value = mock_license
+        mock_ld_mgr.DoesNotExist = LookupError  # allows the try/except to work
 
         recompute_license_balance(license_id)
 
-    flag_update_calls = mock_flags_mgr.filter.return_value.update.call_args_list
-    assert len(flag_update_calls) == 1
-    assert flag_update_calls[0].kwargs.get("is_expired") is True, (
+    mock_flags_mgr.update_or_create.assert_called_once()
+    flags_kwargs = mock_flags_mgr.update_or_create.call_args
+    assert flags_kwargs.kwargs["defaults"]["is_expired"] is True, (
         "is_expired must be True when expiry_date < today"
     )
 
@@ -396,15 +391,14 @@ def test_non_expired_license_not_flagged():
         mock_atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        qs_mock = MagicMock()
-        qs_mock.get.return_value = mock_license
-        mock_ld_mgr.select_related.return_value = qs_mock
+        mock_ld_mgr.select_for_update.return_value.select_related.return_value.get.return_value = mock_license
+        mock_ld_mgr.DoesNotExist = LookupError  # allows the try/except to work
 
         recompute_license_balance(license_id)
 
-    flag_update_calls = mock_flags_mgr.filter.return_value.update.call_args_list
-    assert len(flag_update_calls) == 1
-    assert flag_update_calls[0].kwargs.get("is_expired") is False, (
+    mock_flags_mgr.update_or_create.assert_called_once()
+    flags_kwargs = mock_flags_mgr.update_or_create.call_args
+    assert flags_kwargs.kwargs["defaults"]["is_expired"] is False, (
         "is_expired must be False when expiry_date >= today"
     )
 
@@ -567,17 +561,16 @@ def test_end_to_end_license_workflow():
         mock_atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        qs_mock = MagicMock()
-        qs_mock.get.return_value = mock_license
-        mock_ld_mgr.select_related.return_value = qs_mock
+        mock_ld_mgr.select_for_update.return_value.select_related.return_value.get.return_value = mock_license
+        mock_ld_mgr.DoesNotExist = LookupError  # allows the try/except to work
 
         recompute_license_balance(license_id)
 
-    update_calls = mock_bal_mgr.filter.return_value.update.call_args_list
-    assert len(update_calls) == 1
+    mock_bal_mgr.update_or_create.assert_called_once()
+    bal_kwargs = mock_bal_mgr.update_or_create.call_args
     # credit=10000 - debit=3000 - allotment=2000 - trade=0 = 5000.00
-    assert update_calls[0].kwargs["balance_cif"] == Decimal("5000.00"), (
-        f"E2E balance expected 5000.00, got {update_calls[0].kwargs['balance_cif']}"
+    assert bal_kwargs.kwargs["defaults"]["balance_cif"] == Decimal("5000.00"), (
+        f"E2E balance expected 5000.00, got {bal_kwargs.kwargs['defaults']['balance_cif']}"
     )
 
 
@@ -702,13 +695,13 @@ def test_is_null_flag_set_when_balance_below_threshold():
         mock_atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        qs_mock = MagicMock()
-        qs_mock.get.return_value = mock_license
-        mock_ld_mgr.select_related.return_value = qs_mock
+        mock_ld_mgr.select_for_update.return_value.select_related.return_value.get.return_value = mock_license
+        mock_ld_mgr.DoesNotExist = LookupError  # allows the try/except to work
 
         recompute_license_balance(license_id)
 
-    flag_calls = mock_flags_mgr.filter.return_value.update.call_args_list
-    assert flag_calls[0].kwargs.get("is_null") is True, (
+    mock_flags_mgr.update_or_create.assert_called_once()
+    flags_kwargs = mock_flags_mgr.update_or_create.call_args
+    assert flags_kwargs.kwargs["defaults"]["is_null"] is True, (
         "is_null must be True when balance (400) < threshold (500)"
     )

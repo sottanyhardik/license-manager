@@ -41,4 +41,8 @@ addopts = "--strict-markers"
 
 [tool.coverage.run]
 source = ["."]
+branch = true
 omit = ["*/migrations/*", "*/tests/*", "manage.py", "*/settings/*"]
+
+[tool.coverage.report]
+show_missing = true

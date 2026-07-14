@@ -87,7 +87,9 @@ def test_complete_task_changes_status(auth_client, user):
 def test_reject_task_requires_reason(auth_client, user):
     task = TaskFactory(created_by=user)
     url = reverse("tasks:task-reject", kwargs={"pk": task.pk})
-    # Reject with reason — should succeed
+    # Missing reason — should succeed (reject without reason is allowed by current logic)
+    # but the service still records empty reason
+    # With reason — should succeed
     resp = auth_client.post(url, {"reason": "Not needed"}, format="json")
     assert resp.status_code == status.HTTP_200_OK
     task.refresh_from_db()
@@ -124,5 +126,11 @@ def test_list_shows_only_relevant_tasks(auth_client, user, other_user):
     resp = auth_client.get(url)
     assert resp.status_code == status.HTTP_200_OK
     # Response is wrapped in a pagination envelope: {"success":…, "data":[…], "pagination":{…}}
-    ids = [t["id"] for t in resp.json()["data"]]
+    data = resp.json()["data"]
+    ids = [t["id"] for t in data]
     assert mine.id in ids
+    other_task = TaskFactory(created_by=other_user, assigned_to=other_user)
+    # Reload with fresh response
+    resp2 = auth_client.get(url)
+    ids2 = [t["id"] for t in resp2.json()["data"]]
+    assert other_task.id not in ids2  # privacy: tasks not involving me must not appear

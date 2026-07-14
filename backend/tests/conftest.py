@@ -20,8 +20,9 @@ def api_client():
 
 @pytest.fixture
 def auth_token(db, django_user_model):
+    import uuid as _uuid
     user = django_user_model.objects.create_user(
-        username="testuser",
+        username=f"testuser_{_uuid.uuid4().hex[:8]}",
         password="testpassword123",
         email="test@example.com",
     )

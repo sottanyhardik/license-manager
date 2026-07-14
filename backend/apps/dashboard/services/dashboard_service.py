@@ -2,7 +2,7 @@
 Dashboard aggregation service.
 
 All queries are aggregate-only (Count/Sum/TruncMonth) — no full querysets
-are ever materialised.  Results are cached per-user for 5 minutes.
+are ever materialised.  Results are cached globally for 5 minutes.
 
 BillOfEntry model does not exist in the new backend yet; every code path
 that would touch it is wrapped in try/except ImportError and gracefully
@@ -26,6 +26,16 @@ from apps.license.models.license import LicenseDetailsModel
 # ---------------------------------------------------------------------------
 CACHE_TTL = 60 * 5  # 5 minutes
 
+# Module-level import to avoid re-running try/except on every call
+try:
+    from apps.bill_of_entry.models import BillOfEntryModel as _BillOfEntryModel  # type: ignore[import]
+except ImportError:
+    _BillOfEntryModel = None
+
+
+def _boe_model():
+    return _BillOfEntryModel
+
 
 # ---------------------------------------------------------------------------
 # Public service functions
@@ -38,7 +48,8 @@ def get_dashboard_stats(user: Any) -> dict:
     All keys are always present; unavailable aggregates default to 0.
     Result is cached per user for CACHE_TTL seconds.
     """
-    cache_key = f"dashboard:stats:{user.pk}"
+    # Global key — dashboard data is not per-user
+    cache_key = "dashboard:stats:global"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -93,13 +104,14 @@ def get_dashboard_stats(user: Any) -> dict:
 
     # BOE model may not exist yet
     recent_boes = 0
-    try:
-        from apps.bill_of_entry.models import BillOfEntryModel
-        recent_boes = BillOfEntryModel.objects.filter(
-            created_on__gte=thirty_days_ago,
-        ).count()
-    except ImportError:
-        recent_boes = 0
+    _boe = _boe_model()
+    if _boe is not None:
+        try:
+            recent_boes = _boe.objects.filter(
+                created_on__gte=thirty_days_ago,
+            ).count()
+        except Exception:
+            recent_boes = 0
 
     result = {
         "total_licenses": total_licenses,
@@ -122,7 +134,7 @@ def get_license_utilisation_chart(user: Any) -> list[dict]:
 
     Returns: [{'license_number': str, 'balance_cif': str}, ...]
     """
-    cache_key = f"dashboard:utilisation:{user.pk}"
+    cache_key = "dashboard:utilisation:global"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -153,7 +165,7 @@ def get_monthly_activity(user: Any) -> list[dict]:
     Returns list sorted oldest-first:
       [{'month': 'Jan 2025', 'boe_count': N, 'allotment_count': N}, ...]
     """
-    cache_key = f"dashboard:activity:{user.pk}"
+    cache_key = "dashboard:activity:global"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -177,22 +189,23 @@ def get_monthly_activity(user: Any) -> list[dict]:
 
     # ---- BOE counts by month (graceful degradation) -----------------------
     boe_by_month: dict[tuple[int, int], int] = {}
-    try:
-        from apps.bill_of_entry.models import BillOfEntryModel
-        boe_qs = (
-            BillOfEntryModel.objects
-            .filter(created_on__gte=twelve_months_ago)
-            .annotate(month=TruncMonth("created_on"))
-            .values("month")
-            .annotate(count=Count("pk"))
-            .order_by("month")
-        )
-        boe_by_month = {
-            (row["month"].year, row["month"].month): row["count"]
-            for row in boe_qs
-        }
-    except ImportError:
-        boe_by_month = {}
+    _boe = _boe_model()
+    if _boe is not None:
+        try:
+            boe_qs = (
+                _boe.objects
+                .filter(created_on__gte=twelve_months_ago)
+                .annotate(month=TruncMonth("created_on"))
+                .values("month")
+                .annotate(count=Count("pk"))
+                .order_by("month")
+            )
+            boe_by_month = {
+                (row["month"].year, row["month"].month): row["count"]
+                for row in boe_qs
+            }
+        except Exception:
+            boe_by_month = {}
 
     # ---- Build complete 12-month grid — oldest first ----------------------
     # Generate months oldest-first
@@ -228,7 +241,7 @@ def get_expiring_licenses(user: Any) -> list[dict]:
       [{'license_number': str, 'license_expiry_date': ISO str,
         'balance_cif': str, 'days_to_expiry': int}, ...]
     """
-    cache_key = f"dashboard:expiring:{user.pk}"
+    cache_key = "dashboard:expiring:global"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached

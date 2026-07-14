@@ -228,7 +228,7 @@ class AllotmentItems(AuditModel):
         item = self.item
         if item is None:
             return None
-        return getattr(item, "product_description", None)
+        return getattr(item, "description", None)
 
     @cached_property
     def license_number(self):
@@ -249,7 +249,7 @@ class AllotmentItems(AuditModel):
         lic = self._get_license()
         if lic is None:
             return None
-        return getattr(lic, "license_expiry", None)
+        return getattr(lic, "license_expiry_date", None)
 
     @cached_property
     def hs_code(self):
@@ -291,4 +291,4 @@ class AllotmentItems(AuditModel):
         lic = self._get_license()
         if lic is None:
             return None
-        return getattr(lic, "port_code", None)
+        return getattr(lic, "port", None)

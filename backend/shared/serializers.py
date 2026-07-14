@@ -11,7 +11,7 @@ class EnvelopeMixin:
     @staticmethod
     def wrap(data=None, success: bool = True, message: str | None = None, errors=None) -> dict:
         if success:
-            return {"success": True, "data": data, "message": message}
+            return {"success": True, "data": data, "errors": [], "message": message}
         return {"success": False, "data": None, "errors": errors or [], "message": message or "An error occurred"}
 
 

@@ -123,15 +123,16 @@ class TestCompanyList:
         assert isinstance(data["data"], list)
 
     def test_company_list_all_unpaginated(self, authenticated_client):
-        """?all=true returns a flat list without pagination envelope."""
+        """?all=true returns a standard envelope with all results (no pagination)."""
         CompanyFactory.create_batch(3)
         url = "/api/v1/masters/companies/?all=true"
         response = authenticated_client.get(url)
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        # Unpaginated: plain list, no "pagination" key
-        assert isinstance(data, list)
-        assert len(data) >= 3
+        # ?all=true returns envelope with data list, no "pagination" key
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        assert len(data["data"]) >= 3
 
     def test_company_search_filters_by_name(self, authenticated_client):
         """?search=<term> returns only matching companies."""
@@ -142,7 +143,10 @@ class TestCompanyList:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         results = data.get("data", data)
+        assert len(results) >= 1, "Search returned no results"
         assert all("ABCXYZ" in r["name"] for r in results)
+        unrelated_names = [r["name"] for r in results if "ABCXYZ" not in r["name"]]
+        assert not unrelated_names, f"Non-matching companies in results: {unrelated_names}"
 
     def test_company_detail(self, authenticated_client):
         """GET /:id/ returns 200 with full company data."""

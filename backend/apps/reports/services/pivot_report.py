@@ -72,8 +72,9 @@ def generate_pivot_report(
     if expiry_date_to:
         imp_qs = imp_qs.filter(license__license_expiry_date__lte=expiry_date_to)
 
-    # Collect license IDs from matched import items
-    license_ids = list(imp_qs.values_list("license_id", flat=True).distinct())
+    # Evaluate the queryset once, hold results in memory
+    imp_list = list(imp_qs)  # single DB evaluation; prefetch_related is populated here
+    license_ids = list({imp.license_id for imp in imp_list})
 
     # Build a map: license_id -> norm_class label (from export items)
     exp_qs = LicenseExportItemModel.objects.filter(
@@ -92,10 +93,10 @@ def generate_pivot_report(
     # Group import items by norm class
     grouped: dict[str, list] = defaultdict(list)
 
-    for imp in imp_qs:
+    for imp in imp_list:
         lic = imp.license
         hs = imp.hs_code
-        items_detail = list(imp.items.values_list("name", flat=True))
+        items_detail = [item.name for item in imp.items.all()]
         item_row = {
             "license_number": lic.license_number,
             "serial_number": imp.serial_number,

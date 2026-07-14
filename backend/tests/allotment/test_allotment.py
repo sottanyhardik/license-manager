@@ -25,8 +25,6 @@ def test_create_allotment_dispatches_balance_task():
     mock_item = MagicMock()
     mock_item.item_id = 42
 
-    mock_task = MagicMock()
-
     # Capture the on_commit callback so we can invoke it synchronously
     captured_callbacks = []
 
@@ -107,8 +105,6 @@ def test_delete_allotment_dispatches_balance_task():
     def fake_on_commit(fn):
         captured_callbacks.append(fn)
 
-    mock_task = MagicMock()
-
     with patch("apps.allotment.services.allotment_service.AllotmentModel") as MockAllotmentModel, \
          patch("apps.allotment.services.allotment_service.AllotmentItems") as MockAllotmentItems, \
          patch("apps.allotment.services.allotment_service.transaction") as mock_txn:
@@ -151,16 +147,7 @@ def test_allotment_type_choices():
     AllotmentModel.ALLOTMENT_TYPE_CHOICES must be exactly the two-item list
     defined in the task spec.
     """
-    # Import lazily — Django app registry may not be ready in pure unit tests
-
-    # Patch Django's apps to avoid AppRegistryNotReady in models.py
-    with patch("django.db.models.ForeignKey.__init__", return_value=None), \
-         patch("django.db.models.DecimalField.__init__", return_value=None), \
-         patch("django.db.models.CharField.__init__", return_value=None), \
-         patch("django.db.models.BooleanField.__init__", return_value=None), \
-         patch("django.db.models.DateField.__init__", return_value=None):
-        pass  # just importing is enough; we access the class attribute directly
-
+    # Django app registry is already initialised by the test runner; no patching needed
     from apps.allotment.models import AllotmentModel
     assert AllotmentModel.ALLOTMENT_TYPE_CHOICES == [
         ("AT", "Allotment"),

@@ -209,6 +209,13 @@ def resolve_dispute_row(row_id: int, license_item_id: int, user, boe_id: int) ->
     if not row.is_dispute:
         raise ValueError(f"Row id={row_id} is not flagged as a dispute row")
 
+    from apps.license.models import LicenseImportItemsModel
+
+    try:
+        LicenseImportItemsModel.objects.get(pk=license_item_id)
+    except LicenseImportItemsModel.DoesNotExist:
+        raise ValueError(f"LicenseImportItemsModel with id={license_item_id} does not exist")
+
     row.sr_number_id = license_item_id
     row.is_dispute = False
     # Use queryset .update() to bypass frozen-row guard — this is a dispute resolution,
@@ -282,8 +289,10 @@ def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
         source_port = source_boe.port
         source_boe.delete()
 
-        target_boe.port = source_port
-        target_boe.save(update_fields=["port"])
+        # Only overwrite target port if target has none and source has one
+        if source_port is not None and target_boe.port is None:
+            target_boe.port = source_port
+            target_boe.save(update_fields=["port"])
 
     refreshed = BillOfEntryModel.objects.select_related(
         "company", "port"

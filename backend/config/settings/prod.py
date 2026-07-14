@@ -43,7 +43,9 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SECURE_BROWSER_XSS_FILTER = True  # belt-and-suspenders; header deprecated in modern browsers
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+# SECURE_BROWSER_XSS_FILTER removed — deprecated and no-op since Django 4.2.
+# Use Content-Security-Policy headers via django-csp instead.
 
 # Tell Django that the nginx reverse-proxy sets X-Forwarded-Proto when the
 # original request was HTTPS.  Required for SECURE_SSL_REDIRECT to work
@@ -72,7 +74,7 @@ LOGGING = {
     "handlers": {
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "/var/log/license-manager-v1/django.log",
+            "filename": os.environ.get("DJANGO_LOG_FILE", "/var/log/license-manager-v1/django.log"),
             "maxBytes": 10 * 1024 * 1024,   # 10 MB
             "backupCount": 5,
             "formatter": "verbose",

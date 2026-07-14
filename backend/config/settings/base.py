@@ -5,6 +5,7 @@ Loaded by dev / prod / test sub-modules via `from .base import *`.
 Never use this module directly as DJANGO_SETTINGS_MODULE.
 """
 import os
+import re as _re
 from datetime import timedelta
 from pathlib import Path
 
@@ -105,10 +106,12 @@ WSGI_APPLICATION = "config.wsgi.application"
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
+_db_url = os.environ.get("DATABASE_URL", "sqlite:///db.sqlite3")
+_conn_max_age = 0 if _db_url.startswith("sqlite") else 60
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL", "sqlite:///db.sqlite3"),
-        conn_max_age=60,
+        default=_db_url,
+        conn_max_age=_conn_max_age,
     )
 }
 
@@ -122,8 +125,6 @@ DATABASES = {
 #   /3  — Celery result backend
 _redis_base = os.environ.get("REDIS_URL", "redis://localhost:6379")
 # Strip any trailing /N from the base URL so we can append our own DB number.
-import re as _re
-
 _redis_base = _re.sub(r"/\d+$", "", _redis_base.rstrip("/"))
 
 CACHES = {
@@ -183,6 +184,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+        "user": "300/min",
+    },
     "DEFAULT_PAGINATION_CLASS": "shared.pagination.StandardPagination",
     "PAGE_SIZE": 25,
     "DEFAULT_FILTER_BACKENDS": [

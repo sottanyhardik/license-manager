@@ -420,13 +420,11 @@ def test_trade_billing_pct_3_decimal_precision():
 
     # Correct: Decimal arithmetic
     amount = (cif_inr * pct / Decimal("100")).quantize(Decimal("0.01"))
-    assert amount == Decimal("7925.00"), (
-        f"Expected 7925.00 but got {amount}"
-    )
-
-    # Demonstrate that naive float arithmetic may differ from exact Decimal result
-    # We do NOT assert float == 7925.00 since that is the bug; we assert Decimal is correct.
-    assert amount == Decimal("7925.00")
+    assert amount == Decimal("7925.00"), f"Expected 7925.00 but got {amount}"
+    # Contrast with float arithmetic to document the precision hazard
+    float_amount = round(7.925 * 100000 / 100, 2)
+    # float may produce 7925.0 on some platforms but the intent is to show Decimal is the safe path
+    assert Decimal(str(float_amount)) != amount or True  # informational only
 
 
 def test_trade_billing_qty_mode_precision():

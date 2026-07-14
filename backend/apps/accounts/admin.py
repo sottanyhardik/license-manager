@@ -19,5 +19,7 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ("username", "email", "first_name", "last_name")
     ordering = ("username",)
 
-    fieldsets = BaseUserAdmin.fieldsets
+    fieldsets = BaseUserAdmin.fieldsets + (
+        ("Profile", {"fields": ("avatar",)}),
+    )
     add_fieldsets = BaseUserAdmin.add_fieldsets

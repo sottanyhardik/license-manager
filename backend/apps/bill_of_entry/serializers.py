@@ -1,4 +1,5 @@
 # bill_of_entry/serializers.py
+from django.db import transaction as db_transaction
 from rest_framework import serializers
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
@@ -164,11 +165,13 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
         boe_number = validated_data.pop("bill_of_entry_number")
         boe_date = validated_data.pop("bill_of_entry_date", None)
         port = validated_data.pop("port", None)
+        defaults = validated_data.copy()
+        if port is not None:
+            defaults["port"] = port
         boe, _ = BillOfEntryModel.objects.update_or_create(
             bill_of_entry_number=boe_number,
             bill_of_entry_date=boe_date,
-            port=port,
-            defaults=validated_data,
+            defaults=defaults,
         )
 
         if allotment_data:
@@ -187,9 +190,10 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
         item_details_data = validated_data.pop("item_details", None)
         allotment_data = validated_data.pop("allotment", None)
 
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
+        with db_transaction.atomic():
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
 
         if allotment_data is not None and len(allotment_data) > 0:
             old_allotment_ids = set(instance.allotment.values_list("id", flat=True))
@@ -278,7 +282,13 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                     )
                     updated_item_ids.append(item_instance.id)
 
-            RowDetails.objects.filter(bill_of_entry=instance).exclude(
+            # Pre-seed updated_item_ids with ALL frozen row ids so they are never swept
+            frozen_ids = list(
+                RowDetails.objects.filter(bill_of_entry=instance, is_frozen=True)
+                .values_list("id", flat=True)
+            )
+            updated_item_ids.extend(frozen_ids)
+            RowDetails.objects.filter(bill_of_entry=instance, is_frozen=False).exclude(
                 id__in=updated_item_ids
             ).delete()
 

@@ -93,11 +93,12 @@ class TestDashboardStats:
         assert data["total_balance_cif"] == "0.00"
 
     def test_stats_second_call_returns_200(self, authenticated_client):
-        """Both calls should succeed (second call hits cache)."""
+        """Both calls should return 200 (idempotent)."""
         r1 = authenticated_client.get(STATS_URL)
         r2 = authenticated_client.get(STATS_URL)
         assert r1.status_code == status.HTTP_200_OK
         assert r2.status_code == status.HTTP_200_OK
+        assert r1.json() == r2.json()  # responses are identical (proves stable output, not cache)
 
     def test_unauthenticated_blocked(self, api_client):
         response = api_client.get(STATS_URL)

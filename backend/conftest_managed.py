@@ -4,6 +4,9 @@ so the test runner creates tables in the SQLite test DB.
 
 Loaded via conftest.py: pytest_plugins = ["conftest_managed"]
 """
+import logging
+
+_log = logging.getLogger(__name__)
 
 
 def pytest_configure(config):
@@ -23,5 +26,9 @@ def _patch_all_managed():
         for model in django_apps.get_models():
             if not model._meta.managed:
                 model._meta.managed = True
+    except RuntimeError:
+        # Django app registry not ready yet — safe to ignore here
+        pass
     except Exception:
-        pass  # Django not yet ready -- will be called again after setup
+        _log.exception("_patch_all_managed failed unexpectedly")
+        raise

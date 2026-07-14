@@ -90,7 +90,9 @@ class ItemReportRequestSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
-    min_balance = serializers.FloatField(required=False, allow_null=True)
+    min_balance = serializers.DecimalField(
+        max_digits=15, decimal_places=2, required=False, allow_null=True
+    )
     license_status = serializers.ChoiceField(
         choices=["active", "all"], default="active", required=False
     )
@@ -126,7 +128,9 @@ class PivotReportRequestSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
-    min_balance = serializers.FloatField(required=False, allow_null=True)
+    min_balance = serializers.DecimalField(
+        max_digits=15, decimal_places=2, required=False, allow_null=True
+    )
     license_status = serializers.ChoiceField(
         choices=["active", "all"], default="active", required=False
     )
@@ -333,6 +337,15 @@ class ReportTaskStatusView(APIView):
     permission_classes = [ReportDispatchPermission]
 
     def get(self, request, task_id: str):
+        import uuid as _uuid
+
+        try:
+            _uuid.UUID(task_id)  # validate format before hitting DB
+        except ValueError:
+            return Response(
+                {"detail": "Invalid task ID format."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         from apps.core.models import CeleryTaskTracker
 
         try:

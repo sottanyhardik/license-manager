@@ -80,8 +80,8 @@ def generate_item_report(
         lic = imp.license
         hs = imp.hs_code
 
-        # Items detail: M2M names
-        items_detail = list(imp.items.values_list("name", flat=True))
+        # Items detail: M2M names — use .all() to hit the prefetch cache
+        items_detail = [item.name for item in imp.items.all()]
 
         items.append(
             {

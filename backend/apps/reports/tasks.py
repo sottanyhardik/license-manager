@@ -99,7 +99,13 @@ def generate_balance_report_task(self, license_ids: list, output_format: str, us
         return {"file_path": rel_path}
     except Exception as exc:
         logger.exception("Balance report task %s failed", task_id)
-        _mark_failure(tracker, exc)
+        if self.request.retries >= self.max_retries:
+            _mark_failure(tracker, exc)
+        else:
+            # Update to RETRY status so clients know it will be re-attempted
+            if tracker:
+                tracker.status = "RETRY"
+                tracker.save(update_fields=["status"])
         raise self.retry(exc=exc)
 
 

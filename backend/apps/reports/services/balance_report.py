@@ -60,6 +60,9 @@ def generate_balance_report(license_ids: list, output_format: str) -> dict:
                 .aggregate(total=Sum("cif_fc"))["total"]
             ) or _DEC_0
         except Exception:
+            logger.exception(
+                "Failed to compute total_authorised for license_id=%s", lic.pk
+            )
             total_authorised = _DEC_0
 
         # Compute total_debited from import items
@@ -76,6 +79,9 @@ def generate_balance_report(license_ids: list, output_format: str) -> dict:
                 .aggregate(total=Sum("allotted_value"))["total"]
             ) or _DEC_0
         except Exception:
+            logger.exception(
+                "Failed to compute import aggregates for license_id=%s", lic.pk
+            )
             total_debited = _DEC_0
             total_allotted = _DEC_0
 

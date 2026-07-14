@@ -113,7 +113,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         return f"{self.first_name} {self.last_name}".strip()
 
     def get_short_name(self) -> str:
-        return self.username or self.email
+        return self.username or self.email or ""
 
     # ── Role helpers (backed by Django's built-in Group model) ────────────────
 

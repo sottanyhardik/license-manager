@@ -196,7 +196,8 @@ class AllotmentSerializer(serializers.ModelSerializer):
     def get_is_boe(self, obj):
         """Check if any BillOfEntry records exist via reverse relation."""
         try:
-            return obj.bill_of_entry.exists()
+            # Use .all() to hit the prefetch_related cache without re-querying
+            return obj.bill_of_entry.all().exists()
         except AttributeError:
             # Reverse relation may not exist yet (license app not wired)
             return obj.is_boe

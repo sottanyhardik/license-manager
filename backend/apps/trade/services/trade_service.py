@@ -10,6 +10,8 @@ ValueError (or subclasses) so the view layer can map them to HTTP status codes.
 
 from datetime import date, datetime
 
+from django.db import transaction
+
 # ---------------------------------------------------------------------------
 # Date parsing
 # ---------------------------------------------------------------------------
@@ -123,6 +125,7 @@ class PartnerTradeNotFound(LookupError):
     """Raised when the partner trade PK cannot be resolved."""
 
 
+@transaction.atomic
 def link_trades(trade_pk: int, partner_pk: int | None):
     """
     Bidirectionally link or unlink two LicenseTrade records.

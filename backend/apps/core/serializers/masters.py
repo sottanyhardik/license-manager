@@ -147,7 +147,10 @@ class ExchangeRateSerializer(AuditSerializerMixin):
 
     def get_is_active(self, obj):
         """True if this row has the latest date (the active rate)."""
-        active = ExchangeRateModel.get_active_rate()
+        # Cache the active rate on the serializer context to avoid N queries.
+        if "_active_exchange_rate" not in self.context:
+            self.context["_active_exchange_rate"] = ExchangeRateModel.get_active_rate()
+        active = self.context["_active_exchange_rate"]
         return obj.id == active.id if active else False
 
 

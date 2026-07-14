@@ -152,7 +152,20 @@ def test_unauthenticated_blocked(api_client):
         format="json",
     )
     # DRF returns 401 for unauthenticated requests when IsAuthenticated is in play
-    assert resp.status_code in (
-        status.HTTP_401_UNAUTHORIZED,
-        status.HTTP_403_FORBIDDEN,
+    assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+def test_task_status_failed_returns_error(authenticated_client):
+    task_id = str(uuid.uuid4())
+    CeleryTaskTracker.objects.create(
+        task_id=task_id,
+        task_name="generate_balance_report_task",
+        status="FAILURE",
+        result={"error": "Something went wrong"},
     )
+    url = reverse("reports:task-status", kwargs={"task_id": task_id})
+    resp = authenticated_client.get(url)
+    assert resp.status_code == status.HTTP_200_OK
+    data = resp.json()
+    assert data["status"] in ("failed", "error", "FAILURE")

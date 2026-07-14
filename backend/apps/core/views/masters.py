@@ -19,8 +19,9 @@ Search / filter / ordering:
 - SearchFilter handles free-text ?search= against search_fields.
 - OrderingFilter on all viewsets.
 """
+from django.conf import settings
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, permissions, viewsets
+from rest_framework import filters, permissions, status, viewsets
 from rest_framework.response import Response
 from shared.pagination import StandardPagination
 
@@ -38,6 +39,7 @@ from apps.core.filters import (
     TransferLetterFilter,
     UnitPriceFilter,
 )
+from shared.permissions import IsAdminUser as ActiveAdminUser
 from apps.core.models import (
     ActivityLog,
     CeleryTaskTracker,
@@ -110,7 +112,7 @@ class MasterWritePermission(permissions.BasePermission):
     ]
 
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
             return False
         if request.user.is_superuser:
             return True
@@ -154,8 +156,20 @@ class MasterViewSetMixin:
         queryset = self.filter_queryset(self.get_queryset())
         # ?all=true — bypass pagination (for dropdown lists)
         if request.query_params.get("all", "").lower() == "true":
+            ALL_LIMIT = getattr(settings, "MASTER_ALL_LIMIT", 2000)
+            count = queryset.count()
+            if count > ALL_LIMIT:
+                return Response(
+                    {
+                        "success": False,
+                        "data": None,
+                        "errors": [],
+                        "message": f"Too many rows ({count}). Use filters or pagination.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             serializer = self.get_serializer(queryset, many=True)
-            return Response(serializer.data)
+            return Response({"success": True, "data": serializer.data, "errors": [], "message": None})
         return super().list(request, *args, **kwargs)
 
 
@@ -176,7 +190,7 @@ class CompanyViewSet(MasterViewSetMixin, viewsets.ModelViewSet):
     Search:  name, iec, gst_number
     """
 
-    queryset = CompanyModel.objects.all()
+    queryset = CompanyModel.objects.select_related("created_by", "modified_by").all()
     serializer_class = CompanySerializer
     filterset_class = CompanyFilter
     search_fields = ["name", "iec", "gst_number", "pan"]
@@ -376,7 +390,7 @@ class PortViewSet(MasterViewSetMixin, viewsets.ReadOnlyModelViewSet):
     dropdown payloads; prefer search/filter for large lists.
     """
 
-    queryset = PortModel.objects.all()
+    queryset = PortModel.objects.select_related("created_by", "modified_by").all()
     serializer_class = PortSerializer
     filterset_class = PortFilter
     search_fields = ["code", "name"]
@@ -489,7 +503,7 @@ class MasterChangeViewSet(MasterViewSetMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = MasterChangeSerializer
     search_fields = ["model_label", "natural_key", "op"]
     ordering_fields = "__all__"
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [ActiveAdminUser]
 
 
 class CeleryTaskTrackerViewSet(MasterViewSetMixin, viewsets.ReadOnlyModelViewSet):
@@ -503,7 +517,7 @@ class CeleryTaskTrackerViewSet(MasterViewSetMixin, viewsets.ReadOnlyModelViewSet
     serializer_class = CeleryTaskTrackerSerializer
     search_fields = ["task_name", "status"]
     ordering_fields = "__all__"
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [ActiveAdminUser]
 
 
 class ActivityLogViewSet(MasterViewSetMixin, viewsets.ReadOnlyModelViewSet):
@@ -519,4 +533,4 @@ class ActivityLogViewSet(MasterViewSetMixin, viewsets.ReadOnlyModelViewSet):
     filterset_class = ActivityLogFilter
     search_fields = ["username", "action", "module", "description"]
     ordering_fields = "__all__"
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [ActiveAdminUser]

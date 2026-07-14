@@ -335,3 +335,9 @@ class IncentiveLicenseViewSet(viewsets.ModelViewSet):
         return IncentiveLicense.objects.select_related("exporter", "port_code").order_by(
             "license_expiry_date"
         )
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user, modified_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(modified_by=self.request.user)

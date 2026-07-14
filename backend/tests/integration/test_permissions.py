@@ -42,6 +42,7 @@ def _make_request(method: str, groups: list, is_authenticated: bool = True, is_s
     """
     user = MagicMock()
     user.is_authenticated = is_authenticated
+    user.is_active = is_authenticated  # active iff authenticated; mirrors real User behaviour
     user.is_superuser = is_superuser
 
     group_names = set(groups)

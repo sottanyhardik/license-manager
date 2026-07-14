@@ -12,16 +12,22 @@ from rest_framework import filters, status
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 from shared.pagination import StandardPagination
+from shared.permissions import IsAdminUser
 from shared.serializers import EnvelopeMixin
 
 from .serializers import LoginSerializer, UserSerializer, UsersListSerializer
 
 User = get_user_model()
+
+
+class LoginRateThrottle(AnonRateThrottle):
+    rate = '5/min'
 
 
 class LoginView(APIView):
@@ -34,6 +40,7 @@ class LoginView(APIView):
 
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request, *args, **kwargs):
         serializer = LoginSerializer(data=request.data, context={"request": request})
@@ -127,7 +134,8 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        serializer = UserSerializer(request.user, context={"request": request})
+        user = User.objects.prefetch_related("groups").get(pk=request.user.pk)
+        serializer = UserSerializer(user, context={"request": request})
         return Response(
             EnvelopeMixin.wrap(data=serializer.data),
             status=status.HTTP_200_OK,
@@ -148,7 +156,6 @@ class UsersView(ListAPIView):
     search_fields = ["username", "email", "first_name", "last_name"]
 
     def get_permissions(self):
-        from shared.permissions import IsAdminUser
         return [IsAdminUser()]
 
     def get_queryset(self):

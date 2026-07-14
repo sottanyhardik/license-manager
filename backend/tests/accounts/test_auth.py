@@ -78,6 +78,7 @@ class TestLogin:
         client = APIClient()
         response = client.post(self.url, {"username": "dave"}, format="json")
 
+        # Login view returns 401 for all validation failures (missing fields, wrong creds, etc.)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()["success"] is False
 

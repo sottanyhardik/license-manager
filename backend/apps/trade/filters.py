@@ -4,8 +4,8 @@ from apps.trade.models import LicenseTrade
 
 
 class TradeFilter(FilterSet):
-    direction = CharFilter(field_name="direction", lookup_expr="iexact")
-    license_type = CharFilter(field_name="license_type", lookup_expr="iexact")
+    direction = CharFilter(field_name="direction", lookup_expr="exact")
+    license_type = CharFilter(field_name="license_type", lookup_expr="exact")
     from_company = NumberFilter(field_name="from_company_id")
     to_company = NumberFilter(field_name="to_company_id")
     invoice_date_after = DateFilter(field_name="invoice_date", lookup_expr="gte")

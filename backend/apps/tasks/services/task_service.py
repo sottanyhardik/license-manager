@@ -53,6 +53,12 @@ def reject_task(task: Task, by_user, reason: str = "") -> tuple:
 
 def reopen_task(task: Task) -> Task:
     """Reset a completed/rejected task back to pending."""
+    allowed = {Task.STATUS_COMPLETED, Task.STATUS_REJECTED}
+    if task.status not in allowed:
+        raise ValueError(
+            f"Cannot reopen a task in '{task.status}' state. "
+            "Only completed or rejected tasks may be reopened."
+        )
     task.status = Task.STATUS_PENDING
     task.completed_on = None
     task.rejected_by = None

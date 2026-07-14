@@ -226,7 +226,11 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
     def validate(self, data):
-        """Validate that at least one line (regular or incentive) is present."""
+        """Validate at least one line is present — skip on partial updates."""
+        # On PATCH, omitted nested fields mean 'no change', not 'empty list'.
+        if self.partial and "lines" not in data and "incentive_lines" not in data:
+            return data
+
         lines = data.get("lines", [])
         incentive_lines = data.get("incentive_lines", [])
 
@@ -387,6 +391,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         validated_data.pop("auto_create_paired", None)
 
         old_boe = instance.boe
+        old_invoice_number = instance.invoice_number  # capture BEFORE mutation
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -407,7 +412,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         instance.refresh_from_db()
 
         if old_boe and old_boe != instance.boe:
-            if old_boe.invoice_no == instance.invoice_number:
+            if old_boe.invoice_no == old_invoice_number:  # compare against OLD invoice_number
                 old_boe.invoice_no = None
                 old_boe.save(update_fields=["invoice_no"])
 

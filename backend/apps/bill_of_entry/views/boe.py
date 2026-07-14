@@ -68,13 +68,20 @@ class BillOfEntryViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
 
         # POST — create a new row
+        from django.db import IntegrityError
         serializer = RowDetailsSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(
-                bill_of_entry=boe,
-                created_by=request.user,
-                modified_by=request.user,
-            )
+            try:
+                serializer.save(
+                    bill_of_entry=boe,
+                    created_by=request.user,
+                    modified_by=request.user,
+                )
+            except IntegrityError:
+                return Response(
+                    {"detail": "A row with this sr_number and transaction_type already exists for this BOE."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

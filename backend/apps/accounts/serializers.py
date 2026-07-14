@@ -31,11 +31,8 @@ class LoginSerializer(serializers.Serializer):
             password=password,
         )
 
-        if not user:
+        if not user or not user.is_active:
             raise serializers.ValidationError("Invalid credentials.")
-
-        if not user.is_active:
-            raise serializers.ValidationError("This account is inactive.")
 
         attrs["user"] = user
         return attrs
@@ -57,11 +54,11 @@ class UserSerializer(serializers.ModelSerializer):
             "last_name",
             "is_active",
             "is_staff",
-            "is_superuser",
             "roles",
             "date_joined",
         )
-        read_only_fields = ("id", "date_joined", "is_superuser", "is_staff", "roles")
+        read_only_fields = ("id", "date_joined", "is_staff", "roles")
+        # Note: is_superuser intentionally omitted — not exposed via /me
 
     def get_roles(self, obj) -> list:
         return obj.get_role_codes()

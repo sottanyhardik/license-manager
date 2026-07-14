@@ -316,4 +316,4 @@ class IncentiveLicenseSerializer(serializers.ModelSerializer):
             "created_on",
             "modified_on",
         ]
-        read_only_fields = ["id", "exporter_name", "port_display", "created_on", "modified_on"]
+        read_only_fields = ["id", "exporter_name", "port_display", "balance_value", "created_on", "modified_on"]

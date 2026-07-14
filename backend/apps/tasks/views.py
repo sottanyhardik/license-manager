@@ -16,6 +16,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.tasks.filters import TaskFilter
 from apps.tasks.models import Task
 from apps.tasks.serializers import TaskRemarkSerializer, TaskSerializer
 from apps.tasks.services import task_service
@@ -25,7 +26,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["status", "priority", "assigned_to"]
+    filterset_class = TaskFilter
     search_fields = ["title", "description"]
     ordering_fields = ["created_on", "due_date", "priority", "status"]
     ordering = ["-created_on"]
@@ -103,6 +104,15 @@ class TaskViewSet(viewsets.ModelViewSet):
         if not self._can_modify(task):
             return Response(
                 {"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN
+            )
+        if task.status == Task.STATUS_COMPLETED:
+            return Response(
+                {"detail": "Task is already completed."}, status=status.HTTP_409_CONFLICT
+            )
+        if task.status == Task.STATUS_REJECTED:
+            return Response(
+                {"detail": "Cannot complete a rejected task; reopen it first."},
+                status=status.HTTP_409_CONFLICT,
             )
         task_service.complete_task(task)
         return Response(self.get_serializer(task).data)

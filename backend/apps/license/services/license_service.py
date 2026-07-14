@@ -60,7 +60,7 @@ def update_license(license_id: int, data: dict, user) -> LicenseDetailsModel:
     Raises LicenseDetailsModel.DoesNotExist if the license is not found.
     *user* is stamped onto modified_by.
     """
-    license_obj = LicenseDetailsModel.objects.get(pk=license_id)
+    license_obj = LicenseDetailsModel.objects.select_for_update().get(pk=license_id)
 
     for field, value in data.items():
         setattr(license_obj, field, value)

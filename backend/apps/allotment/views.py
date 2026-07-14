@@ -46,8 +46,13 @@ class AllotmentViewSet(viewsets.ModelViewSet):
                 "allotment_details",
                 "allotment_details__item",
                 "allotment_details__item__license",
+                "allotment_details__item__license__exporter",
+                "allotment_details__item__license__port",
+                "allotment_details__item__hs_code",
+                "bill_of_entry",
             )
             .order_by("-estimated_arrival_date")
+            .distinct()
         )
 
     def create(self, request, *args, **kwargs):

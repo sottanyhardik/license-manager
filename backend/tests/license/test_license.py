@@ -116,8 +116,7 @@ def test_license_list_paginated(license_viewer_user):
         ):
             response = client.get("/api/v1/licenses/")
 
-    # The paginator may return 404 on empty page for some configs;
-    # we accept 200 or the standard pagination shape
+    # The filter mock may not work perfectly in isolation; accept 200 only
     if response.status_code == status.HTTP_200_OK:
         data = response.json()
         assert "pagination" in data or "results" in data or "data" in data
@@ -238,7 +237,7 @@ def test_import_item_create_dispatches_balance_task(license_manager_user):
             format="json",
         )
 
-    # 201 or 400 (serializer validation may run before mock) — key is delay called
+    assert response.status_code == status.HTTP_201_CREATED, f"Got {response.status_code}: {response.content}"
     mock_delay.assert_called_once_with(10)
 
 

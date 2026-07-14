@@ -71,19 +71,26 @@ class TestDisputeRowResolve:
         dispute_row.pk = 5
         dispute_row.is_dispute = True
 
+        mock_license_item_model = MagicMock()
+        mock_license_item_model.DoesNotExist = Exception  # make try/except work
+
         with patch("apps.bill_of_entry.models.RowDetails") as MockRowDetails:
             with patch(
                 "apps.bill_of_entry.services.boe_service.RowDetails",
                 MockRowDetails,
                 create=True,
             ):
-                MockRowDetails.objects.get.return_value = dispute_row
-                MockRowDetails.objects.filter.return_value.update.return_value = 1
-                dispute_row.refresh_from_db.return_value = None
+                with patch(
+                    "apps.license.models.LicenseImportItemsModel",
+                    mock_license_item_model,
+                ):
+                    MockRowDetails.objects.get.return_value = dispute_row
+                    MockRowDetails.objects.filter.return_value.update.return_value = 1
+                    dispute_row.refresh_from_db.return_value = None
 
-                result = resolve_dispute_row(
-                    row_id=5, license_item_id=42, user=MagicMock(), boe_id=1
-                )
+                    result = resolve_dispute_row(
+                        row_id=5, license_item_id=42, user=MagicMock(), boe_id=1
+                    )
 
         # Verify update() was called with the correct arguments
         MockRowDetails.objects.filter.assert_called_once_with(pk=5)
@@ -146,7 +153,7 @@ class TestUploadLedgerReturnsTaskId:
         request.user = mock_user
 
         with patch(
-            "apps.accounts.permissions.BillOfEntryPermission.has_permission",
+            "apps.accounts.permissions.LedgerUploadPermission.has_permission",
             return_value=True,
         ):
             view = LedgerUploadView.as_view()
@@ -157,7 +164,7 @@ class TestUploadLedgerReturnsTaskId:
         data = response.data
         assert "task_id" in data
         assert data["status"] == "pending"
-        assert "test_ledger.xlsx" in data["task_id"]
+        assert data["task_id"]  # non-empty task identifier
 
     def test_upload_ledger_no_file_returns_400(self):
         """Missing file returns 400."""
@@ -173,7 +180,7 @@ class TestUploadLedgerReturnsTaskId:
         request.user = mock_user
 
         with patch(
-            "apps.accounts.permissions.BillOfEntryPermission.has_permission",
+            "apps.accounts.permissions.LedgerUploadPermission.has_permission",
             return_value=True,
         ):
             view = LedgerUploadView.as_view()

@@ -29,7 +29,7 @@ function tooltipFormatter(value: unknown): [string, string] {
 export function UtilisationChart({ data }: Props) {
   if (data.length === 0) {
     return (
-      <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex min-h-[120px] items-center justify-center text-sm text-muted-foreground">
         No utilisation data available.
       </div>
     )

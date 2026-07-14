@@ -43,7 +43,7 @@ export function StatCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-muted-foreground">{label}</p>
+          <p className="line-clamp-2 text-xs sm:text-sm font-medium text-muted-foreground">{label}</p>
           <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight">{value}</p>
           {trend && (
             <div

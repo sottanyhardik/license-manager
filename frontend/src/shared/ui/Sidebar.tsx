@@ -166,9 +166,10 @@ function useIsActive(path: string): boolean {
 interface SidebarLinkProps {
   item: NavItem
   collapsed: boolean
+  onLinkClick?: () => void
 }
 
-function SidebarLink({ item, collapsed }: SidebarLinkProps) {
+function SidebarLink({ item, collapsed, onLinkClick }: SidebarLinkProps) {
   const { hasAnyRole } = useAuth()
   const active = useIsActive(item.path)
 
@@ -182,6 +183,7 @@ function SidebarLink({ item, collapsed }: SidebarLinkProps) {
       <Link
         to={item.path}
         aria-current={active ? 'page' : undefined}
+        onClick={onLinkClick}
         className={cn(
           'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -202,9 +204,10 @@ function SidebarLink({ item, collapsed }: SidebarLinkProps) {
 interface CollapsibleGroupProps {
   group: NavGroup
   collapsed: boolean
+  onLinkClick?: () => void
 }
 
-function CollapsibleGroup({ group, collapsed }: CollapsibleGroupProps) {
+function CollapsibleGroup({ group, collapsed, onLinkClick }: CollapsibleGroupProps) {
   const { pathname } = useLocation()
   const { hasAnyRole } = useAuth()
   const isGroupActive = pathname.startsWith(group.prefix)
@@ -224,6 +227,7 @@ function CollapsibleGroup({ group, collapsed }: CollapsibleGroupProps) {
           to={group.prefix}
           aria-label={group.label}
           title={group.label}
+          onClick={onLinkClick}
           className={cn(
             'flex justify-center rounded-lg px-2 py-2 text-sm font-medium transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -260,7 +264,7 @@ function CollapsibleGroup({ group, collapsed }: CollapsibleGroupProps) {
       {open && (
         <ul className="mt-1 space-y-0.5 pl-6">
           {group.items.map((item) => (
-            <SidebarLink key={item.path} item={item} collapsed={false} />
+            <SidebarLink key={item.path} item={item} collapsed={false} onLinkClick={onLinkClick} />
           ))}
         </ul>
       )}
@@ -270,7 +274,18 @@ function CollapsibleGroup({ group, collapsed }: CollapsibleGroupProps) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Called when any nav link is clicked — used by the mobile drawer to close itself. */
+  onLinkClick?: () => void
+  /**
+   * When true, forces the sidebar to render fully expanded regardless of the
+   * persisted collapsed preference. Used by AdminLayout on mobile so the drawer
+   * always shows labels, not just icons.
+   */
+  forceExpanded?: boolean
+}
+
+export function Sidebar({ onLinkClick, forceExpanded = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('sidebar-collapsed') === 'true'
@@ -278,6 +293,10 @@ export function Sidebar() {
       return false
     }
   })
+
+  // On mobile the drawer always shows the full (non-collapsed) view so that
+  // icon-only mode on a 375 px screen is not the user experience.
+  const effectiveCollapsed = forceExpanded ? false : collapsed
 
   const toggleCollapsed = () => {
     setCollapsed((v) => {
@@ -293,20 +312,21 @@ export function Sidebar() {
 
   return (
     <aside
+      id="main-nav"
       aria-label="Main navigation"
       className={cn(
         'flex h-full flex-col border-r border-border bg-card transition-[width] duration-200',
-        collapsed ? 'w-16' : 'w-60',
+        effectiveCollapsed ? 'w-16' : 'w-60',
       )}
     >
       {/* Brand header */}
       <div
         className={cn(
           'flex h-14 items-center border-b border-border px-3',
-          collapsed ? 'justify-center' : 'justify-between',
+          effectiveCollapsed ? 'justify-center' : 'justify-between',
         )}
       >
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <span className="text-sm font-bold tracking-tight text-foreground">
             License Manager
           </span>
@@ -314,14 +334,14 @@ export function Sidebar() {
         <button
           type="button"
           onClick={toggleCollapsed}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={effectiveCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className={cn(
             'flex size-7 items-center justify-center rounded-md text-muted-foreground',
             'transition-colors hover:bg-accent hover:text-accent-foreground',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           )}
         >
-          {collapsed ? (
+          {effectiveCollapsed ? (
             <ChevronRight className="size-4" aria-hidden="true" />
           ) : (
             <ChevronLeft className="size-4" aria-hidden="true" />
@@ -333,20 +353,20 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-2 py-3">
         <ul className="space-y-0.5">
           {TOP_NAV.map((item) => (
-            <SidebarLink key={item.path} item={item} collapsed={collapsed} />
+            <SidebarLink key={item.path} item={item} collapsed={effectiveCollapsed} onLinkClick={onLinkClick} />
           ))}
 
           {/* Divider before groups */}
           <li aria-hidden="true" className="my-2 border-t border-border" />
 
           {GROUPS.map((group) => (
-            <CollapsibleGroup key={group.prefix} group={group} collapsed={collapsed} />
+            <CollapsibleGroup key={group.prefix} group={group} collapsed={effectiveCollapsed} onLinkClick={onLinkClick} />
           ))}
 
           {/* Divider before Tasks */}
           <li aria-hidden="true" className="my-2 border-t border-border" />
 
-          <SidebarLink item={TASKS_ITEM} collapsed={collapsed} />
+          <SidebarLink item={TASKS_ITEM} collapsed={effectiveCollapsed} onLinkClick={onLinkClick} />
         </ul>
       </nav>
 
@@ -355,7 +375,8 @@ export function Sidebar() {
         <ul className="space-y-0.5">
           <SidebarLink
             item={{ label: 'Settings', path: ROUTES.SETTINGS, icon: Settings }}
-            collapsed={collapsed}
+            collapsed={effectiveCollapsed}
+            onLinkClick={onLinkClick}
           />
         </ul>
       </div>

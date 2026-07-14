@@ -10,6 +10,7 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   ChevronRight,
   LogOut,
+  Menu,
   Moon,
   Sun,
   User,
@@ -156,13 +157,37 @@ function UserMenu() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export function TopBar() {
+interface TopBarProps {
+  /** Called when the mobile hamburger button is pressed. */
+  onMobileMenuToggle: () => void
+  /** Whether the mobile sidebar drawer is currently open. */
+  mobileMenuOpen: boolean
+}
+
+export function TopBar({ onMobileMenuToggle, mobileMenuOpen }: TopBarProps) {
   const { pathname } = useLocation()
   const { theme, toggleTheme } = useTheme()
   const crumbs = buildCrumbs(pathname)
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background px-4">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+      {/* Mobile hamburger — visible only below md breakpoint */}
+      <button
+        type="button"
+        aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={mobileMenuOpen}
+        aria-controls="main-nav"
+        onClick={onMobileMenuToggle}
+        className={cn(
+          'flex md:hidden size-8 items-center justify-center rounded-md',
+          'text-muted-foreground transition-colors',
+          'hover:bg-accent hover:text-accent-foreground',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        )}
+      >
+        <Menu className="size-4" aria-hidden="true" />
+      </button>
+
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="flex flex-1 items-center gap-1 overflow-hidden">
         {crumbs.map((crumb, idx) => {

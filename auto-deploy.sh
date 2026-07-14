@@ -42,7 +42,9 @@ wait_for_health() {
     local max_attempts=5
     local status
     for i in $(seq 1 $max_attempts); do
-        status=$(curl -s -o /dev/null -w "%{http_code}" "http://${host}/api/health/" 2>/dev/null || echo "000")
+        # -L follows the HTTP→HTTPS redirect (nginx 301); -k skips cert verify
+        # because the cert is issued for the DuckDNS domain, not the raw IP.
+        status=$(curl -s -L -k -o /dev/null -w "%{http_code}" "http://${host}/api/health/" 2>/dev/null || echo "000")
         if [ "$status" = "200" ]; then
             print_success "Health check passed (HTTP 200)"
             return 0

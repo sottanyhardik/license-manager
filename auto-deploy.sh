@@ -179,8 +179,8 @@ deploy_to_server() {
     ENV_FILE="$(dirname "$(realpath "$0")")/server-envs/${ENV_NAME}.env"
     if [ -f "$ENV_FILE" ]; then
         print_info "Uploading .env for $ENV_NAME..."
-        scp_cmd "$ENV_FILE" "$SERVER_PATH/backend/.env"
-        print_success ".env uploaded to $SERVER_PATH/backend/.env"
+        scp_cmd "$ENV_FILE" "$SERVER_PATH/legacy/backend/.env"
+        print_success ".env uploaded to $SERVER_PATH/legacy/backend/.env"
     else
         print_warn "No env file found at $ENV_FILE — server will use existing .env or process env"
     fi
@@ -221,7 +221,7 @@ echo_ok "Code updated to latest $BRANCH"
 # ── 2. Backend: dependencies + migrations ───────────────────
 echo_info "Installing Python dependencies..."
 source $SERVER_PATH/venv/bin/activate
-cd $SERVER_PATH/backend
+cd $SERVER_PATH/legacy/backend
 pip install --upgrade pip --quiet
 pip install --upgrade -r requirements.txt --quiet
 echo_ok "Python dependencies installed"
@@ -272,7 +272,7 @@ fi
 # itself deploys via master-data-service/deploy/deploy-mds.sh.
 if [ "$MDS_ENABLED" = "true" ]; then
     echo_info "Enabling MDS in backend/.env..."
-    cd $SERVER_PATH/backend
+    cd $SERVER_PATH/legacy/backend
     touch .env
     sed -i '/^MDS_ENABLED=/d' .env; echo 'MDS_ENABLED=true' >> .env
     if [ -n '$MDS_BASE_URL' ]; then sed -i '/^MDS_BASE_URL=/d' .env; echo 'MDS_BASE_URL=$MDS_BASE_URL' >> .env; fi
@@ -300,7 +300,7 @@ else
     # go local-only. Reads already come from the local mirror tables, so nothing
     # else changes. This actively turns off a server that was previously enabled.
     echo_info "Disabling MDS in backend/.env (master writes local-only)..."
-    cd $SERVER_PATH/backend
+    cd $SERVER_PATH/legacy/backend
     touch .env
     sed -i '/^MDS_ENABLED=/d' .env; echo 'MDS_ENABLED=false' >> .env
     echo_ok "MDS_ENABLED=false written to .env — master edits no longer route through MDS"
@@ -312,7 +312,7 @@ echo_ok "Static files collected"
 
 # ── 4. Frontend build ────────────────────────────────────────
 echo_info "Building frontend..."
-cd $SERVER_PATH/frontend
+cd $SERVER_PATH/legacy/frontend
 npm install --silent
 npm run build
 echo_ok "Frontend built"
@@ -413,7 +413,7 @@ fi
 # migrate (idempotent via CREATE ... IF NOT EXISTS). This extra step refreshes
 # their data and is harmless if the views already exist.
 echo_info "Ensuring materialized views exist + refreshing..."
-cd $SERVER_PATH/backend
+cd $SERVER_PATH/legacy/backend
 source $SERVER_PATH/venv/bin/activate
 python manage.py shell -c "
 from apps.core.materialized_views import create_materialized_views, refresh_all_materialized_views
@@ -440,9 +440,9 @@ except Exception as e:
 echo_ok "Cache warmed"
 
 echo_info "Setting file permissions..."
-echo '$PASSWORD' | sudo -S chown -R django:django $SERVER_PATH/backend/media 2>/dev/null || true
-echo '$PASSWORD' | sudo -S chmod -R 775 $SERVER_PATH/backend/media 2>/dev/null || true
-echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null || true
+echo '$PASSWORD' | sudo -S chown -R django:django $SERVER_PATH/legacy/backend/media 2>/dev/null || true
+echo '$PASSWORD' | sudo -S chmod -R 775 $SERVER_PATH/legacy/backend/media 2>/dev/null || true
+echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/legacy/frontend/dist 2>/dev/null || true
 
 echo_info "Restarting application services..."
 echo '$PASSWORD' | sudo -S supervisorctl restart license-manager
@@ -451,7 +451,7 @@ echo_info "Restarting Celery..."
 echo '$PASSWORD' | sudo -S supervisorctl stop license-manager-celery 2>/dev/null || true
 echo '$PASSWORD' | sudo -S pkill -9 -f "celery" 2>/dev/null || true
 sleep 2
-cd $SERVER_PATH/backend && source $SERVER_PATH/venv/bin/activate
+cd $SERVER_PATH/legacy/backend && source $SERVER_PATH/venv/bin/activate
 celery -A lmanagement purge -f 2>/dev/null || true
 echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery
 

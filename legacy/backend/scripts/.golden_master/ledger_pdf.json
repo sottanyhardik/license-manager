@@ -1,0 +1,23 @@
+{
+  "company_ledger_export": {
+    "content_disposition": "attachment; filename=\"company_ledger__TS.pdf\"",
+    "content_type": "application/pdf",
+    "n_pages": 1,
+    "status": 200,
+    "text_sha256": "dd869ea39ffa1e23bf9428cccc2ddd14cbb4a06adac6ad9920e0971da4c5984a"
+  },
+  "export_all_detailed": {
+    "content_disposition": "attachment; filename=\"license_ledger_detailed_TS.pdf\"",
+    "content_type": "application/pdf",
+    "n_pages": 389,
+    "status": 200,
+    "text_sha256": "1b06d5d99adb594df0224d124e42639a8aa24795dd39c7aaab320e3b8a779c4f"
+  },
+  "export_all_plain": {
+    "content_disposition": "attachment; filename=\"license_ledger_all_TS.pdf\"",
+    "content_type": "application/pdf",
+    "n_pages": 20,
+    "status": 200,
+    "text_sha256": "68184988a22df15f31c566831b04a14c021ee00e4edff51c0dad901b26c62935"
+  }
+}

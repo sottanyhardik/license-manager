@@ -13,7 +13,7 @@ from celery import shared_task
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, acks_late=True, reject_on_worker_lost=True)
 def recompute_license_balance_task(self, license_id: int):
     """
     Recompute the CIF balance for *license_id*.

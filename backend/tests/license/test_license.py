@@ -307,20 +307,23 @@ def test_recompute_balance_service():
         mock_atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        mock_ld_mgr.select_related.return_value.get.return_value = mock_license
-        mock_bal_mgr.filter.return_value.update = MagicMock()
-        mock_flags_mgr.filter.return_value.update = MagicMock()
+        # New call chain: select_for_update().select_related("balance", "flags").get(pk=...)
+        mock_ld_mgr.select_for_update.return_value.select_related.return_value.get.return_value = mock_license
+        mock_bal_mgr.update_or_create = MagicMock(return_value=(MagicMock(), True))
+        mock_flags_mgr.update_or_create = MagicMock(return_value=(MagicMock(), True))
 
         recompute_license_balance(license_id)
 
-    # Verify balance update called with correct value
-    mock_bal_mgr.filter.assert_called_once_with(license_id=license_id)
-    update_kwargs = mock_bal_mgr.filter.return_value.update.call_args[1]
-    assert update_kwargs["balance_cif"] == Decimal("4000.00")
+    # Verify balance update_or_create called with correct value
+    mock_bal_mgr.update_or_create.assert_called_once()
+    bal_call_kwargs = mock_bal_mgr.update_or_create.call_args
+    assert bal_call_kwargs.kwargs["license_id"] == license_id
+    assert bal_call_kwargs.kwargs["defaults"]["balance_cif"] == Decimal("4000.00")
 
     # Verify flags: balance 4000 >= 500, so is_null=False
-    flags_kwargs = mock_flags_mgr.filter.return_value.update.call_args[1]
-    assert flags_kwargs["is_null"] is False
+    mock_flags_mgr.update_or_create.assert_called_once()
+    flags_call_kwargs = mock_flags_mgr.update_or_create.call_args
+    assert flags_call_kwargs.kwargs["defaults"]["is_null"] is False
 
     # Verify credit helper was called with the license_id
     mock_credit.assert_called_once_with(license_id)

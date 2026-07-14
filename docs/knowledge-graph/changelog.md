@@ -42,6 +42,16 @@
 - Production deploy config referenced in auto-deploy.sh (gunicorn/supervisor/nginx on legacy path)
 - README — full developer onboarding (quick start, architecture, commands)
 
+### Phase 3 addendum — License module correctness fixes (2026-07-14)
+
+Applied after initial scaffold, before commit:
+- Fixed `balance_service._compute_debit`: was `boe__license_id` (wrong), corrected to `sr_number__license_id` + `bill_of_entry__license_trades__isnull=True` (matches legacy `balance_calculator.py` exactly)
+- Fixed `balance_service._compute_allotment`: was `allotment__license_id` (wrong), corrected to `item__license_id` (path through `LicenseImportItemsModel`)
+- Fixed `balance_service._compute_trade`: was `trade__license_id` (wrong), corrected to `sr_number__license_id` (path through `LicenseImportItemsModel`)
+- Fixed `LicensePurchase.mode` choices: `DIRECT/BROKER` → `AMOUNT/QTY` (legacy values)
+- Fixed `LicensePurchase.amount_source` choices: `INVOICE/MANUAL` → `FOB_INR/CIF_INR/CIF_USD` (legacy values)
+- Fixed `LicensePurchase.markup_pct`: `decimal_places=2` → `decimal_places=6` (legacy precision)
+
 ### Still pending (not on disk)
 
 - backend/apps/trade/ — trade invoices, lines, payments, 3dp billing precision, async PDF

@@ -72,13 +72,14 @@ SOLD_STATUS_CHOICES = (
 )
 
 PURCHASE_MODE_CHOICES = (
-    ("DIRECT", "DIRECT"),
-    ("BROKER", "BROKER"),
+    ("AMOUNT", "Amount-based"),
+    ("QTY", "Quantity-based"),
 )
 
 PURCHASE_AMOUNT_SOURCE_CHOICES = (
-    ("INVOICE", "INVOICE"),
-    ("MANUAL", "MANUAL"),
+    ("FOB_INR", "FOB (INR)"),
+    ("CIF_INR", "CIF (INR)"),
+    ("CIF_USD", "CIF (USD)"),
 )
 
 BILLING_MODE_CHOICES = (
@@ -501,7 +502,7 @@ class LicensePurchase(AuditModel):
     cif_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
     cif_usd = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
     exchange_rate = models.DecimalField(max_digits=15, decimal_places=6, default=DEC_0)
-    markup_pct = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
+    markup_pct = models.DecimalField(max_digits=15, decimal_places=6, default=DEC_0)
     product_name = models.CharField(max_length=500, blank=True, default="")
     quantity_kg = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_0)
     rate_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)

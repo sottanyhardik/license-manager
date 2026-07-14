@@ -8,7 +8,7 @@ The canonical formula (replicated from legacy balance_calculator.py):
 
 Where:
   credit     = SUM(LicenseExportItemModel.cif_fc)
-  debit      = SUM(RowDetails.cif_fc WHERE transaction_type=DEBIT AND boe.license_trades IS NULL)
+  debit      = SUM(RowDetails.cif_fc WHERE transaction_type=DEBIT AND bill_of_entry.license_trades IS NULL)
   allotment  = SUM(AllotmentItems.cif_fc WHERE allotment.bill_of_entry IS NULL)
   trade      = SUM(LicenseTradeLine.cif_fc WHERE trade.direction='SALE')
 
@@ -68,7 +68,9 @@ def _compute_debit(license_id: int) -> Decimal:
     """
     Sum of RowDetails.cif_fc where:
       - transaction_type = 'DEBIT'
-      - boe.license_trades IS NULL  (i.e. not tied to a trade)
+      - bill_of_entry.license_trades IS NULL  (i.e. not tied to a trade)
+
+    Path: RowDetails → sr_number (LicenseImportItemsModel) → license_id
     """
     RowDetails = _safe_get_model("bill_of_entry", "RowDetails")
     if RowDetails is None:
@@ -76,9 +78,9 @@ def _compute_debit(license_id: int) -> Decimal:
 
     result = (
         RowDetails.objects.filter(
-            boe__license_id=license_id,
+            sr_number__license_id=license_id,
             transaction_type="DEBIT",
-            boe__license_trades__isnull=True,
+            bill_of_entry__license_trades__isnull=True,
         )
         .aggregate(total=_sum_decimal("cif_fc"))["total"]
     )
@@ -89,6 +91,8 @@ def _compute_allotment(license_id: int) -> Decimal:
     """
     Sum of AllotmentItems.cif_fc where allotment.bill_of_entry IS NULL
     (pending allotments not yet converted to BOE).
+
+    Path: AllotmentItems → item (LicenseImportItemsModel) → license_id
     """
     AllotmentItems = _safe_get_model("allotment", "AllotmentItems")
     if AllotmentItems is None:
@@ -96,7 +100,7 @@ def _compute_allotment(license_id: int) -> Decimal:
 
     result = (
         AllotmentItems.objects.filter(
-            allotment__license_id=license_id,
+            item__license_id=license_id,
             allotment__bill_of_entry__isnull=True,
         )
         .aggregate(total=_sum_decimal("cif_fc"))["total"]
@@ -107,6 +111,8 @@ def _compute_allotment(license_id: int) -> Decimal:
 def _compute_trade(license_id: int) -> Decimal:
     """
     Sum of LicenseTradeLine.cif_fc where trade.direction = 'SALE'.
+
+    Path: LicenseTradeLine → sr_number (LicenseImportItemsModel) → license_id
     """
     LicenseTradeLine = _safe_get_model("trade", "LicenseTradeLine")
     if LicenseTradeLine is None:
@@ -114,7 +120,7 @@ def _compute_trade(license_id: int) -> Decimal:
 
     result = (
         LicenseTradeLine.objects.filter(
-            trade__license_id=license_id,
+            sr_number__license_id=license_id,
             trade__direction="SALE",
         )
         .aggregate(total=_sum_decimal("cif_fc"))["total"]
@@ -137,13 +143,24 @@ def recompute_license_balance(license_id: int) -> None:
       - LicenseFlags.is_null  (True when balance < 500)
       - LicenseFlags.is_expired  (True when expiry_date < today)
 
-    Raises LicenseDetailsModel.DoesNotExist if the license is missing.
-    Wrapped in a single atomic transaction.
+    Returns silently if the license no longer exists (deleted between task
+    dispatch and execution).  Wrapped in a single atomic transaction.
     """
     with transaction.atomic():
-        license_obj: LicenseDetailsModel = LicenseDetailsModel.objects.select_related(
-            "balance", "flags"
-        ).get(pk=license_id)
+        # H2: Lock the license row to prevent concurrent recomputes from racing.
+        try:
+            license_obj: LicenseDetailsModel = (
+                LicenseDetailsModel.objects
+                .select_for_update()
+                .select_related("balance", "flags")
+                .get(pk=license_id)
+            )
+        except LicenseDetailsModel.DoesNotExist:
+            logger.warning(
+                "License %s not found — skipping balance recompute (deleted between dispatch and execution).",
+                license_id,
+            )
+            return
 
         credit = _compute_credit(license_id)
         debit = _compute_debit(license_id)
@@ -153,22 +170,28 @@ def recompute_license_balance(license_id: int) -> None:
         raw_balance: Decimal = credit - debit - allotment - trade
         balance: Decimal = max(_DEC_0, raw_balance).quantize(_TWO_PLACES, rounding=ROUND_DOWN)
 
-        # Persist balance
-        LicenseBalance.objects.filter(license_id=license_id).update(
-            balance_cif=balance,
-            ledger_date=timezone.now().date(),
+        # B4: use update_or_create so the row is created when it doesn't exist yet.
+        LicenseBalance.objects.update_or_create(
+            license_id=license_id,
+            defaults={
+                "balance_cif": balance,
+                "ledger_date": timezone.now().date(),
+            },
         )
 
-        # Update flags
+        # B4: same for LicenseFlags — filter().update() is a no-op on a missing row.
         today = timezone.now().date()
         is_null = balance < _NULL_THRESHOLD
         is_expired = (
             license_obj.license_expiry_date is not None
             and license_obj.license_expiry_date < today
         )
-        LicenseFlags.objects.filter(license_id=license_id).update(
-            is_null=is_null,
-            is_expired=is_expired,
+        LicenseFlags.objects.update_or_create(
+            license_id=license_id,
+            defaults={
+                "is_null": is_null,
+                "is_expired": is_expired,
+            },
         )
 
         logger.info(

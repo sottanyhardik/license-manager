@@ -1,0 +1,223 @@
+"""
+Base Django settings for License Manager.
+
+Loaded by dev / prod / test sub-modules via `from .base import *`.
+Never use this module directly as DJANGO_SETTINGS_MODULE.
+"""
+import os
+from pathlib import Path
+from datetime import timedelta
+
+import dj_database_url
+from dotenv import load_dotenv
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+# BASE_DIR = backend/  (2 parents up from config/settings/base.py)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Load .env if present (dev/CI convenience; prod uses real env vars)
+load_dotenv(BASE_DIR / ".env")
+
+# ---------------------------------------------------------------------------
+# Core
+# ---------------------------------------------------------------------------
+SECRET_KEY = os.environ["SECRET_KEY"]
+
+DEBUG = False
+
+ALLOWED_HOSTS = [h for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h]
+
+# ---------------------------------------------------------------------------
+# Applications
+# ---------------------------------------------------------------------------
+INSTALLED_APPS = [
+    # Django built-ins
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    # Third-party
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+    "drf_spectacular",
+    "django_filters",
+    "corsheaders",
+    "simple_history",
+    "health_check",
+    "health_check.db",
+    "health_check.cache",
+    # Local
+    "shared",
+    "apps.accounts",
+    "apps.core",
+    "apps.license",
+    "apps.allotment",
+    "apps.bill_of_entry",
+    "apps.tasks",
+    "apps.dashboard",
+    "apps.reports",
+]
+
+# ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # must be before CommonMiddleware
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",
+]
+
+ROOT_URLCONF = "config.urls"
+
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = "config.wsgi.application"
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+DATABASES = {
+    "default": dj_database_url.config(
+        default=os.environ.get("DATABASE_URL", "sqlite:///db.sqlite3"),
+        conn_max_age=60,
+    )
+}
+
+# ---------------------------------------------------------------------------
+# Caches — django-redis
+# ---------------------------------------------------------------------------
+_redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/2")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": _redis_url,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Password validation
+# ---------------------------------------------------------------------------
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+# ---------------------------------------------------------------------------
+# Internationalisation
+# ---------------------------------------------------------------------------
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
+USE_I18N = True
+USE_TZ = True
+
+# ---------------------------------------------------------------------------
+# Static / media
+# ---------------------------------------------------------------------------
+STATIC_URL = "/static/"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# ---------------------------------------------------------------------------
+# Default primary key
+# ---------------------------------------------------------------------------
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ---------------------------------------------------------------------------
+# Auth model
+# ---------------------------------------------------------------------------
+# managed=False proxy over the shared accounts_user table.
+# The legacy backend owns the table; we only read/authenticate against it.
+AUTH_USER_MODEL = "accounts.User"
+
+# ---------------------------------------------------------------------------
+# Django REST Framework
+# ---------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "shared.pagination.StandardPagination",
+    "PAGE_SIZE": 25,
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "shared.exceptions.custom_exception_handler",
+}
+
+# ---------------------------------------------------------------------------
+# Simple JWT
+# ---------------------------------------------------------------------------
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# ---------------------------------------------------------------------------
+# DRF Spectacular (OpenAPI)
+# ---------------------------------------------------------------------------
+SPECTACULAR_SETTINGS = {
+    "TITLE": "License Manager API v1",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
+
+# ---------------------------------------------------------------------------
+# CORS
+# ---------------------------------------------------------------------------
+CORS_ALLOWED_ORIGINS = [
+    o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o
+]
+
+# ---------------------------------------------------------------------------
+# Celery
+# ---------------------------------------------------------------------------
+CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/2")
+CELERY_RESULT_BACKEND = os.environ.get("REDIS_URL", "redis://localhost:6379/2")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE

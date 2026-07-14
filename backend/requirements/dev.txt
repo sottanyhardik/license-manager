@@ -1,0 +1,5 @@
+-r base.txt
+ruff>=0.4
+black>=24.4
+ipython
+django-extensions

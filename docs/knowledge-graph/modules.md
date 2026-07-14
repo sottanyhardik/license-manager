@@ -20,7 +20,7 @@
 | Feature | Status | Routes | Key Components | API Hooks |
 |---|---|---|---|---|
 | auth | pending | /login, /logout | LoginForm | useLogin, useLogout |
-| licenses | pending | /licenses, /licenses/:id | LicenseList, LicenseDetail | useLicenses, useLicense |
+| licenses | done | /licenses, /licenses/:id | LicenseList, LicenseDetail, LicenseCard, LicenseBalancePanel, LicenseImportItems, LicenseStatusBadge, LicenseFilters, LicenseFormModal | useLicenses, useLicense, useLicenseItems, useLicenseBalance, useLicenseItemUsage, useCreateLicense, useUpdateLicense, useDeleteLicense, usePatchLicenseField, useGenerateLicensePDF |
 | allotments | pending | /allotments | AllotmentForm | useAllotments |
 | bill-of-entry | pending | /boe | BOEList, BOEDetail | useBOEs |
 | trade | pending | /trade | TradeForm | useTrades |

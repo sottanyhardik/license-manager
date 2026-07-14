@@ -4,6 +4,8 @@ export const ENDPOINTS = {
     LOGOUT: '/api/v1/auth/logout/',
     REFRESH: '/api/v1/auth/token/refresh/',
     ME: '/api/v1/auth/me/',
+    CHANGE_PASSWORD: '/api/v1/auth/change-password/',
+    UPDATE_PROFILE: '/api/v1/auth/me/',
   },
   LICENSES: {
     LIST: '/api/v1/licenses/',
@@ -20,6 +22,7 @@ export const ENDPOINTS = {
   ALLOTMENTS: {
     LIST: '/api/v1/allotments/',
     DETAIL: (id: number | string) => `/api/v1/allotments/${id}/`,
+    GENERATE_PDF: (id: number) => `/api/v1/allotments/${id}/generate-pdf/`,
   },
   TRADES: {
     LIST: '/api/v1/trades/',
@@ -40,6 +43,11 @@ export const ENDPOINTS = {
   },
   REPORTS: {
     LIST: '/api/v1/reports/',
+    BALANCE: '/api/v1/reports/balance/generate/',
+    ITEMS: '/api/v1/reports/items/generate/',
+    PIVOT: '/api/v1/reports/pivot/generate/',
+    LEDGER: '/api/v1/reports/ledger/generate/',
+    TASK_STATUS: (taskId: string) => `/api/v1/reports/task/${taskId}/status/`,
   },
   LEDGER: {
     UPLOAD: '/api/v1/ledger/upload/',
@@ -48,6 +56,23 @@ export const ENDPOINTS = {
   TRANSFER_LETTERS: {
     LIST: '/api/v1/transfer-letters/',
     GENERATE: '/api/v1/transfer-letters/generate/',
+  },
+  BILL_OF_ENTRY: {
+    LIST: '/api/v1/bill-of-entries/',
+    DETAIL: (id: number) => `/api/v1/bill-of-entries/${id}/`,
+    ROWS: (id: number) => `/api/v1/bill-of-entries/${id}/rows/`,
+    ROW: (id: number, rowId: number) => `/api/v1/bill-of-entries/${id}/rows/${rowId}/`,
+    RESOLVE_DISPUTE: (id: number, rowId: number) => `/api/v1/bill-of-entries/${id}/rows/${rowId}/resolve-dispute/`,
+    UPLOAD_LEDGER: '/api/v1/bill-of-entries/upload-ledger/',
+  },
+  TASKS: {
+    LIST: '/api/v1/tasks/',
+    DETAIL: (id: number | string) => `/api/v1/tasks/${id}/`,
+    COMPLETE: (id: number | string) => `/api/v1/tasks/${id}/complete/`,
+    REJECT: (id: number | string) => `/api/v1/tasks/${id}/reject/`,
+    REOPEN: (id: number | string) => `/api/v1/tasks/${id}/reopen/`,
+    REMARKS: (id: number | string) => `/api/v1/tasks/${id}/remarks/`,
+    ASSIGNABLE_USERS: '/api/v1/tasks/assignable-users/',
   },
   MASTERS: {
     COMPANIES: '/api/v1/masters/companies/',
@@ -64,5 +89,11 @@ export const ENDPOINTS = {
     SION_NORM_CLASS: (id: number) => `/api/v1/masters/sion-norm-classes/${id}/`,
     EXCHANGE_RATES: '/api/v1/masters/exchange-rates/',
     EXCHANGE_RATE: (id: number) => `/api/v1/masters/exchange-rates/${id}/`,
+  },
+  DASHBOARD: {
+    STATS: '/api/v1/dashboard/stats/',
+    UTILISATION_CHART: '/api/v1/dashboard/charts/utilisation/',
+    ACTIVITY_CHART: '/api/v1/dashboard/charts/activity/',
+    EXPIRING_LICENSES: '/api/v1/dashboard/expiring-licenses/',
   },
 } as const

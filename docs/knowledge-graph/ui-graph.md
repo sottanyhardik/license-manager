@@ -4,12 +4,12 @@
 
 ## Route Map
 
-| Route | Component | Layout | Auth | Role |
-|---|---|---|---|---|
-| /login | Login | AuthLayout | none | any |
-| / | Dashboard | AdminLayout | JWT | any |
-| /licenses | LicenseList | AdminLayout | JWT | license-viewer+ |
-| /licenses/:id | LicenseDetail | AdminLayout | JWT | license-viewer+ |
+| Route | Component | Layout | Auth | Role | Status |
+|---|---|---|---|---|---|
+| /login | Login | AuthLayout | none | any | pending |
+| / | Dashboard | AdminLayout | JWT | any | pending |
+| /licenses | LicenseList | AdminLayout | JWT | license-viewer+ | done — Phase 3 |
+| /licenses/:id | LicenseDetail | AdminLayout | JWT | license-viewer+ | done — Phase 3 |
 | /allotments | AllotmentList | AdminLayout | JWT | allotment-viewer+ |
 | /boe | BOEList | AdminLayout | JWT | boe-viewer+ |
 | /trade | TradeList | AdminLayout | JWT | trade-viewer+ |
@@ -55,6 +55,11 @@
 |---|---|
 | useLicenses | LicenseList, Dashboard |
 | useLicense | LicenseDetail, AllotmentForm, TradeForm |
+| useLicenseItems | LicenseDetail (Import Items tab) |
+| useLicenseBalance | LicenseBalancePanel |
+| useLicenseItemUsage | LicenseImportItems (expand-row detail) |
+| useCreateLicense, useUpdateLicense | LicenseFormModal |
+| usePatchLicenseField | LicenseBalancePanel (inline editable fields) |
 | useAllotments | AllotmentList |
 | useBOEs | BOEList |
 | useTrades | TradeList |

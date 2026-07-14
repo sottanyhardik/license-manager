@@ -15,12 +15,11 @@ Completeness rule: `done` requires models (or models package), views (or views p
 | license | done | DFIA + incentive licenses, import items, balance ledger, async PDF | license_* models in models/ package | balance_service.py, license_service.py | /api/v1/licenses/ |
 | allotment | done | Pre-auth allotments + transfer letters; Celery balance dispatch after commit | allotment*, allotmentitems | allotment_service.py | /api/v1/allotments/ |
 | bill_of_entry | done | BOE header + frozen row details, dispute resolution, ledger upload, merge | billofentry*, rowdetails | boe_service.py | /api/v1/bill-of-entries/ |
-| trade | pending | Trade invoices, lines, payments, 3dp billing precision, async PDF | licensetrade*, tradelinesmodel | — | /api/v1/trades/ (not yet built) |
+| trade | done | Trade invoices (DFIA + Incentive), billing lines (QTY/CIF/FOB modes), payments, 3dp pct/rate_pct precision hotfix, synchronous PDF (purchase invoice + bill of supply), async Celery task stub, auto-paired trade creation, bidirectional trade linking | trade_licensetrade, trade_licensetradeline, trade_incentivetradeline, trade_licensetradepayment | trade_service.py (parse_date_strict, get_prefilled_invoice_number, build_trade_summary, link_trades, PartnerTradeNotFound) | /api/v1/trades/ |
 | tasks | done | Internal workflow task state machine; remarks; complete/reject/reopen | task, taskremark | task_service.py | /api/v1/tasks/ |
 | dashboard | done | KPI aggregation (read-only, no own models); licence utilisation, monthly activity, expiring alerts | reads from license/allotment/boe | dashboard_service.py | /api/v1/dashboard/ |
 | reports | done | Async Celery report generation (balance, item, ledger, pivot); CeleryTaskTracker polling | uses CeleryTaskTracker from core | balance_report.py, item_report.py, ledger_report.py, pivot_report.py | /api/v1/reports/ |
 
-> Note: `trade` app is not present under `backend/apps/` as of this update — it remains pending.
 
 ## Frontend Feature Modules
 
@@ -35,7 +34,7 @@ Completeness rule: `done` requires a `pages/` directory with at least one page c
 | licenses | done | /licenses, /licenses/:id | LicenseList, LicenseDetail, LicenseCard, LicenseBalancePanel, LicenseImportItems, LicenseStatusBadge, LicenseFilters, LicenseFormModal | api.ts, queries.ts, mutations.ts |
 | allotments | done | /allotments | AllotmentList, AllotmentForm, AllotmentItemsTable, AllotmentStatusBadge | api.ts, queries.ts (CRUD + PDF generation) |
 | bill-of-entry | done | /boe, /boe/:id | BOEList, BOEDetail, BOERowsTable, DisputeResolver, LedgerUpload | queries.ts, mutations.ts |
-| trade | pending | /trade | — | — (no frontend feature directory exists) |
+| trade | done | /trades, /trades/new, /trades/:id | TradeList, TradeForm, TradeLineTable, IncentiveLineTable, PaymentTable, TradeSummary | queries.ts (useTrades, useTrade, useTradeSummary), mutations.ts (useCreateTrade, useUpdateTrade, useDeleteTrade, useGeneratePurchaseInvoice, useGenerateBillOfSupply) |
 | reports | done | /reports/* | BalanceReport, ItemReport, LedgerReport, PivotReport, ReportsIndex, LicenseSelector, ReportGenerator, ReportTaskStatus | queries.ts, mutations.ts, hooks/ (async task polling) |
 | tasks | done | /tasks | TaskList, TaskCard, TaskDrawer, TaskRemarks, TaskStatusBadge | queries.ts, mutations.ts |
 | dashboard | done | / | Dashboard, StatCard, ActivityChart, UtilisationChart, ExpiringLicensesTable, DashboardSkeleton | queries.ts |

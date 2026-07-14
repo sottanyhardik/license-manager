@@ -52,10 +52,15 @@ Applied after initial scaffold, before commit:
 - Fixed `LicensePurchase.amount_source` choices: `INVOICE/MANUAL` → `FOB_INR/CIF_INR/CIF_USD` (legacy values)
 - Fixed `LicensePurchase.markup_pct`: `decimal_places=2` → `decimal_places=6` (legacy precision)
 
+### Phase 6 — Trade module (2026-07-14)
+
+- **backend/apps/trade/** — 4 managed=False models (LicenseTrade, LicenseTradeLine, IncentiveTradeLine, LicenseTradePayment), exact db_table names matching legacy schema; `compute_amount()` precision fix (pct/rate_pct: 3dp, never wrapped in q2()); services/trade_service.py ported exactly from legacy (parse_date_strict, get_prefilled_invoice_number, build_trade_summary, link_trades, PartnerTradeNotFound); nested CRUD serializer with inline _sync_nested logic; synchronous PDF actions (purchase invoice + bill of supply with :.3f pct formatting); Celery stub task (acks_late=True); TradePermission enforcement; prefill-invoice-number, summary, link-trade extra actions; wired to INSTALLED_APPS and /api/v1/trades/
+- **frontend/src/features/trade/** — types.ts (Trade, TradeLine, IncentiveTradeLine, TradePayment), queries.ts (useTrades, useTrade, useTradeSummary), mutations.ts (useCreateTrade, useUpdateTrade, useDeleteTrade, useGeneratePurchaseInvoice, useGenerateBillOfSupply), components (TradeLineTable with mode-aware columns + 3dp pct step, IncentiveLineTable with 3dp rate_pct step, PaymentTable, TradeSummary), pages (TradeList with direction filter, TradeForm with conditional DFIA/Incentive line tables); wired to router (/trades, /trades/new, /trades/:id)
+- **frontend/src/shared/api/endpoints.ts** — TRADES section extended with SUMMARY, PREFILL_INVOICE, PURCHASE_INVOICE_PDF, BILL_OF_SUPPLY_PDF, LINES, PAYMENTS, LINK_TRADE
+- **backend/tests/trade/test_trade.py** — 10 unit tests; all pass including the critical precision guard (pct=7.925, cif=100000 → 7925.00 not 7930.00; rate_pct=2.125, value=500000 → 10625.00)
+
 ### Still pending (not on disk)
 
-- backend/apps/trade/ — trade invoices, lines, payments, 3dp billing precision, async PDF
-- frontend/src/features/trade/ — TradeForm, trade list
 - frontend settings page (pages/settings exists but features/settings not created)
 
 ---

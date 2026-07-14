@@ -12,3 +12,10 @@ psycopg[binary]>=3.1
 python-dotenv>=1.0
 dj-database-url>=2.1
 django-redis>=5.4
+# PDF generation
+reportlab>=4.2
+Pillow>=10.3
+# WSGI server
+gunicorn>=22.0
+# Security — required by simplejwt RS256 / token signing
+cryptography>=42.0

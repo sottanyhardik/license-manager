@@ -1,5 +1,5 @@
 -r base.txt
 ruff>=0.4
 black>=24.4
-ipython
-django-extensions
+ipython>=8.24
+django-extensions>=3.2

@@ -1,12 +1,17 @@
 # trade/purchase_invoice_pdf.py
+import logging
+import os
 from io import BytesIO
 
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Table, TableStyle
+
+logger = logging.getLogger(__name__)
 
 
 def num_to_words_indian(amount):
@@ -61,6 +66,7 @@ def num_to_words_indian(amount):
 
         return convert_indian(whole_amount)
     except Exception:
+        logger.warning("num_to_words_indian failed for amount=%r, returning fallback", amount, exc_info=True)
         return str(int(amount))
 
 
@@ -94,11 +100,6 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
     # Page width
     page_width = A4[0] - 60  # minus margins
 
-    # Logo and Title section
-    import os
-
-    from PIL import Image as PILImage
-
     # Title style
     title_style = ParagraphStyle(
         'Title',
@@ -111,53 +112,42 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
 
     logo_img = None
     # Try to add company logo
-    import logging
-    logger = logging.getLogger(__name__)
+    if to_company and to_company.logo:
+        try:
+            logo_path = to_company.logo.path
+            logger.info("Company: %s, Logo path: %s, Exists: %s", to_company.name, logo_path,
+                        os.path.exists(logo_path))
 
-    if to_company:
-        logo_value = to_company.logo if hasattr(to_company, "logo") else "N/A"
-        logger.info(
-            "Company: %s, Has logo attr: %s, Logo value: %s",
-            to_company.name,
-            hasattr(to_company, "logo"),
-            logo_value,
-        )
-
-        if hasattr(to_company, 'logo') and to_company.logo:
-            try:
-                logo_path = to_company.logo.path
-                logger.info(f"Logo path: {logo_path}, Exists: {os.path.exists(logo_path)}")
-
-                if os.path.exists(logo_path):
-                    # Get image dimensions to maintain aspect ratio
-                    pil_img = PILImage.open(logo_path)
+            if os.path.exists(logo_path):
+                # Get image dimensions to maintain aspect ratio
+                with PILImage.open(logo_path) as pil_img:
                     img_width, img_height = pil_img.size
-                    aspect = img_height / float(img_width)
+                aspect = img_height / float(img_width)
 
-                    # Set max dimensions
-                    max_width = 1.5 * inch
-                    max_height = 0.75 * inch
+                # Set max dimensions
+                max_width = 1.5 * inch
+                max_height = 0.75 * inch
 
-                    # Calculate size maintaining aspect ratio
-                    if aspect > (max_height / max_width):
-                        # Height is limiting factor
-                        display_height = max_height
-                        display_width = max_height / aspect
-                    else:
-                        # Width is limiting factor
-                        display_width = max_width
-                        display_height = max_width * aspect
-
-                    logo_img = Image(logo_path, width=display_width, height=display_height)
-                    logger.info(f"Logo loaded successfully: {display_width}x{display_height}")
+                # Calculate size maintaining aspect ratio
+                if aspect > (max_height / max_width):
+                    # Height is limiting factor
+                    display_height = max_height
+                    display_width = max_height / aspect
                 else:
-                    logger.warning(f"Logo file does not exist at path: {logo_path}")
-            except Exception as e:
-                # Log error but continue
-                logger.error(f"Failed to load logo: {e}", exc_info=True)
-                logo_img = None
-        else:
-            logger.info("Company has no logo or logo field is empty")
+                    # Width is limiting factor
+                    display_width = max_width
+                    display_height = max_width * aspect
+
+                logo_img = Image(logo_path, width=display_width, height=display_height)
+                logger.info("Logo loaded successfully: %sx%s", display_width, display_height)
+            else:
+                logger.warning("Logo file does not exist at path: %s", logo_path)
+        except Exception as e:
+            # Log error but continue without logo
+            logger.error("Failed to load logo: %s", e, exc_info=True)
+            logo_img = None
+    elif to_company:
+        logger.info("Company %s has no logo or logo field is empty", to_company.name)
     else:
         logger.warning("No to_company found")
 
@@ -623,28 +613,24 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
 
         # Try to add signature image
         sig_img = None
-        if hasattr(to_company, 'signature') and to_company.signature:
+        if to_company.signature:
             try:
-                import os
                 sig_path = to_company.signature.path
                 if os.path.exists(sig_path):
                     sig_img = Image(sig_path, width=1.3 * inch, height=0.7 * inch)
             except Exception as e:
-                logger.error(f"Failed to load signature: {e}")
+                logger.error("Failed to load signature: %s", e, exc_info=True)
                 sig_img = None
 
         # Try to add stamp image
         stamp_img = None
-        if hasattr(to_company, 'stamp') and to_company.stamp:
+        if to_company.stamp:
             try:
-                import os
-
-                from PIL import Image as PILImage
                 stamp_path = to_company.stamp.path
                 if os.path.exists(stamp_path):
                     # Get original stamp dimensions
-                    pil_stamp = PILImage.open(stamp_path)
-                    stamp_width, stamp_height = pil_stamp.size
+                    with PILImage.open(stamp_path) as pil_stamp:
+                        stamp_width, stamp_height = pil_stamp.size
 
                     # Use original aspect ratio, max size 1.0 inch
                     max_size = 1.0 * inch
@@ -661,7 +647,7 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
 
                     stamp_img = Image(stamp_path, width=display_width, height=display_height)
             except Exception as e:
-                logger.error(f"Failed to load stamp: {e}")
+                logger.error("Failed to load stamp: %s", e, exc_info=True)
                 stamp_img = None
 
         # Place signature and stamp side by side

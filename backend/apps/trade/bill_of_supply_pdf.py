@@ -1,12 +1,17 @@
 # trade/bill_of_supply_pdf.py
+import logging
+import os
 from io import BytesIO
 
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Table, TableStyle
+
+logger = logging.getLogger(__name__)
 
 
 def num_to_words_indian(amount):
@@ -61,6 +66,7 @@ def num_to_words_indian(amount):
 
         return convert_indian(whole_amount)
     except Exception:
+        logger.warning("num_to_words_indian failed for amount=%r, returning fallback", amount, exc_info=True)
         return str(int(amount))
 
 
@@ -94,11 +100,6 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     # Page width
     page_width = A4[0] - 60  # minus margins
 
-    # Logo and Title section
-    import os
-
-    from PIL import Image as PILImage
-
     # Title style
     title_style = ParagraphStyle(
         'Title',
@@ -111,53 +112,42 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
     logo_img = None
     # Try to add company logo
-    import logging
-    logger = logging.getLogger(__name__)
+    if from_company and from_company.logo:
+        try:
+            logo_path = from_company.logo.path
+            logger.info("Company: %s, Logo path: %s, Exists: %s", from_company.name, logo_path,
+                        os.path.exists(logo_path))
 
-    if from_company:
-        logo_value = from_company.logo if hasattr(from_company, "logo") else "N/A"
-        logger.info(
-            "Company: %s, Has logo attr: %s, Logo value: %s",
-            from_company.name,
-            hasattr(from_company, "logo"),
-            logo_value,
-        )
-
-        if hasattr(from_company, 'logo') and from_company.logo:
-            try:
-                logo_path = from_company.logo.path
-                logger.info(f"Logo path: {logo_path}, Exists: {os.path.exists(logo_path)}")
-
-                if os.path.exists(logo_path):
-                    # Get image dimensions to maintain aspect ratio
-                    pil_img = PILImage.open(logo_path)
+            if os.path.exists(logo_path):
+                # Get image dimensions to maintain aspect ratio
+                with PILImage.open(logo_path) as pil_img:
                     img_width, img_height = pil_img.size
-                    aspect = img_height / float(img_width)
+                aspect = img_height / float(img_width)
 
-                    # Set max dimensions
-                    max_width = 1.5 * inch
-                    max_height = 0.75 * inch
+                # Set max dimensions
+                max_width = 1.5 * inch
+                max_height = 0.75 * inch
 
-                    # Calculate size maintaining aspect ratio
-                    if aspect > (max_height / max_width):
-                        # Height is limiting factor
-                        display_height = max_height
-                        display_width = max_height / aspect
-                    else:
-                        # Width is limiting factor
-                        display_width = max_width
-                        display_height = max_width * aspect
-
-                    logo_img = Image(logo_path, width=display_width, height=display_height)
-                    logger.info(f"Logo loaded successfully: {display_width}x{display_height}")
+                # Calculate size maintaining aspect ratio
+                if aspect > (max_height / max_width):
+                    # Height is limiting factor
+                    display_height = max_height
+                    display_width = max_height / aspect
                 else:
-                    logger.warning(f"Logo file does not exist at path: {logo_path}")
-            except Exception as e:
-                # Log error but continue
-                logger.error(f"Failed to load logo: {e}", exc_info=True)
-                logo_img = None
-        else:
-            logger.info("Company has no logo or logo field is empty")
+                    # Width is limiting factor
+                    display_width = max_width
+                    display_height = max_width * aspect
+
+                logo_img = Image(logo_path, width=display_width, height=display_height)
+                logger.info("Logo loaded successfully: %sx%s", display_width, display_height)
+            else:
+                logger.warning("Logo file does not exist at path: %s", logo_path)
+        except Exception as e:
+            # Log error but continue without logo
+            logger.error("Failed to load logo: %s", e, exc_info=True)
+            logo_img = None
+    elif from_company:
+        logger.info("Company %s has no logo or logo field is empty", from_company.name)
     else:
         logger.warning("No from_company found")
 
@@ -657,28 +647,24 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
         # Try to add signature image - bigger size using full space
         sig_img = None
-        if hasattr(from_company, 'signature') and from_company.signature:
+        if from_company.signature:
             try:
-                import os
                 sig_path = from_company.signature.path
                 if os.path.exists(sig_path):
                     sig_img = Image(sig_path, width=1.3 * inch, height=0.7 * inch)  # Bigger size
             except Exception as e:
-                logger.error(f"Failed to load signature: {e}")
+                logger.error("Failed to load signature: %s", e, exc_info=True)
                 sig_img = None
 
         # Try to add stamp image - bigger size using full space
         stamp_img = None
-        if hasattr(from_company, 'stamp') and from_company.stamp:
+        if from_company.stamp:
             try:
-                import os
-
-                from PIL import Image as PILImage
                 stamp_path = from_company.stamp.path
                 if os.path.exists(stamp_path):
                     # Get original stamp dimensions
-                    pil_stamp = PILImage.open(stamp_path)
-                    stamp_width, stamp_height = pil_stamp.size
+                    with PILImage.open(stamp_path) as pil_stamp:
+                        stamp_width, stamp_height = pil_stamp.size
 
                     # Use original aspect ratio, max size 1.0 inch (bigger for full space)
                     max_size = 1.0 * inch
@@ -695,7 +681,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
                     stamp_img = Image(stamp_path, width=display_width, height=display_height)
             except Exception as e:
-                logger.error(f"Failed to load stamp: {e}")
+                logger.error("Failed to load stamp: %s", e, exc_info=True)
                 stamp_img = None
 
         # Place signature and stamp side by side with bigger sizes
@@ -727,8 +713,8 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         sig_table = Table(sig_rows, colWidths=[page_width * 0.35])
         sig_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-            ('VALIGN', (0, 0), (0, 0), 'TOP'),  # First row (for PURPLEHUB) at TOP
-            ('VALIGN', (0, 1), (0, -1), 'MIDDLE'),  # Middle rows (signature/stamp) in MIDDLE
+            ('VALIGN', (0, 0), (0, 0), 'TOP'),  # First row at TOP
+            ('VALIGN', (0, 1), (0, -1), 'MIDDLE'),  # Middle rows in MIDDLE
             ('LEFTPADDING', (0, 0), (-1, -1), 3),  # Add some padding to keep it inside
             ('RIGHTPADDING', (0, 0), (-1, -1), 3),
             ('TOPPADDING', (0, 0), (-1, -1), 3),
@@ -738,7 +724,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         # Set signature in the last row's right column
         declaration_data[-1][1] = sig_table
     else:
-        # No signature/stamp - just show spacing and Authorised Signatory (for Company already in Bank Details row)
+        # No signature/stamp - just show spacing and Authorised Signatory
         declaration_data[-1][1] = Paragraph(
             '<br/><br/><br/><br/><br/><br/>'
             '<b>Authorised Signatory</b>',

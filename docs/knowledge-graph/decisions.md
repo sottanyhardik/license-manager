@@ -28,3 +28,27 @@
 ## Pending Decisions
 
 *None blocking Phase 1. Phase 1 (Authentication module) may begin once Phase 0 exit gate passes.*
+
+---
+
+## Phase 1-9 Build Decisions (feature/V1)
+
+Decisions made during implementation that are not covered by ADR-001 through ADR-010.
+
+| # | Decision | Rationale | Phase |
+|---|---|---|---|
+| BD-001 | **`dashboard` and `reports` apps have no own models** — they read from other apps' tables | Dashboard is a pure aggregation view; reports generate files tracked via core's CeleryTaskTracker. Avoids model proliferation. | Phase 1-9 |
+| BD-002 | **Balance recompute is lazy/deferred** — allotment_service._dispatch() calls recompute_license_balance_task.delay() per item after commit | Prevents blocking HTTP responses on a potentially expensive recalculation. Celery handles retry on failure. | allotment |
+| BD-003 | **`_safe_get_model()` pattern in balance_service and ledger_report** — dynamic model lookup via `apps.get_model()` | Avoids circular imports between license, allotment, bill_of_entry, and trade modules. Each service only imports what it owns. | license, reports |
+| BD-004 | **CeleryTaskTracker lives in core** — view creates tracker before `.delay()`, Celery task updates it | Frontend polls task status endpoint using task_id. Decouples async state from the originating request. | reports |
+| BD-005 | **allotments frontend has `api.ts` instead of `mutations.ts`** — CRUD and PDF generation in api.ts, queries in queries.ts | Structural choice matching the pattern used by licenses; `mutations.ts` pattern was adopted by bill-of-entry, tasks, reports. Both patterns are acceptable. | allotments FE |
+| BD-006 | **`trade` module deferred** — backend/apps/trade/ and frontend/src/features/trade/ not yet implemented | Trade is the lowest-priority module; all other modules that depend on trade (balance_service._compute_trade) use `_safe_get_model()` and degrade gracefully to zero when the model is absent. | trade |
+| BD-007 | **BOE has a `views/` package** (boe.py + ledger.py) instead of a single views.py | BOE view surface is large enough (list, detail, dispute, merge, ledger upload) to warrant splitting. Same pattern as core and license. | bill_of_entry |
+| BD-008 | **Allotment PDF endpoint wired on frontend via `generateAllotmentPdf()`** in api.ts | Allotments can generate a PDF pre-auth allotment document, parallel to license PDF. Backend endpoint confirmed in allotment urls.py. | allotments |
+
+## Open Questions (needing author input)
+
+| # | Question | Impact |
+|---|---|---|
+| OQ-P1 | When will `trade` module be built? It is the last remaining backend app. | balance_service._compute_trade() currently returns 0 for all licenses; balances are understated until trade ships. |
+| OQ-P2 | Should `settings` become a full feature under `frontend/src/features/settings/`? Currently only a page exists under `pages/settings`. | Determines whether to create a features/settings/ directory or keep settings as a plain page. |

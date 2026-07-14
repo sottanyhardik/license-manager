@@ -1,3 +1,5 @@
+pytest_plugins = ["conftest_managed"]
+
 import pytest
 from django.contrib.auth.models import Group
 from rest_framework.test import APIClient

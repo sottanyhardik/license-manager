@@ -1,0 +1,68 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Ruff lint
+        run: uv run --directory backend ruff check .
+      - name: Black format check
+        run: uv run --directory backend black --check .
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: test_lmanagement
+          POSTGRES_USER: lmanagement
+          POSTGRES_PASSWORD: lmanagement
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: uv pip install --system -r backend/requirements/test.txt
+      - name: Run tests
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+          DATABASE_URL: postgresql://lmanagement:lmanagement@localhost:5432/test_lmanagement
+          REDIS_URL: redis://localhost:6379/2
+          SECRET_KEY: test-secret-key
+        run: uv run --directory backend pytest --tb=short
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: uv pip install --system -r backend/requirements/base.txt
+      - name: Django system check
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+          DATABASE_URL: postgresql://lmanagement:lmanagement@localhost:5432/lmanagement
+          REDIS_URL: redis://localhost:6379/2
+          SECRET_KEY: test-secret-key
+        run: uv run --directory backend python manage.py check --deploy

@@ -1,0 +1,1566 @@
+# License Manager — Legacy API Contract
+# Source: legacy/backend/lmanagement/urls.py + per-app urls.py files
+# All paths are prefixed with the base URL of the legacy backend (port 8000).
+# Authentication: Authorization: Bearer <access_token> on all endpoints except
+# /api/auth/login/, /api/auth/refresh/, /api/health/, and /api/mds/status/.
+#
+# Parity tracker: set parity_status to "done" as each endpoint is implemented
+# in backend/ (new v1 Django app, port 8001, prefix /api/v1/).
+
+endpoints:
+
+  # -------------------------------------------------------------------------
+  # SYSTEM
+  # -------------------------------------------------------------------------
+  system:
+    - path: /api/health/
+      method: GET
+      auth: none
+      description: Health check; returns service status
+      new_path: /api/v1/health/
+      parity_status: done
+
+    - path: /api/mds/status/
+      method: GET
+      auth: none
+      description: Market data source status
+      new_path: /api/v1/mds/status/
+      parity_status: done
+
+    - path: /api/schema/
+      method: GET
+      auth: none (debug) / JWT (production)
+      description: OpenAPI 3 schema (drf-spectacular)
+      new_path: /api/v1/schema/
+      parity_status: done
+
+    - path: /api/docs/
+      method: GET
+      auth: none (debug) / JWT (production)
+      description: Swagger UI for interactive API exploration
+      new_path: /api/v1/docs/
+      parity_status: done
+
+    - path: /api/redoc/
+      method: GET
+      auth: none (debug) / JWT (production)
+      description: ReDoc UI for API documentation
+      new_path: /api/v1/redoc/
+      parity_status: done
+
+    - path: /api/media/{path}
+      method: GET
+      auth: JWT
+      description: Protected media/document download (replaces public /media/)
+      new_path: /api/v1/media/{path}
+      parity_status: done
+
+  # -------------------------------------------------------------------------
+  # AUTH  (mounted at /api/auth/)
+  # Source: legacy/backend/apps/accounts/urls.py
+  # -------------------------------------------------------------------------
+  auth:
+    - path: /api/auth/login/
+      method: POST
+      auth: none
+      description: Authenticate with username+password; returns {access, refresh, user}
+      new_path: /api/v1/auth/login/
+      parity_status: done
+
+    - path: /api/auth/logout/
+      method: POST
+      auth: JWT
+      description: Blacklist the supplied refresh token
+      new_path: /api/v1/auth/logout/
+      parity_status: done
+
+    - path: /api/auth/me/
+      method: GET
+      auth: JWT
+      description: Return authenticated user's profile
+      new_path: /api/v1/auth/me/
+      parity_status: done
+
+    - path: /api/auth/me/
+      method: PUT
+      auth: JWT
+      description: Replace own profile fields
+      new_path: /api/v1/auth/me/
+      parity_status: done
+
+    - path: /api/auth/me/
+      method: PATCH
+      auth: JWT
+      description: Partially update own profile fields
+      new_path: /api/v1/auth/me/
+      parity_status: done
+
+    - path: /api/auth/refresh/
+      method: POST
+      auth: none
+      description: Exchange a valid refresh token for a new access token (SimpleJWT TokenRefreshView)
+      new_path: /api/v1/auth/refresh/
+      parity_status: done
+
+    - path: /api/auth/password-reset/
+      method: POST
+      auth: none
+      description: Request a password-reset e-mail
+      new_path: /api/v1/auth/password-reset/
+      parity_status: done
+
+    - path: /api/auth/password-reset-confirm/
+      method: POST
+      auth: none
+      description: Submit token+new password to complete the reset
+      new_path: /api/v1/auth/password-reset-confirm/
+      parity_status: done
+
+    - path: /api/auth/users/
+      method: GET
+      auth: JWT+role (USER_MANAGER or superuser)
+      description: List all application users (paginated)
+      new_path: /api/v1/auth/users/
+      parity_status: done
+
+    - path: /api/auth/users/
+      method: POST
+      auth: JWT+role (USER_MANAGER or superuser)
+      description: Create a new user account
+      new_path: /api/v1/auth/users/
+      parity_status: done
+
+    - path: /api/auth/users/{id}/
+      method: GET
+      auth: JWT+role (USER_MANAGER or superuser)
+      description: Retrieve a single user by primary key
+      new_path: /api/v1/auth/users/{id}/
+      parity_status: done
+
+    - path: /api/auth/users/{id}/
+      method: PUT
+      auth: JWT+role (USER_MANAGER or superuser)
+      description: Replace a user record
+      new_path: /api/v1/auth/users/{id}/
+      parity_status: done
+
+    - path: /api/auth/users/{id}/
+      method: PATCH
+      auth: JWT+role (USER_MANAGER or superuser)
+      description: Partially update a user record
+      new_path: /api/v1/auth/users/{id}/
+      parity_status: done
+
+    - path: /api/auth/users/{id}/
+      method: DELETE
+      auth: JWT+role (USER_MANAGER or superuser)
+      description: Delete a user account
+      new_path: /api/v1/auth/users/{id}/
+      parity_status: done
+
+    - path: /api/auth/users/{id}/reset-password/
+      method: POST
+      auth: JWT+role (USER_MANAGER or superuser)
+      description: Admin-initiated password reset for a given user
+      new_path: /api/v1/auth/users/{id}/reset-password/
+      parity_status: done
+
+    - path: /api/auth/users/available_roles/
+      method: GET
+      auth: JWT
+      description: List the 15 available role codes that can be assigned to users
+      new_path: /api/v1/auth/users/available_roles/
+      parity_status: done
+
+  # -------------------------------------------------------------------------
+  # MASTERS  (mounted at /api/masters/)
+  # Source: legacy/backend/apps/core/urls.py
+  # All masters implement standard CRUD unless noted.
+  # -------------------------------------------------------------------------
+  masters:
+    - path: /api/masters/companies/
+      method: GET
+      auth: JWT
+      description: List importer/exporter company records
+      new_path: /api/v1/masters/companies/
+      parity_status: done
+
+    - path: /api/masters/companies/
+      method: POST
+      auth: JWT+role
+      description: Create a company record
+      new_path: /api/v1/masters/companies/
+      parity_status: done
+
+    - path: /api/masters/companies/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single company
+      new_path: /api/v1/masters/companies/{id}/
+      parity_status: done
+
+    - path: /api/masters/companies/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a company record
+      new_path: /api/v1/masters/companies/{id}/
+      parity_status: done
+
+    - path: /api/masters/companies/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a company record
+      new_path: /api/v1/masters/companies/{id}/
+      parity_status: done
+
+    - path: /api/masters/companies/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a company record
+      new_path: /api/v1/masters/companies/{id}/
+      parity_status: done
+
+    - path: /api/masters/ports/
+      method: GET
+      auth: JWT
+      description: List port master entries
+      new_path: /api/v1/masters/ports/
+      parity_status: done
+
+    - path: /api/masters/ports/
+      method: POST
+      auth: JWT+role
+      description: Create a port entry
+      new_path: /api/v1/masters/ports/
+      parity_status: done
+
+    - path: /api/masters/ports/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single port
+      new_path: /api/v1/masters/ports/{id}/
+      parity_status: done
+
+    - path: /api/masters/ports/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a port entry
+      new_path: /api/v1/masters/ports/{id}/
+      parity_status: done
+
+    - path: /api/masters/ports/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a port entry
+      new_path: /api/v1/masters/ports/{id}/
+      parity_status: done
+
+    - path: /api/masters/ports/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a port entry
+      new_path: /api/v1/masters/ports/{id}/
+      parity_status: done
+
+    - path: /api/masters/hs-codes/
+      method: GET
+      auth: JWT
+      description: List HS (Harmonized System) commodity codes
+      new_path: /api/v1/masters/hs-codes/
+      parity_status: done
+
+    - path: /api/masters/hs-codes/
+      method: POST
+      auth: JWT+role
+      description: Create an HS code entry
+      new_path: /api/v1/masters/hs-codes/
+      parity_status: done
+
+    - path: /api/masters/hs-codes/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single HS code
+      new_path: /api/v1/masters/hs-codes/{id}/
+      parity_status: done
+
+    - path: /api/masters/hs-codes/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace an HS code entry
+      new_path: /api/v1/masters/hs-codes/{id}/
+      parity_status: done
+
+    - path: /api/masters/hs-codes/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update an HS code entry
+      new_path: /api/v1/masters/hs-codes/{id}/
+      parity_status: done
+
+    - path: /api/masters/hs-codes/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete an HS code entry
+      new_path: /api/v1/masters/hs-codes/{id}/
+      parity_status: done
+
+    - path: /api/masters/head-norms/
+      method: GET
+      auth: JWT
+      description: List head SION norm entries
+      new_path: /api/v1/masters/head-norms/
+      parity_status: done
+
+    - path: /api/masters/head-norms/
+      method: POST
+      auth: JWT+role
+      description: Create a head SION norm
+      new_path: /api/v1/masters/head-norms/
+      parity_status: done
+
+    - path: /api/masters/head-norms/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single head SION norm
+      new_path: /api/v1/masters/head-norms/{id}/
+      parity_status: done
+
+    - path: /api/masters/head-norms/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a head SION norm
+      new_path: /api/v1/masters/head-norms/{id}/
+      parity_status: done
+
+    - path: /api/masters/head-norms/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a head SION norm
+      new_path: /api/v1/masters/head-norms/{id}/
+      parity_status: done
+
+    - path: /api/masters/head-norms/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a head SION norm
+      new_path: /api/v1/masters/head-norms/{id}/
+      parity_status: done
+
+    - path: /api/masters/sion-classes/
+      method: GET
+      auth: JWT
+      description: List SION norm class entries
+      new_path: /api/v1/masters/sion-classes/
+      parity_status: done
+
+    - path: /api/masters/sion-classes/
+      method: POST
+      auth: JWT+role
+      description: Create a SION norm class
+      new_path: /api/v1/masters/sion-classes/
+      parity_status: done
+
+    - path: /api/masters/sion-classes/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single SION norm class
+      new_path: /api/v1/masters/sion-classes/{id}/
+      parity_status: done
+
+    - path: /api/masters/sion-classes/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a SION norm class
+      new_path: /api/v1/masters/sion-classes/{id}/
+      parity_status: done
+
+    - path: /api/masters/sion-classes/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a SION norm class
+      new_path: /api/v1/masters/sion-classes/{id}/
+      parity_status: done
+
+    - path: /api/masters/sion-classes/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a SION norm class
+      new_path: /api/v1/masters/sion-classes/{id}/
+      parity_status: done
+
+    - path: /api/masters/product-descriptions/
+      method: GET
+      auth: JWT
+      description: List product description master entries
+      new_path: /api/v1/masters/product-descriptions/
+      parity_status: done
+
+    - path: /api/masters/product-descriptions/
+      method: POST
+      auth: JWT+role
+      description: Create a product description entry
+      new_path: /api/v1/masters/product-descriptions/
+      parity_status: done
+
+    - path: /api/masters/product-descriptions/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single product description
+      new_path: /api/v1/masters/product-descriptions/{id}/
+      parity_status: done
+
+    - path: /api/masters/product-descriptions/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a product description
+      new_path: /api/v1/masters/product-descriptions/{id}/
+      parity_status: done
+
+    - path: /api/masters/product-descriptions/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a product description
+      new_path: /api/v1/masters/product-descriptions/{id}/
+      parity_status: done
+
+    - path: /api/masters/product-descriptions/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a product description
+      new_path: /api/v1/masters/product-descriptions/{id}/
+      parity_status: done
+
+    - path: /api/masters/unit-prices/
+      method: GET
+      auth: JWT
+      description: List unit price master entries
+      new_path: /api/v1/masters/unit-prices/
+      parity_status: done
+
+    - path: /api/masters/unit-prices/
+      method: POST
+      auth: JWT+role
+      description: Create a unit price entry
+      new_path: /api/v1/masters/unit-prices/
+      parity_status: done
+
+    - path: /api/masters/unit-prices/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single unit price entry
+      new_path: /api/v1/masters/unit-prices/{id}/
+      parity_status: done
+
+    - path: /api/masters/unit-prices/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a unit price entry
+      new_path: /api/v1/masters/unit-prices/{id}/
+      parity_status: done
+
+    - path: /api/masters/unit-prices/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a unit price entry
+      new_path: /api/v1/masters/unit-prices/{id}/
+      parity_status: done
+
+    - path: /api/masters/unit-prices/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a unit price entry
+      new_path: /api/v1/masters/unit-prices/{id}/
+      parity_status: done
+
+    - path: /api/masters/groups/
+      method: GET
+      auth: JWT
+      description: List permission groups
+      new_path: /api/v1/masters/groups/
+      parity_status: done
+
+    - path: /api/masters/groups/
+      method: POST
+      auth: JWT+role
+      description: Create a permission group
+      new_path: /api/v1/masters/groups/
+      parity_status: done
+
+    - path: /api/masters/groups/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single permission group
+      new_path: /api/v1/masters/groups/{id}/
+      parity_status: done
+
+    - path: /api/masters/groups/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a permission group
+      new_path: /api/v1/masters/groups/{id}/
+      parity_status: done
+
+    - path: /api/masters/groups/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a permission group
+      new_path: /api/v1/masters/groups/{id}/
+      parity_status: done
+
+    - path: /api/masters/groups/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a permission group
+      new_path: /api/v1/masters/groups/{id}/
+      parity_status: done
+
+    - path: /api/masters/item-names/
+      method: GET
+      auth: JWT
+      description: List item name master entries
+      new_path: /api/v1/masters/item-names/
+      parity_status: done
+
+    - path: /api/masters/item-names/
+      method: POST
+      auth: JWT+role
+      description: Create an item name entry
+      new_path: /api/v1/masters/item-names/
+      parity_status: done
+
+    - path: /api/masters/item-names/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single item name
+      new_path: /api/v1/masters/item-names/{id}/
+      parity_status: done
+
+    - path: /api/masters/item-names/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace an item name entry
+      new_path: /api/v1/masters/item-names/{id}/
+      parity_status: done
+
+    - path: /api/masters/item-names/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update an item name entry
+      new_path: /api/v1/masters/item-names/{id}/
+      parity_status: done
+
+    - path: /api/masters/item-names/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete an item name entry
+      new_path: /api/v1/masters/item-names/{id}/
+      parity_status: done
+
+    - path: /api/masters/exchange-rates/
+      method: GET
+      auth: JWT
+      description: List foreign exchange rate entries
+      new_path: /api/v1/masters/exchange-rates/
+      parity_status: done
+
+    - path: /api/masters/exchange-rates/
+      method: POST
+      auth: JWT+role
+      description: Create an exchange rate entry
+      new_path: /api/v1/masters/exchange-rates/
+      parity_status: done
+
+    - path: /api/masters/exchange-rates/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single exchange rate entry
+      new_path: /api/v1/masters/exchange-rates/{id}/
+      parity_status: done
+
+    - path: /api/masters/exchange-rates/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace an exchange rate entry
+      new_path: /api/v1/masters/exchange-rates/{id}/
+      parity_status: done
+
+    - path: /api/masters/exchange-rates/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update an exchange rate entry
+      new_path: /api/v1/masters/exchange-rates/{id}/
+      parity_status: done
+
+    - path: /api/masters/exchange-rates/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete an exchange rate entry
+      new_path: /api/v1/masters/exchange-rates/{id}/
+      parity_status: done
+
+    - path: /api/masters/transfer-letters/
+      method: GET
+      auth: JWT
+      description: List generated transfer letter records
+      new_path: /api/v1/masters/transfer-letters/
+      parity_status: done
+
+    - path: /api/masters/transfer-letters/
+      method: POST
+      auth: JWT+role
+      description: Create a transfer letter record
+      new_path: /api/v1/masters/transfer-letters/
+      parity_status: done
+
+    - path: /api/masters/transfer-letters/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single transfer letter record
+      new_path: /api/v1/masters/transfer-letters/{id}/
+      parity_status: done
+
+    - path: /api/masters/transfer-letters/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a transfer letter record
+      new_path: /api/v1/masters/transfer-letters/{id}/
+      parity_status: done
+
+    - path: /api/masters/transfer-letters/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a transfer letter record
+      new_path: /api/v1/masters/transfer-letters/{id}/
+      parity_status: done
+
+    - path: /api/masters/transfer-letters/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a transfer letter record
+      new_path: /api/v1/masters/transfer-letters/{id}/
+      parity_status: done
+
+    - path: /api/masters/purchase-statuses/
+      method: GET
+      auth: JWT
+      description: List purchase status codes (e.g. GE, MI, GO)
+      new_path: /api/v1/masters/purchase-statuses/
+      parity_status: done
+
+    - path: /api/masters/purchase-statuses/
+      method: POST
+      auth: JWT+role
+      description: Create a purchase status code
+      new_path: /api/v1/masters/purchase-statuses/
+      parity_status: done
+
+    - path: /api/masters/purchase-statuses/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single purchase status code
+      new_path: /api/v1/masters/purchase-statuses/{id}/
+      parity_status: done
+
+    - path: /api/masters/purchase-statuses/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a purchase status code
+      new_path: /api/v1/masters/purchase-statuses/{id}/
+      parity_status: done
+
+    - path: /api/masters/purchase-statuses/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a purchase status code
+      new_path: /api/v1/masters/purchase-statuses/{id}/
+      parity_status: done
+
+    - path: /api/masters/purchase-statuses/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a purchase status code
+      new_path: /api/v1/masters/purchase-statuses/{id}/
+      parity_status: done
+
+    - path: /api/masters/scheme-codes/
+      method: GET
+      auth: JWT
+      description: List DGFT scheme codes
+      new_path: /api/v1/masters/scheme-codes/
+      parity_status: done
+
+    - path: /api/masters/scheme-codes/
+      method: POST
+      auth: JWT+role
+      description: Create a scheme code
+      new_path: /api/v1/masters/scheme-codes/
+      parity_status: done
+
+    - path: /api/masters/scheme-codes/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single scheme code
+      new_path: /api/v1/masters/scheme-codes/{id}/
+      parity_status: done
+
+    - path: /api/masters/scheme-codes/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a scheme code
+      new_path: /api/v1/masters/scheme-codes/{id}/
+      parity_status: done
+
+    - path: /api/masters/scheme-codes/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a scheme code
+      new_path: /api/v1/masters/scheme-codes/{id}/
+      parity_status: done
+
+    - path: /api/masters/scheme-codes/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a scheme code
+      new_path: /api/v1/masters/scheme-codes/{id}/
+      parity_status: done
+
+    - path: /api/masters/notification-numbers/
+      method: GET
+      auth: JWT
+      description: List DGFT notification numbers
+      new_path: /api/v1/masters/notification-numbers/
+      parity_status: done
+
+    - path: /api/masters/notification-numbers/
+      method: POST
+      auth: JWT+role
+      description: Create a notification number entry
+      new_path: /api/v1/masters/notification-numbers/
+      parity_status: done
+
+    - path: /api/masters/notification-numbers/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single notification number
+      new_path: /api/v1/masters/notification-numbers/{id}/
+      parity_status: done
+
+    - path: /api/masters/notification-numbers/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a notification number entry
+      new_path: /api/v1/masters/notification-numbers/{id}/
+      parity_status: done
+
+    - path: /api/masters/notification-numbers/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a notification number entry
+      new_path: /api/v1/masters/notification-numbers/{id}/
+      parity_status: done
+
+    - path: /api/masters/notification-numbers/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a notification number entry
+      new_path: /api/v1/masters/notification-numbers/{id}/
+      parity_status: done
+
+    - path: /api/masters/activity-logs/
+      method: GET
+      auth: JWT
+      description: List activity log entries (read-only; no write operations)
+      new_path: /api/v1/masters/activity-logs/
+      parity_status: done
+
+    - path: /api/masters/activity-logs/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single activity log entry (read-only)
+      new_path: /api/v1/masters/activity-logs/{id}/
+      parity_status: done
+
+    # Throttle monitoring (admin/observability)
+    - path: /api/masters/throttle-status/
+      method: GET
+      auth: JWT
+      description: Overall API throttle status summary
+      new_path: /api/v1/masters/throttle-status/
+      parity_status: done
+
+    - path: /api/masters/throttle-status/{scope}/
+      method: GET
+      auth: JWT
+      description: Throttle status for a specific rate-limit scope
+      new_path: /api/v1/masters/throttle-status/{scope}/
+      parity_status: done
+
+    - path: /api/masters/throttle-reset/
+      method: POST
+      auth: JWT
+      description: Reset throttle counters (admin action)
+      new_path: /api/v1/masters/throttle-reset/
+      parity_status: done
+
+    - path: /api/masters/throttle-stats/
+      method: GET
+      auth: JWT
+      description: Detailed throttle statistics
+      new_path: /api/v1/masters/throttle-stats/
+      parity_status: done
+
+    - path: /api/masters/throttle-health/
+      method: GET
+      auth: JWT
+      description: Throttle subsystem health check
+      new_path: /api/v1/masters/throttle-health/
+      parity_status: done
+
+  # -------------------------------------------------------------------------
+  # LICENSES  (mounted at /api/)
+  # Source: legacy/backend/apps/license/urls.py
+  # -------------------------------------------------------------------------
+  licenses:
+    - path: /api/licenses/
+      method: GET
+      auth: JWT+role
+      description: >
+        List licenses (paginated, filterable). Key params: search, license_type
+        (DFIA|INCENTIVE|ALL), is_active, is_expired, is_null, company, ordering,
+        purchase_status (comma-separated codes), active_only.
+      new_path: /api/v1/licenses/
+      parity_status: done
+
+    - path: /api/licenses/
+      method: POST
+      auth: JWT+role
+      description: Create a new license record
+      new_path: /api/v1/licenses/
+      parity_status: done
+
+    - path: /api/licenses/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve full license detail
+      new_path: /api/v1/licenses/{id}/
+      parity_status: done
+
+    - path: /api/licenses/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a license record
+      new_path: /api/v1/licenses/{id}/
+      parity_status: done
+
+    - path: /api/licenses/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a license record
+      new_path: /api/v1/licenses/{id}/
+      parity_status: done
+
+    - path: /api/licenses/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a license record
+      new_path: /api/v1/licenses/{id}/
+      parity_status: done
+
+    - path: /api/licenses/{id}/nested_items/
+      method: GET
+      auth: JWT+role
+      description: Lazy-load nested license items for a given license
+      new_path: /api/v1/licenses/{id}/nested_items/
+      parity_status: done
+
+    - path: /api/licenses/{id}/item-usage/
+      method: GET
+      auth: JWT+role
+      description: BOE and allotment usage details for each item on the license
+      new_path: /api/v1/licenses/{id}/item-usage/
+      parity_status: done
+
+    - path: /api/licenses/{id}/balance_pdf/
+      method: GET
+      auth: JWT+role
+      description: Generate and stream a balance PDF for the license
+      new_path: /api/v1/licenses/{id}/balance_pdf/
+      parity_status: done
+
+    - path: /api/licenses/bulk_balance_excel/
+      method: POST
+      auth: JWT+role
+      description: Export balance data for multiple licenses as a single Excel file
+      new_path: /api/v1/licenses/bulk_balance_excel/
+      parity_status: done
+
+    - path: /api/licenses/parse-pdf/
+      method: POST
+      auth: JWT+role
+      description: OCR-parse an uploaded DFIA license PDF and return prefill data for the create form
+      new_path: /api/v1/licenses/parse-pdf/
+      parity_status: done
+
+    # License Actions viewset
+    - path: /api/license-actions/
+      method: GET
+      auth: JWT+role
+      description: List license action records
+      new_path: /api/v1/license-actions/
+      parity_status: done
+
+    - path: /api/license-actions/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single license action
+      new_path: /api/v1/license-actions/{id}/
+      parity_status: done
+
+    # License Items viewset
+    - path: /api/license-items/
+      method: GET
+      auth: JWT+role
+      description: List license item records (filterable by license)
+      new_path: /api/v1/license-items/
+      parity_status: done
+
+    - path: /api/license-items/
+      method: POST
+      auth: JWT+role
+      description: Create a license item
+      new_path: /api/v1/license-items/
+      parity_status: done
+
+    - path: /api/license-items/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single license item
+      new_path: /api/v1/license-items/{id}/
+      parity_status: done
+
+    - path: /api/license-items/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a license item
+      new_path: /api/v1/license-items/{id}/
+      parity_status: done
+
+    - path: /api/license-items/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a license item
+      new_path: /api/v1/license-items/{id}/
+      parity_status: done
+
+    - path: /api/license-items/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a license item
+      new_path: /api/v1/license-items/{id}/
+      parity_status: done
+
+    # License Item Plans viewset
+    - path: /api/license-item-plans/
+      method: GET
+      auth: JWT+role
+      description: List license item plan records
+      new_path: /api/v1/license-item-plans/
+      parity_status: done
+
+    - path: /api/license-item-plans/
+      method: POST
+      auth: JWT+role
+      description: Create a license item plan
+      new_path: /api/v1/license-item-plans/
+      parity_status: done
+
+    - path: /api/license-item-plans/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single license item plan
+      new_path: /api/v1/license-item-plans/{id}/
+      parity_status: done
+
+    - path: /api/license-item-plans/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a license item plan
+      new_path: /api/v1/license-item-plans/{id}/
+      parity_status: done
+
+    - path: /api/license-item-plans/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a license item plan
+      new_path: /api/v1/license-item-plans/{id}/
+      parity_status: done
+
+    - path: /api/license-item-plans/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a license item plan
+      new_path: /api/v1/license-item-plans/{id}/
+      parity_status: done
+
+    # License Ledger viewset
+    - path: /api/license-ledger/
+      method: GET
+      auth: JWT+role
+      description: >
+        Paginated license ledger list. Key params: company, purchase_date_from,
+        purchase_date_to, license_type (ALL|DFIA|INCENTIVE), active_only, no_purchases.
+      new_path: /api/v1/license-ledger/
+      parity_status: done
+
+    - path: /api/license-ledger/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single license ledger entry
+      new_path: /api/v1/license-ledger/{id}/
+      parity_status: done
+
+    - path: /api/license-ledger/{id}/ledger_detail/
+      method: GET
+      auth: JWT+role
+      description: Per-company transaction detail for a license ledger entry
+      new_path: /api/v1/license-ledger/{id}/ledger_detail/
+      parity_status: done
+
+    # Inventory Balance viewset
+    - path: /api/inventory-balance/
+      method: GET
+      auth: JWT+role
+      description: Full inventory balance across all licenses
+      new_path: /api/v1/inventory-balance/
+      parity_status: done
+
+    - path: /api/inventory-balance/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single inventory balance record
+      new_path: /api/v1/inventory-balance/{id}/
+      parity_status: done
+
+    # Incentive Licenses viewset
+    - path: /api/incentive-licenses/
+      method: GET
+      auth: JWT+role
+      description: List incentive license records
+      new_path: /api/v1/incentive-licenses/
+      parity_status: done
+
+    - path: /api/incentive-licenses/
+      method: POST
+      auth: JWT+role
+      description: Create an incentive license record
+      new_path: /api/v1/incentive-licenses/
+      parity_status: done
+
+    - path: /api/incentive-licenses/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single incentive license
+      new_path: /api/v1/incentive-licenses/{id}/
+      parity_status: done
+
+    - path: /api/incentive-licenses/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace an incentive license record
+      new_path: /api/v1/incentive-licenses/{id}/
+      parity_status: done
+
+    - path: /api/incentive-licenses/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update an incentive license record
+      new_path: /api/v1/incentive-licenses/{id}/
+      parity_status: done
+
+    - path: /api/incentive-licenses/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete an incentive license record
+      new_path: /api/v1/incentive-licenses/{id}/
+      parity_status: done
+
+    # Report viewsets (paginated read-only lists)
+    - path: /api/expiring-licenses/
+      method: GET
+      auth: JWT+role
+      description: Licenses expiring within N days (configurable threshold)
+      new_path: /api/v1/expiring-licenses/
+      parity_status: done
+
+    - path: /api/expiring-licenses/{id}/
+      method: GET
+      auth: JWT+role
+      description: Single expiring license detail
+      new_path: /api/v1/expiring-licenses/{id}/
+      parity_status: done
+
+    - path: /api/active-licenses/
+      method: GET
+      auth: JWT+role
+      description: All active licenses with current balances
+      new_path: /api/v1/active-licenses/
+      parity_status: done
+
+    - path: /api/active-licenses/{id}/
+      method: GET
+      auth: JWT+role
+      description: Single active license detail
+      new_path: /api/v1/active-licenses/{id}/
+      parity_status: done
+
+    - path: /api/item-pivot/
+      method: GET
+      auth: JWT+role
+      description: Item pivot report grouped by SION norm class
+      new_path: /api/v1/item-pivot/
+      parity_status: done
+
+    - path: /api/item-pivot/{id}/
+      method: GET
+      auth: JWT+role
+      description: Single item pivot record
+      new_path: /api/v1/item-pivot/{id}/
+      parity_status: done
+
+    - path: /api/item-pivot/available-norms/
+      method: GET
+      auth: JWT+role
+      description: List available SION norm classes for the item pivot filter
+      new_path: /api/v1/item-pivot/available-norms/
+      parity_status: done
+
+    - path: /api/item-report/
+      method: GET
+      auth: JWT+role
+      description: Item-level balance report across licenses
+      new_path: /api/v1/item-report/
+      parity_status: done
+
+    - path: /api/item-report/{id}/
+      method: GET
+      auth: JWT+role
+      description: Single item report record
+      new_path: /api/v1/item-report/{id}/
+      parity_status: done
+
+    # Dashboard
+    - path: /api/dashboard/
+      method: GET
+      auth: JWT+role
+      description: Unified dashboard KPI data (license counts, balances, expiry summary)
+      new_path: /api/v1/dashboard/
+      parity_status: done
+
+    # Ledger upload
+    - path: /api/upload-ledger/
+      method: POST
+      auth: JWT+role
+      description: >
+        Upload CSV/HTM ledger file(s) via multipart/form-data.
+        Response: {tasks: [{license, task_id}], file}.
+      new_path: /api/v1/upload-ledger/
+      parity_status: done
+
+    - path: /api/ledger-task-status/{task_id}/
+      method: GET
+      auth: JWT+role
+      description: >
+        Poll Celery task status for a ledger import.
+        Response: {state, result, progress, error}.
+        States: SUCCESS | FAILURE | PENDING | PROGRESS.
+      new_path: /api/v1/ledger-task-status/{task_id}/
+      parity_status: done
+
+    # Report download endpoints
+    - path: /api/reports/inventory-balance/
+      method: GET
+      auth: JWT+role
+      description: Download inventory balance as Excel file
+      new_path: /api/v1/reports/inventory-balance/
+      parity_status: done
+
+    - path: /api/reports/expiring-licenses/
+      method: GET
+      auth: JWT+role
+      description: Download expiring licenses report (Excel or JSON)
+      new_path: /api/v1/reports/expiring-licenses/
+      parity_status: done
+
+    - path: /api/reports/active-licenses/
+      method: GET
+      auth: JWT+role
+      description: Download active licenses report (Excel or JSON)
+      new_path: /api/v1/reports/active-licenses/
+      parity_status: done
+
+    - path: /api/reports/item-pivot/
+      method: GET
+      auth: JWT+role
+      description: Download item pivot report data (Excel or JSON)
+      new_path: /api/v1/reports/item-pivot/
+      parity_status: done
+
+    - path: /api/reports/item-report/
+      method: GET
+      auth: JWT+role
+      description: Download item report data (Excel or JSON)
+      new_path: /api/v1/reports/item-report/
+      parity_status: done
+
+  # -------------------------------------------------------------------------
+  # ALLOTMENTS  (mounted at /api/)
+  # Source: legacy/backend/apps/allotment/urls.py
+  # -------------------------------------------------------------------------
+  allotments:
+    - path: /api/allotments/
+      method: GET
+      auth: JWT+role
+      description: List allotment records (paginated)
+      new_path: /api/v1/allotments/
+      parity_status: done
+
+    - path: /api/allotments/
+      method: POST
+      auth: JWT+role
+      description: Create a new allotment
+      new_path: /api/v1/allotments/
+      parity_status: done
+
+    - path: /api/allotments/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single allotment
+      new_path: /api/v1/allotments/{id}/
+      parity_status: done
+
+    - path: /api/allotments/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace an allotment record
+      new_path: /api/v1/allotments/{id}/
+      parity_status: done
+
+    - path: /api/allotments/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update an allotment record
+      new_path: /api/v1/allotments/{id}/
+      parity_status: done
+
+    - path: /api/allotments/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete an allotment record
+      new_path: /api/v1/allotments/{id}/
+      parity_status: done
+
+    - path: /api/allotment-actions/{id}/
+      method: GET
+      auth: JWT+role
+      description: Full allotment detail including line items and applied filters
+      new_path: /api/v1/allotment-actions/{id}/
+      parity_status: done
+
+    - path: /api/allotment-actions/{id}/generate-transfer-letter/
+      method: POST
+      auth: JWT+role
+      description: Generate and attach a transfer letter PDF to the allotment
+      new_path: /api/v1/allotment-actions/{id}/generate-transfer-letter/
+      parity_status: done
+
+  # -------------------------------------------------------------------------
+  # BILL OF ENTRY  (mounted at /api/)
+  # Source: legacy/backend/apps/bill_of_entry/urls.py
+  # -------------------------------------------------------------------------
+  bill_of_entry:
+    - path: /api/bill-of-entries/
+      method: GET
+      auth: JWT+role
+      description: List bill of entry records (paginated)
+      new_path: /api/v1/bill-of-entries/
+      parity_status: done
+
+    - path: /api/bill-of-entries/
+      method: POST
+      auth: JWT+role
+      description: Create a new bill of entry
+      new_path: /api/v1/bill-of-entries/
+      parity_status: done
+
+    - path: /api/bill-of-entries/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single bill of entry
+      new_path: /api/v1/bill-of-entries/{id}/
+      parity_status: done
+
+    - path: /api/bill-of-entries/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a bill of entry record
+      new_path: /api/v1/bill-of-entries/{id}/
+      parity_status: done
+
+    - path: /api/bill-of-entries/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a bill of entry record
+      new_path: /api/v1/bill-of-entries/{id}/
+      parity_status: done
+
+    - path: /api/bill-of-entries/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a bill of entry record
+      new_path: /api/v1/bill-of-entries/{id}/
+      parity_status: done
+
+    - path: /api/bill-of-entries/{id}/generate-transfer-letter/
+      method: POST
+      auth: JWT+role
+      description: Generate and attach a transfer letter PDF to the bill of entry
+      new_path: /api/v1/bill-of-entries/{id}/generate-transfer-letter/
+      parity_status: done
+
+    - path: /api/bill-of-entries/parse-pdf/
+      method: POST
+      auth: JWT+role
+      description: OCR-parse an uploaded BOE PDF and return prefill data for the create form
+      new_path: /api/v1/bill-of-entries/parse-pdf/
+      parity_status: done
+
+  # -------------------------------------------------------------------------
+  # TRADES  (mounted at /api/)
+  # Source: legacy/backend/apps/trade/urls.py
+  # -------------------------------------------------------------------------
+  trades:
+    - path: /api/trades/
+      method: GET
+      auth: JWT+role
+      description: List license trade records (paginated)
+      new_path: /api/v1/trades/
+      parity_status: done
+
+    - path: /api/trades/
+      method: POST
+      auth: JWT+role
+      description: Create a new trade
+      new_path: /api/v1/trades/
+      parity_status: done
+
+    - path: /api/trades/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single trade
+      new_path: /api/v1/trades/{id}/
+      parity_status: done
+
+    - path: /api/trades/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a trade record
+      new_path: /api/v1/trades/{id}/
+      parity_status: done
+
+    - path: /api/trades/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a trade record
+      new_path: /api/v1/trades/{id}/
+      parity_status: done
+
+    - path: /api/trades/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a trade record
+      new_path: /api/v1/trades/{id}/
+      parity_status: done
+
+    - path: /api/trades/{id}/generate-transfer-letter/
+      method: POST
+      auth: JWT+role
+      description: Generate and attach a transfer letter PDF to the trade
+      new_path: /api/v1/trades/{id}/generate-transfer-letter/
+      parity_status: done
+
+    # Trade Lines viewset
+    - path: /api/lines/
+      method: GET
+      auth: JWT+role
+      description: List trade line items (filterable by trade)
+      new_path: /api/v1/lines/
+      parity_status: done
+
+    - path: /api/lines/
+      method: POST
+      auth: JWT+role
+      description: Create a trade line item
+      new_path: /api/v1/lines/
+      parity_status: done
+
+    - path: /api/lines/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single trade line item
+      new_path: /api/v1/lines/{id}/
+      parity_status: done
+
+    - path: /api/lines/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a trade line item
+      new_path: /api/v1/lines/{id}/
+      parity_status: done
+
+    - path: /api/lines/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a trade line item
+      new_path: /api/v1/lines/{id}/
+      parity_status: done
+
+    - path: /api/lines/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a trade line item
+      new_path: /api/v1/lines/{id}/
+      parity_status: done
+
+    # Trade Payments viewset
+    - path: /api/payments/
+      method: GET
+      auth: JWT+role
+      description: List trade payment records
+      new_path: /api/v1/payments/
+      parity_status: done
+
+    - path: /api/payments/
+      method: POST
+      auth: JWT+role
+      description: Create a trade payment record
+      new_path: /api/v1/payments/
+      parity_status: done
+
+    - path: /api/payments/{id}/
+      method: GET
+      auth: JWT+role
+      description: Retrieve a single trade payment
+      new_path: /api/v1/payments/{id}/
+      parity_status: done
+
+    - path: /api/payments/{id}/
+      method: PUT
+      auth: JWT+role
+      description: Replace a trade payment record
+      new_path: /api/v1/payments/{id}/
+      parity_status: done
+
+    - path: /api/payments/{id}/
+      method: PATCH
+      auth: JWT+role
+      description: Partially update a trade payment record
+      new_path: /api/v1/payments/{id}/
+      parity_status: done
+
+    - path: /api/payments/{id}/
+      method: DELETE
+      auth: JWT+role
+      description: Delete a trade payment record
+      new_path: /api/v1/payments/{id}/
+      parity_status: done
+
+  # -------------------------------------------------------------------------
+  # TASKS  (mounted at /api/)
+  # Source: legacy/backend/apps/tasks/urls.py
+  # -------------------------------------------------------------------------
+  tasks:
+    - path: /api/tasks/
+      method: GET
+      auth: JWT
+      description: >
+        List tasks. Regular users see their own tasks only;
+        superusers see all tasks.
+      new_path: /api/v1/tasks/
+      parity_status: done
+
+    - path: /api/tasks/
+      method: POST
+      auth: JWT
+      description: Create a new task
+      new_path: /api/v1/tasks/
+      parity_status: done
+
+    - path: /api/tasks/{id}/
+      method: GET
+      auth: JWT
+      description: Retrieve a single task
+      new_path: /api/v1/tasks/{id}/
+      parity_status: done
+
+    - path: /api/tasks/{id}/
+      method: PUT
+      auth: JWT
+      description: Replace a task record
+      new_path: /api/v1/tasks/{id}/
+      parity_status: done
+
+    - path: /api/tasks/{id}/
+      method: PATCH
+      auth: JWT
+      description: Partially update a task record
+      new_path: /api/v1/tasks/{id}/
+      parity_status: done
+
+    - path: /api/tasks/{id}/
+      method: DELETE
+      auth: JWT
+      description: Delete a task record
+      new_path: /api/v1/tasks/{id}/
+      parity_status: done
+
+    - path: /api/tasks/{id}/complete/
+      method: POST
+      auth: JWT
+      description: Mark a task as completed
+      new_path: /api/v1/tasks/{id}/complete/
+      parity_status: done
+
+    - path: /api/tasks/{id}/reject/
+      method: POST
+      auth: JWT
+      description: Reject a task; body must include {reason}
+      new_path: /api/v1/tasks/{id}/reject/
+      parity_status: done
+
+    - path: /api/tasks/{id}/reopen/
+      method: POST
+      auth: JWT
+      description: Reopen a rejected or completed task
+      new_path: /api/v1/tasks/{id}/reopen/
+      parity_status: done
+
+    - path: /api/tasks/{id}/remarks/
+      method: GET
+      auth: JWT
+      description: List remarks (comments) on a task
+      new_path: /api/v1/tasks/{id}/remarks/
+      parity_status: done
+
+    - path: /api/tasks/{id}/remarks/
+      method: POST
+      auth: JWT
+      description: Add a remark to a task
+      new_path: /api/v1/tasks/{id}/remarks/
+      parity_status: done
+
+    - path: /api/tasks/assignable_users/
+      method: GET
+      auth: JWT
+      description: List users who can be assigned tasks
+      new_path: /api/v1/tasks/assignable_users/
+      parity_status: done

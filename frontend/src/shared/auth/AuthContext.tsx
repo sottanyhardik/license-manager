@@ -135,12 +135,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const refresh = localStorage.getItem('refresh')
       if (!refresh) return
       try {
-        const { data } = await axios.post<{ access: string; refresh?: string }>(
+        // TokenRefreshView wraps its response in the standard envelope:
+        // { success: true, data: { access: "...", refresh?: "..." } }
+        // We use raw axios here (outside apiClient) so we must unwrap manually.
+        const { data: envelope } = await axios.post<{
+          success: boolean
+          data: { access: string; refresh?: string }
+        }>(
           `${API_HOST}${ENDPOINTS.AUTH.REFRESH}`,
           { refresh },
         )
-        localStorage.setItem('access', data.access)
-        if (data.refresh) localStorage.setItem('refresh', data.refresh)
+        const tokens = envelope.data
+        localStorage.setItem('access', tokens.access)
+        if (tokens.refresh) localStorage.setItem('refresh', tokens.refresh)
         scheduleProactiveRefresh()
       } catch {
         await logout('session_expired')

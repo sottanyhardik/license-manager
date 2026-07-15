@@ -14,10 +14,11 @@ export interface Company {
   is_active: boolean
 }
 
+/** PortModel fields from PortSerializer: {id, code, name, ...} */
 export interface Port {
   id: number
-  port_code: string
-  port_name: string
+  code: string
+  name: string
 }
 
 export interface HSCode {

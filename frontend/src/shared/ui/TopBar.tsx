@@ -57,8 +57,14 @@ function buildCrumbs(pathname: string): { label: string; path: string }[] {
   let accumulated = ''
   for (const seg of segments) {
     accumulated += `/${seg}`
+    // Numeric segments are record IDs (e.g. /licenses/2348).
+    // Show "Detail" instead of the raw number — the page h1 already shows
+    // the human-readable identifier (license number, BOE number, etc.)
+    const isNumericId = /^\d+$/.test(seg)
     crumbs.push({
-      label: LABELS[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1),
+      label: isNumericId
+        ? 'Detail'
+        : (LABELS[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1)),
       path: accumulated,
     })
   }

@@ -25,7 +25,7 @@ import { useAuth } from '@/shared/auth/AuthContext'
 import { ROLES } from '@/shared/auth/roles'
 import apiClient from '@/shared/api/client'
 import { ENDPOINTS } from '@/shared/api/endpoints'
-import { useLicense } from '../queries'
+import { useLicense, useLicenseItems } from '../queries'
 import { LicenseStatusBadge } from '../components/LicenseStatusBadge'
 import { LicenseBalancePanel } from '../components/LicenseBalancePanel'
 import { LicenseImportItems } from '../components/LicenseImportItems'
@@ -96,6 +96,8 @@ export default function LicenseDetail() {
   const licenseId = id ? parseInt(id, 10) : null
 
   const { data: license, isLoading, isError } = useLicense(licenseId)
+  // Import items fetched separately — LicenseDetailSerializer doesn't embed them
+  const { data: importItems = [] } = useLicenseItems(licenseId)
 
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [editOpen, setEditOpen] = useState(false)
@@ -325,16 +327,9 @@ export default function LicenseDetail() {
 
         {activeTab === 'import-items' && (
           <div role="tabpanel" aria-label="Import Items">
-            {merged.import_license && merged.import_license.length > 0 ? (
-              <LicenseImportItems
-                licenseId={merged.id}
-                items={merged.import_license}
-              />
-            ) : (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                No import items for this license.
-              </div>
-            )}
+            {/* importItems fetched separately via /api/v1/licenses/{id}/items/
+                LicenseDetailSerializer doesn't embed them in the main response */}
+            <LicenseImportItems licenseId={merged.id} items={importItems} />
           </div>
         )}
 

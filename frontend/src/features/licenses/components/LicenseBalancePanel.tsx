@@ -202,16 +202,16 @@ export function LicenseBalancePanel({ license, onUpdate, className }: LicenseBal
       </div>
 
       {/* Additional info */}
-      {(license.purchase_status != null ||
+      {(license.purchase_status_display != null ||
         license.get_norm_class != null ||
         license.latest_transfer != null) && (
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
-          {license.purchase_status && (
+          {license.purchase_status_display && (
             <div>
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Purchase Status
               </span>
-              <p className="mt-0.5 font-medium">{license.purchase_status}</p>
+              <p className="mt-0.5 font-medium">{license.purchase_status_display}</p>
             </div>
           )}
           {license.get_norm_class && (

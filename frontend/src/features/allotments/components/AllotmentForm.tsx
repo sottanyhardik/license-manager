@@ -317,7 +317,7 @@ export function AllotmentForm({
             queryHook={usePortsAll}
             value={watch('port') ?? null}
             onChange={(id) => setValue('port', id, { shouldValidate: false })}
-            getLabel={(p) => `${p.port_code} — ${p.port_name}`}
+            getLabel={(p) => p.name ? `${p.code} — ${p.name}` : p.code}
             placeholder="Select port..."
             aria-label="Port"
           />

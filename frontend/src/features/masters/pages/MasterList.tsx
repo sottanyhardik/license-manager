@@ -79,9 +79,9 @@ const ENTITY_CONFIG: Record<string, AnyEntityConfig> = {
     label: 'Ports',
     searchPlaceholder: 'Search by code or name...',
     columns: [
-      { accessorKey: 'port_code', header: 'Code', enableSorting: true,
+      { accessorKey: 'code', header: 'Code', enableSorting: true,
         cell: ({ getValue }) => <code className="text-xs font-mono">{getValue() as string}</code> },
-      { accessorKey: 'port_name', header: 'Name', enableSorting: true },
+      { accessorKey: 'name', header: 'Name', enableSorting: true },
     ] as ColumnDef<Port, unknown>[] as ColumnDef<Record<string, unknown>, unknown>[],
     useList: usePorts as unknown as AnyEntityConfig['useList'],
     useDelete: useDeletePort as unknown as AnyEntityConfig['useDelete'],

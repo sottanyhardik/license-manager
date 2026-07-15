@@ -13,7 +13,7 @@ import type { Port } from '../types'
 
 const COLUMNS: ColumnDef<Port, unknown>[] = [
   {
-    accessorKey: 'port_code',
+    accessorKey: 'code',
     header: 'Code',
     enableSorting: true,
     cell: ({ getValue }) => (
@@ -22,7 +22,7 @@ const COLUMNS: ColumnDef<Port, unknown>[] = [
       </code>
     ),
   },
-  { accessorKey: 'port_name', header: 'Port Name', enableSorting: true },
+  { accessorKey: 'name', header: 'Port Name', enableSorting: true },
 ]
 
 export default function PortList() {
@@ -42,7 +42,7 @@ export default function PortList() {
     async (row: Port) => {
       if (
         !window.confirm(
-          `Delete port "${row.port_name} (${row.port_code})"? This action cannot be undone.`,
+          `Delete port "${row.name} (${row.code})"? This action cannot be undone.`,
         )
       )
         return

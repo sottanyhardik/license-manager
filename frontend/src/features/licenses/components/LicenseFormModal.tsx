@@ -324,7 +324,7 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
                     queryHook={usePortsAll}
                     value={portValue ?? null}
                     onChange={(id) => setValue('port', id ?? undefined)}
-                    getLabel={(p) => `${p.port_code} — ${p.port_name}`}
+                    getLabel={(p) => p.name ? `${p.code} — ${p.name}` : p.code}
                     placeholder="Select port"
                     aria-label="Select port"
                   />

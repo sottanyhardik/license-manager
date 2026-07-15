@@ -5,18 +5,19 @@
 
 ## Service Inventory
 
-Last updated: Phase 1-9 build on feature/V1 (2026-07-14).
+Last updated: 2026-07-15 (feature/V1 — balance/planning overhaul).
 
 ### license — apps/license/services/balance_service.py
 
 | Function | Signature | Purpose | Status |
 |---|---|---|---|
-| recompute_license_balance | `recompute_license_balance(license_id: int) -> None` | Recomputes LicenseBalance for a license: sums credit, debit, allotment, trade sub-totals. Writes back to LicenseBalance. | done |
-| _compute_credit | `_compute_credit(license_id: int) -> Decimal` | Sums credit entries from the license ledger | done |
-| _compute_debit | `_compute_debit(license_id: int) -> Decimal` | Sums debit entries from the license ledger | done |
-| _compute_allotment | `_compute_allotment(license_id: int) -> Decimal` | Sums allotment amounts via _safe_get_model (avoids circular import) | done |
-| _compute_trade | `_compute_trade(license_id: int) -> Decimal` | Sums trade usage via _safe_get_model — returns 0 while trade app is absent | pending (trade not built) |
-| _safe_get_model | `_safe_get_model(app_label: str, model_name: str)` | Dynamic Django model lookup; returns None gracefully if app/model not installed | done |
+| recompute_license_balance | `recompute_license_balance(license_id: int) -> None` | Recomputes LicenseBalance (balance_cif), LicenseFlags (is_null, is_expired), and all item-level balance fields in one atomic transaction with select_for_update. | done |
+| _compute_credit | `_compute_credit(license_id: int) -> Decimal` | SUM(LicenseExportItemModel.cif_fc) — credit side | done |
+| _compute_debit | `_compute_debit(license_id: int) -> Decimal` | SUM(RowDetails.cif_fc WHERE type='D' AND no trade link) — debit side | done |
+| _compute_allotment | `_compute_allotment(license_id: int) -> Decimal` | SUM(AllotmentItems.cif_fc WHERE allotment.bill_of_entry IS NULL) — pending allotments | done |
+| _compute_trade | `_compute_trade(license_id: int) -> Decimal` | SUM(LicenseTradeLine.cif_fc WHERE direction='SALE') — trade sales | done |
+| _update_item_level_balances | `_update_item_level_balances(license_id: int) -> None` | Bulk-updates available_quantity, debited_quantity, allotted_quantity on all import items. Uses bulk aggregation + bulk_update + select_for_update. | done |
+| ~~_safe_get_model~~ | removed | Was a dangerous silently-zeroing fallback. Replaced with direct lazy imports in each _compute_* function. | REMOVED (2026-07-15) |
 
 ### license — apps/license/services/license_service.py
 
@@ -33,10 +34,12 @@ Last updated: Phase 1-9 build on feature/V1 (2026-07-14).
 
 | Function | Signature | Purpose | Status |
 |---|---|---|---|
-| create_allotment | `create_allotment(data: dict, user) -> AllotmentModel` | Create allotment + items in transaction.atomic; dispatches Celery balance recompute | done |
-| update_allotment | `update_allotment(allotment_id: int, data: dict, user) -> AllotmentModel` | Update allotment; dispatches Celery balance recompute | done |
-| delete_allotment | `delete_allotment(allotment_id: int, user) -> None` | Delete allotment; dispatches Celery balance recompute | done |
-| _dispatch | `_dispatch(item_ids)` | Calls recompute_license_balance_task.delay(iid) for each affected license item after commit | done |
+| create_allotment | `create_allotment(data: dict, user) -> AllotmentModel` | Validates plan availability, creates AllotmentModel + AllotmentItems, decrements LicenseItemPlan, dispatches balance recompute via on_commit | done |
+| update_allotment | `update_allotment(allotment_id: int, data: dict, user) -> AllotmentModel` | Updates header fields only (items managed via separate endpoints); dispatches recompute | done |
+| delete_allotment | `delete_allotment(allotment_id: int, user) -> None` | Collects plan values before cascade delete, restores LicenseItemPlan, dispatches recompute | done |
+| _dispatch | `_dispatch(item_ids: list) → Callable` | Resolves unique license_ids from import item_ids via LicenseImportItemsModel lookup (FIXED: was incorrectly passing item_ids as license_ids), then calls delay() for each | done |
+| _validate_plan_availability | `_validate_plan_availability(import_item_id, qty, cif_fc) -> None` | Raises ValidationError if requested qty/cif exceeds LicenseItemPlan; no-op if no plan row; uses select_for_update | done |
+| _adjust_plan | `_adjust_plan(import_item_id, qty_delta, cif_fc_delta, cif_inr_delta) -> None` | Atomic F()-expression update of LicenseItemPlan; select_for_update; no-op if no plan row | done |
 
 ### bill_of_entry — apps/bill_of_entry/services/boe_service.py
 

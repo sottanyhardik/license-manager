@@ -9,11 +9,15 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftRight, ChevronLeft, Loader2 } from 'lucide-react'
+import { ArrowLeftRight, ChevronLeft, Loader2, Wand2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { cn } from '@/shared/utils/cn'
+import apiClient from '@/shared/api/client'
+import { ENDPOINTS } from '@/shared/api/endpoints'
+import { normaliseApiErrorString } from '@/shared/utils/errors'
 import { useTrade } from '../queries'
 import { useCreateTrade, useUpdateTrade } from '../mutations'
 import { TradeLineTable } from '../components/TradeLineTable'
@@ -106,6 +110,36 @@ export function TradeForm() {
   const updateMutation = useUpdateTrade(tradeId ?? 0)
 
   const [form, setForm] = useState<TradeFormValues>(defaultValues())
+  const [prefillLoading, setPrefillLoading] = useState(false)
+
+  // Derive the "seller" company for prefill: for PURCHASE the buyer is to_company,
+  // but the invoice belongs to the seller (from_company). The backend expects
+  // company_id = the company whose invoice sequence to increment. We pass
+  // from_company when it exists, otherwise to_company as fallback.
+  const prefillCompanyId = form.from_company ?? form.to_company
+
+  async function handlePrefillInvoice() {
+    if (!prefillCompanyId) return
+    setPrefillLoading(true)
+    try {
+      const { data } = await apiClient.get<{ invoice_number: string }>(
+        ENDPOINTS.TRADES.PREFILL_INVOICE,
+        {
+          params: {
+            direction: form.direction,
+            company_id: prefillCompanyId,
+            ...(form.invoice_date ? { invoice_date: form.invoice_date } : {}),
+          },
+        },
+      )
+      patch('invoice_number', data.invoice_number)
+      toast.success('Invoice number generated.')
+    } catch (err) {
+      toast.error(normaliseApiErrorString(err))
+    } finally {
+      setPrefillLoading(false)
+    }
+  }
 
   // Populate form when editing an existing trade
   useEffect(() => {
@@ -288,13 +322,36 @@ export function TradeForm() {
             </FormField>
 
             <FormField label="Invoice Number">
-              <Input
-                type="text"
-                placeholder="e.g. INV-2024-001"
-                value={form.invoice_number}
-                onChange={(e) => patch('invoice_number', e.target.value)}
-                required
-              />
+              <div className="flex gap-1.5">
+                <Input
+                  type="text"
+                  placeholder="e.g. INV-2024-001"
+                  value={form.invoice_number}
+                  onChange={(e) => patch('invoice_number', e.target.value)}
+                  required
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 px-2"
+                  disabled={!prefillCompanyId || prefillLoading}
+                  onClick={handlePrefillInvoice}
+                  title={
+                    prefillCompanyId
+                      ? 'Generate next invoice number'
+                      : 'Select a company first'
+                  }
+                  aria-label="Generate invoice number"
+                >
+                  {prefillLoading ? (
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Wand2 className="size-3.5" aria-hidden="true" />
+                  )}
+                </Button>
+              </div>
             </FormField>
 
             <FormField label="Invoice Date">

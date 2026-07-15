@@ -21,6 +21,28 @@ export const ROLES = {
 
 export type Role = (typeof ROLES)[keyof typeof ROLES]
 
+/**
+ * Human-readable labels for each role code.
+ * Used in the user administration UI.
+ */
+export const ROLE_LABELS: Record<string, string> = {
+  USER_MANAGER: 'User Manager',
+  LICENSE_MANAGER: 'License Manager',
+  LICENSE_VIEWER: 'License Viewer',
+  ALLOTMENT_MANAGER: 'Allotment Manager',
+  ALLOTMENT_VIEWER: 'Allotment Viewer',
+  BOE_MANAGER: 'BOE Manager',
+  BOE_VIEWER: 'BOE Viewer',
+  TRADE_MANAGER: 'Trade Manager',
+  TRADE_VIEWER: 'Trade Viewer',
+  INCENTIVE_LICENSE_MANAGER: 'Incentive License Manager',
+  INCENTIVE_LICENSE_VIEWER: 'Incentive License Viewer',
+  REPORT_VIEWER: 'Report Viewer',
+  TL_GENERATE: 'TL Generate',
+  LEDGER_MANAGER: 'Ledger Manager',
+  ACCOUNT_ACCESS: 'Account Access',
+}
+
 // Convenience groupings for common permission checks
 export const ROLE_GROUPS = {
   LICENSE_ANY: [ROLES.LICENSE_MANAGER, ROLES.LICENSE_VIEWER] as Role[],

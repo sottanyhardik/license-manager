@@ -17,17 +17,25 @@ import {
 import { toast } from 'sonner'
 import { normaliseApiErrorString } from '@/shared/utils/errors'
 import {
+  allocateItems,
+  copyAllotment,
   createAllotment,
   deleteAllotment,
+  deleteAllotmentItem,
   fetchAllotment,
   fetchAllotments,
+  fetchAvailableLicenses,
   generateAllotmentPdf,
   updateAllotment,
 } from './api'
 import type {
   Allotment,
+  AllocateItemsResponse,
+  AllocationEntry,
   AllotmentFormValues,
   AllotmentListParams,
+  AvailableLicensesParams,
+  AvailableLicensesResponse,
   GeneratePdfResponse,
   PaginatedAllotments,
 } from './types'
@@ -123,6 +131,73 @@ export function useGenerateAllotmentPdf(): UseMutationResult<
     mutationFn: generateAllotmentPdf,
     onSuccess: () => {
       toast.success('PDF generation started.')
+    },
+    onError: (err) => {
+      toast.error(normaliseApiErrorString(err))
+    },
+  })
+}
+
+// ─── Available licenses (allocation panel) ─────────────────────────────────────
+
+export function useAvailableLicenses(
+  allotmentId: number | null,
+  params: AvailableLicensesParams,
+  enabled = true,
+): UseQueryResult<AvailableLicensesResponse> {
+  return useQuery({
+    queryKey: ['allotments', allotmentId, 'available-licenses', params],
+    queryFn: () => fetchAvailableLicenses(allotmentId!, params),
+    enabled: enabled && allotmentId !== null && allotmentId > 0,
+    staleTime: STALE_30S,
+    placeholderData: (prev) => prev,
+  })
+}
+
+// ─── Allocate items ────────────────────────────────────────────────────────────
+
+export function useAllocateItems(
+  allotmentId: number,
+): UseMutationResult<AllocateItemsResponse, Error, AllocationEntry[]> {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (items) => allocateItems(allotmentId, items),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['allotments', allotmentId] })
+    },
+    onError: (err) => {
+      toast.error(normaliseApiErrorString(err))
+    },
+  })
+}
+
+// ─── Delete allotment item ─────────────────────────────────────────────────────
+
+export function useDeleteAllotmentItem(
+  allotmentId: number,
+): UseMutationResult<{ message?: string }, Error, number> {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (itemId) => deleteAllotmentItem(allotmentId, itemId),
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: ['allotments', allotmentId] })
+      toast.success(data.message ?? 'Allocation removed.')
+    },
+    onError: (err) => {
+      toast.error(normaliseApiErrorString(err))
+    },
+  })
+}
+
+// ─── Copy allotment ────────────────────────────────────────────────────────────
+
+export function useCopyAllotment(): UseMutationResult<Allotment, Error, number> {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: copyAllotment,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['allotments'] })
+      toast.success('Allotment copied successfully.')
     },
     onError: (err) => {
       toast.error(normaliseApiErrorString(err))

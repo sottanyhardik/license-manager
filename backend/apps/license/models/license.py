@@ -563,6 +563,38 @@ class IncentiveLicense(AuditModel):
     def __str__(self):
         return f"{self.license_type} {self.license_number}"
 
+    def update_sold_status(self) -> None:
+        """
+        Recompute sold_value, balance_value, and sold_status from related
+        IncentiveTradeLine rows (SALE trades only) and save.
+        Called by trade signals when a line is created / updated / deleted.
+        """
+        from decimal import Decimal
+        from django.db.models import Sum
+
+        sold = (
+            self.trade_lines.filter(trade__direction="SALE")
+            .aggregate(total=Sum("license_value"))["total"]
+            or Decimal("0.00")
+        )
+        self.sold_value = sold
+        self.balance_value = self.license_value - sold
+        if sold == Decimal("0.00"):
+            self.sold_status = "NO"
+        elif self.balance_value <= Decimal("0.00"):
+            self.sold_status = "YES"
+        else:
+            self.sold_status = "PARTIAL"
+        self.save(update_fields=["sold_value", "balance_value", "sold_status"])
+
+    def save(self, *args, **kwargs):
+        """Auto-calculate expiry_date = license_date + 2 years if not explicitly set."""
+        update_fields = kwargs.get("update_fields")
+        if update_fields is None and self.license_date and not self.license_expiry_date:
+            from dateutil.relativedelta import relativedelta
+            self.license_expiry_date = self.license_date + relativedelta(years=2)
+        super().save(*args, **kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Invoice models

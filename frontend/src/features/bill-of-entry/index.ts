@@ -34,10 +34,19 @@ export {
 
 // Components
 export { default as BOERowsTable } from './components/BOERowsTable'
+export { default as BoeParsePanel } from './components/BoeParsePanel'
 export { default as DisputeResolver } from './components/DisputeResolver'
 export { default as LedgerUpload } from './components/LedgerUpload'
+
+// Component types
+export type {
+  BoeParsedResult,
+  BoeParsePrefill,
+  BoeParsedLicenceRow,
+} from './components/BoeParsePanel'
 
 // Pages (lazy-loaded by the router — don't re-export from here to avoid
 // pulling them into the main bundle; the router uses dynamic import directly).
 export { default as BOEList } from './pages/BOEList'
 export { default as BOEDetail } from './pages/BOEDetail'
+export { default as BOETransferLetter } from './pages/BOETransferLetter'

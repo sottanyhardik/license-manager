@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/license-manager.iml" filepath="$PROJECT_DIR$/.idea/license-manager.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/license-manager-backend.iml" filepath="$PROJECT_DIR$/.idea/license-manager-backend.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/mds-client.iml" filepath="$PROJECT_DIR$/.idea/mds-client.iml" />
     </modules>
   </component>

@@ -17,6 +17,7 @@ const MasterList = lazy(() => import('@/features/masters/pages/MasterList'))
 
 // Allotments
 const AllotmentList = lazy(() => import('@/features/allotments/pages/AllotmentList'))
+const AllotmentAction = lazy(() => import('@/features/allotments/pages/AllotmentAction'))
 
 // Licenses
 const LicenseList = lazy(() => import('@/features/licenses/pages/LicenseList'))
@@ -25,6 +26,7 @@ const LicenseDetail = lazy(() => import('@/features/licenses/pages/LicenseDetail
 // Bill of Entry
 const BOEList = lazy(() => import('@/features/bill-of-entry/pages/BOEList'))
 const BOEDetail = lazy(() => import('@/features/bill-of-entry/pages/BOEDetail'))
+const BOETransferLetter = lazy(() => import('@/features/bill-of-entry/pages/BOETransferLetter'))
 
 // Dashboard
 const Dashboard = lazy(() => import('@/features/dashboard/pages/Dashboard'))
@@ -40,17 +42,43 @@ const TradeForm = lazy(() =>
 // Tasks
 const TaskList = lazy(() => import('@/features/tasks/pages/TaskList'))
 
+// Ledger Upload
+const LedgerUpload = lazy(() => import('@/features/ledger-upload/pages/LedgerUpload'))
+
+// License Ledger
+const LicenseLedger = lazy(() => import('@/features/license-ledger/pages/LicenseLedger'))
+const LicenseLedgerDetail = lazy(() => import('@/features/license-ledger/pages/LicenseLedgerDetail'))
+
 // Reports
 const ReportsIndex = lazy(() => import('@/features/reports/pages/ReportsIndex'))
 const BalanceReport = lazy(() => import('@/features/reports/pages/BalanceReport'))
 const ItemReport = lazy(() => import('@/features/reports/pages/ItemReport'))
 const PivotReport = lazy(() => import('@/features/reports/pages/PivotReport'))
 const LedgerReport = lazy(() => import('@/features/reports/pages/LedgerReport'))
+const SionE1 = lazy(() => import('@/features/reports/pages/SionE1'))
+const SionE5 = lazy(() => import('@/features/reports/pages/SionE5'))
+const SionE126 = lazy(() => import('@/features/reports/pages/SionE126'))
+const SionE132 = lazy(() => import('@/features/reports/pages/SionE132'))
+const ExpiringLicenses = lazy(() => import('@/features/reports/pages/ExpiringLicenses'))
+const ActiveLicenses = lazy(() => import('@/features/reports/pages/ActiveLicenses'))
+const DownloadLicense = lazy(() => import('@/features/reports/pages/DownloadLicense'))
 
 // Settings — named export, re-wrapped for lazy()
 const Settings = lazy(() =>
   import('@/pages/settings/Settings').then((m) => ({ default: m.Settings })),
 )
+
+// User Administration
+const UserList = lazy(() => import('@/features/accounts/pages/UserList'))
+const UserForm = lazy(() => import('@/features/accounts/pages/UserForm'))
+const Profile = lazy(() => import('@/features/accounts/pages/Profile'))
+
+// Admin tools
+const ActivityLog = lazy(() => import('@/features/admin/pages/ActivityLog'))
+
+// Incentive Licenses
+const IncentiveLicenseList = lazy(() => import('@/features/incentive-licenses/pages/IncentiveLicenseList'))
+const IncentiveLicenseForm = lazy(() => import('@/features/incentive-licenses/pages/IncentiveLicenseForm'))
 
 function PageLoader() {
   return (
@@ -141,6 +169,7 @@ export function AppRouter() {
 
               {/* Allotments */}
               <Route path="/allotments" element={<AllotmentList />} />
+              <Route path="/allotments/:id/allocate" element={<AllotmentAction />} />
 
               {/* Licenses */}
               <Route path="/licenses" element={<LicenseList />} />
@@ -149,6 +178,7 @@ export function AppRouter() {
               {/* Bill of Entry */}
               <Route path="/boe" element={<BOEList />} />
               <Route path="/boe/:id" element={<BOEDetail />} />
+              <Route path="/boe/:id/generate-transfer-letter" element={<BOETransferLetter />} />
 
               {/* Trades */}
               <Route path="/trades" element={<TradeList />} />
@@ -158,12 +188,41 @@ export function AppRouter() {
               {/* Tasks */}
               <Route path="/tasks" element={<TaskList />} />
 
+              {/* Ledger Upload */}
+              <Route path="/ledger-upload" element={<LedgerUpload />} />
+
+              {/* License Ledger */}
+              <Route path="/license-ledger" element={<LicenseLedger />} />
+              <Route path="/license-ledger/:id" element={<LicenseLedgerDetail />} />
+              <Route path="/license-ledger/:id/:companyId" element={<LicenseLedgerDetail />} />
+
+              {/* User Administration */}
+              <Route path="/admin/users" element={<UserList />} />
+              <Route path="/admin/users/new" element={<UserForm />} />
+              <Route path="/admin/users/:id/edit" element={<UserForm />} />
+              <Route path="/admin/activity-log" element={<ActivityLog />} />
+
+              {/* Profile */}
+              <Route path="/profile" element={<Profile />} />
+
+              {/* Incentive Licenses */}
+              <Route path="/incentive-licenses" element={<IncentiveLicenseList />} />
+              <Route path="/incentive-licenses/new" element={<IncentiveLicenseForm />} />
+              <Route path="/incentive-licenses/:id/edit" element={<IncentiveLicenseForm />} />
+
               {/* Reports */}
               <Route path="/reports" element={<ReportsIndex />} />
               <Route path="/reports/balance" element={<BalanceReport />} />
               <Route path="/reports/items" element={<ItemReport />} />
               <Route path="/reports/pivot" element={<PivotReport />} />
               <Route path="/reports/ledger" element={<LedgerReport />} />
+              <Route path="/reports/parle/sion-e1" element={<SionE1 />} />
+              <Route path="/reports/parle/sion-e5" element={<SionE5 />} />
+              <Route path="/reports/parle/sion-e126" element={<SionE126 />} />
+              <Route path="/reports/parle/sion-e132" element={<SionE132 />} />
+              <Route path="/reports/expiring-licenses" element={<ExpiringLicenses />} />
+              <Route path="/reports/active-licenses" element={<ActiveLicenses />} />
+              <Route path="/reports/download-license" element={<DownloadLicense />} />
             </Route>
           </Route>
 

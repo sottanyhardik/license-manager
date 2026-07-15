@@ -3,6 +3,7 @@
 //           "New Allotment" dialog, pagination.
 
 import { useCallback, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Plus, Search, X } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
@@ -78,6 +79,7 @@ function ConfirmDeleteDialog({
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function AllotmentList() {
+  const navigate = useNavigate()
   const [searchInput, setSearchInput] = useState('')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [page, setPage] = useState(1)
@@ -272,6 +274,15 @@ export default function AllotmentList() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center justify-end gap-2">
+                      {/* Allocate */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/allotments/${row.id}/allocate`)}
+                        aria-label={`Allocate ${row.item_name}`}
+                      >
+                        Allocate
+                      </Button>
                       {/* Edit */}
                       <Button
                         variant="ghost"

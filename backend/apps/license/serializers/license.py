@@ -381,8 +381,28 @@ class LicenseDocumentSerializer(serializers.ModelSerializer):
 
 
 class IncentiveLicenseSerializer(serializers.ModelSerializer):
-    exporter_name = serializers.CharField(source="exporter.name", read_only=True, default=None)
-    port_display = serializers.CharField(source="port_code.name", read_only=True, default=None)
+    """
+    Serializer for IncentiveLicense (RODTEP / ROSTL / MEIS).
+
+    Value fields (sold_value, balance_value) are read-only — updated by
+    the trade signal via IncentiveLicense.update_sold_status().
+    sold_status is also read-only for the same reason.
+    expiry_date is auto-calculated in IncentiveLicense.save() and is
+    excluded from writable fields.
+    """
+
+    exporter_name = serializers.CharField(
+        source="exporter.name", read_only=True, default=None
+    )
+    port_display = serializers.CharField(
+        source="port_code.name", read_only=True, default=None
+    )
+    sold_value = serializers.DecimalField(
+        max_digits=15, decimal_places=2, read_only=True
+    )
+    balance_value = serializers.DecimalField(
+        max_digits=15, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = IncentiveLicense
@@ -405,4 +425,28 @@ class IncentiveLicenseSerializer(serializers.ModelSerializer):
             "created_on",
             "modified_on",
         ]
-        read_only_fields = ["id", "exporter_name", "port_display", "balance_value", "created_on", "modified_on"]
+        read_only_fields = [
+            "id",
+            "exporter_name",
+            "port_display",
+            "sold_value",
+            "balance_value",
+            "sold_status",
+            "license_expiry_date",
+            "created_on",
+            "modified_on",
+        ]
+
+    def validate_license_number(self, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("License number may not be blank.")
+        instance = self.instance
+        qs = IncentiveLicense.objects.filter(license_number=value)
+        if instance is not None:
+            qs = qs.exclude(pk=instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                f"An incentive license with number '{value}' already exists."
+            )
+        return value

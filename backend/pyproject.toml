@@ -29,6 +29,14 @@ ignore = [
 "*/migrations/*" = [
     "E501",   # line-too-long — Django auto-generated migrations are verbose; line length not enforced
 ]
+"*/parsers/dfia_pdf.py" = [
+    "C901",   # complex-structure — DFIA regex parser is legitimately complex; kept verbatim from legacy
+    "I001",   # import-block — lazy imports inside functions are intentional (optional OCR/QR deps)
+]
+"*/parsers/boe_pdf.py" = [
+    "C901",   # complex-structure — BOE regex parser is legitimately complex; ported verbatim from legacy
+    "F841",   # unused-variable — page4 reserved for future use
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 12

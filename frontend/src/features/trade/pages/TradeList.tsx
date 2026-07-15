@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftRight, Loader2, Plus, Search } from 'lucide-react'
+import { ArrowLeftRight, FileText, Loader2, Plus, Printer, Search } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Skeleton } from '@/shared/ui/skeleton'
@@ -11,7 +11,11 @@ import { cn } from '@/shared/utils/cn'
 import { formatDate } from '@/shared/utils/formatters'
 import { useDebounce } from '@/shared/hooks/useDebounce'
 import { useTrades } from '../queries'
-import type { TradeDirection } from '../types'
+import {
+  useGeneratePurchaseInvoice,
+  useGenerateBillOfSupply,
+} from '../mutations'
+import type { Trade, TradeDirection } from '../types'
 
 // ─── Skeletons ────────────────────────────────────────────────────────────────
 
@@ -95,6 +99,61 @@ const DIRECTION_OPTIONS: Array<{ value: '' | TradeDirection; label: string }> = 
   { value: 'COMMISSION_PURCHASE', label: 'Commission Purchase' },
   { value: 'COMMISSION_SALE', label: 'Commission Sale' },
 ]
+
+// ─── PDF action cell ─────────────────────────────────────────────────────────
+
+function PdfActionCell({ trade }: { trade: Trade }) {
+  const purchaseMutation = useGeneratePurchaseInvoice()
+  const billMutation = useGenerateBillOfSupply()
+
+  if (trade.direction === 'PURCHASE' || trade.direction === 'COMMISSION_PURCHASE') {
+    return (
+      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          disabled={purchaseMutation.isPending}
+          onClick={() => purchaseMutation.mutate(trade.id)}
+          aria-label={`Download purchase invoice for ${trade.invoice_number}`}
+          title="Download Purchase Invoice PDF"
+        >
+          {purchaseMutation.isPending ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Printer className="size-3.5" aria-hidden="true" />
+          )}
+          <span className="ml-1 hidden sm:inline">Invoice</span>
+        </Button>
+      </td>
+    )
+  }
+
+  if (trade.direction === 'SALE' || trade.direction === 'COMMISSION_SALE') {
+    return (
+      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          disabled={billMutation.isPending}
+          onClick={() => billMutation.mutate(trade.id)}
+          aria-label={`Download bill of supply for ${trade.invoice_number}`}
+          title="Download Bill of Supply PDF"
+        >
+          {billMutation.isPending ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <FileText className="size-3.5" aria-hidden="true" />
+          )}
+          <span className="ml-1 hidden sm:inline">Bill</span>
+        </Button>
+      </td>
+    )
+  }
+
+  return <td className="px-4 py-2.5" />
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -224,6 +283,7 @@ export function TradeList() {
                       'Total Amount',
                       'Paid',
                       'Due',
+                      'PDF',
                     ].map((h) => (
                       <th
                         key={h}
@@ -292,6 +352,7 @@ export function TradeList() {
                         <td className={cn('px-4 py-2.5 tabular-nums font-semibold', dueCls)}>
                           {parseFloat(trade.due_amount).toFixed(2)}
                         </td>
+                        <PdfActionCell trade={trade} />
                       </tr>
                     )
                   })}

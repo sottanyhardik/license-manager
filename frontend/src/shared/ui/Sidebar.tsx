@@ -26,13 +26,17 @@ import {
   FileText,
   LayoutDashboard,
   Package,
+  ScrollText,
   Settings,
   ShoppingCart,
   Truck,
+  Upload,
+  User,
+  Users,
 } from 'lucide-react'
 import { cn } from '@/shared/utils/cn'
 import { useAuth } from '@/shared/auth/AuthContext'
-import { ROLE_GROUPS } from '@/shared/auth/roles'
+import { ROLE_GROUPS, ROLES } from '@/shared/auth/roles'
 import { ROUTES } from '@/shared/routes'
 
 // ── Nav item shape ─────────────────────────────────────────────────────────────
@@ -65,6 +69,12 @@ const TOP_NAV: NavItem[] = [
     roles: ROLE_GROUPS.LICENSE_ANY,
   },
   {
+    label: 'Incentive Licenses',
+    path: ROUTES.INCENTIVE_LICENSES,
+    icon: FileBadge,
+    roles: ROLE_GROUPS.INCENTIVE_ANY,
+  },
+  {
     label: 'Allotments',
     path: ROUTES.ALLOTMENTS,
     icon: Package,
@@ -81,6 +91,24 @@ const TOP_NAV: NavItem[] = [
     path: ROUTES.TRADE,
     icon: ShoppingCart,
     roles: ROLE_GROUPS.TRADE_ANY,
+  },
+  {
+    label: 'Ledger Upload',
+    path: ROUTES.LEDGER_UPLOAD,
+    icon: Upload,
+    roles: ROLE_GROUPS.BOE_ANY,
+  },
+  {
+    label: 'Ledger',
+    path: ROUTES.LICENSE_LEDGER,
+    icon: BookOpen,
+    roles: [ROLES.TRADE_VIEWER, ROLES.TRADE_MANAGER, ROLES.LICENSE_MANAGER, ROLES.LEDGER_MANAGER],
+  },
+  {
+    label: 'Users',
+    path: ROUTES.ADMIN.USERS,
+    icon: Users,
+    roles: [ROLES.USER_MANAGER],
   },
 ]
 

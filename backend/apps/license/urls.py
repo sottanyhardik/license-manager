@@ -19,13 +19,21 @@ Nested routes (manual):
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from apps.license.views.ledger_upload import LedgerTaskStatusView, LedgerUploadView
+from apps.license.views.ledger import LicenseLedgerViewSet
+from apps.license.views import (
+    ActiveLicensesViewSet,
+    ExpiringLicensesViewSet,
+    LicenseViewSet,
+    IncentiveLicenseViewSet,
+    ItemReportViewSet,
+    ItemPivotViewSet,
+)
 from apps.license.views.license import (
     ExportItemViewSet,
     ImportItemViewSet,
-    IncentiveLicenseViewSet,
     LicenseDocumentViewSet,
     LicenseItemPlanViewSet,
-    LicenseViewSet,
 )
 
 app_name = "license"
@@ -33,6 +41,11 @@ app_name = "license"
 router = DefaultRouter()
 router.register(r"licenses", LicenseViewSet, basename="licenses")
 router.register(r"incentive-licenses", IncentiveLicenseViewSet, basename="incentive-licenses")
+router.register(r"expiring-licenses", ExpiringLicensesViewSet, basename="expiring-licenses")
+router.register(r"active-licenses", ActiveLicensesViewSet, basename="active-licenses")
+router.register(r"license-ledger", LicenseLedgerViewSet, basename="license-ledger")
+router.register(r"item-report", ItemReportViewSet, basename="item-report")
+router.register(r"item-pivot", ItemPivotViewSet, basename="item-pivot")
 
 # Manually wired nested routes — mimics drf-nested-routers behaviour
 _item_list = ImportItemViewSet.as_view(
@@ -128,5 +141,16 @@ urlpatterns = [
         "licenses/<int:license_pk>/export-items/<int:pk>/",
         _export_item_detail,
         name="license-export-items-detail",
+    ),
+    # Ledger upload and task status
+    path(
+        "licenses/upload-ledger/",
+        LedgerUploadView.as_view(),
+        name="ledger-upload",
+    ),
+    path(
+        "licenses/ledger-task-status/<str:task_id>/",
+        LedgerTaskStatusView.as_view(),
+        name="ledger-task-status",
     ),
 ]

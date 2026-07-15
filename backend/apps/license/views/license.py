@@ -12,14 +12,22 @@ Design rules:
 """
 import logging
 
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework import serializers as drf_serializers
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
-from shared.pagination import StandardPagination
-from shared.serializers import EnvelopeMixin
 
+from apps.core.models import (
+    CompanyModel,
+    HSCodeModel,
+    NotificationNumber,
+    PortModel,
+    SchemeCode,
+)
 from apps.license.filters import IncentiveLicenseFilter, LicenseFilter
 from apps.license.models import (
     IncentiveLicense,
@@ -40,6 +48,8 @@ from apps.license.serializers import (
     LicenseListSerializer,
 )
 from apps.license.services import license_service
+from shared.pagination import StandardPagination
+from shared.serializers import EnvelopeMixin
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +304,220 @@ class LicenseViewSet(viewsets.ModelViewSet):
 
         return Response(EnvelopeMixin.wrap(data=events))
 
+    # ------------------------------------------------------------------
+    # DFIA PDF parse — prefill the License create form from an upload
+    # ------------------------------------------------------------------
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="parse-pdf",
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def parse_pdf(self, request):  # noqa: C901
+        """
+        POST /api/v1/licenses/parse-pdf/
+        Multipart field: ``file`` — the DFIA licence PDF.
+        Optional field:  ``create_company`` (default "true").
+
+        Extracts licence fields and import-item rows, matches/creates
+        Company, Port, NotificationNumber, and SchemeCode, and returns a
+        ``prefill`` dict ready for the licence create/update form.
+        """
+        from decimal import Decimal, InvalidOperation
+
+        from apps.license.parsers.dfia_pdf import parse_dfia_pdf
+
+        # DFIA licences default to scheme code "26" (≈99% of existing rows).
+        DFIA_DEFAULT_SCHEME_CODE = "26"
+
+        def _decimal(value, default=None):
+            if value in (None, ""):
+                return default
+            try:
+                return Decimal(str(value))
+            except (InvalidOperation, TypeError, ValueError):
+                return default
+
+        def _match_or_create_company(parsed, create_if_missing):
+            iec = (parsed.get("iec") or "").strip()
+            name = (parsed.get("company_name") or "").strip()
+            company = None
+            created = False
+
+            if iec:
+                company = CompanyModel.objects.filter(iec=iec).first()
+            if not company and name:
+                company = CompanyModel.objects.filter(name__iexact=name).first()
+
+            if not company and create_if_missing and iec and name:
+                company = CompanyModel.objects.create(
+                    iec=iec,
+                    name=name,
+                    address_line_1=(parsed.get("company_address") or "").strip(),
+                )
+                created = True
+
+            return company, created
+
+        def _match_port(port_code):
+            if not port_code:
+                return None
+            return PortModel.objects.filter(code__iexact=port_code.strip()).first()
+
+        def _match_hs_code(hsn):
+            if not hsn:
+                return None
+            return HSCodeModel.objects.filter(hs_code=hsn.strip()).first()
+
+        def _resolve_notification_number(code):
+            if not code:
+                return None
+            code = code.strip()
+            if not code:
+                return None
+            obj, _ = NotificationNumber.objects.get_or_create(
+                code=code, defaults={"label": code}
+            )
+            return obj
+
+        def _resolve_scheme_code(code):
+            if not code:
+                return None
+            return SchemeCode.objects.filter(code=code.strip()).first()
+
+        def _annotate_items(items):
+            out = []
+            for item in items:
+                hs = _match_hs_code(item.get("hsn"))
+                out.append({**item, "matched_hs_code_id": hs.id if hs else None})
+            return out
+
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response(
+                {"detail": "No file uploaded. Send the PDF as multipart field 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            parsed = parse_dfia_pdf(upload)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Failed to parse PDF: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not parsed.get("license_number"):
+            return Response(
+                {
+                    "detail": (
+                        "Could not detect a licence number — this may not be a "
+                        "DGFT DFIA licence PDF, or the layout is unsupported."
+                    ),
+                    "parsed": parsed,
+                },
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        existing = (
+            LicenseDetailsModel.objects.filter(
+                license_number=parsed["license_number"]
+            )
+            .only("id", "license_number")
+            .first()
+        )
+
+        create_company = str(request.data.get("create_company", "true")).lower() != "false"
+        company, company_created = _match_or_create_company(parsed, create_company)
+        port = _match_port(parsed.get("port_code"))
+        notification = _resolve_notification_number(parsed.get("notification_number"))
+        scheme = _resolve_scheme_code(DFIA_DEFAULT_SCHEME_CODE)
+
+        items = _annotate_items(parsed.get("items") or [])
+
+        # Auto-calculate registration_number: strip leading zero from license_number.
+        lic_no = parsed.get("license_number") or ""
+        reg_number = (lic_no[1:] if lic_no.startswith("0") else lic_no) or None
+
+        prefill = {
+            "license_number": parsed.get("license_number"),
+            "license_date": parsed.get("license_date"),
+            "license_expiry_date": parsed.get("license_expiry_date"),
+            "file_number": parsed.get("file_number"),
+            "registration_number": reg_number,
+            "registration_date": parsed.get("license_date"),
+            # SlugRelatedField expects the code string, not the PK.
+            "notification_number": notification.code if notification else None,
+            "scheme_code": scheme.code if scheme else None,
+            "exporter": company.id if company else None,
+            "port": port.id if port else None,
+            "condition_sheet": parsed.get("condition_sheet"),
+        }
+
+        return Response({
+            "parsed": parsed,
+            "prefill": prefill,
+            "item_conditions": parsed.get("item_conditions") or [],
+            "matched_company_id": company.id if company else None,
+            "matched_company_name": company.name if company else parsed.get("company_name"),
+            "company_created": company_created,
+            "matched_port_id": port.id if port else None,
+            "matched_port_code": parsed.get("port_code"),
+            "items": items,
+            "existing_license_id": existing.id if existing else None,
+        })
+
+    # ------------------------------------------------------------------
+    # Ledger PDF download
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=["get"], url_path="download-ledger")
+    def download_ledger(self, request, pk=None):
+        """
+        GET /api/v1/licenses/{id}/download-ledger/
+        Returns a PDF of the license ledger (items, allotments, BOE debits).
+        """
+        from apps.accounts.permissions import LicenseLedgerViewPermission
+        from apps.license.services.ledger_pdf_service import (
+            PDFGenerationError,
+            generate_license_ledger_pdf,
+        )
+
+        # Enforce LicenseLedgerViewPermission in addition to the viewset default
+        perm = LicenseLedgerViewPermission()
+        if not perm.has_permission(request, self):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied()
+
+        license_obj = get_object_or_404(
+            LicenseDetailsModel.objects.prefetch_related(
+                "import_license__items",
+                "import_license__hs_code",
+                "import_license__allotment_details__allotment__company",
+                "import_license__item_details__bill_of_entry__company",
+            ).select_related("exporter", "port", "balance", "notification_number"),
+            pk=pk,
+        )
+
+        try:
+            pdf_content = generate_license_ledger_pdf(license_obj)
+            filename = f"License_Ledger_{license_obj.license_number}.pdf"
+            response = HttpResponse(pdf_content, content_type="application/pdf")
+            response["Content-Disposition"] = f'inline; filename="{filename}"'
+            return response
+        except PDFGenerationError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        except Exception as exc:
+            logger.exception("Unexpected error generating ledger PDF for pk=%s: %s", pk, exc)
+            return Response(
+                {"detail": "Failed to generate PDF."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
 
 class ImportItemViewSet(viewsets.ModelViewSet):
     """
@@ -412,7 +636,7 @@ class IncentiveLicenseViewSet(viewsets.ModelViewSet):
     pagination_class = StandardPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = IncentiveLicenseFilter
-    search_fields = ["license_number"]
+    search_fields = ["license_number", "exporter__name"]
     ordering_fields = ["license_number", "license_date", "license_expiry_date"]
     ordering = ["license_expiry_date"]
 

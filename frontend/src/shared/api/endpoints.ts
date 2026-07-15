@@ -103,4 +103,10 @@ export const ENDPOINTS = {
     ACTIVITY_CHART: '/api/v1/dashboard/charts/activity/',
     EXPIRING_LICENSES: '/api/v1/dashboard/expiring-licenses/',
   },
+  NOTIFICATIONS: {
+    BALANCE_LIST: '/api/v1/notifications/balance/',
+    BALANCE_DETAIL: (id: number) => `/api/v1/notifications/balance/${id}/`,
+    BALANCE_ACKNOWLEDGE: (id: number) => `/api/v1/notifications/balance/${id}/acknowledge/`,
+    BALANCE_RESOLVE: (id: number) => `/api/v1/notifications/balance/${id}/resolve/`,
+  },
 } as const

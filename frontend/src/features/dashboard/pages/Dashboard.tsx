@@ -162,6 +162,14 @@ export default function Dashboard() {
           value={stats?.recent_allotments ?? '—'}
           icon={Network}
         />
+        {(stats?.negative_balance_licenses ?? 0) > 0 && (
+          <StatCard
+            label="Negative Balance"
+            value={stats?.negative_balance_licenses ?? 0}
+            icon={AlertTriangle}
+            variant="danger"
+          />
+        )}
       </div>
 
       {/* Row 3 — charts */}

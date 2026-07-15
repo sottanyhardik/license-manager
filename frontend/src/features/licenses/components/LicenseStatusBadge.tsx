@@ -1,14 +1,17 @@
-// LicenseStatusBadge — displays expired / near-expiry / active state.
+// LicenseStatusBadge — displays expired / near-expiry / active / negative-balance state.
 // Near-expiry threshold: < 30 days to expiry date.
+// BD-003: also shows a Negative Balance variant when flags.balance_status === "negative".
 
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import { cn } from '@/shared/utils/cn'
+import type { LicenseFlags } from '../types'
 
 export type LicenseStatus = 'expired' | 'near-expiry' | 'active'
 
 interface LicenseStatusBadgeProps {
   isExpired: boolean
   expiryDate: string
+  flags?: LicenseFlags
   className?: string
   showLabel?: boolean
 }
@@ -52,9 +55,26 @@ const STATUS_CONFIG: Record<
 export function LicenseStatusBadge({
   isExpired,
   expiryDate,
+  flags,
   className,
   showLabel = true,
 }: LicenseStatusBadgeProps) {
+  // BD-003: Negative balance takes priority over expiry/near-expiry unless already expired.
+  if (!isExpired && flags?.balance_status === 'negative') {
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold',
+          'bg-destructive/10 text-destructive border-destructive/30',
+          className,
+        )}
+      >
+        <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
+        {showLabel && 'Negative Balance'}
+      </span>
+    )
+  }
+
   const status = getStatus(isExpired, expiryDate)
   const config = STATUS_CONFIG[status]
   const Icon = config.icon

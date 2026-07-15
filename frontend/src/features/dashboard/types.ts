@@ -11,6 +11,8 @@ export interface DashboardStats {
   recent_boes: number
   recent_allotments: number
   low_balance_licenses: number
+  /** BD-003: Count of licenses whose balance_cif has gone negative. */
+  negative_balance_licenses?: number
 }
 
 export interface UtilisationItem {

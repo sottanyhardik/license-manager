@@ -304,6 +304,7 @@ export default function LicenseList() {
                         <LicenseStatusBadge
                           isExpired={lic.is_expired ?? false}
                           expiryDate={lic.license_expiry_date ?? ''}
+                          flags={lic.flags}
                         />
                       </td>
                     </tr>

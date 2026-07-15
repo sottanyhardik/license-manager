@@ -4,7 +4,7 @@
 // Composes: balance summary cards + inline-editable fields (condition sheet, notes).
 
 import { useState } from 'react'
-import { CheckCircle2, FileText, Loader2, PenSquare, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileText, Loader2, PenSquare, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/shared/utils/cn'
 import { Button } from '@/shared/ui/button'
@@ -155,9 +155,27 @@ export function LicenseBalancePanel({ license, onUpdate, className }: LicenseBal
 
   const balanceNum = balanceCif != null ? parseFloat(balanceCif) : null
   const isNegative = balanceNum !== null && balanceNum < 0
+  const isNull = license.flags?.balance_status === 'null' || balanceCif == null
 
   return (
     <div className={cn('space-y-5', className)}>
+      {/* BD-003: Negative balance warning banner */}
+      {license.flags?.balance_status === 'negative' && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-semibold">Negative Balance</p>
+            <p className="text-xs text-destructive/80 mt-0.5">
+              This license has consumed more than its authorised CIF value.
+              Investigate and acknowledge the exception.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Balance summary */}
       <div>
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold border-b pb-2">
@@ -168,7 +186,7 @@ export function LicenseBalancePanel({ license, onUpdate, className }: LicenseBal
           <BalanceStat
             label="Balance CIF"
             value={balanceCif}
-            highlight={!isNegative}
+            highlight={!isNegative && !isNull}
             negative={isNegative}
           />
           {totalAuthorised != null && (

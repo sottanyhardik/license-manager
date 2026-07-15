@@ -58,6 +58,8 @@ export interface LicenseFlags {
   near_expiry: boolean
   /** True when the license has at least one purchase/trade transaction. */
   has_purchases: boolean
+  /** BD-003: Computed balance health status */
+  balance_status?: 'healthy' | 'null' | 'negative'
 }
 
 // ── Import items (SR rows in the license) ─────────────────────────────────────

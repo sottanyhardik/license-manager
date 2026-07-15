@@ -217,6 +217,7 @@ export default function LicenseDetail() {
               <LicenseStatusBadge
                 isExpired={merged.is_expired ?? false}
                 expiryDate={merged.license_expiry_date ?? ''}
+                flags={merged.flags}
               />
             </div>
             <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">

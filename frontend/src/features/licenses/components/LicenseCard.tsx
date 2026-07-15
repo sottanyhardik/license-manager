@@ -61,6 +61,7 @@ export function LicenseCard({ license, onClick, className }: LicenseCardProps) {
           <LicenseStatusBadge
             isExpired={license.is_expired ?? false}
             expiryDate={license.license_expiry_date ?? ''}
+            flags={license.flags}
           />
         </div>
       </div>

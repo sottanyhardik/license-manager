@@ -134,12 +134,16 @@ if not _db_url:
 
 _conn_max_age = 0 if _db_url.startswith("sqlite") else 60
 
+# dj_database_url infers the correct Django backend from the URL scheme:
+#   sqlite:///  → django.db.backends.sqlite3
+#   postgresql:// / postgres:// → django.db.backends.postgresql
+# Do NOT pass engine= here — it would override the scheme-based detection and
+# force PostgreSQL even for SQLite URLs (causing the "database does not exist"
+# error when the sqlite filename is used as a Postgres DB name).
 DATABASES = {
     "default": dj_database_url.config(
         default=_db_url,
         conn_max_age=_conn_max_age,
-        # Use psycopg3 driver when connecting to PostgreSQL
-        engine="django.db.backends.postgresql",
     )
 }
 

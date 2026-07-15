@@ -1,7 +1,8 @@
 # Test Coverage Map
 
 > **Business Rule → Test mapping. Identifies gaps in test coverage.**  
-> Status: ✅ Covered | ⚠️ Partial | ❌ Missing
+> Status: ✅ Covered | ⚠️ Partial | ❌ Missing | ⏳ Required by pending BD
+> Last updated: 2026-07-15 — BD-001, BD-002, BD-003 approved, tests required.
 
 ---
 
@@ -9,9 +10,12 @@
 
 | Rule | Business Rule | Test File | Test Function | Status |
 |---|---|---|---|---|
-| LIC-002 | balance = credit - debit - allotment - trade | test_license_workflows.py | test_license_balance_after_boe_row_creation | ✅ |
-| LIC-003 | balance >= 0 always | test_license_workflows.py | test_over_allotment_rejected | ✅ |
-| LIC-004 | is_null = True when balance < 500 | test_balance_system.py | test_is_null_flag_set_when_balance_below_threshold | ✅ |
+| LIC-002 | balance = credit - debit - allotment - trade (⏳ BD-003: no floor) | test_license_workflows.py | test_license_balance_after_boe_row_creation | ✅ |
+| LIC-003 | ~~balance >= 0~~ **SUPERSEDED** → balance may be negative (BD-003) | test_license_workflows.py | test_over_allotment_rejected | ⚠️ Must update when BD-003 implemented |
+| LIC-004 | is_null = True when 0 <= balance < 500 (⏳ BD-003 update required) | test_balance_system.py | test_is_null_flag_set_when_balance_below_threshold | ⚠️ Must update when BD-003 implemented |
+| LIC-016 | ⏳ BD-003: is_negative_balance = True when balance < 0 | — | — | ❌ Required, not yet written |
+| LIC-017 | ⏳ BD-002: group_import_items_by_name sums correctly | — | — | ❌ Required, not yet written |
+| LIC-018 | ⏳ BD-002: grouping preserves raw rows unchanged | — | — | ❌ Required, not yet written |
 | LIC-005 | is_expired = True when past expiry | test_balance_system.py | test_is_expired_flag_set_correctly | ✅ |
 | LIC-006 | Credit = SUM(export items cif_fc) | test_balance_system.py | test_balance_formula_all_components | ✅ |
 | LIC-007 | Debit = SUM(BOE RowDetails cif_fc) | test_balance_system.py | test_boe_scenario_a_no_allotment | ✅ |
@@ -95,7 +99,42 @@
 
 ---
 
-## Missing Tests (Prioritized)
+## Required Tests from Approved Business Decisions
+
+### BD-001 (Allotment Validation) — Must be written before implementation
+
+| # | Test | Purpose |
+|---|---|---|
+| 1 | `test_allotment_rejected_when_exceeds_license_cif_balance` | BD-001: total CIF > balance_cif → ValidationError |
+| 2 | `test_allotment_rejected_when_item_qty_exceeds_available_qty` | BD-001: qty > available_quantity → ValidationError |
+| 3 | `test_allotment_allowed_when_within_balance` | BD-001: positive case (passes) |
+| 4 | `test_allotment_concurrent_requests_safe` | BD-001: two simultaneous allotments — only one succeeds |
+| 5 | `test_allotment_partial_rejection_no_partial_writes` | BD-001: atomic — all-or-nothing |
+
+### BD-002 (Grouped Import Items) — Must be written before implementation
+
+| # | Test | Purpose |
+|---|---|---|
+| 6 | `test_group_import_items_by_name_sums_correctly` | BD-002: three "Dietary Fiber" rows sum to correct total |
+| 7 | `test_group_preserves_raw_rows_unchanged` | BD-002: raw rows unmodified by grouping |
+| 8 | `test_group_handles_items_without_item_name` | BD-002: edge case — no ItemNameModel linked |
+| 9 | `test_group_key_is_item_name_id` | BD-002: verifies grouping key is `ItemNameModel.id` |
+
+### BD-003 (Negative Balance) — Must be written before implementation
+
+| # | Test | Purpose |
+|---|---|---|
+| 10 | `test_balance_can_be_negative` | BD-003: BOE > credit → balance is negative (no floor) |
+| 11 | `test_is_negative_balance_flag_set` | BD-003: balance < 0 → is_negative_balance=True |
+| 12 | `test_is_null_not_set_when_negative` | BD-003: negative balance doesn't set is_null |
+| 13 | `test_item_available_quantity_can_be_negative` | BD-003: item level also allows negative |
+| 14 | `test_boe_creation_never_rejected_for_balance` | BD-003: BOE always allowed regardless of balance |
+| 15 | `test_activity_log_created_on_negative_balance` | BD-003: ActivityLog entry created |
+| 16 | Update `test_balance_never_negative` | **Must change**: was LIC-003, now superseded by BD-003 |
+
+---
+
+## Missing Tests (Pre-existing Gaps, Prioritized)
 
 ### HIGH Priority
 1. ❌ PLAN-005: `cif_fc > planned_cif_fc` raises ValidationError

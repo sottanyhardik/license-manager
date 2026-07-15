@@ -1,183 +1,316 @@
 # Business Decision Log
 
 > **Domain decisions and their rationale.**  
-> Preserved so future developers understand WHY rules exist, not just WHAT they are.
+> Preserved so future developers understand WHY rules exist, not just WHAT they are.  
+> Last updated: 2026-07-15 (feature/V1).
 
 ---
 
-## BD-001: Balance Is Async, Never Synchronous
+## BD-001: Allotment Cannot Exceed Available Balance ✅ APPROVED
 
-**Decision**: License balance is never recomputed inline during a request. Always via Celery.
+**Decision date**: 2026-07-15  
+**Status**: APPROVED — awaiting implementation
 
-**Why**: 
-- Balance formula requires 4 separate aggregate queries across 4 different tables
-- Tables are owned by the legacy system; no transactions cross both apps
-- Under concurrent load (multiple users creating allotments simultaneously), synchronous recompute would create locks held for too long
-- A failed balance recompute should not fail the user's primary action (creating an allotment)
+**Decision**: An allotment is a reservation. A reservation must never exceed what is currently available. Validation must enforce both quantity (per item) and CIF FC (per license).
 
-**Consequence**: Balance may lag by seconds after a user action. UI shows "Balance last updated: {ledger_date}".
+### Validation Rules (approved)
 
-**Alternatives Considered**:
-- Inline recompute: rejected (too slow, locks too long)
-- DB triggers: rejected (legacy DB owns DDL; cannot modify)
-- Event sourcing: rejected (too complex for current phase)
-
----
-
-## BD-002: managed=False For All Business Tables
-
-**Decision**: All concrete models in the new backend have `managed = False`.
-
-**Why**: 
-- Tables are owned by the legacy backend (legacy/backend/)
-- The legacy backend manages all DDL via its own migrations
-- The new backend is a read/write proxy during the parallel-run phase
-- Adding `managed = True` would cause Django to try to DROP and recreate legacy tables on `migrate`
-
-**Consequence**: 
-- `makemigrations` must never be run for accounts/core/license/allotment/boe/trade/tasks
-- Field definitions in models.py must exactly match the legacy DB schema
-- Any schema change requires coordination with the legacy team
-
-**Open Question**: After final cutover, which app owns DDL going forward? → **Pending decision** (ADR to be written at cutover time)
-
----
-
-## BD-003: Planning Is Optional (No Restriction Without Plan)
-
-**Decision**: If no `LicenseItemPlan` row exists for an import item, allotments are unrestricted.
-
-**Why**:
-- Thousands of legacy licenses have no planning data
-- Requiring planning would block all allotments on migrated licenses until plans are created
-- Some operators prefer not to use planning (less administrative overhead)
-
-**Consequence**: Over-allotment is possible for unplanned items. The balance formula still prevents over-consumption of the license balance itself, but planning is a pre-consumption control.
-
-**Business Rule**: PLAN-001 — "Planning is optional"
-
----
-
-## BD-004: Allotment Exits Balance Formula When BOE Is Linked
-
-**Decision**: An allotment only counts in `_compute_allotment()` when `allotment.bill_of_entry IS NULL`.
-
-**Why**: 
-- When a BOE is raised against an allotment, the allotment "becomes" a real debit
-- If both allotment AND debit were counted, the balance would be reduced twice for the same physical import
-- The M2M relationship `BillOfEntryModel.allotment` provides the linkage signal
-
-**Example**:
+**Item-level check** (for each AllotmentItem being created):
 ```
-Allotment (cif_fc=1000): reduces balance by 1000 (reservation)
-BOE from allotment (cif_fc=1000): 
-  → allotment exits formula (bill_of_entry IS NOT NULL) → +1000 back
-  → BOE debit enters formula → -1000
-  → Net change: 0 (reservation became real debit at same amount)
+allotment.qty <= LicenseImportItemsModel.available_quantity
 ```
 
-**Assumption**: BOE amount ≈ allotment amount. If they differ, the delta reflects the actual difference.
+**License-level check** (for the entire allotment batch):
+```
+SUM(allotment_items.cif_fc) <= LicenseBalance.balance_cif
+```
 
-**Known Risk**: If the allotment M2M is not set when creating a BOE from an allotment, both are counted simultaneously → double-deduction. The BOE serializer sets this M2M in `create()` and `update()`.
+Both checks must:
+- Run inside `transaction.atomic()`
+- Use `select_for_update()` on the target row to prevent concurrent races
+- Reject atomically — no partial writes
+- Return clear validation errors identifying which limit was exceeded
 
----
+**Rationale**: Allotments are forward reservations. Allowing over-reservation would cause `balance_cif` to go negative before any physical import occurs, making the license appear exhausted before actual consumption.
 
-## BD-005: 3 Decimal Places for `pct` and `rate_pct`
+### Current Implementation Gap
 
-**Decision**: Trade billing percentages (`pct`, `rate_pct`) are stored and computed at 3 decimal places.
+`_validate_plan_availability()` in `allotment_service.py` only checks against `LicenseItemPlan` (the optional forward-planning model). It does NOT check:
+- `LicenseBalance.balance_cif` (actual available CIF on license)
+- `LicenseImportItemsModel.available_quantity` (actual available qty per import item)
 
-**Why**:
-- DGFT licenses sometimes specify exact percentages like 7.925% or 2.125%
-- Rounding to 2dp before computation introduces errors:
-  - 7.925% × 100,000 = 7,925.00 (correct)
-  - q2(7.925) = 7.93 → 7.93% × 100,000 = 7,930.00 (wrong by Rs 5)
-- For large CIF values, this rounding error compounds
+If no `LicenseItemPlan` row exists, there is currently ZERO validation.
 
-**Rule**: Use `Decimal(str(pct))` NOT `q2(pct)` when pct/rate_pct is a percentage used for division.
+### Files Affected by Implementation
 
-**Tested by**: `test_trade.py::test_pct_3dp_precision_cif` (pins: 7.925 × 100,000 = 7,925.00 not 7,930.00)
+| File | Change Required |
+|---|---|
+| `backend/apps/allotment/services/allotment_service.py` | Add `_validate_balance_availability(license_id, items_data)` function; call it inside `create_allotment()` |
+| `backend/apps/license/models/license.py` | Read `LicenseBalance.balance_cif` and `LicenseImportItemsModel.available_quantity` |
+| `backend/apps/allotment/serializers.py` | Error response shape for the new validation |
+| `backend/tests/allotment/test_allotment.py` | Add test: over-qty rejected; Add test: over-CIF rejected; Add test: concurrent safe |
+| `frontend/src/features/allotments/components/AllotmentForm.tsx` | Display validation error messages from new guards |
+| `docs/business-rules/business-rule-index.md` | Add rules ALLOT-008, ALLOT-009 |
 
----
+### Concurrency Safety Requirement
 
-## BD-006: Redis DB Isolation (Cache/Broker/Results Separated)
+The new check must use `select_for_update()` on both:
+1. `LicenseBalance.objects.select_for_update().get(license_id=...)` — to lock the license balance row
+2. `LicenseImportItemsModel.objects.select_for_update().filter(pk__in=item_ids)` — to lock each item row
 
-**Decision**: Django cache, Celery broker, and Celery results use separate Redis DBs (/1, /2, /3).
-
-**Why**:
-- A `cache.clear()` call (e.g., for cache busting) would also wipe in-flight Celery task messages if they share a DB
-- A Redis `FLUSHDB` for debugging would kill active worker queues
-- Result key TTL and cache key TTL are different — mixing them in one keyspace causes accidental evictions
-
-**Alternative**: Use separate Redis instances. Rejected as over-engineering for current scale.
-
-**Enforced by**: `config/settings/base.py` — each URL explicitly appends `/1`, `/2`, `/3` to `REDIS_URL`.
-
----
-
-## BD-007: `ooc_date` Must Remain CharField(255)
-
-**Decision**: `BillOfEntryModel.ooc_date` is `CharField(255)`, not `DateField`.
-
-**Why**:
-- ICEGATE (the customs authority portal) returns `ooc_date` as raw text in various formats
-- Formats include: "25-12-2024", "25/12/2024", "25 Dec 2024", "N/A", "PENDING", "" (empty)
-- Attempting to parse this as `DateField` would cause `ValidationError` on import for non-date values
-- This field is displayed verbatim to operators — they use it for reference only
-
-**Consequence**: Date-based filtering on `ooc_date` is not possible. Operators must filter by `bill_of_entry_date` instead.
-
-**Future Enhancement**: After all ICEGATE data is normalized, consider migrating to a nullable `DateField` with a `raw_ooc_date` fallback.
+This prevents two concurrent allotment requests each "seeing" sufficient balance and both passing validation.
 
 ---
 
-## BD-008: Celery Tasks Use `acks_late=True`
+## BD-002: Duplicate Import Items — Grouped for Planning/Reports, Raw for Transactions ✅ APPROVED
 
-**Decision**: All financial Celery tasks use `acks_late=True, reject_on_worker_lost=True`.
+**Decision date**: 2026-07-15  
+**Status**: APPROVED — awaiting implementation
 
-**Why**:
-- Default behavior: message is ACKed when picked up by worker. If worker crashes mid-execution, message is lost.
-- With `acks_late=True`: message is ACKed only after task completes. If worker crashes, message returns to queue for retry.
-- Balance recompute and report generation are both critical — silent drops are unacceptable.
+**Decision**: Import Item rows must NEVER be merged in storage. Every original row must remain. However, for planning and reporting, duplicate Import Items must be grouped.
 
-**Trade-off**: Tasks may execute twice if they crash after completion but before ACK. Both are idempotent (balance recompute writes the same result regardless of how many times it runs).
+### Grouping Key: `ItemNameModel`
+
+The canonical grouping key is **`ItemNameModel.id` / `ItemNameModel.name`**.
+
+Evidence:
+- `LicenseImportItemsModel.items` is a `ManyToManyField` to `core.ItemNameModel`
+- `ItemNameModel.name` is `unique=True` — each distinct item has a canonical name
+- The serial_number field (`LicenseImportItemsModel.serial_number`) is a legal row identifier (DGFT-assigned SR number) — it cannot be used as a grouping key
+
+### How Grouping Works
+
+```
+License rows (stored as-is):
+  SR-001: Dietary Fiber — 500 KG (items M2M → ItemNameModel id=42 "Dietary Fiber")
+  SR-002: Dietary Fiber — 300 KG (items M2M → ItemNameModel id=42 "Dietary Fiber")
+  SR-003: Dietary Fiber — 200 KG (items M2M → ItemNameModel id=42 "Dietary Fiber")
+
+Grouped view (for planning/reports):
+  ItemNameModel id=42 "Dietary Fiber" — 1000 KG (SUM of SR-001 + SR-002 + SR-003)
+```
+
+### Where Raw Rows Must Be Used (no grouping)
+
+| Feature | Why |
+|---|---|
+| Allotment creation | Allotments reference specific SR numbers (AllotmentItems.item FK → LicenseImportItemsModel) |
+| BOE RowDetails | RowDetails.sr_number FK → individual import item row |
+| Ledger | Each SR transaction must be traceable |
+| Audit trail | Historical records are SR-specific |
+| AllotmentItems | `unique_together = (item, allotment)` enforces per-SR uniqueness |
+
+### Where Grouped View Must Be Used
+
+| Feature | Grouping |
+|---|---|
+| Planning (`LicenseItemPlan`) | One plan per `ItemNameModel` per license |
+| Balance reports | Group `available_quantity` by `ItemNameModel` |
+| Item utilisation reports | Group `debited_quantity` by `ItemNameModel` |
+| Pivot reports | Group by SION norm class (already uses `ItemNameModel.sion_norm_class`) |
+| Planning UI display | Show grouped totals alongside individual SR rows |
+
+### Implementation Notes
+
+**Grouping query**:
+```python
+from django.db.models import Sum
+
+# Get all ItemNameModel IDs for a license:
+LicenseImportItemsModel.objects
+  .filter(license_id=license_id)
+  .prefetch_related("items")
+
+# Group by ItemNameModel:
+# For each unique ItemNameModel, sum: quantity, available_quantity, debited_quantity, allotted_quantity
+```
+
+**`LicenseItemPlan` adjustment**: Currently `LicenseItemPlan` has `import_item` FK → `LicenseImportItemsModel` (one plan per SR row). Per BD-002, plans should be at the `ItemNameModel` level. This requires either:
+- Changing `LicenseItemPlan.import_item` FK to point to `ItemNameModel` instead, OR
+- Grouping multiple `LicenseItemPlan` rows by `ItemNameModel` when displaying
+
+**Recommendation**: Keep the existing FK structure (backward compatible). Add a `_group_items_by_name(license_id)` helper function in `balance_service.py` that returns grouped totals.
+
+### Files Affected by Implementation
+
+| File | Change Required |
+|---|---|
+| `backend/apps/license/services/balance_service.py` | Add `group_import_items_by_name(license_id)` helper |
+| `backend/apps/reports/services/balance_report.py` | Use grouped view for report output |
+| `backend/apps/reports/services/item_report.py` | Group by ItemNameModel |
+| `backend/apps/reports/services/pivot_report.py` | Group by ItemNameModel → norm_class |
+| `backend/apps/license/serializers/license.py` | Add `ImportItemGroupedSerializer` for planning/reports |
+| `backend/apps/license/views/license.py` | Add endpoint for grouped import items |
+| `frontend/src/features/licenses/components/LicenseImportItems.tsx` | Add grouped summary row |
+| `docs/business-rules/business-rule-index.md` | Add rules LIC-016, LIC-017 |
 
 ---
 
-## BD-009: `UserSerializer` Must Include `is_superuser`
+## BD-003: BOE May Exceed Available Balance — Negative Balance Tracking ✅ APPROVED
 
-**Decision**: The login endpoint response and `/me` endpoint must include `is_superuser: boolean`.
+**Decision date**: 2026-07-15  
+**Status**: APPROVED — awaiting implementation
 
-**Why**:
-- Frontend `AuthContext.hasAnyRole()` checks `user?.is_superuser` to grant blanket access to superusers
-- Without this field, superusers have `is_superuser = undefined` (falsy)
-- All role-gated navigation items (Licenses, Allotments, BOE, Trade, Reports) are hidden
-- This was a production bug fixed in commit 362cc9ac
+**Decision**: BOE creation must never be blocked. Actual customs clearance may legitimately exceed the currently available balance. The system must allow it and track the negative balance with full alerting.
 
-**Symptom if removed**: Superusers see only 3 items in sidebar (Dashboard, Masters, Tasks). No "New License" or other write buttons appear.
+### Required Behavior
 
-**This MUST have a regression test** (currently missing — see improvement register M-009/test gap).
+When `balance_cif < 0` after a BOE:
+1. Record the negative balance correctly (no floor)
+2. Set `LicenseFlags.is_negative_balance = True`
+3. Create an `ActivityLog` event type `NEGATIVE_BALANCE`
+4. Show visible warning in License UI (red badge)
+5. Include in dashboard alerts (new "Negative Balance" KPI card)
+6. Include in exception reports
+7. Do NOT automatically reject, adjust, or reverse
+
+### Example
+
+```
+Available CIF FC:  USD 100.00
+BOE CIF FC:        USD 120.00
+Balance after:     USD -20.00  (allowed — not blocked)
+Status:            ⚠ NEGATIVE BALANCE
+Alert:             Dashboard shows 1 license with negative balance
+```
+
+### Current Implementation Gap
+
+`recompute_license_balance()` currently uses `max(_DEC_0, raw_balance)` which floors at 0. This must be removed for `balance_cif` calculation.
+
+`_update_item_level_balances()` similarly floors `available_quantity` at 0. This also must allow negative.
+
+No `is_negative_balance` flag exists in `LicenseFlags`. This requires a new DB field.
+
+### Migration Consideration (CRITICAL)
+
+`LicenseFlags` is `managed=False` — the table is owned by the legacy PostgreSQL database. Adding `is_negative_balance` requires:
+
+**Option A** (preferred): Add the column to the legacy DB via the legacy backend's migration, then expose it in the new backend's model definition.
+
+**Option B** (interim): Compute `is_negative_balance` dynamically from `balance_cif < 0` (a `@property` on the model or in the serializer). No DB change needed. Less efficient but unblocks frontend work.
+
+**Recommendation**: Use Option B (computed property) for the initial implementation. Plan Option A as a follow-up migration.
+
+### Formula Changes Required
+
+**License-level** (`balance_service.recompute_license_balance`):
+```python
+# CURRENT (wrong — floors at zero):
+balance = max(_DEC_0, raw_balance).quantize(...)
+
+# NEW (allows negative):
+balance = raw_balance.quantize(_TWO_PLACES, rounding=ROUND_DOWN)
+# No max() wrapper
+```
+
+**Item-level** (`balance_service._update_item_level_balances`):
+```python
+# CURRENT (wrong — floors at zero):
+avail_qty = max(_DEC_0, total_qty - deb_qty - allt_qty).quantize(...)
+
+# NEW (allows negative):
+avail_qty = (total_qty - deb_qty - allt_qty).quantize(_THREE_PLACES, rounding=ROUND_DOWN)
+# No max() wrapper
+```
+
+**Flag logic** (`balance_service.recompute_license_balance`):
+```python
+# ADD:
+is_negative_balance = balance < _DEC_0
+is_null = _DEC_0 <= balance < _NULL_THRESHOLD  # only meaningful when balance >= 0
+
+# WRITE:
+LicenseFlags.objects.update_or_create(
+    license_id=license_id,
+    defaults={
+        "is_null": is_null,
+        "is_expired": is_expired,
+        "is_negative_balance": is_negative_balance,  # NEW field (via Option B: property)
+    },
+)
+```
+
+### Files Affected by Implementation
+
+| File | Change Required |
+|---|---|
+| `backend/apps/license/services/balance_service.py` | Remove `max(_DEC_0, ...)` from both formulas; add `is_negative_balance` logic |
+| `backend/apps/license/models/license.py` | Add `is_negative_balance` to `LicenseFlags` (computed property or DB field) |
+| `backend/apps/license/serializers/license.py` | Expose `is_negative_balance` in `LicenseFlagsSerializer` |
+| `backend/apps/dashboard/services/dashboard_service.py` | Add `negative_balance` KPI count |
+| `backend/apps/dashboard/serializers.py` | Expose negative balance count |
+| `backend/apps/core/models/masters.py` | Add `NEGATIVE_BALANCE` to `ActivityLog.ACTION_CHOICES` |
+| `backend/apps/reports/services/balance_report.py` | Include negative balance flag in output |
+| `frontend/src/features/licenses/components/LicenseStatusBadge.tsx` | Add negative balance variant |
+| `frontend/src/features/licenses/components/LicenseBalancePanel.tsx` | Show red warning when balance < 0 |
+| `frontend/src/features/dashboard/components/StatCard.tsx` | New negative-balance card |
+| `frontend/src/features/dashboard/pages/Dashboard.tsx` | Add negative balance stat |
+| `docs/business-rules/business-rule-index.md` | Update LIC-003 (was "balance >= 0", now "balance may be negative") |
+| `docs/business-rules/balance-calculations.md` | Remove "clamped to zero" section |
+
+### Tests Required
+
+| Test | Description |
+|---|---|
+| `test_balance_can_be_negative` | BOE exceeds credit → balance is negative (no floor) |
+| `test_is_negative_balance_flag` | balance < 0 → is_negative_balance = True |
+| `test_is_null_not_set_when_negative` | balance < 0 does NOT set is_null |
+| `test_item_available_quantity_can_be_negative` | BOE qty > total qty → available_quantity < 0 |
+| `test_boe_creation_never_rejected_for_balance` | Creating BOE with insufficient balance → allowed, not rejected |
 
 ---
 
-## BD-010: BOE Row Scoping Prevents IDOR
+## Previous Business Decisions
 
-**Decision**: All row-level operations (update, delete, resolve dispute) scope `RowDetails.objects.get(pk=row_id, bill_of_entry_id=boe_id)`.
+## BD-004: Balance Is Async, Never Synchronous
+**(Previously BD-001 in original numbering)**  
+**Status**: IMPLEMENTED — See `license/tasks.py`
 
-**Why**:
-- Without scoping, a `BOE_MANAGER` user can update or delete rows from ANY BOE by guessing row IDs
-- This is an Insecure Direct Object Reference (IDOR) — a OWASP Top 10 vulnerability
-- The BOE ID comes from the URL: `PATCH /api/v1/bill-of-entries/{boe_id}/rows/{row_id}/`
+## BD-005: managed=False For All Business Tables
+**(Previously BD-002)**  
+**Status**: IMPLEMENTED — All business models have `managed=False`
 
-**Fixed in**: Security audit Phase 1, commit 743d37df.
+## BD-006: Planning Is Optional (No Restriction Without Plan)
+**(Previously BD-003)**  
+**Status**: IMPLEMENTED — `_validate_plan_availability` returns early when no `LicenseItemPlan` row exists. **Note**: BD-001 ABOVE adds validation against the actual balance even without a plan row.
+
+## BD-007: Allotment Exits Balance Formula When BOE Is Linked
+**(Previously BD-004)**  
+**Status**: IMPLEMENTED — `allotment__bill_of_entry__isnull=True` filter
+
+## BD-008: 3 Decimal Places for `pct` and `rate_pct`
+**(Previously BD-005)**  
+**Status**: IMPLEMENTED — `Decimal(str(pct))` before dividing by 100
+
+## BD-009: Redis DB Isolation (Cache/Broker/Results Separated)
+**(Previously BD-006)**  
+**Status**: IMPLEMENTED — `/1`, `/2`, `/3` separation
+
+## BD-010: `ooc_date` Must Remain CharField(255)
+**(Previously BD-007)**  
+**Status**: IMPLEMENTED — Raw ICEGATE text format
+
+## BD-011: Celery Tasks Use `acks_late=True`
+**(Previously BD-008)**  
+**Status**: IMPLEMENTED — All financial tasks
+
+## BD-012: `UserSerializer` Must Include `is_superuser`
+**(Previously BD-009)**  
+**Status**: IMPLEMENTED — Frontend RBAC navigation requires it
+
+## BD-013: BOE Row Scoping Prevents IDOR
+**(Previously BD-010)**  
+**Status**: IMPLEMENTED — `bill_of_entry_id=boe_id` scoping on all row operations
 
 ---
 
 ## Open Questions
 
-| # | Question | Context | Owner |
+| # | Question | Context | Decision Required |
 |---|---|---|---|
-| OQ-1 | Who owns DDL after final cutover? | Currently legacy backend owns all tables | TBD at cutover |
-| OQ-2 | Should planning be mandatory for new licenses? | Currently optional for backward compat | Product decision |
-| OQ-3 | Should balance report use `balance_service._compute_*`? | Currently reimplements — missing trade component | Engineering |
-| OQ-4 | When should `generate_license_pdf_task` be implemented? | Currently a stub | Engineering priority |
-| OQ-5 | JWT RS256 migration (post-cutover)? | ADR-006: HS256 during transition, RS256 after | ADR-006 |
+| OQ-1 | When does cutover happen? | Currently parallel-run | Product decision |
+| OQ-2 | Should `LicenseItemPlan` be grouped by `ItemNameModel`? | BD-002 grouping | Engineering decision (see BD-002 notes) |
+| OQ-3 | `is_negative_balance` as DB field vs computed property? | BD-003 | DB migration timing decision |
+| OQ-4 | Should negative `available_quantity` be displayed or hidden in UI? | BD-003 item-level | UX decision |
+| OQ-5 | JWT RS256 migration post-cutover? | ADR-006 | Architecture decision |

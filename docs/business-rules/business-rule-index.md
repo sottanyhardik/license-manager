@@ -1,7 +1,8 @@
 # Business Rule Index
 
 > **Complete index of every business rule implemented in the codebase.**  
-> Last updated: 2026-07-15.
+> Last updated: 2026-07-15 — updated for BD-001, BD-002, BD-003 approvals.  
+> Rules marked ⏳ are approved but **not yet implemented**.
 
 ---
 
@@ -10,9 +11,12 @@
 | ID | Rule | Implemented in | File |
 |---|---|---|---|
 | LIC-001 | `license_number` is globally unique | DB constraint `unique=True` | `license_licensedetailsmodel` table |
-| LIC-002 | `balance_cif = max(0, credit - debit - allotment - trade)` | `recompute_license_balance()` | `balance_service.py` |
-| LIC-003 | `balance_cif >= 0` — never negative | `max(_DEC_0, raw_balance)` | `balance_service.py:144` |
-| LIC-004 | `is_null = True` when `balance_cif < 500` | `is_null = balance < _NULL_THRESHOLD` | `balance_service.py:158` |
+| LIC-002 | `balance_cif = credit - debit - allotment - trade` (⏳ BD-003: remove `max(0,...)` floor) | `recompute_license_balance()` | `balance_service.py` |
+| LIC-003 | ~~`balance_cif >= 0` — never negative~~ **SUPERSEDED BY BD-003** → `balance_cif` may be negative; `is_negative_balance` flag set when `< 0` | ⏳ pending `max(_DEC_0,...)` removal | `balance_service.py:144` |
+| LIC-004 | `is_null = True` when `0 <= balance_cif < 500` (⏳ BD-003: only applies when balance >= 0) | `is_null = balance < _NULL_THRESHOLD` | `balance_service.py:158` |
+| LIC-016 | ⏳ BD-003: `is_negative_balance = True` when `balance_cif < 0`; triggers ActivityLog + dashboard alert | pending implementation | `balance_service.py`, `LicenseFlags` |
+| LIC-017 | ⏳ BD-002: Duplicate import items (same `ItemNameModel`) summed for planning/reports; raw rows preserved for allotment/BOE/ledger | pending `group_import_items_by_name()` helper | `balance_service.py` |
+| LIC-018 | ⏳ BD-002: Grouping key for duplicate items = `ItemNameModel.id` / `ItemNameModel.name` (unique in system) | pending implementation | `core/models/masters.py:ItemNameModel.name unique=True` |
 | LIC-005 | `is_expired = True` when `license_expiry_date < today` | Checked on every recompute | `balance_service.py:159-162` |
 | LIC-006 | Credit = SUM of all export item `cif_fc` | `_compute_credit()` | `balance_service.py:36-44` |
 | LIC-007 | Debit = SUM of BOE RowDetails `cif_fc` WHERE type='D' AND no trade | `_compute_debit()` | `balance_service.py:47-65` |
@@ -53,6 +57,9 @@
 | ALLOT-005 | `unique_together = (item, allotment)` — one line per item per allotment | `AllotmentItems.Meta` | `allotment/models.py:203` |
 | ALLOT-006 | `alloted_quantity` property = SUM of all allotment_details.qty | `cached_property` on AllotmentModel | `allotment/models.py:122-127` |
 | ALLOT-007 | `balanced_quantity` property = required_quantity - alloted_quantity (never negative) | `max(diff, Decimal("0"))` | `allotment/models.py:138-141` |
+| ALLOT-008 | ⏳ BD-001: Allotment qty per item MUST NOT exceed `LicenseImportItemsModel.available_quantity` | pending `_validate_balance_availability()` | `allotment_service.py` |
+| ALLOT-009 | ⏳ BD-001: Total allotment CIF FC MUST NOT exceed `LicenseBalance.balance_cif` | pending `_validate_balance_availability()` | `allotment_service.py` |
+| ALLOT-010 | ⏳ BD-001: Both validations use `select_for_update()` inside `transaction.atomic()` | pending implementation | `allotment_service.py` |
 
 ---
 
@@ -73,6 +80,8 @@
 | BOE-011 | BOE exchange rate = total_inr / total_fc (auto-computed) | `BillOfEntryModel.save()` | `boe/models.py:115-134` |
 | BOE-012 | `ooc_date` MUST stay CharField(255) — NOT DateField | Raw ICEGATE text field | `boe/models.py:89` |
 | BOE-013 | BOE unique: `(bill_of_entry_number, bill_of_entry_date)` | `unique_together` on BillOfEntryModel.Meta | `boe/models.py:98` |
+| BOE-014 | ⏳ BD-003: BOE creation MUST NEVER be blocked by insufficient balance | Pending removal of balance-blocking code (none exists currently — already not blocked) | `boe/views.py`, `boe/serializers.py` |
+| BOE-015 | ⏳ BD-003: When BOE causes `balance_cif < 0`, system must alert but not reject | Pending `is_negative_balance` flag + ActivityLog + dashboard alert | `balance_service.py`, `LicenseFlags` |
 
 ---
 

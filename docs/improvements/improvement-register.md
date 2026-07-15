@@ -2,7 +2,19 @@
 
 > **All known issues, technical debt, and improvement opportunities.**  
 > Ranked: CRITICAL / HIGH / MEDIUM / LOW  
-> Last updated: 2026-07-15.
+> Last updated: 2026-07-15 — BD-001, BD-002, BD-003 approved.
+>
+> Items marked ~~strikethrough~~ are RESOLVED by approved business decisions and tracked in `docs/implementation-plan.md`.
+
+---
+
+## Approved Business Decision Items (tracked in implementation-plan.md)
+
+| ID | BD | Item | Status |
+|---|---|---|---|
+| ~~BLV-001~~ | BD-001 | No guard preventing allotment from exceeding `balance_cif` | ✅ APPROVED — see implementation-plan.md |
+| ~~BLV-003~~ | BD-002 | Duplicate import items not summed for planning/reports | ✅ APPROVED — see implementation-plan.md |
+| ~~BLV-005~~ | BD-003 | BOE blocked by balance → should allow with negative balance tracking | ✅ APPROVED — see implementation-plan.md |
 
 ---
 

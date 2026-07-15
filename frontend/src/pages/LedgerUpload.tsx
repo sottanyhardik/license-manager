@@ -196,7 +196,7 @@ const LedgerUpload = () => {
                 const _inp = document.getElementById("file-input") as HTMLInputElement | null; if (_inp) _inp.value = "";
             }
             if (allErrors.length > 0) {
-                setAsyncError(`${allErrors.length} file(s) failed: ${allErrors.map((e) => e.file).join(", ")}`);
+                setAsyncError(`${allErrors.length} file(s) failed: ${allErrors.map((e) => `${e.file}: ${e.error}`).join("; ")}`);
             }
         } catch (err) {
             console.error("Upload error:", err);

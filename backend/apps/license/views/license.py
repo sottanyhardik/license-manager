@@ -25,8 +25,10 @@ from apps.license.models import (
     IncentiveLicense,
     LicenseDetailsModel,
     LicenseDocumentModel,
+    LicenseExportItemModel,
     LicenseImportItemsModel,
     LicenseItemPlan,
+    LicenseTransferModel,
 )
 from apps.license.permissions import IncentiveLicensePermission, LicensePermission
 from apps.license.serializers import (
@@ -219,6 +221,79 @@ class LicenseViewSet(viewsets.ModelViewSet):
             status=status.HTTP_202_ACCEPTED,
         )
 
+    @action(detail=True, methods=["get"], url_path="history")
+    def history(self, request, pk=None):
+        """
+        GET /api/v1/licenses/{id}/history/
+        Returns a chronological timeline of events for this license.
+        Sources: ActivityLog, LicenseTransferModel, creation/modification timestamps.
+        """
+        from apps.core.models import ActivityLog
+
+        instance = self.get_object()
+        events = []
+
+        # 1. License creation event
+        if instance.created_on:
+            events.append({
+                "event_type": "created",
+                "description": f"License {instance.license_number} created",
+                "timestamp": (
+                    instance.created_on.isoformat()
+                    if hasattr(instance.created_on, "isoformat")
+                    else str(instance.created_on)
+                ),
+                "user": str(instance.created_by) if instance.created_by else None,
+            })
+
+        # 2. ActivityLog entries for this license
+        try:
+            logs = ActivityLog.objects.filter(
+                module="LICENSE",
+                resource_id=str(pk),
+            ).order_by("-timestamp").values(
+                "action", "description", "timestamp", "username"
+            )[:50]
+            for log in logs:
+                events.append({
+                    "event_type": log["action"].lower(),
+                    "description": log["description"] or f"{log['action']} on license",
+                    "timestamp": log["timestamp"].isoformat() if log["timestamp"] else None,
+                    "user": log["username"],
+                })
+        except Exception:
+            pass
+
+        # 3. Transfer history
+        try:
+            transfers = LicenseTransferModel.objects.filter(
+                license_id=pk
+            ).select_related("from_company", "to_company").order_by("-transfer_date")
+            for tr in transfers:
+                from_name = tr.from_company.name if tr.from_company else "Unknown"
+                to_name = tr.to_company.name if tr.to_company else "Unknown"
+                events.append({
+                    "event_type": "transfer",
+                    "description": (
+                        f"License transferred from {from_name} to {to_name}"
+                        f" — Status: {tr.transfer_status or 'N/A'}"
+                    ),
+                    "timestamp": tr.transfer_initiation_date.isoformat() if tr.transfer_initiation_date else (
+                        str(tr.transfer_date) if tr.transfer_date else None
+                    ),
+                    "user": tr.user_id_transfer_initiation or (
+                        str(tr.transfer_initiation_user)
+                        if tr.transfer_initiation_user else None
+                    ),
+                })
+        except Exception:
+            pass
+
+        # Sort all events by timestamp (newest first); None timestamps sort last
+        events.sort(key=lambda e: e.get("timestamp") or "", reverse=True)
+
+        return Response(EnvelopeMixin.wrap(data=events))
+
 
 class ImportItemViewSet(viewsets.ModelViewSet):
     """
@@ -351,6 +426,54 @@ class IncentiveLicenseViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(modified_by=self.request.user)
+
+
+# ---------------------------------------------------------------------------
+# Export items viewset (read-only — credit side of a license)
+# ---------------------------------------------------------------------------
+
+
+class ExportItemSerializer(drf_serializers.ModelSerializer):
+    """Read-only serializer for LicenseExportItemModel."""
+
+    norm_class_label = drf_serializers.CharField(
+        source="norm_class.norm_class", read_only=True, default=None
+    )
+    item_label = drf_serializers.CharField(
+        source="item.name", read_only=True, default=None
+    )
+
+    class Meta:
+        model = LicenseExportItemModel
+        fields = [
+            "id", "license", "description", "item", "item_label",
+            "norm_class", "norm_class_label", "duty_type",
+            "net_quantity", "old_quantity", "unit",
+            "fob_fc", "fob_inr", "fob_exchange_rate", "currency",
+            "value_addition", "cif_fc", "cif_inr",
+        ]
+        read_only_fields = ["id", "license", "norm_class_label", "item_label"]
+
+
+class ExportItemViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only ViewSet for LicenseExportItemModel.
+    Nested under /api/v1/licenses/{license_pk}/export-items/
+    Shows the credit side of a license (what products are being exported).
+    """
+
+    permission_classes = [LicensePermission]
+    serializer_class = ExportItemSerializer
+    pagination_class = None  # always return the full list for a single license
+
+    def get_queryset(self):
+        license_pk = self.kwargs.get("license_pk")
+        return (
+            LicenseExportItemModel.objects
+            .select_related("item", "norm_class")
+            .filter(license_id=license_pk)
+            .order_by("id")
+        )
 
 
 # ---------------------------------------------------------------------------

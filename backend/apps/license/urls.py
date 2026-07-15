@@ -20,6 +20,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from apps.license.views.license import (
+    ExportItemViewSet,
     ImportItemViewSet,
     IncentiveLicenseViewSet,
     LicenseDocumentViewSet,
@@ -79,6 +80,9 @@ _plan_detail = LicenseItemPlanViewSet.as_view(
     }
 )
 
+_export_item_list = ExportItemViewSet.as_view({"get": "list"})
+_export_item_detail = ExportItemViewSet.as_view({"get": "retrieve"})
+
 urlpatterns = [
     path("", include(router.urls)),
     # Nested: import items
@@ -113,5 +117,16 @@ urlpatterns = [
         "licenses/<int:license_pk>/item-plans/<int:pk>/",
         _plan_detail,
         name="license-item-plans-detail",
+    ),
+    # Nested: export items (credit side of a license)
+    path(
+        "licenses/<int:license_pk>/export-items/",
+        _export_item_list,
+        name="license-export-items-list",
+    ),
+    path(
+        "licenses/<int:license_pk>/export-items/<int:pk>/",
+        _export_item_detail,
+        name="license-export-items-detail",
     ),
 ]

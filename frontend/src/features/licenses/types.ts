@@ -44,9 +44,13 @@ export type LicenseType = 'DFIA' | 'RODTEP' | 'ROSTL' | 'MEIS' | 'INCENTIVE' | s
 
 export interface LicenseBalance {
   balance_cif: string
-  total_authorised: string
-  total_debited: string
-  total_allotted: string
+  ledger_date?: string | null
+  /** Total authorised CIF = SUM(export items). */
+  total_authorised?: string | null
+  /** Total debited CIF = SUM(BOE RowDetails). */
+  total_debited?: string | null
+  /** Total allotted CIF = SUM(pending AllotmentItems). */
+  total_allotted?: string | null
 }
 
 export interface LicenseFlags {
@@ -76,6 +80,10 @@ export interface LicenseImportItem {
   cif_fc?: string | null
   /** Balance CIF in foreign currency. */
   balance_cif_fc?: string | null
+  /** Planned quantity from LicenseItemPlan (null if no plan exists). */
+  planned_quantity?: string | null
+  /** Planned CIF FC from LicenseItemPlan (null if no plan exists). */
+  planned_cif_fc?: string | null
   /** Mapped item names from the masters. */
   items?: number[]
   items_detail?: Array<{ id: number; name: string }>

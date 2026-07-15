@@ -145,6 +145,7 @@ export function LicenseImportItems({ licenseId, items, className }: LicenseImpor
     { key: 'hs_code', label: 'HS Code', align: 'left' },
     { key: 'description', label: 'Description', align: 'left' },
     { key: 'quantity', label: 'Total Qty', align: 'right' },
+    { key: 'planned_quantity', label: 'Planned', align: 'right' },
     { key: 'allotted_quantity', label: 'Allotted', align: 'right' },
     { key: 'debited_quantity', label: 'Debited', align: 'right' },
     { key: 'available_quantity', label: 'Available', align: 'right' },
@@ -201,6 +202,10 @@ export function LicenseImportItems({ licenseId, items, className }: LicenseImpor
                   </td>
                   <td className="max-w-xs truncate px-3 py-2">{item.description ?? '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmt(item.quantity)}</td>
+                  {/* Planned — shown in muted blue if present, dash if no plan */}
+                  <td className="px-3 py-2 text-right tabular-nums text-blue-600 dark:text-blue-400">
+                    {item.planned_quantity != null ? fmt(item.planned_quantity) : '—'}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmt(item.allotted_quantity)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmt(item.debited_quantity)}</td>
                   <td

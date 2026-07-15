@@ -109,6 +109,119 @@ def _sum_decimal(field: str):
     return Sum(field)
 
 
+def _update_item_level_balances(license_id: int) -> None:
+    """
+    Update per-item balance fields for every LicenseImportItemsModel row
+    belonging to *license_id*.
+
+    Fields updated (mirrors legacy calculate_balance.update_balance_values):
+      debited_quantity  — SUM(RowDetails.qty WHERE transaction_type='D')
+      debited_value     — SUM(RowDetails.cif_fc WHERE transaction_type='D')
+      allotted_quantity — SUM(AllotmentItems.qty  WHERE allotment has no BOE AND type=AT)
+      allotted_value    — SUM(AllotmentItems.cif_fc WHERE same)
+      available_quantity— max(0, quantity − debited_quantity − allotted_quantity)
+
+    Must be called inside an existing transaction.atomic() block.
+    Uses select_for_update() on items to prevent concurrent write races.
+    Uses bulk_update() — one UPDATE per changed item, not N UPDATEs.
+    """
+    from django.db.models import Sum
+    from django.db.models.functions import Coalesce
+
+    from apps.allotment.models import AllotmentItems
+    from apps.bill_of_entry.models import RowDetails
+    from apps.license.models import LicenseImportItemsModel
+
+    items = list(
+        LicenseImportItemsModel.objects
+        .select_for_update()
+        .filter(license_id=license_id)
+    )
+    if not items:
+        return
+
+    item_ids = [item.pk for item in items]
+
+    # ── Debit aggregation ────────────────────────────────────────────────────
+    debit_map: dict[int, tuple] = {
+        row["sr_number_id"]: (row["qty_sum"], row["val_sum"])
+        for row in (
+            RowDetails.objects
+            .filter(sr_number_id__in=item_ids, transaction_type="D")
+            .values("sr_number_id")
+            .annotate(
+                qty_sum=Coalesce(Sum("qty"), _DEC_0),
+                val_sum=Coalesce(Sum("cif_fc"), _DEC_0),
+            )
+        )
+    }
+
+    # ── Allotment aggregation (pending only — no BOE linked, type=AT) ────────
+    allot_map: dict[int, tuple] = {
+        row["item_id"]: (row["qty_sum"], row["val_sum"])
+        for row in (
+            AllotmentItems.objects
+            .filter(
+                item_id__in=item_ids,
+                allotment__bill_of_entry__isnull=True,
+                allotment__type="AT",
+            )
+            .values("item_id")
+            .annotate(
+                qty_sum=Coalesce(Sum("qty"), _DEC_0),
+                val_sum=Coalesce(Sum("cif_fc"), _DEC_0),
+            )
+        )
+    }
+
+    # ── Compute and collect changed items ─────────────────────────────────────
+    _THREE_PLACES = Decimal("0.001")
+    to_update = []
+    for item in items:
+        deb_qty, deb_val = debit_map.get(item.pk, (_DEC_0, _DEC_0))
+        allt_qty, allt_val = allot_map.get(item.pk, (_DEC_0, _DEC_0))
+
+        total_qty = item.quantity or _DEC_0
+        avail_qty = max(_DEC_0, total_qty - deb_qty - allt_qty).quantize(
+            _THREE_PLACES, rounding=ROUND_DOWN
+        )
+        deb_qty = deb_qty.quantize(_THREE_PLACES, rounding=ROUND_DOWN)
+        allt_qty = allt_qty.quantize(_THREE_PLACES, rounding=ROUND_DOWN)
+        deb_val = deb_val.quantize(_TWO_PLACES, rounding=ROUND_DOWN)
+        allt_val = allt_val.quantize(_TWO_PLACES, rounding=ROUND_DOWN)
+
+        if (
+            item.debited_quantity != deb_qty
+            or item.debited_value != deb_val
+            or item.allotted_quantity != allt_qty
+            or item.allotted_value != allt_val
+            or item.available_quantity != avail_qty
+        ):
+            item.debited_quantity = deb_qty
+            item.debited_value = deb_val
+            item.allotted_quantity = allt_qty
+            item.allotted_value = allt_val
+            item.available_quantity = avail_qty
+            to_update.append(item)
+
+    if to_update:
+        LicenseImportItemsModel.objects.bulk_update(
+            to_update,
+            [
+                "debited_quantity",
+                "debited_value",
+                "allotted_quantity",
+                "allotted_value",
+                "available_quantity",
+            ],
+        )
+        logger.info(
+            "Item-level balances updated for license %s: %d item(s) changed",
+            license_id,
+            len(to_update),
+        )
+
+
 def recompute_license_balance(license_id: int) -> None:
     """
     Recompute and persist the CIF balance for *license_id*.
@@ -177,3 +290,7 @@ def recompute_license_balance(license_id: int) -> None:
             trade,
             balance,
         )
+
+        # Update per-item balance fields (available_quantity, debited_quantity, etc.)
+        # inside the same atomic transaction so item and license values are always consistent.
+        _update_item_level_balances(license_id)

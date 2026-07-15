@@ -16,14 +16,14 @@ import pytest
 
 def test_create_allotment_dispatches_balance_task():
     """
-    create_allotment() must call recompute_license_balance_task.delay(item_id)
-    once for each item after the transaction commits.
+    create_allotment() must call recompute_license_balance_task.delay(license_id)
+    once for each unique license derived from the allotment items, after commit.
+
+    _dispatch() now resolves license IDs from import-item IDs via
+    LicenseImportItemsModel, so we mock that lookup to return license_id=7.
     """
     mock_allotment = MagicMock()
     mock_allotment.pk = 1
-
-    mock_item = MagicMock()
-    mock_item.item_id = 42
 
     # Capture the on_commit callback so we can invoke it synchronously
     captured_callbacks = []
@@ -48,7 +48,9 @@ def test_create_allotment_dispatches_balance_task():
 
     with patch("apps.allotment.services.allotment_service.AllotmentModel") as MockAllotmentModel, \
          patch("apps.allotment.services.allotment_service.AllotmentItems") as MockAllotmentItems, \
-         patch("apps.allotment.services.allotment_service.transaction") as mock_txn:
+         patch("apps.allotment.services.allotment_service.transaction") as mock_txn, \
+         patch("apps.allotment.services.allotment_service._validate_plan_availability"), \
+         patch("apps.allotment.services.allotment_service._adjust_plan"):
 
         # Set up atomic as a context manager
         mock_txn.atomic.return_value.__enter__ = MagicMock(return_value=None)
@@ -61,6 +63,9 @@ def test_create_allotment_dispatches_balance_task():
         # AllotmentItems() constructor and .save()
         mock_ai = MagicMock()
         mock_ai.item_id = 42
+        mock_ai.qty = Decimal("10.000")
+        mock_ai.cif_fc = Decimal("100.00")
+        mock_ai.cif_inr = Decimal("8000.00")
         MockAllotmentItems.return_value = mock_ai
 
         from apps.allotment.services.allotment_service import create_allotment
@@ -69,26 +74,27 @@ def test_create_allotment_dispatches_balance_task():
         # on_commit must have been registered
         assert len(captured_callbacks) == 1
 
-    # Now fire the callback with the lazy task import mocked
-    with patch("apps.license.tasks.recompute_license_balance_task") as mock_recompute:
-        import sys
-        import types
+    # Now fire the callback — mock both LicenseImportItemsModel and tasks
+    mock_recompute = MagicMock()
 
-        # Stub apps.license.tasks if not already importable
-        if "apps.license" not in sys.modules:
-            license_mod = types.ModuleType("apps.license")
-            tasks_mod = types.ModuleType("apps.license.tasks")
-            tasks_mod.recompute_license_balance_task = mock_recompute
-            sys.modules.setdefault("apps.license", license_mod)
-            sys.modules.setdefault("apps.license.tasks", tasks_mod)
+    # Build a mock LicenseImportItemsModel queryset that returns license_id=7
+    mock_item_qs = MagicMock()
+    mock_item_qs.filter.return_value = mock_item_qs
+    mock_item_qs.exclude.return_value = mock_item_qs
+    mock_item_qs.values_list.return_value = [7]  # license_id resolved from item_id=42
 
-        # Patch the import path used inside _dispatch's inner function
-        with patch.dict(
-            "sys.modules",
-            {"apps.license.tasks": MagicMock(recompute_license_balance_task=mock_recompute)},
-        ):
-            captured_callbacks[0]()
-            mock_recompute.delay.assert_called_once_with(42)
+    mock_license_import_model = MagicMock()
+    mock_license_import_model.objects = mock_item_qs
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "apps.license.tasks": MagicMock(recompute_license_balance_task=mock_recompute),
+            "apps.license.models": MagicMock(LicenseImportItemsModel=mock_license_import_model),
+        },
+    ):
+        captured_callbacks[0]()
+        mock_recompute.delay.assert_called_once_with(7)
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +104,10 @@ def test_create_allotment_dispatches_balance_task():
 def test_delete_allotment_dispatches_balance_task():
     """
     delete_allotment() must collect item IDs before deleting and dispatch
-    recompute_license_balance_task.delay() for each one after commit.
+    recompute_license_balance_task.delay() for each unique license after commit.
+
+    _dispatch() now resolves license IDs from import-item IDs via
+    LicenseImportItemsModel. Item IDs 10 and 20 both map to license_id=5.
     """
     captured_callbacks = []
 
@@ -107,17 +116,21 @@ def test_delete_allotment_dispatches_balance_task():
 
     with patch("apps.allotment.services.allotment_service.AllotmentModel") as MockAllotmentModel, \
          patch("apps.allotment.services.allotment_service.AllotmentItems") as MockAllotmentItems, \
-         patch("apps.allotment.services.allotment_service.transaction") as mock_txn:
+         patch("apps.allotment.services.allotment_service.transaction") as mock_txn, \
+         patch("apps.allotment.services.allotment_service._adjust_plan"):
 
         mock_txn.atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_txn.atomic.return_value.__exit__ = MagicMock(return_value=False)
         mock_txn.on_commit.side_effect = fake_on_commit
 
-        # Simulate two item IDs attached to the allotment
+        # Simulate two items attached to the allotment (values() returns dicts)
         mock_qs = MagicMock()
         mock_qs.filter.return_value = mock_qs
         mock_qs.exclude.return_value = mock_qs
-        mock_qs.values_list.return_value = [10, 20]
+        mock_qs.values.return_value = [
+            {"item_id": 10, "qty": Decimal("5.000"), "cif_fc": Decimal("50.00"), "cif_inr": Decimal("4000.00")},
+            {"item_id": 20, "qty": Decimal("3.000"), "cif_fc": Decimal("30.00"), "cif_inr": Decimal("2400.00")},
+        ]
         MockAllotmentItems.objects = mock_qs
 
         MockAllotmentModel.objects.filter.return_value.delete = MagicMock()
@@ -128,14 +141,25 @@ def test_delete_allotment_dispatches_balance_task():
         assert len(captured_callbacks) == 1
 
     mock_recompute = MagicMock()
+
+    # Both item_ids 10 and 20 map to license_id=5 (same license, de-duplicated by set)
+    mock_item_qs = MagicMock()
+    mock_item_qs.filter.return_value = mock_item_qs
+    mock_item_qs.exclude.return_value = mock_item_qs
+    mock_item_qs.values_list.return_value = [5]  # one unique license_id
+
+    mock_license_import_model = MagicMock()
+    mock_license_import_model.objects = mock_item_qs
+
     with patch.dict(
         "sys.modules",
-        {"apps.license.tasks": MagicMock(recompute_license_balance_task=mock_recompute)},
+        {
+            "apps.license.tasks": MagicMock(recompute_license_balance_task=mock_recompute),
+            "apps.license.models": MagicMock(LicenseImportItemsModel=mock_license_import_model),
+        },
     ):
         captured_callbacks[0]()
-        assert mock_recompute.delay.call_count == 2
-        mock_recompute.delay.assert_any_call(10)
-        mock_recompute.delay.assert_any_call(20)
+        mock_recompute.delay.assert_called_once_with(5)
 
 
 # ---------------------------------------------------------------------------

@@ -327,57 +327,55 @@ class RowDetails(AuditModel):
 # -----------------------------
 # Signals for stock updates
 # -----------------------------
-def _update_balance_sync(item_id: int) -> None:
-    """Update balance values synchronously."""
-    try:
-        from apps.license.models import LicenseImportItemsModel
+def _dispatch_balance_recompute(license_id: int) -> None:
+    """Dispatch async balance recompute for the given license.
 
+    Registers an on_commit callback so the Celery task is only enqueued
+    after the surrounding transaction is durable. Falls back to immediate
+    dispatch if called outside a transaction (e.g. in tests).
+    """
+    def _job():
         try:
-            from apps.core.scripts.calculate_balance import update_balance_values
+            from apps.license.tasks import recompute_license_balance_task
+            recompute_license_balance_task.delay(license_id)
         except ImportError:
             logger.warning(
-                "_update_balance_sync: apps.core.scripts.calculate_balance not available yet"
+                "recompute_license_balance_task not importable — balance recompute skipped"
             )
-            return
+        except Exception as exc:
+            logger.error(
+                "Failed to dispatch balance recompute for license %s: %s",
+                license_id, exc, exc_info=True,
+            )
 
-        item = LicenseImportItemsModel.objects.get(id=item_id)
-        update_balance_values(item)
-    except Exception as e:
-        logger.exception("_update_balance_sync failed for item_id=%s: %s", item_id, e)
+    try:
+        transaction.on_commit(_job)
+    except Exception:
+        _job()
 
 
 @receiver(post_save, sender=RowDetails, dispatch_uid="boe_update_stock_on_save")
 def update_stock(sender, instance, **kwargs):
-    """Update stock balance after row save."""
-    item = instance.sr_number
-    if not item:
+    """Recompute license balance after a BOE row is saved."""
+    sr = instance.sr_number
+    if sr is None:
         return
-
-    def _job():
-        _update_balance_sync(item.id)
-
-    try:
-        transaction.on_commit(_job)
-    except Exception as e:
-        logger.debug("on_commit not available, invoking balance update immediately: %s", e)
-        _job()
+    license_id = getattr(sr, "license_id", None)
+    if not license_id:
+        return
+    _dispatch_balance_recompute(license_id)
 
 
 @receiver(post_delete, sender=RowDetails, dispatch_uid="boe_delete_stock_on_delete")
 def delete_stock(sender, instance, **kwargs):
-    """Update stock balance after row delete."""
-    item = instance.sr_number
-    if not item:
+    """Recompute license balance after a BOE row is deleted."""
+    sr = instance.sr_number
+    if sr is None:
         return
-
-    def _job():
-        _update_balance_sync(item.id)
-
-    try:
-        transaction.on_commit(_job)
-    except Exception as e:
-        logger.debug("on_commit not available, invoking balance update immediately: %s", e)
-        _job()
+    license_id = getattr(sr, "license_id", None)
+    if not license_id:
+        return
+    _dispatch_balance_recompute(license_id)
 
 
 def _recalculate_boe_exchange_rate(boe_id: int, force: bool = False) -> None:

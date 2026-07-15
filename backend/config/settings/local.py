@@ -33,7 +33,6 @@ def _patch_managed(sender, **kwargs):  # noqa: ARG001
             model._meta.managed = True
 
 from django.db.models.signals import post_migrate  # noqa: E402
-from django.apps import AppConfig  # noqa: E402
 
 # Use post_setup equivalent — run immediately if app registry is already ready
 try:

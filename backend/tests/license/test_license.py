@@ -300,6 +300,9 @@ def test_recompute_balance_service():
     ) as mock_bal_mgr, patch(
         "apps.license.models.LicenseFlags.objects"
     ) as mock_flags_mgr, patch(
+        # Stub item-level update — isolate license-level balance test
+        "apps.license.services.balance_service._update_item_level_balances"
+    ), patch(
         "django.db.transaction.atomic"
     ) as mock_atomic:
         # Make atomic() a no-op context manager

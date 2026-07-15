@@ -38,6 +38,27 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # ---------------------------------------------------------------------------
+# Module-level autouse fixture
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _patch_item_level_balances():
+    """
+    Stub out _update_item_level_balances for all tests in this module.
+
+    The function was added to recompute_license_balance() to keep item-level
+    balance fields (available_quantity, debited_quantity, etc.) in sync.
+    It issues real DB queries, but these tests mock the ORM and run without
+    a live database.  Patching it here isolates the license-level balance
+    tests from the item-level update path, which has its own dedicated tests.
+    """
+    with patch(
+        "apps.license.services.balance_service._update_item_level_balances"
+    ) as mock_update:
+        mock_update.return_value = None
+        yield mock_update
+
+# ---------------------------------------------------------------------------
 # BR-02 — Test 1: balance_service produces correct balance after BOE debit
 # ---------------------------------------------------------------------------
 

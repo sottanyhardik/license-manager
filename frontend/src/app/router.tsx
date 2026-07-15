@@ -116,7 +116,7 @@ class PageErrorBoundary extends Component<
 
 export function AppRouter() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <PageErrorBoundary>
       <Suspense fallback={<PageLoader />}>
         <Routes>

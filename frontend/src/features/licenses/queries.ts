@@ -65,10 +65,15 @@ export function useLicenseItems(
   return useQuery({
     queryKey: ['licenses', licenseId, 'items'],
     queryFn: async () => {
-      const { data } = await apiClient.get<LicenseImportItem[]>(
+      const { data: payload } = await apiClient.get(
         ENDPOINTS.LICENSES.ITEMS(licenseId!),
       )
-      return data
+      // The axios interceptor wraps paginated responses as { data: T[], pagination: {...} }.
+      // Extract the items array from whichever shape arrives.
+      if (Array.isArray(payload)) return payload as LicenseImportItem[]
+      if (payload && typeof payload === 'object' && 'data' in payload && Array.isArray(payload.data))
+        return payload.data as LicenseImportItem[]
+      return [] as LicenseImportItem[]
     },
     enabled: licenseId !== null && licenseId > 0,
     staleTime: STALE_5_MIN,
@@ -101,10 +106,13 @@ export function useLicenseExportItems(
   return useQuery({
     queryKey: ['licenses', licenseId, 'export-items'],
     queryFn: async () => {
-      const { data } = await apiClient.get<ExportItem[]>(
+      const { data: payload } = await apiClient.get(
         ENDPOINTS.LICENSES.EXPORT_ITEMS(licenseId!),
       )
-      return data
+      if (Array.isArray(payload)) return payload as ExportItem[]
+      if (payload && typeof payload === 'object' && 'data' in payload && Array.isArray(payload.data))
+        return payload.data as ExportItem[]
+      return [] as ExportItem[]
     },
     enabled: licenseId !== null && licenseId > 0,
     staleTime: STALE_5_MIN,
@@ -141,10 +149,13 @@ export function useLicenseHistory(
   return useQuery({
     queryKey: ['licenses', licenseId, 'history'],
     queryFn: async () => {
-      const { data } = await apiClient.get<HistoryEvent[]>(
+      const { data: payload } = await apiClient.get(
         ENDPOINTS.LICENSES.HISTORY(licenseId!),
       )
-      return data
+      if (Array.isArray(payload)) return payload as HistoryEvent[]
+      if (payload && typeof payload === 'object' && 'data' in payload && Array.isArray(payload.data))
+        return payload.data as HistoryEvent[]
+      return [] as HistoryEvent[]
     },
     enabled: licenseId !== null && licenseId > 0,
     staleTime: STALE_5_MIN,

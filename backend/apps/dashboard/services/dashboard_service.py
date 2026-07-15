@@ -88,6 +88,10 @@ def get_dashboard_stats(user: Any) -> dict:
                 balance__balance_cif__lt=Decimal("100.00"),
             ),
         ),
+        negative_balance_licenses=Count(
+            "pk",
+            filter=Q(balance__balance_cif__lt=Decimal("0")),
+        ),
     )
 
     total_licenses = stats["total"]
@@ -97,6 +101,7 @@ def get_dashboard_stats(user: Any) -> dict:
     expiring_soon = stats["expiring_soon"]
     total_balance_cif = str(stats["total_balance_cif_sum"] or Decimal("0.00"))
     low_balance_licenses = stats["low_balance_licenses"]
+    negative_balance_licenses = stats["negative_balance_licenses"]
 
     recent_allotments = AllotmentModel.objects.filter(
         modified_on__gte=thirty_days_ago,
@@ -123,6 +128,7 @@ def get_dashboard_stats(user: Any) -> dict:
         "recent_boes": recent_boes,
         "recent_allotments": recent_allotments,
         "low_balance_licenses": low_balance_licenses,
+        "negative_balance_licenses": negative_balance_licenses,
     }
     cache.set(cache_key, result, CACHE_TTL)
     return result

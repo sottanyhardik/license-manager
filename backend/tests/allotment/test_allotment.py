@@ -46,11 +46,20 @@ def test_create_allotment_dispatches_balance_task():
     }
     user = MagicMock()
 
+    # Build a mock LicenseImportItemsModel for the BD-001 license_id lookup
+    mock_bd001_qs = MagicMock()
+    mock_bd001_qs.values_list.return_value.get.return_value = 7  # license_id=7
+    mock_bd001_model = MagicMock()
+    mock_bd001_model.objects = mock_bd001_qs
+    mock_bd001_model.DoesNotExist = LookupError
+
     with patch("apps.allotment.services.allotment_service.AllotmentModel") as MockAllotmentModel, \
          patch("apps.allotment.services.allotment_service.AllotmentItems") as MockAllotmentItems, \
          patch("apps.allotment.services.allotment_service.transaction") as mock_txn, \
          patch("apps.allotment.services.allotment_service._validate_plan_availability"), \
-         patch("apps.allotment.services.allotment_service._adjust_plan"):
+         patch("apps.allotment.services.allotment_service._validate_balance_availability"), \
+         patch("apps.allotment.services.allotment_service._adjust_plan"), \
+         patch("apps.license.models.LicenseImportItemsModel", mock_bd001_model):
 
         # Set up atomic as a context manager
         mock_txn.atomic.return_value.__enter__ = MagicMock(return_value=None)

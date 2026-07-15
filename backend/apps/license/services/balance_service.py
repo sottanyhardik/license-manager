@@ -182,9 +182,7 @@ def _update_item_level_balances(license_id: int) -> None:
         allt_qty, allt_val = allot_map.get(item.pk, (_DEC_0, _DEC_0))
 
         total_qty = item.quantity or _DEC_0
-        avail_qty = max(_DEC_0, total_qty - deb_qty - allt_qty).quantize(
-            _THREE_PLACES, rounding=ROUND_DOWN
-        )
+        avail_qty = (total_qty - deb_qty - allt_qty).quantize(_THREE_PLACES, rounding=ROUND_DOWN)
         deb_qty = deb_qty.quantize(_THREE_PLACES, rounding=ROUND_DOWN)
         allt_qty = allt_qty.quantize(_THREE_PLACES, rounding=ROUND_DOWN)
         deb_val = deb_val.quantize(_TWO_PLACES, rounding=ROUND_DOWN)
@@ -222,6 +220,121 @@ def _update_item_level_balances(license_id: int) -> None:
         )
 
 
+def _handle_negative_balance_notification(license_id: int, balance: Decimal) -> None:
+    """
+    Create or update LicenseBalanceNotification for negative balance (BD-003).
+
+    Rules:
+    - If balance < 0 and no ACTIVE notification: create one.
+    - If balance < 0 and ACTIVE notification exists: update balance_cif.
+    - If balance >= 0: do NOT touch existing notifications
+      (resolution is a deliberate business action, not automatic).
+
+    Called inside transaction.atomic() — safe to write here.
+    """
+    if balance >= _DEC_0:
+        return  # Balance is healthy — notifications managed by business process
+
+    try:
+        from apps.notifications.models import LicenseBalanceNotification
+    except ImportError:
+        logger.warning("notifications app not available — skipping notification")
+        return
+
+    existing = LicenseBalanceNotification.objects.filter(
+        license_id=license_id,
+        status=LicenseBalanceNotification.STATUS_ACTIVE,
+    ).first()
+
+    if existing:
+        # Update the existing active notification with the latest balance
+        existing.balance_cif = balance
+        existing.save(update_fields=["balance_cif", "updated_at"])
+        logger.info(
+            "Updated negative balance notification for license %s: balance=%s",
+            license_id, balance,
+        )
+    else:
+        # Create new notification
+        LicenseBalanceNotification.objects.create(
+            license_id=license_id,
+            status=LicenseBalanceNotification.STATUS_ACTIVE,
+            balance_cif=balance,
+        )
+        logger.warning(
+            "NEGATIVE BALANCE: License %s has balance=%s — notification created",
+            license_id, balance,
+        )
+
+
+def group_import_items_by_name(license_id: int) -> list[dict]:
+    """
+    Group LicenseImportItemsModel rows by ItemNameModel for analytical views.
+
+    BD-002: Raw rows are NEVER merged. This returns a computed view only.
+    Used for: Planning, Reports, Dashboard analytics.
+    NOT used for: Allotment, BOE, Ledger, Audit (those use raw SR rows).
+
+    Grouping key: ItemNameModel.id (canonical, unique=True in the system).
+    Fallback: item.description (free text, only when no ItemNameModel linked).
+
+    Returns list of dicts sorted by item name:
+    [{
+        'item_name_id': int | str,    # ItemNameModel.id or 'desc:{description}'
+        'item_name': str,             # display name
+        'total_quantity': Decimal,    # SUM of quantity across all SR rows
+        'available_quantity': Decimal, # SUM of available_quantity
+        'debited_quantity': Decimal,  # SUM of debited_quantity
+        'allotted_quantity': Decimal, # SUM of allotted_quantity
+        'sr_numbers': list[int],      # original SR numbers (traceability)
+        'row_ids': list[int],         # original row PKs
+    }]
+    """
+    from collections import defaultdict
+
+    from apps.license.models import LicenseImportItemsModel
+
+    items = (
+        LicenseImportItemsModel.objects
+        .filter(license_id=license_id)
+        .prefetch_related("items")  # ItemNameModel M2M
+    )
+
+    groups: dict = defaultdict(lambda: {
+        "total_quantity": _DEC_0,
+        "available_quantity": _DEC_0,
+        "debited_quantity": _DEC_0,
+        "allotted_quantity": _DEC_0,
+        "sr_numbers": [],
+        "row_ids": [],
+    })
+
+    for item in items:
+        item_names = list(item.items.all())
+        if item_names:
+            # Use the first linked ItemNameModel as grouping key
+            canonical = item_names[0]
+            key_id: int | str = canonical.id
+            key_name = canonical.name
+        else:
+            # No ItemNameModel linked — group by description as fallback
+            key_id = f"desc:{item.description or item.serial_number}"
+            key_name = item.description or f"SR-{item.serial_number}"
+
+        g = groups[(key_id, key_name)]
+        g["total_quantity"] += item.quantity or _DEC_0
+        g["available_quantity"] += item.available_quantity or _DEC_0
+        g["debited_quantity"] += item.debited_quantity or _DEC_0
+        g["allotted_quantity"] += item.allotted_quantity or _DEC_0
+        g["sr_numbers"].append(int(item.serial_number))
+        g["row_ids"].append(item.pk)
+
+    return [
+        {"item_name_id": k[0], "item_name": k[1], **v}
+        for k, v in sorted(groups.items(), key=lambda x: str(x[0][1]).lower())
+    ]
+
+
 def recompute_license_balance(license_id: int) -> None:
     """
     Recompute and persist the CIF balance for *license_id*.
@@ -255,7 +368,7 @@ def recompute_license_balance(license_id: int) -> None:
         trade = _compute_trade(license_id)
 
         raw_balance: Decimal = credit - debit - allotment - trade
-        balance: Decimal = max(_DEC_0, raw_balance).quantize(_TWO_PLACES, rounding=ROUND_DOWN)
+        balance: Decimal = raw_balance.quantize(_TWO_PLACES, rounding=ROUND_DOWN)
 
         # B4: use update_or_create so the row is created when it doesn't exist yet.
         LicenseBalance.objects.update_or_create(
@@ -268,7 +381,8 @@ def recompute_license_balance(license_id: int) -> None:
 
         # B4: same for LicenseFlags — filter().update() is a no-op on a missing row.
         today = timezone.now().date()
-        is_null = balance < _NULL_THRESHOLD
+        # BD-003: is_null only covers the [0, threshold) range; negative handled by notifications
+        is_null = _DEC_0 <= balance < _NULL_THRESHOLD  # only meaningful when >= 0
         is_expired = (
             license_obj.license_expiry_date is not None
             and license_obj.license_expiry_date < today
@@ -280,6 +394,9 @@ def recompute_license_balance(license_id: int) -> None:
                 "is_expired": is_expired,
             },
         )
+
+        # BD-003: Handle negative balance notification
+        _handle_negative_balance_notification(license_id, balance)
 
         logger.info(
             "Balance recomputed for license %s: credit=%s debit=%s allotment=%s trade=%s => %s",

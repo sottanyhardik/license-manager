@@ -38,16 +38,21 @@ from django.utils import timezone
 @pytest.fixture(autouse=True)
 def _patch_item_level_balances():
     """
-    Suppress _update_item_level_balances in all balance tests.
+    Suppress _update_item_level_balances and _handle_negative_balance_notification
+    in all balance tests.
 
-    That function issues real DB queries; patching it here keeps all
+    Both functions issue real DB queries; patching them here keeps all
     recompute_license_balance() tests isolated to the formula under test.
     The item-level formula is covered separately in the BR-ITEM tests below.
+    The notification handler is exercised in the BD-003 tests.
     """
     with patch(
         "apps.license.services.balance_service._update_item_level_balances"
-    ) as mock_update:
+    ) as mock_update, patch(
+        "apps.license.services.balance_service._handle_negative_balance_notification"
+    ) as mock_notify:
         mock_update.return_value = None
+        mock_notify.return_value = None
         yield mock_update
 
 
@@ -128,13 +133,14 @@ def test_balance_formula_all_components():
 # 2. Balance clamped to zero (never negative)
 # ===========================================================================
 
-def test_balance_never_negative():
+def test_balance_can_go_negative():
     """
-    BR-FLOOR: max(0, raw) — balance must never go below 0.
+    BD-003: Balance floor (max(0, raw)) has been REMOVED.
 
-    credit=1000, debit=8000 → raw=-7000 → clamped to 0.
-    Protects against edge cases where debits exceed credits (data import
-    timing, partial BOE uploads, concurrent allotments).
+    credit=1000, debit=8000 → raw=-7000 → balance must be stored as -7000.00.
+    Negative balances now trigger a LicenseBalanceNotification (tested in
+    the BD-003 section below). The floor removal is intentional — over-debit
+    is a real business condition that must be surfaced, not silently zeroed.
     """
     bal_mgr, _ = _call_recompute(
         license_id=2,
@@ -146,8 +152,8 @@ def test_balance_never_negative():
 
     bal_mgr.update_or_create.assert_called_once()
     written = bal_mgr.update_or_create.call_args.kwargs["defaults"]["balance_cif"]
-    assert written == Decimal("0.00"), (
-        f"Balance must be clamped to 0 when debits exceed credits, got {written}"
+    assert written == Decimal("-7000.00"), (
+        f"BD-003: Balance must be stored as -7000.00 (no floor), got {written}"
     )
 
 
@@ -276,11 +282,20 @@ def test_create_allotment_decrements_plan():
     }
     user = MagicMock()
 
+    # Mock LicenseImportItemsModel for the BD-001 license_id lookup in create_allotment
+    mock_bd001_qs = MagicMock()
+    mock_bd001_qs.values_list.return_value.get.return_value = 1  # license_id=1
+    mock_bd001_model = MagicMock()
+    mock_bd001_model.objects = mock_bd001_qs
+    mock_bd001_model.DoesNotExist = LookupError
+
     with patch("apps.allotment.services.allotment_service.AllotmentModel") as MockModel, \
          patch("apps.allotment.services.allotment_service.AllotmentItems") as MockItems, \
          patch("apps.allotment.services.allotment_service.transaction") as mock_txn, \
          patch("apps.allotment.services.allotment_service._validate_plan_availability") as mock_validate, \
-         patch("apps.allotment.services.allotment_service._adjust_plan") as mock_adjust:
+         patch("apps.allotment.services.allotment_service._validate_balance_availability"), \
+         patch("apps.allotment.services.allotment_service._adjust_plan") as mock_adjust, \
+         patch("apps.license.models.LicenseImportItemsModel", mock_bd001_model):
 
         mock_txn.atomic.return_value.__enter__ = MagicMock(return_value=None)
         mock_txn.atomic.return_value.__exit__ = MagicMock(return_value=False)
@@ -659,6 +674,13 @@ def test_multiple_allotments_cumulative_plan_reduction():
     def capture_adjust(**kwargs):
         adjust_calls.append(kwargs)
 
+    # Mock LicenseImportItemsModel for the BD-001 license_id lookup in create_allotment
+    mock_bd001_qs = MagicMock()
+    mock_bd001_qs.values_list.return_value.get.return_value = 1  # license_id=1
+    mock_bd001_model = MagicMock()
+    mock_bd001_model.objects = mock_bd001_qs
+    mock_bd001_model.DoesNotExist = LookupError
+
     for data in [base_data_1, base_data_2]:
         mock_allotment = MagicMock()
         mock_allotment.pk = len(adjust_calls) + 1
@@ -667,8 +689,10 @@ def test_multiple_allotments_cumulative_plan_reduction():
              patch("apps.allotment.services.allotment_service.AllotmentItems") as MockItems, \
              patch("apps.allotment.services.allotment_service.transaction") as mock_txn, \
              patch("apps.allotment.services.allotment_service._validate_plan_availability"), \
+             patch("apps.allotment.services.allotment_service._validate_balance_availability"), \
              patch("apps.allotment.services.allotment_service._adjust_plan",
-                   side_effect=capture_adjust):
+                   side_effect=capture_adjust), \
+             patch("apps.license.models.LicenseImportItemsModel", mock_bd001_model):
 
             mock_txn.atomic.return_value.__enter__ = MagicMock(return_value=None)
             mock_txn.atomic.return_value.__exit__ = MagicMock(return_value=False)

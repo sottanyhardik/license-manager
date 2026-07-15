@@ -10,4 +10,5 @@ urlpatterns = [
     path("reports/", include("apps.reports.urls", namespace="reports")),
     path("dashboard/", include("apps.dashboard.urls", namespace="dashboard")),
     path("trades/", include("apps.trade.urls", namespace="trade")),
+    path("notifications/", include("apps.notifications.urls")),
 ]

@@ -81,6 +81,8 @@ class LicenseBalanceSerializer(serializers.ModelSerializer):
 
 
 class LicenseFlagsSerializer(serializers.ModelSerializer):
+    balance_status = serializers.SerializerMethodField()
+
     class Meta:
         model = LicenseFlags
         fields = [
@@ -93,8 +95,24 @@ class LicenseFlagsSerializer(serializers.ModelSerializer):
             "is_incomplete",
             "is_expired",
             "is_individual",
+            "balance_status",  # NEW: "healthy" | "null" | "negative"
         ]
         read_only_fields = fields
+
+    def get_balance_status(self, obj) -> str:
+        """
+        Richer status replacing the boolean is_null (BD-003).
+        Returns: 'negative' | 'null' | 'healthy'
+        """
+        try:
+            balance_cif = obj.license.balance.balance_cif
+            if balance_cif < 0:
+                return "negative"
+            if balance_cif < 500:  # _NULL_THRESHOLD
+                return "null"
+            return "healthy"
+        except Exception:
+            return "healthy"
 
 
 class LicenseNotesSerializer(serializers.ModelSerializer):

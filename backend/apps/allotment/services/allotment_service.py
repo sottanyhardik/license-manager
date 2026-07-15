@@ -68,6 +68,66 @@ def _dispatch(item_ids: list):
 # Internal helpers — LicenseItemPlan management
 # ---------------------------------------------------------------------------
 
+def _validate_balance_availability(
+    license_id: int,
+    items_data: list[dict],
+) -> None:
+    """
+    Reject allotment if it would exceed the actual available balance.
+
+    Two independent checks (both must pass):
+    1. SUM(items.cif_fc) <= LicenseBalance.balance_cif  (license-level CIF)
+    2. Per item: allotment_qty <= item.available_quantity  (item-level qty)
+
+    Both use select_for_update() to prevent concurrent over-allotment races.
+    Must be called inside transaction.atomic().
+
+    Raises ValidationError with a clear message if either check fails.
+    """
+    from apps.license.models import LicenseBalance, LicenseImportItemsModel
+
+    # -- License-level CIF check ---------------------------------------------
+    try:
+        balance = LicenseBalance.objects.select_for_update().get(license_id=license_id)
+        available_cif = balance.balance_cif
+    except LicenseBalance.DoesNotExist:
+        available_cif = Decimal("0")
+
+    total_allotment_cif = sum(
+        Decimal(str(item_dict.get("cif_fc") or 0)) for item_dict in items_data
+    )
+
+    if total_allotment_cif > available_cif:
+        raise ValidationError(
+            f"Total allotment CIF FC {total_allotment_cif} exceeds available license "
+            f"balance {available_cif}. Reduce the allotment or wait for balance to be freed."
+        )
+
+    # -- Per-item quantity check ---------------------------------------------
+    item_ids = [item_dict.get("item") for item_dict in items_data if item_dict.get("item")]
+    if not item_ids:
+        return
+
+    items_map = {
+        item.pk: item
+        for item in LicenseImportItemsModel.objects.select_for_update().filter(pk__in=item_ids)
+    }
+
+    for item_dict in items_data:
+        item_id = item_dict.get("item")
+        if not item_id:
+            continue
+        qty_requested = Decimal(str(item_dict.get("qty") or 0))
+        item = items_map.get(item_id)
+        if item is None:
+            continue
+        if qty_requested > item.available_quantity:
+            raise ValidationError(
+                f"Requested quantity {qty_requested} for import item SR-{item.serial_number} "
+                f"exceeds available quantity {item.available_quantity}."
+            )
+
+
 def _validate_plan_availability(import_item_id: int, qty_requested: Decimal, cif_fc_requested: Decimal) -> None:
     """
     Raise ValidationError if the requested allotment exceeds available plan.
@@ -153,6 +213,21 @@ def create_allotment(data: dict, user) -> AllotmentModel:
                     qty_requested=Decimal(str(item_dict.get("qty") or 0)),
                     cif_fc_requested=Decimal(str(item_dict.get("cif_fc") or 0)),
                 )
+
+        # BD-001: Validate against ACTUAL available balance (not just LicenseItemPlan)
+        if items_data:
+            first_item_id = next(
+                (d.get("item") for d in items_data if d.get("item")), None
+            )
+            if first_item_id:
+                from apps.license.models import LicenseImportItemsModel
+                try:
+                    license_id = LicenseImportItemsModel.objects.values_list(
+                        "license_id", flat=True
+                    ).get(pk=first_item_id)
+                    _validate_balance_availability(license_id, items_data)
+                except LicenseImportItemsModel.DoesNotExist:
+                    pass  # item-level validation will catch this
 
         allotment = AllotmentModel(**data)
         allotment.created_by = user

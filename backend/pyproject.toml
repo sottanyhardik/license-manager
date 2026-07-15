@@ -26,6 +26,9 @@ ignore = [
 "backend/tests/**" = [
     "F841",   # same — when ruff is run from repo root rather than backend/
 ]
+"*/migrations/*" = [
+    "E501",   # line-too-long — Django auto-generated migrations are verbose; line length not enforced
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 12

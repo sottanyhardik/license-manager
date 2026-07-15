@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "apps.dashboard",
     "apps.reports",
     "apps.trade",
+    "apps.notifications",
 ]
 
 # ---------------------------------------------------------------------------

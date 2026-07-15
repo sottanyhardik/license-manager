@@ -196,6 +196,14 @@ class LicenseViewSet(viewsets.ModelViewSet):
         serializer = LicenseListSerializer(qs, many=True, context={"request": request})
         return Response(EnvelopeMixin.wrap(data=serializer.data))
 
+    @action(detail=True, methods=["get"], url_path="items/grouped")
+    def items_grouped(self, request, pk=None):
+        """GET /api/v1/licenses/{id}/items/grouped/ — grouped by ItemNameModel."""
+        from apps.license.services.balance_service import group_import_items_by_name
+        instance = self.get_object()
+        data = group_import_items_by_name(instance.pk)
+        return Response(EnvelopeMixin.wrap(data=data))
+
     @action(detail=True, methods=["post"], url_path="generate_pdf")
     def generate_pdf(self, request, pk=None):
         """Dispatch an async PDF generation task."""

@@ -44,18 +44,20 @@ import pytest
 @pytest.fixture(autouse=True)
 def _patch_item_level_balances():
     """
-    Stub out _update_item_level_balances for all tests in this module.
+    Stub out _update_item_level_balances and _handle_negative_balance_notification
+    for all tests in this module.
 
-    The function was added to recompute_license_balance() to keep item-level
-    balance fields (available_quantity, debited_quantity, etc.) in sync.
-    It issues real DB queries, but these tests mock the ORM and run without
-    a live database.  Patching it here isolates the license-level balance
-    tests from the item-level update path, which has its own dedicated tests.
+    Both functions issue real DB queries, but these tests mock the ORM and run
+    without a live database.  Patching them here isolates the license-level
+    balance tests from the item-level update and notification paths.
     """
     with patch(
         "apps.license.services.balance_service._update_item_level_balances"
-    ) as mock_update:
+    ) as mock_update, patch(
+        "apps.license.services.balance_service._handle_negative_balance_notification"
+    ) as mock_notify:
         mock_update.return_value = None
+        mock_notify.return_value = None
         yield mock_update
 
 # ---------------------------------------------------------------------------
@@ -174,11 +176,14 @@ def test_allotment_reserves_quantity():
 # BR-02 constraint — Test 3: Over-allotment clamped to 0 (floor)
 # ---------------------------------------------------------------------------
 
-def test_over_allotment_rejected():
+def test_over_allotment_produces_negative_balance():
     """
-    BR-02 constraint: available_qty cannot go below 0.
-    When allotment > credit, the balance is clamped to 0 (floor).
-    The service enforces this via max(0, raw_balance).
+    BD-003: Balance floor removed — when allotment > credit, balance is stored as
+    the actual negative value, not clamped to 0.
+
+    credit=500, allotment=800 → raw = 500 - 800 = -300.
+    BD-003 removes the max(0, raw) floor, so the stored balance must be -300.00.
+    A LicenseBalanceNotification is created for this license (tested separately).
     """
     from apps.license.services.balance_service import recompute_license_balance
 
@@ -219,9 +224,9 @@ def test_over_allotment_rejected():
 
     mock_bal_mgr.update_or_create.assert_called_once()
     bal_kwargs = mock_bal_mgr.update_or_create.call_args
-    # raw = 500 - 800 = -300; clamped to 0
-    assert bal_kwargs.kwargs["defaults"]["balance_cif"] == Decimal("0.00"), (
-        f"Balance must not go below 0, got {bal_kwargs.kwargs['defaults']['balance_cif']}"
+    # BD-003: raw = 500 - 800 = -300; stored as-is (no floor)
+    assert bal_kwargs.kwargs["defaults"]["balance_cif"] == Decimal("-300.00"), (
+        f"BD-003: balance must be stored as -300.00 (no floor), got {bal_kwargs.kwargs['defaults']['balance_cif']}"
     )
 
 

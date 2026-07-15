@@ -185,6 +185,125 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
 
         return boe
 
+    def _update_allotment_links(self, instance, allotment_data: list) -> None:
+        """Update the M2M allotment links on a BillOfEntryModel instance.
+
+        When allotments are linked: sets is_boe=True.
+        When allotments are removed: resets is_boe=False if no other BOE links them.
+        """
+        if not allotment_data:
+            return
+
+        old_allotment_ids = set(instance.allotment.values_list("id", flat=True))
+        instance.allotment.set(allotment_data)
+        new_allotment_ids = {a.id for a in allotment_data}
+
+        for allotment in allotment_data:
+            if allotment.id not in old_allotment_ids:
+                allotment.is_boe = True
+                allotment.save()
+
+        removed_allotment_ids = old_allotment_ids - new_allotment_ids
+        if removed_allotment_ids:
+            from apps.allotment.models import AllotmentModel
+
+            for allotment_id in removed_allotment_ids:
+                try:
+                    allotment = AllotmentModel.objects.get(id=allotment_id)
+                    if not allotment.bill_of_entry.exclude(id=instance.id).exists():
+                        allotment.is_boe = False
+                        allotment.save()
+                except AllotmentModel.DoesNotExist:
+                    pass
+
+    def _sync_item_details(self, instance, item_details_data: list) -> None:  # noqa: C901
+        """Synchronize nested RowDetails for a BillOfEntryModel instance.
+
+        - Creates new rows
+        - Updates existing rows (by sr_number + transaction_type)
+        - Deletes removed non-frozen rows
+        """
+        updated_item_ids = []
+
+        for item_data in item_details_data:
+            sr_number = item_data.get("sr_number")
+            if isinstance(sr_number, dict):
+                sr_number_id = sr_number.get("id")
+            elif hasattr(sr_number, "id"):
+                sr_number_id = sr_number.id
+            else:
+                sr_number_id = sr_number
+
+            if not sr_number_id:
+                continue
+
+            transaction_type = item_data.get("transaction_type", "D")
+            item_id = item_data.get("id")
+
+            item_data_clean = {
+                k: v
+                for k, v in item_data.items()
+                if k not in ["id", "sr_number", "license_number", "item_description", "hs_code"]
+            }
+
+            if item_id:
+                try:
+                    item_instance = RowDetails.objects.get(
+                        id=item_id, bill_of_entry=instance
+                    )
+                    if item_instance.is_frozen:
+                        updated_item_ids.append(item_id)
+                        continue
+                    for key, value in item_data_clean.items():
+                        setattr(item_instance, key, value)
+                    item_instance.sr_number_id = sr_number_id
+                    item_instance.save()
+                    updated_item_ids.append(item_id)
+                except RowDetails.DoesNotExist:
+                    item_data_clean["sr_number_id"] = sr_number_id
+                    item_instance, _ = RowDetails.objects.update_or_create(
+                        bill_of_entry=instance,
+                        sr_number_id=sr_number_id,
+                        transaction_type=transaction_type,
+                        defaults=item_data_clean,
+                    )
+                    updated_item_ids.append(item_instance.id)
+            else:
+                existing = RowDetails.objects.filter(
+                    bill_of_entry=instance,
+                    sr_number_id=sr_number_id,
+                    transaction_type=transaction_type,
+                ).first()
+                if existing and existing.is_frozen:
+                    updated_item_ids.append(existing.id)
+                    continue
+                item_data_clean["sr_number_id"] = sr_number_id
+                item_instance, _ = RowDetails.objects.update_or_create(
+                    bill_of_entry=instance,
+                    sr_number_id=sr_number_id,
+                    transaction_type=transaction_type,
+                    defaults=item_data_clean,
+                )
+                updated_item_ids.append(item_instance.id)
+
+        # Pre-seed updated_item_ids with ALL frozen row ids so they are never swept
+        frozen_ids = list(
+            RowDetails.objects.filter(bill_of_entry=instance, is_frozen=True)
+            .values_list("id", flat=True)
+        )
+        updated_item_ids.extend(frozen_ids)
+        RowDetails.objects.filter(bill_of_entry=instance, is_frozen=False).exclude(
+            id__in=updated_item_ids
+        ).delete()
+
+        # Clear cached properties to force recalculation
+        for cached_attr in ("item_details_cached", "get_licenses"):
+            if hasattr(instance, cached_attr):
+                try:
+                    delattr(instance, cached_attr)
+                except AttributeError:
+                    pass
+
     def update(self, instance, validated_data):
         """Update BOE with nested item details"""
         item_details_data = validated_data.pop("item_details", None)
@@ -195,110 +314,11 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                 setattr(instance, attr, value)
             instance.save()
 
-        if allotment_data is not None and len(allotment_data) > 0:
-            old_allotment_ids = set(instance.allotment.values_list("id", flat=True))
-            instance.allotment.set(allotment_data)
-            new_allotment_ids = {a.id for a in allotment_data}
-
-            for allotment in allotment_data:
-                if allotment.id not in old_allotment_ids:
-                    allotment.is_boe = True
-                    allotment.save()
-
-            removed_allotment_ids = old_allotment_ids - new_allotment_ids
-            if removed_allotment_ids:
-                from apps.allotment.models import AllotmentModel
-
-                for allotment_id in removed_allotment_ids:
-                    try:
-                        allotment = AllotmentModel.objects.get(id=allotment_id)
-                        if not allotment.bill_of_entry.exclude(id=instance.id).exists():
-                            allotment.is_boe = False
-                            allotment.save()
-                    except AllotmentModel.DoesNotExist:
-                        pass
+        if allotment_data is not None:
+            self._update_allotment_links(instance, allotment_data)
 
         if item_details_data is not None:
-            updated_item_ids = []
-
-            for item_data in item_details_data:
-                sr_number = item_data.get("sr_number")
-                if isinstance(sr_number, dict):
-                    sr_number_id = sr_number.get("id")
-                elif hasattr(sr_number, "id"):
-                    sr_number_id = sr_number.id
-                else:
-                    sr_number_id = sr_number
-
-                if not sr_number_id:
-                    continue
-
-                transaction_type = item_data.get("transaction_type", "D")
-                item_id = item_data.get("id")
-
-                item_data_clean = {
-                    k: v
-                    for k, v in item_data.items()
-                    if k not in ["id", "sr_number", "license_number", "item_description", "hs_code"]
-                }
-
-                if item_id:
-                    try:
-                        item_instance = RowDetails.objects.get(
-                            id=item_id, bill_of_entry=instance
-                        )
-                        if item_instance.is_frozen:
-                            updated_item_ids.append(item_id)
-                            continue
-                        for key, value in item_data_clean.items():
-                            setattr(item_instance, key, value)
-                        item_instance.sr_number_id = sr_number_id
-                        item_instance.save()
-                        updated_item_ids.append(item_id)
-                    except RowDetails.DoesNotExist:
-                        item_data_clean["sr_number_id"] = sr_number_id
-                        item_instance, _ = RowDetails.objects.update_or_create(
-                            bill_of_entry=instance,
-                            sr_number_id=sr_number_id,
-                            transaction_type=transaction_type,
-                            defaults=item_data_clean,
-                        )
-                        updated_item_ids.append(item_instance.id)
-                else:
-                    existing = RowDetails.objects.filter(
-                        bill_of_entry=instance,
-                        sr_number_id=sr_number_id,
-                        transaction_type=transaction_type,
-                    ).first()
-                    if existing and existing.is_frozen:
-                        updated_item_ids.append(existing.id)
-                        continue
-                    item_data_clean["sr_number_id"] = sr_number_id
-                    item_instance, _ = RowDetails.objects.update_or_create(
-                        bill_of_entry=instance,
-                        sr_number_id=sr_number_id,
-                        transaction_type=transaction_type,
-                        defaults=item_data_clean,
-                    )
-                    updated_item_ids.append(item_instance.id)
-
-            # Pre-seed updated_item_ids with ALL frozen row ids so they are never swept
-            frozen_ids = list(
-                RowDetails.objects.filter(bill_of_entry=instance, is_frozen=True)
-                .values_list("id", flat=True)
-            )
-            updated_item_ids.extend(frozen_ids)
-            RowDetails.objects.filter(bill_of_entry=instance, is_frozen=False).exclude(
-                id__in=updated_item_ids
-            ).delete()
-
-            # Clear cached properties to force recalculation
-            for cached_attr in ("item_details_cached", "get_licenses"):
-                if hasattr(instance, cached_attr):
-                    try:
-                        delattr(instance, cached_attr)
-                    except AttributeError:
-                        pass
+            self._sync_item_details(instance, item_details_data)
 
         return instance
 

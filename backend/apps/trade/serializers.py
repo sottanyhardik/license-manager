@@ -179,7 +179,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
             "due_amount": str(lt.due_amount),
         }
 
-    def to_internal_value(self, data):
+    def to_internal_value(self, data):  # noqa: C901
         """Parse JSON strings OR flattened FormData from multipart/form-data."""
         import json
         import re

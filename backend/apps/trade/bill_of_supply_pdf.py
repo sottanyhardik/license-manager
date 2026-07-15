@@ -14,7 +14,7 @@ from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Table, Table
 logger = logging.getLogger(__name__)
 
 
-def num_to_words_indian(amount):
+def num_to_words_indian(amount):  # noqa: C901
     """Convert number to Indian rupees words"""
     try:
         # Remove decimals for word conversion
@@ -70,7 +70,7 @@ def num_to_words_indian(amount):
         return str(int(amount))
 
 
-def generate_bill_of_supply_pdf(trade, include_signature=True):
+def generate_bill_of_supply_pdf(trade, include_signature=True):  # noqa: C901
     """
     Generate Bill of Supply PDF for SALE transactions.
 

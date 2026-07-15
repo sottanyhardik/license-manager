@@ -14,6 +14,7 @@ import logging
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
+from rest_framework import serializers as drf_serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from shared.pagination import StandardPagination
@@ -25,6 +26,7 @@ from apps.license.models import (
     LicenseDetailsModel,
     LicenseDocumentModel,
     LicenseImportItemsModel,
+    LicenseItemPlan,
 )
 from apps.license.permissions import IncentiveLicensePermission, LicensePermission
 from apps.license.serializers import (
@@ -338,6 +340,84 @@ class IncentiveLicenseViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, modified_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(modified_by=self.request.user)
+
+
+# ---------------------------------------------------------------------------
+# LicenseItemPlan viewset
+# ---------------------------------------------------------------------------
+
+
+class LicenseItemPlanSerializer(drf_serializers.ModelSerializer):
+    """Serializer for LicenseItemPlan — planning allocations per import item."""
+
+    import_item_description = drf_serializers.CharField(
+        source="import_item.description", read_only=True, default=None
+    )
+    license_number = drf_serializers.CharField(
+        source="license.license_number", read_only=True, default=None
+    )
+
+    class Meta:
+        model = LicenseItemPlan
+        fields = [
+            "id",
+            "license",
+            "license_number",
+            "import_item",
+            "import_item_description",
+            "item_name",
+            "planned_quantity",
+            "unit_price",
+            "planned_cif_fc",
+            "planned_cif_inr",
+            "note",
+        ]
+        read_only_fields = ["id", "license_number", "import_item_description"]
+
+
+class LicenseItemPlanViewSet(viewsets.ModelViewSet):
+    """
+    CRUD ViewSet for LicenseItemPlan.
+
+    Nested under a license:
+      GET    /api/v1/licenses/{license_pk}/item-plans/        → list plans for license
+      POST   /api/v1/licenses/{license_pk}/item-plans/        → create plan
+      GET    /api/v1/licenses/{license_pk}/item-plans/{pk}/   → retrieve plan
+      PATCH  /api/v1/licenses/{license_pk}/item-plans/{pk}/   → update plan
+      DELETE /api/v1/licenses/{license_pk}/item-plans/{pk}/   → delete plan
+
+    Plans are optional — an import item without a plan has no allotment restriction.
+    Creating a plan for an import item that already has one is blocked by DB unique
+    constraint (one plan per item).
+    """
+
+    permission_classes = [LicensePermission]
+    serializer_class = LicenseItemPlanSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        license_pk = self.kwargs.get("license_pk")
+        qs = LicenseItemPlan.objects.select_related(
+            "license", "import_item", "item_name"
+        )
+        if license_pk:
+            qs = qs.filter(license_id=license_pk)
+        return qs
+
+    def perform_create(self, serializer):
+        license_pk = self.kwargs.get("license_pk")
+        # If license_pk is in the URL, force it on the created object
+        kwargs = {"created_by": self.request.user, "modified_by": self.request.user}
+        if license_pk and not serializer.validated_data.get("license"):
+            try:
+                license_obj = LicenseDetailsModel.objects.get(pk=license_pk)
+                kwargs["license"] = license_obj
+            except LicenseDetailsModel.DoesNotExist:
+                pass
+        serializer.save(**kwargs)
 
     def perform_update(self, serializer):
         serializer.save(modified_by=self.request.user)

@@ -23,6 +23,7 @@ from apps.license.views.license import (
     ImportItemViewSet,
     IncentiveLicenseViewSet,
     LicenseDocumentViewSet,
+    LicenseItemPlanViewSet,
     LicenseViewSet,
 )
 
@@ -63,6 +64,21 @@ _doc_detail = LicenseDocumentViewSet.as_view(
     }
 )
 
+_plan_list = LicenseItemPlanViewSet.as_view(
+    {
+        "get": "list",
+        "post": "create",
+    }
+)
+_plan_detail = LicenseItemPlanViewSet.as_view(
+    {
+        "get": "retrieve",
+        "patch": "partial_update",
+        "put": "update",
+        "delete": "destroy",
+    }
+)
+
 urlpatterns = [
     path("", include(router.urls)),
     # Nested: import items
@@ -86,5 +102,16 @@ urlpatterns = [
         "licenses/<int:license_pk>/documents/<int:pk>/",
         _doc_detail,
         name="license-documents-detail",
+    ),
+    # Nested: item plans (LicenseItemPlan — planning allocations per import item)
+    path(
+        "licenses/<int:license_pk>/item-plans/",
+        _plan_list,
+        name="license-item-plans-list",
+    ),
+    path(
+        "licenses/<int:license_pk>/item-plans/<int:pk>/",
+        _plan_detail,
+        name="license-item-plans-detail",
     ),
 ]

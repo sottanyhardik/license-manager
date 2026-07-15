@@ -26,11 +26,10 @@ Matches the mocking pattern in tests/integration/test_license_workflows.py.
 """
 import datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.utils import timezone
-
 
 # ===========================================================================
 # Module-level autouse fixture — suppress item-level balance updates
@@ -367,9 +366,8 @@ def test_create_allotment_rejects_over_plan():
     before any DB write. Verifies that the validation gate runs inside the
     transaction and surfaces the error to the caller.
     """
-    from django.core.exceptions import ValidationError
-
     from apps.allotment.services.allotment_service import _validate_plan_availability
+    from django.core.exceptions import ValidationError
 
     mock_plan = MagicMock()
     mock_plan.planned_quantity = Decimal("100.000")

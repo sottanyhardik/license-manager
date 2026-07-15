@@ -30,10 +30,54 @@ from apps.license.models import (
 
 
 class LicenseBalanceSerializer(serializers.ModelSerializer):
+    """
+    Balance snapshot for a license.
+
+    In addition to the stored balance_cif, exposes three computed breakdown
+    fields so the UI can render a full balance summary without additional
+    API calls:
+
+      total_authorised  — SUM(export items CIF FC)  [the "credit" side]
+      total_debited     — SUM(BOE RowDetails CIF FC) [direct debit consumption]
+      total_allotted    — SUM(pending AllotmentItems CIF FC) [reserved, not yet debited]
+
+    These are computed on-the-fly from the live DB state (same formulas used
+    by balance_service._compute_*) so they are always consistent with
+    balance_cif = max(0, total_authorised - total_debited - total_allotted - trade).
+
+    Only used on the license detail endpoint — single record, so the extra
+    DB round-trips are acceptable.
+    """
+
+    total_authorised = serializers.SerializerMethodField()
+    total_debited = serializers.SerializerMethodField()
+    total_allotted = serializers.SerializerMethodField()
+
     class Meta:
         model = LicenseBalance
-        fields = ["balance_cif", "ledger_date"]
-        read_only_fields = ["balance_cif", "ledger_date"]
+        fields = ["balance_cif", "ledger_date", "total_authorised", "total_debited", "total_allotted"]
+        read_only_fields = ["balance_cif", "ledger_date", "total_authorised", "total_debited", "total_allotted"]
+
+    def get_total_authorised(self, obj) -> str | None:
+        from apps.license.services.balance_service import _compute_credit
+        try:
+            return str(_compute_credit(obj.license_id))
+        except Exception:
+            return None
+
+    def get_total_debited(self, obj) -> str | None:
+        from apps.license.services.balance_service import _compute_debit
+        try:
+            return str(_compute_debit(obj.license_id))
+        except Exception:
+            return None
+
+    def get_total_allotted(self, obj) -> str | None:
+        from apps.license.services.balance_service import _compute_allotment
+        try:
+            return str(_compute_allotment(obj.license_id))
+        except Exception:
+            return None
 
 
 class LicenseFlagsSerializer(serializers.ModelSerializer):
@@ -230,11 +274,20 @@ class ImportItemSerializer(serializers.ModelSerializer):
     Full CRUD serializer for LicenseImportItemsModel.
 
     hs_code accepts a PK on write; hs_code_display is a read-only label.
+
+    Planning fields (planned_quantity, planned_cif_fc) are fetched from the
+    related LicenseItemPlan row (if one exists). They are read-only in this
+    serializer — plans are managed via the /api/v1/licenses/{id}/item-plans/
+    endpoint.
     """
 
     hs_code_display = serializers.CharField(
         source="hs_code.code", read_only=True, default=None
     )
+
+    # Planning fields — derived from LicenseItemPlan (may be null if no plan exists)
+    planned_quantity = serializers.SerializerMethodField()
+    planned_cif_fc = serializers.SerializerMethodField()
 
     class Meta:
         model = LicenseImportItemsModel
@@ -254,6 +307,9 @@ class ImportItemSerializer(serializers.ModelSerializer):
             "debited_value",
             "allotted_quantity",
             "allotted_value",
+            # Planning fields
+            "planned_quantity",
+            "planned_cif_fc",
             "is_restricted",
             "condition_type",
             "comment",
@@ -271,7 +327,22 @@ class ImportItemSerializer(serializers.ModelSerializer):
             "debited_value",
             "allotted_quantity",
             "allotted_value",
+            # Planning fields — managed via item-plans endpoint
+            "planned_quantity",
+            "planned_cif_fc",
         ]
+
+    def get_planned_quantity(self, obj) -> str | None:
+        """Return planned_quantity from the first LicenseItemPlan for this item, or None."""
+        from apps.license.models import LicenseItemPlan
+        plan = LicenseItemPlan.objects.filter(import_item_id=obj.pk).first()
+        return str(plan.planned_quantity) if plan else None
+
+    def get_planned_cif_fc(self, obj) -> str | None:
+        """Return planned_cif_fc from the first LicenseItemPlan for this item, or None."""
+        from apps.license.models import LicenseItemPlan
+        plan = LicenseItemPlan.objects.filter(import_item_id=obj.pk).first()
+        return str(plan.planned_cif_fc) if plan else None
 
 
 # ---------------------------------------------------------------------------

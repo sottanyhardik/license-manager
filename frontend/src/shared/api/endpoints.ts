@@ -18,6 +18,9 @@ export const ENDPOINTS = {
     GENERATE_PDF: (id: number | string) => `/api/v1/licenses/${id}/generate-pdf/`,
     MERGED_DOCUMENTS: (id: number | string) => `/api/v1/licenses/${id}/merged-documents/`,
     SEARCH: '/api/v1/licenses/search/',
+    EXPORT_ITEMS: (id: number | string) => `/api/v1/licenses/${id}/export-items/`,
+    DOCUMENTS: (id: number | string) => `/api/v1/licenses/${id}/documents/`,
+    HISTORY: (id: number | string) => `/api/v1/licenses/${id}/history/`,
   },
   ALLOTMENTS: {
     LIST: '/api/v1/allotments/',
@@ -96,6 +99,9 @@ export const ENDPOINTS = {
     SION_NORM_CLASS: (id: number) => `/api/v1/masters/sion-norm-classes/${id}/`,
     EXCHANGE_RATES: '/api/v1/masters/exchange-rates/',
     EXCHANGE_RATE: (id: number) => `/api/v1/masters/exchange-rates/${id}/`,
+    SCHEME_CODES: '/api/v1/masters/scheme-codes/',
+    NOTIFICATION_NUMBERS: '/api/v1/masters/notification-numbers/',
+    PURCHASE_STATUSES: '/api/v1/masters/purchase-statuses/',
   },
   DASHBOARD: {
     STATS: '/api/v1/dashboard/stats/',

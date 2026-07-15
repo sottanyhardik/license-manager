@@ -14,18 +14,31 @@ export interface License {
   /** License type — present in detail responses. In list responses use
    * scheme_code_display or parse from license_number prefix. */
   license_type?: LicenseType
-  /** Scheme code display string (e.g. "DFIA", "RODTEP") — present in list. */
-  scheme_code_display?: string | null
   license_date: string | null
   license_expiry_date: string | null
   is_expired?: boolean | null
   /** Days until expiry. Negative means already expired. */
   days_to_expiry?: number
+  /** FK IDs — present in detail responses for edit form pre-fill */
+  exporter?: number | null     // same FK as "company" in the form
   company?: number | null
+  port?: number | null
+  scheme_code?: number | null
+  notification_number?: number | null
+  purchase_status?: number | null
+  /** Display strings (read-only from API) */
   company_label?: string | null
   exporter_name?: string | null
   port_name?: string | null
-  purchase_status?: string | null
+  port_display?: string | null
+  scheme_code_display?: string | null
+  notification_number_display?: string | null
+  purchase_status_display?: string | null
+  /** Scalar fields */
+  file_number?: string | null
+  registration_number?: string | null
+  registration_date?: string | null
+  ge_file_number?: number | null
   get_norm_class?: string | null
   /** Available CIF in the license's foreign currency (DFIA = USD). */
   balance_cif?: string | null
@@ -101,6 +114,46 @@ export interface LicenseExportItem {
   fob_fc?: string | null
 }
 
+// ── Export items (from /licenses/{id}/export-items/) ─────────────────────────
+
+export interface ExportItem {
+  id: number
+  license: number
+  description?: string | null
+  item?: number | null
+  item_label?: string | null
+  norm_class?: number | null
+  norm_class_label?: string | null
+  duty_type?: string | null
+  net_quantity?: string | null
+  old_quantity?: string | null
+  unit?: string | null
+  fob_fc?: string | null
+  fob_inr?: string | null
+  currency?: string | null
+  value_addition?: string | null
+  cif_fc?: string | null
+  cif_inr?: string | null
+}
+
+// ── Documents ────────────────────────────────────────────────────────────────
+
+export interface LicenseDocument {
+  id: number
+  license: number
+  type: 'LICENSE COPY' | 'TRANSFER LETTER' | 'OTHER'
+  file: string
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+
+export interface HistoryEvent {
+  event_type: string
+  description: string
+  timestamp: string | null
+  user: string | null
+}
+
 // ── Item usage (expanded row detail) ─────────────────────────────────────────
 
 export interface ItemUsageBOE {
@@ -146,5 +199,12 @@ export interface LicenseFormValues {
   license_date: string
   license_expiry_date: string
   company: number | null
+  port?: number | null
+  scheme_code?: number | null
+  notification_number?: number | null
+  purchase_status?: number | null
+  file_number?: string
+  registration_number?: string
+  registration_date?: string
   notes?: string
 }

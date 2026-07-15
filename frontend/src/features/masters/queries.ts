@@ -25,8 +25,11 @@ import type {
   ItemGroup,
   ItemName,
   ListParams,
+  NotificationNumber,
   PaginatedResponse,
   Port,
+  PurchaseStatus,
+  SchemeCode,
   SionNormClass,
 } from './types'
 
@@ -568,5 +571,52 @@ export function useDeleteExchangeRate(): UseMutationResult<void, Error, number> 
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['masters', 'exchange-rates'] })
     },
+  })
+}
+
+// ─── Scheme Codes ─────────────────────────────────────────────────────────────
+
+export function useSchemeCodesAll(): UseQueryResult<SchemeCode[]> {
+  return useQuery({
+    queryKey: ['masters', 'scheme-codes', 'all'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<SchemeCode[]>(ENDPOINTS.MASTERS.SCHEME_CODES, {
+        params: { all: true },
+      })
+      return data
+    },
+    staleTime: STALE_10_MIN,
+  })
+}
+
+// ─── Notification Numbers ─────────────────────────────────────────────────────
+
+export function useNotificationNumbersAll(): UseQueryResult<NotificationNumber[]> {
+  return useQuery({
+    queryKey: ['masters', 'notification-numbers', 'all'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<NotificationNumber[]>(
+        ENDPOINTS.MASTERS.NOTIFICATION_NUMBERS,
+        { params: { all: true } },
+      )
+      return data
+    },
+    staleTime: STALE_10_MIN,
+  })
+}
+
+// ─── Purchase Statuses ────────────────────────────────────────────────────────
+
+export function usePurchaseStatusesAll(): UseQueryResult<PurchaseStatus[]> {
+  return useQuery({
+    queryKey: ['masters', 'purchase-statuses', 'all'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<PurchaseStatus[]>(
+        ENDPOINTS.MASTERS.PURCHASE_STATUSES,
+        { params: { all: true } },
+      )
+      return data
+    },
+    staleTime: STALE_10_MIN,
   })
 }

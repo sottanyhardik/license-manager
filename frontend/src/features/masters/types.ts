@@ -52,6 +52,29 @@ export interface ExchangeRate {
   date: string
 }
 
+/** DGFT scheme codes — SchemeCodeSerializer: {id, code, label} */
+export interface SchemeCode {
+  id: number
+  code: string
+  label?: string
+}
+
+/** DGFT notification numbers — NotificationNumberSerializer: {id, code, label} */
+export interface NotificationNumber {
+  id: number
+  code: string
+  label?: string
+}
+
+/** Purchase status codes — PurchaseStatusSerializer: {id, code, label, is_active, display_order} */
+export interface PurchaseStatus {
+  id: number
+  code: string
+  label?: string
+  is_active?: boolean
+  display_order?: number
+}
+
 // Re-export the canonical paginated response type from the shared layer.
 // Do not define a local PaginatedResponse here — use shared/types/api.ts.
 export type { PaginatedResponse } from '@/shared/types/api'

@@ -11,8 +11,14 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { cn } from '@/shared/utils/cn'
 import { MasterSelect } from '@/features/masters/components/MasterSelect'
-import { useCompaniesAll } from '@/features/masters/queries'
-import type { Company } from '@/features/masters/types'
+import {
+  useCompaniesAll,
+  usePortsAll,
+  useSchemeCodesAll,
+  useNotificationNumbersAll,
+  usePurchaseStatusesAll,
+} from '@/features/masters/queries'
+import type { Company, Port, SchemeCode, NotificationNumber, PurchaseStatus } from '@/features/masters/types'
 import { useCreateLicense, useUpdateLicense } from '../mutations'
 import type { License } from '../types'
 
@@ -22,6 +28,13 @@ type FormValues = {
   license_date: string
   license_expiry_date: string
   company: number | undefined
+  port: number | undefined
+  scheme_code: number | undefined
+  notification_number: number | undefined
+  purchase_status: number | undefined
+  file_number: string
+  registration_number: string
+  registration_date: string
   notes: string
 }
 
@@ -86,11 +99,22 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
       license_date: '',
       license_expiry_date: '',
       company: undefined,
+      port: undefined,
+      scheme_code: undefined,
+      notification_number: undefined,
+      purchase_status: undefined,
+      file_number: '',
+      registration_number: '',
+      registration_date: '',
       notes: '',
     },
   })
 
   const companyValue = watch('company')
+  const portValue = watch('port')
+  const schemeCodeValue = watch('scheme_code')
+  const notificationNumberValue = watch('notification_number')
+  const purchaseStatusValue = watch('purchase_status')
 
   // Pre-fill when editing.
   useEffect(() => {
@@ -98,11 +122,20 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
       if (license) {
         reset({
           license_number: license.license_number,
-          license_type: license.license_type ?? 'DFIA',
-          license_date: license.license_date ?? undefined,
-          license_expiry_date: license.license_expiry_date ?? undefined,
-          company: license.company ?? undefined,
-          notes: license.balance_report_notes ?? '',
+          license_type: license.license_type ?? license.scheme_code_display ?? 'DFIA',
+          license_date: license.license_date ?? '',
+          license_expiry_date: license.license_expiry_date ?? '',
+          // Use the FK ID fields from LicenseDetailSerializer
+          // (the API returns both the FK integer AND a display string)
+          company: license.exporter ?? license.company ?? undefined,
+          port: license.port ?? undefined,
+          scheme_code: license.scheme_code ?? undefined,
+          notification_number: license.notification_number ?? undefined,
+          purchase_status: license.purchase_status ?? undefined,
+          file_number: license.file_number ?? '',
+          registration_number: license.registration_number ?? '',
+          registration_date: license.registration_date ?? '',
+          notes: license.balance_report_notes ?? license.condition_sheet ?? '',
         })
       } else {
         reset({
@@ -111,6 +144,13 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
           license_date: '',
           license_expiry_date: '',
           company: undefined,
+          port: undefined,
+          scheme_code: undefined,
+          notification_number: undefined,
+          purchase_status: undefined,
+          file_number: '',
+          registration_number: '',
+          registration_date: '',
           notes: '',
         })
       }
@@ -128,6 +168,13 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
       license_date: values.license_date,
       license_expiry_date: values.license_expiry_date,
       company: values.company,
+      port: values.port ?? null,
+      scheme_code: values.scheme_code ?? null,
+      notification_number: values.notification_number ?? null,
+      purchase_status: values.purchase_status ?? null,
+      file_number: values.file_number || undefined,
+      registration_number: values.registration_number || undefined,
+      registration_date: values.registration_date || undefined,
       notes: values.notes,
       balance_report_notes: values.notes,
     }
@@ -149,8 +196,8 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content
           className={cn(
-            'fixed left-[50%] top-[50%] z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2',
-            'rounded-xl border bg-background shadow-xl',
+            'fixed left-[50%] top-[50%] z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2',
+            'max-h-[90vh] overflow-y-auto rounded-xl border bg-background shadow-xl',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
             'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
             'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
@@ -172,54 +219,55 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
 
           {/* Body */}
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
-            <div className="space-y-4 px-6 py-5">
-              {/* License number */}
-              <Field
-                label="License Number"
-                htmlFor="license-number"
-                error={errors.license_number?.message}
-                required
-              >
-                <Input
-                  id="license-number"
-                  placeholder="e.g. 0310252856"
-                  {...register('license_number', {
-                    required: 'License number is required',
-                    maxLength: { value: 100, message: 'License number too long' },
-                  })}
-                  aria-invalid={!!errors.license_number}
-                />
-              </Field>
+            <div className="space-y-5 px-6 py-5">
 
-              {/* License type */}
-              <Field
-                label="License Type"
-                htmlFor="license-type"
-                error={errors.license_type?.message}
-                required
-              >
-                <select
-                  id="license-type"
-                  {...register('license_type', { required: 'License type is required' })}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-invalid={!!errors.license_type}
+              {/* Row 1: License number + License type */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field
+                  label="License Number"
+                  htmlFor="license-number"
+                  error={errors.license_number?.message}
+                  required
                 >
-                  {LICENSE_TYPES.map((lt) => (
-                    <option key={lt} value={lt}>
-                      {lt}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+                  <Input
+                    id="license-number"
+                    placeholder="e.g. 0310252856"
+                    {...register('license_number', {
+                      required: 'License number is required',
+                      maxLength: { value: 100, message: 'License number too long' },
+                    })}
+                    aria-invalid={!!errors.license_number}
+                  />
+                </Field>
 
-              {/* Company */}
+                <Field
+                  label="License Type"
+                  htmlFor="license-type"
+                  error={errors.license_type?.message}
+                  required
+                >
+                  <select
+                    id="license-type"
+                    {...register('license_type', { required: 'License type is required' })}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-invalid={!!errors.license_type}
+                  >
+                    {LICENSE_TYPES.map((lt) => (
+                      <option key={lt} value={lt}>
+                        {lt}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+
+              {/* Row 2: Company (full width) */}
               <Field
                 label="Company"
                 htmlFor="license-company"
                 error={errors.company?.message}
                 required
               >
-                {/* Hidden input so RHF tracks company validity */}
                 <input
                   type="hidden"
                   {...register('company', {
@@ -237,8 +285,8 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
                 />
               </Field>
 
-              {/* Dates row */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Row 3: Issue date + Expiry date */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field
                   label="Issue Date"
                   htmlFor="license-date"
@@ -263,6 +311,93 @@ export function LicenseFormModal({ open, onOpenChange, license }: LicenseFormMod
                     type="date"
                     {...register('license_expiry_date', { required: 'Expiry date is required' })}
                     aria-invalid={!!errors.license_expiry_date}
+                  />
+                </Field>
+              </div>
+
+              {/* Row 4: Port + Scheme Code */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Port" htmlFor="license-port">
+                  <input type="hidden" {...register('port')} />
+                  <MasterSelect<Port>
+                    id="license-port"
+                    queryHook={usePortsAll}
+                    value={portValue ?? null}
+                    onChange={(id) => setValue('port', id ?? undefined)}
+                    getLabel={(p) => `${p.port_code} — ${p.port_name}`}
+                    placeholder="Select port"
+                    aria-label="Select port"
+                  />
+                </Field>
+
+                <Field label="Scheme Code" htmlFor="license-scheme-code">
+                  <input type="hidden" {...register('scheme_code')} />
+                  <MasterSelect<SchemeCode>
+                    id="license-scheme-code"
+                    queryHook={useSchemeCodesAll}
+                    value={schemeCodeValue ?? null}
+                    onChange={(id) => setValue('scheme_code', id ?? undefined)}
+                    getLabel={(s) => s.code}
+                    placeholder="Select scheme code"
+                    aria-label="Select scheme code"
+                  />
+                </Field>
+              </div>
+
+              {/* Row 5: Notification Number + Purchase Status */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Notification Number" htmlFor="license-notification-number">
+                  <input type="hidden" {...register('notification_number')} />
+                  <MasterSelect<NotificationNumber>
+                    id="license-notification-number"
+                    queryHook={useNotificationNumbersAll}
+                    value={notificationNumberValue ?? null}
+                    onChange={(id) => setValue('notification_number', id ?? undefined)}
+                    getLabel={(n) => n.code}
+                    placeholder="Select notification number"
+                    aria-label="Select notification number"
+                  />
+                </Field>
+
+                <Field label="Purchase Status" htmlFor="license-purchase-status">
+                  <input type="hidden" {...register('purchase_status')} />
+                  <MasterSelect<PurchaseStatus>
+                    id="license-purchase-status"
+                    queryHook={usePurchaseStatusesAll}
+                    value={purchaseStatusValue ?? null}
+                    onChange={(id) => setValue('purchase_status', id ?? undefined)}
+                    getLabel={(ps) => ps.label ?? ps.code}
+                    placeholder="Select purchase status"
+                    aria-label="Select purchase status"
+                  />
+                </Field>
+              </div>
+
+              {/* Row 6: File Number + Registration Number */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="File Number" htmlFor="license-file-number">
+                  <Input
+                    id="license-file-number"
+                    placeholder="Optional file number"
+                    {...register('file_number')}
+                  />
+                </Field>
+                <Field label="Registration Number" htmlFor="license-registration-number">
+                  <Input
+                    id="license-registration-number"
+                    placeholder="Optional registration number"
+                    {...register('registration_number')}
+                  />
+                </Field>
+              </div>
+
+              {/* Row 7: Registration Date */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Registration Date" htmlFor="license-registration-date">
+                  <Input
+                    id="license-registration-date"
+                    type="date"
+                    {...register('registration_date')}
                   />
                 </Field>
               </div>

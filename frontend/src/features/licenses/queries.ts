@@ -10,8 +10,11 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import apiClient from '@/shared/api/client'
 import { ENDPOINTS } from '@/shared/api/endpoints'
 import type {
+  ExportItem,
+  HistoryEvent,
   License,
   LicenseBalance,
+  LicenseDocument,
   LicenseImportItem,
   LicenseListParams,
   ItemUsage,
@@ -82,6 +85,64 @@ export function useLicenseBalance(
     queryFn: async () => {
       const { data } = await apiClient.get<LicenseBalance>(
         ENDPOINTS.LICENSES.BALANCE(licenseId!),
+      )
+      return data
+    },
+    enabled: licenseId !== null && licenseId > 0,
+    staleTime: STALE_5_MIN,
+  })
+}
+
+// ─── Export items ─────────────────────────────────────────────────────────────
+
+export function useLicenseExportItems(
+  licenseId: number | null,
+): UseQueryResult<ExportItem[]> {
+  return useQuery({
+    queryKey: ['licenses', licenseId, 'export-items'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ExportItem[]>(
+        ENDPOINTS.LICENSES.EXPORT_ITEMS(licenseId!),
+      )
+      return data
+    },
+    enabled: licenseId !== null && licenseId > 0,
+    staleTime: STALE_5_MIN,
+  })
+}
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+export function useLicenseDocuments(
+  licenseId: number | null,
+): UseQueryResult<LicenseDocument[]> {
+  return useQuery({
+    queryKey: ['licenses', licenseId, 'documents'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: LicenseDocument[] } | LicenseDocument[]>(
+        ENDPOINTS.LICENSES.DOCUMENTS(licenseId!),
+      )
+      // Handle both envelope ({ data: [...] }) and direct array responses.
+      const payload = res.data
+      if (Array.isArray(payload)) return payload
+      if (payload && 'data' in payload && Array.isArray(payload.data)) return payload.data
+      return []
+    },
+    enabled: licenseId !== null && licenseId > 0,
+    staleTime: STALE_5_MIN,
+  })
+}
+
+// ─── History ──────────────────────────────────────────────────────────────────
+
+export function useLicenseHistory(
+  licenseId: number | null,
+): UseQueryResult<HistoryEvent[]> {
+  return useQuery({
+    queryKey: ['licenses', licenseId, 'history'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<HistoryEvent[]>(
+        ENDPOINTS.LICENSES.HISTORY(licenseId!),
       )
       return data
     },

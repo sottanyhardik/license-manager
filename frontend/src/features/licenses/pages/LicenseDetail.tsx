@@ -29,16 +29,21 @@ import { useLicense } from '../queries'
 import { LicenseStatusBadge } from '../components/LicenseStatusBadge'
 import { LicenseBalancePanel } from '../components/LicenseBalancePanel'
 import { LicenseImportItems } from '../components/LicenseImportItems'
+import { LicenseExportItems } from '../components/LicenseExportItems'
+import { LicenseDocuments } from '../components/LicenseDocuments'
+import { LicenseHistory } from '../components/LicenseHistory'
 import { LicenseFormModal } from '../components/LicenseFormModal'
 import type { License } from '../types'
 
 // ── Tab types ──────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'import-items' | 'history'
+type Tab = 'overview' | 'import-items' | 'export-items' | 'documents' | 'history'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'import-items', label: 'Import Items' },
+  { id: 'export-items', label: 'Export Items' },
+  { id: 'documents', label: 'Documents' },
   { id: 'history', label: 'History' },
 ]
 
@@ -333,11 +338,21 @@ export default function LicenseDetail() {
           </div>
         )}
 
+        {activeTab === 'export-items' && (
+          <div role="tabpanel" aria-label="Export Items">
+            <LicenseExportItems licenseId={merged.id} />
+          </div>
+        )}
+
+        {activeTab === 'documents' && (
+          <div role="tabpanel" aria-label="Documents">
+            <LicenseDocuments licenseId={merged.id} />
+          </div>
+        )}
+
         {activeTab === 'history' && (
           <div role="tabpanel" aria-label="History">
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              History view coming soon.
-            </div>
+            <LicenseHistory licenseId={merged.id} />
           </div>
         )}
       </div>

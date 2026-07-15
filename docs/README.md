@@ -1,9 +1,22 @@
 # License Manager — Documentation Index
 
-> **Complete knowledge base** for the License Manager application.  
-> Last updated: 2026-07-15 (feature/V1).
+> **Complete Living System Specification** for the License Manager application.  
+> Last updated: 2026-07-15 (feature/V1). **Update this file whenever documentation changes.**
 
 This documentation is the **single source of truth** for understanding the system. Read this before any development task to avoid re-discovering architecture.
+
+---
+
+## 🚀 Start Here (Claude context files)
+
+| Purpose | Document |
+|---|---|
+| Quick system briefing (5 min) | [claude/system-overview.md](claude/system-overview.md) |
+| Before touching balance/allotment/BOE | [claude/balance-context.md](claude/balance-context.md) |
+| Backend development patterns | [claude/backend-context.md](claude/backend-context.md) |
+| Frontend development patterns | [claude/frontend-context.md](claude/frontend-context.md) |
+| Recurring code patterns | [claude/common-patterns.md](claude/common-patterns.md) |
+| How to run, test, lint, commit | [claude/development-guide.md](claude/development-guide.md) |
 
 ---
 
@@ -14,6 +27,13 @@ This documentation is the **single source of truth** for understanding the syste
 | System overview + architecture diagrams | [knowledge-graphs/system-overview.md](knowledge-graphs/system-overview.md) |
 | **Balance formula (critical)** | [business-rules/balance-calculations.md](business-rules/balance-calculations.md) |
 | Planning / allotment rules | [business-rules/planning-rules.md](business-rules/planning-rules.md) |
+| **All business rules indexed** | [business-rules/business-rule-index.md](business-rules/business-rule-index.md) |
+| **All calculations with formulas** | [business-rules/calculation-engine.md](business-rules/calculation-engine.md) |
+| Business decisions & rationale | [business-decisions.md](business-decisions.md) |
+| Change impact maps | [knowledge-graphs/dependency-maps.md](knowledge-graphs/dependency-maps.md) |
+| Test coverage gaps | [test-coverage-map.md](test-coverage-map.md) |
+| Rule → Code traceability | [traceability.md](traceability.md) |
+| Known issues & improvements | [improvements/improvement-register.md](improvements/improvement-register.md) |
 | License module details | [modules/license.md](modules/license.md) |
 | Allotment module | [modules/allotment.md](modules/allotment.md) |
 | Bill of Entry module | [modules/bill-of-entry.md](modules/bill-of-entry.md) |
@@ -118,3 +138,79 @@ This documentation is the **single source of truth** for understanding the syste
 | Trade PDFs use window.open (fixed) | DONE | frontend | Fixed: now use apiClient with responseType: 'blob' |
 | BOE balance recompute was broken | DONE | balance | Fixed: signals now dispatch correct license_id (not item_id) |
 | _dispatch passed wrong IDs | DONE | allotment | Fixed: now resolves license_id from import item ID |
+
+---
+
+## End-to-End Workflows
+
+| Workflow | Document |
+|---|---|
+| License creation → allotment → BOE → closure | [workflows/license-lifecycle.md](workflows/license-lifecycle.md) |
+
+## State Machines
+
+| Document | Entities covered |
+|---|---|
+| [state-machines/entities.md](state-machines/entities.md) | License, Allotment, BOE RowDetails, Task, CeleryTask, IncentiveLicense |
+
+## Data Flows (Sequence Diagrams)
+
+| Document | Flows covered |
+|---|---|
+| [data-flows/balance-recompute-flow.md](data-flows/balance-recompute-flow.md) | After allotment, after BOE row, full recompute detail, report generation |
+
+## Change Playbooks
+
+| Module | Playbook |
+|---|---|
+| Balance & Planning | [playbooks/balance-module-playbook.md](playbooks/balance-module-playbook.md) |
+
+---
+
+## 📋 Living Documentation Maintenance Protocol
+
+**Every time code changes, update the relevant documentation:**
+
+### If you change business logic:
+1. Update `docs/business-rules/business-rule-index.md` (add/modify rule)
+2. Update `docs/business-rules/calculation-engine.md` (if formula changes)
+3. Update `docs/traceability.md` (trace from UI to DB)
+4. Update the affected module doc (`docs/modules/{module}.md`)
+5. Update `docs/test-coverage-map.md` if tests added/removed
+
+### If you change architecture:
+1. Write or update an ADR in `docs/adr/`
+2. Update `docs/knowledge-graphs/system-overview.md`
+3. Update `docs/knowledge-graphs/dependency-maps.md`
+4. Update `docs/infrastructure.md` if infra changes
+
+### If you fix a bug:
+1. Add to `docs/business-decisions.md` if it reveals a hidden assumption
+2. Update `docs/claude/{relevant-context}.md` "Known Pitfalls" section
+3. Remove from `docs/improvements/improvement-register.md` if it was listed
+
+### If you add a feature:
+1. Create/update the module doc
+2. Add business rules to the index
+3. Add to test coverage map
+4. Update workflows if user flow changes
+
+---
+
+## Document Count
+
+| Category | Count | Lines |
+|---|---|---|
+| Claude context files | 6 | ~1,050 |
+| Business rules | 4 | ~1,160 |
+| Module docs | 8 | ~4,000 |
+| Knowledge graphs | 3 | ~480 |
+| Workflows | 1 | ~340 |
+| State machines | 1 | ~180 |
+| Data flows | 1 | ~190 |
+| Playbooks | 1 | ~180 |
+| Improvements | 1 | ~130 |
+| Infrastructure | 1 | ~260 |
+| ADRs | 10 | ~860 |
+| Other | 5 | ~2,200 |
+| **Total** | **~47** | **~11,000+** |

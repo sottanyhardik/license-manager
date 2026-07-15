@@ -107,12 +107,39 @@ WSGI_APPLICATION = "config.wsgi.application"
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
-_db_url = os.environ.get("DATABASE_URL", "sqlite:///db.sqlite3")
+# Resolution order (first match wins):
+#   1. DATABASE_URL env var (full DSN, e.g. from Docker / Heroku / Railway)
+#   2. Individual DB_NAME / DB_USER / DB_PASS / DB_HOST / DB_PORT env vars
+#      (same naming convention as the legacy backend's lmanagement/settings.py)
+#   3. SQLite fallback for local development without any env vars set
+#
+# Production ALWAYS sets DATABASE_URL or DB_* vars — the SQLite fallback is
+# intentionally kept so `manage.py check` works in CI without a live database.
+_db_url = os.environ.get("DATABASE_URL")
+
+if not _db_url:
+    # Build a PostgreSQL DSN from the legacy env var naming convention
+    _db_name = os.environ.get("DB_NAME")
+    _db_user = os.environ.get("DB_USER")
+    _db_pass = os.environ.get("DB_PASS", "")
+    _db_host = os.environ.get("DB_HOST", "localhost")
+    _db_port = os.environ.get("DB_PORT", "5432")
+
+    if _db_name and _db_user:
+        # All required fields present — construct a PostgreSQL DSN
+        _db_url = f"postgresql://{_db_user}:{_db_pass}@{_db_host}:{_db_port}/{_db_name}"
+    else:
+        # No database config at all — use SQLite for local dev / CI
+        _db_url = "sqlite:///db.sqlite3"
+
 _conn_max_age = 0 if _db_url.startswith("sqlite") else 60
+
 DATABASES = {
     "default": dj_database_url.config(
         default=_db_url,
         conn_max_age=_conn_max_age,
+        # Use psycopg3 driver when connecting to PostgreSQL
+        engine="django.db.backends.postgresql",
     )
 }
 

@@ -10,7 +10,10 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('license', '__first__'),
+        # ('license', '__first__') removed — license models are managed=False
+        # (tables owned by legacy DB, no migrations directory). The FK to
+        # license.licensedetailsmodel is still valid at the DB level; Django
+        # does not need to sequence this migration against an unmanaged app.
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

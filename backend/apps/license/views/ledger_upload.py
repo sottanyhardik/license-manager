@@ -55,6 +55,10 @@ class LedgerUploadView(APIView):
     def _is_htm(filename):
         return filename.lower().endswith(('.htm', '.html'))
 
+    @staticmethod
+    def _is_csv(filename):
+        return filename.lower().endswith('.csv')
+
     def _read_raw(self, uploaded_file):
         """Read uploaded file bytes."""
         content = b''
@@ -116,7 +120,7 @@ class LedgerUploadView(APIView):
         errors = []
 
         for uploaded_file in files:
-            if not (uploaded_file.name.endswith('.csv') or self._is_htm(uploaded_file.name)):
+            if not (self._is_csv(uploaded_file.name) or self._is_htm(uploaded_file.name)):
                 errors.append({'file': uploaded_file.name, 'error': 'Only CSV and HTM/HTML files are supported'})
                 continue
 
@@ -146,7 +150,7 @@ class LedgerUploadView(APIView):
 
             except Exception as e:
                 logger.exception("Failed to process %s", uploaded_file.name)
-                errors.append({'file': uploaded_file.name, 'error': 'Processing failed; check server logs'})
+                errors.append({'file': uploaded_file.name, 'error': str(e)})
 
         total_tasks = sum(f['total'] for f in file_tasks)
         return Response({
@@ -164,7 +168,7 @@ class LedgerUploadView(APIView):
             try:
                 logger.info(f"Processing file {file_sequence_number}/{len(files)}: {uploaded_file.name}")
 
-                if not (uploaded_file.name.endswith('.csv') or self._is_htm(uploaded_file.name)):
+                if not (self._is_csv(uploaded_file.name) or self._is_htm(uploaded_file.name)):
                     all_results.append({
                         'file': uploaded_file.name,
                         'success': False,

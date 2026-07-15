@@ -16,7 +16,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // New backend (feature/V1) — routes /api/v1/ to port 8001 FIRST
+      // New backend (feature/V1) — routes /api/v1/ to port 8001 (must be BEFORE /api/)
       '/api/v1': {
         target: 'http://localhost:8001',
         changeOrigin: true,

@@ -76,12 +76,14 @@ class Task(AuditModel):
     def __str__(self):
         return f"Task({self.pk}): {self.title}"
 
-    def mark_completed(self):
+    def mark_completed(self) -> None:
+        """Transition task to COMPLETED state and record completion timestamp."""
         self.status = self.STATUS_COMPLETED
         self.completed_on = timezone.now()
         self.save(update_fields=["status", "completed_on", "modified_on"])
 
-    def mark_rejected(self, by_user=None, reason=""):
+    def mark_rejected(self, by_user=None, reason: str = "") -> None:
+        """Transition task to REJECTED state, recording the rejecting user and reason."""
         self.status = self.STATUS_REJECTED
         if by_user is not None:
             self.rejected_by = by_user

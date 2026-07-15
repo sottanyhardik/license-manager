@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import BaseRolePermission
+from apps.core.models import CeleryTaskTracker
 
 logger = logging.getLogger(__name__)
 
@@ -167,19 +168,17 @@ class LedgerReportRequestSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 _STATUS_MAP = {
-    "PENDING": "pending",
-    "STARTED": "running",
-    "RETRY": "running",
-    "SUCCESS": "done",
-    "FAILURE": "error",
-    "REVOKED": "error",
+    CeleryTaskTracker.STATUS_PENDING: "pending",
+    CeleryTaskTracker.STATUS_STARTED: "running",
+    CeleryTaskTracker.STATUS_RETRY:   "running",
+    CeleryTaskTracker.STATUS_SUCCESS: "done",
+    CeleryTaskTracker.STATUS_FAILURE: "error",
+    CeleryTaskTracker.STATUS_REVOKED: "error",
 }
 
 
 def _make_tracker(task_name: str, task_id: str, args_payload: dict):
     """Create a CeleryTaskTracker in PENDING state before dispatching."""
-    from apps.core.models import CeleryTaskTracker
-
     CeleryTaskTracker.objects.create(
         task_id=task_id,
         task_name=task_name,
@@ -348,8 +347,6 @@ class ReportTaskStatusView(APIView):
                 {"detail": "Invalid task ID format."}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        from apps.core.models import CeleryTaskTracker
-
         try:
             tracker = CeleryTaskTracker.objects.get(task_id=task_id)
         except CeleryTaskTracker.DoesNotExist:
@@ -358,7 +355,9 @@ class ReportTaskStatusView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        mapped_status = _STATUS_MAP.get(tracker.status, "pending")
+        mapped_status = _STATUS_MAP.get(
+            tracker.status, _STATUS_MAP[CeleryTaskTracker.STATUS_PENDING]
+        )
 
         file_url = None
         if tracker.status == CeleryTaskTracker.STATUS_SUCCESS and tracker.result:

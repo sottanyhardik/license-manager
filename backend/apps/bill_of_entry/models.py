@@ -143,10 +143,12 @@ class BillOfEntryModel(AuditModel):
     # --- Computed properties ---
     @cached_property
     def item_details_cached(self):
+        """All RowDetails for this BOE, cached on first access."""
         return self.item_details.all()
 
     @cached_property
     def get_total_inr(self) -> Decimal:
+        """Sum of all RowDetails.cif_inr for this BOE."""
         total = self.item_details_cached.aggregate(
             total=Coalesce(Sum("cif_inr"), Value(DEC_0), output_field=DecimalField())
         )["total"]
@@ -154,6 +156,7 @@ class BillOfEntryModel(AuditModel):
 
     @cached_property
     def get_total_fc(self) -> Decimal:
+        """Sum of all RowDetails.cif_fc for this BOE."""
         total = self.item_details_cached.aggregate(
             total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
         )["total"]
@@ -161,6 +164,7 @@ class BillOfEntryModel(AuditModel):
 
     @cached_property
     def get_total_quantity(self) -> Decimal:
+        """Sum of all RowDetails.qty for this BOE."""
         total = self.item_details_cached.aggregate(
             total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField())
         )["total"]
@@ -168,6 +172,7 @@ class BillOfEntryModel(AuditModel):
 
     @cached_property
     def get_licenses(self) -> str:
+        """Comma-joined license numbers linked via RowDetails.sr_number."""
         return ", ".join(
             item.sr_number.license.license_number
             for item in self.item_details_cached
@@ -176,6 +181,7 @@ class BillOfEntryModel(AuditModel):
 
     @cached_property
     def get_unit_price(self) -> Decimal:
+        """Average unit price: total_fc / total_qty (0 when no quantity)."""
         total_qty = self.get_total_quantity
         if total_qty > DEC_000:
             try:
@@ -187,6 +193,7 @@ class BillOfEntryModel(AuditModel):
 
     @cached_property
     def get_exchange_rate(self) -> Decimal:
+        """Average exchange rate: total_inr / total_fc (0 when no FC)."""
         total_fc = self.get_total_fc
         if total_fc > DEC_0:
             try:

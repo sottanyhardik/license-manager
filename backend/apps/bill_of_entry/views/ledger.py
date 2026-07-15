@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import LedgerUploadPermission
+from apps.core.models import CeleryTaskTracker
 
 ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -44,7 +45,8 @@ class LedgerUploadView(APIView):
 
         # Do NOT echo client filename in task_id
         task_id = f"ledger-upload-stub-{uuid.uuid4().hex}"
+        # CeleryTaskTracker.STATUS_PENDING == "PENDING"; .lower() yields the UI display value.
         return Response(
-            {"task_id": task_id, "status": "pending"},
+            {"task_id": task_id, "status": CeleryTaskTracker.STATUS_PENDING.lower()},
             status=status.HTTP_202_ACCEPTED,
         )

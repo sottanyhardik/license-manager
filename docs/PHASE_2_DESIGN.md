@@ -779,7 +779,7 @@ Out of scope for Phase 2 design but committed-to in Phase 5:
   - Backend: `pytest`, `python manage.py makemigrations --check --dry-run`, `ruff check`.
   - Frontend: `npm run build`, `npm run lint`, `vitest run` (once tests exist).
   - Block merge on failure.
-- **Deploy:** `auto-deploy.sh` adds a `/api/health/` check after restart on each server before continuing to next.
+- **Deploy:** `scripts/deployment/auto-deploy.sh` adds a `/api/health/` check after restart on each server before continuing to next.
 
 ---
 

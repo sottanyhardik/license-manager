@@ -283,7 +283,7 @@ All frontend pages and components are TypeScript (`.tsx`). The UI uses **shadcn/
 | Notification Number | `/api/masters/notification-numbers/` | number, description |
 
 **Business Rules**:
-- Master data is managed on the canonical `license-manager` server and synced to followers via `sync-masters.sh`
+- Master data is managed on the canonical `license-manager` server and synced to followers via `scripts/maintenance/sync-masters.sh`
 - Companies have full KYC fields (IEC, PAN, GST) required for transfer letter generation
 - Exchange rates are historical — one record per currency per date
 - `ItemNameModel` is referenced from `AllotmentModel.item_name_fk` — item names in use on allotments should not be deleted; `SET_NULL` on delete protects the allotment record

@@ -9,7 +9,7 @@
 #    6. Prompt to apply
 #
 #  Usage:
-#    bash audit-and-merge-masters.sh
+#    bash scripts/maintenance/audit-and-merge-masters.sh
 # ============================================================
 
 set -e

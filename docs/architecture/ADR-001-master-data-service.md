@@ -3,7 +3,7 @@
 **Status:** Proposed
 **Date:** 2026-07-03
 **Deciders:** (human owner) + solutions-architect
-**Supersedes:** the one-way additive `sync-masters.sh` script (license-manager -> labdhi + tractor)
+**Supersedes:** the one-way additive `scripts/maintenance/sync-masters.sh` script (license-manager -> labdhi + tractor)
 **Owner-agents referenced:** `data-engineer`, `backend-engineer`, `devops-sre`, `frontend-engineer`, `qa-test-engineer`, `code-reviewer`, `security-auditor`
 
 > Direction is already decided: **central service**, not multi-master. This ADR designs the central-service option well; it does not re-litigate the choice.
@@ -40,7 +40,7 @@ Key facts established from the code index and source (not assumed):
 - **`select_related`/`prefetch_related` on masters is pervasive and hot** — `views/item_pivot_report.py`, `views/active_licenses_report.py:84` (`'exporter','port'`), `views/expiring_licenses_report.py:75`, `views_incentive.py:39` (`'exporter','port_code'`), `views/license_items.py:29` (`'license','hs_code'`), `views/item_report.py`, `ledger_pdf.py`, `views_actions.py:471/503`. **Any design that turns these joins into per-row REST calls will regress the heaviest reports into N+1 network calls.** This alone dictates the FK strategy.
 - **Media fields** (local filesystem today — `lmanagement/settings.py:168-169` `MEDIA_URL=/media/`, `MEDIA_ROOT=BASE_DIR/media`, no `django-storages`): `CompanyModel.logo/signature/stamp` (111-113), `UnitPriceModel.logo/signature/stamp` (403/413/414), `TransferLetterModel.tl` FileField (361). Media is greenfield for object storage — no existing storages config to unwind.
 - Stack: Django 6.0.4, DRF 3.17, Python 3.14, Postgres 16, django-redis, Celery. CI at `.github/workflows/ci.yml`.
-- Existing sync: `sync-masters.sh` runs `audit_masters` on the source (`143.110.252.201`) and additively imports new rows into followers labdhi (`139.59.92.226`) and tractor (`165.232.185.220`). Additive-only, so followers have diverged and drift is one-way.
+- Existing sync: `scripts/maintenance/sync-masters.sh` runs `audit_masters` on the source (`143.110.252.201`) and additively imports new rows into followers labdhi (`139.59.92.226`) and tractor (`165.232.185.220`). Additive-only, so followers have diverged and drift is one-way.
 
 ---
 
@@ -66,7 +66,7 @@ This is the lowest-blast-radius design: the license app's models and queries do 
 **Trade-off:** a new deployable to run, monitor, back up, and secure (owned by `devops-sre`). Accepted — it's the cost of a real service boundary. The mitigation is that the *consuming* side barely changes (mirror keeps FKs local), so the risk concentrates in one new, well-scoped component.
 
 **Topology:**
-- MDS runs on the current canonical source host `143.110.252.201` (already the source of truth for `sync-masters.sh`), behind nginx + TLS, reachable at `https://masters.<internal-domain>`.
+- MDS runs on the current canonical source host `143.110.252.201` (already the source of truth for `scripts/maintenance/sync-masters.sh`), behind nginx + TLS, reachable at `https://masters.<internal-domain>`.
 - The 3 existing servers (license-manager @ .201, labdhi @ 139.59.92.226, tractor @ 165.232.185.220) and future projects reach MDS over HTTPS with **service-to-service tokens**.
 - Each consuming project keeps its **local mirror** in its own DB; MDS is reached only for **writes** and **delta pulls**, never on the hot read path.
 
@@ -196,10 +196,10 @@ Each phase is independently shippable and CI-gated (`.github/workflows/ci.yml`).
 | **3. Media to object storage** | Stand up MinIO/S3; migrate + dedup media; MDS serves keys/presigned URLs. | `django-storages` config in MDS; media migration scripts | **devops-sre** + **data-engineer** | New infra; consumers still use local media | Private-bucket verified (**security-auditor**); every existing file resolves; checksum match | Med (data movement) — old files kept read-only as fallback |
 | **4. `mds-client` package + shadow sync** | Publish client; run **read-only mirror sync in shadow mode** on all consumers — populate a *parallel* mirror, diff against live `core` tables. No writes redirected yet. | new `mds-client` pkg; Celery beat task in consumers | **backend-engineer** | Additive; live `core` still authoritative | Shadow mirror matches live `core` (zero diff) for N days; hot reports (`item_pivot_report`, `active_licenses_report`, `ledger_pdf`) byte-identical against mirror vs live | Med — this is where drift/sync bugs surface *before* they matter |
 | **5. FK remap + mirror becomes read source** | Apply canonical-id remap (Phase 0 map) in one transaction per consumer; point `core` tables at the mirror; reads served from mirror. | consumer migration rewriting 11 FKs + `license_import_item` M2M | **data-engineer** (remap) + **backend-engineer** | **High** — rewrites FK ids across license tables; the crux migration | Dry-run on staging clone; per-table row + FK-integrity reconciliation; instant rollback = restore backup | **Highest** — full backup, maintenance window, staged one server at a time (labdhi first, .201 last) |
-| **6. Cutover writes to MDS** | Flip a feature flag: master writes go through `mds-client` -> MDS; local mirror read-only. Retire `sync-masters.sh`. | consumer admin/API save hooks; flag; cron removal | **backend-engineer** + **devops-sre** | Med — changes *where* masters are written | Write flows E2E; degradation test (MDS down -> clear error, reads still work); **reverse = flip flag back** | Med — reversible by flag; do labdhi -> tractor -> .201 |
+| **6. Cutover writes to MDS** | Flip a feature flag: master writes go through `mds-client` -> MDS; local mirror read-only. Retire `scripts/maintenance/sync-masters.sh`. | consumer admin/API save hooks; flag; cron removal | **backend-engineer** + **devops-sre** | Med — changes *where* masters are written | Write flows E2E; degradation test (MDS down -> clear error, reads still work); **reverse = flip flag back** | Med — reversible by flag; do labdhi -> tractor -> .201 |
 | **7. Decommission & harden** | Remove dual-write scaffolding, finalize monitoring/alerts on sync lag + MDS health, docs. | ops dashboards, `docs/` | **devops-sre** + **technical-writer** | Low | Sync-lag alerting live; runbook exists | Low |
 
-**Reversible cutover / fallback:** Phase 5 is protected by full backups and staged rollout (one server at a time). Phase 6 is a **feature flag** — writes revert to local + `sync-masters.sh` can be re-enabled if MDS misbehaves. The mirror serving reads is safe to keep even if writes roll back (it's just a fresher copy of what sync produced).
+**Reversible cutover / fallback:** Phase 5 is protected by full backups and staged rollout (one server at a time). Phase 6 is a **feature flag** — writes revert to local + `scripts/maintenance/sync-masters.sh` can be re-enabled if MDS misbehaves. The mirror serving reads is safe to keep even if writes roll back (it's just a fresher copy of what sync produced).
 
 ---
 

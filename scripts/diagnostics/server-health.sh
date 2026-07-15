@@ -2,7 +2,7 @@
 
 # Server Health & Verification Script
 # Checks all 3 production servers for full functionality
-# Usage: ./server-health.sh [--fix]
+# Usage: ./scripts/diagnostics/server-health.sh [--fix]
 
 # Colors
 RED='\033[0;31m'

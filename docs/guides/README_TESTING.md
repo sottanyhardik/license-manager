@@ -4,16 +4,16 @@
 
 ```bash
 # Make script executable (first time only)
-chmod +x run-tests.sh
+chmod +x scripts/testing/run-tests.sh
 
 # Run all tests
-./run-tests.sh
+./scripts/testing/run-tests.sh
 
 # Run specific test types
-./run-tests.sh --api        # API tests only
-./run-tests.sh --fast       # Skip slow tests
-./run-tests.sh --coverage   # Detailed coverage report
-./run-tests.sh --clean      # Clean artifacts first
+./scripts/testing/run-tests.sh --api        # API tests only
+./scripts/testing/run-tests.sh --fast       # Skip slow tests
+./scripts/testing/run-tests.sh --coverage   # Detailed coverage report
+./scripts/testing/run-tests.sh --clean      # Clean artifacts first
 ```
 
 ## What's Included
@@ -22,7 +22,7 @@ chmod +x run-tests.sh
 - **Pytest Configuration** (`backend/pytest.ini`)
 - **Test Fixtures** (`backend/tests/conftest.py`) - Fake data generators
 - **Test Requirements** (`backend/requirements-test.txt`)
-- **Test Runner** (`run-tests.sh`) - Automated test execution
+- **Test Runner** (`scripts/testing/run-tests.sh`) - Automated test execution
 
 ### ✅ Test Suites Created
 1. **Core API Tests** (`test_api_core.py`)
@@ -85,7 +85,7 @@ pytest --version
 
 ### Run All Tests
 ```bash
-./run-tests.sh
+./scripts/testing/run-tests.sh
 ```
 
 **Output:**
@@ -123,13 +123,13 @@ Backend Tests:  ✓ PASSED
 
 ```bash
 # API tests only
-./run-tests.sh --api
+./scripts/testing/run-tests.sh --api
 
 # Fast tests (skip slow ones)
-./run-tests.sh --fast
+./scripts/testing/run-tests.sh --fast
 
 # With detailed coverage
-./run-tests.sh --coverage
+./scripts/testing/run-tests.sh --coverage
 # Opens: backend/htmlcov/index.html
 ```
 
@@ -199,7 +199,7 @@ def test_with_fixtures(authenticated_client, test_license, test_trade):
 
 ```
 .
-├── run-tests.sh                    # Master test runner
+├── scripts/testing/run-tests.sh                    # Master test runner
 ├── README_TESTING.md              # This file
 ├── TESTING_GUIDE.md               # Detailed guide
 └── backend/
@@ -248,7 +248,7 @@ pip install -r requirements-test.txt
 1. ✅ Tests created and verified
 2. ✅ Fake data fixtures ready
 3. ✅ Automated test runner ready
-4. ⏳ Run your first test: `./run-tests.sh`
+4. ⏳ Run your first test: `./scripts/testing/run-tests.sh`
 5. ⏳ Review coverage report
 6. ⏳ Add more tests as needed
 

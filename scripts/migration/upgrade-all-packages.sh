@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="${PWD}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$PROJECT_DIR"
 BACKUP_DIR="${HOME}/pip-backups"
 TIMESTAMP="$(date +%F_%H%M%S)"
 BACKUP_FILE="${BACKUP_DIR}/requirements-${TIMESTAMP}.txt"

@@ -14,13 +14,15 @@ echo ""
 echo "Processing 2075 licenses..."
 echo ""
 
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$PROJECT_ROOT/backend"
 
 # Activate virtual environment if it exists
-if [ -d "venv" ]; then
-    source venv/bin/activate
-elif [ -d "../venv" ]; then
-    source ../venv/bin/activate
+if [ -d "$PROJECT_ROOT/venv" ]; then
+    source "$PROJECT_ROOT/venv/bin/activate"
+elif [ -d "$PROJECT_ROOT/.venv" ]; then
+    source "$PROJECT_ROOT/.venv/bin/activate"
 fi
 
 # Run the sync command

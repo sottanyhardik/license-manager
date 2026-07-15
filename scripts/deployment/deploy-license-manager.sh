@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy script for license-manager.duckdns.org (143.110.252.201)
-# Run from your LOCAL machine: bash deploy-license-manager.sh
+# Run from your LOCAL machine: bash scripts/deployment/deploy-license-manager.sh
 # Prerequisites: SSH key auth set up for django@143.110.252.201
 
 set -e

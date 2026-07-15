@@ -4,12 +4,12 @@
 # Run all tests with fake database
 #
 # Usage:
-#   ./run-tests.sh              # Run all tests
-#   ./run-tests.sh --fast       # Run fast tests only (skip slow)
-#   ./run-tests.sh --coverage   # Run with detailed coverage report
-#   ./run-tests.sh --api        # Run API tests only
-#   ./run-tests.sh --unit       # Run unit tests only
-#   ./run-tests.sh --clean      # Clean test artifacts first
+#   ./scripts/testing/run-tests.sh              # Run all tests
+#   ./scripts/testing/run-tests.sh --fast       # Run fast tests only (skip slow)
+#   ./scripts/testing/run-tests.sh --coverage   # Run with detailed coverage report
+#   ./scripts/testing/run-tests.sh --api        # Run API tests only
+#   ./scripts/testing/run-tests.sh --unit       # Run unit tests only
+#   ./scripts/testing/run-tests.sh --clean      # Clean test artifacts first
 #
 
 set -e  # Exit on error
@@ -22,7 +22,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Project paths
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BACKEND_DIR="$PROJECT_ROOT/backend"
 FRONTEND_DIR="$PROJECT_ROOT/frontend"
 
@@ -57,7 +58,7 @@ for arg in "$@"; do
             COVERAGE_DETAIL=true
             ;;
         --help)
-            echo "Usage: ./run-tests.sh [OPTIONS]"
+            echo "Usage: ./scripts/testing/run-tests.sh [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --fast          Run fast tests only (skip slow tests)"

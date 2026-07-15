@@ -6,7 +6,7 @@ This directory contains all the deployment and management scripts for the Licens
 
 ## 📋 Available Scripts
 
-### 1. **auto-deploy.sh** - Primary Deployment Tool
+### 1. **scripts/deployment/auto-deploy.sh** - Primary Deployment Tool
 **Purpose**: Deploy latest code to production servers (automated deployment)
 
 **What it does**:
@@ -20,7 +20,7 @@ This directory contains all the deployment and management scripts for the Licens
 
 **Usage**:
 ```bash
-./auto-deploy.sh
+./scripts/deployment/auto-deploy.sh
 ```
 
 **Servers**: 143.110.252.201, 139.59.92.226
@@ -29,7 +29,7 @@ This directory contains all the deployment and management scripts for the Licens
 
 ---
 
-### 2. **verify-deployment.sh** - Pre-Deployment Checker
+### 2. **scripts/deployment/verify-deployment.sh** - Pre-Deployment Checker
 **Purpose**: Validate all prerequisites before deployment
 
 **What it checks**:
@@ -42,29 +42,29 @@ This directory contains all the deployment and management scripts for the Licens
 
 **Usage**:
 ```bash
-./verify-deployment.sh
+./scripts/deployment/verify-deployment.sh
 ```
 
-**When to use**: Run BEFORE `auto-deploy.sh` to ensure everything is ready
+**When to use**: Run BEFORE `scripts/deployment/auto-deploy.sh` to ensure everything is ready
 
 ---
 
-### 3. **db-tools.sh** - Database Management Utility
+### 3. **scripts/database/db-tools.sh** - Database Management Utility
 **Purpose**: Unified tool for all database operations
 
 **Commands**:
 ```bash
 # Create backup of remote database
-./db-tools.sh backup
+./scripts/database/db-tools.sh backup
 
 # Download database from server to local
-./db-tools.sh download
+./scripts/database/db-tools.sh download
 
 # Restore database from backup file
-./db-tools.sh restore backups/backup_20241225.sql
+./scripts/database/db-tools.sh restore backups/backup_20241225.sql
 
 # Download and restore in one command
-./db-tools.sh sync
+./scripts/database/db-tools.sh sync
 ```
 
 **Features**:
@@ -75,7 +75,7 @@ This directory contains all the deployment and management scripts for the Licens
 
 ---
 
-### 4. **sync-media.sh** - Media Files Sync
+### 4. **scripts/diagnostics/sync-media.sh** - Media Files Sync
 **Purpose**: Sync media files from production to local development
 
 **What it does**:
@@ -86,7 +86,7 @@ This directory contains all the deployment and management scripts for the Licens
 
 **Usage**:
 ```bash
-./sync-media.sh
+./scripts/diagnostics/sync-media.sh
 ```
 
 **Server**: 143.110.252.201
@@ -94,7 +94,7 @@ This directory contains all the deployment and management scripts for the Licens
 
 ---
 
-### 5. **start-server.sh** - Manual Server Startup
+### 5. **scripts/development/start-server.sh** - Manual Server Startup
 **Purpose**: Start server manually (for 64.227.129.26)
 
 **What it does**:
@@ -107,14 +107,14 @@ This directory contains all the deployment and management scripts for the Licens
 ```bash
 ssh django@64.227.129.26
 cd /home/django/license-manager
-./start-server.sh
+./scripts/development/start-server.sh
 ```
 
-**Note**: This is for a different server than auto-deploy.sh
+**Note**: This is for a different server than scripts/deployment/auto-deploy.sh
 
 ---
 
-### 6. **setup-labdhi-server.sh** - Initial Server Setup
+### 6. **scripts/deployment/setup-labdhi-server.sh** - Initial Server Setup
 **Purpose**: One-time server setup for new servers
 
 **What it installs**:
@@ -127,14 +127,14 @@ cd /home/django/license-manager
 
 **Usage** (on new server):
 ```bash
-./setup-labdhi-server.sh
+./scripts/deployment/setup-labdhi-server.sh
 ```
 
 **When to use**: Only when setting up a brand new server
 
 ---
 
-### 7. **setup-ssl-labdhi.sh** - SSL Certificate Setup
+### 7. **scripts/deployment/setup-ssl-labdhi.sh** - SSL Certificate Setup
 **Purpose**: Configure HTTPS with Let's Encrypt certificates
 
 **What it does**:
@@ -145,7 +145,7 @@ cd /home/django/license-manager
 
 **Usage** (on server):
 ```bash
-./setup-ssl-labdhi.sh
+./scripts/deployment/setup-ssl-labdhi.sh
 ```
 
 **Domain**: labdhi.duckdns.org
@@ -158,10 +158,10 @@ cd /home/django/license-manager
 ### Daily Development Workflow
 ```bash
 # 1. Sync database from production
-./db-tools.sh sync
+./scripts/database/db-tools.sh sync
 
 # 2. Sync media files
-./sync-media.sh
+./scripts/diagnostics/sync-media.sh
 
 # 3. Start local development
 cd backend
@@ -176,35 +176,35 @@ git commit -m "Your changes"
 git push origin version-4.1
 
 # 2. Verify deployment readiness
-./verify-deployment.sh
+./scripts/deployment/verify-deployment.sh
 
 # 3. Deploy to production
-./auto-deploy.sh
+./scripts/deployment/auto-deploy.sh
 ```
 
 ### New Server Setup Workflow
 ```bash
 # On new server:
 # 1. Initial setup
-./setup-labdhi-server.sh
+./scripts/deployment/setup-labdhi-server.sh
 
 # 2. Configure SSL
-./setup-ssl-labdhi.sh
+./scripts/deployment/setup-ssl-labdhi.sh
 
 # 3. Deploy code
-./auto-deploy.sh
+./scripts/deployment/auto-deploy.sh
 ```
 
 ### Database Backup Workflow
 ```bash
 # Regular backup
-./db-tools.sh backup
+./scripts/database/db-tools.sh backup
 
 # Download for local testing
-./db-tools.sh download
+./scripts/database/db-tools.sh download
 
 # Restore from specific backup
-./db-tools.sh restore backups/backup_20241225.sql
+./scripts/database/db-tools.sh restore backups/backup_20241225.sql
 ```
 
 ---
@@ -213,14 +213,14 @@ git push origin version-4.1
 
 ```
 license-manager/
-├── auto-deploy.sh          # Main deployment script
-├── verify-deployment.sh    # Pre-deployment checks
-├── db-tools.sh            # Database management
-├── sync-media.sh          # Media sync utility
-├── start-server.sh        # Manual server start
-├── setup-labdhi-server.sh # Initial server setup
-├── setup-ssl-labdhi.sh    # SSL configuration
-└── backups/               # Database backups (created by db-tools.sh)
+├── scripts/deployment/auto-deploy.sh          # Main deployment script
+├── scripts/deployment/verify-deployment.sh    # Pre-deployment checks
+├── scripts/database/db-tools.sh            # Database management
+├── scripts/diagnostics/sync-media.sh          # Media sync utility
+├── scripts/development/start-server.sh        # Manual server start
+├── scripts/deployment/setup-labdhi-server.sh # Initial server setup
+├── scripts/deployment/setup-ssl-labdhi.sh    # SSL configuration
+└── backups/               # Database backups (created by scripts/database/db-tools.sh)
 ```
 
 ---
@@ -256,7 +256,7 @@ ssh django@143.110.252.201
 # Check PostgreSQL is running locally
 brew services list | grep postgresql
 
-# Verify database credentials in db-tools.sh
+# Verify database credentials in scripts/database/db-tools.sh
 ```
 
 ### Frontend build fails
@@ -283,7 +283,7 @@ sudo systemctl status nginx
 ## 🔒 Security Notes
 
 ⚠️  **Password**: Currently hardcoded as `admin` in scripts
-⚠️  **Database credentials**: Exposed in db-tools.sh
+⚠️  **Database credentials**: Exposed in scripts/database/db-tools.sh
 ⚠️  **Backup files**: Contains production data, handle securely
 
 **Recommendations**:
@@ -297,7 +297,7 @@ sudo systemctl status nginx
 ## 📝 Maintenance
 
 ### Regular Tasks
-- **Daily**: Database backups via `db-tools.sh backup`
+- **Daily**: Database backups via `scripts/database/db-tools.sh backup`
 - **Weekly**: Check disk space on servers
 - **Monthly**: Review and clean old backup files
 - **Quarterly**: Update SSL certificates (auto-renewed)
@@ -333,7 +333,7 @@ sudo systemctl reload nginx
 ls -lht backups/ | head -5
 
 # Restore
-./db-tools.sh restore backups/backup_YYYYMMDD_HHMMSS.sql
+./scripts/database/db-tools.sh restore backups/backup_YYYYMMDD_HHMMSS.sql
 ```
 
 ---

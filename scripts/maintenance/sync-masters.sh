@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  sync-masters.sh — One-way master sync from license-manager → labdhi + tractor
+#  scripts/maintenance/sync-masters.sh — One-way master sync from license-manager → labdhi + tractor
 #
 #  Runs the canonical audit on license-manager, then imports any new
 #  master records into the follower servers.  Uses unique-key matching
@@ -9,11 +9,11 @@
 #  Designed to be safe to run repeatedly (idempotent) — perfect for cron.
 #
 #  Usage:
-#    bash sync-masters.sh           # full run, prints summary
-#    bash sync-masters.sh --quiet   # silent except errors (for cron)
+#    bash scripts/maintenance/sync-masters.sh           # full run, prints summary
+#    bash scripts/maintenance/sync-masters.sh --quiet   # silent except errors (for cron)
 #
 #  Cron example (run every 15 min from your local mac):
-#    */15 * * * * cd /Users/drushahardiksottany/PycharmProjects/license-manager && bash sync-masters.sh --quiet >> /tmp/master-sync.log 2>&1
+#    */15 * * * * cd /Users/drushahardiksottany/PycharmProjects/license-manager && bash scripts/maintenance/sync-masters.sh --quiet >> /tmp/master-sync.log 2>&1
 # ============================================================
 
 set -e

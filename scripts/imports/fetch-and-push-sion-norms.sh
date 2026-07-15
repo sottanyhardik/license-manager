@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  fetch-and-push-sion-norms.sh
+#  scripts/imports/fetch-and-push-sion-norms.sh
 #
 #  For every SION norm code currently in SionNormClassModel on
 #  license-manager, fetch the full export+import detail from DGFT
@@ -13,9 +13,9 @@
 #  The existing master-sync cron then propagates to labdhi + tractor.
 #
 #  Usage:
-#    bash fetch-and-push-sion-norms.sh           # full run
-#    bash fetch-and-push-sion-norms.sh --quiet   # silent (cron mode)
-#    bash fetch-and-push-sion-norms.sh --codes E126,A1234   # only these
+#    bash scripts/imports/fetch-and-push-sion-norms.sh           # full run
+#    bash scripts/imports/fetch-and-push-sion-norms.sh --quiet   # silent (cron mode)
+#    bash scripts/imports/fetch-and-push-sion-norms.sh --codes E126,A1234   # only these
 # ============================================================
 
 set -e

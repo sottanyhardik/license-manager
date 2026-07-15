@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  run-deploy.sh — convenience wrapper around auto-deploy.sh
+#  scripts/deployment/run-deploy.sh — convenience wrapper around scripts/deployment/auto-deploy.sh
 #
 #  Sources local secrets from `deploy-secrets.env` (git-ignored) so you don't
 #  have to export DEPLOY_PASSWORD / MDS_BASE_URL / MDS_TOKEN by hand each time,
@@ -8,20 +8,21 @@
 #
 #  Usage:
 #    cp deploy-secrets.env.example deploy-secrets.env   # once, then fill it in
-#    ./run-deploy.sh                 # deploy default branch (feature/Phase2), all servers
-#    ./run-deploy.sh feature/Phase2 143.110.252.201     # one branch, one server
+#    ./scripts/deployment/run-deploy.sh                 # deploy default branch (feature/Phase2), all servers
+#    ./scripts/deployment/run-deploy.sh feature/Phase2 143.110.252.201     # one branch, one server
 #
-#  Everything after the first arg is passed straight through to auto-deploy.sh
+#  Everything after the first arg is passed straight through to scripts/deployment/auto-deploy.sh
 #  (BRANCH, then optional single-server IP).
 # ============================================================
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SECRETS="$HERE/deploy-secrets.env"
+PROJECT_ROOT="$(cd "$HERE/../.." && pwd)"
+SECRETS="$PROJECT_ROOT/deploy-secrets.env"
 
 if [ ! -f "$SECRETS" ]; then
     echo "❌ $SECRETS not found."
-    echo "   Create it:  cp deploy-secrets.env.example deploy-secrets.env  (then fill in the values)"
+    echo "   Create it from the repo root:  cp deploy-secrets.env.example deploy-secrets.env  (then fill in the values)"
     exit 1
 fi
 

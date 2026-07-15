@@ -3,13 +3,13 @@
 # Run parse_existing_license_copies management command on all 3 servers.
 #
 # Usage:
-#   bash run-parse-license-copies.sh                  # live run on all 3 servers
-#   bash run-parse-license-copies.sh --dry-run        # preview only
-#   bash run-parse-license-copies.sh --norm-desc-only # just fix export descriptions
-#   bash run-parse-license-copies.sh --license-number 0311005034  # single licence
-#   bash run-parse-license-copies.sh license-manager  # single server
-#   bash run-parse-license-copies.sh labdhi           # single server
-#   bash run-parse-license-copies.sh tractor          # single server
+#   bash scripts/imports/run-parse-license-copies.sh                  # live run on all 3 servers
+#   bash scripts/imports/run-parse-license-copies.sh --dry-run        # preview only
+#   bash scripts/imports/run-parse-license-copies.sh --norm-desc-only # just fix export descriptions
+#   bash scripts/imports/run-parse-license-copies.sh --license-number 0311005034  # single licence
+#   bash scripts/imports/run-parse-license-copies.sh license-manager  # single server
+#   bash scripts/imports/run-parse-license-copies.sh labdhi           # single server
+#   bash scripts/imports/run-parse-license-copies.sh tractor          # single server
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail

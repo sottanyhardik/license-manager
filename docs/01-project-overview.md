@@ -82,11 +82,11 @@ graph LR
     Labdhi -->|follower| DB2[(PostgreSQL)]
     Tractor -->|follower| DB3[(PostgreSQL)]
     
-    LM -->|sync-masters.sh| Labdhi
-    LM -->|sync-masters.sh| Tractor
+    LM -->|scripts/maintenance/sync-masters.sh| Labdhi
+    LM -->|scripts/maintenance/sync-masters.sh| Tractor
     
     LM --> Redis1[(Redis)]
     LM --> Celery1[Celery Worker]
 ```
 
-`license-manager` is the **canonical server**. Master data (companies, ports, HS codes, SION norms, etc.) is periodically synced one-way from license-manager → labdhi and tractor via the `sync-masters.sh` shell script which calls `audit_masters` and `auto_import_masters` management commands.
+`license-manager` is the **canonical server**. Master data (companies, ports, HS codes, SION norms, etc.) is periodically synced one-way from license-manager → labdhi and tractor via the `scripts/maintenance/sync-masters.sh` shell script which calls `audit_masters` and `auto_import_masters` management commands.

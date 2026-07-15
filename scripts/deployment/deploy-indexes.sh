@@ -6,10 +6,14 @@
 # Safely applies composite performance indexes to production database
 # with minimal downtime and rollback capability
 #
-# Usage: ./deploy-indexes.sh [--dry-run] [--rollback]
+# Usage: ./scripts/deployment/deploy-indexes.sh [--dry-run] [--rollback]
 # ==============================================================================
 
 set -e  # Exit on error
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # Colors for output
 RED='\033[0;31m'
@@ -352,7 +356,7 @@ Next Steps:
 1. Monitor query performance over the next 24-48 hours
 2. Check index usage statistics with:
    SELECT * FROM pg_stat_user_indexes WHERE schemaname = 'public';
-3. If rollback is needed, run: ./deploy-indexes.sh --rollback
+3. If rollback is needed, run: ./scripts/deployment/deploy-indexes.sh --rollback
 
 Expected Performance Improvements:
 - Item Report queries: 50-70% faster
@@ -382,7 +386,7 @@ print_warning "Recommended Next Steps:"
 echo "  1. Monitor application performance for 24-48 hours"
 echo "  2. Check for slow queries in database logs"
 echo "  3. Run: python3 manage.py test (verify no regressions)"
-echo "  4. If issues occur, rollback with: ./deploy-indexes.sh --rollback"
+echo "  4. If issues occur, rollback with: ./scripts/deployment/deploy-indexes.sh --rollback"
 
 echo ""
 print_info "Deployment log saved to: $LOG_FILE"

@@ -4,7 +4,7 @@
 #  Runs in DRY-RUN mode first, then prompts before applying.
 #
 #  Usage:
-#    bash apply-master-merge.sh /path/to/master-audit-YYYYMMDD-HHMM
+#    bash scripts/maintenance/apply-master-merge.sh /path/to/master-audit-YYYYMMDD-HHMM
 # ============================================================
 
 set -e

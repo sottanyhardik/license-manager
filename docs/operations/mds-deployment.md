@@ -22,7 +22,7 @@
 | Nothing changes without `--confirm` | All four scripts default to dry-run; loads/onboarding apply only with `--confirm`. |
 | Secrets only via env | `SYNC_PASSWORD`, `MDS_DB_PASS`, per-server `MDS_TOKEN` are read from env, never hardcoded, never logged (token is masked). |
 | Conflicts block a load | `migrate-all-servers.sh` refuses to load if `reconcile_masters` reports unresolved conflicts / manual-sign-off, unless `--accept-conflicts` is given explicitly. |
-| Reversible | Writes still go to local tables until the Phase-6 write cutover; `sync-masters.sh` remains re-enable-able. See [Rollback](#8-rollback). |
+| Reversible | Writes still go to local tables until the Phase-6 write cutover; `scripts/maintenance/sync-masters.sh` remains re-enable-able. See [Rollback](#8-rollback). |
 
 **Deploy artifacts** live in `master-data-service/deploy/` (+ two files at the
 service root). These stand the service up on its host:
@@ -175,7 +175,7 @@ and `proxy_pass` to gunicorn.
 ```bash
 sudo cp master-data-service/deploy/nginx-mds.conf /etc/nginx/sites-available/mds
 sudo ln -sf /etc/nginx/sites-available/mds /etc/nginx/sites-enabled/mds
-# TLS issuance: reuse the repo pattern (setup-ssl-labdhi.sh / setup-ssl-tractor.sh)
+# TLS issuance: reuse the repo pattern (scripts/deployment/setup-ssl-labdhi.sh / scripts/deployment/setup-ssl-tractor.sh)
 #   certbot --nginx -d masters.internal.example.com   # fills the ssl_certificate lines
 sudo nginx -t && sudo systemctl reload nginx     # ALWAYS test before reload — never blind-reload
 ```
@@ -231,7 +231,7 @@ counts are verified after.
 
 - SSH access to all three servers as `django@<host>` (key auth preferred; if
   using a password, `export SYNC_PASSWORD=…` and have `sshpass` installed —
-  same convention as `sync-masters.sh`).
+  same convention as `scripts/maintenance/sync-masters.sh`).
 - MDS DB env exported locally: `MDS_DB_NAME/USER/PASS/HOST/PORT`, and `MDS_DIR`
   pointing at the `master-data-service` checkout.
 - Phase-0 reconciliation already understood — see `master-consolidation.md`.
@@ -369,8 +369,8 @@ consumer's own mirror/client tables, rollback is straightforward and staged.
 | Bad MDS load | Restore the pre-load dump: `gunzip -c backups/mds/mds-master_data-<ts>.sql.gz \| PGPASSWORD=… psql -h $MDS_DB_HOST -U $MDS_DB_USER $MDS_DB_NAME`. Then re-run the load with a corrected golden export (idempotent). |
 | Onboarding caused a consumer problem | On the affected server, set `MDS_ENABLED=false` in its `.env` and restart the app. Reads fall back to the existing local tables; the client/sync worker goes dormant. `migrate mds_client` is additive and safe to leave in place. |
 | Sync misbehaving | Set `MDS_ENABLED=false` on the consumer (stops the sync worker). The local mirror keeps serving the last-known-good data. |
-| Need the old master flow back | Re-enable the additive `sync-masters.sh` (repo root) — it is unchanged and still operates one-way from .201 to followers. |
-| Write cutover (Phase 6) regressed | Flip the write feature flag back to local; writes return to local tables + `sync-masters.sh`. The mirror serving reads is safe to keep. |
+| Need the old master flow back | Re-enable the additive `scripts/maintenance/sync-masters.sh` (repo root) — it is unchanged and still operates one-way from .201 to followers. |
+| Write cutover (Phase 6) regressed | Flip the write feature flag back to local; writes return to local tables + `scripts/maintenance/sync-masters.sh`. The mirror serving reads is safe to keep. |
 
 MDS is **not** on the read hot path, so an MDS outage never breaks consumer
 reads — only writes (which fail loudly / queue). This is the SPOF mitigation in

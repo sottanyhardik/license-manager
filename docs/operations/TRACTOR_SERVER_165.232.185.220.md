@@ -30,7 +30,7 @@
 
 ```bash
 # Deploy to all servers including new one
-./auto-deploy.sh
+./scripts/deployment/auto-deploy.sh
 ```
 
 ### Option 2: Manual Deployment
@@ -52,7 +52,7 @@ echo 'admin' | sudo -S systemctl reload nginx
 EOF
 
 # Run regular deployment
-./auto-deploy.sh
+./scripts/deployment/auto-deploy.sh
 ```
 
 ## Nginx Configuration Details
@@ -89,7 +89,7 @@ ssh django@165.232.185.220 "ls -la /home/django/license-manager"
 
 ### 3. Deploy Application
 ```bash
-./auto-deploy.sh
+./scripts/deployment/auto-deploy.sh
 ```
 
 ### 4. Test API
@@ -186,7 +186,7 @@ EOF
    - Line 233: Added to `CORS_ALLOWED_ORIGINS`
    - Line 280: Added to `CSRF_TRUSTED_ORIGINS`
 
-2. **auto-deploy.sh**
+2. **scripts/deployment/auto-deploy.sh**
    - Line 24: Updated `SERVERS` array
 
 3. **nginx-tractor-http.conf** (NEW)
@@ -200,4 +200,4 @@ EOF
 ✅ SSH access verified
 ✅ Ready for deployment
 
-Run `./auto-deploy.sh` to deploy to all servers including this new one!
+Run `./scripts/deployment/auto-deploy.sh` to deploy to all servers including this new one!

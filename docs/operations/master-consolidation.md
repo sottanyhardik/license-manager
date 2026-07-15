@@ -14,7 +14,7 @@
 
 The three servers (license-manager @ `143.110.252.201`, labdhi @
 `139.59.92.226`, tractor @ `165.232.185.220`) diverged under the additive,
-one-way `sync-masters.sh`. The same real-world entity now has **different
+one-way `scripts/maintenance/sync-masters.sh`. The same real-world entity now has **different
 integer PKs** on each server, and followers hold rows the source never pulled
 back. Before any central Master-Data Service can be loaded, we must decide, per
 master row, **which version is canonical**.

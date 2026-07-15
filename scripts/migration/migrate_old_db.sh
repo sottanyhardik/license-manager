@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
 # ====== CONFIGURATION ======
-VENV_DIR="/Users/drushahardiksottany/PycharmProjects/license-manager/.venv"
+VENV_DIR="${VENV_DIR:-$PROJECT_ROOT/.venv}"
 PY_BIN="$VENV_DIR/bin/python"
-MANAGE="/Users/drushahardiksottany/PycharmProjects/license-manager/manage.py"
+MANAGE="$PROJECT_ROOT/backend/manage.py"
 # ============================
 
 echo "⚙️ Activating virtual environment..."
@@ -17,16 +20,18 @@ else
 fi
 
 echo "🧠 Checking Django DB settings..."
-DB_ENGINE=$($PY_BIN $MANAGE shell -c "from django.conf import settings; print(settings.DATABASES['default']['ENGINE'])")
-DB_NAME=$($PY_BIN $MANAGE shell -c "from django.conf import settings; print(settings.DATABASES['default']['NAME'])")
+DB_ENGINE=$("$PY_BIN" "$MANAGE" shell -c "from django.conf import settings; print(settings.DATABASES['default']['ENGINE'])")
+DB_NAME=$("$PY_BIN" "$MANAGE" shell -c "from django.conf import settings; print(settings.DATABASES['default']['NAME'])")
 
 echo "Database engine: $DB_ENGINE"
 echo "Database name: $DB_NAME"
 echo
 
 echo "📦 Backing up current django_migrations table..."
-BACKUP_FILE="django_migrations_backup_$(date +%Y%m%d_%H%M%S).csv"
-$PY_BIN $MANAGE dbshell <<EOF || true
+BACKUP_DIR="$PROJECT_ROOT/backups/migration-history"
+mkdir -p "$BACKUP_DIR"
+BACKUP_FILE="$BACKUP_DIR/django_migrations_backup_$(date +%Y%m%d_%H%M%S).csv"
+"$PY_BIN" "$MANAGE" dbshell <<EOF || true
 .output $BACKUP_FILE
 SELECT * FROM django_migrations;
 EOF
@@ -37,19 +42,19 @@ echo "⚠️  Deleting 'django_migrations' table from database '$DB_NAME'..."
 
 if [[ "$DB_ENGINE" == *"sqlite3"* ]]; then
   echo "Detected SQLite database."
-  $PY_BIN $MANAGE dbshell <<'EOF'
+  "$PY_BIN" "$MANAGE" dbshell <<'EOF'
 DROP TABLE IF EXISTS django_migrations;
 EOF
 
 elif [[ "$DB_ENGINE" == *"postgresql"* ]]; then
   echo "Detected PostgreSQL database."
-  $PY_BIN $MANAGE dbshell <<'EOF'
+  "$PY_BIN" "$MANAGE" dbshell <<'EOF'
 DROP TABLE IF EXISTS django_migrations CASCADE;
 EOF
 
 elif [[ "$DB_ENGINE" == *"mysql"* ]]; then
   echo "Detected MySQL database."
-  $PY_BIN $MANAGE dbshell <<'EOF'
+  "$PY_BIN" "$MANAGE" dbshell <<'EOF'
 DROP TABLE IF EXISTS django_migrations;
 EOF
 
@@ -62,8 +67,8 @@ echo "✅ 'django_migrations' table dropped successfully."
 
 echo
 echo "📜 Rebuilding migration history..."
-$PY_BIN $MANAGE makemigrations --noinput
-$PY_BIN $MANAGE migrate --fake-initial --noinput
+"$PY_BIN" "$MANAGE" makemigrations --noinput
+"$PY_BIN" "$MANAGE" migrate --fake-initial --noinput
 
 echo
 echo "🎉 Done! Database schema and migration table are now consistent."

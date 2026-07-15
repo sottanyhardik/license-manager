@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  fetch-all-sion-from-dgft.sh
+#  scripts/imports/fetch-all-sion-from-dgft.sh
 #
 #  Fetch the COMPLETE catalog of SION norms (~2074 codes across
 #  12 product groups) from DGFT, then push to all 3 servers.
@@ -9,9 +9,9 @@
 #  it's skipped, so you can re-run safely after a network blip.
 #
 #  Usage:
-#    bash fetch-all-sion-from-dgft.sh            # full catalog
-#    bash fetch-all-sion-from-dgft.sh --groups E,A   # limit to letters
-#    bash fetch-all-sion-from-dgft.sh --dry-run  # fetch only, don't push
+#    bash scripts/imports/fetch-all-sion-from-dgft.sh            # full catalog
+#    bash scripts/imports/fetch-all-sion-from-dgft.sh --groups E,A   # limit to letters
+#    bash scripts/imports/fetch-all-sion-from-dgft.sh --dry-run  # fetch only, don't push
 # ============================================================
 
 set -e

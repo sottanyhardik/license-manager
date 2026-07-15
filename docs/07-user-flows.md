@@ -209,7 +209,7 @@ sequenceDiagram
     participant Labdhi as labdhi (follower)
     participant Tractor as tractor (follower)
 
-    Cron->>LicenseManager: bash sync-masters.sh
+    Cron->>LicenseManager: bash scripts/maintenance/sync-masters.sh
     LicenseManager->>LicenseManager: python manage.py audit_masters\n→ /tmp/sync-audit.json
     LicenseManager-->>Cron: sync-audit.json
 

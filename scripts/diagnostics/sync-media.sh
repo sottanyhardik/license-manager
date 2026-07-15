@@ -5,6 +5,10 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$PROJECT_ROOT"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -15,7 +19,7 @@ NC='\033[0m'
 # Configuration
 REMOTE_SERVER="django@143.110.252.201"
 REMOTE_MEDIA_PATH="/home/django/license-manager/media"
-LOCAL_MEDIA_PATH="./media"
+LOCAL_MEDIA_PATH="$PROJECT_ROOT/media"
 
 print_header() {
     echo -e "\n${BLUE}================================================${NC}"

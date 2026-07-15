@@ -12,7 +12,7 @@ import sys
 # worker's main process, before workers fork) so local dev on macOS doesn't
 # segfault. On Linux (production) the variable is meaningless and ignored, so
 # this is a no-op there. If workers still crash on macOS/Python 3.14, run the
-# worker with a non-forking pool: `--pool=solo` (see run-celery-dev.sh).
+# worker with a non-forking pool: `--pool=solo` (see scripts/development/run-celery-dev.sh).
 if sys.platform == "darwin":
     os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
 
@@ -76,7 +76,7 @@ app.conf.beat_schedule = {
     # schedule `core.tasks.fetch_exchange_rates` on Celery beat here.  Instead,
     # the fetch runs from a local cron on the dev machine and pushes the result
     # to license-manager; the existing master-sync cron replicates it to the
-    # other servers.  See: fetch-and-push-rates.sh
+    # other servers.  See: scripts/imports/fetch-and-push-rates.sh
 
     # Cleanup old task records every hour
     "cleanup-old-tasks-hourly": {

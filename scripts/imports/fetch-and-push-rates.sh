@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  fetch-and-push-rates.sh
+#  scripts/imports/fetch-and-push-rates.sh
 #
 #  Fetch the latest DGFT customs exchange rate (USD/EUR/GBP/CNY)
 #  on this Mac (which can reach DGFT — production servers can't, 403'd),
@@ -10,8 +10,8 @@
 #  labdhi + tractor automatically (ExchangeRateModel is in the sync list).
 #
 #  Usage:
-#    bash fetch-and-push-rates.sh              # full run, prints summary
-#    bash fetch-and-push-rates.sh --quiet      # silent except errors (cron)
+#    bash scripts/imports/fetch-and-push-rates.sh              # full run, prints summary
+#    bash scripts/imports/fetch-and-push-rates.sh --quiet      # silent except errors (cron)
 # ============================================================
 
 set -e

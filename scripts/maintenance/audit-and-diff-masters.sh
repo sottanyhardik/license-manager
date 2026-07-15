@@ -4,7 +4,7 @@
 #  Produces merge-plan.csv locally for manual review.
 #
 #  Usage:
-#    bash audit-and-diff-masters.sh
+#    bash scripts/maintenance/audit-and-diff-masters.sh
 #
 #  Requires:
 #    sshpass installed locally  (sudo apt install sshpass / brew install sshpass)
@@ -97,12 +97,15 @@ log "Generating merge plan..."
 log "  winner: $WINNER"
 log "  others: ${OTHERS[*]}"
 
-cd backend
-../.venv/bin/python manage.py diff_masters \
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+cd "$PROJECT_ROOT/backend"
+"$PROJECT_ROOT/.venv/bin/python" manage.py diff_masters \
     --winner "$WINNER" \
     --others "${OTHERS[@]}" \
     --out "$PLAN_CSV"
-cd ..
+cd "$PROJECT_ROOT"
 
 echo ""
 ok "============================================================"
@@ -118,4 +121,4 @@ echo ""
 echo "  Next step — for each CONFLICT row in the CSV, edit the 'action'"
 echo "  column to one of: KEEP_WINNER / OVERWRITE / SKIP"
 echo "  Then run:"
-echo "       bash apply-master-merge.sh \"$OUT_DIR\""
+echo "       bash scripts/maintenance/apply-master-merge.sh \"$OUT_DIR\""

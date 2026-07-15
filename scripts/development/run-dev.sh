@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# run-dev.sh — Local development runner for License Manager
+# scripts/development/run-dev.sh — Local development runner for License Manager
 #
 # Starts all services needed for local development in one terminal:
 #   1. Redis            (broker/cache — started via brew if not already up)
@@ -20,7 +20,8 @@
 set -euo pipefail
 
 # ── Paths ────────────────────────────────────────────────────────────
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 VENV_PY="$ROOT_DIR/.venv/bin/python"

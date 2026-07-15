@@ -1,9 +1,13 @@
 #!/bin/bash
 
 # Deployment Verification Script
-# Checks all prerequisites before running auto-deploy.sh
+# Checks all prerequisites before running scripts/deployment/auto-deploy.sh
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # Colors
 RED='\033[0;31m'
@@ -139,7 +143,7 @@ if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
     print_success "All checks passed! Ready to deploy."
     echo ""
     print_info "To deploy, run:"
-    echo "    ./auto-deploy.sh"
+    echo "    ./scripts/deployment/auto-deploy.sh"
     echo ""
     exit 0
 elif [ $ERRORS -eq 0 ]; then
@@ -147,7 +151,7 @@ elif [ $ERRORS -eq 0 ]; then
     print_info "You can proceed with deployment, but review warnings above"
     echo ""
     print_info "To deploy, run:"
-    echo "    ./auto-deploy.sh"
+    echo "    ./scripts/deployment/auto-deploy.sh"
     echo ""
     exit 0
 else

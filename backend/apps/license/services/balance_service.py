@@ -29,6 +29,7 @@ from apps.license.models import LicenseBalance, LicenseDetailsModel, LicenseFlag
 logger = logging.getLogger(__name__)
 
 _TWO_PLACES = Decimal("0.01")
+_THREE_PLACES = Decimal("0.001")
 _DEC_0 = Decimal("0")
 _NULL_THRESHOLD = Decimal("500")
 
@@ -128,7 +129,7 @@ def _update_item_level_balances(license_id: int) -> None:
     from django.db.models import Sum
     from django.db.models.functions import Coalesce
 
-    from apps.allotment.models import AllotmentItems
+    from apps.allotment.models import AllotmentItems, AllotmentModel
     from apps.bill_of_entry.models import TRANSACTION_TYPE_DEBIT, RowDetails
     from apps.license.models import LicenseImportItemsModel
 
@@ -164,7 +165,7 @@ def _update_item_level_balances(license_id: int) -> None:
             .filter(
                 item_id__in=item_ids,
                 allotment__bill_of_entry__isnull=True,
-                allotment__type="AT",
+                allotment__type=AllotmentModel.TYPE_AT,
             )
             .values("item_id")
             .annotate(
@@ -175,7 +176,6 @@ def _update_item_level_balances(license_id: int) -> None:
     }
 
     # ── Compute and collect changed items ─────────────────────────────────────
-    _THREE_PLACES = Decimal("0.001")
     to_update = []
     for item in items:
         deb_qty, deb_val = debit_map.get(item.pk, (_DEC_0, _DEC_0))

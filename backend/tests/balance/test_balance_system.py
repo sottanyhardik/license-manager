@@ -366,8 +366,9 @@ def test_create_allotment_rejects_over_plan():
     before any DB write. Verifies that the validation gate runs inside the
     transaction and surfaces the error to the caller.
     """
-    from apps.allotment.services.allotment_service import _validate_plan_availability
     from django.core.exceptions import ValidationError
+
+    from apps.allotment.services.allotment_service import _validate_plan_availability
 
     mock_plan = MagicMock()
     mock_plan.planned_quantity = Decimal("100.000")
@@ -878,4 +879,48 @@ def test_is_expired_flag_set_correctly():
     assert active_defaults["is_expired"] is False, (
         f"is_expired must be False for expiry={future} (future), "
         f"got {active_defaults['is_expired']}"
+    )
+
+
+# ===========================================================================
+# Regression: _compute_debit uses correct single-char transaction_type value
+# ===========================================================================
+
+def test_compute_debit_uses_single_char_transaction_type():
+    """
+    Regression test: _compute_debit must filter by transaction_type='D'
+    (the DB-stored single-char value), NOT the human label 'Debit' or 'DEBIT'.
+
+    History: the original filter used transaction_type="DEBIT", which matched
+    zero rows in production — causing balances to be overstated by the full
+    debit amount.
+
+    Verifies two things:
+    1. TRANSACTION_TYPE_DEBIT == "D" (the constant matches the DB choice value).
+    2. balance_service._compute_debit uses TRANSACTION_TYPE_DEBIT, not a raw
+       string literal, so the correct value always reaches the ORM filter.
+
+    The legacy migration confirms: choices=[('C', 'Credit'), ('D', 'Debit')].
+    """
+    import inspect
+
+    from apps.bill_of_entry.models import TRANSACTION_TYPE_DEBIT
+    from apps.license.services import balance_service
+
+    # 1. The constant must equal the DB-stored single-char value.
+    assert TRANSACTION_TYPE_DEBIT == "D", (
+        f"TRANSACTION_TYPE_DEBIT must equal 'D' (single char — the DB choice key). "
+        f"Got {TRANSACTION_TYPE_DEBIT!r}. "
+        "The legacy migration 0001_initial.py uses choices=[('C','Credit'),('D','Debit')]."
+    )
+
+    # 2. The service function must reference the constant, not a raw literal.
+    source = inspect.getsource(balance_service._compute_debit)
+    assert "TRANSACTION_TYPE_DEBIT" in source, (
+        "_compute_debit must use the TRANSACTION_TYPE_DEBIT constant, not a raw string. "
+        "Raw string 'DEBIT' previously caused debit to always be zero (no rows matched)."
+    )
+    assert '"DEBIT"' not in source and "'DEBIT'" not in source, (
+        "_compute_debit must not contain the raw string 'DEBIT'. "
+        "The DB stores single-char 'D' — using 'DEBIT' silently matches nothing."
     )

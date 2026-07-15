@@ -27,9 +27,12 @@ class AllotmentModel(AuditModel):
     database owns DDL; this class is a read/write proxy only.
     """
 
+    TYPE_AT = "AT"
+    TYPE_TR = "TR"
+
     ALLOTMENT_TYPE_CHOICES = [
-        ("AT", "Allotment"),
-        ("TR", "Transfer"),
+        (TYPE_AT, "Allotment"),
+        (TYPE_TR, "Transfer"),
     ]
 
     company = models.ForeignKey(
@@ -40,7 +43,7 @@ class AllotmentModel(AuditModel):
     type = models.CharField(
         max_length=2,
         choices=ALLOTMENT_TYPE_CHOICES,
-        default="AT",
+        default=TYPE_AT,
     )
     required_quantity = models.DecimalField(
         max_digits=15,

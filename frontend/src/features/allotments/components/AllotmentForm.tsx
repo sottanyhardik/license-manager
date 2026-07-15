@@ -220,7 +220,7 @@ export function AllotmentForm({
         setValue('unit_value_per_unit', newUnit, { shouldValidate: false })
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setValue is stable (React Hook Form contract)
   }, [qty, unitValue])
 
   // Rule 3: cif_fc AND exchange_rate → cif_inr
@@ -233,7 +233,7 @@ export function AllotmentForm({
         setValue('cif_inr', newCifInr, { shouldValidate: false })
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setValue is stable (React Hook Form contract)
   }, [cifFc, exchangeRate])
 
   // Rule 4: cif_inr AND exchange_rate → cif_fc → recalc unit_value
@@ -249,7 +249,7 @@ export function AllotmentForm({
         setValue('unit_value_per_unit', newUnit, { shouldValidate: false })
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setValue is stable (React Hook Form contract)
   }, [cifInr, exchangeRate])
 
   // ─── Submit ────────────────────────────────────────────────────────────────

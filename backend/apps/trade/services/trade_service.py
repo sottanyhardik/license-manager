@@ -8,9 +8,15 @@ Request objects, no DRF Response objects.  Domain errors are raised as
 ValueError (or subclasses) so the view layer can map them to HTTP status codes.
 """
 
+from __future__ import annotations
+
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from django.db import transaction
+
+if TYPE_CHECKING:
+    from apps.trade.models import LicenseTrade
 
 # ---------------------------------------------------------------------------
 # Date parsing
@@ -126,7 +132,7 @@ class PartnerTradeNotFound(LookupError):
 
 
 @transaction.atomic
-def link_trades(trade_pk: int, partner_pk: int | None):
+def link_trades(trade_pk: int, partner_pk: int | None) -> LicenseTrade:
     """
     Bidirectionally link or unlink two LicenseTrade records.
 

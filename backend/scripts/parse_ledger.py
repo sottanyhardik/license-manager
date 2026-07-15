@@ -1,4 +1,5 @@
 import datetime
+import logging
 from django.db import transaction
 from django.db.models import Q
 
@@ -11,6 +12,8 @@ from apps.license.models import (
     LicenseExportItemModel,
     LicenseImportItemsModel,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def parse_date(date_str):

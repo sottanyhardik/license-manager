@@ -20,7 +20,10 @@ from apps.core.models.masters import AuditModel
 # ---------------------------------------------------------------------------
 # Constants (defined locally — no constants.py in new backend yet)
 # ---------------------------------------------------------------------------
-TYPE_CHOICES = (("C", "Credit"), ("D", "Debit"))
+TRANSACTION_TYPE_CREDIT = "C"
+TRANSACTION_TYPE_DEBIT = "D"
+
+TYPE_CHOICES = ((TRANSACTION_TYPE_CREDIT, "Credit"), (TRANSACTION_TYPE_DEBIT, "Debit"))
 ROW_TYPE_CHOICES = (("AR", "ARO"), ("AT", "Allotment"))
 
 DEC_0 = Decimal("0")

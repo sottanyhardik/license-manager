@@ -44,7 +44,8 @@ def _mark_started(tracker):
     """Set tracker to STARTED and record started_at."""
     if tracker is None:
         return
-    tracker.status = "STARTED"
+    from apps.core.models import CeleryTaskTracker
+    tracker.status = CeleryTaskTracker.STATUS_STARTED
     tracker.started_at = dj_timezone.now()
     tracker.save(update_fields=["status", "started_at"])
 
@@ -52,7 +53,8 @@ def _mark_started(tracker):
 def _mark_success(tracker, rel_path: str):
     if tracker is None:
         return
-    tracker.status = "SUCCESS"
+    from apps.core.models import CeleryTaskTracker
+    tracker.status = CeleryTaskTracker.STATUS_SUCCESS
     tracker.result = {"file_path": rel_path}
     tracker.completed_at = dj_timezone.now()
     tracker.save(update_fields=["status", "result", "completed_at"])
@@ -61,7 +63,8 @@ def _mark_success(tracker, rel_path: str):
 def _mark_failure(tracker, exc: Exception):
     if tracker is None:
         return
-    tracker.status = "FAILURE"
+    from apps.core.models import CeleryTaskTracker
+    tracker.status = CeleryTaskTracker.STATUS_FAILURE
     tracker.traceback = str(exc)
     tracker.completed_at = dj_timezone.now()
     tracker.save(update_fields=["status", "traceback", "completed_at"])
@@ -104,7 +107,8 @@ def generate_balance_report_task(self, license_ids: list, output_format: str, us
         else:
             # Update to RETRY status so clients know it will be re-attempted
             if tracker:
-                tracker.status = "RETRY"
+                from apps.core.models import CeleryTaskTracker
+                tracker.status = CeleryTaskTracker.STATUS_RETRY
                 tracker.save(update_fields=["status"])
         raise self.retry(exc=exc)
 

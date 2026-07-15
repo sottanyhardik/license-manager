@@ -12,7 +12,7 @@ line-length = 120
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP"]
+select = ["E", "F", "I", "N", "UP", "C901"]
 ignore = [
     "E402",   # module-import-not-at-top — intentional lazy imports to avoid circular imports
     "N806",   # non-lowercase-variable-in-function — Django convention (User, Model classes assigned in functions)
@@ -26,6 +26,9 @@ ignore = [
 "backend/tests/**" = [
     "F841",   # same — when ruff is run from repo root rather than backend/
 ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
 
 [tool.black]
 line-length = 120

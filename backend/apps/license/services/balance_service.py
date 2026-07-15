@@ -8,7 +8,7 @@ The canonical formula (replicated from legacy balance_calculator.py):
 
 Where:
   credit     = SUM(LicenseExportItemModel.cif_fc)
-  debit      = SUM(RowDetails.cif_fc WHERE transaction_type=DEBIT AND bill_of_entry.license_trades IS NULL)
+  debit      = SUM(RowDetails.cif_fc WHERE transaction_type='D' AND bill_of_entry.license_trades IS NULL)
   allotment  = SUM(AllotmentItems.cif_fc WHERE allotment.bill_of_entry IS NULL)
   trade      = SUM(LicenseTradeLine.cif_fc WHERE trade.direction='SALE')
 
@@ -47,17 +47,17 @@ def _compute_credit(license_id: int) -> Decimal:
 def _compute_debit(license_id: int) -> Decimal:
     """
     Sum of RowDetails.cif_fc where:
-      - transaction_type = 'DEBIT'
+      - transaction_type = 'D'
       - bill_of_entry.license_trades IS NULL  (i.e. not tied to a trade)
 
     Path: RowDetails → sr_number (LicenseImportItemsModel) → license_id
     """
-    from apps.bill_of_entry.models import RowDetails
+    from apps.bill_of_entry.models import TRANSACTION_TYPE_DEBIT, RowDetails
 
     result = (
         RowDetails.objects.filter(
             sr_number__license_id=license_id,
-            transaction_type="DEBIT",
+            transaction_type=TRANSACTION_TYPE_DEBIT,
             bill_of_entry__license_trades__isnull=True,
         )
         .aggregate(total=_sum_decimal("cif_fc"))["total"]
@@ -129,7 +129,7 @@ def _update_item_level_balances(license_id: int) -> None:
     from django.db.models.functions import Coalesce
 
     from apps.allotment.models import AllotmentItems
-    from apps.bill_of_entry.models import RowDetails
+    from apps.bill_of_entry.models import TRANSACTION_TYPE_DEBIT, RowDetails
     from apps.license.models import LicenseImportItemsModel
 
     items = list(
@@ -147,7 +147,7 @@ def _update_item_level_balances(license_id: int) -> None:
         row["sr_number_id"]: (row["qty_sum"], row["val_sum"])
         for row in (
             RowDetails.objects
-            .filter(sr_number_id__in=item_ids, transaction_type="D")
+            .filter(sr_number_id__in=item_ids, transaction_type=TRANSACTION_TYPE_DEBIT)
             .values("sr_number_id")
             .annotate(
                 qty_sum=Coalesce(Sum("qty"), _DEC_0),

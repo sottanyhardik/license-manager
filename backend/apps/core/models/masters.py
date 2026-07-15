@@ -752,19 +752,28 @@ class CeleryTaskTracker(models.Model):
     DB table: core_celerytasktracker (owned by legacy).
     """
 
+    STATUS_PENDING = "PENDING"
+    STATUS_STARTED = "STARTED"
+    STATUS_SUCCESS = "SUCCESS"
+    STATUS_FAILURE = "FAILURE"
+    STATUS_RETRY = "RETRY"
+    STATUS_REVOKED = "REVOKED"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_STARTED, "Started"),
+        (STATUS_SUCCESS, "Success"),
+        (STATUS_FAILURE, "Failure"),
+        (STATUS_RETRY, "Retry"),
+        (STATUS_REVOKED, "Revoked"),
+    ]
+
     task_id = models.CharField(max_length=255, unique=True, db_index=True)
     task_name = models.CharField(max_length=255, db_index=True)
     status = models.CharField(
         max_length=50,
-        choices=[
-            ("PENDING", "Pending"),
-            ("STARTED", "Started"),
-            ("SUCCESS", "Success"),
-            ("FAILURE", "Failure"),
-            ("RETRY", "Retry"),
-            ("REVOKED", "Revoked"),
-        ],
-        default="PENDING",
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
         db_index=True,
     )
     args = models.JSONField(default=list, blank=True)

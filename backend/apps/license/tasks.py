@@ -57,7 +57,7 @@ def generate_license_pdf_task(self, license_id: int, report_type: str, user_id: 
         from apps.core.models import CeleryTaskTracker
 
         CeleryTaskTracker.objects.filter(task_id=task_id).update(
-            status="PENDING",
+            status=CeleryTaskTracker.STATUS_PENDING,
         )
     except Exception:
         # CeleryTaskTracker may not be populated yet — non-fatal

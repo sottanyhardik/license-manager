@@ -47,10 +47,12 @@ class ReportDispatchPermission(BaseRolePermission):
     required_roles_for_write = []
 
     def has_permission(self, request, view):
-        if request.user and request.user.is_superuser:
-            return True
-        if not request.user or not request.user.is_authenticated:
+        # Reject unauthenticated or inactive users first
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
             return False
+        # Superusers have all permissions (only when also active — checked above)
+        if request.user.is_superuser:
+            return True
         return request.user.has_any_role(self.required_roles_for_read)
 
 
@@ -181,7 +183,7 @@ def _make_tracker(task_name: str, task_id: str, args_payload: dict):
     CeleryTaskTracker.objects.create(
         task_id=task_id,
         task_name=task_name,
-        status="PENDING",
+        status=CeleryTaskTracker.STATUS_PENDING,
         kwargs=args_payload,
     )
 
@@ -359,7 +361,7 @@ class ReportTaskStatusView(APIView):
         mapped_status = _STATUS_MAP.get(tracker.status, "pending")
 
         file_url = None
-        if tracker.status == "SUCCESS" and tracker.result:
+        if tracker.status == CeleryTaskTracker.STATUS_SUCCESS and tracker.result:
             file_path = tracker.result.get("file_path")
             if file_path:
                 media_url = getattr(settings, "MEDIA_URL", "/media/")

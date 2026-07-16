@@ -16,7 +16,7 @@ export function openPdfPreview(data, filename) {
     // the print dialog default to "Actual size" instead of "Fit to page".
     const viewerUrl = `${url}#zoom=100`;
 
-    const safeName = sanitizeFilename(filename);
+    const safeName = sanitizePdfFilename(filename);
     const win = window.open('', '_blank');
 
     if (!win) {
@@ -33,7 +33,7 @@ export function openPdfPreview(data, filename) {
 <html>
 <head>
 <meta charset="utf-8">
-<title>${escapeHtml(safeName)}</title>
+<title>${escapeHtmlAttribute(safeName)}</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #525659; }
   embed, iframe { width: 100%; height: 100%; border: none; display: block; }
@@ -45,7 +45,7 @@ export function openPdfPreview(data, filename) {
 </style>
 </head>
 <body>
-<a class="dl" href="${url}" download="${escapeHtml(safeName)}">⬇ Download</a>
+<a class="dl" href="${url}" download="${escapeHtmlAttribute(safeName)}">Download</a>
 <embed src="${viewerUrl}" type="application/pdf">
 </body>
 </html>`);
@@ -57,13 +57,31 @@ export function openPdfPreview(data, filename) {
     return win;
 }
 
-function sanitizeFilename(name) {
-    const base = (name || 'document').toString().trim().replace(/[\\/:*?"<>|]+/g, '_');
-    return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
+export function sanitizePdfFilename(name) {
+    const base = String(name ?? '')
+        .trim()
+        .split('')
+        .map((char) => {
+            const code = char.charCodeAt(0);
+            return code < 32 || code === 127 || '\\/:*?"<>|'.includes(char) ? '_' : char;
+        })
+        .join('')
+        .replace(/\s+/g, ' ')
+        .replace(/_+/g, '_')
+        .replace(/^[_ .]+|[_ .]+$/g, '');
+    const safeBase = base || 'document';
+    const withExtension = /\.pdf$/i.test(safeBase) ? safeBase : `${safeBase}.pdf`;
+    const normalizedName = withExtension.replace(/_+(\.pdf)$/i, '$1');
+
+    if (normalizedName.length <= 180) {
+        return normalizedName;
+    }
+
+    return `${normalizedName.slice(0, 176).replace(/[. _]+$/g, '')}.pdf`;
 }
 
-function escapeHtml(s) {
-    return String(s)
+export function escapeHtmlAttribute(value) {
+    return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')

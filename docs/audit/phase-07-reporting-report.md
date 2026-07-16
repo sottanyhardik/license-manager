@@ -393,6 +393,56 @@
   - Shared `AsyncSelectField` does not currently expose `inputId`/ARIA hooks, so include/exclude company selectors still rely on placeholder text rather than true label association; complete that when the shared selector component is selected for audit.
 - Status: COMPLETED
 
+## frontend/src/pages/reports/ItemPivotReport.tsx
+
+- File Path: `frontend/src/pages/reports/ItemPivotReport.tsx`
+- Module: Reporting & Exports / Frontend item pivot report page
+- Total LOC: 1478
+- Lines Reviewed: 1478
+- Functions Reviewed: 13 (`itemBgColor`, `toFiniteNumber`, `normalizeFilterValues`, `buildItemPivotReportPath`, `PurchaseStatusBadge`, `ItemPivotReport`, `loadFilterOptions`, `loadAvailableNorms`, `loadReport`, `handleUpdateBalance`, `pollUpdateStatus`, `handleExport`, `calculateNotificationSummary`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added `buildItemPivotReportPath()` so JSON and Excel report URLs are built through `URLSearchParams` instead of manual string concatenation.
+  - Added `toFiniteNumber()` to prevent malformed numeric report data from propagating `NaN` through summary calculations or task completion toasts.
+  - Guarded balance-update responses that do not return a `task_id`.
+  - Normalized blank optional filters out of API request paths.
+- Package Replacements:
+  - Reused existing `openAuthedFile()` from `frontend/src/utils/documentDownload.ts` for report Excel downloads and merged DFIA documents.
+- Performance Improvements:
+  - Removed duplicate URL-building logic between JSON load and Excel export paths.
+  - Avoided unnecessary object URL creation/revocation code in this component by delegating blob lifetime handling to the shared helper.
+- Security Improvements:
+  - Removed direct `localStorage.getItem('access')` use and manual Authorization header construction from the merged-document path.
+  - Kept all report/export/document paths relative to the authenticated Axios base URL.
+  - Preserved React escaping for modal text, notes, conditions, and report values; no `dangerouslySetInnerHTML` path exists in this file.
+- Dead Code Removed:
+  - Removed unused `react-select`, `AsyncSelectField`, and filter-icon imports left behind after `ItemPivotFilters` extraction.
+- Duplicate Logic Removed:
+  - Consolidated item-pivot report URL generation into `buildItemPivotReportPath()`.
+  - Consolidated numeric coercion into `toFiniteNumber()`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ItemPivotReport.test.ts` covering encoded URL construction, blank optional filters, malformed numeric fallbacks, and non-finite numeric protection.
+- Verification Results:
+  - Dependency search: `rg -n "item-pivot|ItemPivotReport|ItemPivot|update-balance|norm_class|downloadUrl|createObjectURL|purchase_status" frontend/src/pages/reports frontend/src backend docs -g '!node_modules'` reviewed route, backend endpoint, docs, export/download, and related report dependencies.
+  - Focused Vitest: `npm test -- ItemPivotReport.test.ts` -> 3 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ItemPivotReport.tsx src/pages/reports/ItemPivotReport.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Scoped diff check before code commit: `git diff --cached --check` -> clean.
+- Commit SHA:
+  - `91fadfcad93f027592594783c6387dca8d88e9ab`
+- Commit Timestamp:
+  - `2026-07-16T15:19:38+05:30`
+- Commit Summary:
+  - `fix(reports): harden item pivot report`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The table renderer remains oversized and should be split only when the selected audit unit is a rendering-component extraction; this pass avoided a large visual refactor.
+- Status: COMPLETED
+
 ## backend/apps/bill_of_entry/views_export.py
 
 - File Path: `backend/apps/bill_of_entry/views_export.py`

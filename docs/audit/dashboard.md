@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:50:15+00:00`
+Generated: `2026-07-16T09:54:38+00:00`
 
 ## Repository Statistics
 
-- Files audited: `461`
+- Files audited: `463`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `393`
+- Files requiring dependency recheck: `392`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `457`
-- Total source files tracked: `918`
-- Total source LOC tracked: `240157`
-- Audited LOC: `108890`
-- Remaining LOC: `131267`
+- Files remaining: `456`
+- Total source files tracked: `919`
+- Total source LOC tracked: `240299`
+- Audited LOC: `110230`
+- Remaining LOC: `130069`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,8 +35,8 @@ Generated: `2026-07-16T09:50:15+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 23784 | 19 | 3 | 31 | 0 |
-| `frontend/src/pages` | 67 | 17846 | 46 | 0 | 21 | 0 |
+| `docs` | 53 | 23840 | 19 | 3 | 31 | 0 |
+| `frontend/src/pages` | 68 | 17932 | 48 | 0 | 20 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
@@ -989,6 +989,12 @@ Generated: `2026-07-16T09:50:15+00:00`
 - Phase 7 ItemPivotReport regression: added frontend/src/pages/reports/ItemPivotReport.test.ts covering encoded URL construction, blank optional filters, malformed numeric fallbacks, and non-finite numeric protection
 - Phase 7 ItemPivotReport verification: npm test -- ItemPivotReport.test.ts -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ItemPivotReport.tsx src/pages/reports/ItemPivotReport.test.ts -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
 - Phase 7 ItemPivotReport commit: 91fadfcad93f027592594783c6387dca8d88e9ab at 2026-07-16T15:19:38+05:30, fix(reports): harden item pivot report
+- Phase 7 ItemReport audit: reviewed 1231-line React item report page, report URL construction, JSON/excel export paths, item-name inline edit refresh, filter controls, authenticated document opening, option loading fallbacks, and report table rendering
+- Phase 7 ItemReport hardening: replaced duplicated string-concatenated report URLs with URLSearchParams helper, normalized malformed numeric filters, reused shared openAuthedFile for Excel export, removed console logging from option-load fallback paths, deduplicated purchase/norm options, and added stable labels/input IDs for filter controls
+- Phase 7 ItemReport regression: added frontend/src/pages/reports/ItemReport.test.ts covering encoded URL construction, blank optional filters, malformed numeric fallbacks, value normalization, Unicode-safe query encoding, and non-finite numeric protection
+- Phase 7 ItemReport verification: npm test -- ItemReport.test.ts -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ItemReport.tsx src/pages/reports/ItemReport.test.ts -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; git diff --check scoped to ItemReport files -> clean; py_compile not applicable to TSX/TS frontend source
+- Phase 7 ItemReport security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 ItemReport commit: 1248ff802868a5d899b7944d11453456a86c6212 at 2026-07-16T15:24:02+05:30, fix(reports): harden item report
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

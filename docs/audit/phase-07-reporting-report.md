@@ -230,6 +230,54 @@
   - None for this component.
 - Status: COMPLETED - REMOVED
 
+## frontend/src/pages/reports/ItemReport.tsx
+
+- File Path: `frontend/src/pages/reports/ItemReport.tsx`
+- Module: Reporting & Exports / Frontend item report page
+- LOC: 1,231 (`ItemReport.tsx`) + 61 (`ItemReport.test.ts`)
+- Lines Reviewed: 1,231
+- Functions Reviewed: 18 (`normalizeReportNumber`, `normalizeFilterValues`, `buildItemReportPath`, `ItemReport`, option loaders, report load/export handlers, filter handlers, inline edit handlers, and item-name refresh handler)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added defensive numeric filter normalization so malformed, empty, `NaN`, and infinite values fall back before reaching report query parameters.
+  - Normalized array filters by trimming and dropping blank/null values before encoding.
+  - Trimmed optional text/date filters and omitted empty values from API requests.
+  - Preserved active filter behavior across report load, Excel export, and item-name inline edit refresh.
+- Package Replacements:
+  - Replaced custom Excel blob/anchor download logic with existing `openAuthedFile()`.
+  - Replaced manual string query concatenation with browser-standard `URLSearchParams`.
+- Performance Improvements:
+  - Removed duplicated report URL assembly across JSON load, Excel export, and post-edit refresh paths.
+  - Deduplicated repeated purchase-status and norm option literals into shared constants.
+- Security Improvements:
+  - Excel export now uses the shared authenticated download helper instead of bespoke blob handling.
+  - URL encoding is centralized through `URLSearchParams`, avoiding malformed or partially encoded query strings.
+  - Removed option-load `console.error` calls that could expose request failure details in production consoles.
+- Dead Code Removed:
+  - Removed duplicate URL-building branches and manual blob download code.
+- Duplicate Logic Removed:
+  - Consolidated report path generation into `buildItemReportPath()`.
+  - Consolidated numeric/filter normalization helpers for frontend report requests.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ItemReport.test.ts` covering encoded active-filter URLs, blank optional filters, malformed numeric fallbacks, value normalization, and non-finite number handling.
+- Verification Results:
+  - Focused Vitest: `npm test -- ItemReport.test.ts` -> 3 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ItemReport.tsx src/pages/reports/ItemReport.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/ItemReport.tsx frontend/src/pages/reports/ItemReport.test.ts` -> clean.
+  - py_compile: not applicable to TSX/TS frontend source; compileall returned clean for the scoped frontend paths.
+- Commit SHA: `1248ff802868a5d899b7944d11453456a86c6212`
+- Commit Timestamp: `2026-07-16T15:24:02+05:30`
+- Commit Summary: `fix(reports): harden item report`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The page is still large; further component extraction should wait for the queued report component audits to avoid mixing unrelated files.
+- Status: COMPLETED
+
 ## frontend/src/pages/reports/ActiveLicenses.tsx
 
 - File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`

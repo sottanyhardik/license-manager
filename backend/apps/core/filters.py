@@ -11,13 +11,12 @@ with advanced features like:
 - Filter validation and sanitization
 """
 
-from rest_framework import filters
-from django_filters import rest_framework as django_filters
-from django.db.models import Q
-from django.utils.translation import gettext_lazy as _
-from typing import List, Optional
 import operator
 from functools import reduce
+
+from django.db.models import Q
+from django.utils.translation import gettext_lazy as _
+from rest_framework import filters
 
 
 # ============================================================================
@@ -528,7 +527,7 @@ class CombinedFilterBackend(filters.BaseFilterBackend):
 # Utility Functions
 # ============================================================================
 
-def get_filter_fields_from_serializer(serializer_class) -> List[str]:
+def get_filter_fields_from_serializer(serializer_class) -> list[str]:
     """
     Extract filterable fields from serializer.
 

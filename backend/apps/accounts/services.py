@@ -4,6 +4,7 @@ Service layer for user creation.
 """
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 from rest_framework import serializers
 
 User = get_user_model()
@@ -19,5 +20,5 @@ def create_user(username: str, password: str, email: str, first_name: str = "", 
             last_name=last_name or ""
         )
         return user
-    except Exception as e:
-        raise serializers.ValidationError(f"Failed to create user: {e}")
+    except (IntegrityError, ValueError) as exc:
+        raise serializers.ValidationError(f"Failed to create user: {exc}") from exc

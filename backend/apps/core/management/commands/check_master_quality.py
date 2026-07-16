@@ -26,9 +26,9 @@ Usage:
     python manage.py check_master_quality --quarantine    # refuses: prints the plan only
 """
 import json
-import sys
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from django.apps import apps
 from django.core.management.base import BaseCommand, CommandError
@@ -176,8 +176,7 @@ class Command(BaseCommand):
 
         payload = json.dumps(report, indent=2, default=_jsonable)
         if opts["out"]:
-            with open(opts["out"], "w") as fh:
-                fh.write(payload)
+            Path(opts["out"]).write_text(payload, encoding="utf-8")
             self.stderr.write(f"Wrote report -> {opts['out']}")
         else:
             self.stdout.write(payload)

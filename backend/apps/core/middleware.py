@@ -6,14 +6,15 @@ from django.utils.deprecation import MiddlewareMixin
 
 class DisableCSRFForAPIMiddleware(MiddlewareMixin):
     """
-    Disable CSRF validation for API endpoints that use JWT authentication.
+    Disable CSRF validation only for API requests that present token auth.
 
-    This middleware exempts /api/ endpoints from CSRF validation since they use
-    JWT tokens in the Authorization header instead of session-based authentication.
+    The API supports both JWT and DRF session authentication. Session-backed
+    requests must keep DRF's CSRF enforcement; bearer-token requests do not use
+    cookies as credentials and can safely skip CSRF checks.
     """
 
     def process_request(self, request):
-        if request.path.startswith('/api/'):
+        if request.path.startswith('/api/') and _uses_token_auth(request):
             setattr(request, '_dont_enforce_csrf_checks', True)
         return None
 
@@ -30,6 +31,20 @@ _DOWNLOAD_KEYWORDS = ('download', 'pdf', 'excel', 'export', 'generate-bill',
                       'balance-pdf', 'balance-excel', 'generate-transfer',
                       'generate-pdf', 'generate-purchase', 'balance-report')
 _UPLOAD_KEYWORDS   = ('upload', 'ledger-csv', 'upload-ledger')
+
+
+def _uses_token_auth(request):
+    authorization = request.META.get('HTTP_AUTHORIZATION', '')
+    if authorization.lower().startswith('bearer '):
+        return True
+
+    method = getattr(request, 'method', '').upper()
+    path = getattr(request, 'path', '').lower()
+    if method not in {'GET', 'HEAD'} or not any(k in path for k in _DOWNLOAD_KEYWORDS):
+        return False
+
+    query_params = getattr(request, 'GET', {})
+    return bool(query_params.get('access_token'))
 
 
 def _get_client_ip(request):

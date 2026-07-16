@@ -12,7 +12,7 @@ sorted into the correct buckets:
   - a keyless row (model with no natural key)
 """
 import json
-import os
+from pathlib import Path
 import tempfile
 from unittest import TestCase
 
@@ -241,13 +241,12 @@ class TestParseInputs(TestCase):
                 _rec("K", 2, "hB", "2026-02-01T00:00:00"),
             ]),
         })
-        with tempfile.TemporaryDirectory() as d:
-            p1 = os.path.join(d, "s1.json")
-            p2 = os.path.join(d, "s2.json")
-            with open(p1, "w") as f:
-                json.dump(snap1, f)
-            with open(p2, "w") as f:
-                json.dump(snap2, f)
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            p1 = temp_dir / "s1.json"
+            p2 = temp_dir / "s2.json"
+            p1.write_text(json.dumps(snap1), encoding="utf-8")
+            p2.write_text(json.dumps(snap2), encoding="utf-8")
 
             parsed = self.cmd._parse_inputs([f"s1={p1}", f"s2={p2}"])
             assert set(parsed.keys()) == {"s1", "s2"}

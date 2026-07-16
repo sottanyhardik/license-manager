@@ -11,7 +11,7 @@ def _label(instance) -> str:
     return f"{instance._meta.app_label}.{instance.__class__.__name__}"
 
 
-@receiver(post_save)
+@receiver(post_save, dispatch_uid="masters.record_master_save")
 def _record_save(sender, instance, created, **kwargs):
     if sender in TRACKED_MODELS:
         MasterChange.objects.create(
@@ -21,7 +21,7 @@ def _record_save(sender, instance, created, **kwargs):
         )
 
 
-@receiver(post_delete)
+@receiver(post_delete, dispatch_uid="masters.record_master_delete")
 def _record_delete(sender, instance, **kwargs):
     if sender in TRACKED_MODELS:
         MasterChange.objects.create(

@@ -22,14 +22,6 @@ def generate_allotment_pdf_bytes(allotment):
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5 * inch, bottomMargin=0.5 * inch)
 
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=14,
-        textColor=colors.black,
-        spaceAfter=12,
-        alignment=TA_CENTER,
-    )
     header_style = ParagraphStyle(
         'CustomHeader',
         parent=styles['Normal'],

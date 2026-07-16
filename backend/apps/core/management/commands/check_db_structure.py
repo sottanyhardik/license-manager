@@ -15,13 +15,11 @@ Usage:
     python manage.py check_db_structure --fix  # Attempt to fix issues
 """
 
-from typing import Dict, List, Set, Tuple
 from collections import defaultdict
 
+from django.apps import apps
 from django.core.management.base import BaseCommand
 from django.db import connection
-from django.apps import apps
-from django.db.models import Model
 
 
 class Command(BaseCommand):
@@ -119,7 +117,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("Check complete!"))
         self.stdout.write(self.style.SUCCESS("=" * 80))
 
-    def _get_database_tables(self) -> Set[str]:
+    def _get_database_tables(self) -> set[str]:
         """Get list of all tables in the database."""
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -131,7 +129,7 @@ class Command(BaseCommand):
             """)
             return {row[0] for row in cursor.fetchall()}
 
-    def _get_database_columns(self) -> Dict[str, List[Dict]]:
+    def _get_database_columns(self) -> dict[str, list[dict]]:
         """Get column information for all tables."""
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -152,7 +150,7 @@ class Command(BaseCommand):
 
             return dict(columns_by_table)
 
-    def _report_missing_tables(self, missing_tables: Set[str], model_tables: Dict, verbose: bool):
+    def _report_missing_tables(self, missing_tables: set[str], model_tables: dict, verbose: bool):
         """Report tables that are defined in models but don't exist in database."""
         if missing_tables:
             self.stdout.write(f"\n❌ Missing tables ({len(missing_tables)}):")
@@ -170,7 +168,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"\n✅ No missing tables - all models have database tables")
 
-    def _report_orphaned_tables(self, orphaned_tables: Set[str], verbose: bool):
+    def _report_orphaned_tables(self, orphaned_tables: set[str], verbose: bool):
         """Report tables that exist in database but don't have corresponding models."""
         # Filter out known system/legacy tables
         system_prefixes = ('django_', 'auth_', 'eScrap_', 'ebrc_', 'shipping_', 'license_movement_')
@@ -197,9 +195,9 @@ class Command(BaseCommand):
 
     def _report_matching_tables(
         self,
-        matching_tables: Set[str],
-        model_tables: Dict,
-        db_columns: Dict,
+        matching_tables: set[str],
+        model_tables: dict,
+        db_columns: dict,
         show_columns: bool
     ):
         """Report tables that exist in both database and models."""
@@ -225,7 +223,7 @@ class Command(BaseCommand):
             if not show_columns:
                 self.stdout.write("   Use --show-columns to see column details")
 
-    def _fix_missing_tables(self, missing_tables: Set[str], model_tables: Dict):
+    def _fix_missing_tables(self, missing_tables: set[str], model_tables: dict):
         """Attempt to create missing tables."""
         self.stdout.write(f"\n🔧 Attempting to fix missing tables...")
 

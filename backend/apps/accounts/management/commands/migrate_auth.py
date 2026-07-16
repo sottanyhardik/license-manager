@@ -30,14 +30,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Generator, Iterator
+from urllib.parse import urlsplit, urlunsplit
 
-import psycopg2
-import psycopg2.extras
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -53,6 +53,7 @@ AUDIT_DIR = Path("migration-audit")
 LOG_FILE = AUDIT_DIR / "migration_log.jsonl"
 
 DEFAULT_BATCH_SIZE = 500
+PASSWORD_KV_RE = re.compile(r"(?i)(password=)(\S+)")
 
 
 # ---------------------------------------------------------------------------
@@ -60,9 +61,19 @@ DEFAULT_BATCH_SIZE = 500
 # ---------------------------------------------------------------------------
 
 @contextmanager
-def source_cursor(dsn: str) -> Generator[psycopg2.extensions.cursor, None, None]:
+def source_cursor(dsn: str) -> Generator[Any, None, None]:
     """Open a read-only server-side cursor on the source DB."""
-    conn = psycopg2.connect(dsn)
+    try:
+        import psycopg2
+        import psycopg2.extras
+    except ImportError as exc:
+        raise CommandError("psycopg2 is required to run migrate_auth.") from exc
+
+    try:
+        conn = psycopg2.connect(dsn)
+    except psycopg2.OperationalError as exc:
+        raise CommandError(f"Cannot connect to source DB: {exc}") from exc
+
     conn.set_session(readonly=True, autocommit=True)
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -73,6 +84,18 @@ def source_cursor(dsn: str) -> Generator[psycopg2.extensions.cursor, None, None]
 
 def _now() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
+
+
+def redact_dsn(dsn: str) -> str:
+    parsed = urlsplit(dsn)
+    if parsed.password is None:
+        return PASSWORD_KV_RE.sub(r"\1***", dsn)
+
+    host = parsed.hostname or ""
+    port = f":{parsed.port}" if parsed.port else ""
+    username = parsed.username or ""
+    netloc = f"{username}:***@{host}{port}" if username else f"***@{host}{port}"
+    return urlunsplit(parsed._replace(netloc=netloc))
 
 
 class AuditLog:
@@ -120,7 +143,7 @@ class AuditLog:
         return len(self._errors)
 
 
-def batched(cursor: psycopg2.extensions.cursor, query: str, size: int) -> Iterator[list]:
+def batched(cursor: Any, query: str, size: int) -> Iterator[list]:
     """Execute *query* on *cursor* and yield lists of rows of length *size*."""
     cursor.execute(query)
     while True:
@@ -173,17 +196,14 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.WARNING(
-                f"{'[DRY-RUN] ' if dry_run else ''}migrate_auth — source: {source_dsn!r}"
+                f"{'[DRY-RUN] ' if dry_run else ''}migrate_auth — source: {redact_dsn(source_dsn)!r}"
             )
         )
 
-        try:
-            with source_cursor(source_dsn) as cur:
-                self._migrate_groups(cur, audit, dry_run, batch_size)
-                self._migrate_users(cur, audit, dry_run, batch_size)
-                self._migrate_group_memberships(cur, audit, dry_run, batch_size)
-        except psycopg2.OperationalError as exc:
-            raise CommandError(f"Cannot connect to source DB: {exc}") from exc
+        with source_cursor(source_dsn) as cur:
+            self._migrate_groups(cur, audit, dry_run, batch_size)
+            self._migrate_users(cur, audit, dry_run, batch_size)
+            self._migrate_group_memberships(cur, audit, dry_run, batch_size)
 
         # Summary
         total_errors = audit.error_count
@@ -201,7 +221,7 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------ Groups
     def _migrate_groups(
         self,
-        cur: psycopg2.extensions.cursor,
+        cur: Any,
         audit: AuditLog,
         dry_run: bool,
         batch_size: int,
@@ -269,7 +289,7 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------ Users
     def _migrate_users(
         self,
-        cur: psycopg2.extensions.cursor,
+        cur: Any,
         audit: AuditLog,
         dry_run: bool,
         batch_size: int,
@@ -365,7 +385,7 @@ class Command(BaseCommand):
                             skipped += 1
                             status = "skipped"
                         else:
-                            obj = User.objects.create(**defaults)
+                            obj = User.objects.create(username=username, **defaults)
                             migrated += 1
                             status = "migrated"
 
@@ -396,7 +416,7 @@ class Command(BaseCommand):
     # ------------------------------------------------------- Group memberships
     def _migrate_group_memberships(
         self,
-        cur: psycopg2.extensions.cursor,
+        cur: Any,
         audit: AuditLog,
         dry_run: bool,
         batch_size: int,

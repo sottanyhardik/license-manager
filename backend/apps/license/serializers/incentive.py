@@ -3,11 +3,15 @@
 Split out of the former serializers.py (behaviour unchanged). These do not
 reference the core licence serializers.
 """
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from apps.core.models import ItemNameModel
 from apps.core.serializers.fields import IndianDateField
 from apps.license.models import IncentiveLicense, LicenseItemPlan, LicenseImportItemsModel
+
+DECIMAL_ZERO = Decimal("0.00")
 
 
 class IncentiveLicenseSerializer(serializers.ModelSerializer):
@@ -30,24 +34,22 @@ class IncentiveLicenseSerializer(serializers.ModelSerializer):
 
     def get_sold_value(self, obj):
         """Get total sold value from SALE trades"""
-        return float(obj.get_sold_value())
+        return float(obj.sold_value or DECIMAL_ZERO)
 
     def get_balance_value(self, obj):
         """Get remaining balance value"""
-        return float(obj.get_balance_value())
+        return float(obj.balance_value or DECIMAL_ZERO)
 
     def get_sold_status(self, obj):
         """Get sold status: YES (fully sold), NO (not sold), PARTIAL (partially sold)"""
-        from decimal import Decimal
-        sold_value = obj.get_sold_value()
-        balance_value = obj.get_balance_value()
+        sold_value = obj.sold_value or DECIMAL_ZERO
+        balance_value = obj.balance_value or DECIMAL_ZERO
 
-        if sold_value == Decimal('0.00') or sold_value is None:
+        if sold_value == DECIMAL_ZERO:
             return 'NO'
-        elif balance_value <= Decimal('0.00'):
+        if balance_value <= DECIMAL_ZERO:
             return 'YES'
-        else:
-            return 'PARTIAL'
+        return 'PARTIAL'
 
     def to_representation(self, instance):
         """Add formatted dates and display names"""

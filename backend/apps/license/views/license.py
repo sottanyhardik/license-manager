@@ -461,7 +461,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         from apps.bill_of_entry.models import RowDetails
         from apps.allotment.models import AllotmentItems
 
-        license_obj = self.get_object()
+        self.get_object()
         item_id = request.query_params.get('item_id')
         item_type = request.query_params.get('type')
 
@@ -678,7 +678,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                             tmp_reader = PdfReader(tmp_f)
                             for page in tmp_reader.pages:
                                 writer.add_page(page)
-                        logger.info(f"Converted and added DOCX/DOC: {file_path}")
+                        logger.info(f"Converted and added DOCX/DOC: {file_name}")
 
                         # Clean up temp file
                         try:

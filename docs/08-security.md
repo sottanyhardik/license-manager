@@ -49,7 +49,7 @@ All permission classes follow the pattern: superusers bypass everything.
 </ProtectedRoute>
 ```
 
-Navigation links in `Sidebar.tsx` are also filtered by role — unauthorized options are not rendered.
+Navigation links in `TopNav.tsx` and command entries in `CommandPalette.tsx` are also filtered by role — unauthorized options are not rendered.
 
 ---
 

@@ -236,7 +236,7 @@ class ThrottleHealthView(APIView):
                 cache_backend = 'memcached'
             else:
                 cache_backend = 'locmem'
-        except Exception as e:
+        except Exception:
             cache_available = False
 
         # Get configured throttle rates

@@ -60,7 +60,7 @@ def num_to_words_indian(amount):
             return ' '.join(result)
 
         return convert_indian(whole_amount)
-    except Exception as e:
+    except Exception:
         return str(int(amount))
 
 
@@ -79,17 +79,6 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
     # Get company color (default to black)
     from_company = trade.from_company
-    company_color = colors.black
-
-    if from_company and from_company.bill_colour:
-        color_value = from_company.bill_colour.strip()
-        if color_value:
-            if not color_value.startswith('#'):
-                color_value = '#' + color_value
-            try:
-                company_color = colors.HexColor(color_value)
-            except (ValueError, TypeError):
-                company_color = colors.black
 
     doc = SimpleDocTemplate(
         buffer,
@@ -659,9 +648,6 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     if include_signature and from_company:
         # Add signature/stamp if requested
         sig_rows = []
-
-        # First row: Signature and Stamp side by side (removed "for Company Name" as it's now in Bank Details)
-        sig_stamp_row = []
 
         # Try to add signature image - bigger size using full space
         sig_img = None

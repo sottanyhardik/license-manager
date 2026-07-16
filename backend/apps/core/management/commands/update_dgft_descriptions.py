@@ -2,13 +2,15 @@
 Management command to fetch all SION norms from DGFT and update existing descriptions
 Uses the DGFT DataTables API to get comprehensive norm data
 """
-from django.core.management.base import BaseCommand
-from django.db import transaction
-import requests
 import json
+import re
 import time
 
-from apps.core.models import SionNormClassModel, SIONExportModel, SIONImportModel, HeadSIONNormsModel
+import requests
+from django.core.management.base import BaseCommand
+from django.db import transaction
+
+from apps.core.models import HeadSIONNormsModel, SionNormClassModel, SIONExportModel
 
 
 class Command(BaseCommand):
@@ -331,7 +333,6 @@ class Command(BaseCommand):
         try:
             if not value:
                 return 0
-            import re
             clean_value = re.sub(r'[^\d.-]', '', str(value))
             return float(clean_value) if clean_value else 0
         except (ValueError, TypeError):

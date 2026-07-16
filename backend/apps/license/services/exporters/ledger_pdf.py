@@ -622,7 +622,6 @@ def generate_all_licenses_pdf(licenses_data, query_params):
                     exp_date_str = exp_date.strftime('%d-%b-%y') if exp_date else '-'
 
                     total_val = license.get('total_value', 0)
-                    balance_val = license.get('balance_value', 0)
                     sold_val = license.get('sold_value', 0)
                     purchase_amt = license.get('purchase_amount', 0)
                     sale_amt = license.get('sale_amount', 0)
@@ -1303,7 +1302,7 @@ def build_incentive_ledger_detail(license, company_id=None):
 
     for trade in trades:
         license_line = next(
-            (l for l in trade.incentive_lines.all() if l.incentive_license_id == license.id),
+            (line for line in trade.incentive_lines.all() if line.incentive_license_id == license.id),
             None,
         )
         if not license_line:

@@ -285,7 +285,6 @@ class ExchangeRateSerializer(AuditSerializerMixin):
 
     def get_is_active(self, obj):
         """Check if this is the active (latest) exchange rate"""
-        from apps.core.models import ExchangeRateModel
         active_rate = ExchangeRateModel.get_active_rate()
         return obj.id == active_rate.id if active_rate else False
 

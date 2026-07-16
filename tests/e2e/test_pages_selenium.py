@@ -79,7 +79,7 @@ def _assert_no_console_errors(driver):
 # Login form — covered separately because it's the one page that EXERCISES
 # the login flow rather than skipping it.
 # ---------------------------------------------------------------------------
-def test_login_page(selenium_driver, frontend_url, backend_url):
+def test_login_page(selenium_driver, frontend_url, backend_url, e2e_credentials):
     driver = selenium_driver
     driver.get(f"{frontend_url}/login")
 
@@ -88,9 +88,9 @@ def test_login_page(selenium_driver, frontend_url, backend_url):
     password_input = driver.find_element(By.CSS_SELECTOR, "input[type='password']")
 
     username_input.clear()
-    username_input.send_keys("hardik")
+    username_input.send_keys(e2e_credentials["username"])
     password_input.clear()
-    password_input.send_keys("admin@123")
+    password_input.send_keys(e2e_credentials["password"])
 
     submit = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
     submit.click()

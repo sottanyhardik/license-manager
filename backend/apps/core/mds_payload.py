@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from django.db import models
 
@@ -107,7 +107,7 @@ def _serialize_scalar(value: Any) -> Any:
     return value
 
 
-def _mds_models() -> Dict[str, dict]:
+def _mds_models() -> dict[str, dict]:
     """The model_label -> config mapping for all 17 masters (always available)."""
     return _MDS_MODELS
 
@@ -135,7 +135,7 @@ def _parent_natural_key_field(parent_model: type[models.Model]) -> str | None:
     return cfg.get("natural_key") if cfg else None
 
 
-def build_row(instance: models.Model) -> Tuple[str, str, Dict[str, Any]]:
+def build_row(instance: models.Model) -> tuple[str, str, dict[str, Any]]:
     """Build the flat MDS row for one local master instance.
 
     Returns ``(mds_model_label, natural_key_field, row)`` where:
@@ -153,7 +153,7 @@ def build_row(instance: models.Model) -> Tuple[str, str, Dict[str, Any]]:
     cfg = _config_for_label(label)
     natural_key = cfg["natural_key"]
 
-    row: Dict[str, Any] = {}
+    row: dict[str, Any] = {}
     for field in model._meta.get_fields():
         if not getattr(field, "concrete", False):
             continue  # reverse relations, m2m handled elsewhere / not on masters
@@ -192,7 +192,7 @@ def build_row(instance: models.Model) -> Tuple[str, str, Dict[str, Any]]:
     return label, natural_key, row
 
 
-def natural_key_value(instance: models.Model) -> Tuple[str, str, Any]:
+def natural_key_value(instance: models.Model) -> tuple[str, str, Any]:
     """``(mds_model_label, natural_key_field, natural_key_value)`` for delete."""
     model = type(instance)
     label = local_model_label(model)
@@ -202,7 +202,7 @@ def natural_key_value(instance: models.Model) -> Tuple[str, str, Any]:
     return label, natural_key, value
 
 
-def build_export_record(instance: models.Model) -> Dict[str, Any]:
+def build_export_record(instance: models.Model) -> dict[str, Any]:
     """Build the offline-export record ``{"key": <nk>, "data": {...}}`` for one
     instance, reusing :func:`build_row` so the offline JSON and the online write
     payload derive from ONE codepath (identical scalar/media/FK handling).
@@ -218,7 +218,7 @@ def build_export_record(instance: models.Model) -> Dict[str, Any]:
     model = type(instance)
 
     # Map FK field name -> its ``<fk>__<parent_nk>`` export key.
-    fk_rename: Dict[str, str] = {}
+    fk_rename: dict[str, str] = {}
     for field in model._meta.get_fields():
         if getattr(field, "concrete", False) and field.is_relation and field.many_to_one:
             parent_nk = _parent_natural_key_field(field.related_model)
@@ -226,7 +226,7 @@ def build_export_record(instance: models.Model) -> Dict[str, Any]:
                 fk_rename[field.name] = f"{field.name}__{parent_nk}"
 
     key_value = row.get(natural_key)
-    data: Dict[str, Any] = {}
+    data: dict[str, Any] = {}
     for name, value in row.items():
         if name == natural_key and natural_key == "uid":
             # keyless masters carry the uid as the record "key", not in "data".

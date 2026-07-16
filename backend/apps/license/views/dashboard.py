@@ -12,7 +12,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import ReportPermission
 from apps.allotment.models import AllotmentModel
 from apps.bill_of_entry.models import BillOfEntryModel
 from apps.core.cache_utils import CACHE_TIMEOUT_MEDIUM

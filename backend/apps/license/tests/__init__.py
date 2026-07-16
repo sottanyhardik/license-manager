@@ -1,3 +1,0 @@
-"""
-License app tests
-"""

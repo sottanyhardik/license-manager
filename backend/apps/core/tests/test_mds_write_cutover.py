@@ -114,7 +114,7 @@ def patch_client(monkeypatch):
 
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(username="u1", password="x")
+    return User.objects.create_superuser(username="u1", password="x")
 
 
 # --- MDS OFF (default) ------------------------------------------------------
@@ -170,7 +170,7 @@ class TestMdsOnCreate:
         assert CompanyModel.objects.filter(iec="IEC1000001").exists()
 
     def test_create_503_and_no_partial_write_when_mds_down(self, user, enable_mds, patch_client):
-        rec = patch_client(WriteRecorder(down=True))
+        patch_client(WriteRecorder(down=True))
         request = FACTORY.post("/companies/", {"iec": "IEC2000002", "name": "GhostCo"})
         force_authenticate(request, user=user)
         view = CompanyViewSet.as_view({"post": "create"})
@@ -214,7 +214,7 @@ class TestMdsOnDelete:
         assert rec.deletes == [("core.CompanyModel", "IEC4000004")]
 
     def test_delete_503_leaves_local_row_intact_when_mds_down(self, user, enable_mds, patch_client):
-        rec = patch_client(WriteRecorder(down=True))
+        patch_client(WriteRecorder(down=True))
         c = CompanyModel.objects.create(iec="IEC5000005", name="Stay")
         request = FACTORY.delete("/companies/")
         force_authenticate(request, user=user)

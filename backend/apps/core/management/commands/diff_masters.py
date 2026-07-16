@@ -19,6 +19,7 @@ Status values:
 """
 import csv
 import json
+from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
@@ -32,8 +33,15 @@ class Command(BaseCommand):
         parser.add_argument("--out", default="merge-plan.csv", help="Output CSV path")
 
     def handle(self, *args, **opts):
-        winner = json.load(open(opts["winner"]))
-        others = [json.load(open(p)) for p in opts["others"]]
+        winner = json.loads(Path(opts["winner"]).read_text(encoding="utf-8"))
+        others = [json.loads(Path(path).read_text(encoding="utf-8")) for path in opts["others"]]
+        other_records_by_table_key = {}
+        for other in others:
+            for table_name, table in other.get("tables", {}).items():
+                for record in table.get("records", []):
+                    other_records_by_table_key.setdefault(table_name, {}).setdefault(record["key"], []).append(
+                        (other["server_name"], record)
+                    )
 
         rows = []
         # Iterate every table present in the winner snapshot
@@ -45,23 +53,15 @@ class Command(BaseCommand):
             w_by_key = {r["key"]: r for r in w_table["records"]}
 
             # All keys present on any "other" server
-            other_keys = set()
-            for o in others:
-                o_table = o["tables"].get(table_name, {"records": []})
-                for r in o_table.get("records", []):
-                    other_keys.add(r["key"])
+            other_records_by_key = other_records_by_table_key.get(table_name, {})
+            other_keys = set(other_records_by_key)
 
             # Every key seen anywhere
             all_keys = set(w_by_key.keys()) | other_keys
 
             for key in sorted(all_keys):
                 w_rec = w_by_key.get(key)
-                o_recs = []
-                for o in others:
-                    o_table = o["tables"].get(table_name, {"records": []})
-                    for r in o_table.get("records", []):
-                        if r["key"] == key:
-                            o_recs.append((o["server_name"], r))
+                o_recs = other_records_by_key.get(key, [])
 
                 if w_rec and o_recs:
                     # Compare hashes
@@ -94,7 +94,7 @@ class Command(BaseCommand):
                 })
 
         # Write CSV
-        with open(opts["out"], "w", newline="") as f:
+        with Path(opts["out"]).open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=[
                 "table", "key", "status", "winner_has", "winner_id",
                 "others_have", "action", "winner_hash", "other_hashes",

@@ -91,6 +91,10 @@ print_error() {
     echo -e "${RED}✗ $1${NC}"
 }
 
+print_warning() {
+    echo -e "${YELLOW}⚠ $1${NC}"
+}
+
 # Function to check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
@@ -120,16 +124,16 @@ setup_test_environment() {
     cd "$BACKEND_DIR"
     
     # Check if virtual environment exists
-    if [ ! -d "venv" ] && [ ! -d "../venv" ]; then
-        print_error "No virtual environment found. Creating one..."
-        python3 -m venv venv
-        source venv/bin/activate
+    if [ -d "$PROJECT_ROOT/.venv" ]; then
+        source "$PROJECT_ROOT/.venv/bin/activate"
+    elif [ -d "$BACKEND_DIR/venv" ]; then
+        source "$BACKEND_DIR/venv/bin/activate"
+    elif [ -d "$PROJECT_ROOT/venv" ]; then
+        source "$PROJECT_ROOT/venv/bin/activate"
     else
-        if [ -d "venv" ]; then
-            source venv/bin/activate
-        else
-            source ../venv/bin/activate
-        fi
+        print_error "No virtual environment found. Creating one..."
+        python3 -m venv "$PROJECT_ROOT/.venv"
+        source "$PROJECT_ROOT/.venv/bin/activate"
     fi
     
     # Install test dependencies if needed
@@ -163,23 +167,23 @@ run_backend_tests() {
     
     # Build pytest command based on mode
     PYTEST_CMD="pytest"
-    PYTEST_ARGS="-v --tb=short"
+    PYTEST_ARGS=(-v --tb=short)
     
     case $RUN_MODE in
         fast)
-            PYTEST_ARGS="$PYTEST_ARGS -m 'not slow'"
+            PYTEST_ARGS+=(-m "not slow")
             echo -e "${YELLOW}Mode: Fast tests only${NC}"
             ;;
         api)
-            PYTEST_ARGS="$PYTEST_ARGS -m api"
+            PYTEST_ARGS+=(-m api)
             echo -e "${YELLOW}Mode: API tests only${NC}"
             ;;
         unit)
-            PYTEST_ARGS="$PYTEST_ARGS -m unit"
+            PYTEST_ARGS+=(-m unit)
             echo -e "${YELLOW}Mode: Unit tests only${NC}"
             ;;
         integration)
-            PYTEST_ARGS="$PYTEST_ARGS -m integration"
+            PYTEST_ARGS+=(-m integration)
             echo -e "${YELLOW}Mode: Integration tests only${NC}"
             ;;
         all)
@@ -189,18 +193,26 @@ run_backend_tests() {
     
     # Add coverage if requested
     if [ "$COVERAGE_DETAIL" = true ]; then
-        PYTEST_ARGS="$PYTEST_ARGS --cov=. --cov-report=html --cov-report=term-missing"
+        PYTEST_ARGS+=(--cov=. --cov-report=html --cov-report=term-missing)
     else
-        PYTEST_ARGS="$PYTEST_ARGS --cov=. --cov-report=term --no-cov-on-fail"
+        PYTEST_ARGS+=(--cov=. --cov-report=term --no-cov-on-fail)
     fi
     
     # Run tests
     echo ""
-    echo -e "${BLUE}Running: $PYTEST_CMD $PYTEST_ARGS${NC}"
+    echo -e "${BLUE}Running: $PYTEST_CMD ${PYTEST_ARGS[*]} tests/${NC}"
     echo ""
     
-    if $PYTEST_CMD $PYTEST_ARGS tests/; then
+    set +e
+    "$PYTEST_CMD" "${PYTEST_ARGS[@]}" tests/
+    PYTEST_STATUS=$?
+    set -e
+
+    if [ $PYTEST_STATUS -eq 0 ]; then
         print_success "Backend tests passed"
+        BACKEND_STATUS=0
+    elif [ $PYTEST_STATUS -eq 5 ] && [ "$RUN_MODE" != "all" ]; then
+        print_warning "No backend tests matched mode: $RUN_MODE"
         BACKEND_STATUS=0
     else
         print_error "Backend tests failed"

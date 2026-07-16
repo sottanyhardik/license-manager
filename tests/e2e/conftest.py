@@ -16,6 +16,7 @@ Override the URLs / credentials with environment variables:
 from __future__ import annotations
 
 import os
+import json
 import socket
 from urllib.parse import urlparse
 
@@ -55,10 +56,15 @@ def frontend_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def jwt_token(backend_url: str) -> str:
+def e2e_credentials() -> dict:
+    return {"username": USERNAME, "password": PASSWORD}
+
+
+@pytest.fixture(scope="session")
+def jwt_token(backend_url: str, e2e_credentials: dict) -> str:
     r = requests.post(
         f"{backend_url}/api/auth/login/",
-        json={"username": USERNAME, "password": PASSWORD},
+        json=e2e_credentials,
         timeout=10,
     )
     assert r.status_code == 200, f"login failed: {r.status_code} {r.text[:300]}"
@@ -108,13 +114,13 @@ def selenium_driver():
 
 
 @pytest.fixture(scope="session")
-def _spa_auth_payload(backend_url: str) -> dict:
+def _spa_auth_payload(backend_url: str, e2e_credentials: dict) -> dict:
     """One login per pytest session. The login endpoint is throttled at
     10/minute; doing it once and reusing the tokens keeps every test under
     the limit even when the full suite runs back-to-back."""
     r = requests.post(
         f"{backend_url}/api/auth/login/",
-        json={"username": USERNAME, "password": PASSWORD},
+        json=e2e_credentials,
         timeout=10,
     )
     assert r.status_code == 200, f"login failed: {r.status_code} {r.text[:200]}"
@@ -142,6 +148,6 @@ def logged_in_driver(selenium_driver, frontend_url: str, _spa_auth_payload: dict
         "localStorage.setItem('user', arguments[2]);",
         _spa_auth_payload["access"],
         _spa_auth_payload["refresh"],
-        __import__("json").dumps(_spa_auth_payload.get("user", {})),
+        json.dumps(_spa_auth_payload.get("user", {})),
     )
     return selenium_driver

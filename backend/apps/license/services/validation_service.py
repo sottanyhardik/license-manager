@@ -6,7 +6,6 @@ This module handles business rule validation for licenses and items.
 
 from datetime import timedelta
 from decimal import Decimal
-from typing import List, Dict
 
 from django.utils import timezone
 
@@ -31,6 +30,9 @@ class LicenseValidationService:
         Returns:
             Tuple of (is_valid, error_message)
         """
+        if license_obj is None:
+            return False, "License is required"
+
         errors = []
 
         # Check purchase status
@@ -42,7 +44,8 @@ class LicenseValidationService:
             errors.append("License has expired")
 
         # Check balance
-        if license_obj.get_balance_cif < 500:
+        balance = to_decimal(getattr(license_obj, "get_balance_cif", DEC_0), DEC_0)
+        if balance < 500:
             errors.append("License balance is below minimum threshold (500)")
 
         # Check AU status
@@ -55,7 +58,7 @@ class LicenseValidationService:
         return True, ""
 
     @staticmethod
-    def validate_license_complete(license_obj) -> tuple[bool, List[str]]:
+    def validate_license_complete(license_obj) -> tuple[bool, list[str]]:
         """
         Check if license has all required fields.
         
@@ -65,6 +68,9 @@ class LicenseValidationService:
         Returns:
             Tuple of (is_complete, missing_fields)
         """
+        if license_obj is None:
+            return False, ["license"]
+
         missing_fields = []
 
         if not license_obj.license_expiry_date:
@@ -94,8 +100,15 @@ class LicenseValidationService:
         Returns:
             True if expiring within days, False otherwise
         """
+        if license_obj is None:
+            return False
         if not license_obj.license_expiry_date:
             return False
+
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            days = 90
 
         today = timezone.now().date()
         threshold_date = today + timedelta(days=days)
@@ -122,7 +135,12 @@ class LicenseValidationService:
         Returns:
             Tuple of (is_valid, error_message)
         """
+        if license_obj is None:
+            return False, "License is required"
+
         required = to_decimal(required_value, DEC_0)
+        if required < DEC_0:
+            return False, f"Required value cannot be negative: {required}"
 
         # If the import item carries a percentage condition, the remaining
         # pool is the binding limit; otherwise the licence balance applies.
@@ -160,10 +178,15 @@ class LicenseValidationService:
         Returns:
             Tuple of (is_valid, error_message)
         """
+        if import_item is None:
+            return False, "Import item is required"
+
         from apps.license.services.balance_calculator import ItemBalanceCalculator
 
         available_qty = ItemBalanceCalculator.calculate_available_quantity(import_item)
         required = to_decimal(required_quantity, DEC_0)
+        if required < DEC_0:
+            return False, f"Required quantity cannot be negative: {required}"
 
         if available_qty < required:
             return False, f"Insufficient quantity. Available: {available_qty}, Required: {required}"
@@ -180,6 +203,11 @@ class LicenseValidationService:
         Validate that allocation doesn't exceed the licence-condition pool
         for this item (NEW condition_type model).
         """
+        if license_obj is None:
+            return False, "License is required"
+        if import_item is None:
+            return False, "Import item is required"
+
         cond = (getattr(import_item, "condition_type", "") or "").strip()
         if not cond.endswith("%"):
             return True, ""  # AU / open: no pool ceiling
@@ -190,6 +218,8 @@ class LicenseValidationService:
             return True, ""
 
         required = to_decimal(required_value, DEC_0)
+        if required < DEC_0:
+            return False, f"Required value cannot be negative: {required}"
         if remaining < required:
             return False, f"Exceeds {cond} pool limit. Available: {remaining}, Required: {required}"
         return True, ""
@@ -201,7 +231,7 @@ class LicenseValidationService:
             import_item,
             quantity: Decimal,
             value: Decimal
-    ) -> tuple[bool, List[str]]:
+    ) -> tuple[bool, list[str]]:
         """
         Comprehensive validation for allocation.
 
@@ -215,6 +245,13 @@ class LicenseValidationService:
             Tuple of (is_valid, error_messages)
         """
         errors = []
+
+        if license_obj is None:
+            errors.append("License is required")
+        if import_item is None:
+            errors.append("Import item is required")
+        if errors:
+            return False, errors
 
         # Check license is active
         is_active, active_error = cls.validate_license_active(license_obj)
@@ -232,7 +269,7 @@ class LicenseValidationService:
             errors.append(quantity_error)
 
         # Check restriction limits (only if is_restricted=True)
-        if import_item.is_restricted:
+        if getattr(import_item, "is_restricted", False):
             within_restriction, restriction_error = cls.validate_restriction_limit(
                 license_obj,
                 import_item,
@@ -254,10 +291,12 @@ class LicenseValidationService:
         Returns:
             True if individual license, False otherwise
         """
+        if license_obj is None:
+            return False
         return license_obj.import_license.filter(cif_fc=Decimal('0.01')).exists()
 
     @staticmethod
-    def update_license_flags(license_obj) -> Dict[str, bool]:
+    def update_license_flags(license_obj) -> dict[str, bool]:
         """
         Update all license status flags.
         
@@ -267,10 +306,19 @@ class LicenseValidationService:
         Returns:
             Dictionary of updated flags
         """
+        if license_obj is None:
+            return {
+                "is_null": True,
+                "is_expired": False,
+                "is_active": False,
+                "is_incomplete": True,
+                "is_individual": False,
+            }
+
         flags = {}
 
         # Check if null (low balance)
-        balance = license_obj.get_balance_cif
+        balance = to_decimal(getattr(license_obj, "get_balance_cif", DEC_0), DEC_0)
         flags['is_null'] = balance < 500
 
         # Check if expired

@@ -12,23 +12,19 @@ For each item, it displays:
 """
 
 from decimal import Decimal
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
-from django.db.models import Sum, Q, F, DecimalField, Value
-from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
-from django.views import View
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+from rest_framework.views import APIView
 
 from apps.core.constants import DEC_0, DEC_000
-from apps.core.models import SionNormClassModel, ItemNameModel
-from apps.license.models import LicenseExportItemModel, LicenseImportItemsModel, LicenseDetailsModel
+from apps.accounts.permissions import ReportPermission
+from apps.core.models import SionNormClassModel
+from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
 # Excel export handled inline with openpyxl
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class InventoryBalanceReportView(View):
+class InventoryBalanceReportView(APIView):
     """
     API endpoint for Inventory Balance Report by SION Norm.
 
@@ -37,6 +33,7 @@ class InventoryBalanceReportView(View):
         - format: 'json' or 'excel' (default: json)
         - include_zero: Include items with zero balance (default: false)
     """
+    permission_classes = [ReportPermission]
 
     def get(self, request, *args, **kwargs):
         sion_norm = request.GET.get('sion_norm')

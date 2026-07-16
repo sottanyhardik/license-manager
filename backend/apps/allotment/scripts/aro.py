@@ -34,7 +34,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
             f.write(f"PDF: {pdf_path}\n")
             f.write(f"DOCX exists: {os.path.exists(docx_path)}\n")
             f.flush()
-    except Exception as e:
+    except Exception:
         pass  # Ignore logging errors
 
     logger.info(f"Starting PDF conversion: {os.path.basename(docx_path)}")

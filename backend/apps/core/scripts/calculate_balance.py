@@ -123,7 +123,6 @@ def calculate_available_value(instance):
 
     # Use the centralized calculator directly to avoid recursion through properties
     available_value = LicenseBalanceCalculator.calculate_balance(instance.license)
-    balance_value = available_value
 
     # Business Logic: If all items OTHER THAN serial_number = 1 have CIF = 0,
     # then serial_number 1's available_value should be balance_cif

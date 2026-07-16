@@ -3,8 +3,6 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
-from django.urls import reverse_lazy
-
 # ---------------------------------------------------------------------
 # Base Paths
 # ---------------------------------------------------------------------
@@ -30,7 +28,8 @@ DEBUG = os.getenv("DEBUG", "False").lower() == "true"   # PRODUCTION DEFAULT: Fa
 ALLOWED_HOSTS = os.getenv(
     "ALLOWED_HOSTS",
     "127.0.0.1,localhost"  # production: set ALLOWED_HOSTS env var with real domains
-).split(",")
+)
+ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS.split(",") if host.strip()]
 
 # HTTPS Settings — all default to OFF; production servers must set them
 # explicitly via environment variables (see server-envs/*.env).
@@ -333,7 +332,7 @@ try:
         "Authorization",
         "authorization",
     ]
-except Exception:
+except ImportError:
     # fallback - minimal safe set
     CORS_ALLOW_HEADERS = [
         "accept",

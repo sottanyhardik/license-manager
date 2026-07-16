@@ -9,11 +9,9 @@
 
 set -e
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
-log()  { echo -e "${BLUE}→${NC} $*"; }
-ok()   { echo -e "${GREEN}✓${NC} $*"; }
-warn() { echo -e "${YELLOW}⚠${NC} $*"; }
-err()  { echo -e "${RED}✗${NC} $*"; }
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/maintenance/_master_sync_lib.sh
+source "$SCRIPT_DIR/_master_sync_lib.sh"
 
 AUDIT_DIR="${1:?Usage: $0 <audit-dir>}"
 if [ ! -d "$AUDIT_DIR" ]; then
@@ -27,20 +25,10 @@ if [ ! -f "$PLAN_CSV" ]; then
     exit 1
 fi
 
-SERVER_USER="django"
-PASSWORD="admin"
-IP="143.110.252.201"   # license-manager (winner)
-REMOTE_PATH="/home/django/license-manager/backend"
-VENV_ACTIVATE="/home/django/license-manager/venv/bin/activate"
+IP="$WINNER_IP"   # license-manager (winner)
 REMOTE_TMP="/tmp/master-merge-$(date +%s)"
 
-if command -v sshpass &>/dev/null; then
-    SSH_BIN="sshpass -p $PASSWORD ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-    SCP_BIN="sshpass -p $PASSWORD scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-else
-    SSH_BIN="ssh"
-    SCP_BIN="scp"
-fi
+master_sync_setup_ssh
 
 # Find non-winner audit jsons in the audit dir
 OTHERS=()

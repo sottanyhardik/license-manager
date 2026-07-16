@@ -1,17 +1,34 @@
 # license/signals.py
+import logging
 import threading
 from contextlib import contextmanager
 from decimal import Decimal
 
-from django.db.models.signals import post_save, post_delete, pre_delete
+from django.db.models.signals import post_delete, post_save, pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
 
-from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 from apps.allotment.models import AllotmentItems
 from apps.bill_of_entry.models import RowDetails
-from apps.trade.models import LicenseTradeLine
 from apps.core.models import CompanyModel
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
+from apps.trade.models import LicenseTradeLine
+
+
+logger = logging.getLogger(__name__)
+DEC_0 = Decimal("0")
+SPECIAL_AVAILABLE_VALUE = Decimal("0.01")
+BALANCE_ONLY_UPDATE_FIELDS = frozenset(
+    {
+        "available_quantity",
+        "debited_quantity",
+        "allotted_quantity",
+        "allotted_value",
+        "debited_value",
+        "available_value",
+        "is_restricted",
+    }
+)
 
 
 # ── Bulk-operation guard ─────────────────────────────────────────────────────
@@ -43,6 +60,15 @@ def suspend_license_flag_recalc():
         _bulk_state.suspended = prev
 
 
+def _instance_id(instance) -> str:
+    return str(getattr(instance, "pk", None) or getattr(instance, "id", None) or "unsaved")
+
+
+def _related_license(instance, relation_name):
+    related = getattr(instance, relation_name, None)
+    return getattr(related, "license", None) if related is not None else None
+
+
 def _update_all_import_items_available_value(license_instance):
     """
     Update available_value for ALL import items in a license, using the
@@ -60,12 +86,10 @@ def _update_all_import_items_available_value(license_instance):
 
     Uses bulk `.update()` to bypass post_save signals and prevent recursion.
     """
-    import logging
-    from decimal import Decimal
     from apps.license.services.condition_pool import compute_condition_pools
 
-    logger = logging.getLogger(__name__)
-    DEC_0 = Decimal("0")
+    if license_instance is None or not getattr(license_instance, "pk", None):
+        return
 
     try:
         import_items = list(license_instance.import_license.all())
@@ -86,8 +110,8 @@ def _update_all_import_items_available_value(license_instance):
         updates_made = 0
         for item in import_items:
             try:
-                if item.cif_inr == Decimal("0.01") or item.cif_fc == Decimal("0.01"):
-                    new_av = Decimal("0.01")
+                if item.cif_inr == SPECIAL_AVAILABLE_VALUE or item.cif_fc == SPECIAL_AVAILABLE_VALUE:
+                    new_av = SPECIAL_AVAILABLE_VALUE
                 else:
                     cond = (item.condition_type or "").strip()
                     if cond.endswith("%") and cond in pools:
@@ -101,8 +125,11 @@ def _update_all_import_items_available_value(license_instance):
                         available_value=new_av
                     )
                     updates_made += 1
-            except Exception as e:
-                logger.error(f"Error updating available_value for item {item.id}: {e}")
+            except Exception:
+                logger.exception(
+                    "Error updating available_value for import item %s",
+                    _instance_id(item),
+                )
 
         if updates_made > 0:
             logger.info(
@@ -110,8 +137,11 @@ def _update_all_import_items_available_value(license_instance):
                 updates_made, license_instance.license_number,
             )
 
-    except Exception as e:
-        logger.error(f"Error updating import items for license {license_instance.id}: {e}")
+    except Exception:
+        logger.exception(
+            "Error updating import items for license %s",
+            _instance_id(license_instance),
+        )
 
 
 def update_license_flags(license_instance):
@@ -126,6 +156,9 @@ def update_license_flags(license_instance):
     """
     # Import locally to avoid circular imports at module load
     from apps.license.models import LicenseFlags, LicenseBalance
+
+    if license_instance is None or not getattr(license_instance, "pk", None):
+        return
 
     flag_updates = {}
     balance_updates = {}
@@ -150,10 +183,10 @@ def update_license_flags(license_instance):
         new_is_null = balance < Decimal('500')
         if license_instance.is_null != new_is_null:
             flag_updates['is_null'] = new_is_null
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(
-            f"Error calculating balance for license {license_instance.id}: {e}"
+    except Exception:
+        logger.exception(
+            "Error calculating balance for license %s",
+            _instance_id(license_instance),
         )
 
     if flag_updates:
@@ -254,16 +287,13 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
     Also auto-link ItemNameModel items based on description/HS code and norm class.
     This ensures balance_cif, available_quantity, and available_value are updated.
     """
-    import logging
-    logger = logging.getLogger(__name__)
-
     if kwargs.get('raw', False):
-        logger.debug(f"Signal skipped (raw=True) for import item {instance.id}")
+        logger.debug("Signal skipped (raw=True) for import item %s", _instance_id(instance))
         return
     if _flags_suspended():
         # Bulk serializer operation in progress — the caller will flush
         # update_license_flags once after all items are written.
-        logger.debug(f"Signal skipped (flags suspended) for import item {instance.id}")
+        logger.debug("Signal skipped (flags suspended) for import item %s", _instance_id(instance))
         return
 
     # Skip if only balance fields changed — those updates come from
@@ -273,22 +303,20 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
     # an O(N) cascade after every bulk save commits.
     update_fields = kwargs.get('update_fields')
     if update_fields is not None:
-        _balance_only_fields = {
-            'available_quantity', 'debited_quantity', 'allotted_quantity',
-            'allotted_value', 'debited_value', 'available_value',
-            'is_restricted',  # auto-link sets this via .update() but on_commit may surface it
-        }
-        if set(update_fields).issubset(_balance_only_fields):
+        if set(update_fields).issubset(BALANCE_ONLY_UPDATE_FIELDS):
             return
 
-    logger.info(f"Signal fired for import item {instance.id} (created={created})")
+    logger.info("Signal fired for import item %s (created=%s)", _instance_id(instance), created)
 
     if instance.license:
         update_license_flags(instance.license)
 
         # Only auto-link items if no items are currently linked (items field is empty)
         if instance.items.exists():
-            logger.info(f"Import item {instance.id} already has items linked. Skipping auto-link.")
+            logger.info(
+                "Import item %s already has items linked. Skipping auto-link.",
+                _instance_id(instance),
+            )
             return
 
         # Auto-link ItemNameModel items when import item is created or updated
@@ -297,7 +325,7 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
             instance.license.export_license.values_list('norm_class__norm_class', flat=True).distinct()
         )
 
-        logger.info(f"License norm classes: {license_norm_classes}")
+        logger.info("License norm classes: %s", license_norm_classes)
 
         if license_norm_classes and instance.description:
             # Use the shared item matcher utility for consistent matching logic
@@ -305,22 +333,37 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
 
             matching_items = match_import_item_to_items(instance, license_norm_classes)
 
-            logger.info(f"Found {matching_items.count()} matching items using comprehensive filters")
+            logger.info(
+                "Found %d matching items using comprehensive filters",
+                matching_items.count(),
+            )
 
             # Link ALL matching items. `is_restricted` is no longer auto-set
             # from ItemNameModel.restriction_percentage — restrictions come
             # exclusively from the licence's condition sheet via condition_type.
             for item_name in matching_items:
                 if not instance.items.filter(id=item_name.id).exists():
-                    logger.info(f"Linking item {item_name.id} ({item_name.name}) to import item {instance.id}")
+                    logger.info(
+                        "Linking item %s (%s) to import item %s",
+                        item_name.id,
+                        item_name.name,
+                        _instance_id(instance),
+                    )
                     instance.items.add(item_name)
                 else:
-                    logger.debug(f"Item {item_name.id} already linked to import item {instance.id}")
+                    logger.debug(
+                        "Item %s already linked to import item %s",
+                        item_name.id,
+                        _instance_id(instance),
+                    )
         else:
             if not license_norm_classes:
-                logger.warning(f"No license norm classes found for license {instance.license.id}")
+                logger.warning(
+                    "No license norm classes found for license %s",
+                    _instance_id(instance.license),
+                )
             if not instance.description:
-                logger.warning(f"No description for import item {instance.id}")
+                logger.warning("No description for import item %s", _instance_id(instance))
 
 
 @receiver(post_delete, sender=LicenseImportItemsModel)
@@ -348,10 +391,9 @@ def update_license_on_allotment_item_change(sender, instance, **kwargs):
     if kwargs.get('raw', False):
         return
 
-    # Get the license from the allotment item
-    if hasattr(instance, 'item') and instance.item:
-        if hasattr(instance.item, 'license') and instance.item.license:
-            update_license_flags(instance.item.license)
+    license_obj = _related_license(instance, "item")
+    if license_obj:
+        update_license_flags(license_obj)
 
 
 # Signals for balance updates on BOE items
@@ -365,10 +407,9 @@ def update_license_on_boe_item_change(sender, instance, **kwargs):
     if kwargs.get('raw', False):
         return
 
-    # Get the license from the BOE row detail via sr_number (LicenseImportItemsModel)
-    if hasattr(instance, 'sr_number') and instance.sr_number:
-        if hasattr(instance.sr_number, 'license') and instance.sr_number.license:
-            update_license_flags(instance.sr_number.license)
+    license_obj = _related_license(instance, "sr_number")
+    if license_obj:
+        update_license_flags(license_obj)
 
 
 # Signals for balance updates on Trade Line items
@@ -382,10 +423,9 @@ def update_license_on_trade_line_change(sender, instance, **kwargs):
     if kwargs.get('raw', False):
         return
 
-    # Get the license from the trade line via sr_number (LicenseImportItemsModel)
-    if hasattr(instance, 'sr_number') and instance.sr_number:
-        if hasattr(instance.sr_number, 'license') and instance.sr_number.license:
-            update_license_flags(instance.sr_number.license)
+    license_obj = _related_license(instance, "sr_number")
+    if license_obj:
+        update_license_flags(license_obj)
 
 
 # Snapshot the exporter name onto each license BEFORE the company is deleted.

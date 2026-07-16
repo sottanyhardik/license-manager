@@ -44,7 +44,7 @@ class MasterViewSet(viewsets.ModelViewSet):
         """(max_modified, count, etag) over the WHOLE model (not the delta)."""
         agg = self.queryset.model.objects.aggregate(m=Max("modified_on"), c=Count("id"))
         token = f"{agg['m']}-{agg['c']}"
-        etag = quote_etag(hashlib.md5(token.encode()).hexdigest())
+        etag = quote_etag(hashlib.sha256(token.encode()).hexdigest())
         return agg["m"], agg["c"], etag
 
     def list(self, request, *args, **kwargs):

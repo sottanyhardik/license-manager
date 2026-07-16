@@ -51,6 +51,8 @@ REQUIRED_MODEL_KEYS = ("endpoint", "natural_key", "mirror_model")
 
 def get_base_url() -> str:
     url = getattr(settings, "MDS_BASE_URL", None)
+    if isinstance(url, str):
+        url = url.strip()
     if not url:
         raise ImproperlyConfigured("MDS_BASE_URL is not set; the mds_client cannot reach the service.")
     # Normalise to a single trailing slash so urljoin behaves predictably.
@@ -59,6 +61,8 @@ def get_base_url() -> str:
 
 def get_token() -> str:
     token = getattr(settings, "MDS_TOKEN", None)
+    if isinstance(token, str):
+        token = token.strip()
     if not token:
         raise ImproperlyConfigured("MDS_TOKEN is not set; the mds_client cannot authenticate to the service.")
     return token

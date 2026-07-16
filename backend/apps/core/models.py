@@ -72,9 +72,6 @@ except ImportError:  # pragma: no cover - fallback keeps core importable w/o cli
     def _sig_unit_price(name, unit_price, label):
         return "|".join([_mds_ss(name), _mds_ss(unit_price), _mds_ss(label)])
 
-alpha = RegexValidator(r'^[a-zA-Z ]*$', 'Only alpha characters are allowed.')
-
-
 def company_upload_path(instance, filename):
     # Store company files under companies/<id>/
     return f"companies/{instance.id}/{filename}"
@@ -696,11 +693,6 @@ class ExchangeRateModel(AuditModel):
         """
         return cls.objects.filter(date__lte=date).first()
 
-    def save(self, *args, **kwargs):
-        """Override save to ensure date uniqueness"""
-        super().save(*args, **kwargs)
-
-
 class CeleryTaskTracker(models.Model):
     """
     Track all Celery tasks for monitoring and cleanup.
@@ -818,4 +810,3 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.username} | {self.action} | {self.module} | {self.timestamp:%Y-%m-%d %H:%M}"
-

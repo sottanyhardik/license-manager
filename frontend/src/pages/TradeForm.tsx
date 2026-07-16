@@ -7,13 +7,14 @@ import HybridSelect from "../components/HybridSelect";
 import ConditionBadge from "../components/ConditionBadge";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import {formatDateForInput, parseDate} from "../utils/dateFormatter";
+import {parseDate} from "../utils/dateFormatter";
 import * as validateFormUtil from "../utils/formValidation";
 import { ValidationRules } from "../utils/formValidation";
 import TransferLetterModal from "../components/TransferLetterModal";
 import {navigateToList} from "../utils/navigationUtils";
 import {useBackButton} from "../hooks/useBackButton";
 import TradeConfigCard from "./TradeConfigCard";
+import { buildTradeJsonPayload, cleanIncentiveLine, cleanTradeLine, cleanTradePayment, formatTradeDateForApi, getEntityId } from "./tradeFormHelpers";
 import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Building2, Calculator, CheckCircle, FileText, IndianRupee, Link, List, Package, Percent, Plus, ShoppingCart, SlidersHorizontal, Store, Trash2, TrendingUp, Wand2, Weight, X, XCircle } from "lucide-react";
 
 export default function TradeForm() {
@@ -69,13 +70,6 @@ export default function TradeForm() {
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [hasUnsavedChanges]);
-
-    // Helper function to format Date object to YYYY-MM-DD for API
-    const formatDateForAPI = (date) => {
-        if (!date) return null;
-        if (!(date instanceof Date)) return date;
-        return formatDateForInput(date);
-    };
 
     // Define handlePrefillFromBOE before useEffect
     const handlePrefillFromBOE = useCallback(async () => {
@@ -295,7 +289,7 @@ export default function TradeForm() {
                 params: {
                     direction: formData.direction,
                     company_id: companyId,
-                    invoice_date: formatDateForAPI(formData.invoice_date)
+                    invoice_date: formatTradeDateForApi(formData.invoice_date)
                 }
             });
             setFormData(prev => ({
@@ -608,9 +602,9 @@ export default function TradeForm() {
                 const formDataObj = new FormData();
 
                 // Add regular fields - extract IDs from FK objects
-                const fromCompanyId = typeof formData.from_company === 'object' ? formData.from_company?.id : formData.from_company;
-                const toCompanyId = typeof formData.to_company === 'object' ? formData.to_company?.id : formData.to_company;
-                const boeId = typeof formData.boe === 'object' ? formData.boe?.id : formData.boe;
+                const fromCompanyId = getEntityId(formData.from_company);
+                const toCompanyId = getEntityId(formData.to_company);
+                const boeId = getEntityId(formData.boe);
 
                 formDataObj.append('direction', formData.direction);
                 formDataObj.append('license_type', formData.license_type);
@@ -618,7 +612,7 @@ export default function TradeForm() {
                 if (toCompanyId) formDataObj.append('to_company', toCompanyId);
                 if (boeId) formDataObj.append('boe', boeId);
                 formDataObj.append('invoice_number', formData.invoice_number?.trim() || '');
-                formDataObj.append('invoice_date', formatDateForAPI(formData.invoice_date));
+                formDataObj.append('invoice_date', formatTradeDateForApi(formData.invoice_date));
                 formDataObj.append('remarks', formData.remarks || '');
 
                 // Add company snapshot fields
@@ -635,115 +629,21 @@ export default function TradeForm() {
                 formDataObj.append('purchase_invoice_copy', formData.purchase_invoice_copy);
 
                 // Add lines as JSON string (clean up empty id fields and extract sr_number ID)
-                const cleanedLines = formData.lines.map(line => {
-                    const cleanedLine = {...line};
-                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
-                        delete cleanedLine.id;
-                    }
-                    // Extract sr_number ID if it's an object
-                    if (cleanedLine.sr_number && typeof cleanedLine.sr_number === 'object') {
-                        cleanedLine.sr_number = cleanedLine.sr_number.id;
-                    }
-                    // Always set HSN code to 49070000
-                    cleanedLine.hsn_code = '49070000';
-                    return cleanedLine;
-                });
+                const cleanedLines = formData.lines.map(cleanTradeLine);
                 formDataObj.append('lines', JSON.stringify(cleanedLines));
 
                 // Add incentive_lines as JSON string (clean up empty id fields)
-                const cleanedIncentiveLines = formData.incentive_lines.map(line => {
-                    const cleanedLine = {...line};
-                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
-                        delete cleanedLine.id;
-                    }
-                    // Extract incentive_license ID if it's an object
-                    if (cleanedLine.incentive_license && typeof cleanedLine.incentive_license === 'object') {
-                        cleanedLine.incentive_license = cleanedLine.incentive_license.id;
-                    }
-                    return cleanedLine;
-                });
+                const cleanedIncentiveLines = formData.incentive_lines.map(cleanIncentiveLine);
                 formDataObj.append('incentive_lines', JSON.stringify(cleanedIncentiveLines));
 
                 // Add payments as JSON string (clean up empty id fields)
-                const paymentsData = formData.payments.map(payment => {
-                    const cleanedPayment = {...payment, date: formatDateForAPI(payment.date)};
-                    if (cleanedPayment.id === '' || cleanedPayment.id === null || cleanedPayment.id === undefined) {
-                        delete cleanedPayment.id;
-                    }
-                    return cleanedPayment;
-                });
+                const paymentsData = formData.payments.map(cleanTradePayment);
                 formDataObj.append('payments', JSON.stringify(paymentsData));
 
                 payload = formDataObj;
                 headers = { 'Content-Type': 'multipart/form-data' };
             } else {
-                // Use regular JSON - extract IDs from FK objects
-                const fromCompanyId = typeof formData.from_company === 'object' ? formData.from_company?.id : formData.from_company;
-                const toCompanyId = typeof formData.to_company === 'object' ? formData.to_company?.id : formData.to_company;
-                const boeId = typeof formData.boe === 'object' ? formData.boe?.id : formData.boe;
-
-                // Clean up lines: remove empty id fields and extract sr_number ID
-                const cleanedLines = formData.lines.map(line => {
-                    const cleanedLine = {...line};
-                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
-                        delete cleanedLine.id;
-                    }
-                    // Extract sr_number ID if it's an object
-                    if (cleanedLine.sr_number && typeof cleanedLine.sr_number === 'object') {
-                        cleanedLine.sr_number = cleanedLine.sr_number.id;
-                    }
-                    // Always set HSN code to 49070000
-                    cleanedLine.hsn_code = '49070000';
-                    return cleanedLine;
-                });
-
-                // Clean up incentive_lines: remove empty id fields and extract IDs
-                const cleanedIncentiveLines = formData.incentive_lines.map(line => {
-                    const cleanedLine = {...line};
-                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
-                        delete cleanedLine.id;
-                    }
-                    // Extract incentive_license ID if it's an object
-                    if (cleanedLine.incentive_license && typeof cleanedLine.incentive_license === 'object') {
-                        cleanedLine.incentive_license = cleanedLine.incentive_license.id;
-                    }
-                    return cleanedLine;
-                });
-
-                // Clean up payments: remove empty id fields
-                const cleanedPayments = formData.payments.map(payment => {
-                    const cleanedPayment = {...payment, date: formatDateForAPI(payment.date)};
-                    if (cleanedPayment.id === '' || cleanedPayment.id === null || cleanedPayment.id === undefined) {
-                        delete cleanedPayment.id;
-                    }
-                    return cleanedPayment;
-                });
-
-                payload = {
-                    // Only include writable fields, not read-only display fields
-                    direction: formData.direction,
-                    license_type: formData.license_type,
-                    from_company: fromCompanyId,
-                    to_company: toCompanyId,
-                    boe: boeId || null,
-                    invoice_number: formData.invoice_number?.trim() || '',
-                    invoice_date: formatDateForAPI(formData.invoice_date),
-                    remarks: formData.remarks || '',
-                    // Company snapshot fields
-                    from_pan: formData.from_pan || '',
-                    from_gst: formData.from_gst || '',
-                    from_addr_line_1: formData.from_addr_line_1 || '',
-                    from_addr_line_2: formData.from_addr_line_2 || '',
-                    to_pan: formData.to_pan || '',
-                    to_gst: formData.to_gst || '',
-                    to_addr_line_1: formData.to_addr_line_1 || '',
-                    to_addr_line_2: formData.to_addr_line_2 || '',
-                    // Nested data
-                    lines: cleanedLines,
-                    incentive_lines: cleanedIncentiveLines,
-                    payments: cleanedPayments,
-                    auto_create_paired: autoCreatePaired,
-                };
+                payload = buildTradeJsonPayload(formData, autoCreatePaired);
             }
 
             if (isEdit) {

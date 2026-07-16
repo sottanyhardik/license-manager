@@ -18,7 +18,7 @@ from apps.core.models import CompanyModel, HeadSIONNormsModel, SionNormClassMode
 def _run(tmp_path, **kwargs):
     out = tmp_path / "mq.json"
     call_command("check_master_quality", "--out", str(out), **kwargs)
-    return json.loads(out.read_text())
+    return json.loads(out.read_text(encoding="utf-8"))
 
 
 def test_clean_db_reports_zero(db, tmp_path):

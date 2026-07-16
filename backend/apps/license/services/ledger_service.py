@@ -5,16 +5,83 @@ Pure business-logic functions extracted from LicenseLedgerViewSet.
 The viewset becomes a thin HTTP coordinator; all data assembly lives here.
 """
 import logging
-from decimal import Decimal
-from datetime import datetime
+from datetime import date
+from decimal import Decimal, InvalidOperation
 
 from django.utils import timezone
 from django.db.models import Sum, Count, Q, Value, DecimalField
 from django.db.models.functions import Coalesce
+from django.utils.dateparse import parse_date
 
 from apps.license.models import LicenseDetailsModel, IncentiveLicense
 
 logger = logging.getLogger(__name__)
+
+DFIA_LICENSE_TYPE = "DFIA"
+INCENTIVE_LICENSE_TYPE = "INCENTIVE"
+INCENTIVE_SUBTYPES = ("RODTEP", "ROSTL", "MEIS")
+INCENTIVE_LICENSE_TYPES = frozenset({INCENTIVE_LICENSE_TYPE, *INCENTIVE_SUBTYPES})
+ALL_LICENSE_TYPES = frozenset({"ALL", DFIA_LICENSE_TYPE, *INCENTIVE_LICENSE_TYPES})
+TRADE_DIRECTIONS = ("PURCHASE", "SALE")
+TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+DECIMAL_ZERO = Decimal("0")
+
+
+def _get_text_param(query_params, name: str, default: str = "") -> str:
+    value = query_params.get(name, default)
+    if value is None:
+        return default
+    return str(value).strip()
+
+
+def _get_license_type(query_params) -> str:
+    license_type = _get_text_param(query_params, "license_type", "ALL").upper()
+    return license_type if license_type in ALL_LICENSE_TYPES else "ALL"
+
+
+def _get_bool_param(query_params, name: str, *, default: bool = False) -> bool:
+    value = query_params.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in TRUE_VALUES
+
+
+def _parse_decimal(value) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = Decimal(str(value).strip())
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return parsed if parsed.is_finite() else None
+
+
+def _parse_int(value) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_iso_date(value) -> date | None:
+    if value in (None, ""):
+        return None
+    try:
+        return parse_date(str(value).strip())
+    except ValueError:
+        return None
+
+
+def _as_decimal(value) -> Decimal:
+    return value if value is not None else DECIMAL_ZERO
+
+
+def _as_model_list(queryset, *related_fields):
+    if hasattr(queryset, "select_related"):
+        return list(queryset.select_related(*related_fields))
+    return list(queryset)
 
 
 # ---------------------------------------------------------------------------
@@ -23,9 +90,11 @@ logger = logging.getLogger(__name__)
 
 def get_sold_status(total, balance) -> str:
     """Return 'YES', 'NO', or 'PARTIAL' based on how much of the license is sold."""
+    total = _as_decimal(total)
+    balance = _as_decimal(balance)
     if balance <= 0:
         return 'YES'
-    elif balance >= total:
+    if balance >= total:
         return 'NO'
     return 'PARTIAL'
 
@@ -42,10 +111,7 @@ def prepare_dfia_data(queryset) -> list:
     from apps.trade.models import LicenseTrade
 
     # Accept either a QuerySet or a plain list of model instances.
-    if hasattr(queryset, 'select_related'):
-        licenses = list(queryset.select_related('exporter', 'port'))
-    else:
-        licenses = list(queryset)
+    licenses = _as_model_list(queryset, 'exporter', 'port')
     if not licenses:
         return []
 
@@ -53,13 +119,13 @@ def prepare_dfia_data(queryset) -> list:
 
     purchase_totals = (
         LicenseTrade.objects
-        .filter(license_type='DFIA', direction='PURCHASE', lines__sr_number__license_id__in=license_ids)
+        .filter(license_type=DFIA_LICENSE_TYPE, direction='PURCHASE', lines__sr_number__license_id__in=license_ids)
         .values('lines__sr_number__license_id')
         .annotate(total_inr=Sum('lines__amount_inr'), total_usd=Sum('lines__cif_fc'))
     )
     sale_totals = (
         LicenseTrade.objects
-        .filter(license_type='DFIA', direction='SALE', lines__sr_number__license_id__in=license_ids)
+        .filter(license_type=DFIA_LICENSE_TYPE, direction='SALE', lines__sr_number__license_id__in=license_ids)
         .values('lines__sr_number__license_id')
         .annotate(total_inr=Sum('lines__amount_inr'), total_usd=Sum('lines__cif_fc'))
     )
@@ -82,7 +148,7 @@ def prepare_dfia_data(queryset) -> list:
 
         data.append({
             'id': license.id,
-            'license_type': 'DFIA',
+            'license_type': DFIA_LICENSE_TYPE,
             'license_number': license.license_number,
             'license_date': license.license_date,
             'license_expiry_date': license.license_expiry_date,
@@ -109,7 +175,7 @@ def prepare_incentive_data(queryset) -> list:
     """
     from apps.trade.models import LicenseTrade
 
-    licenses = list(queryset.select_related('exporter', 'port_code'))
+    licenses = _as_model_list(queryset, 'exporter', 'port_code')
     if not licenses:
         return []
 
@@ -118,13 +184,21 @@ def prepare_incentive_data(queryset) -> list:
 
     purchase_totals = (
         LicenseTrade.objects
-        .filter(license_type='INCENTIVE', direction='PURCHASE', incentive_lines__incentive_license_id__in=license_ids)
+        .filter(
+            license_type=INCENTIVE_LICENSE_TYPE,
+            direction='PURCHASE',
+            incentive_lines__incentive_license_id__in=license_ids,
+        )
         .values('incentive_lines__incentive_license_id')
         .annotate(total_inr=Sum('incentive_lines__amount_inr'), total_value=Sum('incentive_lines__license_value'))
     )
     sale_totals = (
         LicenseTrade.objects
-        .filter(license_type='INCENTIVE', direction='SALE', incentive_lines__incentive_license_id__in=license_ids)
+        .filter(
+            license_type=INCENTIVE_LICENSE_TYPE,
+            direction='SALE',
+            incentive_lines__incentive_license_id__in=license_ids,
+        )
         .values('incentive_lines__incentive_license_id')
         .annotate(total_inr=Sum('incentive_lines__amount_inr'), total_value=Sum('incentive_lines__license_value'))
     )
@@ -174,7 +248,7 @@ def get_incentive_breakdown(incentive_qs) -> dict:
     """
     rows = (
         incentive_qs
-        .filter(license_type__in=['RODTEP', 'ROSTL', 'MEIS'])
+        .filter(license_type__in=INCENTIVE_SUBTYPES)
         .values('license_type')
         .annotate(count=Count('id'), balance=Sum('balance_value'))
     )
@@ -185,7 +259,7 @@ def get_incentive_breakdown(incentive_qs) -> dict:
         }
         for row in rows
     }
-    for lt in ['RODTEP', 'ROSTL', 'MEIS']:
+    for lt in INCENTIVE_SUBTYPES:
         if lt not in breakdown:
             breakdown[lt] = {'count': 0, 'balance': 0.0}
     return breakdown
@@ -204,17 +278,15 @@ def build_license_queryset(query_params) -> list:
     Accepts a dict-like ``query_params`` (e.g. ``request.query_params``).
     """
     from apps.trade.models import LicenseTrade
-    from django.db.models import Q
-    from datetime import date as _date, datetime as _datetime
 
-    license_type = query_params.get('license_type', 'ALL')
-    min_balance = query_params.get('min_balance')
-    exporter_id = query_params.get('exporter')
-    company_id = query_params.get('company')
-    no_purchases = query_params.get('no_purchases', 'false').lower() == 'true'
-    is_active_only = query_params.get('active_only', 'true').lower() == 'true'
-    purchase_date_from = query_params.get('purchase_date_from')
-    purchase_date_to = query_params.get('purchase_date_to')
+    license_type = _get_license_type(query_params)
+    min_balance = _parse_decimal(_get_text_param(query_params, 'min_balance'))
+    exporter_id = _parse_int(_get_text_param(query_params, 'exporter'))
+    company_id = _parse_int(_get_text_param(query_params, 'company'))
+    no_purchases = _get_bool_param(query_params, 'no_purchases')
+    is_active_only = _get_bool_param(query_params, 'active_only', default=True)
+    purchase_date_from = _parse_iso_date(_get_text_param(query_params, 'purchase_date_from'))
+    purchase_date_to = _parse_iso_date(_get_text_param(query_params, 'purchase_date_to'))
 
     dfia_qs = LicenseDetailsModel.objects.select_related('exporter', 'port').all()
     incentive_qs = IncentiveLicense.objects.select_related('exporter', 'port_code').all()
@@ -229,70 +301,59 @@ def build_license_queryset(query_params) -> list:
         dfia_qs = dfia_qs.filter(exporter_id=exporter_id)
         incentive_qs = incentive_qs.filter(exporter_id=exporter_id)
 
-    if min_balance:
-        try:
-            min_bal = Decimal(min_balance)
-            dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_bal)
-            incentive_qs = incentive_qs.filter(balance_value__gte=min_bal)
-        except (ValueError, TypeError):
-            pass
+    if min_balance is not None:
+        dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_balance)
+        incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
 
     if (purchase_date_from or purchase_date_to) and not company_id:
         dfia_pf: dict = {}
         inc_pf: dict = {}
         for param, key in [(purchase_date_from, 'invoice_date__gte'), (purchase_date_to, 'invoice_date__lte')]:
             if param:
-                try:
-                    d = _datetime.strptime(param, '%Y-%m-%d').date()
-                    dfia_pf[key] = d
-                    inc_pf[key] = d
-                except ValueError:
-                    pass
+                dfia_pf[key] = param
+                inc_pf[key] = param
         if dfia_pf:
             ids = LicenseTrade.objects.filter(
-                license_type='DFIA', direction='PURCHASE', **dfia_pf
+                license_type=DFIA_LICENSE_TYPE, direction='PURCHASE', **dfia_pf
             ).values_list('lines__sr_number__license_id', flat=True).distinct()
             dfia_qs = dfia_qs.filter(id__in=ids)
         if inc_pf:
             ids = LicenseTrade.objects.filter(
-                license_type='INCENTIVE', direction='PURCHASE', **inc_pf
+                license_type=INCENTIVE_LICENSE_TYPE, direction='PURCHASE', **inc_pf
             ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
             incentive_qs = incentive_qs.filter(id__in=ids)
 
     if company_id:
-        try:
-            cid = int(company_id)
-            dfia_ids = LicenseTrade.objects.filter(
-                Q(from_company_id=cid) | Q(to_company_id=cid), license_type='DFIA'
-            ).values_list('lines__sr_number__license_id', flat=True).distinct()
-            inc_ids = LicenseTrade.objects.filter(
-                Q(from_company_id=cid) | Q(to_company_id=cid), license_type='INCENTIVE'
-            ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
-            dfia_qs = dfia_qs.filter(id__in=dfia_ids)
-            incentive_qs = incentive_qs.filter(id__in=inc_ids)
-        except (ValueError, TypeError):
-            logger.warning("Invalid company_id: %s", company_id)
+        dfia_ids = LicenseTrade.objects.filter(
+            Q(from_company_id=company_id) | Q(to_company_id=company_id), license_type=DFIA_LICENSE_TYPE
+        ).values_list('lines__sr_number__license_id', flat=True).distinct()
+        inc_ids = LicenseTrade.objects.filter(
+            Q(from_company_id=company_id) | Q(to_company_id=company_id), license_type=INCENTIVE_LICENSE_TYPE
+        ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
+        dfia_qs = dfia_qs.filter(id__in=dfia_ids)
+        incentive_qs = incentive_qs.filter(id__in=inc_ids)
+    elif query_params.get('company'):
+        logger.warning("Invalid company_id: %s", query_params.get('company'))
 
     if no_purchases:
         dfia_with = LicenseTrade.objects.filter(
-            license_type='DFIA', direction='PURCHASE'
+            license_type=DFIA_LICENSE_TYPE, direction='PURCHASE'
         ).values_list('lines__sr_number__license_id', flat=True).distinct()
         inc_with = LicenseTrade.objects.filter(
-            license_type='INCENTIVE', direction='PURCHASE'
+            license_type=INCENTIVE_LICENSE_TYPE, direction='PURCHASE'
         ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
         dfia_qs = dfia_qs.exclude(id__in=dfia_with)
         incentive_qs = incentive_qs.exclude(id__in=inc_with)
 
-    if license_type == 'DFIA':
+    if license_type == DFIA_LICENSE_TYPE:
         return prepare_dfia_data(dfia_qs)
-    elif license_type in ['RODTEP', 'ROSTL', 'MEIS', 'INCENTIVE']:
-        if license_type != 'INCENTIVE':
+    if license_type in INCENTIVE_LICENSE_TYPES:
+        if license_type != INCENTIVE_LICENSE_TYPE:
             incentive_qs = incentive_qs.filter(license_type=license_type)
         return prepare_incentive_data(incentive_qs)
-    else:
-        combined = list(prepare_dfia_data(dfia_qs)) + list(prepare_incentive_data(incentive_qs))
-        combined.sort(key=lambda x: x.get('license_date') or _date.min, reverse=True)
-        return combined
+    combined = list(prepare_dfia_data(dfia_qs)) + list(prepare_incentive_data(incentive_qs))
+    combined.sort(key=lambda x: x.get('license_date') or date.min, reverse=True)
+    return combined
 
 
 # ---------------------------------------------------------------------------
@@ -308,12 +369,12 @@ def get_ledger_summary(query_params) -> dict:
     """
     from apps.trade.models import LicenseTrade
 
-    company_id = query_params.get('company')
-    license_type = query_params.get('license_type', 'ALL')
-    is_active_only = query_params.get('active_only', 'true').lower() == 'true'
-    min_balance = query_params.get('min_balance')
-    purchase_date_from = query_params.get('purchase_date_from')
-    purchase_date_to = query_params.get('purchase_date_to')
+    company_id = _parse_int(_get_text_param(query_params, 'company'))
+    license_type = _get_license_type(query_params)
+    is_active_only = _get_bool_param(query_params, 'active_only', default=True)
+    min_balance = _parse_decimal(_get_text_param(query_params, 'min_balance'))
+    purchase_date_from = _parse_iso_date(_get_text_param(query_params, 'purchase_date_from'))
+    purchase_date_to = _parse_iso_date(_get_text_param(query_params, 'purchase_date_to'))
 
     # Base querysets
     if is_active_only:
@@ -325,71 +386,56 @@ def get_ledger_summary(query_params) -> dict:
         dfia_qs = LicenseDetailsModel.objects.all()
         incentive_qs = IncentiveLicense.objects.all()
 
-    if min_balance:
-        try:
-            min_bal = Decimal(min_balance)
-            dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_bal)
-            incentive_qs = incentive_qs.filter(balance_value__gte=min_bal)
-        except (ValueError, TypeError):
-            pass
+    if min_balance is not None:
+        dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_balance)
+        incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
 
     # Date-range filter on license IDs via trade dates
     if purchase_date_from or purchase_date_to:
         dfia_f: dict = {}
         inc_f: dict = {}
         if purchase_date_from:
-            try:
-                d = datetime.strptime(purchase_date_from, '%Y-%m-%d').date()
-                dfia_f['invoice_date__gte'] = d
-                inc_f['invoice_date__gte'] = d
-            except ValueError:
-                pass
+            dfia_f['invoice_date__gte'] = purchase_date_from
+            inc_f['invoice_date__gte'] = purchase_date_from
         if purchase_date_to:
-            try:
-                d = datetime.strptime(purchase_date_to, '%Y-%m-%d').date()
-                dfia_f['invoice_date__lte'] = d
-                inc_f['invoice_date__lte'] = d
-            except ValueError:
-                pass
+            dfia_f['invoice_date__lte'] = purchase_date_to
+            inc_f['invoice_date__lte'] = purchase_date_to
         if dfia_f:
             ids = LicenseTrade.objects.filter(
-                license_type='DFIA', direction='PURCHASE', **dfia_f
+                license_type=DFIA_LICENSE_TYPE, direction='PURCHASE', **dfia_f
             ).values_list('lines__sr_number__license_id', flat=True).distinct()
             dfia_qs = dfia_qs.filter(id__in=ids)
         if inc_f:
             ids = LicenseTrade.objects.filter(
-                license_type='INCENTIVE', direction='PURCHASE', **inc_f
+                license_type=INCENTIVE_LICENSE_TYPE, direction='PURCHASE', **inc_f
             ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
             incentive_qs = incentive_qs.filter(id__in=ids)
 
     # Company filter
     if company_id:
-        try:
-            cid_int = int(company_id)
-            dfia_ids = LicenseTrade.objects.filter(
-                Q(from_company_id=cid_int) | Q(to_company_id=cid_int), license_type='DFIA'
-            ).values_list('lines__sr_number__license_id', flat=True).distinct()
-            inc_ids = LicenseTrade.objects.filter(
-                Q(from_company_id=cid_int) | Q(to_company_id=cid_int), license_type='INCENTIVE'
-            ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
-            dfia_qs = dfia_qs.filter(id__in=dfia_ids)
-            incentive_qs = incentive_qs.filter(id__in=inc_ids)
-        except (ValueError, TypeError):
-            logger.warning("Invalid company_id in summary: %s", company_id)
+        dfia_ids = LicenseTrade.objects.filter(
+            Q(from_company_id=company_id) | Q(to_company_id=company_id), license_type=DFIA_LICENSE_TYPE
+        ).values_list('lines__sr_number__license_id', flat=True).distinct()
+        inc_ids = LicenseTrade.objects.filter(
+            Q(from_company_id=company_id) | Q(to_company_id=company_id), license_type=INCENTIVE_LICENSE_TYPE
+        ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
+        dfia_qs = dfia_qs.filter(id__in=dfia_ids)
+        incentive_qs = incentive_qs.filter(id__in=inc_ids)
+    elif query_params.get('company'):
+        logger.warning("Invalid company_id in summary: %s", query_params.get('company'))
 
     # License-type filter
     if license_type != 'ALL':
-        if license_type == 'DFIA':
+        if license_type == DFIA_LICENSE_TYPE:
             incentive_qs = IncentiveLicense.objects.none()
-        elif license_type in ['RODTEP', 'ROSTL', 'MEIS', 'INCENTIVE']:
+        elif license_type in INCENTIVE_LICENSE_TYPES:
             dfia_qs = LicenseDetailsModel.objects.none()
-            if license_type != 'INCENTIVE':
+            if license_type != INCENTIVE_LICENSE_TYPE:
                 incentive_qs = incentive_qs.filter(license_type=license_type)
 
     # DFIA aggregates
-    _Dec = Decimal
     _opening_rows = dfia_qs.annotate(
-        _opening=Coalesce(Sum('export_license__cif_fc'), Value(_Dec('0')), output_field=DecimalField())
+        _opening=Coalesce(Sum('export_license__cif_fc'), Value(DECIMAL_ZERO), output_field=DecimalField())
     ).values_list('_opening', flat=True)
     dfia_total = sum(float(v or 0) for v in _opening_rows)
     dfia_balance = float(dfia_qs.aggregate(balance=Sum('balance__balance_cif'))['balance'] or 0)
@@ -404,16 +450,12 @@ def get_ledger_summary(query_params) -> dict:
     incentive_sold = float(inc_agg['sold'] or 0)
 
     # Trade-amount aggregates
-    dfia_tf: dict = {'license_type': 'DFIA'}
-    inc_tf: dict = {'license_type': 'INCENTIVE'}
+    dfia_tf: dict = {'license_type': DFIA_LICENSE_TYPE}
+    inc_tf: dict = {'license_type': INCENTIVE_LICENSE_TYPE}
     for field, param in [('invoice_date__gte', purchase_date_from), ('invoice_date__lte', purchase_date_to)]:
         if param:
-            try:
-                d = datetime.strptime(param, '%Y-%m-%d').date()
-                dfia_tf[field] = d
-                inc_tf[field] = d
-            except ValueError:
-                pass
+            dfia_tf[field] = param
+            inc_tf[field] = param
 
     def _sum(qs_filter, direction):
         return LicenseTrade.objects.filter(direction=direction, **qs_filter).aggregate(
@@ -421,15 +463,19 @@ def get_ledger_summary(query_params) -> dict:
         )['total'] or 0
 
     if company_id:
-        try:
-            cid_int = int(company_id)
-            cq = Q(from_company_id=cid_int) | Q(to_company_id=cid_int)
-            dfia_purchases = LicenseTrade.objects.filter(cq, direction='PURCHASE', **dfia_tf).aggregate(total=Sum('total_amount'))['total'] or 0
-            dfia_sales = LicenseTrade.objects.filter(cq, direction='SALE', **dfia_tf).aggregate(total=Sum('total_amount'))['total'] or 0
-            inc_purchases = LicenseTrade.objects.filter(cq, direction='PURCHASE', **inc_tf).aggregate(total=Sum('total_amount'))['total'] or 0
-            inc_sales = LicenseTrade.objects.filter(cq, direction='SALE', **inc_tf).aggregate(total=Sum('total_amount'))['total'] or 0
-        except (ValueError, TypeError):
-            dfia_purchases = dfia_sales = inc_purchases = inc_sales = 0
+        cq = Q(from_company_id=company_id) | Q(to_company_id=company_id)
+        dfia_purchases = LicenseTrade.objects.filter(
+            cq, direction='PURCHASE', **dfia_tf
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        dfia_sales = LicenseTrade.objects.filter(
+            cq, direction='SALE', **dfia_tf
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        inc_purchases = LicenseTrade.objects.filter(
+            cq, direction='PURCHASE', **inc_tf
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        inc_sales = LicenseTrade.objects.filter(
+            cq, direction='SALE', **inc_tf
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
     else:
         dfia_purchases = _sum(dfia_tf, 'PURCHASE')
         dfia_sales = _sum(dfia_tf, 'SALE')
@@ -470,33 +516,27 @@ def search_licenses(query_params) -> dict:
     Returns ``{'count': int, 'query': str, 'license_type': str, 'results': list}``.
     Returns ``None`` when no query is provided (caller should return 400).
     """
-    from django.db.models import Q
-    from datetime import date as _date
-
-    query = query_params.get('q', '').strip()
-    license_type = query_params.get('license_type', 'ALL')
-    active_only = query_params.get('active_only', 'true').lower() == 'true'
-    min_balance = query_params.get('min_balance')
+    query = _get_text_param(query_params, 'q')
+    license_type = _get_license_type(query_params)
+    active_only = _get_bool_param(query_params, 'active_only', default=True)
+    min_balance = _parse_decimal(_get_text_param(query_params, 'min_balance'))
 
     if not query:
         return None
 
     results = []
 
-    if license_type in ['ALL', 'DFIA']:
+    if license_type in {'ALL', DFIA_LICENSE_TYPE}:
         dfia_qs = LicenseDetailsModel.objects.select_related('exporter', 'port').filter(
             Q(license_number__icontains=query) | Q(exporter__name__icontains=query)
         )
         if active_only:
             dfia_qs = dfia_qs.filter(flags__is_expired=False)
-        if min_balance:
-            try:
-                dfia_qs = dfia_qs.filter(balance__balance_cif__gte=Decimal(min_balance))
-            except (ValueError, TypeError):
-                pass
+        if min_balance is not None:
+            dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_balance)
         results.extend(prepare_dfia_data(dfia_qs[:50]))
 
-    if license_type in ['ALL', 'INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
+    if license_type in {'ALL', *INCENTIVE_LICENSE_TYPES}:
         incentive_qs = IncentiveLicense.objects.select_related('exporter', 'port_code').filter(
             Q(license_number__icontains=query) | Q(exporter__name__icontains=query)
         )
@@ -504,16 +544,13 @@ def search_licenses(query_params) -> dict:
             incentive_qs = incentive_qs.filter(
                 is_active=True, license_expiry_date__gte=timezone.now().date()
             )
-        if license_type not in ['ALL', 'INCENTIVE']:
+        if license_type not in {'ALL', INCENTIVE_LICENSE_TYPE}:
             incentive_qs = incentive_qs.filter(license_type=license_type)
-        if min_balance:
-            try:
-                incentive_qs = incentive_qs.filter(balance_value__gte=Decimal(min_balance))
-            except (ValueError, TypeError):
-                pass
+        if min_balance is not None:
+            incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
         results.extend(prepare_incentive_data(incentive_qs[:50]))
 
-    results.sort(key=lambda x: x.get('license_date') or _date.min, reverse=True)
+    results.sort(key=lambda x: x.get('license_date') or date.min, reverse=True)
     return {'count': len(results), 'query': query, 'license_type': license_type, 'results': results}
 
 
@@ -524,13 +561,13 @@ def get_company_wise_trades(query_params) -> dict:
     """
     from apps.trade.models import LicenseTrade
 
-    search = query_params.get('search', '').strip()
+    search = _get_text_param(query_params, 'search')
     terms = [t.strip() for t in search.split(',') if t.strip()] if search else []
 
     qs = LicenseTrade.objects.select_related('from_company', 'to_company').prefetch_related(
         'lines__sr_number__license',
         'incentive_lines__incentive_license',
-    ).filter(direction__in=['PURCHASE', 'SALE'])
+    ).filter(direction__in=TRADE_DIRECTIONS)
 
     if terms:
         if len(terms) == 1:
@@ -629,20 +666,20 @@ def get_license_wise_trades(query_params) -> dict:
     """
     from apps.trade.models import LicenseTrade
 
-    search = query_params.get('search', '').strip()
+    search = _get_text_param(query_params, 'search')
     terms = [t.strip() for t in search.split(',') if t.strip()] if search else []
-    license_type = query_params.get('license_type', 'ALL')
-    purchase_date_from = query_params.get('purchase_date_from', '')
-    purchase_date_to = query_params.get('purchase_date_to', '')
+    license_type = _get_license_type(query_params)
+    purchase_date_from = _parse_iso_date(_get_text_param(query_params, 'purchase_date_from'))
+    purchase_date_to = _parse_iso_date(_get_text_param(query_params, 'purchase_date_to'))
 
     qs = LicenseTrade.objects.select_related('from_company', 'to_company').prefetch_related(
         'lines__sr_number__license',
         'incentive_lines__incentive_license',
-    ).filter(direction__in=['PURCHASE', 'SALE'])
+    ).filter(direction__in=TRADE_DIRECTIONS)
 
     if license_type and license_type != 'ALL':
-        if license_type == 'INCENTIVE':
-            qs = qs.filter(license_type__in=['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'])
+        if license_type == INCENTIVE_LICENSE_TYPE:
+            qs = qs.filter(license_type=INCENTIVE_LICENSE_TYPE)
         else:
             qs = qs.filter(license_type=license_type)
     if purchase_date_from:

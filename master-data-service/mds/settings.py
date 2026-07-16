@@ -165,6 +165,9 @@ REST_FRAMEWORK = {
 # --- Service-to-service tokens ---------------------------------------------
 # Map: token -> scope ("read" or "write"). Set MDS_TOKENS as
 # "token1:write,token2:read" in the environment. A "write" token also reads.
+VALID_SERVICE_TOKEN_SCOPES = {"read", "write"}
+
+
 def _parse_tokens(raw):
     out = {}
     for pair in raw.split(","):
@@ -172,7 +175,13 @@ def _parse_tokens(raw):
         if not pair:
             continue
         token, _, scope = pair.partition(":")
-        out[token.strip()] = (scope.strip() or "read").lower()
+        token = token.strip()
+        if not token:
+            continue
+        scope = (scope.strip() or "read").lower()
+        if scope not in VALID_SERVICE_TOKEN_SCOPES:
+            raise ValueError(f"Invalid MDS token scope {scope!r}; expected 'read' or 'write'.")
+        out[token] = scope
     return out
 
 

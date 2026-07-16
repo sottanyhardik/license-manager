@@ -31,7 +31,10 @@ class DefaultMdsModelsTests(unittest.TestCase):
         self.assertEqual(len(endpoints), len(set(endpoints)))
 
     def test_keyless_labels_match_uid_entries(self):
-        expected = {l for l, c in DEFAULT_MDS_MODELS.items() if c["natural_key"] == "uid"}
+        expected = {
+            label for label, config in DEFAULT_MDS_MODELS.items()
+            if config["natural_key"] == "uid"
+        }
         self.assertEqual(set(KEYLESS_MODEL_LABELS), expected)
         # the 7 keyless masters per ADR Decision 6
         self.assertEqual(len(KEYLESS_MODEL_LABELS), 7)

@@ -22,9 +22,11 @@ import io
 import json
 import hashlib
 import traceback
+from pathlib import Path
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "lmanagement.settings")
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND_ROOT))
 
 import django  # noqa: E402
 django.setup()  # noqa: E402
@@ -41,7 +43,7 @@ from pypdf import PdfReader  # noqa: E402
 from apps.license.views.ledger import LicenseLedgerViewSet  # noqa: E402
 from apps.core.models import CompanyModel  # noqa: E402
 
-BASELINE = os.path.join(os.path.dirname(__file__), ".golden_master", "ledger_pdf.json")
+BASELINE = Path(__file__).resolve().parent / ".golden_master" / "ledger_pdf.json"
 _TS = re.compile(r"_\d{8}_\d{6}")  # the datetime.now() stamp in filenames
 
 
@@ -111,18 +113,21 @@ def _diff(a, b, path=""):
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
-    snap = snapshot()
-    if mode == "record":
-        os.makedirs(os.path.dirname(BASELINE), exist_ok=True)
-        json.dump(snap, open(BASELINE, "w"), indent=2, sort_keys=True)
-        for k, v in snap.items():
-            print(f"  {k}: status={v.get('status')} pages={v.get('n_pages')} sha={ (v.get('text_sha256') or '')[:12] }")
-        print(f"[ledger-gm] baseline -> {BASELINE}")
-        return
     if mode != "check":
+        if mode == "record":
+            snap = snapshot()
+            BASELINE.parent.mkdir(exist_ok=True)
+            BASELINE.write_text(json.dumps(snap, indent=2, sort_keys=True), encoding="utf-8")
+            for k, v in snap.items():
+                print(f"  {k}: status={v.get('status')} pages={v.get('n_pages')} sha={ (v.get('text_sha256') or '')[:12] }")
+            print(f"[ledger-gm] baseline -> {BASELINE}")
+            return
         print(__doc__)
         raise SystemExit(2)
-    base = json.load(open(BASELINE))
+    if not BASELINE.exists():
+        raise SystemExit(f"No baseline at {BASELINE}; run `record` first.")
+    snap = snapshot()
+    base = json.loads(BASELINE.read_text(encoding="utf-8"))
     diffs = list(_diff(base, snap))
     if not diffs:
         print("[ledger-gm] PASS — ledger PDF output identical to baseline.")

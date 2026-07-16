@@ -110,7 +110,6 @@ def fetch_eligible_licenses(order=None, expired_only=False):
 
 def _parse_transfer_dt(t):
     """Parse the initiation datetime of a transfer record. Returns datetime.min on failure."""
-    from datetime import datetime
     for key in ("transferInitiationDate", "transferDate", "transferacceptanceDate"):
         raw = (t.get(key) or "").split("+")[0].strip()
         raw_norm = raw.split(".")[0].strip()
@@ -272,7 +271,7 @@ def authenticate(server_url=None):
         except requests.exceptions.SSLError as e:
             logger.warning("SSL Error on %s: %s", attempt_url, e)
             continue
-        except Exception as e:
+        except Exception:
             logger.exception("Authentication error on %s", attempt_url)
             return False, attempt_url
 
@@ -456,7 +455,7 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
         ownership_row.save(update_fields=['last_ownership_fetch'])
 
         return True
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to save ownership locally for %s", dfia)
         return False
 
@@ -694,7 +693,6 @@ class Command(BaseCommand):
         expired_only = options['expired']
         server_url = options['server']
         default_iec = options['iec']  # Default IEC for licenses without exporter
-        fetch_all = options['fetch_all']  # Fetch all licenses including expired
 
         # If not local-only and no server specified, ask for server
         if not local_only and not server_url:

@@ -451,7 +451,7 @@ class FinancialYearField(serializers.Field):
                 'end_date': end_date,
                 'year_string': value
             }
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError):
             raise serializers.ValidationError(
                 f"Invalid financial year format: {value}"
             )

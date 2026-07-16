@@ -7,6 +7,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import api from "../../api/axios";
 import {formatDateForInput, parseDate as parseDateUtil} from "../../utils/dateFormatter";
 import { AlertCircle, Calculator, Hash, Inbox, Lock, Plus, Table, Trash2, Wand2 } from "lucide-react";
+import { formatInr } from "./masterDisplayFormatters";
 
 /**
  * NestedFieldArray Component
@@ -730,8 +731,8 @@ export default function NestedFieldArray({
                     <div className="mt-2 flex items-center justify-end gap-4 rounded-md border-t-2 border-border bg-muted/40 px-2 py-2 text-[13px]">
                         <span className="text-muted-foreground">Totals:</span>
                         <span><span className="text-muted-foreground mr-1">Qty</span><strong>{totQty.toFixed(3)} kg</strong></span>
-                        <span><span className="text-muted-foreground mr-1">CIF INR</span><strong>₹{totCif.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
-                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                        <span><span className="text-muted-foreground mr-1">CIF INR</span><strong>{formatInr(totCif)}</strong></span>
+                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>{formatInr(totAmt)}</strong></span>
                     </div>
                 );
             })()}
@@ -740,7 +741,7 @@ export default function NestedFieldArray({
                 return (
                     <div className="mt-2 flex items-center justify-end gap-4 rounded-md border-t-2 border-border bg-muted/40 px-2 py-2 text-[13px]">
                         <span className="text-muted-foreground">Total:</span>
-                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>{formatInr(totAmt)}</strong></span>
                     </div>
                 );
             })()}
@@ -749,7 +750,7 @@ export default function NestedFieldArray({
                 return (
                     <div className="mt-2 flex items-center justify-end gap-4 rounded-md border-t-2 border-success/40 bg-success/10 px-2 py-2 text-[13px]">
                         <span className="text-muted-foreground">Total Paid:</span>
-                        <strong className="text-success">₹{totPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                        <strong className="text-success">{formatInr(totPaid)}</strong>
                     </div>
                 );
             })()}

@@ -29,15 +29,15 @@ Backward-compat is preserved in code:
   - DRF serializers use SlugRelatedField(slug_field='code') where the API
     previously returned the raw code string.
 """
-from django.db import migrations, models
 import django.db.models.deletion
+from django.db import migrations, models
 
 
 def populate_and_backfill(apps, schema_editor):
     SchemeCode = apps.get_model("core", "SchemeCode")
     NotificationNumber = apps.get_model("core", "NotificationNumber")
 
-    from django.db import connection
+    connection = schema_editor.connection
 
     # 1. Read distinct string values currently in license rows.
     with connection.cursor() as c:

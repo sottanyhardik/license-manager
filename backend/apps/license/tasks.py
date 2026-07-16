@@ -118,7 +118,6 @@ def update_all_license_balances(self, license_status='all'):
 
                 # Update progress every batch
                 if (i + 1) % batch_size == 0:
-                    progress = int(((i + 1) / total_licenses) * 90)  # Reserve 10% for restrictions
                     self.update_state(
                         state='PROGRESS',
                         meta={
@@ -816,14 +815,14 @@ def process_ledger_file_async(self, file_content, file_name):
                         'current': idx,
                         'total': total_licenses,
                         'status': f'Processed {idx}/{total_licenses} licenses',
-                        'processed_licenses': [l['license_number'] for l in processed_licenses],
+                        'processed_licenses': [license_data['license_number'] for license_data in processed_licenses],
                         'failed_licenses': failed_licenses
                     }
                 )
 
                 logger.info(f"Successfully processed license {idx}/{total_licenses}: {license_number}")
 
-            except RecursionError as rec_error:
+            except RecursionError:
                 error_msg = f"Recursion error (maximum depth exceeded)"
                 failed_licenses.append({
                     'index': idx,
@@ -851,7 +850,7 @@ def process_ledger_file_async(self, file_content, file_name):
             'total_licenses': total_licenses,
             'processed_count': len(processed_licenses),
             'failed_count': len(failed_licenses),
-            'processed_licenses': [l['license_number'] for l in processed_licenses],
+            'processed_licenses': [license_data['license_number'] for license_data in processed_licenses],
             'failed_licenses': failed_licenses,
             'elapsed_seconds': elapsed,
             'timestamp': datetime.now().isoformat()

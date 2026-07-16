@@ -7,8 +7,9 @@ This module centralizes all balance calculation logic for:
 - Available values for allocation
 """
 
+from __future__ import annotations
+
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, Tuple, Optional
 
 from django.db.models import Sum, DecimalField, Value
 from django.db.models.functions import Coalesce
@@ -18,14 +19,16 @@ from apps.core.utils.decimal_utils import to_decimal
 
 # Module-level imports so tests can patch via
 # patch("apps.license.services.balance_calculator.LicenseExportItemModel") etc.
-from apps.license.models import LicenseExportItemModel  # noqa: E402
-from apps.bill_of_entry.models import RowDetails  # noqa: E402
-from apps.allotment.models import AllotmentItems  # noqa: E402
+from apps.license.models import LicenseExportItemModel
+from apps.bill_of_entry.models import RowDetails
+from apps.allotment.models import AllotmentItems
+
+DECIMAL_CENT = Decimal("0.01")
 
 
 def quantize_2dp(value: Decimal) -> Decimal:
     """Quantize decimal to 2 decimal places."""
-    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return to_decimal(value, DEC_0).quantize(DECIMAL_CENT, rounding=ROUND_HALF_UP)
 
 
 class LicenseBalanceCalculator:
@@ -161,7 +164,7 @@ class LicenseBalanceCalculator:
         return balance if balance >= DEC_0 else DEC_0
 
     @classmethod
-    def calculate_all_components(cls, license_obj) -> Dict[str, Decimal]:
+    def calculate_all_components(cls, license_obj) -> dict[str, Decimal]:
         """
         Calculate all balance components at once.
 
@@ -195,7 +198,7 @@ class ItemBalanceCalculator:
     """
 
     @staticmethod
-    def calculate_item_credit_debit(import_item) -> Tuple[Decimal, Decimal]:
+    def calculate_item_credit_debit(import_item) -> tuple[Decimal, Decimal]:
         """
         Calculate credit and debit for an import item.
         
@@ -313,7 +316,7 @@ class ItemBalanceCalculator:
         return available if available >= DEC_0 else DEC_0
 
     @classmethod
-    def calculate_item_components(cls, import_item) -> Dict[str, Decimal]:
+    def calculate_item_components(cls, import_item) -> dict[str, Decimal]:
         """
         Calculate all components for an import item.
         
@@ -338,8 +341,8 @@ class ItemBalanceCalculator:
     def calculate_available_value_for_allocation(
             import_item,
             unit_price: Decimal,
-            required_value_with_buffer: Optional[Decimal] = None
-    ) -> Dict[str, Decimal]:
+            required_value_with_buffer: Decimal | None = None
+    ) -> dict[str, Decimal]:
         """
         Calculate maximum available value for allocation considering all constraints.
         
@@ -353,6 +356,7 @@ class ItemBalanceCalculator:
         """
         available_qty = ItemBalanceCalculator.calculate_available_quantity(import_item)
         balance_cif = ItemBalanceCalculator.calculate_item_balance(import_item)
+        unit_price = to_decimal(unit_price, DEC_0)
 
         if unit_price <= 0:
             return {
@@ -366,12 +370,13 @@ class ItemBalanceCalculator:
 
         # Check CIF constraint
         if max_value > balance_cif:
-            max_qty = balance_cif / unit_price if unit_price > 0 else DEC_0
+            max_qty = balance_cif / unit_price
             max_value = max_qty * unit_price
 
         # Check required value constraint if provided
-        if required_value_with_buffer and max_value > required_value_with_buffer:
-            max_qty = required_value_with_buffer / unit_price if unit_price > 0 else DEC_0
+        required_value = to_decimal(required_value_with_buffer, DEC_0)
+        if required_value > DEC_0 and max_value > required_value:
+            max_qty = required_value / unit_price
             max_value = max_qty * unit_price
 
         return {

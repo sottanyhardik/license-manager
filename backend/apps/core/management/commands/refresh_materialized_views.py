@@ -9,11 +9,13 @@ Usage:
 """
 
 from django.core.management.base import BaseCommand
+
 from apps.core.materialized_views import (
+    MATERIALIZED_VIEW_NAMES,
+    check_materialized_view_freshness,
+    get_materialized_view_stats,
     refresh_all_materialized_views,
     refresh_materialized_view,
-    get_materialized_view_stats,
-    check_materialized_view_freshness
 )
 
 
@@ -80,9 +82,8 @@ class Command(BaseCommand):
                 'Please specify --view <name>, --all, or --stats'
             ))
             self.stdout.write('\nAvailable views:')
-            self.stdout.write('  - license_balance_mv')
-            self.stdout.write('  - item_balance_mv')
-            self.stdout.write('  - dashboard_stats_mv')
+            for view in MATERIALIZED_VIEW_NAMES:
+                self.stdout.write(f'  - {view}')
 
     def show_stats(self):
         """Show statistics about materialized views."""
@@ -108,7 +109,7 @@ class Command(BaseCommand):
 
             # Check freshness
             self.stdout.write(self.style.SUCCESS('\n=== Freshness Check ===\n'))
-            for view in ['license_balance_mv', 'item_balance_mv', 'dashboard_stats_mv']:
+            for view in MATERIALIZED_VIEW_NAMES:
                 freshness = check_materialized_view_freshness(view)
                 if freshness:
                     self.stdout.write(f"{view}: {freshness['last_refreshed']}")

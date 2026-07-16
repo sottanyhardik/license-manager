@@ -1,5 +1,5 @@
-import { useContext, useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { type FormEvent, useContext, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import {
     ShieldCheck,
@@ -13,6 +13,7 @@ import {
 
 import api from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
+import { getSafeRedirect } from "../utils/authRedirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +40,7 @@ export default function Login() {
     const searchParams = new URLSearchParams(location.search);
     const redirectParam = searchParams.get("redirect");
     const reason = searchParams.get("reason");
-    const from = location.state?.from || redirectParam || "/dashboard";
+    const from = getSafeRedirect(location.state?.from) ?? getSafeRedirect(redirectParam) ?? "/dashboard";
 
     const sessionMessage =
         reason === "idle" ? "You were logged out due to inactivity." :
@@ -52,7 +53,7 @@ export default function Login() {
         if (!authLoading && user) navigate(from, { replace: true });
     }, [user, authLoading, navigate, from]);
 
-    const submit = async (e) => {
+    const submit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError("");
         setSubmitting(true);
@@ -61,7 +62,8 @@ export default function Login() {
             loginSuccess({ access: data.access, refresh: data.refresh, user: data.user });
             navigate(from, { replace: true });
         } catch (err) {
-            setError(err.response?.data?.detail || "Invalid username or password.");
+            const detail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+            setError(detail || "Invalid username or password.");
             setSubmitting(false);
         }
     };
@@ -183,6 +185,12 @@ export default function Login() {
                                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                                 </button>
                             </div>
+                        </div>
+
+                        <div className="-mt-2 text-right">
+                            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+                                Forgot password?
+                            </Link>
                         </div>
 
                         <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">

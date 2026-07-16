@@ -1,5 +1,6 @@
 import { Link as LinkIcon, X } from "lucide-react";
 import { clickable } from "../../utils/clickable";
+import { formatTruthyInr } from "./masterDisplayFormatters";
 
 interface LinkTradeModalProps {
     linkModalTrade: any;
@@ -51,7 +52,7 @@ export default function LinkTradeModal({ linkModalTrade, closeLinkModal, linkSea
                                         {t.direction_label || t.direction}
                                     </span>
                                     <div style={{ fontSize: 12, color: 'var(--tb-text-secondary)', marginTop: '4px' }}>
-                                        ₹{Number(t.total_amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                        {formatTruthyInr(t.total_amount, "-")}
                                     </div>
                                 </div>
                             </div>

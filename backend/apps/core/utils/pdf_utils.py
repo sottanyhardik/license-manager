@@ -2,7 +2,6 @@
 Shared PDF export utilities for creating professional business-level reports.
 """
 from datetime import datetime
-from io import BytesIO
 
 from django.http import HttpResponse
 
@@ -12,10 +11,7 @@ try:
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    from reportlab.pdfgen import canvas
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
     REPORTLAB_AVAILABLE = True
 except ImportError:

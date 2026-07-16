@@ -394,7 +394,7 @@ class TestPerformanceIntegration(APIIntegrationTestBase):
         import time
         start_time = time.time()
 
-        response = self.client.get('/api/licenses/')
+        self.client.get('/api/licenses/')
 
         end_time = time.time()
         response_time = end_time - start_time
@@ -407,7 +407,7 @@ class TestPerformanceIntegration(APIIntegrationTestBase):
         import time
         start_time = time.time()
 
-        response = self.client.get('/api/dashboard/stats/')
+        self.client.get('/api/dashboard/stats/')
 
         end_time = time.time()
         response_time = end_time - start_time

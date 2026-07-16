@@ -4,8 +4,10 @@ Reusable query builder utilities for license filtering.
 This module provides a clean, composable API for building complex Django Q objects
 and querysets with date ranges, filters, exclusions, and logical combinations.
 """
-import datetime
-from typing import Dict, List, Optional, Any
+from __future__ import annotations
+
+import datetime as dt
+from typing import Any
 
 from django.conf import settings
 from django.db.models import Q, QuerySet
@@ -26,19 +28,21 @@ class QueryFilterBuilder:
     def __init__(self):
         self.base_filter = Q()
 
-    def add_and_filters(self, filters: Dict[str, Any]) -> 'QueryFilterBuilder':
+    def add_and_filters(self, filters: dict[str, Any]) -> QueryFilterBuilder:
         """Add AND filters to the query."""
         for key, value in filters.items():
             self.base_filter &= Q(**{key: value})
         return self
 
-    def add_or_filters(self, filters: Dict[str, Any]) -> 'QueryFilterBuilder':
+    def add_or_filters(self, filters: dict[str, Any]) -> QueryFilterBuilder:
         """
         Add OR filters to the query.
         Supports list values for __icontains fields.
         """
         for key, value in filters.items():
             if isinstance(value, list) and '__icontains' in key:
+                if not value:
+                    continue
                 or_filter = Q()
                 for v in value:
                     or_filter |= Q(**{key: v})
@@ -47,13 +51,15 @@ class QueryFilterBuilder:
                 self.base_filter &= Q(**{key: value})
         return self
 
-    def add_exclude_filters(self, filters: Dict[str, Any]) -> 'QueryFilterBuilder':
+    def add_exclude_filters(self, filters: dict[str, Any]) -> QueryFilterBuilder:
         """
         Add exclusion filters to the query.
         Supports list values for __icontains fields.
         """
         for key, value in filters.items():
             if isinstance(value, list) and '__icontains' in key:
+                if not value:
+                    continue
                 exclude_filter = Q()
                 for v in value:
                     exclude_filter |= Q(**{key: v})
@@ -62,7 +68,7 @@ class QueryFilterBuilder:
                 self.base_filter &= ~Q(**{key: value})
         return self
 
-    def add_and_or_filters(self, filter_groups: List[Dict[str, Any]]) -> 'QueryFilterBuilder':
+    def add_and_or_filters(self, filter_groups: list[dict[str, Any]]) -> QueryFilterBuilder:
         """
         Add groups of AND filters combined with OR.
         Example: (A AND B) OR (C AND D)
@@ -86,10 +92,10 @@ class DateRangeHandler:
 
     @staticmethod
     def parse_date_range(
-        date_range: Optional[Dict[str, str]] = None,
+        date_range: dict[str, str] | None = None,
         default_offset_days: int = 15,
         field_name: str = 'license_expiry_date'
-    ) -> Dict[str, datetime.datetime]:
+    ) -> dict[str, dt.datetime]:
         """
         Parse date range and return filter dict.
 
@@ -104,19 +110,19 @@ class DateRangeHandler:
         filters = {}
 
         if date_range:
-            start = date_range.get('start')
-            end = date_range.get('end')
+            start = (date_range.get('start') or '').strip()
+            end = (date_range.get('end') or '').strip()
 
             if start:
-                start_date = datetime.datetime.strptime(start, '%Y-%m-%d')
+                start_date = dt.datetime.strptime(start, '%Y-%m-%d')
                 filters[f'{field_name}__gte'] = start_date
 
             if end:
-                end_date = datetime.datetime.strptime(end, '%Y-%m-%d')
+                end_date = dt.datetime.strptime(end, '%Y-%m-%d')
                 filters[f'{field_name}__lte'] = end_date
         else:
             # Default: filter by expiry limit
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=default_offset_days)
+            expiry_limit = dt.datetime.today() - dt.timedelta(days=default_offset_days)
             filters[f'{field_name}__gte'] = expiry_limit
 
         return filters
@@ -124,9 +130,9 @@ class DateRangeHandler:
     @staticmethod
     def get_expiry_filters(
         is_expired: bool = False,
-        expiry_days: Optional[int] = None,
+        expiry_days: int | None = None,
         field_name: str = 'license_expiry_date'
-    ) -> Dict[str, datetime.datetime]:
+    ) -> dict[str, dt.datetime]:
         """
         Get date filters for expired or active licenses.
 
@@ -138,14 +144,15 @@ class DateRangeHandler:
         Returns:
             Dict with field__gte and optional field__lte keys
         """
-        expiry_days = expiry_days or getattr(settings, 'EXPIRY_DAY', 15)
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=expiry_days)
+        expiry_days = expiry_days if expiry_days is not None else getattr(settings, 'EXPIRY_DAY', 15)
+        today = dt.datetime.today()
+        expiry_limit = today - dt.timedelta(days=expiry_days)
 
         filters = {}
 
         if is_expired:
             # Expired licenses: between 60 days ago and expiry_limit
-            start = datetime.datetime.today() - datetime.timedelta(days=60)
+            start = today - dt.timedelta(days=60)
             filters[f'{field_name}__gte'] = start
             filters[f'{field_name}__lte'] = expiry_limit
         else:
@@ -175,17 +182,17 @@ class LicenseQueryBuilder:
         self.filter_builder = QueryFilterBuilder()
         self.ordering = []
 
-    def with_base_filters(self, **kwargs) -> 'LicenseQueryBuilder':
+    def with_base_filters(self, **kwargs) -> LicenseQueryBuilder:
         """Add base filters."""
         self.filter_builder.add_and_filters(kwargs)
         return self
 
     def with_date_range(
         self,
-        date_range: Optional[Dict[str, str]] = None,
+        date_range: dict[str, str] | None = None,
         field_name: str = 'license_expiry_date',
         default_offset_days: int = 15
-    ) -> 'LicenseQueryBuilder':
+    ) -> LicenseQueryBuilder:
         """Add date range filters."""
         date_filters = DateRangeHandler.parse_date_range(
             date_range, default_offset_days, field_name
@@ -197,25 +204,25 @@ class LicenseQueryBuilder:
         self,
         is_expired: bool = False,
         field_name: str = 'license_expiry_date'
-    ) -> 'LicenseQueryBuilder':
+    ) -> LicenseQueryBuilder:
         """Add expiry-based filters."""
         expiry_filters = DateRangeHandler.get_expiry_filters(is_expired, field_name=field_name)
         self.filter_builder.add_and_filters(expiry_filters)
         return self
 
-    def with_purchase_status(self, status: str) -> 'LicenseQueryBuilder':
+    def with_purchase_status(self, status: str) -> LicenseQueryBuilder:
         """Add purchase status filter."""
         self.filter_builder.add_and_filters({'purchase_status': status})
         return self
 
-    def with_norm_class(self, norm_class: str) -> 'LicenseQueryBuilder':
+    def with_norm_class(self, norm_class: str) -> LicenseQueryBuilder:
         """Add norm class filter."""
         self.filter_builder.add_and_filters({
             'export_license__norm_class__norm_class': norm_class
         })
         return self
 
-    def with_party(self, parties: List[str]) -> 'LicenseQueryBuilder':
+    def with_party(self, parties: list[str]) -> LicenseQueryBuilder:
         """Filter by party names (OR logic)."""
         if parties:
             self.filter_builder.add_or_filters({
@@ -223,7 +230,7 @@ class LicenseQueryBuilder:
             })
         return self
 
-    def exclude_party(self, parties: List[str]) -> 'LicenseQueryBuilder':
+    def exclude_party(self, parties: list[str]) -> LicenseQueryBuilder:
         """Exclude party names."""
         if parties:
             self.filter_builder.add_exclude_filters({
@@ -231,12 +238,12 @@ class LicenseQueryBuilder:
             })
         return self
 
-    def with_is_au(self, is_au: bool = False) -> 'LicenseQueryBuilder':
+    def with_is_au(self, is_au: bool = False) -> LicenseQueryBuilder:
         """Add is_au filter."""
         self.filter_builder.add_and_filters({'is_au': is_au})
         return self
 
-    def order_by(self, *fields) -> 'LicenseQueryBuilder':
+    def order_by(self, *fields) -> LicenseQueryBuilder:
         """Add ordering."""
         self.ordering.extend(fields)
         return self

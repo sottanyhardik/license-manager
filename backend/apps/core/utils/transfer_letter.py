@@ -145,7 +145,7 @@ def merge_license_documents(licenses, output_path):
             logger.warning("No license documents found to merge")
             return False
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error merging license documents")
         return False
 
@@ -187,7 +187,7 @@ def merge_tl_with_license_copy(tl_pdf_path, license_copy_path, output_path):
         logger.info("Created FS PDF: %s", os.path.basename(output_path))
         return True
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error merging TL with License Copy")
         return False
 
@@ -592,7 +592,7 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
         response['Content-Disposition'] = f'attachment; filename="{file_name}"'
         return response
 
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to generate transfer letter")
         return Response(
             {'error': 'Failed to generate transfer letter'},

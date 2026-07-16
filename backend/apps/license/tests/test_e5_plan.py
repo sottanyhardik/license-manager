@@ -99,6 +99,11 @@ class TestClassifyE5Item(TestCase):
     def test_unclassified_returns_none(self):
         assert classify_e5_item('CARDBOARD', '4819', 'Packing box') is None
 
+    def test_null_blank_and_unicode_inputs_are_safe(self):
+        assert classify_e5_item(None, None, None) is None
+        assert classify_e5_item('', '   ', '   ') is None
+        assert classify_e5_item('FOOD ITEM', '', 'Dietary Fibre \U0001f330') == 'DIETARY FIBRE'
+
     def test_classify_hsn_compat_shim_still_works(self):
         # HSN-only classifier still handles the SWP/PKO/RBD/WF buckets.
         assert classify_e5_hsn('04041010') == 'SWP'
@@ -253,6 +258,13 @@ class TestFullWaterfall(TestCase):
     def test_zero_quantities_leave_balance_intact(self):
         planned, _ = compute_e5_plan(_totals(), license_balance=BALANCE_CIF_USD)
         assert _planned_sum(planned) == 0.0
+
+    def test_invalid_quantities_and_negative_balance_plan_zero(self):
+        totals = _totals(**{'DIETARY FIBRE': 'bad', 'SWP': None, 'WPC': '100'})
+        planned, rate = compute_e5_plan(totals, license_balance=Decimal('-1'))
+
+        assert _planned_sum(planned) == 0.0
+        assert rate['WPC'] == float(WPC_MIN_PRICE)
 
     def test_sequential_deduction_order(self):
         # Construct a balance so small that only Step 1 can run — that proves

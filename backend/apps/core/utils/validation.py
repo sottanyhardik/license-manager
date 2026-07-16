@@ -479,7 +479,7 @@ def validate_nested_items(
                 if error_key not in errors:
                     errors[error_key] = []
                 errors[error_key].append(str(e))
-            except Exception as e:
+            except Exception:
                 error_key = f"{field_name}[{idx}]"
                 if error_key not in errors:
                     errors[error_key] = []

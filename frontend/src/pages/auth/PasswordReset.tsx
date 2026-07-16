@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { motion, useReducedMotion } from "framer-motion";
@@ -16,7 +16,7 @@ export default function PasswordReset() {
     const [submitting, setSubmitting] = useState(false);
     const [sent, setSent] = useState(false);
 
-    const submit = async (e) => {
+    const submit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setSubmitting(true);
         try {

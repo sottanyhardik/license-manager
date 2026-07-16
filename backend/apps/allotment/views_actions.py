@@ -481,7 +481,7 @@ class AllotmentActionViewSet(ViewSet):
                     'item_id': item_id,
                     'error': 'License import item not found'
                 })
-            except Exception as e:
+            except Exception:
                 import logging as _log
                 _log.getLogger(__name__).exception("allocate_items: failed for item_id %s", item_id)
                 errors.append({'item_id': item_id, 'error': 'Allocation failed; check server logs'})

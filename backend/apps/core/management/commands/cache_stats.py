@@ -51,7 +51,10 @@ class Command(BaseCommand):
         if options['keys']:
             try:
                 client = cache.client.get_client()
-                keys = client.keys('*')
+                if hasattr(client, 'scan_iter'):
+                    keys = list(client.scan_iter('*', count=1000))
+                else:
+                    keys = client.keys('*')
                 self.stdout.write(f'\n📋 Total cache keys: {len(keys)}\n')
                 for key in sorted(keys[:100]):  # Show first 100
                     self.stdout.write(f'  - {key.decode() if isinstance(key, bytes) else key}')

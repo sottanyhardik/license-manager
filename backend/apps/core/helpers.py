@@ -1,9 +1,7 @@
-# serializers.py (safe _sync_nested + example update integration)
-from django.db import transaction
-from rest_framework import serializers
+"""Shared helper functions for core serializers and related modules."""
 
-# Import your models as appropriate:
-# from ..models import SionNormClassModel, SIONExportModel, SIONImportModel
+from django.db import transaction
+
 
 def _sync_nested(
     instance,

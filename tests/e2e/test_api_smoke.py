@@ -14,11 +14,11 @@ import pytest
 
 
 # ---------- auth ----------
-def test_login_returns_token(backend_url, api_get):
+def test_login_returns_token(backend_url, e2e_credentials):
     import requests
     r = requests.post(
         f"{backend_url}/api/auth/login/",
-        json={"username": "hardik", "password": "admin@123"},
+        json=e2e_credentials,
         timeout=10,
         # Plain HTTP only — fails closed if SECURE_SSL_REDIRECT is left on
         # against DEBUG=False with no HTTPS proxy in front.
@@ -29,12 +29,12 @@ def test_login_returns_token(backend_url, api_get):
     assert "access" in body and "refresh" in body and "user" in body
 
 
-def test_login_no_redirect_in_dev(backend_url):
+def test_login_no_redirect_in_dev(backend_url, e2e_credentials):
     """If DEBUG=True locally, the login endpoint must NOT 301 to HTTPS."""
     import requests
     r = requests.post(
         f"{backend_url}/api/auth/login/",
-        json={"username": "hardik", "password": "admin@123"},
+        json=e2e_credentials,
         timeout=10,
         allow_redirects=False,
     )

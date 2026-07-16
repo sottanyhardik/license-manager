@@ -90,7 +90,7 @@ def parse_file(data):
                 try:
                     if extract_data(line, phrase) != 'Qty':
                         data_dict[key] = extract_data(line, phrase)
-                except Exception as e:
+                except Exception:
                     logger.exception("Error extracting data for phrase %s in line", phrase)
 
         if 'Debit-' in line or 'Credit-' in line:
@@ -110,7 +110,7 @@ def parse_file(data):
             if row_type == 'D':
                 try:
                     row_dict['be_date'] =datetime.datetime.strptime(split_line[8].strip(), '%d/%m/%Y').strftime('%Y/%m/%d')
-                except Exception as e:
+                except Exception:
                     row_dict['be_date'] = datetime.datetime.strptime(split_line[8].strip(), '%d/%m/%y').strftime(
                         '%Y/%m/%d')
             data_dict['row'].append(row_dict)

@@ -3,8 +3,7 @@ Unit tests for apps.license.services.balance_calculator module
 """
 from decimal import Decimal
 from unittest import TestCase
-from unittest.mock import Mock, patch, MagicMock
-from django.db.models import QuerySet
+from unittest.mock import Mock, patch
 
 from apps.core.constants import DEC_0, DEBIT
 from apps.license.services.balance_calculator import (
@@ -16,7 +15,7 @@ from apps.license.services.balance_calculator import (
 class TestLicenseBalanceCalculator(TestCase):
     """Tests for LicenseBalanceCalculator class"""
 
-    @patch('apps.license.models.LicenseExportItemModel')
+    @patch('apps.license.services.balance_calculator.LicenseExportItemModel')
     def test_calculate_credit_with_exports(self, mock_export_model):
         """Should calculate total export CIF"""
         # Setup mock
@@ -32,7 +31,7 @@ class TestLicenseBalanceCalculator(TestCase):
         assert result == Decimal('1000.00')
         mock_export_model.objects.filter.assert_called_once_with(license=mock_license)
 
-    @patch('apps.license.models.LicenseExportItemModel')
+    @patch('apps.license.services.balance_calculator.LicenseExportItemModel')
     def test_calculate_credit_no_exports(self, mock_export_model):
         """Should return zero when no exports"""
         # Setup mock
@@ -47,7 +46,7 @@ class TestLicenseBalanceCalculator(TestCase):
         # Assert
         assert result == DEC_0
 
-    @patch('apps.bill_of_entry.models.RowDetails')
+    @patch('apps.license.services.balance_calculator.RowDetails')
     def test_calculate_debit_with_boe(self, mock_row_details):
         """Should calculate total BOE debits"""
         # Setup mock
@@ -61,9 +60,13 @@ class TestLicenseBalanceCalculator(TestCase):
 
         # Assert
         assert result == Decimal('300.00')
-        mock_row_details.objects.filter.assert_called_once()
+        mock_row_details.objects.filter.assert_called_once_with(
+            sr_number__license=mock_license,
+            transaction_type=DEBIT,
+            bill_of_entry__license_trades__isnull=True,
+        )
 
-    @patch('apps.bill_of_entry.models.RowDetails')
+    @patch('apps.license.services.balance_calculator.RowDetails')
     def test_calculate_debit_no_boe(self, mock_row_details):
         """Should return zero when no BOE"""
         # Setup mock
@@ -78,7 +81,7 @@ class TestLicenseBalanceCalculator(TestCase):
         # Assert
         assert result == DEC_0
 
-    @patch('apps.allotment.models.AllotmentItems')
+    @patch('apps.license.services.balance_calculator.AllotmentItems')
     def test_calculate_allotment_with_items(self, mock_allotment_items):
         """Should calculate total allotment CIF"""
         # Setup mock
@@ -92,9 +95,28 @@ class TestLicenseBalanceCalculator(TestCase):
 
         # Assert
         assert result == Decimal('200.00')
-        mock_allotment_items.objects.filter.assert_called_once()
+        mock_allotment_items.objects.filter.assert_called_once_with(
+            item__license=mock_license,
+            allotment__bill_of_entry__isnull=True,
+        )
 
-    @patch('apps.allotment.models.AllotmentItems')
+    @patch('apps.trade.models.LicenseTradeLine')
+    def test_calculate_trade_counts_only_sale_trades(self, mock_trade_line):
+        """Should calculate trade debits only from SALE trade lines"""
+        mock_license = Mock()
+        mock_queryset = Mock()
+        mock_queryset.aggregate.return_value = {'total': Decimal('125.00')}
+        mock_trade_line.objects.filter.return_value = mock_queryset
+
+        result = LicenseBalanceCalculator.calculate_trade(mock_license)
+
+        assert result == Decimal('125.00')
+        mock_trade_line.objects.filter.assert_called_once_with(
+            sr_number__license=mock_license,
+            trade__direction='SALE',
+        )
+
+    @patch('apps.license.services.balance_calculator.AllotmentItems')
     def test_calculate_allotment_no_items(self, mock_allotment_items):
         """Should return zero when no allotments"""
         # Setup mock
@@ -197,8 +219,8 @@ class TestLicenseBalanceCalculator(TestCase):
 class TestItemBalanceCalculator(TestCase):
     """Tests for ItemBalanceCalculator class"""
 
-    @patch('apps.bill_of_entry.models.RowDetails')
-    @patch('apps.allotment.models.AllotmentItems')
+    @patch('apps.license.services.balance_calculator.RowDetails')
+    @patch('apps.license.services.balance_calculator.AllotmentItems')
     def test_calculate_item_credit_debit_with_item_cif(self, mock_allotment, mock_row_details):
         """Should calculate credit/debit using specific item CIF"""
         # Setup mock
@@ -223,9 +245,9 @@ class TestItemBalanceCalculator(TestCase):
         assert credit == Decimal('500.00')
         assert total_debit == Decimal('150.00')  # 100 + 50
 
-    @patch('apps.license.models.LicenseExportItemModel')
-    @patch('apps.bill_of_entry.models.RowDetails')
-    @patch('apps.allotment.models.AllotmentItems')
+    @patch('apps.license.services.balance_calculator.LicenseExportItemModel')
+    @patch('apps.license.services.balance_calculator.RowDetails')
+    @patch('apps.license.services.balance_calculator.AllotmentItems')
     def test_calculate_item_credit_debit_zero_cif(self, mock_allotment, mock_row_details, mock_export):
         """Should calculate using total export CIF when item CIF is zero"""
         # Setup mock
@@ -255,8 +277,8 @@ class TestItemBalanceCalculator(TestCase):
         assert credit == Decimal('1000.00')  # Total export CIF
         assert total_debit == Decimal('400.00')  # 300 + 100
 
-    @patch('apps.bill_of_entry.models.RowDetails')
-    @patch('apps.allotment.models.AllotmentItems')
+    @patch('apps.license.services.balance_calculator.RowDetails')
+    @patch('apps.license.services.balance_calculator.AllotmentItems')
     def test_calculate_item_credit_debit_no_debits(self, mock_allotment, mock_row_details):
         """Should handle zero debits"""
         # Setup mock
@@ -307,8 +329,8 @@ class TestItemBalanceCalculator(TestCase):
             # Assert
             assert result == DEC_0
 
-    @patch('apps.bill_of_entry.models.RowDetails')
-    @patch('apps.allotment.models.AllotmentItems')
+    @patch('apps.license.services.balance_calculator.RowDetails')
+    @patch('apps.license.services.balance_calculator.AllotmentItems')
     def test_calculate_available_quantity(self, mock_allotment, mock_row_details):
         """Should calculate available quantity"""
         # Setup mock
@@ -331,8 +353,8 @@ class TestItemBalanceCalculator(TestCase):
         # Assert
         assert result == Decimal('500')  # 1000 - 300 - 200
 
-    @patch('apps.bill_of_entry.models.RowDetails')
-    @patch('apps.allotment.models.AllotmentItems')
+    @patch('apps.license.services.balance_calculator.RowDetails')
+    @patch('apps.license.services.balance_calculator.AllotmentItems')
     def test_calculate_available_quantity_zero(self, mock_allotment, mock_row_details):
         """Should return zero when fully allocated"""
         # Setup mock
@@ -451,9 +473,57 @@ class TestItemBalanceCalculator(TestCase):
                 mock_item, unit_price
             )
 
-            # Assert
+        # Assert
+        assert result['max_quantity'] == DEC_0
+        assert result['max_value'] == DEC_0
+
+    def test_calculate_available_value_for_allocation_none_unit_price(self):
+        """Should treat a missing unit price as zero allocation capacity"""
+        mock_item = Mock()
+
+        with patch.object(ItemBalanceCalculator, 'calculate_available_quantity',
+                          return_value=Decimal('1000')), \
+             patch.object(ItemBalanceCalculator, 'calculate_item_balance',
+                          return_value=Decimal('5000.00')):
+
+            result = ItemBalanceCalculator.calculate_available_value_for_allocation(
+                mock_item, None
+            )
+
             assert result['max_quantity'] == DEC_0
             assert result['max_value'] == DEC_0
+
+    def test_calculate_available_value_for_allocation_invalid_required_value_ignored(self):
+        """Should ignore malformed required-value caps instead of raising"""
+        mock_item = Mock()
+
+        with patch.object(ItemBalanceCalculator, 'calculate_available_quantity',
+                          return_value=Decimal('100')), \
+             patch.object(ItemBalanceCalculator, 'calculate_item_balance',
+                          return_value=Decimal('5000.00')):
+
+            result = ItemBalanceCalculator.calculate_available_value_for_allocation(
+                mock_item, Decimal('10.00'), "not-a-decimal"
+            )
+
+            assert result['max_quantity'] == Decimal('100')
+            assert result['max_value'] == Decimal('1000.00')
+
+    def test_calculate_available_value_for_allocation_negative_required_value_ignored(self):
+        """Should ignore negative required-value caps instead of returning negative allocation"""
+        mock_item = Mock()
+
+        with patch.object(ItemBalanceCalculator, 'calculate_available_quantity',
+                          return_value=Decimal('100')), \
+             patch.object(ItemBalanceCalculator, 'calculate_item_balance',
+                          return_value=Decimal('5000.00')):
+
+            result = ItemBalanceCalculator.calculate_available_value_for_allocation(
+                mock_item, Decimal('10.00'), Decimal('-1.00')
+            )
+
+            assert result['max_quantity'] == Decimal('100')
+            assert result['max_value'] == Decimal('1000.00')
 
 
 class TestEdgeCases(TestCase):

@@ -3,6 +3,8 @@
 import pytest
 from rest_framework.test import APIClient
 
+from mds.settings import _parse_tokens
+from masters.auth import ServiceTokenAuthentication
 from masters.models import Company, MasterChange
 
 WRITE = "t-write"
@@ -33,6 +35,12 @@ class TestAuth:
         _auth(api, "nope")
         assert api.get("/api/v1/companies/").status_code in (401, 403)
 
+    def test_service_token_scope_lookup_matches_configured_token(self):
+        auth = ServiceTokenAuthentication()
+
+        assert auth._scope_for_token(WRITE) == "write"
+        assert auth._scope_for_token("nope") is None
+
     def test_read_token_cannot_write(self, api):
         _auth(api, READ)
         r = api.post("/api/v1/companies/bulk_upsert/", [{"iec": "IEC1", "name": "A"}], format="json")
@@ -41,6 +49,16 @@ class TestAuth:
     def test_read_token_can_read(self, api):
         _auth(api, READ)
         assert api.get("/api/v1/companies/").status_code == 200
+
+    def test_parse_tokens_skips_empty_entries_and_defaults_to_read(self):
+        assert _parse_tokens("read-token, write-token:write, :write, ,") == {
+            "read-token": "read",
+            "write-token": "write",
+        }
+
+    def test_parse_tokens_rejects_invalid_scope(self):
+        with pytest.raises(ValueError):
+            _parse_tokens("token:admin")
 
 
 @pytest.mark.django_db

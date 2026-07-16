@@ -9,19 +9,16 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict, List, Any
 
-from django.db.models import Sum, Q, F, DecimalField, Value
+from django.db.models import Sum, DecimalField, Value
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
-from django.views import View
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework import viewsets, status
+from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from rest_framework.views import APIView
 from apps.accounts.permissions import ReportPermission
 
 from apps.core.constants import DEC_0, DEC_000, GE, MI, IP, SM
-from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
+from apps.license.models import LicenseDetailsModel
 
 def _safe_int(value, default):
     try:
@@ -32,7 +29,7 @@ def _safe_int(value, default):
 
 
 
-class ActiveLicensesReportView(View):
+class ActiveLicensesReportView(APIView):
     """
     Report showing active licenses with expiry >= (today - N days).
 
@@ -41,6 +38,7 @@ class ActiveLicensesReportView(View):
         - format: 'json' or 'excel' (default: json)
         - sion_norm: Filter by SION norm (optional)
     """
+    permission_classes = [ReportPermission]
 
     def get(self, request, *args, **kwargs):
         days = _safe_int(request.GET.get('days'), 30)
@@ -294,7 +292,7 @@ class ActiveLicensesReportView(View):
             HttpResponse with Excel file
         """
         import openpyxl
-        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.styles import Font, Alignment, PatternFill
 
         workbook = openpyxl.Workbook()
         workbook.remove(workbook.active)  # Remove default sheet
@@ -607,7 +605,7 @@ class ActiveLicensesViewSet(viewsets.ViewSet):
     """
     ViewSet for Active Licenses Report.
 
-    Permissions: AllowAny - accessible to all users
+    Permissions: ReportPermission.
     """
     permission_classes = [ReportPermission]
 

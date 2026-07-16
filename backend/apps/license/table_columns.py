@@ -4,14 +4,35 @@ Reusable table column classes for Django Tables2.
 This module provides a factory pattern for creating table columns with
 totaling functionality, eliminating ~100 lines of duplicate code from tables.py.
 """
+from decimal import Decimal, InvalidOperation
+
 import django_tables2 as dt2
 from django.contrib.humanize.templatetags.humanize import intcomma
+
+
+def _as_decimal(value) -> Decimal:
+    if value in (None, ""):
+        return Decimal("0")
+    try:
+        decimal_value = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("0")
+    if not decimal_value.is_finite():
+        return Decimal("0")
+    return decimal_value
 
 
 class ColumnTotal(dt2.Column):
     """Base column class with footer totaling support."""
 
-    column_total = 0
+    def __init__(self, *args, **kwargs):
+        self.column_total = Decimal("0")
+        super().__init__(*args, **kwargs)
+
+    def render_total_value(self, value, places: int = 0):
+        decimal_value = _as_decimal(value)
+        self.column_total += decimal_value
+        return intcomma(round(decimal_value, places))
 
     def render_footer(self, bound_column, table):
         """Render footer with formatted total."""
@@ -43,13 +64,10 @@ class ColumnFactory:
         class DynamicTotalColumn(ColumnTotal):
             def render(self, record):
                 # Call the method on the record
-                if callable(getattr(record, method_name, None)):
-                    value = getattr(record, method_name)()
-                else:
-                    value = getattr(record, method_name, 0)
-
-                self.column_total += value
-                return intcomma(round(value, decimals))
+                value = getattr(record, method_name, Decimal("0"))
+                if callable(value):
+                    value = value()
+                return self.render_total_value(value, decimals)
 
         # Set a meaningful class name for debugging
         DynamicTotalColumn.__name__ = f'{method_name.title().replace("_", "")}Column'
@@ -69,9 +87,8 @@ class ColumnFactory:
         """
         class DynamicAttributeColumn(ColumnTotal):
             def render(self, record):
-                value = getattr(record, attribute_name, 0)
-                self.column_total += value
-                return intcomma(round(value, decimals))
+                value = getattr(record, attribute_name, Decimal("0"))
+                return self.render_total_value(value, decimals)
 
         # Set a meaningful class name for debugging
         DynamicAttributeColumn.__name__ = f'{attribute_name.title().replace("_", "")}Column'
@@ -115,6 +132,29 @@ class CustomCalculationColumn(ColumnTotal):
 
     def render(self, record):
         # Custom calculation
-        value = (record.get_balance_cif * 1.1) if hasattr(record, 'get_balance_cif') else 0
-        self.column_total += value
-        return intcomma(round(value, 2))
+        value = getattr(record, 'get_balance_cif', Decimal("0"))
+        if callable(value):
+            value = value()
+        return self.render_total_value(_as_decimal(value) * Decimal("1.1"), 2)
+
+
+__all__ = [
+    "BalanceCIFColumn",
+    "BOPPQuantityColumn",
+    "ColumnFactory",
+    "ColumnTotal",
+    "CustomCalculationColumn",
+    "DietaryFibreQuantityColumn",
+    "FruitsQuantityColumn",
+    "MNMQuantityColumn",
+    "PERCIFColumn",
+    "PPQuantityColumn",
+    "PaperBoardQuantityColumn",
+    "PaperQuantityColumn",
+    "PomaceQuantityColumn",
+    "RBDQuantityColumn",
+    "SugarQuantityColumn",
+    "TotalBalanceCIFColumn",
+    "VegetableOilQuantityColumn",
+    "WheatQuantityColumn",
+]

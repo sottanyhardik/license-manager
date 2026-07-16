@@ -12,38 +12,16 @@
 
 set -e
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
-log()  { echo -e "${BLUE}→${NC} $*"; }
-ok()   { echo -e "${GREEN}✓${NC} $*"; }
-warn() { echo -e "${YELLOW}⚠${NC} $*"; }
-err()  { echo -e "${RED}✗${NC} $*"; }
-
-SERVER_USER="django"
-PASSWORD="admin"
-REMOTE_PATH="/home/django/license-manager/backend"
-VENV_ACTIVATE="/home/django/license-manager/venv/bin/activate"
-
-# server-ip:server-label pairs
-SERVERS=(
-    "143.110.252.201:license-manager"
-    "139.59.92.226:labdhi"
-    "165.232.185.220:tractor"
-)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/maintenance/_master_sync_lib.sh
+source "$SCRIPT_DIR/_master_sync_lib.sh"
 
 # Output location (local)
 OUT_DIR="$(pwd)/master-audit-$(date +%Y%m%d-%H%M)"
 mkdir -p "$OUT_DIR"
 log "Output directory: $OUT_DIR"
 
-# Choose SSH/SCP wrapper (sshpass if installed)
-if command -v sshpass &>/dev/null; then
-    SSH_BIN="sshpass -p $PASSWORD ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-    SCP_BIN="sshpass -p $PASSWORD scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-else
-    warn "sshpass not installed — will prompt for password each connection"
-    SSH_BIN="ssh"
-    SCP_BIN="scp"
-fi
+master_sync_setup_ssh
 
 # ── Step 1: run audit on every server, pull JSON locally ────
 FAILED=()
@@ -97,7 +75,6 @@ log "Generating merge plan..."
 log "  winner: $WINNER"
 log "  others: ${OTHERS[*]}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT/backend"

@@ -27,10 +27,31 @@ _ALLOTTED_FILTER = Q(
 )
 
 
+def _item_pk(item):
+    if item is None:
+        return None
+    return getattr(item, "pk", item)
+
+
+def _normalize_item_ids(item_ids) -> list:
+    if item_ids is None:
+        return []
+
+    ids = []
+    for item_id in item_ids:
+        item_id = _item_pk(item_id)
+        if item_id not in (None, ""):
+            ids.append(item_id)
+    return list(dict.fromkeys(ids))
+
+
 def live_allotted_qty(item) -> Decimal:
     """Sum of quantity already allotted (non-BOE, type=AT) for this import item."""
     from apps.allotment.models import AllotmentItems
-    return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item=item).aggregate(
+    item_id = _item_pk(item)
+    if item_id is None:
+        return DEC_000
+    return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id=item_id).aggregate(
         total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
     )["total"] or DEC_000
 
@@ -38,7 +59,10 @@ def live_allotted_qty(item) -> Decimal:
 def live_allotted_value(item) -> Decimal:
     """Sum of CIF-FC already allotted (non-BOE, type=AT) for this import item."""
     from apps.allotment.models import AllotmentItems
-    return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item=item).aggregate(
+    item_id = _item_pk(item)
+    if item_id is None:
+        return DEC_0
+    return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id=item_id).aggregate(
         total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
     )["total"] or DEC_0
 
@@ -46,7 +70,7 @@ def live_allotted_value(item) -> Decimal:
 def live_allotted_qty_for(item_ids) -> Decimal:
     """Sum of quantity already allotted across a set of import items (group cap)."""
     from apps.allotment.models import AllotmentItems
-    ids = list(item_ids)
+    ids = _normalize_item_ids(item_ids)
     if not ids:
         return DEC_000
     return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id__in=ids).aggregate(
@@ -57,7 +81,7 @@ def live_allotted_qty_for(item_ids) -> Decimal:
 def live_allotted_value_for(item_ids) -> Decimal:
     """Sum of CIF-FC already allotted across a set of import items (group cap)."""
     from apps.allotment.models import AllotmentItems
-    ids = list(item_ids)
+    ids = _normalize_item_ids(item_ids)
     if not ids:
         return DEC_0
     return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id__in=ids).aggregate(

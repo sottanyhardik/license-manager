@@ -4,6 +4,7 @@ import { EntityCard, DetailTable } from "../../../components/ui";
 import api from "../../../api/axios";
 import { saveFilterState } from "../../../utils/filterPersistence";
 import { openPdfPreview } from "../../../utils/pdfPreview";
+import { formatTruthyIndianNumber, formatTruthyInr } from "../masterDisplayFormatters";
 
 interface AllotmentsTableProps {
     loading: boolean;
@@ -42,8 +43,8 @@ export default function AllotmentsTable({
                         ) : (
                             <div>
                                 {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—';
-                                    const fmtQty = (val) => val ? Number(val).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—';
+                                    const fmtInr = (val) => formatTruthyInr(val);
+                                    const fmtQty = (val) => formatTruthyIndianNumber(val, { maximumFractionDigits: 3 });
                                     const detailRows = item.allotment_details || [];
                                     return (
                                         <EntityCard
@@ -113,7 +114,7 @@ export default function AllotmentsTable({
                                                         { key: 'qty',                 label: 'Qty',        align: 'right', nowrap: true,
                                                             render: v => fmtQty(v) },
                                                         { key: 'cif_fc',              label: 'CIF (FC)',   align: 'right', nowrap: true,
-                                                            render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                                                            render: v => formatTruthyIndianNumber(v, { maximumFractionDigits: 2 }) },
                                                         { key: 'cif_inr',             label: 'CIF (INR)',  align: 'right', nowrap: true, bold: true,
                                                             render: v => fmtInr(v) },
                                                     ]}

@@ -225,7 +225,6 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         Optional company parameter: If provided, only shows transactions involving that company.
         """
-        from django.utils import timezone
         from apps.trade.models import LicenseTrade
         from django.db.models import Q
 
@@ -265,8 +264,6 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         Get licenses with available balance for sale.
         Filters out expired and fully sold licenses.
         """
-        from django.utils import timezone
-
         min_balance = Decimal(request.query_params.get('min_balance', '100'))
 
         # DFIA with balance

@@ -20,6 +20,7 @@ import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
 import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
 import AllotmentsTable from "./tables/AllotmentsTable";
+import GenericMasterCards from "./tables/GenericMasterCards";
 import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
@@ -1650,87 +1651,18 @@ export default function MasterList() {
                             onInlineUpdate={handleInlineUpdate}
                         />
                     ) : (
-                        loading ? (
-                            <div className="text-center py-5">
-                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted-foreground">Loading {entityTitle}...</div>
-                            </div>
-                        ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted-foreground">
-                                <Inbox className="size-4" aria-hidden="true" />
-                                <div className="mt-2">No {entityTitle ? entityTitle.toLowerCase() : 'records'} found</div>
-                            </div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    // list_display is array of strings (field names)
-                                    const cols = metadata.list_display || [];
-                                    const fmtLabel = (col) => col.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                                    const getVal = (col) => {
-                                        const fieldKey = col.replace(/__/g, '_');
-                                        const val = item[fieldKey] !== undefined ? item[fieldKey] : item[col];
-                                        if (val === null || val === undefined || val === '') return null;
-                                        if (typeof val === 'boolean') return val ? 'Yes' : 'No';
-                                        if (typeof val === 'object') return JSON.stringify(val);
-                                        return String(val);
-                                    };
-                                    return (
-                                        <div key={item.id} style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            background: 'var(--tb-card-bg)',
-                                            border: '1px solid var(--tb-border)',
-                                            borderLeft: '4px solid #4f46e5',
-                                            borderRadius: 'var(--tb-r-md)',
-                                            marginBottom: '6px',
-                                            padding: '10px 14px',
-                                            gap: '12px',
-                                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                                        }}>
-                                            {/* Fields row — equal-width columns so all rows align */}
-                                            <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'flex-start', minWidth: 0 }}>
-                                                {cols.map((col, idx) => {
-                                                    const v = getVal(col);
-                                                    return (
-                                                        <div key={col} style={{ flex: '1 1 0', minWidth: 0 }}>
-                                                            <div style={{ fontSize: 10, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                {fmtLabel(col)}
-                                                            </div>
-                                                            <div style={{
-                                                                fontSize: 14,
-                                                                color: idx === 0 ? 'var(--tb-brand-active)' : 'var(--tb-gray-700)',
-                                                                fontWeight: idx === 0 ? '600' : '400',
-                                                                wordBreak: 'break-word',
-                                                            }}>
-                                                                {v ?? <span style={{ color: 'var(--tb-border-strong)' }}>—</span>}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-
-                                            {/* Actions — always right-pinned */}
-                                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignSelf: 'center' }}>
-                                                <button
-                                                    onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/masters/${entityName}/${item.id}/edit`); }}
-                                                    title="Edit"
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 10px', cursor: 'pointer' }}
-                                                >
-                                                    <Pencil className="size-4" aria-hidden="true" /> Edit
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(item)}
-                                                    title="Delete"
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
-                                                >
-                                                    <Trash2 className="size-4" aria-hidden="true" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )
+                        <GenericMasterCards
+                            loading={loading}
+                            data={data}
+                            metadata={metadata}
+                            entityName={entityName}
+                            entityTitle={entityTitle}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                        />
                     ))}
 
                     {/* Pagination */}

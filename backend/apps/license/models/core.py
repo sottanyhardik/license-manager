@@ -429,10 +429,6 @@ class LicenseDetailsModel(AuditModel):
         if not matching_rows:
             return {"available_quantity_sum": DEC_000, "quantity_sum": DEC_000}
 
-    # Deprecated: Use get_item_group_data instead
-    def get_item_head_data(self, item_name: str) -> Dict[str, Any]:
-        return self.get_item_group_data(item_name)
-
         total_available = sum(
             _to_decimal(row.get("available_quantity_sum") or DEC_000, DEC_000)
             for row in matching_rows
@@ -446,6 +442,10 @@ class LicenseDetailsModel(AuditModel):
             "available_quantity_sum": total_available,
             "quantity_sum": total_quantity,
         }
+
+    # Deprecated: Use get_item_group_data instead
+    def get_item_head_data(self, item_name: str) -> Dict[str, Any]:
+        return self.get_item_group_data(item_name)
 
     # ---------- domain convenience lookups ----------
     @cached_property
@@ -642,15 +642,6 @@ class LicenseDetailsModel(AuditModel):
             available_value = self.use_balance_cif(cif_juice, available_value)
 
         cif_swp = cif_cheese = wpc_cif = DEC_0
-
-        # Oils & Milk distribution logic: lazy imports to avoid startup-time import errors.
-        try:
-            from backend.scripts.veg_oil_allocator import allocate_priority_oils_with_min_pomace
-        except Exception:
-            allocate_priority_oils_with_min_pomace = None
-
-        oil_info = self.oil_queryset
-        total_oil_available = _to_decimal(oil_info.get("available_quantity_sum") or DEC_000, DEC_000)
 
         # heuristics omitted for brevity; preserve Decimal conversions as before
         oil_data = {"Total_CIF": DEC_0, "rbd_oil": DEC_000, "cif_rbd_oil": DEC_0, "pko_oil": DEC_000,

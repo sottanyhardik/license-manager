@@ -1,18 +1,15 @@
-# accounts/views/auth.py
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import authenticate
 from rest_framework import status
 from rest_framework.generics import RetrieveUpdateAPIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.core.middleware import log_login, log_logout
 from apps.core.throttling import LoginRateThrottle
 from ..serializers import UserSerializer
-
-User = get_user_model()
 
 
 class LoginView(APIView):
@@ -52,7 +49,7 @@ class LogoutView(APIView):
             return Response({"detail": "refresh token required"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             RefreshToken(token).blacklist()
-        except Exception:
+        except TokenError:
             return Response({"detail": "invalid token"}, status=status.HTTP_400_BAD_REQUEST)
         log_logout(request.user, request)
         return Response({"detail": "logged out"}, status=status.HTTP_205_RESET_CONTENT)

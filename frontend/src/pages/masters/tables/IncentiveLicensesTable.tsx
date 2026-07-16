@@ -2,6 +2,7 @@ import {
     Building2, Calendar, CalendarX, Fingerprint, Inbox, MapPin, Pencil, Trash2,
 } from "lucide-react";
 import { saveFilterState } from "../../../utils/filterPersistence";
+import { formatTruthyInr, parseMasterDisplayDate } from "../masterDisplayFormatters";
 
 interface IncentiveLicensesTableProps {
     loading: boolean;
@@ -31,9 +32,9 @@ export default function IncentiveLicensesTable({
                         ) : (
                             <div>
                                 {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
-                                    const parseIndianDate = (s) => { if (!s) return null; const p = s.split('-'); return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null; };
-                                    const isExpired = item.license_expiry_date && parseIndianDate(item.license_expiry_date) < new Date();
+                                    const fmtInr = (val) => formatTruthyInr(val, "-");
+                                    const expiryDate = parseMasterDisplayDate(item.license_expiry_date);
+                                    const isExpired = Boolean(expiryDate && expiryDate < new Date());
                                     const soldStyle = item.sold_status === 'YES' ? { border: 'var(--tb-danger-border)', left: 'var(--tb-danger)', badge: 'var(--tb-danger-soft)', badgeText: 'var(--tb-danger-text)', label: 'Sold' }
                                         : item.sold_status === 'PARTIAL' ? { border: 'var(--tb-warning-border)', left: 'var(--tb-warning)', badge: 'var(--tb-warning-soft)', badgeText: 'var(--tb-warning-text)', label: 'Partial' }
                                         : { border: 'var(--tb-success-border)', left: 'var(--tb-success)', badge: 'var(--tb-success-soft)', badgeText: 'var(--tb-success-text)', label: 'Available' };

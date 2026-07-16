@@ -8,7 +8,6 @@ from django.conf import settings
 from django.db import models
 from django.db.models import F
 from django.http import HttpResponse
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
@@ -24,7 +23,7 @@ except ImportError:
     OPENPYXL_AVAILABLE = False
 
 try:
-    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -39,6 +38,18 @@ class StandardPagination(PageNumberPagination):
     page_size = 25
     page_size_query_param = "page_size"
     max_page_size = 200
+
+
+class MasterDataPermission(permissions.BasePermission):
+    """Authenticated users may read master data; only superusers may write it."""
+
+    def has_permission(self, request, view):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return user.is_superuser
 
 
 class CaseInsensitiveSearchFilter(filters.SearchFilter):
@@ -83,7 +94,7 @@ class MasterViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     # Default: authenticated users can read master data (companies, ports, etc.)
     # Individual viewsets override this with role-specific permission classes.
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [MasterDataPermission]
     pagination_class = StandardPagination
     filter_backends = [CaseInsensitiveSearchFilter, filters.OrderingFilter]  # Use custom search with icontains
     ordering_fields = "__all__"

@@ -5,8 +5,6 @@ Unit + edge-case tests for the E132 planning classification engine
 import unittest
 from decimal import Decimal
 
-from decimal import Decimal as _Dec
-
 from apps.license.services.e132_plan import (
     ALUMINIUM, CHEESE, MILK, PKO, RBD, YEAST, UNIT_PRICE, PLANNING_ORDER,
     NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC, SWP, DWP, WPC,
@@ -126,10 +124,10 @@ class TestNutRaisinCereals(unittest.TestCase):
         self.assertEqual(classify_e132_record("11041200", "rolled oats")[0], CEREALS_FLAKES)
 
     def test_new_item_prices(self):
-        self.assertEqual(UNIT_PRICE[NUT_NUTS], _Dec("10.00"))
-        self.assertEqual(UNIT_PRICE[RAISIN_ITEM], _Dec("4.00"))
-        self.assertEqual(UNIT_PRICE[CEREALS_FLAKES], _Dec("0.60"))
-        self.assertEqual(UNIT_PRICE[CMC], _Dec("5.00"))
+        self.assertEqual(UNIT_PRICE[NUT_NUTS], Decimal("10.00"))
+        self.assertEqual(UNIT_PRICE[RAISIN_ITEM], Decimal("4.00"))
+        self.assertEqual(UNIT_PRICE[CEREALS_FLAKES], Decimal("0.60"))
+        self.assertEqual(UNIT_PRICE[CMC], Decimal("5.00"))
 
     def test_raisin_priced_value(self):
         # 100 × $4 = 400, within a generous balance.
@@ -276,6 +274,16 @@ class TestNullAndBlankSafe(unittest.TestCase):
 
     def test_null_hsn_desc_match(self):
         self.assertEqual(classify_e132_record(None, "  Milk  ")[0], MILK)
+
+    def test_unicode_description_and_invalid_quantity_are_safe(self):
+        records = [
+            {"record_id": 1, "hs_code": None, "description": "  MILK \U0001f95b  ", "quantity": "bad"},
+        ]
+        result = plan_e132(records, balance_cif=Decimal("100"))
+
+        self.assertEqual(result["classified"][0].planning_item, MILK)
+        self.assertEqual(result["classified"][0].quantity, Decimal("0"))
+        self.assertEqual(result["total_planned"], Decimal("0"))
 
 
 class TestCaseInsensitiveAndTrim(unittest.TestCase):

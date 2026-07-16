@@ -71,6 +71,11 @@ class TestClassifyE1Item(TestCase):
     def test_unclassified(self):
         assert classify_e1_item('SUGAR', '17019990', 'Refined Cane Sugar') is None
 
+    def test_null_blank_and_unicode_inputs_are_safe(self):
+        assert classify_e1_item(None, None, None) is None
+        assert classify_e1_item('', '   ', '   ') is None
+        assert classify_e1_item('PACKING', '', 'Aluminium foil \U0001f4e6 7607') == 'ALUMINIUM FOIL'
+
 
 class TestSplitDisplayUtilQty(TestCase):
 
@@ -128,6 +133,17 @@ class TestComputeE1Plan(TestCase):
     def test_zero_quantities_no_utilization(self):
         planned, _ = compute_e1_plan(_zero_qty(), _zero_qty(), Decimal('10000'))
         assert _planned_sum(planned) == 0.0
+
+    def test_invalid_util_quantities_and_negative_balance_plan_zero(self):
+        planned, rate = compute_e1_plan(
+            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 10.0, 'WPC': 10.0}),
+            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 'bad', 'WPC': None}),
+            Decimal('-1'),
+        )
+
+        assert _planned_sum(planned) == 0.0
+        assert rate['OTHER CONFECTIONERY INGREDIENTS'] == 2.7
+        assert rate['WPC'] == 22.0
 
     def test_other_confectionery_at_max_price(self):
         # 100 kg × 2.7 = 270 ≤ balance.

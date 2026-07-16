@@ -16,6 +16,8 @@ import logging
 import re
 import urllib.parse
 import urllib.request
+import gzip
+import zlib
 from datetime import datetime
 from decimal import Decimal
 from http.cookiejar import CookieJar
@@ -45,6 +47,22 @@ CURRENCY_FIELD_MAP = {
     "GBP": "pound_sterling",
     "CNY": "chinese_yuan",
 }
+
+
+def _decode_response_body(response) -> str:
+    raw = response.read()
+    encoding = response.headers.get("Content-Encoding", "").lower()
+    if encoding == "gzip":
+        raw = gzip.decompress(raw)
+    elif encoding == "deflate":
+        raw = zlib.decompress(raw)
+    elif encoding == "br":
+        try:
+            import brotli
+        except ImportError as exc:
+            raise RuntimeError("DGFT returned Brotli-compressed content but brotli is not installed") from exc
+        raw = brotli.decompress(raw)
+    return raw.decode("utf-8", errors="replace")
 
 
 def _fetch_dgft_rates(timeout=30):
@@ -77,19 +95,7 @@ def _fetch_dgft_rates(timeout=30):
     # 1. Hit the landing page to obtain JSESSIONID + CSRF token
     landing_req = urllib.request.Request(LANDING_URL, headers=browser_headers)
     with opener.open(landing_req, timeout=timeout) as resp:
-        raw = resp.read()
-        # Handle gzip transparently (urllib doesn't auto-decompress)
-        if resp.headers.get("Content-Encoding") == "gzip":
-            import gzip
-            raw = gzip.decompress(raw)
-        elif resp.headers.get("Content-Encoding") == "br":
-            try:
-                import brotli
-                raw = brotli.decompress(raw)
-            except ImportError:
-                # Retry without br
-                pass
-        landing_html = raw.decode("utf-8", errors="replace")
+        landing_html = _decode_response_body(resp)
     csrf_match = re.search(r'name="_csrf"\s+content="([a-f0-9-]+)"', landing_html)
     if not csrf_match:
         raise RuntimeError("CSRF token not found on DGFT landing page")
@@ -122,11 +128,7 @@ def _fetch_dgft_rates(timeout=30):
     }
     req = urllib.request.Request(api_url, data=payload, headers=api_headers, method="POST")
     with opener.open(req, timeout=timeout) as resp:
-        raw = resp.read()
-        if resp.headers.get("Content-Encoding") == "gzip":
-            import gzip
-            raw = gzip.decompress(raw)
-        body = raw.decode("utf-8", errors="replace")
+        body = _decode_response_body(resp)
     data = json.loads(body)
     return data.get("data", [])
 

@@ -33,12 +33,19 @@ function getTokenExpiryMs(token: string): number | null {
     }
 }
 
+function getStoredUser(): AuthUser | null {
+    const storedUser = localStorage.getItem("user");
+    if (!storedUser) return null;
+    try {
+        return JSON.parse(storedUser);
+    } catch {
+        localStorage.removeItem("user");
+        return null;
+    }
+}
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-    const [user, setUser] = useState<AuthUser | null>(
-        localStorage.getItem("user")
-            ? JSON.parse(localStorage.getItem("user")!)
-            : null
-    );
+    const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
     const [loading, setLoading] = useState(true);
     const loadUserCalled = useRef(false);
     const lastActivityRef = useRef(Date.now());

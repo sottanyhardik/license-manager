@@ -2,11 +2,19 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from . import services
 
 User = get_user_model()
+
+
+def validate_user_password(password, user=None):
+    try:
+        validate_password(password, user)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError({"password": exc.messages}) from exc
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -22,7 +30,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         pwdc = attrs.pop("password_confirm", None)
         if pwdc is not None and pwd != pwdc:
             raise serializers.ValidationError({"password_confirm": "Password confirmation does not match."})
-        validate_password(pwd)
+        validate_user_password(pwd)
         return attrs
 
     def create(self, validated_data):
@@ -77,6 +85,11 @@ class UserManagementSerializer(serializers.ModelSerializer):
         # Replace the ListField write representation with the actual group names
         data['roles'] = instance.get_role_codes()
         return data
+
+    def validate_password(self, value):
+        if value:
+            validate_user_password(value, self.instance)
+        return value
 
     def _sync_roles(self, user, role_codes):
         """Sync user's groups to exactly the given role codes."""

@@ -6,6 +6,7 @@ import { ArrowLeft, Check, X, KeyRound } from "lucide-react";
 import { createUser, getAvailableRoles, getUser, resetPassword, updateUser } from "../../api/users";
 import { AuthContext } from "../../context/AuthContext";
 import { getErrorMessage } from "../../utils/errorUtils";
+import { extractFormErrors, getFieldError } from "../../utils/formErrors";
 import { ROLE_LABELS } from "../../utils/roleConstants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ export default function UserForm() {
     const [newPassword, setNewPassword] = useState("");
     const [showPwReset, setShowPwReset] = useState(false);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
+    const [passwordResetErrors, setPasswordResetErrors] = useState<Record<string, string | undefined>>({});
 
     useEffect(() => {
         const init = async () => {
@@ -94,9 +96,8 @@ export default function UserForm() {
             }
             navigate("/admin/users");
         } catch (err) {
-            if (err?.response?.data && typeof err.response.data === "object") {
-                setFieldErrors(err.response.data);
-            }
+            const { fieldErrors: errors } = extractFormErrors(err);
+            setFieldErrors(errors);
             toast.error(getErrorMessage(err));
         } finally {
             setSaving(false);
@@ -106,12 +107,15 @@ export default function UserForm() {
     const handleResetPassword = async () => {
         if (!newPassword) return;
         setResettingPw(true);
+        setPasswordResetErrors({});
         try {
             await resetPassword(id, newPassword);
             toast.success("Password reset successfully");
             setShowPwReset(false);
             setNewPassword("");
         } catch (err) {
+            const { fieldErrors: errors } = extractFormErrors(err);
+            setPasswordResetErrors(errors);
             toast.error(getErrorMessage(err));
         } finally {
             setResettingPw(false);
@@ -120,8 +124,10 @@ export default function UserForm() {
 
     if (loading) return <div className="p-8 text-center text-sm text-muted-foreground">Loading…</div>;
 
-    const FieldError = ({ name }) =>
-        fieldErrors[name] ? <p className="mt-1 text-[11.5px] text-destructive">{fieldErrors[name]}</p> : null;
+    const FieldError = ({ name }) => {
+        const error = getFieldError(fieldErrors, name);
+        return error ? <p className="mt-1 text-[11.5px] text-destructive">{error}</p> : null;
+    };
 
     return (
         <div className="mx-auto max-w-3xl">
@@ -242,9 +248,18 @@ export default function UserForm() {
                             className="flex-1"
                             placeholder="New password"
                             value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
+                            onChange={(e) => {
+                                setNewPassword(e.target.value);
+                                setPasswordResetErrors(prev => ({ ...prev, password: undefined }));
+                            }}
                             autoComplete="new-password"
+                            aria-invalid={!!getFieldError(passwordResetErrors, "password")}
                         />
+                        {getFieldError(passwordResetErrors, "password") && (
+                            <p className="basis-full text-[11.5px] text-destructive">
+                                {getFieldError(passwordResetErrors, "password")}
+                            </p>
+                        )}
                         <Button onClick={handleResetPassword} disabled={resettingPw || !newPassword}>
                             <Check className="size-4" />
                             {resettingPw ? "Saving…" : "Set Password"}

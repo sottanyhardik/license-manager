@@ -43,9 +43,10 @@ DATA MAPPING (source: LicenseImportItemsModel of an E132 licence)
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from decimal import Decimal
-from typing import Any, Iterable, Optional
+from decimal import Decimal, InvalidOperation
+from typing import Any
 
 NORM = "E132"
 
@@ -72,7 +73,7 @@ WPC = "WPC - E132"            # Whey Protein Concentrate
 MILK_PRODUCTS = (SWP, DWP, WPC)   # display order of the three split products
 
 # ── Fixed planning unit prices (USD). ────────────────────────────────────────
-UNIT_PRICE: dict[str, Optional[Decimal]] = {
+UNIT_PRICE: dict[str, Decimal | None] = {
     YEAST: Decimal("3.00"),
     CHEESE: Decimal("5.00"),
     PKO: Decimal("2.30"),
@@ -134,13 +135,13 @@ def _has_word(desc_norm: str, word: str) -> bool:
 # Each rule: (planning_item, predicate(hsn_digits, desc_norm) -> reason|None).
 # First rule whose predicate returns a reason wins. Reasons are the audit trail.
 
-def _rule_yeast(hsn: str, desc: str) -> Optional[str]:
+def _rule_yeast(hsn: str, desc: str) -> str | None:
     if "yeast" in desc and _hsn_matches(hsn, "2106"):
         return "Description contains 'yeast' AND HSN=2106"
     return None
 
 
-def _rule_cheese(hsn: str, desc: str) -> Optional[str]:
+def _rule_cheese(hsn: str, desc: str) -> str | None:
     for code in ("0401", "0405", "0406", "2106"):
         if _hsn_matches(hsn, code):
             return f"HSN={code}"
@@ -149,7 +150,7 @@ def _rule_cheese(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-def _rule_pko(hsn: str, desc: str) -> Optional[str]:
+def _rule_pko(hsn: str, desc: str) -> str | None:
     if _hsn_matches(hsn, "1513"):
         return "HSN=1513"
     if "pko" in desc:
@@ -159,7 +160,7 @@ def _rule_pko(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-def _rule_rbd(hsn: str, desc: str) -> Optional[str]:
+def _rule_rbd(hsn: str, desc: str) -> str | None:
     if _hsn_matches(hsn, "1511"):
         return "HSN=1511"
     if "rbd" in desc:
@@ -169,7 +170,7 @@ def _rule_rbd(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-def _rule_aluminium(hsn: str, desc: str) -> Optional[str]:
+def _rule_aluminium(hsn: str, desc: str) -> str | None:
     if _hsn_matches(hsn, "7607"):
         return "HSN=7607"
     if _has_word(desc, "7607"):
@@ -182,7 +183,7 @@ def _rule_aluminium(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-def _rule_milk(hsn: str, desc: str) -> Optional[str]:
+def _rule_milk(hsn: str, desc: str) -> str | None:
     # Explicit guard: a "yeast" + HSN-2106 record is Yeast, never Milk (already
     # guaranteed by the Yeast-first priority, but kept here as defensive intent).
     if "yeast" in desc and _hsn_matches(hsn, "2106"):
@@ -198,7 +199,7 @@ def _rule_milk(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-def _rule_nut(hsn: str, desc: str) -> Optional[str]:
+def _rule_nut(hsn: str, desc: str) -> str | None:
     # NUT & NUTS: HSN starts with 0802 (or '0802' in the description) — but NOT
     # when the record is milk or a 0806 (raisin) item, per the stated exclusions.
     if not (_hsn_matches(hsn, "0802") or _has_word(desc, "0802")):
@@ -210,7 +211,7 @@ def _rule_nut(hsn: str, desc: str) -> Optional[str]:
     return "HSN=0802 / desc contains '0802' (excl. milk & 0806)"
 
 
-def _rule_raisin(hsn: str, desc: str) -> Optional[str]:
+def _rule_raisin(hsn: str, desc: str) -> str | None:
     # RAISIN: HSN starts with 0806 (or '0806' in the description).
     if _hsn_matches(hsn, "0806"):
         return "HSN=0806"
@@ -219,7 +220,7 @@ def _rule_raisin(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-def _rule_cereals(hsn: str, desc: str) -> Optional[str]:
+def _rule_cereals(hsn: str, desc: str) -> str | None:
     # ⚠ ASSUMED rule — no classification criteria were given for CEREALS FLAKES.
     #   Uses HSN 1104 (this codebase's historical cereal-flakes code). CONFIRM /
     #   replace the code or keyword below with the real rule.
@@ -230,7 +231,7 @@ def _rule_cereals(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-def _rule_cmc(hsn: str, desc: str) -> Optional[str]:
+def _rule_cmc(hsn: str, desc: str) -> str | None:
     # CMC: HSN starts with 3912 (or '3912' in the description). CMC is evaluated
     # LAST in the priority order, so this only catches items not already claimed
     # by a higher-priority rule ("not classified elsewhere").
@@ -274,7 +275,7 @@ def _active_rules():
     return _RULES_CORRECTED if PRIORITY_YEAST_FIRST else _RULES_LITERAL
 
 
-def classify_e132_record(hs_code: Any, description: Any) -> tuple[Optional[str], Optional[str]]:
+def classify_e132_record(hs_code: Any, description: Any) -> tuple[str | None, str | None]:
     """Classify one E132 record.
 
     Returns ``(planning_item_name, classification_reason)``; ``(None, None)`` when
@@ -296,7 +297,7 @@ def _d(value: Any) -> Decimal:
         return value
     try:
         return Decimal(str(value)) if value not in (None, "") else Decimal("0")
-    except Exception:
+    except (InvalidOperation, TypeError, ValueError):
         return Decimal("0")
 
 
@@ -483,8 +484,8 @@ class ClassifiedRecord:
     hs_code: str
     description: str
     quantity: Decimal
-    planning_item: Optional[str]
-    reason: Optional[str]
+    planning_item: str | None
+    reason: str | None
 
 
 def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:

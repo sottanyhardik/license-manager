@@ -685,7 +685,6 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         v = getattr(obj, '_has_manual_plan', None)
         if v is not None:
             return bool(v)
-        from apps.license.models import LicenseItemPlan
         return LicenseItemPlan.objects.filter(license=obj).exists()
 
     def get_has_tl(self, obj):

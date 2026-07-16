@@ -529,6 +529,7 @@ TradeLineViewSet = MasterViewSet.create_viewset(
         "ordering": ["trade", "id"]
     }
 )
+TradeLineViewSet.permission_classes = [TradePermission]
 
 
 TradePaymentViewSet = MasterViewSet.create_viewset(
@@ -556,3 +557,4 @@ TradePaymentViewSet = MasterViewSet.create_viewset(
         "ordering": ["-date", "-id"]
     }
 )
+TradePaymentViewSet.permission_classes = [TradePermission]

@@ -1,9 +1,9 @@
 # ADR-001: Central Master-Data Service
 
-**Status:** Proposed
+**Status:** Accepted; implementation in progress
 **Date:** 2026-07-03
 **Deciders:** (human owner) + solutions-architect
-**Supersedes:** the one-way additive `scripts/maintenance/sync-masters.sh` script (license-manager -> labdhi + tractor)
+**Supersedes:** the one-way additive `scripts/maintenance/sync-masters.sh` script (license-manager -> labdhi + tractor) after MDS cutover. Until then, legacy maintenance scripts remain available as fallback/operations tooling.
 **Owner-agents referenced:** `data-engineer`, `backend-engineer`, `devops-sre`, `frontend-engineer`, `qa-test-engineer`, `code-reviewer`, `security-auditor`
 
 > Direction is already decided: **central service**, not multi-master. This ADR designs the central-service option well; it does not re-litigate the choice.
@@ -40,7 +40,7 @@ Key facts established from the code index and source (not assumed):
 - **`select_related`/`prefetch_related` on masters is pervasive and hot** — `views/item_pivot_report.py`, `views/active_licenses_report.py:84` (`'exporter','port'`), `views/expiring_licenses_report.py:75`, `views_incentive.py:39` (`'exporter','port_code'`), `views/license_items.py:29` (`'license','hs_code'`), `views/item_report.py`, `ledger_pdf.py`, `views_actions.py:471/503`. **Any design that turns these joins into per-row REST calls will regress the heaviest reports into N+1 network calls.** This alone dictates the FK strategy.
 - **Media fields** (local filesystem today — `lmanagement/settings.py:168-169` `MEDIA_URL=/media/`, `MEDIA_ROOT=BASE_DIR/media`, no `django-storages`): `CompanyModel.logo/signature/stamp` (111-113), `UnitPriceModel.logo/signature/stamp` (403/413/414), `TransferLetterModel.tl` FileField (361). Media is greenfield for object storage — no existing storages config to unwind.
 - Stack: Django 6.0.4, DRF 3.17, Python 3.14, Postgres 16, django-redis, Celery. CI at `.github/workflows/ci.yml`.
-- Existing sync: `scripts/maintenance/sync-masters.sh` runs `audit_masters` on the source (`143.110.252.201`) and additively imports new rows into followers labdhi (`139.59.92.226`) and tractor (`165.232.185.220`). Additive-only, so followers have diverged and drift is one-way.
+- Existing sync: `scripts/maintenance/sync-masters.sh` runs `audit_masters` on the source (`143.110.252.201`) and additively imports new rows into followers labdhi (`139.59.92.226`) and tractor (`165.232.185.220`). Additive-only, so followers have diverged and drift is one-way. Related legacy consolidation scripts share `scripts/maintenance/_master_sync_lib.sh` for host, credential, logging, and SSH wrapper defaults.
 
 ---
 

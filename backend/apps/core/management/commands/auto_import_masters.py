@@ -21,6 +21,7 @@ Usage (run on the WINNER server = license-manager):
 import csv
 import json
 from collections import defaultdict
+from pathlib import Path
 
 from django.apps import apps
 from django.core.management.base import BaseCommand
@@ -109,7 +110,7 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         sources = []
         for path in opts["sources"]:
-            snap = json.load(open(path))
+            snap = json.loads(Path(path).read_text(encoding="utf-8"))
             sources.append(snap)
             self.stdout.write(f"Loaded {snap['server_name']} from {path}")
 
@@ -144,6 +145,10 @@ class Command(BaseCommand):
                     f.name: f for f in Model._meta.fields
                     if f.is_relation and f.many_to_one
                 }
+                field_by_key = {}
+                for field in Model._meta.fields:
+                    field_by_key[field.name] = field
+                    field_by_key[field.attname] = field
 
                 for rec in table_data.get("records", []):
                     raw = rec["data"]
@@ -180,13 +185,6 @@ class Command(BaseCommand):
                         unique_field_names = {f for tup in unique_keys for f in tup}
                         override_fields = set(FIELD_OVERRIDES.get(table, {}).keys())
                         skip_fields = unique_field_names | override_fields | EXCLUDED_FIELDS
-
-                        # Build a name→field lookup over both .name and .attname
-                        # so FK keys like "head_id" resolve to the right field.
-                        field_by_key = {}
-                        for _f in Model._meta.fields:
-                            field_by_key[_f.name] = _f
-                            field_by_key[_f.attname] = _f
 
                         changed = {}
                         for fname, sval in src_data.items():
@@ -274,7 +272,7 @@ class Command(BaseCommand):
 
         # Write failed CSV
         if failed_rows:
-            with open(opts["failed_out"], "w", newline="") as f:
+            with Path(opts["failed_out"]).open("w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=["table", "source_server", "source_key", "source_id", "error", "data"])
                 writer.writeheader()
                 writer.writerows(failed_rows)

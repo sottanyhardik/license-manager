@@ -10,13 +10,13 @@ from collections import defaultdict
 from decimal import Decimal
 from typing import Dict, List, Any
 
-from django.db.models import Sum, Prefetch
+from django.db.models import Prefetch
 from django.http import JsonResponse, HttpResponse
-from django.views import View
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from apps.accounts.permissions import ReportPermission
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.core.constants import DEC_0, DEC_000, GE, MI, CO
 from apps.core.models import ItemNameModel
@@ -58,7 +58,7 @@ def _xlsx_safe_row(row):
 logger = logging.getLogger(__name__)
 
 
-class ItemPivotReportView(View):
+class ItemPivotReportView(APIView):
     """
     Report showing licenses with items as columns (pivot format).
 
@@ -66,6 +66,7 @@ class ItemPivotReportView(View):
         - format: 'json' or 'excel' (default: json)
         - days: Number of days to look back (default: 30)
     """
+    permission_classes = [ReportPermission]
 
     def get(self, request, *args, **kwargs):
         output_format = request.GET.get('format', 'json').lower()
@@ -121,7 +122,6 @@ class ItemPivotReportView(View):
         """
         from datetime import date, timedelta
         today = date.today()
-        start_date = today - timedelta(days=days)
 
         # Base query - licenses with required purchase status.
         # The frontend sends the chosen codes as a comma-separated string;
@@ -706,7 +706,6 @@ class ItemPivotReportView(View):
             # Build a bal_agg-equivalent over each import_item (need per-item
             # condition_type to honour the Display/Util qty split for E1).
             # Items inactive in the master are still included so qty isn't lost.
-            from collections import defaultdict as _dd
             import_items = (
                 LicenseImportItemsModel.objects
                 .filter(license=license_obj)
@@ -1243,7 +1242,6 @@ class ItemPivotReportView(View):
                     for item in items_with_data:
                         item_name = item['name']
                         has_restriction = item.get('has_restriction', False)
-                        is_rutile = item_name == 'RUTILE - A3627'
                         headers = [
                             f"{item_name} HSN Code",
                             f"{item_name} Product Description",
@@ -1295,7 +1293,6 @@ class ItemPivotReportView(View):
                         for item in items_with_data:
                             item_name = item['name']
                             has_restriction = item.get('has_restriction', False)
-                            is_rutile = item_name == 'RUTILE - A3627'
                             item_data = lic['items'].get(item_name, {})
                             cond = item_data.get('condition_type') or ''
                             # Tint the HSN-code cell for this (licence, item)
@@ -1327,42 +1324,41 @@ class ItemPivotReportView(View):
                     totals_row[0].font = Font(bold=True)
                     totals_row.extend([None, None, None, None, None, None])
 
-                    total_cif_cell = WriteOnlyCell(worksheet, value=sum(l['total_cif'] for l in licenses_list))
+                    total_cif_cell = WriteOnlyCell(worksheet, value=sum(license_row['total_cif'] for license_row in licenses_list))
                     total_cif_cell.font = Font(bold=True)
                     totals_row.append(total_cif_cell)
 
-                    debited_cif_cell = WriteOnlyCell(worksheet, value=sum(l.get('debited_cif', 0) for l in licenses_list))
+                    debited_cif_cell = WriteOnlyCell(worksheet, value=sum(license_row.get('debited_cif', 0) for license_row in licenses_list))
                     debited_cif_cell.font = Font(bold=True)
                     totals_row.append(debited_cif_cell)
 
-                    alloted_cif_cell = WriteOnlyCell(worksheet, value=sum(l['alloted_cif'] for l in licenses_list))
+                    alloted_cif_cell = WriteOnlyCell(worksheet, value=sum(license_row['alloted_cif'] for license_row in licenses_list))
                     alloted_cif_cell.font = Font(bold=True)
                     totals_row.append(alloted_cif_cell)
 
-                    balance_cif_cell = WriteOnlyCell(worksheet, value=sum(l['balance_cif'] for l in licenses_list))
+                    balance_cif_cell = WriteOnlyCell(worksheet, value=sum(license_row['balance_cif'] for license_row in licenses_list))
                     balance_cif_cell.font = Font(bold=True)
                     totals_row.append(balance_cif_cell)
 
                     for item in items_with_data:
                         item_name = item['name']
                         has_restriction = item.get('has_restriction', False)
-                        is_rutile = item_name == 'RUTILE - A3627'
                         totals_row.extend([None, None])  # HSN, Description
                         for qty_type in ['quantity', 'allotted_quantity', 'debited_quantity', 'available_quantity']:
-                            total = sum(l['items'].get(item_name, {}).get(qty_type, 0) for l in licenses_list)
+                            total = sum(license_row['items'].get(item_name, {}).get(qty_type, 0) for license_row in licenses_list)
                             cell = WriteOnlyCell(worksheet, value=total)
                             cell.font = Font(bold=True)
                             totals_row.append(cell)
                         if has_restriction:
                             totals_row.append(None)  # Restriction %
-                            total_restriction = sum(l['items'].get(item_name, {}).get('restriction_value', 0) for l in licenses_list)
+                            total_restriction = sum(license_row['items'].get(item_name, {}).get('restriction_value', 0) for license_row in licenses_list)
                             cell = WriteOnlyCell(worksheet, value=total_restriction)
                             cell.font = Font(bold=True)
                             totals_row.append(cell)
                         # Unit Price column total stays blank (it's a rate);
                         # Planned CIF totals across the column.
                         totals_row.append(None)
-                        total_planned = sum((l['items'].get(item_name, {}).get('planned_cif') or 0) for l in licenses_list)
+                        total_planned = sum((license_row['items'].get(item_name, {}).get('planned_cif') or 0) for license_row in licenses_list)
                         cell = WriteOnlyCell(worksheet, value=total_planned)
                         cell.font = Font(bold=True)
                         totals_row.append(cell)
@@ -1404,7 +1400,7 @@ class ItemPivotViewSet(viewsets.ViewSet):
     """
     ViewSet for Item Pivot Report.
 
-    Permissions: AllowAny - accessible to all users
+    Permissions: ReportPermission.
     """
     permission_classes = [ReportPermission]
 

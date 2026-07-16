@@ -1,5 +1,3 @@
-from typing import List
-
 from django.db import models as dj_models
 
 from .master_view import MasterViewSet
@@ -57,42 +55,6 @@ def choose_label_field(related_model):
         if c in model_fields:
             return c
     return "id"
-
-
-def to_kebab(s: str) -> str:
-    """
-    Convert snake_case or underscores to kebab-case.
-    """
-    return s.replace("_", "-").lower()
-
-
-def build_endpoint_candidates(rel_model) -> List[str]:
-    """
-    Return a list of plausible endpoints (strings ending with '/')
-    for a related model, ordered by preference.
-    """
-    raw_name = getattr(rel_model._meta, "model_name", None) or getattr(rel_model._meta, "object_name",
-                                                                       None) or rel_model.__name__
-    raw_name = str(raw_name).lower()
-    plural = raw_name if raw_name.endswith("s") else f"{raw_name}s"
-    kebab = to_kebab(raw_name)
-    kebab_plural = kebab if kebab.endswith("s") else f"{kebab}s"
-
-    candidates = [
-        f"{API_PREFIX}{raw_name}/",
-        f"{API_PREFIX}{plural}/",
-        f"{API_PREFIX}{kebab}/",
-        f"{API_PREFIX}{kebab_plural}/",
-    ]
-
-    # remove duplicates preserving order
-    seen = set()
-    out = []
-    for c in candidates:
-        if c not in seen:
-            seen.add(c)
-            out.append(c)
-    return out
 
 
 def enhance_config_with_fk(model_cls, config=None):

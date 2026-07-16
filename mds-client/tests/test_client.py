@@ -4,8 +4,10 @@ change feed, and MDSUnavailable on connection error. Stdlib mocking only."""
 from __future__ import annotations
 
 import requests
-from django.test import SimpleTestCase
+from django.core.exceptions import ImproperlyConfigured
+from django.test import SimpleTestCase, override_settings
 
+from mds_client import settings as client_settings
 from mds_client.client import MDSClient, MDSHTTPError, MDSUnavailable
 from tests.support import FakeSession, make_response
 
@@ -191,3 +193,14 @@ class FailureModeTests(SimpleTestCase):
         client = MDSClient(base_url=BASE, token="secret-token")
         self.assertEqual(client.session.headers["Authorization"], "Bearer secret-token")
         client.close()
+
+
+class ClientSettingsTests(SimpleTestCase):
+    @override_settings(MDS_TOKEN="  service-token  ")
+    def test_get_token_strips_surrounding_whitespace(self):
+        self.assertEqual(client_settings.get_token(), "service-token")
+
+    @override_settings(MDS_TOKEN="   ")
+    def test_get_token_rejects_blank_token(self):
+        with self.assertRaises(ImproperlyConfigured):
+            client_settings.get_token()

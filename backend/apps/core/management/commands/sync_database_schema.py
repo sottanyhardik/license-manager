@@ -14,13 +14,12 @@ Usage:
     python manage.py sync_database_schema --show-sql         # Show SQL that would be executed
 """
 
-from django.core.management.base import BaseCommand
-from django.db import connection
+from collections import defaultdict
+
 from django.apps import apps
 from django.core.management import call_command
-from collections import defaultdict
-from decimal import Decimal
-import sys
+from django.core.management.base import BaseCommand
+from django.db import connection
 
 
 class Command(BaseCommand):
@@ -69,7 +68,8 @@ class Command(BaseCommand):
         if fix and any(issues.values()):
             if not skip_backup:
                 self.stdout.write("\n💾 Step 3: Creating database backup...")
-                self._create_backup()
+                if not self._create_backup():
+                    return
 
             self.stdout.write("\n🔧 Step 4: Fixing schema issues...")
             self._fix_issues(issues, show_sql)
@@ -336,7 +336,8 @@ class Command(BaseCommand):
         response = input("     Continue anyway? [y/N]: ")
         if response.lower() != 'y':
             self.stdout.write("     Cancelled.")
-            sys.exit(0)
+            return False
+        return True
 
     def _fix_issues(self, issues, show_sql):
         """Fix schema issues by generating and applying migrations."""

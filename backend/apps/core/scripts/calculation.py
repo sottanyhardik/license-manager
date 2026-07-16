@@ -55,11 +55,7 @@ def optimize_product_distribution(pko_unit, veg_oil_unit, available_qty, availab
 # X2>=0
 # X1+X2 should be almost equal to Z2
 # X1*Y1 + X2*Y2 should me almost equal to Z1
-
-import numpy as np
 from scipy.optimize import linprog
-
-import numpy as np
 
 
 def optimize_oil_distribution(
@@ -105,11 +101,6 @@ def optimize_oil_distribution(
         }
     else:
         return {"error": "Optimization was not successful."}
-
-
-from scipy.optimize import linprog
-
-from scipy.optimize import linprog
 
 
 def optimize_milk_distribution(

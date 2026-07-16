@@ -2,8 +2,10 @@
 PDF table building utilities.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import List, Optional, Any, Dict
+from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.units import inch
@@ -16,9 +18,9 @@ from .styles import create_table_style_basic, PDFStyles
 @dataclass
 class TableConfig:
     """Configuration for table generation."""
-    col_widths: Optional[List[float]] = None
+    col_widths: list[float] | None = None
     repeat_rows: int = 1  # Number of header rows to repeat on each page
-    style: Optional[TableStyle] = None
+    style: TableStyle | None = None
     wrap_text: bool = True  # Whether to wrap text in Paragraphs
 
 
@@ -27,7 +29,7 @@ class PDFTableBuilder:
     Helper class for building PDF tables with common patterns.
     """
 
-    def __init__(self, config: Optional[TableConfig] = None, styles: Optional[PDFStyles] = None):
+    def __init__(self, config: TableConfig | None = None, styles: PDFStyles | None = None):
         """
         Initialize table builder.
         
@@ -39,7 +41,7 @@ class PDFTableBuilder:
         self.styles = styles or PDFStyles()
         self.data = []
 
-    def add_header_row(self, headers: List[str]) -> 'PDFTableBuilder':
+    def add_header_row(self, headers: list[str]) -> PDFTableBuilder:
         """
         Add header row to table.
         
@@ -57,7 +59,7 @@ class PDFTableBuilder:
         self.data.append(header_cells)
         return self
 
-    def add_data_row(self, row: List[Any], number_columns: Optional[List[int]] = None) -> 'PDFTableBuilder':
+    def add_data_row(self, row: list[Any], number_columns: list[int] | None = None) -> PDFTableBuilder:
         """
         Add data row to table.
         
@@ -81,7 +83,7 @@ class PDFTableBuilder:
 
         return self
 
-    def add_rows(self, rows: List[List[Any]], number_columns: Optional[List[int]] = None) -> 'PDFTableBuilder':
+    def add_rows(self, rows: list[list[Any]], number_columns: list[int] | None = None) -> PDFTableBuilder:
         """
         Add multiple data rows.
         
@@ -96,7 +98,7 @@ class PDFTableBuilder:
             self.add_data_row(row, number_columns)
         return self
 
-    def add_total_row(self, row: List[Any], label: str = "Total") -> 'PDFTableBuilder':
+    def add_total_row(self, row: list[Any], label: str = "Total") -> PDFTableBuilder:
         """
         Add a total/summary row.
         
@@ -144,7 +146,7 @@ class PDFTableBuilder:
 
         return table
 
-    def reset(self) -> 'PDFTableBuilder':
+    def reset(self) -> PDFTableBuilder:
         """
         Reset builder to create a new table.
         
@@ -156,10 +158,10 @@ class PDFTableBuilder:
 
 
 def create_simple_table(
-        headers: List[str],
-        rows: List[List[Any]],
-        col_widths: Optional[List[float]] = None,
-        style: Optional[TableStyle] = None
+        headers: list[str],
+        rows: list[list[Any]],
+        col_widths: list[float] | None = None,
+        style: TableStyle | None = None
 ) -> Table:
     """
     Create a simple table with headers and data rows.
@@ -180,9 +182,9 @@ def create_simple_table(
 
 
 def create_key_value_table(
-        data: Dict[str, Any],
-        col_widths: Optional[List[float]] = None,
-        style: Optional[TableStyle] = None
+        data: dict[str, Any],
+        col_widths: list[float] | None = None,
+        style: TableStyle | None = None
 ) -> Table:
     """
     Create a key-value table (2 columns).
@@ -223,8 +225,8 @@ def create_key_value_table(
 
 
 def create_info_header_table(
-        info_data: List[List[str]],
-        col_widths: Optional[List[float]] = None
+        info_data: list[list[str]],
+        col_widths: list[float] | None = None
 ) -> Table:
     """
     Create an information header table (typically 4 columns: label, value, label, value).
@@ -273,8 +275,7 @@ def format_currency_cell(value: Any, decimals: int = 2) -> str:
     Returns:
         Formatted string
     """
-    dec_value = to_decimal(value)
-    return format_decimal(dec_value, decimals)
+    return _format_decimal_cell(value, decimals)
 
 
 def format_quantity_cell(value: Any, decimals: int = 3) -> str:
@@ -288,14 +289,18 @@ def format_quantity_cell(value: Any, decimals: int = 3) -> str:
     Returns:
         Formatted string
     """
+    return _format_decimal_cell(value, decimals)
+
+
+def _format_decimal_cell(value: Any, decimals: int) -> str:
     dec_value = to_decimal(value)
     return format_decimal(dec_value, decimals)
 
 
 def calculate_column_widths(
         total_width: float,
-        proportions: List[float]
-) -> List[float]:
+        proportions: list[float]
+) -> list[float]:
     """
     Calculate column widths based on proportions.
     

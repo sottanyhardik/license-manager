@@ -1,4 +1,5 @@
 import { Layers, MapPin, X } from "lucide-react";
+import { formatTruthyInr } from "./masterDisplayFormatters";
 
 interface BoeMergeModalProps {
     mergeBoeTarget: any;
@@ -74,7 +75,7 @@ export default function BoeMergeModal({ mergeBoeTarget, closeMergeModal, mergeCa
                                 <div style={{ textAlign: 'right' }}>
                                     {candidate.total_inr && (
                                         <div style={{ fontWeight: '700', fontSize: 14, color: 'var(--tb-text)' }}>
-                                            ₹{Number(candidate.total_inr).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                            {formatTruthyInr(candidate.total_inr)}
                                         </div>
                                     )}
                                     {mergeBoeSource?.id === candidate.id && (

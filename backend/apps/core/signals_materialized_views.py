@@ -8,14 +8,15 @@ Celery tasks are preferred to avoid refresh overhead on every save.
 """
 
 import logging
+
+from django.db import transaction
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from django.db import transaction
 
 from apps.core.tasks_materialized_views import (
     refresh_license_balance_task,
     refresh_item_balance_task,
-    refresh_dashboard_stats_task
+    refresh_dashboard_stats_task,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,8 +38,8 @@ def refresh_on_commit(task_func):
         try:
             # Use apply_async with countdown to debounce rapid saves
             task_func.apply_async(countdown=5)
-        except Exception as e:
-            logger.warning(f"Could not schedule refresh task: {e}")
+        except Exception:
+            logger.warning("Could not schedule refresh task", exc_info=True)
 
     transaction.on_commit(_refresh)
 
@@ -47,18 +48,26 @@ def refresh_on_commit(task_func):
 # License Model Signals
 # ============================================================================
 
-@receiver([post_save, post_delete], sender='license.LicenseDetailsModel')
+@receiver(
+    [post_save, post_delete],
+    sender='license.LicenseDetailsModel',
+    dispatch_uid='refresh_materialized_views_on_license_change',
+)
 def refresh_views_on_license_change(sender, instance, **kwargs):
     """Refresh views when license is created/updated/deleted."""
-    logger.debug(f"License change detected: {instance.license_number}")
+    logger.debug("License change detected: %s", instance.license_number)
     refresh_on_commit(refresh_license_balance_task)
     refresh_on_commit(refresh_dashboard_stats_task)
 
 
-@receiver([post_save, post_delete], sender='license.LicenseImportItemsModel')
+@receiver(
+    [post_save, post_delete],
+    sender='license.LicenseImportItemsModel',
+    dispatch_uid='refresh_materialized_views_on_import_item_change',
+)
 def refresh_views_on_import_item_change(sender, instance, **kwargs):
     """Refresh views when import items are created/updated/deleted."""
-    logger.debug(f"Import item change detected: {instance.id}")
+    logger.debug("Import item change detected: %s", instance.id)
     refresh_on_commit(refresh_item_balance_task)
     refresh_on_commit(refresh_license_balance_task)
 
@@ -67,14 +76,18 @@ def refresh_views_on_import_item_change(sender, instance, **kwargs):
 # BOE Signals
 # ============================================================================
 
-@receiver([post_save, post_delete], sender='bill_of_entry.RowDetails')
+@receiver(
+    [post_save, post_delete],
+    sender='bill_of_entry.RowDetails',
+    dispatch_uid='refresh_materialized_views_on_row_details_change',
+)
 def refresh_views_on_row_details_change(sender, instance, **kwargs):
     """
     Refresh views when BOE row details change.
 
     CRITICAL: This affects balance calculations!
     """
-    logger.debug(f"Row details change detected: {instance.id}")
+    logger.debug("Row details change detected: %s", instance.id)
     refresh_on_commit(refresh_item_balance_task)
     refresh_on_commit(refresh_license_balance_task)
     refresh_on_commit(refresh_dashboard_stats_task)
@@ -84,14 +97,18 @@ def refresh_views_on_row_details_change(sender, instance, **kwargs):
 # Allotment Signals
 # ============================================================================
 
-@receiver([post_save, post_delete], sender='allotment.AllotmentItems')
+@receiver(
+    [post_save, post_delete],
+    sender='allotment.AllotmentItems',
+    dispatch_uid='refresh_materialized_views_on_allotment_items_change',
+)
 def refresh_views_on_allotment_items_change(sender, instance, **kwargs):
     """
     Refresh views when allotment items change.
 
     CRITICAL: This affects balance calculations!
     """
-    logger.debug(f"Allotment items change detected: {instance.id}")
+    logger.debug("Allotment items change detected: %s", instance.id)
     refresh_on_commit(refresh_item_balance_task)
     refresh_on_commit(refresh_license_balance_task)
 
@@ -124,8 +141,12 @@ class auto_refresh_context:
             license.save()
     """
     def __enter__(self):
+        self._previous_auto_refresh = AUTO_REFRESH_ENABLED
         enable_auto_refresh()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        disable_auto_refresh()
+        if self._previous_auto_refresh:
+            enable_auto_refresh()
+        else:
+            disable_auto_refresh()

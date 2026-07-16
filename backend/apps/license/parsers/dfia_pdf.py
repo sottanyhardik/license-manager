@@ -784,7 +784,6 @@ def _parse_items(text: str) -> list[dict[str, Any]]:
         # stops there naturally.
         si = None
         desc_lines: list[str] = []
-        last_wrapped = False  # whether the line just appended is mid-wrap
         j = i - 1
         while j >= 0:
             raw = lines[j]

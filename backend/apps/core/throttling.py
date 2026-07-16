@@ -25,14 +25,34 @@ Usage:
 """
 
 import logging
+
+from django.core.cache import cache
 from rest_framework.throttling import (
     AnonRateThrottle as DRFAnonRateThrottle,
-    UserRateThrottle as DRFUserRateThrottle,
     SimpleRateThrottle,
+    UserRateThrottle as DRFUserRateThrottle,
 )
-from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
+
+
+def _request_ident(throttle, request):
+    return request.user.pk if request.user.is_authenticated else throttle.get_ident(request)
+
+
+def _request_label(throttle, request):
+    return request.user.username if request.user.is_authenticated else throttle.get_ident(request)
+
+
+def _cache_key(throttle, request, ident=None):
+    return throttle.cache_format % {
+        'scope': throttle.scope,
+        'ident': ident if ident is not None else _request_ident(throttle, request),
+    }
+
+
+def _warn_rate_limited(message, *args):
+    logger.warning(message, *args)
 
 
 class AnonRateThrottle(DRFAnonRateThrottle):
@@ -47,9 +67,7 @@ class AnonRateThrottle(DRFAnonRateThrottle):
     def allow_request(self, request, view):
         allowed = super().allow_request(request, view)
         if not allowed:
-            logger.warning(
-                f"Anonymous rate limit exceeded from IP: {self.get_ident(request)}"
-            )
+            _warn_rate_limited("Anonymous rate limit exceeded from IP: %s", self.get_ident(request))
         return allowed
 
 
@@ -65,10 +83,7 @@ class UserRateThrottle(DRFUserRateThrottle):
     def allow_request(self, request, view):
         allowed = super().allow_request(request, view)
         if not allowed:
-            user = request.user
-            logger.warning(
-                f"User rate limit exceeded for user: {user.username if user.is_authenticated else 'Anonymous'}"
-            )
+            _warn_rate_limited("User rate limit exceeded for user: %s", _request_label(self, request))
         return allowed
 
 
@@ -88,17 +103,12 @@ class StaffRateThrottle(SimpleRateThrottle):
         if not request.user.is_staff:
             return None  # Only throttle staff users
 
-        return self.cache_format % {
-            'scope': self.scope,
-            'ident': request.user.pk
-        }
+        return _cache_key(self, request, request.user.pk)
 
     def allow_request(self, request, view):
         allowed = super().allow_request(request, view)
         if not allowed:
-            logger.warning(
-                f"Staff rate limit exceeded for user: {request.user.username}"
-            )
+            _warn_rate_limited("Staff rate limit exceeded for user: %s", request.user.username)
         return allowed
 
 
@@ -113,23 +123,12 @@ class BurstRateThrottle(SimpleRateThrottle):
     scope = 'burst'
 
     def get_cache_key(self, request, view):
-        if request.user.is_authenticated:
-            ident = request.user.pk
-        else:
-            ident = self.get_ident(request)
-
-        return self.cache_format % {
-            'scope': self.scope,
-            'ident': ident
-        }
+        return _cache_key(self, request)
 
     def allow_request(self, request, view):
         allowed = super().allow_request(request, view)
         if not allowed:
-            user = request.user
-            logger.warning(
-                f"Burst rate limit exceeded for: {user.username if user.is_authenticated else self.get_ident(request)}"
-            )
+            _warn_rate_limited("Burst rate limit exceeded for: %s", _request_label(self, request))
         return allowed
 
 
@@ -144,23 +143,12 @@ class SustainedRateThrottle(SimpleRateThrottle):
     scope = 'sustained'
 
     def get_cache_key(self, request, view):
-        if request.user.is_authenticated:
-            ident = request.user.pk
-        else:
-            ident = self.get_ident(request)
-
-        return self.cache_format % {
-            'scope': self.scope,
-            'ident': ident
-        }
+        return _cache_key(self, request)
 
     def allow_request(self, request, view):
         allowed = super().allow_request(request, view)
         if not allowed:
-            user = request.user
-            logger.warning(
-                f"Sustained rate limit exceeded for: {user.username if user.is_authenticated else self.get_ident(request)}"
-            )
+            _warn_rate_limited("Sustained rate limit exceeded for: %s", _request_label(self, request))
         return allowed
 
 
@@ -175,23 +163,12 @@ class UploadRateThrottle(SimpleRateThrottle):
     scope = 'upload'
 
     def get_cache_key(self, request, view):
-        if request.user.is_authenticated:
-            ident = request.user.pk
-        else:
-            ident = self.get_ident(request)
-
-        return self.cache_format % {
-            'scope': self.scope,
-            'ident': ident
-        }
+        return _cache_key(self, request)
 
     def allow_request(self, request, view):
         allowed = super().allow_request(request, view)
         if not allowed:
-            user = request.user
-            logger.warning(
-                f"Upload rate limit exceeded for: {user.username if user.is_authenticated else self.get_ident(request)}"
-            )
+            _warn_rate_limited("Upload rate limit exceeded for: %s", _request_label(self, request))
         return allowed
 
 
@@ -206,23 +183,12 @@ class ExportRateThrottle(SimpleRateThrottle):
     scope = 'export'
 
     def get_cache_key(self, request, view):
-        if request.user.is_authenticated:
-            ident = request.user.pk
-        else:
-            ident = self.get_ident(request)
-
-        return self.cache_format % {
-            'scope': self.scope,
-            'ident': ident
-        }
+        return _cache_key(self, request)
 
     def allow_request(self, request, view):
         allowed = super().allow_request(request, view)
         if not allowed:
-            user = request.user
-            logger.warning(
-                f"Export rate limit exceeded for: {user.username if user.is_authenticated else self.get_ident(request)}"
-            )
+            _warn_rate_limited("Export rate limit exceeded for: %s", _request_label(self, request))
         return allowed
 
 
@@ -240,17 +206,12 @@ class LoginRateThrottle(SimpleRateThrottle):
         # Use IP address for login throttling (before authentication)
         ident = self.get_ident(request)
 
-        return self.cache_format % {
-            'scope': self.scope,
-            'ident': ident
-        }
+        return _cache_key(self, request, ident)
 
     def allow_request(self, request, view):
         allowed = super().allow_request(request, view)
         if not allowed:
-            logger.warning(
-                f"Login rate limit exceeded from IP: {self.get_ident(request)}"
-            )
+            _warn_rate_limited("Login rate limit exceeded from IP: %s", self.get_ident(request))
         return allowed
 
 
@@ -265,23 +226,12 @@ class StrictRateThrottle(SimpleRateThrottle):
     scope = 'strict'
 
     def get_cache_key(self, request, view):
-        if request.user.is_authenticated:
-            ident = request.user.pk
-        else:
-            ident = self.get_ident(request)
-
-        return self.cache_format % {
-            'scope': self.scope,
-            'ident': ident
-        }
+        return _cache_key(self, request)
 
     def allow_request(self, request, view):
         allowed = super().allow_request(request, view)
         if not allowed:
-            user = request.user
-            logger.warning(
-                f"Strict rate limit exceeded for: {user.username if user.is_authenticated else self.get_ident(request)}"
-            )
+            _warn_rate_limited("Strict rate limit exceeded for: %s", _request_label(self, request))
         return allowed
 
 
@@ -310,15 +260,7 @@ class PerViewRateThrottle(SimpleRateThrottle):
         if not self.scope:
             return None
 
-        if request.user.is_authenticated:
-            ident = request.user.pk
-        else:
-            ident = self.get_ident(request)
-
-        return self.cache_format % {
-            'scope': self.scope,
-            'ident': ident
-        }
+        return _cache_key(self, request)
 
 
 # Throttle utilities
@@ -345,15 +287,7 @@ def get_throttle_status(request, throttle_class):
     rate = throttle.get_rate()
 
     # Check if request would be allowed
-    if request.user.is_authenticated:
-        ident = request.user.pk
-    else:
-        ident = throttle.get_ident(request)
-
-    cache_key = throttle.cache_format % {
-        'scope': throttle.scope,
-        'ident': ident
-    }
+    cache_key = _cache_key(throttle, request)
 
     # Get current history from cache
     history = cache.get(cache_key, [])
@@ -395,12 +329,12 @@ def reset_throttle(user_id=None, ip_address=None, scope='user'):
     if user_id:
         cache_key = f'throttle_{scope}_{user_id}'
         cache.delete(cache_key)
-        logger.info(f"Reset throttle for user {user_id}, scope: {scope}")
+        logger.info("Reset throttle for user %s, scope: %s", user_id, scope)
 
     if ip_address:
         cache_key = f'throttle_{scope}_{ip_address}'
         cache.delete(cache_key)
-        logger.info(f"Reset throttle for IP {ip_address}, scope: {scope}")
+        logger.info("Reset throttle for IP %s, scope: %s", ip_address, scope)
 
 
 def get_all_throttle_status(request):
@@ -429,8 +363,8 @@ def get_all_throttle_status(request):
     for scope, throttle_class in throttles.items():
         try:
             status[scope] = get_throttle_status(request, throttle_class)
-        except Exception as e:
-            logger.error(f"Error getting throttle status for {scope}: {e}")
-            status[scope] = {'error': str(e)}
+        except Exception as exc:
+            logger.exception("Error getting throttle status for %s", scope)
+            status[scope] = {'error': str(exc)}
 
     return status

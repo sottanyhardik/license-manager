@@ -15,7 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import AllotmentPermission
+from apps.accounts.permissions import BillOfEntryPermission
 from apps.allotment.models import AllotmentModel
 from apps.bill_of_entry.parsers.boe_pdf import parse_boe_pdf
 from apps.core.models import CompanyModel, ExchangeRateModel, PortModel
@@ -195,7 +195,7 @@ class BOEPdfParseView(APIView):
 
     Returns a JSON object suitable for prefilling AllotmentFormModal.
     """
-    permission_classes = [IsAuthenticated, AllotmentPermission]
+    permission_classes = [IsAuthenticated, BillOfEntryPermission]
     parser_classes = [MultiPartParser, FormParser]
 
     @transaction.atomic

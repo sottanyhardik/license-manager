@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { reportEntities, masterEntities } from "../routes/config";
+import { REPORT_ROLES } from "../routes/authorizationRoles";
 import CommandPalette from "./CommandPalette";
 import { ChevronDown, Gauge, Search, ShieldCheck } from "lucide-react";
 import Icon from "@/components/Icon";
@@ -175,7 +176,7 @@ export default function TopNav() {
                         );
                     })}
 
-                    {hasAnyRole(["REPORT_VIEWER", "LICENSE_MANAGER", "TRADE_MANAGER", "ALLOTMENT_MANAGER", "BOE_MANAGER", "INCENTIVE_LICENSE_MANAGER"]) && (
+                    {hasAnyRole(REPORT_ROLES) && (
                         <NavMenu
                             icon="bar-chart-line"
                             label="Reports"

@@ -28,6 +28,7 @@ import json
 import socket
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -160,8 +161,10 @@ class Command(BaseCommand):
             "tables": tables,
         }
 
-        with open(opts["out"], "w") as fh:
-            json.dump(snapshot, fh, indent=2, default=str)
+        Path(opts["out"]).write_text(
+            json.dumps(snapshot, indent=2, default=str),
+            encoding="utf-8",
+        )
 
         total = sum(t["count"] for t in tables.values())
         for name, t in tables.items():

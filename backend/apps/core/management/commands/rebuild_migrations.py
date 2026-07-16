@@ -17,15 +17,12 @@ Usage:
     python manage.py rebuild_migrations --full  # Full rebuild (backup + remove + recreate)
 """
 
-import os
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
-from django.core.management.base import BaseCommand, CommandError
 from django.core.management import call_command
-from django.db import connection
+from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
@@ -123,9 +120,9 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(
                     f"Backup available at: {self.backup_dir}"
                 ))
-            raise CommandError(f"Rebuild failed: {str(e)}")
+            raise CommandError(f"Rebuild failed: {str(e)}") from e
 
-    def _backup_migrations(self, apps: List[str], dry_run: bool = False):
+    def _backup_migrations(self, apps: list[str], dry_run: bool = False):
         """Create timestamped backup of all migration files."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backend_dir = Path(__file__).resolve().parent.parent.parent.parent
@@ -156,7 +153,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"✓ Backed up {total_files} migration files"))
 
-    def _remove_alter_migrations(self, apps: List[str], dry_run: bool = False):
+    def _remove_alter_migrations(self, apps: list[str], dry_run: bool = False):
         """Remove ALTER/RENAME migration files that may cause conflicts."""
         backend_dir = Path(__file__).resolve().parent.parent.parent.parent
 
@@ -194,7 +191,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.SUCCESS("✓ No ALTER/RENAME migrations found"))
 
-    def _recreate_migrations(self, apps: List[str], dry_run: bool = False):
+    def _recreate_migrations(self, apps: list[str], dry_run: bool = False):
         """Create fresh migrations for all specified apps."""
         if dry_run:
             self.stdout.write("Would create fresh migrations for:")
@@ -224,29 +221,4 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("\n✓ Fresh migrations created"))
 
         except Exception as e:
-            raise CommandError(f"Failed to create migrations: {str(e)}")
-
-    def _check_database_consistency(self):
-        """Check if database structure matches model definitions."""
-        self.stdout.write("\nChecking database consistency...")
-
-        inconsistencies = []
-
-        with connection.cursor() as cursor:
-            # Get list of tables
-            cursor.execute("""
-                SELECT table_name
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                AND table_type = 'BASE TABLE'
-                AND table_name NOT LIKE 'django_%'
-                AND table_name NOT LIKE 'auth_%'
-                ORDER BY table_name
-            """)
-            db_tables = {row[0] for row in cursor.fetchall()}
-
-        # Compare with model tables
-        # This is a simplified check - full validation would require introspection
-        self.stdout.write(f"Found {len(db_tables)} tables in database")
-
-        return inconsistencies
+            raise CommandError(f"Failed to create migrations: {str(e)}") from e

@@ -9,10 +9,9 @@ This module provides utilities for generating PDFs including:
 - Common PDF formatting helpers
 """
 
-import os
 import logging
+import os
 from io import BytesIO
-from typing import Optional, List, Tuple, Union
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Number to Words Conversion
 # =============================================================================
 
-def num_to_words_indian(amount: Union[int, float, str]) -> str:
+def num_to_words_indian(amount: int | float | str) -> str:
     """
     Convert number to Indian rupees words.
 
@@ -105,9 +104,9 @@ def num_to_words_indian(amount: Union[int, float, str]) -> str:
             return ' '.join(result)
 
         return convert_indian(whole_amount)
-    except Exception as e:
-        logger.error(f"Failed to convert number to words: {amount}, error: {e}")
-        return str(int(float(amount)))
+    except Exception:
+        logger.exception("Failed to convert number to words: %s", amount)
+        return str(amount)
 
 
 # =============================================================================
@@ -135,7 +134,7 @@ class PDFStyleBuilder:
         font_size: int = 9,
         font_name: str = 'Helvetica-Bold',
         text_color: colors.Color = colors.black
-    ) -> List[Tuple]:
+    ) -> list[tuple]:
         """
         Create table header row style.
 
@@ -163,7 +162,7 @@ class PDFStyleBuilder:
         font_name: str = 'Helvetica',
         padding: int = 4,
         valign: str = 'MIDDLE'
-    ) -> List[Tuple]:
+    ) -> list[tuple]:
         """
         Create table data rows style.
 
@@ -190,8 +189,8 @@ class PDFStyleBuilder:
     def total_row_style(
         font_size: int = 10,
         font_name: str = 'Helvetica-Bold',
-        bg_color: Optional[colors.Color] = None
-    ) -> List[Tuple]:
+        bg_color: colors.Color | None = None
+    ) -> list[tuple]:
         """
         Create table total/summary row style.
 
@@ -217,7 +216,7 @@ class PDFStyleBuilder:
     def grid_style(
         line_width: float = 0.5,
         line_color: colors.Color = colors.black
-    ) -> List[Tuple]:
+    ) -> list[tuple]:
         """
         Create table grid/border style.
 
@@ -234,7 +233,7 @@ class PDFStyleBuilder:
         ]
 
     @staticmethod
-    def combine_styles(*style_groups: List[Tuple]) -> List[Tuple]:
+    def combine_styles(*style_groups: list[tuple]) -> list[tuple]:
         """
         Combine multiple style groups into one.
 
@@ -266,7 +265,7 @@ def load_company_logo(
     company,
     max_width: float = 1.5 * inch,
     max_height: float = 0.75 * inch
-) -> Optional[Image]:
+) -> Image | None:
     """
     Load and resize company logo maintaining aspect ratio.
 
@@ -288,20 +287,20 @@ def load_company_logo(
         return None
 
     if not hasattr(company, 'logo') or not company.logo:
-        logger.info(f"Company {company.name} has no logo")
+        logger.info("Company %s has no logo", company.name)
         return None
 
     try:
         logo_path = company.logo.path
-        logger.info(f"Attempting to load logo from: {logo_path}")
+        logger.info("Attempting to load logo from: %s", logo_path)
 
         if not os.path.exists(logo_path):
-            logger.warning(f"Logo file does not exist at path: {logo_path}")
+            logger.warning("Logo file does not exist at path: %s", logo_path)
             return None
 
         # Get image dimensions to maintain aspect ratio
-        pil_img = PILImage.open(logo_path)
-        img_width, img_height = pil_img.size
+        with PILImage.open(logo_path) as pil_img:
+            img_width, img_height = pil_img.size
         aspect = img_height / float(img_width)
 
         # Calculate size maintaining aspect ratio
@@ -315,11 +314,11 @@ def load_company_logo(
             display_height = max_width * aspect
 
         logo_img = Image(logo_path, width=display_width, height=display_height)
-        logger.info(f"Logo loaded successfully: {display_width}x{display_height}")
+        logger.info("Logo loaded successfully: %sx%s", display_width, display_height)
         return logo_img
 
-    except Exception as e:
-        logger.error(f"Failed to load logo: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Failed to load logo")
         return None
 
 
@@ -327,7 +326,7 @@ def load_company_signature(
     company,
     width: float = 1.3 * inch,
     height: float = 0.7 * inch
-) -> Optional[Image]:
+) -> Image | None:
     """
     Load company signature image.
 
@@ -346,15 +345,15 @@ def load_company_signature(
         sig_path = company.signature.path
         if os.path.exists(sig_path):
             return Image(sig_path, width=width, height=height)
-    except Exception as e:
-        logger.error(f"Failed to load signature: {e}")
+    except Exception:
+        logger.exception("Failed to load signature")
     return None
 
 
 def load_company_stamp(
     company,
     max_size: float = 1.0 * inch
-) -> Optional[Image]:
+) -> Image | None:
     """
     Load company stamp image with aspect ratio preservation.
 
@@ -374,8 +373,8 @@ def load_company_stamp(
             return None
 
         # Get original stamp dimensions
-        pil_stamp = PILImage.open(stamp_path)
-        stamp_width, stamp_height = pil_stamp.size
+        with PILImage.open(stamp_path) as pil_stamp:
+            stamp_width, stamp_height = pil_stamp.size
 
         # Use original aspect ratio
         aspect = stamp_height / float(stamp_width)
@@ -390,8 +389,8 @@ def load_company_stamp(
             display_height = display_width * aspect
 
         return Image(stamp_path, width=display_width, height=display_height)
-    except Exception as e:
-        logger.error(f"Failed to load stamp: {e}")
+    except Exception:
+        logger.exception("Failed to load stamp")
     return None
 
 
@@ -485,7 +484,7 @@ def create_paragraph_styles():
 # Color Utilities
 # =============================================================================
 
-def parse_company_color(color_value: Optional[str], default: colors.Color = colors.black) -> colors.Color:
+def parse_company_color(color_value: str | None, default: colors.Color = colors.black) -> colors.Color:
     """
     Parse company color from hex string.
 
@@ -507,8 +506,8 @@ def parse_company_color(color_value: Optional[str], default: colors.Color = colo
         if not color_str.startswith('#'):
             color_str = '#' + color_str
         return colors.HexColor(color_str)
-    except Exception as e:
-        logger.warning(f"Failed to parse color '{color_value}': {e}")
+    except Exception:
+        logger.warning("Failed to parse color %r", color_value, exc_info=True)
         return default
 
 
@@ -580,7 +579,7 @@ class InvoicePDFGenerator:
         """Get usable page width (pagesize - margins)"""
         return self.pagesize[0] - self.margins['left'] - self.margins['right']
 
-    def create_header(self, company, title: str) -> List:
+    def create_header(self, company, title: str) -> list:
         """
         Create header with logo and title.
 
@@ -676,7 +675,7 @@ class InvoicePDFGenerator:
 
         return sig_table
 
-    def format_currency(self, amount: Union[int, float], decimals: int = 2) -> str:
+    def format_currency(self, amount: int | float, decimals: int = 2) -> str:
         """Format currency with Indian numbering system"""
         return f"{float(amount):,.{decimals}f}"
 

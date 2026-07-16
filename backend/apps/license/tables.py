@@ -1,5 +1,5 @@
-import decimal
 import itertools
+from decimal import Decimal, InvalidOperation
 
 import django_tables2 as dt2
 from django.contrib.humanize.templatetags.humanize import intcomma
@@ -9,8 +9,27 @@ from django_tables2 import Column
 from . import models
 
 
+def _as_decimal(value):
+    if value in (None, ""):
+        return Decimal("0")
+    try:
+        decimal_value = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("0")
+    if not decimal_value.is_finite():
+        return Decimal("0")
+    return decimal_value
+
+
 class ColumnTotal(dt2.Column):
-    column_total = 0
+    def __init__(self, *args, **kwargs):
+        self.column_total = Decimal("0")
+        super().__init__(*args, **kwargs)
+
+    def render_total_value(self, value, places=0):
+        value = _as_decimal(value)
+        self.column_total += value
+        return intcomma(round(value, places))
 
     def render_footer(self, bound_column, table):
         return intcomma(round(self.column_total, 0))
@@ -19,193 +38,145 @@ class ColumnTotal(dt2.Column):
 class BalanceCIFColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_balance_cif
-        self.column_total += bills
-        return intcomma(round(bills, 2))
+        return self.render_total_value(record.get_balance_cif, 2)
 
 
 class TotalBalanceCIFColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.opening_balance
-        self.column_total += bills
-        return intcomma(round(bills, 2))
+        return self.render_total_value(record.opening_balance, 2)
 
 
 class PERCIFColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_per_cif()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_per_cif())
 
 
 class WheatQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_wheat()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_wheat())
 
 
 class SugarQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_sugar()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_sugar())
 
 
 class BOPPQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_bopp()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_bopp())
 
 
 class FruitsQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_fruit()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_fruit())
 
 
 class PaperQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_paper()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_paper())
 
 
 class MNMQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_m_n_m()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_m_n_m())
 
 
 class PPQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_pp()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_pp())
 
 
 class PaperBoardQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_pp()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_pp())
 
 
 class DFQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_dietary_fibre()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_dietary_fibre())
 
 
 class ColourQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_food_colour()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_food_colour())
 
 
 class AntiOxidantQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_anti_oxidant()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_anti_oxidant())
 
 
 class StarchQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_starch()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_starch())
 
 
 class StarchConfectioneryQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_starch_confectionery()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_starch_confectionery())
 
 
 class EmulsifierQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_emulsifier()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_emulsifier())
 
 
 class FFQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_food_flavour()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_food_flavour())
 
 
 class LAQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_leavening_agent()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_leavening_agent())
 
 
 class RBDQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_rbd()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_rbd())
 
 
 class LiquidGlucoseQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_liquid_glucose()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_liquid_glucose())
 
 
 class TartaricAcidQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_tartaric_acid()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_tartaric_acid())
 
 
 class OCIQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_other_confectionery()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_other_confectionery())
 
 
 class EssentialOilQuantityColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_essential_oil()
-        self.column_total += bills
-        return intcomma(round(bills, 0))
+        return self.render_total_value(record.get_essential_oil())
 
 
 class LicenseDetailTable(dt2.Table):
@@ -244,11 +215,11 @@ class LicenseDetailTable(dt2.Table):
 
 class DecimalColumnWithTotal(Column):
     def __init__(self, *args, **kwargs):
-        self.total = decimal.Decimal(0)  # Make sure total is a Decimal
+        self.total = Decimal("0")
         super().__init__(*args, **kwargs)
 
     def render(self, record):
-        value = decimal.Decimal(self.accessor.resolve(record))  # Make sure value is Decimal
+        value = _as_decimal(self.accessor.resolve(record))
         self.total += value
         return floatformat(value, 2)
 
@@ -679,24 +650,30 @@ class TruncatedTextColumn(dt2.Column):
     '''A Column to limit to 100 characters and add an ellipsis'''
 
     def render(self, value):
-        if len(value) > 10:
-            return value[0:10] + '...'
-        return str(value)
+        text = "" if value is None else str(value)
+        if len(text) > 10:
+            return text[0:10] + '...'
+        return text
 
 
 class TruncatedBigTextColumn(dt2.Column):
     '''A Column to limit to 100 characters and add an ellipsis'''
 
     def render(self, value):
-        if len(value) > 32:
-            return value[0:30] + '...'
-        return str(value)
+        text = "" if value is None else str(value)
+        if len(text) > 32:
+            return text[0:30] + '...'
+        return text
 
 
 class ColumnWithThousandsSeparator(dt2.Column):
-    column_total = 0
+    def __init__(self, *args, **kwargs):
+        self.column_total = Decimal("0")
+        super().__init__(*args, **kwargs)
 
     def render(self, value):
+        value = _as_decimal(value)
+        self.column_total += value
         return intcomma(round(value, 2))
 
     def render_footer(self, bound_column, table):

@@ -305,7 +305,6 @@ def pl_paragraph(
     color = pl_color_name(value)
     sign = "+" if value >= 0 else ""
     text = f"{prefix}{sign}{format_indian_number(value, decimals)}"
-    tag = f"<font color='{color}'>"
     if bold:
         tag_inner = f"<b>{text}</b>"
     else:

@@ -14,38 +14,15 @@
 
 set -e
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
-log()  { echo -e "${BLUE}→${NC} $*"; }
-ok()   { echo -e "${GREEN}✓${NC} $*"; }
-warn() { echo -e "${YELLOW}⚠${NC} $*"; }
-err()  { echo -e "${RED}✗${NC} $*"; }
-
-SERVER_USER="django"
-PASSWORD="admin"
-REMOTE_PATH="/home/django/license-manager/backend"
-VENV_ACTIVATE="/home/django/license-manager/venv/bin/activate"
-WINNER_IP="143.110.252.201"   # license-manager
-WINNER_LABEL="license-manager"
-
-# All servers to audit (IP:label)
-SERVERS=(
-    "143.110.252.201:license-manager"
-    "139.59.92.226:labdhi"
-    "165.232.185.220:tractor"
-)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/maintenance/_master_sync_lib.sh
+source "$SCRIPT_DIR/_master_sync_lib.sh"
 
 OUT_DIR="$(pwd)/master-audit-$(date +%Y%m%d-%H%M)"
 mkdir -p "$OUT_DIR"
 log "Output directory: $OUT_DIR"
 
-if command -v sshpass &>/dev/null; then
-    SSH="sshpass -p $PASSWORD ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-    SCP="sshpass -p $PASSWORD scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-else
-    warn "sshpass not installed — will prompt for password"
-    SSH="ssh"
-    SCP="scp"
-fi
+master_sync_setup_ssh
 
 # ── 1. Audit every server, pull JSON ─────────────────────────
 FAILED=()

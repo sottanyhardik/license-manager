@@ -8,13 +8,16 @@ This module handles the business logic for:
 """
 
 from decimal import Decimal
-from typing import Dict, Tuple, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.core.constants import DEC_0
 from apps.core.utils.decimal_utils import to_decimal, decimal_division
+
+if TYPE_CHECKING:
+    from apps.allotment.models import AllotmentItems
 
 
 class AllocationService:
@@ -272,7 +275,7 @@ class AllocationService:
         return allocation_item
 
     @staticmethod
-    def get_allocation_summary(allotment) -> Dict[str, any]:
+    def get_allocation_summary(allotment) -> Dict[str, Any]:
         """
         Get summary of allocations for an allotment.
         

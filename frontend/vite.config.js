@@ -73,26 +73,26 @@ export default defineConfig({
             return 'vendor-other';
           }
 
-          // Application code chunks
-          // Reports module - heavy pages
-          if (id.includes('/pages/reports/')) {
-            return 'app-reports';
+          // Application shell code used on first paint.
+          if (
+            id.includes('/layout/') ||
+            id.includes('/components/ui/') ||
+            id.includes('/components/primitives/') ||
+            id.includes('/components/Icon') ||
+            id.includes('/components/TopNav') ||
+            id.includes('/components/CommandPalette') ||
+            id.includes('/components/LoadingFallback') ||
+            id.includes('/components/ErrorScreen') ||
+            id.includes('/components/GlobalErrorBoundary') ||
+            id.includes('/components/TaskFAB') ||
+            id.includes('/components/TaskDrawer')
+          ) {
+            return 'app-shell';
           }
 
-          // Ledger module - financial pages
-          if (id.includes('/pages/ledger/')) {
-            return 'app-ledger';
-          }
+          // Avoid broad route-level chunks: they can become entry preloads
+          // when shared symbols are hoisted by the bundler.
 
-          // Master data pages
-          if (id.includes('/pages/masters/')) {
-            return 'app-masters';
-          }
-
-          // Components chunk
-          if (id.includes('/components/')) {
-            return 'app-components';
-          }
         },
 
         // Naming pattern for chunks

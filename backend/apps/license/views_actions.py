@@ -1,10 +1,8 @@
 # license/views_actions.py
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
@@ -70,24 +68,19 @@ class LicenseActionViewSet(ViewSet):
     @action(detail=True, methods=['post'], url_path='fetch-ledger')
     def fetch_ledger(self, request, pk=None):
         """
-        Fetch ledger details from DGFT API and update database.
-        Retrieves latest transaction data for the license.
+        Return an explicit unsupported response for remote DGFT ledger fetching.
+
+        Ownership fetches are implemented by `fetch_ownership`; ledger imports
+        are supported through the upload-ledger workflow. A live remote ledger
+        integration requires endpoint and credential decisions that are not part
+        of this API contract.
         """
         license_obj = get_object_or_404(LicenseDetailsModel, pk=pk)
 
         try:
-            # TODO: Implement DGFT API call
-            # For now, return a placeholder response
-            # The actual implementation will require:
-            # 1. DGFT API endpoint URL
-            # 2. Authentication credentials/tokens
-            # 3. API request parameters (license number, etc.)
-            # 4. Response parsing logic
-            # 5. Database update logic using ledger_parser_refactored
-
             return Response({
                 'success': False,
-                'message': 'DGFT API integration pending - endpoint and credentials required',
+                'message': 'Remote DGFT ledger fetch is not configured. Use ledger upload instead.',
                 'license_number': license_obj.license_number
             }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -97,7 +90,7 @@ class LicenseActionViewSet(ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=['post'], url_path='update-license-transfer', permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], url_path='update-license-transfer', permission_classes=[LicensePermission])
     def update_license_transfer(self, request):
         """
         Update license ownership and transfer information.
@@ -229,7 +222,7 @@ class LicenseActionViewSet(ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=['post'], url_path='bulk-update-license-transfer', permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], url_path='bulk-update-license-transfer', permission_classes=[LicensePermission])
     def bulk_update_license_transfer(self, request):
         """
         Bulk update license ownership and transfer information for multiple licenses.
@@ -418,7 +411,7 @@ class LicenseActionViewSet(ViewSet):
 
                         success_count += 1
 
-                except Exception as e:
+                except Exception:
                     import logging as _log
                     _log.getLogger(__name__).exception(
                         "bulk_update_license_transfer: failed for license %s",
@@ -440,7 +433,7 @@ class LicenseActionViewSet(ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=True, methods=['get'], url_path='ownership-data', permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['get'], url_path='ownership-data', permission_classes=[LicensePermission])
     def ownership_data(self, request, pk=None):
         """
         Return the locally-saved DGFT ownership snapshot for a license:
@@ -492,7 +485,7 @@ class LicenseActionViewSet(ViewSet):
             'transfers': transfers,
         })
 
-    @action(detail=True, methods=['post'], url_path='fetch-ownership', permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], url_path='fetch-ownership', permission_classes=[LicensePermission])
     def fetch_ownership(self, request, pk=None):
         """
         Fetch ownership info for a single license from DGFT and save locally.

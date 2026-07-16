@@ -60,7 +60,7 @@ def num_to_words_indian(amount):
             return ' '.join(result)
 
         return convert_indian(whole_amount)
-    except Exception as e:
+    except Exception:
         return str(int(amount))
 
 
@@ -79,17 +79,6 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
 
     # Get company color (default to black)
     to_company = trade.to_company
-    company_color = colors.black
-
-    if to_company and to_company.bill_colour:
-        color_value = to_company.bill_colour.strip()
-        if color_value:
-            if not color_value.startswith('#'):
-                color_value = '#' + color_value
-            try:
-                company_color = colors.HexColor(color_value)
-            except (ValueError, TypeError):
-                company_color = colors.black
 
     doc = SimpleDocTemplate(
         buffer,

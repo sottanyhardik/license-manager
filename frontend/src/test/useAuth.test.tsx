@@ -236,4 +236,14 @@ describe('AuthProvider / AuthContext', () => {
 
     expect(result.current.user).toEqual(MOCK_USER)
   })
+
+  it('ignores corrupted serialized user data from localStorage', async () => {
+    localStorage.setItem('user', '{bad json')
+
+    const { result } = renderHook(() => useContext(AuthContext), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.user).toBeNull()
+    expect(localStorage.getItem('user')).toBeNull()
+  })
 })

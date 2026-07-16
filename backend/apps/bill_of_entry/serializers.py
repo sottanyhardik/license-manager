@@ -120,6 +120,21 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
             total_inr = float(data.get('total_inr') or 0)
             if total_fc > 0:
                 data['exchange_rate'] = round(total_inr / total_fc, 4)
+
+        # Add allotment information if available
+        allotments = instance.allotment.all()
+        if allotments:
+            data['allotments'] = [
+                {
+                    'id': allot.id,
+                    'item_name': allot.item_name,
+                    'invoice': allot.invoice,
+                    'required_quantity': str(allot.required_quantity),
+                    'estimated_arrival_date': allot.estimated_arrival_date,
+                    'company': allot.company.name if allot.company else None,
+                }
+                for allot in allotments
+            ]
         return data
 
     def to_internal_value(self, data):
@@ -311,24 +326,3 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                 delattr(instance, 'get_licenses')
 
         return instance
-
-    def to_representation(self, instance):
-        """Add computed fields to representation"""
-        representation = super().to_representation(instance)
-
-        # Add allotment information if available
-        allotments = instance.allotment.all()
-        if allotments:
-            representation['allotments'] = [
-                {
-                    'id': allot.id,
-                    'item_name': allot.item_name,
-                    'invoice': allot.invoice,
-                    'required_quantity': str(allot.required_quantity),
-                    'estimated_arrival_date': allot.estimated_arrival_date,
-                    'company': allot.company.name if allot.company else None,
-                }
-                for allot in allotments
-            ]
-
-        return representation

@@ -10,9 +10,11 @@ from apps.core.utils.date_utils import (
     format_date_iso,
     is_date_expired,
     is_date_in_range,
+    is_date_within_days,
     date_range_overlaps,
     days_between,
     add_business_days,
+    add_months,
     get_financial_year,
     get_quarter,
     is_weekend,
@@ -241,6 +243,22 @@ class TestIsDateInRange(TestCase):
         assert is_date_in_range(check_date, start, None) is True
 
 
+class TestIsDateWithinDays(TestCase):
+    """Tests for is_date_within_days function"""
+
+    def test_future_date_within_positive_window(self):
+        reference = date(2024, 1, 1)
+        assert is_date_within_days(date(2024, 1, 5), 7, reference) is True
+
+    def test_future_date_outside_positive_window(self):
+        reference = date(2024, 1, 1)
+        assert is_date_within_days(date(2024, 1, 10), 7, reference) is False
+
+    def test_past_date_within_negative_window(self):
+        reference = date(2024, 1, 10)
+        assert is_date_within_days(date(2024, 1, 5), -7, reference) is True
+
+
 class TestDateRangeOverlaps(TestCase):
     """Tests for date_range_overlaps function"""
 
@@ -338,6 +356,16 @@ class TestAddBusinessDays(TestCase):
         start = date(2024, 1, 6)  # Saturday
         result = add_business_days(start, 1)
         assert result.weekday() < 5  # Should land on weekday
+
+
+class TestAddMonths(TestCase):
+    """Tests for add_months function"""
+
+    def test_end_of_month_clamps_to_month_length(self):
+        assert add_months(date(2024, 1, 31), 1) == date(2024, 2, 29)
+
+    def test_negative_months(self):
+        assert add_months(date(2024, 3, 31), -1) == date(2024, 2, 29)
 
 
 class TestGetFinancialYear(TestCase):

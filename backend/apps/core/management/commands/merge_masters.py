@@ -21,6 +21,7 @@ SAFE BY DEFAULT: dry-run unless --apply is passed.
 """
 import csv
 import json
+from pathlib import Path
 
 from django.apps import apps
 from django.core.management.base import BaseCommand
@@ -63,7 +64,7 @@ class Command(BaseCommand):
         # Load other servers' snapshots, indexed by (table, key) → record
         others_data = {}
         for path in opts["others"]:
-            snap = json.load(open(path))
+            snap = json.loads(Path(path).read_text(encoding="utf-8"))
             for table_name, t in snap["tables"].items():
                 for r in t.get("records", []):
                     key = (table_name, r["key"])
@@ -71,7 +72,8 @@ class Command(BaseCommand):
                     others_data.setdefault(key, (snap["server_name"], r))
 
         # Load plan
-        plan_rows = list(csv.DictReader(open(opts["plan"])))
+        with Path(opts["plan"]).open(encoding="utf-8", newline="") as plan_file:
+            plan_rows = list(csv.DictReader(plan_file))
 
         actionable = [r for r in plan_rows if r["action"] in ("IMPORT_TO_WINNER", "OVERWRITE")]
         self.stdout.write(f"Plan has {len(plan_rows)} total rows, {len(actionable)} actionable.\n")
@@ -84,7 +86,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             for row in actionable:
                 table = row["table"]
-                key   = row["key"]
+                key = row["key"]
                 action = row["action"]
 
                 if table not in TABLE_TO_MODEL:

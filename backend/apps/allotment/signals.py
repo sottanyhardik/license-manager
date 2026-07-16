@@ -54,7 +54,7 @@ def update_is_allotted_on_delete(sender, instance, **kwargs):
                 has_details = instance.allotment.allotment_details.exists()
                 if has_details:
                     instance.allotment.allotment_details.delete()
-    except Exception as e:
+    except Exception:
         # Allotment is being deleted, skip the update
         pass
 

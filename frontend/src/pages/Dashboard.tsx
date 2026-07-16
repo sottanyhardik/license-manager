@@ -83,6 +83,8 @@ export default function Dashboard() {
     const canSeeAllotments = isSuperAdmin() || hasAnyRole(["ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER", "REPORT_VIEWER"]);
     const canSeeBOE = isSuperAdmin() || hasAnyRole(["BOE_MANAGER", "BOE_VIEWER", "ACCOUNT_ACCESS", "TL_GENERATE", "REPORT_VIEWER"]);
     const canSeeLicenses = isSuperAdmin() || hasAnyRole(["LICENSE_MANAGER", "LICENSE_VIEWER", "TRADE_MANAGER", "TRADE_VIEWER", "REPORT_VIEWER"]);
+    const canCreateAllotments = isSuperAdmin() || hasAnyRole(["ALLOTMENT_MANAGER"]);
+    const canCreateBOE = isSuperAdmin() || hasAnyRole(["BOE_MANAGER"]);
 
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
@@ -135,12 +137,16 @@ export default function Dashboard() {
                 <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
                 Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/allotments/create")}>
-                <Plus className="size-4" />New Allotment
-            </Button>
-            <Button size="sm" onClick={() => navigate("/bill-of-entries/create")}>
-                <Plus className="size-4" />New BOE
-            </Button>
+            {canCreateAllotments && (
+                <Button variant="outline" size="sm" onClick={() => navigate("/allotments/create")}>
+                    <Plus className="size-4" />New Allotment
+                </Button>
+            )}
+            {canCreateBOE && (
+                <Button size="sm" onClick={() => navigate("/bill-of-entries/create")}>
+                    <Plus className="size-4" />New BOE
+                </Button>
+            )}
         </>
     );
 

@@ -46,14 +46,13 @@ pytest                        # contract tests (needs Postgres)
 ## Adding a master (the pattern)
 
 1. `models.py` — subclass `MasterModel`, set `NATURAL_KEY_FIELD` to its unique
-   business key.
-2. `serializers.py` — a `ModelSerializer`.
-3. `views.py` — subclass `MasterViewSet` (set `queryset`, `serializer_class`,
-   `natural_key_field`).
-4. `urls.py` — `router.register(...)`.
-5. `signals.py` — add the model to `TRACKED_MODELS` (change-feed).
-6. `admin.py` — register (optional).
-7. `makemigrations` + a test in `masters/tests/`.
+   business key, or combine `SyntheticKeyMixin` with `MasterModel` for keyless
+   child rows that need deterministic `uid` values.
+2. Add the model to `MASTER_REGISTRY` with `(model, natural_key_field, endpoint)`.
+3. `serializers.py`, `views.py`, `urls.py`, `signals.py`, and `admin.py` consume
+   the registry, so no per-master boilerplate is required unless the new model
+   needs custom behavior.
+4. Run `makemigrations` and add or update contract tests in `masters/tests/`.
 
 ## Not yet wired (later phases)
 

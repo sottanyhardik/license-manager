@@ -4,16 +4,16 @@ Item Report - List all License Import Items with filters and inline editing supp
 
 import logging
 
-from django.db.models import Q, Prefetch
+from django.db.models import Prefetch
 from django.http import JsonResponse, HttpResponse
-from django.views import View
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from apps.accounts.permissions import ReportPermission
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.core.models import ItemNameModel
-from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
+from apps.license.models import LicenseImportItemsModel
 
 def _safe_int(value, default):
     try:
@@ -26,7 +26,7 @@ def _safe_int(value, default):
 logger = logging.getLogger(__name__)
 
 
-class ItemReportView(View):
+class ItemReportView(APIView):
     """
     Report showing all License Import Items with filters.
 
@@ -34,6 +34,7 @@ class ItemReportView(View):
         - item_names: Comma-separated item name IDs for filtering (multiselect)
         - format: 'json' or 'excel' (default: json)
     """
+    permission_classes = [ReportPermission]
 
     def get(self, request, *args, **kwargs):
         output_format = request.GET.get('format', 'json').lower()
@@ -90,12 +91,9 @@ class ItemReportView(View):
             Dictionary with report data
         """
         from datetime import date, timedelta
-        from apps.core.constants import GE, MI, IP, SM, CO
-
         today = date.today()
 
         # Base query - all import items with licenses
-        from django.db.models import Prefetch
         from apps.license.models import LicenseTransferModel
 
         # Prefetch only the latest transfer for each license
@@ -361,9 +359,6 @@ class ItemReportView(View):
             for license_id, license_items in grouped_items.items():
                 row_span = len(license_items)
                 start_row = current_row
-
-                # Get license-level data from first item
-                first_item = license_items[0]
 
                 # Add each item in this license group
                 for item_idx, item in enumerate(license_items):

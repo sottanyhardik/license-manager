@@ -9,7 +9,6 @@ Run with:
 """
 import pytest
 from decimal import Decimal
-from datetime import date, timedelta
 from unittest.mock import patch, Mock
 
 from django.urls import reverse

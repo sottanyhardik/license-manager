@@ -37,7 +37,7 @@ class Command(BaseCommand):
             self.stdout.write("Current ItemNameModel records:")
 
             # Show first 10 records as preview
-            preview_items = ItemNameModel.objects.all()[:10]
+            preview_items = ItemNameModel.objects.select_related("group")[:10]
             for item in preview_items:
                 group_name = item.group.name if item.group else "No Group"
                 self.stdout.write(f"  - {item.name} (Group: {group_name})")

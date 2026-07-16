@@ -100,12 +100,6 @@ def query_set_table(tables, query_set, label='License List'):
 def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_filters=None, exclude_and_filters=None,
                     is_au=False, is_expired=False, purchase_status=GE):
     my_filter = Q()
-    if date_range:
-        start = date_range.get('start', None)
-        end = date_range.get('end', None)
-    else:
-        start = None
-        end = None
     if is_expired:
         expiry_limit = datetime.datetime.today() - datetime.timedelta(days=settings.EXPIRY_DAY)
         START = datetime.datetime.today() - datetime.timedelta(days=60)
@@ -257,7 +251,6 @@ def biscuit_dfia(date_range=None, status=False, party=GE):
 
 
 def confectionery_query(date_range=None, party=None, exclude_party=None, is_expired=False):
-    tables = []
     query_dict = {
         'export_license__norm_class__norm_class': 'E1',
     }
@@ -305,7 +298,6 @@ def confectionery_dfia(date_range=None, status=None):
 
 
 def namkeen_query(date_range=None, party=None, exclude_party=None, is_expired=False):
-    tables = []
     query_dict = {
         'export_license__norm_class__norm_class': 'E132',
     }
@@ -327,7 +319,6 @@ def namkeen_query(date_range=None, party=None, exclude_party=None, is_expired=Fa
 
 
 def tractor_query(date_range=None, party=None, exclude_party=None, is_expired=False, notification_number=N2023):
-    tables = []
     query_dict = {
         'export_license__norm_class__norm_class': 'C969',
         'notification_number': notification_number
@@ -350,7 +341,6 @@ def tractor_query(date_range=None, party=None, exclude_party=None, is_expired=Fa
 
 
 def steel_query(date_range=None, party=None, exclude_party=None, is_expired=False, notification_number=N2023):
-    tables = []
     query_dict = {
         'export_license__norm_class__norm_class__in': ['C471', 'C969', 'C473'],
         'notification_number': notification_number
@@ -641,7 +631,6 @@ def glass_dfia(date_range=None, status=None):
 
 
 def glass_query(date_range=None, party=None, exclude_party=None, is_expired=False, notification_number=N2023):
-    tables = []
     query_dict = {
         'export_license__norm_class__norm_class': 'A3627',
         'notification_number': notification_number
@@ -691,7 +680,6 @@ def pickle_dfia(date_range=None, status=None):
 
 
 def pickle_query(date_range=None, party=None, exclude_party=None, is_expired=False, notification_number=N2023):
-    tables = []
     query_dict = {
         'export_license__norm_class__norm_class': 'E126',
         'notification_number': notification_number

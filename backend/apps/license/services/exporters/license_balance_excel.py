@@ -11,7 +11,6 @@ def build_balance_excel_unused(license_obj):
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from io import BytesIO
-    from datetime import date
 
 
     # Create workbook
@@ -316,12 +315,9 @@ def build_balance_excel(license_obj):
     from django.http import HttpResponse
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from openpyxl.utils import get_column_letter
     from io import BytesIO
     from decimal import Decimal as _Dec
     from collections import defaultdict
-    from django.db.models import Sum as _Sum, DecimalField as _DF, Value as _Val
-    from django.db.models.functions import Coalesce as _Coalesce
     from apps.bill_of_entry.models import RowDetails
     from apps.allotment.models import AllotmentItems
 
@@ -889,16 +885,19 @@ def build_bulk_balance_excel(request):
     from io import BytesIO
     from decimal import Decimal as _Dec
     from collections import defaultdict
-    from django.db.models import Sum as _Sum, DecimalField as _DF, Value as _Val
-    from django.db.models.functions import Coalesce as _Coalesce
     from apps.bill_of_entry.models import RowDetails
     from apps.allotment.models import AllotmentItems
     from rest_framework.response import Response
     from apps.license.models import LicenseDetailsModel
 
-    license_numbers = request.data.get('license_numbers', [])
+    license_numbers = request.data.get('license_numbers')
+    if not isinstance(license_numbers, list):
+        return Response({'error': 'license_numbers must be a non-empty list of strings.'}, status=400)
+
+    license_numbers = [item.strip() for item in license_numbers if isinstance(item, str) and item.strip()]
     if not license_numbers:
-        return Response({'error': 'No license numbers provided.'}, status=400)
+        return Response({'error': 'license_numbers must be a non-empty list of strings.'}, status=400)
+    license_numbers = list(dict.fromkeys(license_numbers))
 
     licenses = LicenseDetailsModel.objects.filter(
         license_number__in=license_numbers
@@ -943,8 +942,9 @@ def build_bulk_balance_excel(request):
 
     def _write_license_sheet(wb, license_obj):
         from datetime import date as _date_cls
-        sheet_name = str(license_obj.license_number)[:31]
-        ws = wb.create_sheet(title=sheet_name)
+        requested_sheet_name = str(license_obj.license_number or license_obj.pk)[:31]
+        ws = wb.create_sheet(title=requested_sheet_name)
+        sheet_name = ws.title
 
         license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
         license_expiry_str = license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-'

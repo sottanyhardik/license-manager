@@ -5,14 +5,9 @@ to shrink it. Inherited first in the MRO, so method resolution — and therefore
 behaviour — is unchanged. Imports are copied from license.py (not imported from
 it) to avoid a circular import.
 """
-from datetime import date, datetime, time
-from typing import Any, Dict, Iterable
+from collections.abc import Iterable
 
-from rest_framework import serializers
-
-from apps.core.models import ItemNameModel, ProductDescriptionModel, SchemeCode, NotificationNumber
-from apps.core.serializers import HSCodeSerializer, SionNormClassNestedSerializer
-from apps.core.serializers.fields import IndianDateField
+from apps.core.models import ProductDescriptionModel
 from apps.license.models import (
     LicenseDetailsModel,
     LicenseExportItemModel,
@@ -20,12 +15,10 @@ from apps.license.models import (
     LicenseDocumentModel,
     LicenseTransferModel,
     LicensePurchase,
-    IncentiveLicense,
     LicenseBalance,
     LicenseFlags,
     LicenseNotes,
     LicenseOwnership,
-    LicenseItemPlan,
 )
 
 
@@ -74,8 +67,6 @@ def _apply_sub_table_writes(license_instance, sub_writes):
     for rel, values in sub_writes.items():
         if values:
             model_map[rel].objects.filter(license_id=license_instance.pk).update(**values)
-
-
 
 
 class LicenseWriteMixin:
@@ -699,9 +690,9 @@ class LicenseWriteMixin:
                             error_msg = f"Cannot delete {len(protected_items)} import item(s) because they are used in trades or bills of entry:\n\n"
                             for protected in protected_items:
                                 error_msg += f"  • Serial #{protected['serial_number']}: {protected['description']} (ID: {protected['id']})\n"
-                            error_msg += f"\nThese items are currently being used and cannot be removed from the license. "
-                            error_msg += f"To delete them, first remove their usage from trades or bills of entry, "
-                            error_msg += f"or include them in your save to keep them."
+                            error_msg += "\nThese items are currently being used and cannot be removed from the license. "
+                            error_msg += "To delete them, first remove their usage from trades or bills of entry, "
+                            error_msg += "or include them in your save to keep them."
 
                             logger.error("Protected items preventing deletion: %s", protected_items)
                             raise ValidationError({
@@ -865,5 +856,3 @@ class LicenseWriteMixin:
         bulk_auto_link_license_items(instance)
         update_license_flags(instance)
         return instance
-
-

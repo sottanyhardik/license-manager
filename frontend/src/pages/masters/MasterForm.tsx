@@ -17,7 +17,7 @@ import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import {navigateToList} from "../../utils/navigationUtils";
 import {useBackButton} from "../../hooks/useBackButton";
 import { ENTITY_SECTIONS } from "./entitySections";
-import { buildLicensePatch, buildLicenseSummary } from "./masterFormHelpers";
+import { buildLicensePatch, buildLicenseSummary, getMasterFormApiBase } from "./masterFormHelpers";
 import LicenseParsePanel from "./LicenseParsePanel";
 import TradeMetaBadges from "./TradeMetaBadges";
 import BoeParsePanel from "./BoeParsePanel";
@@ -104,14 +104,7 @@ export default function MasterForm({
 
     const fetchMetadata = async () => {
         try {
-            let apiPath;
-            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `${entityName}/`;
-            } else if (entityName === 'incentive-licenses') {
-                apiPath = `incentive-licenses/`;
-            } else {
-                apiPath = `masters/${entityName}/`;
-            }
+            const apiPath = getMasterFormApiBase(entityName);
 
             // Use GET to fetch metadata (custom structure with form_fields, field_meta, etc.)
             const {data} = await api.get(apiPath);
@@ -179,14 +172,7 @@ export default function MasterForm({
     const fetchRecord = async () => {
         setLoading(true);
         try {
-            let apiPath;
-            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `${entityName}/${recordId}/`;
-            } else if (entityName === 'incentive-licenses') {
-                apiPath = `incentive-licenses/${recordId}/`;
-            } else {
-                apiPath = `masters/${entityName}/${recordId}/`;
-            }
+            const apiPath = `${getMasterFormApiBase(entityName)}${recordId}/`;
             const {data} = await api.get(apiPath);
 
             // Pre-populate the AsyncSelectField cache from the *_detail
@@ -1024,14 +1010,7 @@ export default function MasterForm({
         }
 
         try {
-            let apiPath;
-            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `${entityName}/`;
-            } else if (entityName === 'incentive-licenses') {
-                apiPath = `incentive-licenses/`;
-            } else {
-                apiPath = `masters/${entityName}/`;
-            }
+            const apiPath = getMasterFormApiBase(entityName);
 
             // Check if formData contains any File objects (including nested).
             // NOTE: boePdfFile is intentionally excluded here — it is uploaded

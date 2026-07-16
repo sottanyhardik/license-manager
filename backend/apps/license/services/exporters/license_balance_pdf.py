@@ -43,16 +43,6 @@ def build_balance_pdf_response(license_obj, request):
         fontName='Helvetica-Bold'
     )
 
-    section_style = ParagraphStyle(
-        'SectionTitle',
-        parent=styles['Heading2'],
-        fontSize=10,
-        textColor=colors.HexColor('#2c3e50'),
-        spaceBefore=5,
-        spaceAfter=3,
-        fontName='Helvetica-Bold'
-    )
-
     # Add title
     title = Paragraph(f"<b>License Balance Report</b>", title_style)
     elements.append(title)

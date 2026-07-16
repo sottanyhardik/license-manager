@@ -10,10 +10,26 @@ Usage:
     python manage.py update_balance_cif --license-number 0310837441
 """
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from apps.license.models import LicenseDetailsModel
+
+from apps.license.models import LicenseBalance, LicenseDetailsModel
 from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+
+def _validate_batch_size(value):
+    if value < 1:
+        raise CommandError("--batch-size must be greater than zero.")
+
+
+def _normalize_license_number(value):
+    if value is None:
+        return None
+
+    license_number = value.strip()
+    if not license_number:
+        raise CommandError("--license-number must not be blank.")
+    return license_number
 
 
 class Command(BaseCommand):
@@ -31,40 +47,48 @@ class Command(BaseCommand):
             type=str,
             help='Update only a specific license by license number'
         )
+        parser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Calculate and report changes without saving them.',
+        )
 
     def handle(self, *args, **options):
         batch_size = options['batch_size']
-        license_number = options.get('license_number')
+        license_number = _normalize_license_number(options.get('license_number'))
+        dry_run = bool(options.get('dry_run'))
+        _validate_batch_size(batch_size)
 
         if license_number:
             # Update specific license
             try:
                 license_obj = LicenseDetailsModel.objects.get(license_number=license_number)
-                self.update_license_balance(license_obj)
+                balance = self.update_license_balance(license_obj, dry_run=dry_run)
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f'✓ Updated balance_cif for license {license_number}: {license_obj.balance_cif}'
+                        f'✓ {"Would update" if dry_run else "Updated"} '
+                        f'balance_cif for license {license_number}: {balance}'
                     )
                 )
-            except LicenseDetailsModel.DoesNotExist:
-                self.stdout.write(
-                    self.style.ERROR(f'✗ License {license_number} not found')
-                )
+            except LicenseDetailsModel.DoesNotExist as exc:
+                raise CommandError(f'License {license_number} not found') from exc
             return
 
         # Update all licenses in batches
         total_licenses = LicenseDetailsModel.objects.count()
         self.stdout.write(f'Processing {total_licenses} licenses in batches of {batch_size}...')
+        self.stdout.write(f'Dry run: {dry_run}')
 
         updated_count = 0
         error_count = 0
 
         # Use iterator to avoid loading all licenses into memory
-        licenses = LicenseDetailsModel.objects.all().iterator(chunk_size=batch_size)
+        licenses = LicenseDetailsModel.objects.all().order_by("id").iterator(chunk_size=batch_size)
 
         for license_obj in licenses:
             try:
-                self.update_license_balance(license_obj)
+                with transaction.atomic():
+                    self.update_license_balance(license_obj, dry_run=dry_run)
                 updated_count += 1
 
                 # Progress indicator
@@ -93,17 +117,21 @@ class Command(BaseCommand):
                     f'✗ Failed to update {error_count} licenses'
                 )
             )
+            raise CommandError(f'Failed to update {error_count} license balance(s).')
 
-    def update_license_balance(self, license_obj):
+    def update_license_balance(self, license_obj, *, dry_run):
         """
         Update balance_cif for a single license.
-        Uses update() to avoid triggering signals.
+        Writes the LicenseBalance sub-table without saving the parent license.
         """
-        from apps.license.models import LicenseBalance
         balance = LicenseBalanceCalculator.calculate_balance(license_obj)
 
-        # Use update() to avoid triggering signals (prevents recursion).
-        # balance_cif now lives on LicenseBalance (OneToOne sub-table).
-        LicenseBalance.objects.filter(license_id=license_obj.pk).update(
-            balance_cif=balance
-        )
+        if dry_run:
+            return balance
+
+        # balance_cif lives on LicenseBalance (OneToOne sub-table). get_or_create
+        # repairs legacy rows where the signal-created subrow is missing.
+        balance_row, _ = LicenseBalance.objects.get_or_create(license=license_obj)
+        balance_row.balance_cif = balance
+        balance_row.save(update_fields=["balance_cif"])
+        return balance

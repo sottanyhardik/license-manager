@@ -2,26 +2,27 @@ import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { masterEntities, reportEntities } from "../routes/config";
+import { REPORT_ROLES } from "../routes/authorizationRoles";
 import { Search } from "lucide-react";
 import Icon from "@/components/Icon";
 
 const BASE_COMMANDS = [
     { id: "dashboard",      label: "Dashboard",          icon: "speedometer2",          path: "/dashboard",        group: "Navigation" },
-    { id: "licenses",       label: "Licenses",           icon: "file-earmark-text",     path: "/licenses",         group: "Navigation" },
-    { id: "allotments",     label: "Allotments",         icon: "box-seam",              path: "/allotments",       group: "Navigation" },
-    { id: "boe",            label: "Bill of Entries",    icon: "receipt",               path: "/bill-of-entries",  group: "Navigation" },
-    { id: "trades",         label: "Trade In & Out",     icon: "arrow-left-right",      path: "/trades",           group: "Navigation" },
-    { id: "ledger",         label: "License Ledger",     icon: "journal-text",          path: "/license-ledger",   group: "Navigation" },
-    { id: "new-boe",        label: "New Bill of Entry",  icon: "plus-circle",           path: "/bill-of-entries/create", group: "Quick Create" },
-    { id: "new-allotment",  label: "New Allotment",      icon: "plus-circle",           path: "/allotments/create",      group: "Quick Create" },
-    { id: "new-license",    label: "New License",        icon: "plus-circle",           path: "/licenses/create",        group: "Quick Create" },
+    { id: "licenses",       label: "Licenses",           icon: "file-earmark-text",     path: "/licenses",         group: "Navigation", roles: ["LICENSE_MANAGER", "LICENSE_VIEWER"] },
+    { id: "allotments",     label: "Allotments",         icon: "box-seam",              path: "/allotments",       group: "Navigation", roles: ["ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER"] },
+    { id: "boe",            label: "Bill of Entries",    icon: "receipt",               path: "/bill-of-entries",  group: "Navigation", roles: ["BOE_MANAGER", "BOE_VIEWER", "TL_GENERATE", "ACCOUNT_ACCESS"] },
+    { id: "trades",         label: "Trade In & Out",     icon: "arrow-left-right",      path: "/trades",           group: "Navigation", roles: ["TRADE_MANAGER", "TRADE_VIEWER"] },
+    { id: "ledger",         label: "License Ledger",     icon: "journal-text",          path: "/license-ledger",   group: "Navigation", roles: ["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"] },
+    { id: "new-boe",        label: "New Bill of Entry",  icon: "plus-circle",           path: "/bill-of-entries/create", group: "Quick Create", roles: ["BOE_MANAGER"] },
+    { id: "new-allotment",  label: "New Allotment",      icon: "plus-circle",           path: "/allotments/create",      group: "Quick Create", roles: ["ALLOTMENT_MANAGER"] },
+    { id: "new-license",    label: "New License",        icon: "plus-circle",           path: "/licenses/create",        group: "Quick Create", roles: ["LICENSE_MANAGER"] },
     { id: "profile",        label: "Profile",            icon: "person",                path: "/profile",          group: "Account" },
 ];
 
 function buildCommands() {
     const cmds = [...BASE_COMMANDS];
     reportEntities.forEach(r => {
-        cmds.push({ id: "report-" + r.path, label: r.label, icon: r.icon || "bar-chart", path: r.path, group: "Reports" });
+        cmds.push({ id: "report-" + r.path, label: r.label, icon: r.icon || "bar-chart", path: r.path, group: "Reports", roles: REPORT_ROLES });
     });
     masterEntities.forEach(m => {
         cmds.push({ id: "master-" + m.path, label: m.label, icon: m.icon || "database", path: m.path, group: "Masters" });
@@ -33,13 +34,16 @@ const ALL_COMMANDS = buildCommands();
 
 export default function CommandPalette({ open, onClose }) {
     const navigate = useNavigate();
-    const { isSuperAdmin, canManageUsers } = useContext(AuthContext);
+    const { isSuperAdmin, canManageUsers, hasAnyRole } = useContext(AuthContext);
     const [query, setQuery] = useState("");
     const [activeIdx, setActiveIdx] = useState(0);
     const inputRef = useRef(null);
 
     const commands = (() => {
-        const base = [...ALL_COMMANDS];
+        const base = ALL_COMMANDS.filter(command => {
+            if (isSuperAdmin && isSuperAdmin()) return true;
+            return !command.roles || hasAnyRole(command.roles);
+        });
         if (isSuperAdmin && isSuperAdmin()) {
             base.push({ id: "users",    label: "Users & Roles",  icon: "shield-lock", path: "/settings",             group: "Admin" });
             base.push({ id: "activity", label: "Activity Log",   icon: "journal-text", path: "/admin/activity-log",  group: "Admin" });

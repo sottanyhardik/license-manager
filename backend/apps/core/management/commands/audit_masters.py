@@ -28,11 +28,12 @@ Output format:
 import hashlib
 import json
 import socket
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
-from django.core.management.base import BaseCommand
 from django.apps import apps
+from django.core.management.base import BaseCommand
 from django.db import models
 
 
@@ -134,7 +135,6 @@ class Command(BaseCommand):
 
             qs = Model.objects.all()
             records = []
-            seen_keys = set()
             for inst in qs.iterator():
                 data = _record_to_dict(inst)
                 if key_field:
@@ -148,7 +148,6 @@ class Command(BaseCommand):
                     "data_hash": _hash_record(data),
                     "data": data,
                 })
-                seen_keys.add(key)
 
             snapshot["tables"][label.lower()] = {
                 "count": len(records),
@@ -158,8 +157,7 @@ class Command(BaseCommand):
 
         output = json.dumps(snapshot, indent=2, default=str)
         if opts.get("out"):
-            with open(opts["out"], "w") as f:
-                f.write(output)
+            Path(opts["out"]).write_text(output, encoding="utf-8")
             self.stdout.write(self.style.SUCCESS(f"Wrote audit to {opts['out']}"))
         else:
             self.stdout.write(output)

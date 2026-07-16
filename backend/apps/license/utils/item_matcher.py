@@ -837,27 +837,29 @@ def match_import_item_to_items(import_item, license_norm_classes):
         QuerySet: ItemNameModel items that match this import item
     """
     from apps.core.models import ItemNameModel
+    from apps.license.models import LicenseImportItemsModel
 
     if not license_norm_classes:
         return ItemNameModel.objects.none()
 
     filters = get_item_filters()
-    matched_item_names = []
+    matched_item_ids = set()
+    import_item_qs = LicenseImportItemsModel.objects.filter(id=import_item.id)
 
     for item_config in filters:
-        # Check if this item config applies to any of the license norms
-        if not any(norm in item_config['norms'] for norm in license_norm_classes):
+        # Check if this item config applies to any of the license norms.
+        applicable_norms = [norm for norm in license_norm_classes if norm in item_config['norms']]
+        if not applicable_norms:
             continue
 
         # Check if the import item matches any of the filters for this item type
         for filter_q in item_config['filters']:
             # Create a queryset with just this import item and apply the filter
-            from apps.license.models import LicenseImportItemsModel
-            test_qs = LicenseImportItemsModel.objects.filter(id=import_item.id).filter(filter_q)
+            test_qs = import_item_qs.filter(filter_q)
 
             if test_qs.exists():
                 # This import item matches this filter, find the corresponding ItemNameModel
-                item_name = f"{item_config['base_name']} - {license_norm_classes[0]}"
+                item_name = f"{item_config['base_name']} - {applicable_norms[0]}"
 
                 # Try to find the ItemNameModel (it might not exist yet)
                 matching_items = ItemNameModel.objects.filter(
@@ -865,12 +867,11 @@ def match_import_item_to_items(import_item, license_norm_classes):
                     sion_norm_class__norm_class__in=license_norm_classes
                 )
 
-                matched_item_names.extend(matching_items)
+                matched_item_ids.update(matching_items.values_list("id", flat=True))
                 break  # Found a match for this item config, move to next
 
     # Return unique ItemNameModel items
-    if matched_item_names:
-        item_ids = list(set(item.id for item in matched_item_names))
-        return ItemNameModel.objects.filter(id__in=item_ids)
+    if matched_item_ids:
+        return ItemNameModel.objects.filter(id__in=matched_item_ids)
 
     return ItemNameModel.objects.none()

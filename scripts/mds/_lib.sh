@@ -54,6 +54,16 @@ err()  { _emit "${_C_RED}[$(_ts)] ✗${_C_NC} $*" >&2; }
 dry()  { _emit "${_C_DIM}[$(_ts)] (dry-run)${_C_NC} $*"; }
 die()  { err "$*"; exit 1; }
 
+mds_usage() {
+    local script="$1" code="${2:-0}"
+    awk '
+        NR == 1 && /^#!/ { next }
+        /^#/ { sub(/^# ?/, ""); print; next }
+        { exit }
+    ' "$script"
+    exit "$code"
+}
+
 # ── host resolution (same defaults as scripts/maintenance/sync-masters.sh) ──────────────────────
 mds_source_ip()   { echo "${SYNC_SOURCE_IP:-143.110.252.201}"; }
 mds_follower_ip() {
@@ -129,7 +139,7 @@ mds_print_counts() {
     python3 - "$json" "$label" <<'PY'
 import json, sys
 path, label = sys.argv[1], sys.argv[2]
-with open(path) as fh:
+with open(path, encoding="utf-8") as fh:
     snap = json.load(fh)
 tables = snap.get("tables", {})
 total = 0
@@ -149,7 +159,7 @@ mds_counts_json() {
     mds_require_cmd python3
     python3 - "$json" <<'PY'
 import json, sys
-with open(sys.argv[1]) as fh:
+with open(sys.argv[1], encoding="utf-8") as fh:
     snap = json.load(fh)
 tables = snap.get("tables", {})
 print(json.dumps({k: v.get("count", 0) for k, v in tables.items()}, sort_keys=True))

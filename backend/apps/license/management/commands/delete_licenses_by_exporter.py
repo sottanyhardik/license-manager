@@ -20,8 +20,8 @@ Usage:
     python manage.py delete_licenses_by_exporter --filter exclude --exporter "SION C969" --confirm
 """
 
-from django.core.management.base import BaseCommand
-from django.db import transaction, connection
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 from django.db.models import Count, Q
 
 from apps.license.models import LicenseDetailsModel
@@ -73,8 +73,14 @@ class Command(BaseCommand):
         confirm = options['confirm']
         batch_size = options['batch_size']
         filter_type = options['filter']
-        exporter_pattern = options['exporter']
+        exporter_pattern = options['exporter'].strip()
         disable_signals = options['disable_signals']
+
+        if not exporter_pattern:
+            raise CommandError('Exporter filter must not be blank')
+
+        if batch_size < 1:
+            raise CommandError('Batch size must be greater than zero')
 
         if not dry_run and not confirm:
             self.stdout.write(
@@ -150,23 +156,18 @@ class Command(BaseCommand):
         batch_num = 0
 
         # Optionally disable signals for speed
-        disconnected_signals = []
         if disable_signals:
-            from django.db.models.signals import post_save, post_delete, pre_delete, pre_save
+            from django.db.models.signals import post_save, post_delete, pre_delete
             from apps.allotment.models import update_stock, delete_stock as allotment_delete_stock
             from apps.bill_of_entry.models import update_stock as boe_update_stock, delete_stock as boe_delete_stock
 
             # Disable allotment signals
             post_save.disconnect(update_stock, sender=AllotmentItems)
             post_delete.disconnect(allotment_delete_stock, sender=AllotmentItems)
-            disconnected_signals.append(('post_save', update_stock, AllotmentItems))
-            disconnected_signals.append(('post_delete', allotment_delete_stock, AllotmentItems))
 
             # Disable BOE signals
             post_save.disconnect(boe_update_stock, sender=RowDetails)
             post_delete.disconnect(boe_delete_stock, sender=RowDetails)
-            disconnected_signals.append(('post_save', boe_update_stock, RowDetails))
-            disconnected_signals.append(('post_delete', boe_delete_stock, RowDetails))
 
             # Disable ALL license signals for maximum speed
             try:

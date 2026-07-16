@@ -1,15 +1,17 @@
-import { lazy, Suspense, useEffect, type ReactElement } from "react";
+import { lazy, Suspense, type ReactElement } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
 import AdminLayout from "../layout/AdminLayout";
 import { PageLoader } from "../components/LoadingFallback";
-import { lazyLoadWithRetry, preloadCriticalRoutes } from "../utils/lazyLoad";
+import { lazyLoadWithRetry } from "../utils/lazyLoad";
 
 import Login from "../pages/Login";
+import PasswordReset from "../pages/auth/PasswordReset";
 import Unauthorized from "../pages/errors/Unauthorized";
 import NotFound from "../pages/errors/NotFound";
 import Forbidden from "../pages/Forbidden";
+import { REPORT_ROLES } from "./authorizationRoles";
 
 const UserList = lazyLoadWithRetry(() => import("../pages/admin/UserList"));
 const UserForm = lazyLoadWithRetry(() => import("../pages/admin/UserForm"));
@@ -39,17 +41,6 @@ const LicenseLedger = lazy(() => import("../pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("../pages/LicenseLedgerDetail"));
 const PDFViewer = lazy(() => import("../pages/PDFViewer"));
 
-const REPORT_ROLES = [
-    "REPORT_VIEWER",
-    "LICENSE_MANAGER",
-    "LICENSE_VIEWER",
-    "TRADE_MANAGER",
-    "TRADE_VIEWER",
-    "ALLOTMENT_MANAGER",
-    "BOE_MANAGER",
-    "INCENTIVE_LICENSE_MANAGER",
-];
-
 const REPORT_ROUTES: [string, ReactElement][] = [
     ["/reports/parle/sion-e1", <SionE1 />],
     ["/reports/parle/sion-e5", <SionE5 />],
@@ -63,22 +54,12 @@ const REPORT_ROUTES: [string, ReactElement][] = [
 ];
 
 export default function AppRoutes() {
-    useEffect(() => {
-        preloadCriticalRoutes(
-            {
-                masterList: () => import("../pages/masters/MasterList"),
-                itemReport: () => import("../pages/reports/ItemReport"),
-                itemPivotReport: () => import("../pages/reports/ItemPivotReport"),
-            },
-            3000,
-        );
-    }, []);
-
     return (
         <Suspense fallback={<PageLoader />}>
             <Routes>
                 {/* Public */}
                 <Route path="/login" element={<Login />} />
+                <Route path="/forgot-password" element={<PasswordReset />} />
                 <Route path="/401" element={<Unauthorized />} />
                 <Route path="/403" element={<Forbidden />} />
 

@@ -1,9 +1,12 @@
 # FILE: accounts/signals.py
+import logging
+
+from django.contrib.auth import get_user_model
 from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
-from django.contrib.auth import get_user_model
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_delete, sender=User)
@@ -13,7 +16,7 @@ def delete_avatar_on_user_delete(sender, instance, **kwargs):
         if instance.avatar:
             instance.avatar.delete(save=False)
     except Exception:
-        pass
+        logger.warning("Failed to delete avatar for deleted user id=%s", instance.pk, exc_info=True)
 
 
 @receiver(pre_save, sender=User)
@@ -31,4 +34,4 @@ def delete_old_avatar_on_change(sender, instance, **kwargs):
         try:
             old_avatar.delete(save=False)
         except Exception:
-            pass
+            logger.warning("Failed to delete replaced avatar for user id=%s", instance.pk, exc_info=True)

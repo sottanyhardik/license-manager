@@ -9,16 +9,18 @@ This module provides utilities for:
 """
 
 import json
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_DOWN
-from typing import Union, Callable, Any
-
-import math
+from collections.abc import Callable
+from decimal import Decimal, InvalidOperation, ROUND_FLOOR, ROUND_HALF_UP
+from typing import Any
 
 from apps.core.constants import DEC_0
 
+DecimalInput = Decimal | int | float | str | None
+DecimalRoundInput = Decimal | int | float
+
 
 def to_decimal(
-        value: Union[Decimal, int, float, str, None],
+        value: DecimalInput,
         default: Decimal = DEC_0
 ) -> Decimal:
     """
@@ -70,8 +72,8 @@ def to_float(value, default: float = 0.0) -> float:
 
 def safe_decimal_operation(
         operation: Callable[[Decimal, Decimal], Decimal],
-        value1: Union[Decimal, int, float, str, None],
-        value2: Union[Decimal, int, float, str, None],
+        value1: DecimalInput,
+        value2: DecimalInput,
         default: Decimal = DEC_0
 ) -> Decimal:
     """
@@ -104,7 +106,7 @@ def safe_decimal_operation(
         return default
 
 
-def round_decimal_down(value: Union[Decimal, int, float], decimals: int = 0) -> Decimal:
+def round_decimal_down(value: DecimalRoundInput, decimals: int = 0) -> Decimal:
     """
     Round a decimal value down to specified decimal places.
     
@@ -121,17 +123,13 @@ def round_decimal_down(value: Union[Decimal, int, float], decimals: int = 0) -> 
         >>> round_decimal_down(123.99, 0)
         Decimal('123')
     """
-    multiplier = 10 ** decimals
     dec_value = to_decimal(value, DEC_0)
-
-    # Convert to float for math.floor, then back to Decimal via string
-    # This preserves precision better than direct Decimal arithmetic
-    floored = math.floor(float(dec_value) * multiplier) / multiplier
-    return Decimal(str(floored))
+    quantize_value = Decimal(10) ** -decimals
+    return dec_value.quantize(quantize_value, rounding=ROUND_FLOOR)
 
 
 def round_decimal(
-        value: Union[Decimal, int, float],
+        value: DecimalRoundInput,
         decimals: int = 2,
         rounding: str = ROUND_HALF_UP
 ) -> Decimal:
@@ -158,8 +156,8 @@ def round_decimal(
 
 
 def decimal_division(
-        numerator: Union[Decimal, int, float, str, None],
-        denominator: Union[Decimal, int, float, str, None],
+        numerator: DecimalInput,
+        denominator: DecimalInput,
         decimals: int = 2,
         default: Decimal = DEC_0
 ) -> Decimal:
@@ -194,7 +192,7 @@ def decimal_division(
         return default
 
 
-def sum_decimals(*values: Union[Decimal, int, float, str, None]) -> Decimal:
+def sum_decimals(*values: DecimalInput) -> Decimal:
     """
     Safely sum multiple decimal values.
     
@@ -233,7 +231,7 @@ class DecimalEncoder(json.JSONEncoder):
 
 
 def format_decimal(
-        value: Union[Decimal, int, float, str, None],
+        value: DecimalInput,
         decimals: int = 2,
         thousands_sep: str = ","
 ) -> str:

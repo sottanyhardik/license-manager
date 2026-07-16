@@ -339,3 +339,38 @@
 - Remaining Technical Debt:
   - Queued BOE files own the broad Ruff findings and must be completed separately.
 - Status: DELETED
+
+## BOE Legacy Django Template-View Stack
+
+- File Path(s): `backend/apps/bill_of_entry/templates/bill_of_entry/add.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/ajax_list.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/card.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/detail.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/fetch.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/list.html`; `backend/apps/bill_of_entry/views/common.py`; `backend/apps/bill_of_entry/views/detail_update_views.py`; `backend/apps/bill_of_entry/views/fetch_views.py`; `backend/apps/bill_of_entry/views/transfer_views.py`; `backend/apps/bill_of_entry/scripts/utils.py`; `docs/operations/PURCHASE_STATUS_FK_MIGRATION.md`
+- Module: Bills of Entry / Legacy Django template-view stack
+- Total LOC: 1117 source lines removed; 1 related operations-note line updated
+- Lines Reviewed: 1117 source lines plus repository-wide dependency references
+- Functions Reviewed: Legacy class methods and view dispatch/post/get/context paths in `detail_update_views.py`, `fetch_views.py`, and `transfer_views.py`
+- Classes Reviewed: `BillOfEntryDetailView`, `BillOfEntryLicenseImportItemInline`, `BillOfEntryUpdateDetailView`, `BillOfEntryUpdateView`, `BillOfEntryFetchView`, `GenerateTransferLetterView`
+- Validation Improvements: Removed unrouted template forms and captcha/transfer-letter POST surfaces that lacked the active DRF permission, serializer, transaction, and validation contracts used by React/API workflows.
+- Package Replacements: None; deletion was safer than refactoring legacy Django templates because no runtime path remained and React/DRF are the active BOE surfaces.
+- Performance Improvements: Removed obsolete template rendering, unbounded BOE fetch list processing, and legacy transfer-letter archive generation paths from importable source.
+- Security Improvements: Removed stale CSRF-hidden-input template paths, captcha submission surface, direct media/archive response construction, and legacy POST views outside the current API permission model.
+- Dead Code Removed: Deleted six BOE Django templates, four legacy view modules, and the now-orphaned `scripts/utils.py` static port dictionary after recursive dependency analysis.
+- Duplicate Logic Removed: Removed duplicate BOE add/update/detail/list/fetch/transfer-letter workflows superseded by DRF/React paths and active core transfer-letter utilities.
+- Tests Added: None; no live behavior path remained. Existing BOE API/helper regressions were run to guard active workflows.
+- Verification Results:
+  - Repository-wide dependency scan found no active `render()`, `render_to_response()`, `TemplateResponse`, generic/class-based view, `include`, `extends`, custom/inclusion tag, email/PDF/report/export, management command, test, URL route, middleware, signal, dynamic import, cached template path, third-party package, or runtime loader reference to the deleted templates/views.
+  - Remaining references are stale legacy navigation URL tags in other legacy templates plus docs/audit history; recorded as technical debt outside this BOE deletion unit.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/views/__init__.py backend/apps/bill_of_entry/views/boe.py backend/apps/bill_of_entry/views/parse_pdf.py backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py docs/operations/PURCHASE_STATUS_FK_MIGRATION.md` -> clean.
+  - Remaining BOE views `py_compile` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q` -> 18 passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `git diff --check` scoped to deleted stack and operations note -> clean before source commit.
+- Commit SHA: `0d42a515b6349520b665ad388f49fe92a78d45bc`
+- Commit Timestamp: `2026-07-16T17:17:06+05:30`
+- Commit Summary: `cleanup(bill_of_entry): remove dead legacy template views`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Stale legacy nav URL tags remain in `backend/templates/base/main.html`, `backend/apps/core/templates/base.html`, and `backend/apps/core/templates/core/list.html`; these are outside the current BOE unit and should be handled when their owning templates are selected.
+  - `backend/apps/bill_of_entry/tests.py` remains the next BOE file marked `REQUIRES_RECHECK` in the active audit database.
+- Status: DELETED

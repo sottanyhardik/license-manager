@@ -128,12 +128,12 @@
       "backend": {
         "blocked": 0,
         "changed": 6,
-        "completed": 25,
-        "files": 132,
+        "completed": 23,
+        "files": 121,
         "in_progress": 0,
-        "lines": 77387,
+        "lines": 76270,
         "not_started": 2,
-        "requires_recheck": 99
+        "requires_recheck": 90
       },
       "backend/apps/__init__.py": {
         "blocked": 0,
@@ -168,12 +168,12 @@
       "backend/apps/bill_of_entry": {
         "blocked": 0,
         "changed": 5,
-        "completed": 8,
-        "files": 34,
+        "completed": 6,
+        "files": 23,
         "in_progress": 0,
-        "lines": 4516,
+        "lines": 3399,
         "not_started": 2,
-        "requires_recheck": 19
+        "requires_recheck": 10
       },
       "backend/apps/core": {
         "blocked": 0,
@@ -567,7 +567,6 @@
       "backend/apps/bill_of_entry/serializers.py",
       "backend/apps/bill_of_entry/services/boe_service.py",
       "backend/apps/bill_of_entry/views/boe.py",
-      "backend/apps/bill_of_entry/views/detail_update_views.py",
       "backend/apps/bill_of_entry/views/parse_pdf.py",
       "backend/apps/core/__init__.py",
       "backend/apps/core/admin.py",
@@ -896,7 +895,7 @@
     "active_phase": "Phase 8 - Bills of Entry",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "b6bb035b",
+    "head": "0d42a515",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -976,11 +975,19 @@
         "phase": "Phase 8 - Bills of Entry",
         "status": "DELETED",
         "timestamp": "2026-07-16T17:11:47+05:30"
+      },
+      {
+        "commit_sha": "0d42a515b6349520b665ad388f49fe92a78d45bc",
+        "commit_summary": "cleanup(bill_of_entry): remove dead legacy template views",
+        "file": "backend/apps/bill_of_entry/templates + legacy views stack",
+        "phase": "Phase 8 - Bills of Entry",
+        "status": "DELETED",
+        "timestamp": "2026-07-16T17:17:06+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 929,
-    "tracked_audit_lines": 242725,
+    "tracked_audit_files": 918,
+    "tracked_audit_lines": 241608,
     "working_tree": "dirty"
   },
   "schema_version": 1,

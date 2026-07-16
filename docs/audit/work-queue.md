@@ -21,6 +21,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-16T17:05:46+05:30` - Phase 8 Bills of Entry deleted obsolete `backend/apps/bill_of_entry/scripts/generate_tl.py` in commit `1e4ecac9cb814cdb40dfbee97401e0de10c5a9ae` (`cleanup(bill_of_entry): remove dead transfer letter script`); continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T17:08:36+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/scripts/utils.py`; retained live ICEGATE port dictionary unchanged and continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T17:11:47+05:30` - Phase 8 Bills of Entry deleted obsolete `backend/apps/bill_of_entry/tasks.py` in commit `b6bb035b05c8497f9c6c9a71fb3f609bf02ef521` (`cleanup(bill_of_entry): remove dead balance task`); continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-16T17:17:06+05:30` - Phase 8 Bills of Entry deleted the verified-dead BOE legacy Django template-view stack in commit `0d42a515b6349520b665ad388f49fe92a78d45bc` (`cleanup(bill_of_entry): remove dead legacy template views`); continue with `backend/apps/bill_of_entry/tests.py`, the remaining BOE file marked `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

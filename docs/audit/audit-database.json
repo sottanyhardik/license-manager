@@ -7,6 +7,12 @@
       "event": "Rebuilt audit state after inventory schema repair.",
       "reason": "Prior docs/audit database included binary/vendor/generated files and marked too many files as recheck.",
       "timestamp": "2026-07-16T10:31:21+00:00"
+    },
+    {
+      "timestamp": "2026-07-16T17:17:06+05:30",
+      "event": "Phase 8 BOE legacy Django template-view stack removed from active audit inventory.",
+      "reason": "Dependency analysis proved the legacy templates, views, and script utility were orphaned after URLConf/DRF migration; source deletion committed atomically.",
+      "commit_sha": "0d42a515b6349520b665ad388f49fe92a78d45bc"
     }
   ],
   "blocked_work": [
@@ -52,7 +58,6 @@
     "backend/apps/bill_of_entry/admin.py",
     "backend/apps/bill_of_entry/parsers/boe_pdf.py",
     "backend/apps/bill_of_entry/serializers.py",
-    "backend/apps/bill_of_entry/views/detail_update_views.py",
     "backend/apps/bill_of_entry/views/parse_pdf.py",
     "backend/apps/core/admin.py",
     "backend/apps/core/authentication.py",
@@ -346,9 +351,12 @@
     "Phase 8 Bills of Entry ICEGATE helper hardening completed for backend/apps/bill_of_entry/scripts/boe.py with standard-library HTML parsing, bounded HTTP calls, validation guards, and focused regression coverage.",
     "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/scripts/generate_tl.py after repository-wide runtime reference scan found no imports, routes, commands, tests, or execution paths.",
     "Phase 8 Bills of Entry port dictionary audit completed for backend/apps/bill_of_entry/scripts/utils.py with source retained unchanged for the live BOE fetch dependency.",
-    "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/tasks.py after dependency analysis found no active task callers and current BOE models use synchronous balance updates."
+    "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/tasks.py after dependency analysis found no active task callers and current BOE models use synchronous balance updates.",
+    "Phase 8 Bills of Entry deleted verified-dead legacy Django template-view stack after repository-wide dependency analysis found no live render, URL, include, command, test, middleware, signal, email, PDF/report/export, dynamic-import, or runtime execution path; source commit 0d42a515b6349520b665ad388f49fe92a78d45bc (cleanup(bill_of_entry): remove dead legacy template views)."
   ],
-  "dead_code_findings": [],
+  "dead_code_findings": [
+    "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py."
+  ],
   "duplicate_logic_findings": [],
   "excluded_files": {
     ".DS_Store": {
@@ -6370,35 +6378,6 @@
       "total_imports": 6,
       "total_lines": 333
     },
-    "backend/apps/bill_of_entry/scripts/utils.py": {
-      "audit_status": "COMPLETED",
-      "complexity": 2,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "b26dba9a939195a84e7655d98ee32fb4904bb14b057513d07cfe2af4a06e433a",
-      "file_fingerprint": {
-        "mtime_ns": 1784119299580296213,
-        "size": 9731,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "python",
-      "last_audit_timestamp": "2026-07-16T17:08:36+05:30",
-      "maintainability_score": 98,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 99,
-      "previous_index_checksum": null,
-      "readability_score": 98,
-      "security_score": 92,
-      "technical_debt_score": 1,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 0,
-      "total_imports": 0,
-      "total_lines": 237
-    },
     "backend/apps/bill_of_entry/serializers.py": {
       "audit_status": "COMPLETED",
       "complexity": 23,
@@ -6516,180 +6495,6 @@
       "total_functions": 10,
       "total_imports": 4,
       "total_lines": 310
-    },
-    "backend/apps/bill_of_entry/templates/bill_of_entry/add.html": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 4,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "1ddd4ee7787e365a300c920f8f4c0e0b7143d0be25fdae29be631dd28e25b56a",
-      "file_fingerprint": {
-        "mtime_ns": 1784118789127725652,
-        "size": 12191,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 97,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 99,
-      "previous_index_checksum": null,
-      "readability_score": 97,
-      "security_score": 80,
-      "technical_debt_score": 3,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 1,
-      "total_imports": 0,
-      "total_lines": 220
-    },
-    "backend/apps/bill_of_entry/templates/bill_of_entry/ajax_list.html": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 1,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "be9905d9e5edea200bed3f5b006d0894e836085887c6b6a54bd569806d6e5c40",
-      "file_fingerprint": {
-        "mtime_ns": 1784118789127824903,
-        "size": 6009,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 99,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 99,
-      "previous_index_checksum": null,
-      "readability_score": 99,
-      "security_score": 80,
-      "technical_debt_score": 1,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 0,
-      "total_imports": 0,
-      "total_lines": 123
-    },
-    "backend/apps/bill_of_entry/templates/bill_of_entry/card.html": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 1,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "761856524ca39f5d25b675f26f60a8acb873d4b4221f2f01e5157756cedb503a",
-      "file_fingerprint": {
-        "mtime_ns": 1784118789127901820,
-        "size": 4972,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 99,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 99,
-      "security_score": 80,
-      "technical_debt_score": 1,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 0,
-      "total_imports": 0,
-      "total_lines": 114
-    },
-    "backend/apps/bill_of_entry/templates/bill_of_entry/detail.html": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 0,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "c43a09d0c15fb7ee59f0243c2e313e8c9209c0cbc96560b424d6d101c69e7476",
-      "file_fingerprint": {
-        "mtime_ns": 1784118789127954737,
-        "size": 1379,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 100,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 100,
-      "security_score": 80,
-      "technical_debt_score": 0,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 0,
-      "total_imports": 0,
-      "total_lines": 36
-    },
-    "backend/apps/bill_of_entry/templates/bill_of_entry/fetch.html": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 0,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "e5529b0ab18ae8b626156e9ad2d30cede8405c8a660cf0623b1f00028e703515",
-      "file_fingerprint": {
-        "mtime_ns": 1784118789128319323,
-        "size": 1578,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 100,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 100,
-      "security_score": 80,
-      "technical_debt_score": 0,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 0,
-      "total_imports": 0,
-      "total_lines": 34
-    },
-    "backend/apps/bill_of_entry/templates/bill_of_entry/list.html": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 3,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "fd59f3876a93a6a304d4e1e482a4061a7dcda6a54ad6f3e581ab0f6ff1bb545c",
-      "file_fingerprint": {
-        "mtime_ns": 1784118789128393157,
-        "size": 4986,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 98,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 98,
-      "security_score": 80,
-      "technical_debt_score": 2,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 1,
-      "total_imports": 0,
-      "total_lines": 110
     },
     "backend/apps/bill_of_entry/tests.py": {
       "audit_status": "REQUIRES_RECHECK",
@@ -6839,93 +6644,6 @@
       "total_imports": 9,
       "total_lines": 448
     },
-    "backend/apps/bill_of_entry/views/common.py": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 0,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "8c4211255fcf9074a2e6060dc54636e7867948b240d794bda24937b8125d068a",
-      "file_fingerprint": {
-        "mtime_ns": 1784119299582472481,
-        "size": 137,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "python",
-      "last_audit_timestamp": null,
-      "maintainability_score": 100,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 100,
-      "security_score": 80,
-      "technical_debt_score": 0,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 0,
-      "total_imports": 0,
-      "total_lines": 6
-    },
-    "backend/apps/bill_of_entry/views/detail_update_views.py": {
-      "audit_status": "COMPLETED",
-      "complexity": 28,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "b91bcbe3f984bd2a3c44b1632888b52e15b9c9707b707c1d8535eba250ffeebd",
-      "file_fingerprint": {
-        "mtime_ns": 1784138257178630036,
-        "size": 3307,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "python",
-      "last_audit_timestamp": "2026-07-16T10:31:21+00:00",
-      "maintainability_score": 83,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 83,
-      "security_score": 100,
-      "technical_debt_score": 17,
-      "todo_count": 0,
-      "total_classes": 4,
-      "total_functions": 8,
-      "total_imports": 0,
-      "total_lines": 80
-    },
-    "backend/apps/bill_of_entry/views/fetch_views.py": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 7,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "cc269b14c7e8a703a1fe8fc4bbabefcb4ab43aced21565e51fa4d6d502751d22",
-      "file_fingerprint": {
-        "mtime_ns": 1784119299583012818,
-        "size": 3167,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "python",
-      "last_audit_timestamp": null,
-      "maintainability_score": 95,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 95,
-      "security_score": 80,
-      "technical_debt_score": 5,
-      "todo_count": 0,
-      "total_classes": 1,
-      "total_functions": 2,
-      "total_imports": 0,
-      "total_lines": 80
-    },
     "backend/apps/bill_of_entry/views/parse_pdf.py": {
       "audit_status": "COMPLETED",
       "complexity": 21,
@@ -6954,35 +6672,6 @@
       "total_functions": 8,
       "total_imports": 0,
       "total_lines": 272
-    },
-    "backend/apps/bill_of_entry/views/transfer_views.py": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 13,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "5af6a92dbfd00af2ec5ea54088b1658e4a07ddf59a2e9c06d102277896c22956",
-      "file_fingerprint": {
-        "mtime_ns": 1784119299583475947,
-        "size": 3710,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "python",
-      "last_audit_timestamp": null,
-      "maintainability_score": 93,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 93,
-      "security_score": 80,
-      "technical_debt_score": 7,
-      "todo_count": 0,
-      "total_classes": 1,
-      "total_functions": 5,
-      "total_imports": 0,
-      "total_lines": 77
     },
     "backend/apps/bill_of_entry/views_export.py": {
       "audit_status": "COMPLETED",
@@ -31339,7 +31028,6 @@
     "backend/apps/bill_of_entry/serializers.py",
     "backend/apps/bill_of_entry/services/boe_service.py",
     "backend/apps/bill_of_entry/views/boe.py",
-    "backend/apps/bill_of_entry/views/detail_update_views.py",
     "backend/apps/bill_of_entry/views/parse_pdf.py",
     "backend/apps/core/__init__.py",
     "backend/apps/core/admin.py",
@@ -31756,12 +31444,12 @@
     "backend/apps/bill_of_entry": {
       "blocked": 0,
       "changed": 5,
-      "completed": 17,
-      "files": 32,
+      "completed": 15,
+      "files": 21,
       "in_progress": 0,
-      "lines": 4559,
+      "lines": 3442,
       "not_started": 0,
-      "requires_recheck": 10
+      "requires_recheck": 1
     },
     "backend/apps/core": {
       "blocked": 0,
@@ -32167,7 +31855,7 @@
   "repository_inventory": {
     "excluded_files": 595,
     "inventory_rule": "Only source, tests, configs, migrations, scripts, and documentation are audited.",
-    "source_files": 929
+    "source_files": 918
   },
   "repository_metadata": {
     "branch": "feature/V2",
@@ -32198,18 +31886,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 115956,
+    "audited_lines": 115639,
     "blocked": 0,
     "changed": 50,
-    "completed": 497,
-    "files": 929,
+    "completed": 495,
+    "files": 918,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 242725,
+    "lines": 241608,
     "not_started": 12,
-    "remaining_lines": 126769,
-    "requires_recheck": 370,
+    "remaining_lines": 125969,
+    "requires_recheck": 361,
     "todo": 22
   },
   "verification_history": [
@@ -33256,6 +32944,15 @@
     "Phase 8 BOE tasks verification: reference scan found no runtime task callers; scoped Ruff package/script/API paths -> clean; py_compile remaining BOE model/view/script dependencies -> passed; compileall backend/apps/bill_of_entry -> passed; pytest backend/tests/test_api_boe.py -q -> 12 passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning",
     "Phase 8 BOE tasks broad Ruff note: broad backend/apps/bill_of_entry Ruff remains blocked by existing findings in queued files models.py, tests.py, views/common.py, detail_update_views.py, and fetch_views.py",
     "Phase 8 BOE tasks security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked for this phase",
-    "Phase 8 BOE tasks commit: b6bb035b05c8497f9c6c9a71fb3f609bf02ef521 at 2026-07-16T17:11:47+05:30, cleanup(bill_of_entry): remove dead balance task"
+    "Phase 8 BOE tasks commit: b6bb035b05c8497f9c6c9a71fb3f609bf02ef521 at 2026-07-16T17:11:47+05:30, cleanup(bill_of_entry): remove dead balance task",
+    "Phase 8 BOE legacy template dependency scan: no active render(), render_to_response(), TemplateResponse, generic/class-based view, include, extends, custom/inclusion tag, email/PDF/report/export, command, test, URL, middleware, signal, dynamic import, cached path, third-party, or runtime loader references found for deleted templates/views; remaining hits are stale legacy nav URL tags and audit/docs history only.",
+    "Phase 8 BOE legacy template deletion scoped Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/views/__init__.py backend/apps/bill_of_entry/views/boe.py backend/apps/bill_of_entry/views/parse_pdf.py backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py docs/operations/PURCHASE_STATUS_FK_MIGRATION.md -> clean.",
+    "Phase 8 BOE legacy template deletion py_compile: remaining BOE views passed py_compile.",
+    "Phase 8 BOE legacy template deletion compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry -> passed.",
+    "Phase 8 BOE legacy template deletion regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q -> 18 passed.",
+    "Phase 8 BOE legacy template deletion Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 8 BOE legacy template deletion makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
+    "Phase 8 BOE legacy template deletion diff check: git diff --check scoped to deleted stack and operations note -> clean.",
+    "Phase 8 BOE legacy template deletion commit: 0d42a515b6349520b665ad388f49fe92a78d45bc at 2026-07-16T17:17:06+05:30, cleanup(bill_of_entry): remove dead legacy template views."
   ]
 }

@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `497`
+- Files audited: `495`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `370`
+- Files requiring dependency recheck: `361`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `432`
-- Total source files tracked: `929`
-- Total source LOC tracked: `242725`
-- Audited LOC: `115956`
-- Remaining LOC: `126769`
+- Files remaining: `423`
+- Total source files tracked: `918`
+- Total source LOC tracked: `241608`
+- Audited LOC: `115639`
+- Remaining LOC: `125969`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -41,7 +41,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
-| `backend/apps/bill_of_entry` | 32 | 4559 | 17 | 5 | 10 | 0 |
+| `backend/apps/bill_of_entry` | 21 | 3442 | 15 | 5 | 1 | 0 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
 
@@ -83,6 +83,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 Bills of Entry removed obsolete unreferenced `backend/apps/bill_of_entry/scripts/generate_tl.py`; active transfer-letter generation remains in BOE transfer views and core transfer-letter utilities.
 - Phase 8 Bills of Entry port dictionary completed for `backend/apps/bill_of_entry/scripts/utils.py`; live `fetch_views.py` dependency retained source unchanged.
 - Phase 8 Bills of Entry removed obsolete unreferenced `backend/apps/bill_of_entry/tasks.py`; current BOE models use synchronous balance updates instead of the stale Celery task.
+- Phase 8 Bills of Entry removed verified-dead legacy Django template-view stack for BOE: six templates, four legacy views, and the orphaned `scripts/utils.py` port dictionary were deleted after repository-wide dependency analysis found no live runtime path.
 
 ## Verification History
 
@@ -133,6 +134,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 BOE tasks regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py -q -> 12 passed
 - Phase 8 BOE tasks Django check: .venv/bin/python backend/manage.py check -> no issues
 - Phase 8 BOE tasks makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE legacy template dependency scan: no active render(), render_to_response(), TemplateResponse, generic/class-based view, include, extends, custom/inclusion tag, email/PDF/report/export, command, test, URL, middleware, signal, dynamic import, cached path, third-party, or runtime loader references found for deleted templates/views; remaining hits are stale legacy nav URL tags and audit/docs history only.
+- Phase 8 BOE legacy template deletion scoped Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/views/__init__.py backend/apps/bill_of_entry/views/boe.py backend/apps/bill_of_entry/views/parse_pdf.py backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py docs/operations/PURCHASE_STATUS_FK_MIGRATION.md -> clean
+- Phase 8 BOE legacy template deletion py_compile: remaining BOE views passed py_compile
+- Phase 8 BOE legacy template deletion compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry -> passed
+- Phase 8 BOE legacy template deletion regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q -> 18 passed
+- Phase 8 BOE legacy template deletion Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE legacy template deletion makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE legacy template deletion commit: 0d42a515b6349520b665ad388f49fe92a78d45bc at 2026-07-16T17:17:06+05:30, cleanup(bill_of_entry): remove dead legacy template views
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

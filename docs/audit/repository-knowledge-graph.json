@@ -896,7 +896,7 @@
     "active_phase": "Phase 8 - Bills of Entry",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "e912f224",
+    "head": "1e4ecac",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -954,11 +954,19 @@
         "phase": "Phase 8 - Bills of Entry",
         "status": "COMPLETED",
         "timestamp": "2026-07-16T16:57:31+05:30"
+      },
+      {
+        "commit_sha": "1e4ecac9cb814cdb40dfbee97401e0de10c5a9ae",
+        "commit_summary": "cleanup(bill_of_entry): remove dead transfer letter script",
+        "file": "backend/apps/bill_of_entry/scripts/generate_tl.py",
+        "phase": "Phase 8 - Bills of Entry",
+        "status": "DELETED",
+        "timestamp": "2026-07-16T17:05:46+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 931,
-    "tracked_audit_lines": 242762,
+    "tracked_audit_files": 930,
+    "tracked_audit_lines": 242735,
     "working_tree": "dirty"
   },
   "schema_version": 1,

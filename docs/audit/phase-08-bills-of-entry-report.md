@@ -241,3 +241,37 @@
 - Remaining Technical Debt:
   - Adjacent BOE scripts remain queued and must be audited separately; no additional helper extraction was safe until their call contracts are reviewed.
 - Status: COMPLETED
+
+## backend/apps/bill_of_entry/scripts/generate_tl.py
+
+- File Path(s): `backend/apps/bill_of_entry/scripts/generate_tl.py`; `docs/operations/PURCHASE_STATUS_FK_MIGRATION.md`
+- Module: Bills of Entry / Obsolete transfer-letter one-off script
+- Total LOC: 27 source lines; 1 related operations-note line updated
+- Lines Reviewed: 27 source lines plus repository-wide dependency references
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an import-time script path that executed database queries and file-generation side effects without arguments, permission checks, transaction boundaries, or input validation.
+- Package Replacements: None; deletion was safer than converting the one-off script to a maintained command because active transfer-letter generation already exists in BOE transfer views and core transfer-letter utilities.
+- Performance Improvements: Removed an unbounded top-level queryset over BOE records and per-record item traversal from importable source.
+- Security Improvements: Removed hardcoded `TransferLetterModel` primary key usage, import-time write side effects, and unguarded media-path generation from a script with no live caller.
+- Dead Code Removed: Deleted verified-dead `backend/apps/bill_of_entry/scripts/generate_tl.py`.
+- Duplicate Logic Removed: Removed duplicate transfer-letter generation workflow superseded by `backend/apps/bill_of_entry/views/transfer_views.py` and `backend/apps/core/utils/transfer_letter.py`.
+- Tests Added: None; no live behavior path remained. Existing BOE API/helper regressions were run to guard adjacent transfer/export behavior.
+- Verification Results:
+  - Repository-wide runtime reference scan excluding audit docs -> no imports, URL routes, commands, tests, middleware, signals, dynamic imports, or execution paths.
+  - Historical operations checklist reference updated to document removal rather than future query updates.
+  - `.venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py backend/tests/test_api_boe.py -q` -> 18 passed.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/scripts docs/operations/PURCHASE_STATUS_FK_MIGRATION.md` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/__init__.py backend/apps/bill_of_entry/scripts/boe.py backend/apps/bill_of_entry/scripts/utils.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `git diff --check -- backend/apps/bill_of_entry/scripts/generate_tl.py docs/operations/PURCHASE_STATUS_FK_MIGRATION.md` -> clean before code commit.
+- Commit SHA: `1e4ecac9cb814cdb40dfbee97401e0de10c5a9ae`
+- Commit Timestamp: `2026-07-16T17:05:46+05:30`
+- Commit Summary: `cleanup(bill_of_entry): remove dead transfer letter script`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Adjacent BOE script utilities remain queued and must be audited separately.
+- Status: DELETED

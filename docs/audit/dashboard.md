@@ -6,14 +6,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 - Files audited: `496`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `373`
+- Files requiring dependency recheck: `372`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `435`
-- Total source files tracked: `931`
-- Total source LOC tracked: `242762`
+- Files remaining: `434`
+- Total source files tracked: `930`
+- Total source LOC tracked: `242735`
 - Audited LOC: `115719`
-- Remaining LOC: `127043`
+- Remaining LOC: `127016`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -41,7 +41,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
-| `backend/apps/bill_of_entry` | 34 | 4596 | 16 | 5 | 13 | 0 |
+| `backend/apps/bill_of_entry` | 33 | 4569 | 16 | 5 | 12 | 0 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
 
@@ -80,6 +80,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 Bills of Entry parsers package marker completed for `backend/apps/bill_of_entry/parsers/__init__.py`; no source changes were required for the empty package marker.
 - Phase 8 Bills of Entry scripts package marker completed for `backend/apps/bill_of_entry/scripts/__init__.py`; no source changes were required for the empty package marker.
 - Phase 8 Bills of Entry ICEGATE helper completed for `backend/apps/bill_of_entry/scripts/boe.py`; removed missing `bs4` dependency usage, added bounded HTTP handling, and covered helper parsing/validation with focused regressions in `backend/tests/test_boe_script_helpers.py`.
+- Phase 8 Bills of Entry removed obsolete unreferenced `backend/apps/bill_of_entry/scripts/generate_tl.py`; active transfer-letter generation remains in BOE transfer views and core transfer-letter utilities.
 
 ## Verification History
 
@@ -109,6 +110,13 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 BOE ICEGATE helper compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed
 - Phase 8 BOE ICEGATE helper Django check: .venv/bin/python backend/manage.py check -> no issues
 - Phase 8 BOE ICEGATE helper makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE generate_tl dependency scan: runtime reference scan excluding docs/audit -> no results
+- Phase 8 BOE generate_tl regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py backend/tests/test_api_boe.py -q -> 18 passed
+- Phase 8 BOE generate_tl Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts docs/operations/PURCHASE_STATUS_FK_MIGRATION.md -> clean
+- Phase 8 BOE generate_tl py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/__init__.py backend/apps/bill_of_entry/scripts/boe.py backend/apps/bill_of_entry/scripts/utils.py -> passed
+- Phase 8 BOE generate_tl compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts -> passed
+- Phase 8 BOE generate_tl Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE generate_tl makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

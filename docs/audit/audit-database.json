@@ -343,7 +343,8 @@
     "Phase 8 Bills of Entry migrations package marker audit completed for backend/apps/bill_of_entry/migrations/__init__.py with no source changes required.",
     "Phase 8 Bills of Entry parsers package marker audit completed for backend/apps/bill_of_entry/parsers/__init__.py with no source changes required.",
     "Phase 8 Bills of Entry scripts package marker audit completed for backend/apps/bill_of_entry/scripts/__init__.py with no source changes required.",
-    "Phase 8 Bills of Entry ICEGATE helper hardening completed for backend/apps/bill_of_entry/scripts/boe.py with standard-library HTML parsing, bounded HTTP calls, validation guards, and focused regression coverage."
+    "Phase 8 Bills of Entry ICEGATE helper hardening completed for backend/apps/bill_of_entry/scripts/boe.py with standard-library HTML parsing, bounded HTTP calls, validation guards, and focused regression coverage.",
+    "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/scripts/generate_tl.py after repository-wide runtime reference scan found no imports, routes, commands, tests, or execution paths."
   ],
   "dead_code_findings": [],
   "duplicate_logic_findings": [],
@@ -6366,35 +6367,6 @@
       "total_functions": 18,
       "total_imports": 6,
       "total_lines": 333
-    },
-    "backend/apps/bill_of_entry/scripts/generate_tl.py": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 0,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "5f8f3d249c23db3c04c3b1058bea355cfc025cc958e596f98c0b659606bb513e",
-      "file_fingerprint": {
-        "mtime_ns": 1784119299580033503,
-        "size": 1509,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "python",
-      "last_audit_timestamp": null,
-      "maintainability_score": 100,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 100,
-      "security_score": 80,
-      "technical_debt_score": 0,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 0,
-      "total_imports": 0,
-      "total_lines": 27
     },
     "backend/apps/bill_of_entry/scripts/utils.py": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31812,11 +31784,11 @@
       "blocked": 0,
       "changed": 5,
       "completed": 16,
-      "files": 34,
+      "files": 33,
       "in_progress": 0,
-      "lines": 4596,
+      "lines": 4569,
       "not_started": 0,
-      "requires_recheck": 13
+      "requires_recheck": 12
     },
     "backend/apps/core": {
       "blocked": 0,
@@ -32222,7 +32194,7 @@
   "repository_inventory": {
     "excluded_files": 595,
     "inventory_rule": "Only source, tests, configs, migrations, scripts, and documentation are audited.",
-    "source_files": 931
+    "source_files": 930
   },
   "repository_metadata": {
     "branch": "feature/V2",
@@ -32257,14 +32229,14 @@
     "blocked": 0,
     "changed": 50,
     "completed": 496,
-    "files": 931,
+    "files": 930,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 242762,
+    "lines": 242735,
     "not_started": 12,
-    "remaining_lines": 127043,
-    "requires_recheck": 373,
+    "remaining_lines": 127016,
+    "requires_recheck": 372,
     "todo": 22
   },
   "verification_history": [
@@ -33293,6 +33265,12 @@
     "Phase 8 BOE ICEGATE helper commit: e912f2242b1202cf87524998e4cdd1c2ca2d5230 at 2026-07-16T16:57:31+05:30, fix(bill_of_entry): harden icegate helpers",
     "Ruff F821 undefined-name sweep: clean",
     "Previous Ruff selected F811/E741 baseline: 23 findings, now resolved",
-    "Ruff full baseline: 547 findings remain"
+    "Ruff full baseline: 547 findings remain",
+    "Phase 8 BOE generate_tl script audit: reviewed 27-line top-level script, import-time BillOfEntryModel query, hardcoded date filter, hardcoded TransferLetterModel pk=39, per-row template payload construction, file path construction, and generate_tl_software side-effect call",
+    "Phase 8 BOE generate_tl dependency analysis: repository-wide runtime search found no imports, URL routes, commands, tests, middleware, signals, dynamic imports, or execution paths for backend/apps/bill_of_entry/scripts/generate_tl.py; only a historical operations checklist reference remained and was updated",
+    "Phase 8 BOE generate_tl removal: deleted obsolete one-off script with import-time database/file-generation side effects; active transfer-letter generation remains in backend/apps/bill_of_entry/views/transfer_views.py and backend/apps/core/utils/transfer_letter.py",
+    "Phase 8 BOE generate_tl verification: runtime reference scan excluding docs/audit -> no results; pytest backend/tests/test_boe_script_helpers.py backend/tests/test_api_boe.py -q -> 18 passed; Ruff backend/apps/bill_of_entry/scripts and operations note -> clean; py_compile remaining BOE scripts -> passed; compileall scripts package -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning",
+    "Phase 8 BOE generate_tl security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked for this phase",
+    "Phase 8 BOE generate_tl commit: 1e4ecac9cb814cdb40dfbee97401e0de10c5a9ae at 2026-07-16T17:05:46+05:30, cleanup(bill_of_entry): remove dead transfer letter script"
   ]
 }

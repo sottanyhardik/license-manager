@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T09:09:45+00:00",
+  "generated_at": "2026-07-16T09:13:28+00:00",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -167,13 +167,13 @@
       },
       "backend/apps/bill_of_entry": {
         "blocked": 0,
-        "changed": 6,
-        "completed": 6,
-        "files": 37,
+        "changed": 5,
+        "completed": 7,
+        "files": 34,
         "in_progress": 0,
-        "lines": 4792,
+        "lines": 4468,
         "not_started": 2,
-        "requires_recheck": 23
+        "requires_recheck": 20
       },
       "backend/apps/core": {
         "blocked": 0,
@@ -221,7 +221,7 @@
         "completed": 17,
         "files": 54,
         "in_progress": 0,
-        "lines": 24244,
+        "lines": 24303,
         "not_started": 0,
         "requires_recheck": 34
       },
@@ -561,12 +561,12 @@
       "backend/apps/allotment/signals.py",
       "backend/apps/allotment/views.py",
       "backend/apps/allotment/views_actions.py",
-      "backend/apps/allotment/views_export.py",
       "backend/apps/bill_of_entry/admin.py",
       "backend/apps/bill_of_entry/models.py",
       "backend/apps/bill_of_entry/parsers/boe_pdf.py",
       "backend/apps/bill_of_entry/serializers.py",
       "backend/apps/bill_of_entry/services/boe_service.py",
+      "backend/apps/bill_of_entry/views/__init__.py",
       "backend/apps/bill_of_entry/views/boe.py",
       "backend/apps/bill_of_entry/views/detail_update_views.py",
       "backend/apps/bill_of_entry/views/parse_pdf.py",
@@ -772,7 +772,6 @@
       "backend/tests/__init__.py",
       "backend/tests/balance/test_bd_implementations.py",
       "backend/tests/test_all_conditions.py",
-      "backend/tests/test_api_allotment.py",
       "backend/tests/test_api_integration.py",
       "backend/tests/test_api_license.py",
       "backend/tests/test_authentication_query_param.py",
@@ -838,6 +837,7 @@
       "frontend/vitest.config.ts",
       "legacy/backend/apps/allotment/views.py",
       "legacy/backend/apps/bill_of_entry/services/boe_service.py",
+      "legacy/backend/apps/bill_of_entry/urls.py",
       "legacy/backend/apps/bill_of_entry/views/boe.py",
       "legacy/backend/apps/bill_of_entry/views/parse_pdf.py",
       "legacy/backend/apps/core/management/commands/seed_e132_plan_items.py",
@@ -897,10 +897,10 @@
   "repository": {
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "9ac8fa92",
+    "head": "992b442c",
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 915,
-    "tracked_audit_lines": 240143,
+    "tracked_audit_files": 912,
+    "tracked_audit_lines": 239878,
     "working_tree": "dirty"
   },
   "schema_version": 1,

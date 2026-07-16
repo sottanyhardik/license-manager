@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:09:45+00:00`
+Generated: `2026-07-16T09:13:28+00:00`
 
 ## Repository Statistics
 
-- Files audited: `441`
-- Files changed directly: `51`
-- Files requiring dependency recheck: `408`
+- Files audited: `442`
+- Files changed directly: `50`
+- Files requiring dependency recheck: `405`
 - Files not started: `15`
 - Files ignored/excluded: `595`
-- Files remaining: `474`
-- Total source files tracked: `915`
-- Total source LOC tracked: `240143`
-- Audited LOC: `104481`
-- Remaining LOC: `135662`
+- Files remaining: `470`
+- Total source files tracked: `912`
+- Total source LOC tracked: `239878`
+- Audited LOC: `104527`
+- Remaining LOC: `135351`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,13 +35,13 @@ Generated: `2026-07-16T09:09:45+00:00`
 | `backend` | 132 | 77332 | 23 | 6 | 100 | 3 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 54 | 24244 | 17 | 3 | 34 | 0 |
+| `docs` | 54 | 24303 | 17 | 3 | 34 | 0 |
 | `frontend/src/pages` | 61 | 17245 | 34 | 0 | 27 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 68 | 8898 | 6 | 0 | 62 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
-| `backend/apps/bill_of_entry` | 37 | 4792 | 6 | 6 | 23 | 2 |
+| `backend/apps/bill_of_entry` | 34 | 4468 | 7 | 5 | 20 | 2 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
 
@@ -937,6 +937,18 @@ Generated: `2026-07-16T09:09:45+00:00`
 - Phase 7 allotment grouped export API migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
 - Phase 7 allotment grouped export API import verification: Django setup imported AllotmentViewSet with download_grouped_export and _group_allotments attached
 - Phase 7 allotment grouped export API security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 BOE pending-bill template dependency analysis: repository-wide search found download.html and download_port.html referenced only by unused backend/apps/bill_of_entry/views/download_views.py and audit metadata; bill_of_entry URLConf exposes only DRF routes and parse-pdf
+- Phase 7 BOE pending-bill template removal: deleted verified-dead legacy PDF templates and their unreachable DownloadPendingBillView/DownloadPortView module; cleaned stale commented re-export references from views package
+- Phase 7 BOE pending-bill template verification: remaining exact-reference scan after deletion found only generated audit metadata before state regeneration
+- Phase 7 BOE pending-bill template focused pytest: .venv/bin/python -m pytest backend/tests/test_api_boe.py -q -> 7 passed
+- Phase 7 BOE pending-bill template Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/views/__init__.py docs/audit/build_audit_state.py -> clean
+- Phase 7 BOE pending-bill template py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/views/__init__.py docs/audit/build_audit_state.py -> passed
+- Phase 7 BOE pending-bill template compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/views docs/audit/build_audit_state.py -> passed
+- Phase 7 BOE pending-bill template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 BOE pending-bill template migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 BOE pending-bill template import/template verification: reversed active BOE API routes and confirmed removed legacy templates no longer resolve
+- Phase 7 BOE pending-bill template diff check: git diff --check for scoped BOE removal and audit artifacts -> clean
+- Phase 7 BOE pending-bill template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

@@ -171,3 +171,49 @@
 - Remaining Technical Debt:
   - PDF and XLSX layout generation remain intentionally separate because their output primitives diverge; deeper consolidation would risk visual/export regressions.
 - Status: COMPLETED
+
+## backend/apps/bill_of_entry/templates/bill_of_entry/download.html
+
+- File Path: `backend/apps/bill_of_entry/templates/bill_of_entry/download.html`
+- Module: Reporting & Exports / Legacy Bill of Entry pending-bill PDF template
+- LOC: 146
+- Lines Reviewed: 146
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Removed verified-dead legacy template instead of hardening an unreachable server-rendered report path.
+  - Removed the companion unreachable `DownloadPendingBillView` context path that re-filtered GET parameters without any live URL entry point.
+- Package Replacements:
+  - None. No replacement dependency was needed because the component had no live caller.
+- Performance Improvements:
+  - Removed an unreachable nested template-rendering path with repeated related-manager lookups, repeated per-row computed properties, and template-level aggregation tags.
+- Security Improvements:
+  - Removed stale PDF HTML rendering surface that loaded legacy template tags and traversed related objects without a live permission-protected route.
+- Dead Code Removed:
+  - Deleted `backend/apps/bill_of_entry/templates/bill_of_entry/download.html`.
+  - Recursively deleted `backend/apps/bill_of_entry/templates/bill_of_entry/download_port.html`, the companion unused pending-bill port report template.
+  - Deleted `backend/apps/bill_of_entry/views/download_views.py`, which only defined unreachable `DownloadPendingBillView` and `DownloadPortView`.
+  - Removed stale commented re-export references from `backend/apps/bill_of_entry/views/__init__.py`.
+- Duplicate Logic Removed:
+  - Removed duplicated pending-bill table/PDF layout between `download.html` and `download_port.html`.
+- Tests Added:
+  - None required for deletion; repository-wide dependency analysis found no live runtime path.
+- Verification Results:
+  - Dependency search: `rg -n "DownloadPendingBillView|DownloadPortView|download_views|bill_of_entry/download\\.html|bill_of_entry/download_port\\.html|templates/bill_of_entry/download|download_port" . -S` found executable references only in `backend/apps/bill_of_entry/views/download_views.py` before deletion.
+  - URL review: `backend/apps/bill_of_entry/urls.py` exposes only DRF bill-of-entry routes and `bill-of-entries/parse-pdf/`; no legacy download view is routed.
+  - Template dependency review: no `render()`, `TemplateResponse`, include, extends, email/PDF/report/export generator, command, middleware, signal, test, frontend, or documentation runtime reference was found.
+  - Post-removal exact-reference scan found only audit metadata before state regeneration.
+  - Audit Database: deleted templates and view no longer appear in tracked source files after `python3 docs/audit/build_audit_state.py`; `backend/apps/bill_of_entry/views/__init__.py` is marked `COMPLETED`.
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_boe.py -q` -> 7 passed.
+  - Ruff: `.venv/bin/ruff check backend/apps/bill_of_entry/views/__init__.py docs/audit/build_audit_state.py` -> clean.
+  - py_compile: `.venv/bin/python -m py_compile backend/apps/bill_of_entry/views/__init__.py docs/audit/build_audit_state.py` -> passed.
+  - compileall: `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/views docs/audit/build_audit_state.py` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Import/template verification: active BOE API routes reverse successfully and removed legacy templates no longer resolve.
+  - Diff check: scoped `git diff --check` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this component.
+- Status: COMPLETED - REMOVED

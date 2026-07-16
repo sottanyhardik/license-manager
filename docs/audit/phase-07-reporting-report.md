@@ -111,6 +111,42 @@
   - None for this file.
 - Status: COMPLETED - REMOVED
 
+## frontend/src/components/reports/LicenseExportPanel.tsx
+
+- File Path: `frontend/src/components/reports/LicenseExportPanel.tsx`
+- Module: Reporting & Exports / Frontend license Excel export panel
+- LOC: 116
+- Lines Reviewed: 116
+- Functions Reviewed: 3 (`normalizeExportDays`, `LicenseExportPanel`, `handleExport`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added typed props for report title, description, day label, helper, endpoint, filename, features, and default days.
+  - Added `normalizeExportDays()` to coerce invalid input and clamp days to the supported `1..365` range before endpoint generation.
+  - Added stable `aria-describedby` wiring between the numeric input and helper text.
+- Package Replacements:
+  - Reused existing `openAuthedFile()` from `frontend/src/utils/documentDownload.ts` instead of custom per-component blob URL and anchor logic.
+- Performance Improvements:
+  - Removed immediate object URL creation/revocation from this component and delegated download lifetime handling to the shared helper.
+- Security Improvements:
+  - Export downloads continue to use the shared authenticated Axios path through `openAuthedFile()`.
+  - Invalid day values cannot produce unbounded report-window query parameters.
+- Dead Code Removed:
+  - Removed custom blob-download implementation from the component.
+- Duplicate Logic Removed:
+  - Consolidated authenticated blob download behavior with existing shared utility.
+- Tests Added:
+  - Added `frontend/src/components/reports/LicenseExportPanel.test.tsx` covering day normalization, default download path, and clamped out-of-range input.
+- Verification Results:
+  - Focused Vitest: `npm test -- LicenseExportPanel.test.tsx` -> 3 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/components/reports/LicenseExportPanel.tsx src/components/reports/LicenseExportPanel.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this component.
+- Status: COMPLETED
+
 ### Final State Verification
 
 - Audit Database: `backend/apps/allotment/scripts/pdf_coordinate_finder.py`, `backend/tests/test_pdf_coordinate_finder.py`, and `docs/audit/phase-07-reporting-report.md` marked `COMPLETED`.

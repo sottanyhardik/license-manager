@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T09:25:06+00:00",
+  "generated_at": "2026-07-16T09:27:20+00:00",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -221,7 +221,7 @@
         "completed": 19,
         "files": 53,
         "in_progress": 0,
-        "lines": 23501,
+        "lines": 23542,
         "not_started": 0,
         "requires_recheck": 31
       },
@@ -268,12 +268,12 @@
       "frontend/src/components": {
         "blocked": 0,
         "changed": 0,
-        "completed": 6,
-        "files": 68,
+        "completed": 8,
+        "files": 69,
         "in_progress": 0,
-        "lines": 8898,
+        "lines": 8992,
         "not_started": 0,
-        "requires_recheck": 62
+        "requires_recheck": 61
       },
       "frontend/src/constants.js": {
         "blocked": 0,
@@ -779,7 +779,6 @@
       "backend/tests/test_ledger_parser.py",
       "docs/04-api.md",
       "docs/08-security.md",
-      "docs/README.md",
       "docs/architecture/ADR-001-master-data-service.md",
       "docs/architecture/MODULARIZATION_MASTER_PLAN.md",
       "docs/architecture/NAVBAR_ROLE_MAPPING.md",
@@ -794,6 +793,8 @@
       "frontend/src/components/CommandPalette.tsx",
       "frontend/src/components/TopNav.test.tsx",
       "frontend/src/components/TopNav.tsx",
+      "frontend/src/components/reports/LicenseExportPanel.test.tsx",
+      "frontend/src/components/reports/LicenseExportPanel.tsx",
       "frontend/src/context/AuthContext.tsx",
       "frontend/src/pages/Dashboard.tsx",
       "frontend/src/pages/Login.test.tsx",
@@ -896,10 +897,10 @@
   "repository": {
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "fec269e2",
+    "head": "40262851",
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 912,
-    "tracked_audit_lines": 239268,
+    "tracked_audit_files": 913,
+    "tracked_audit_lines": 239403,
     "working_tree": "dirty"
   },
   "schema_version": 1,

@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:25:06+00:00`
+Generated: `2026-07-16T09:27:20+00:00`
 
 ## Repository Statistics
 
-- Files audited: `449`
+- Files audited: `451`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `399`
+- Files requiring dependency recheck: `398`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `463`
-- Total source files tracked: `912`
-- Total source LOC tracked: `239268`
-- Audited LOC: `106033`
-- Remaining LOC: `133235`
+- Files remaining: `462`
+- Total source files tracked: `913`
+- Total source LOC tracked: `239403`
+- Audited LOC: `106256`
+- Remaining LOC: `133147`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,10 +35,10 @@ Generated: `2026-07-16T09:25:06+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 23501 | 19 | 3 | 31 | 0 |
+| `docs` | 53 | 23542 | 19 | 3 | 31 | 0 |
 | `frontend/src/pages` | 62 | 17334 | 36 | 0 | 26 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
-| `frontend/src/components` | 68 | 8898 | 6 | 0 | 62 | 0 |
+| `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
 | `backend/apps/bill_of_entry` | 34 | 4516 | 8 | 5 | 19 | 2 |
@@ -967,6 +967,9 @@ Generated: `2026-07-16T09:25:06+00:00`
 - Phase 7 PDF viewer regression: npm test -- PDFViewer.test.tsx -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/PDFViewer.tsx src/pages/PDFViewer.test.tsx -> passed; npm run build -> passed
 - Phase 7 UX/UI audit report dependency analysis: repository-wide search found docs/guides/UX_UI_AUDIT_REPORT.md referenced only by docs/README.md and audit metadata; content was stale JSX-era planning documentation and not a live reporting/export path
 - Phase 7 UX/UI audit report removal: deleted verified-dead stale guide and removed its docs/README.md index entry instead of carrying obsolete unresolved future-action content in the active audit knowledge base
+- Phase 7 LicenseExportPanel audit: reviewed shared active/expiring license Excel export component, props, days input, endpoint/filename callbacks, blob download path, loading state, toast error path, and feature rendering
+- Phase 7 LicenseExportPanel hardening: added typed props, normalized/clamped days to 1-365, stable input/help IDs, shared authenticated download helper usage, and focused regression tests
+- Phase 7 LicenseExportPanel verification: npm test -- LicenseExportPanel.test.tsx -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/components/reports/LicenseExportPanel.tsx src/components/reports/LicenseExportPanel.test.tsx -> passed; npm run build -> passed
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

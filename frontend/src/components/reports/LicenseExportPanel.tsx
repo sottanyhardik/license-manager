@@ -1,17 +1,41 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
 import { Download, Loader2, CheckCircle2 } from "lucide-react";
 
-import api from "../../api/axios";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { openAuthedFile } from "@/utils/documentDownload";
+
+const MIN_DAYS = 1;
+const MAX_DAYS = 365;
+
+type LicenseExportPanelProps = {
+    title: string;
+    description: string;
+    daysLabel: string;
+    helpText: (days: number) => string;
+    endpoint: (days: number) => string;
+    filename: (days: number) => string;
+    features?: string[];
+    defaultDays?: number;
+};
+
+export function normalizeExportDays(value: unknown, fallback = 30): number {
+    const fallbackDays = Number.isFinite(fallback)
+        ? Math.min(MAX_DAYS, Math.max(MIN_DAYS, Math.trunc(fallback)))
+        : 30;
+    const parsed = Number.parseInt(String(value), 10);
+    if (!Number.isFinite(parsed)) {
+        return fallbackDays;
+    }
+    return Math.min(MAX_DAYS, Math.max(MIN_DAYS, parsed));
+}
 
 /**
  * Shared export panel for the near-identical Expiring/Active license reports.
- * Logic (blob download) is preserved exactly from the original pages.
  */
 export default function LicenseExportPanel({
     title,
@@ -22,22 +46,20 @@ export default function LicenseExportPanel({
     filename,            // (days) => string
     features = [],
     defaultDays = 30,
-}) {
-    const [days, setDays] = useState(defaultDays);
+}: LicenseExportPanelProps) {
+    const [days, setDays] = useState(() => normalizeExportDays(defaultDays));
     const [loading, setLoading] = useState(false);
+    const daysInputId = useId();
+    const daysHelpId = `${daysInputId}-help`;
 
     const handleExport = async () => {
+        const exportDays = normalizeExportDays(days, defaultDays);
+        if (exportDays !== days) {
+            setDays(exportDays);
+        }
         setLoading(true);
         try {
-            const response = await api.get(endpoint(days), { responseType: "blob" });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement("a");
-            link.href = url;
-            link.setAttribute("download", filename(days));
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            await openAuthedFile(endpoint(exportDays), filename(exportDays));
         } catch (error) {
             toast.error(error?.response?.data?.error || "Failed to download report. Please try again.");
         } finally {
@@ -54,16 +76,17 @@ export default function LicenseExportPanel({
                     <CardHeader className="border-b"><CardTitle className="text-sm">Export Settings</CardTitle></CardHeader>
                     <CardContent className="pt-5">
                         <div className="mb-4">
-                            <Label className="mb-1.5" htmlFor="days">{daysLabel}</Label>
+                            <Label className="mb-1.5" htmlFor={daysInputId}>{daysLabel}</Label>
                             <Input
-                                id="days"
+                                id={daysInputId}
                                 type="number"
-                                min="1"
-                                max="365"
+                                min={MIN_DAYS}
+                                max={MAX_DAYS}
                                 value={days}
-                                onChange={(e) => setDays(parseInt(e.target.value) || defaultDays)}
+                                aria-describedby={daysHelpId}
+                                onChange={(e) => setDays(normalizeExportDays(e.target.value, defaultDays))}
                             />
-                            <p className="mt-1.5 text-[11.5px] text-muted-foreground">{helpText(days)}</p>
+                            <p id={daysHelpId} className="mt-1.5 text-[11.5px] text-muted-foreground">{helpText(days)}</p>
                         </div>
                         <Button onClick={handleExport} disabled={loading}>
                             {loading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
@@ -78,7 +101,7 @@ export default function LicenseExportPanel({
                         <CardContent className="pt-5">
                             <ul className="flex flex-col gap-2.5">
                                 {features.map((f, i) => (
-                                    <li key={i} className="flex items-start gap-2 text-[13px] text-foreground">
+                                    <li key={`${f}-${i}`} className="flex items-start gap-2 text-[13px] text-foreground">
                                         <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
                                         {f}
                                     </li>

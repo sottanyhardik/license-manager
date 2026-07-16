@@ -957,3 +957,47 @@
 - Remaining Technical Debt:
   - None for this component.
 - Status: COMPLETED - REMOVED
+
+## frontend/src/utils/pdfPreview.js
+
+- File Path: `frontend/src/utils/pdfPreview.js`
+- Module: Reporting & Exports / Shared PDF blob preview wrapper
+- LOC: 90 (`pdfPreview.js`) + 55 (`pdfPreview.test.ts`)
+- Lines Reviewed: 90
+- Functions Reviewed: 3 (`openPdfPreview`, `sanitizePdfFilename`, `escapeHtmlAttribute`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Hardened filename normalization for `null`/`undefined`, blank strings, whitespace, control characters, reserved filename characters, missing extensions, and overlong names.
+  - Added explicit regression coverage for unsafe filenames and popup-blocked behavior.
+- Package Replacements:
+  - None. Native Blob, object URL, DOM, and string APIs remain appropriate for this small browser helper.
+- Performance Improvements:
+  - Kept blob URL creation single-pass and preserved immediate revocation when popup creation is blocked.
+  - Added deterministic length capping for generated download names.
+- Security Improvements:
+  - Escapes HTML-sensitive title and download attribute values before writing wrapper HTML.
+  - Sanitizes unsafe filename characters and control characters before using names in the generated preview document.
+  - Replaced the non-ASCII icon label in generated HTML with plain `Download` text.
+- Dead Code Removed:
+  - Replaced private untested helpers with exported, directly tested helpers.
+- Duplicate Logic Removed:
+  - Centralized filename and HTML attribute handling inside reusable helper functions for all PDF preview callers.
+- Tests Added:
+  - Added `frontend/src/utils/pdfPreview.test.ts` covering blank/unsafe filenames, HTML-sensitive escaping, popup-blocked URL cleanup, sanitized wrapper HTML, and unload cleanup registration.
+- Verification Results:
+  - Focused Vitest: `npm test -- pdfPreview.test.ts` -> 4 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/utils/pdfPreview.js src/utils/pdfPreview.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> exit 0 with existing `staticfiles.W004` warning for `frontend/dist/assets`.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/utils/pdfPreview.js frontend/src/utils/pdfPreview.test.ts` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/utils/pdfPreview.js frontend/src/utils/pdfPreview.test.ts` -> clean.
+- Commit SHA: `3ad2061986783d8f0a3cc98fcd7771f586af65a5`
+- Commit Timestamp: `2026-07-16T15:44:54+05:30`
+- Commit Summary: `fix(reports): harden pdf preview wrapper`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this helper.
+- Status: COMPLETED

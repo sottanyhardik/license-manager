@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T10:12:04+00:00`
+Generated: `2026-07-16T10:15:36+00:00`
 
 ## Repository Statistics
 
-- Files audited: `477`
+- Files audited: `479`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `384`
+- Files requiring dependency recheck: `383`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `448`
-- Total source files tracked: `925`
-- Total source LOC tracked: `241107`
-- Audited LOC: `111532`
-- Remaining LOC: `129575`
+- Files remaining: `447`
+- Total source files tracked: `926`
+- Total source LOC tracked: `241232`
+- Audited LOC: `111721`
+- Remaining LOC: `129511`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,7 +35,7 @@ Generated: `2026-07-16T10:12:04+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 24195 | 19 | 3 | 31 | 0 |
+| `docs` | 53 | 24247 | 19 | 3 | 31 | 0 |
 | `frontend/src/pages` | 74 | 18310 | 60 | 0 | 14 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
@@ -1037,6 +1037,12 @@ Generated: `2026-07-16T10:12:04+00:00`
 - Phase 7 documentDownload verification: npm test -- documentDownload.test.ts -> 8 passed; npm run typecheck -> passed; npm run lint -- --quiet src/utils/documentDownload.ts src/utils/documentDownload.test.ts -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
 - Phase 7 documentDownload security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Phase 7 documentDownload commit: bf5ad0010a89381311d2542d3eb4c613dbed68fa at 2026-07-16T15:41:27+05:30, fix(reports): validate authenticated download paths
+- Phase 7 pdfPreview audit: reviewed shared PDF blob preview wrapper, popup-blocked path, object URL lifecycle, wrapper HTML construction, title/download filename handling, and report/export callers
+- Phase 7 pdfPreview hardening: exported and tested filename/HTML helpers, normalized blank unsafe control-character and overlong PDF names, escaped title/download attributes, removed non-ASCII download label, and kept blocked-popup URL cleanup
+- Phase 7 pdfPreview regression: added frontend/src/utils/pdfPreview.test.ts covering blank/unsafe filenames, HTML-sensitive escaping, popup-blocked cleanup, and escaped wrapper HTML
+- Phase 7 pdfPreview verification: npm test -- pdfPreview.test.ts -> 4 passed; npm run typecheck -> passed; npm run lint -- --quiet src/utils/pdfPreview.js src/utils/pdfPreview.test.ts -> passed; npm run build -> passed; Django check -> exit 0 with staticfiles.W004 frontend/dist/assets warning; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 pdfPreview security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 pdfPreview commit: 3ad2061986783d8f0a3cc98fcd7771f586af65a5 at 2026-07-16T15:44:54+05:30, fix(reports): harden pdf preview wrapper
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

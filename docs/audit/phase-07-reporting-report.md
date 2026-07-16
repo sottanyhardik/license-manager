@@ -486,6 +486,54 @@
   - Shared SION report table and API handling remain queued under `SionNormReport.tsx`.
 - Status: COMPLETED
 
+## frontend/src/pages/reports/SionNormReport.tsx
+
+- File Path: `frontend/src/pages/reports/SionNormReport.tsx`
+- Module: Reporting & Exports / Shared frontend SION report implementation
+- LOC: 408 (`SionNormReport.tsx`) + 89 (`SionNormReport.test.tsx`)
+- Lines Reviewed: 408
+- Functions Reviewed: 9 (`normalizeBooleanFilter`, `formatReportNumber`, `buildSionReportPath`, `getSionReportGroups`, `SionNormReport`, `handleFilterChange`, `renderTableHeaders`, `renderLicenseRow`, `renderTotalsRow`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added defensive boolean filter normalization for active/expired and balance-CIF radio values.
+  - Centralized and encoded API query construction in `buildSionReportPath()`.
+  - Rejected malformed, blank, `NaN`, and infinite numeric values before formatting.
+  - Guarded malformed API payloads where `groups`, `notifications`, `licenses`, or `totals` are missing or non-arrays.
+  - Synced filter state when the `sionNorm` prop changes.
+- Package Replacements:
+  - Reused `URLSearchParams` for API report query construction.
+  - Used `Number.isFinite()` for robust numeric validation.
+- Performance Improvements:
+  - Avoided rendering crashes/retries caused by malformed API shapes.
+  - Prevented post-unmount state updates during slow or cancelled report fetches.
+- Security Improvements:
+  - Encoded license IDs in generated license detail links.
+  - Avoided rendering `NaN`/`Infinity` as report values.
+  - Removed unused catch binding and limited error handling to the mounted component lifecycle.
+- Dead Code Removed:
+  - Removed ad hoc inline query-string construction from the fetch effect.
+- Duplicate Logic Removed:
+  - Consolidated filter normalization and number formatting into exported helpers.
+- Tests Added:
+  - Added `frontend/src/pages/reports/SionNormReport.test.tsx` covering helper normalization, malformed API groups, finite number formatting, default fetch path, and radio-triggered reload path.
+- Verification Results:
+  - Focused Vitest: `npm test -- SionNormReport.test.tsx` -> 5 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/SionNormReport.tsx src/pages/reports/SionNormReport.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/reports/SionNormReport.tsx frontend/src/pages/reports/SionNormReport.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/SionNormReport.tsx frontend/src/pages/reports/SionNormReport.test.tsx` -> clean.
+- Commit SHA: `78e9c91eebad9007552cd95e7519dca062021b08`
+- Commit Timestamp: `2026-07-16T15:38:09+05:30`
+- Commit Summary: `fix(reports): harden sion norm report`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Dense SION table layout remains intentionally monolithic to avoid changing report column semantics during this audit pass.
+- Status: COMPLETED
+
 ## frontend/src/pages/reports/ActiveLicenses.tsx
 
 - File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`

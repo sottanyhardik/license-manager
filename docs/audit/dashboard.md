@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:16:52+00:00`
+Generated: `2026-07-16T09:18:18+00:00`
 
 ## Repository Statistics
 
-- Files audited: `444`
+- Files audited: `445`
 - Files changed directly: `50`
 - Files requiring dependency recheck: `403`
-- Files not started: `15`
+- Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `468`
+- Files remaining: `467`
 - Total source files tracked: `912`
-- Total source LOC tracked: `240037`
-- Audited LOC: `105525`
-- Remaining LOC: `134512`
+- Total source LOC tracked: `240074`
+- Audited LOC: `105559`
+- Remaining LOC: `134515`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -32,10 +32,10 @@ Generated: `2026-07-16T09:16:52+00:00`
 
 | Module | Files | LOC | Completed | Changed | Recheck | Not Started |
 |---|---:|---:|---:|---:|---:|---:|
-| `backend` | 132 | 77387 | 24 | 6 | 99 | 3 |
+| `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 54 | 24359 | 17 | 3 | 34 | 0 |
+| `docs` | 54 | 24396 | 17 | 3 | 34 | 0 |
 | `frontend/src/pages` | 61 | 17245 | 34 | 0 | 27 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 68 | 8898 | 6 | 0 | 62 | 0 |
@@ -960,6 +960,8 @@ Generated: `2026-07-16T09:16:52+00:00`
 - Phase 7 BOE export API migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
 - Phase 7 BOE export API import verification: Django setup imported BillOfEntryViewSet with export_bill_of_entries and _group_boe attached; export route reverses to /api/bill-of-entries/export/
 - Phase 7 BOE export API security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 shared.pdf package marker audit: reviewed 0-line backend/shared/pdf/__init__.py; retained empty package marker because shared.pdf.builders is imported by license PDF exporter code
+- Phase 7 shared.pdf package marker verification: import shared.pdf and shared.pdf.builders passed; Ruff, py_compile, and compileall passed
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

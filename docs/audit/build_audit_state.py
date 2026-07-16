@@ -196,6 +196,7 @@ COMPLETED_VERIFIED_FILES.update({
     "backend/apps/trade/bill_of_supply_pdf.py",
     "backend/apps/trade/purchase_invoice_pdf.py",
     "backend/scripts/test_crud_balance_updates.py",
+    "backend/shared/pdf/__init__.py",
     "backend/shared/pdf/builders.py",
     "backend/tests/test_api_integration.py",
 })
@@ -1490,6 +1491,8 @@ VERIFICATION_HISTORY = [
     "Phase 7 BOE export API migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only",
     "Phase 7 BOE export API import verification: Django setup imported BillOfEntryViewSet with export_bill_of_entries and _group_boe attached; export route reverses to /api/bill-of-entries/export/",
     "Phase 7 BOE export API security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked",
+    "Phase 7 shared.pdf package marker audit: reviewed 0-line backend/shared/pdf/__init__.py; retained empty package marker because shared.pdf.builders is imported by license PDF exporter code",
+    "Phase 7 shared.pdf package marker verification: import shared.pdf and shared.pdf.builders passed; Ruff, py_compile, and compileall passed",
     "Ruff F821 undefined-name sweep: clean",
     "Previous Ruff selected F811/E741 baseline: 23 findings, now resolved",
     "Ruff full baseline: 547 findings remain",

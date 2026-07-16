@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T09:16:52+00:00",
+  "generated_at": "2026-07-16T09:18:18+00:00",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -128,11 +128,11 @@
       "backend": {
         "blocked": 0,
         "changed": 6,
-        "completed": 24,
+        "completed": 25,
         "files": 132,
         "in_progress": 0,
         "lines": 77387,
-        "not_started": 3,
+        "not_started": 2,
         "requires_recheck": 99
       },
       "backend/apps/__init__.py": {
@@ -221,7 +221,7 @@
         "completed": 17,
         "files": 54,
         "in_progress": 0,
-        "lines": 24359,
+        "lines": 24396,
         "not_started": 0,
         "requires_recheck": 34
       },
@@ -569,7 +569,6 @@
       "backend/apps/bill_of_entry/views/boe.py",
       "backend/apps/bill_of_entry/views/detail_update_views.py",
       "backend/apps/bill_of_entry/views/parse_pdf.py",
-      "backend/apps/bill_of_entry/views_export.py",
       "backend/apps/core/__init__.py",
       "backend/apps/core/admin.py",
       "backend/apps/core/authentication.py",
@@ -772,7 +771,6 @@
       "backend/tests/__init__.py",
       "backend/tests/balance/test_bd_implementations.py",
       "backend/tests/test_all_conditions.py",
-      "backend/tests/test_api_boe.py",
       "backend/tests/test_api_integration.py",
       "backend/tests/test_api_license.py",
       "backend/tests/test_authentication_query_param.py",
@@ -897,10 +895,10 @@
   "repository": {
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "3d7708e4",
+    "head": "a7b5be7c",
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
     "tracked_audit_files": 912,
-    "tracked_audit_lines": 240037,
+    "tracked_audit_lines": 240074,
     "working_tree": "dirty"
   },
   "schema_version": 1,

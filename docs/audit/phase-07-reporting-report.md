@@ -170,6 +170,40 @@
   - PDF and XLSX layout code remains separate because the output primitives and layout constraints differ; deeper consolidation would risk report formatting regressions.
 - Status: COMPLETED
 
+## backend/shared/pdf/__init__.py
+
+- File Path: `backend/shared/pdf/__init__.py`
+- Module: Reporting & Exports / Shared PDF package marker
+- LOC: 0
+- Lines Reviewed: 0
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - None; file intentionally contains no executable validation path.
+- Package Replacements:
+  - None. Empty `__init__.py` retained so `shared.pdf.builders` imports remain stable.
+- Performance Improvements:
+  - None; no runtime code.
+- Security Improvements:
+  - None; no runtime code or input surface.
+- Dead Code Removed:
+  - None. Removing this package marker would risk import compatibility for `shared.pdf.builders`.
+- Duplicate Logic Removed:
+  - None.
+- Tests Added:
+  - None required; no behavior changed.
+- Verification Results:
+  - Dependency search: `shared.pdf.builders` is imported by `backend/apps/license/services/exporters/ledger_pdf.py`; package marker retained.
+  - Import verification: `import shared.pdf` and `import shared.pdf.builders` -> passed.
+  - Ruff: `.venv/bin/ruff check backend/shared/pdf/__init__.py` -> clean.
+  - py_compile: `.venv/bin/python -m py_compile backend/shared/pdf/__init__.py` -> passed.
+  - compileall: `.venv/bin/python -m compileall -q backend/shared/pdf/__init__.py` -> passed.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED
+
 ## backend/apps/allotment/views_export.py
 
 - File Path: `backend/apps/allotment/views_export.py`

@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:54:38+00:00`
+Generated: `2026-07-16T09:57:32+00:00`
 
 ## Repository Statistics
 
-- Files audited: `463`
+- Files audited: `465`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `392`
+- Files requiring dependency recheck: `391`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `456`
-- Total source files tracked: `919`
-- Total source LOC tracked: `240299`
-- Audited LOC: `110230`
-- Remaining LOC: `130069`
+- Files remaining: `455`
+- Total source files tracked: `920`
+- Total source LOC tracked: `240474`
+- Audited LOC: `110503`
+- Remaining LOC: `129971`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,8 +35,8 @@ Generated: `2026-07-16T09:54:38+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 23840 | 19 | 3 | 31 | 0 |
-| `frontend/src/pages` | 68 | 17932 | 48 | 0 | 20 | 0 |
+| `docs` | 53 | 23892 | 19 | 3 | 31 | 0 |
+| `frontend/src/pages` | 69 | 18055 | 50 | 0 | 19 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
@@ -995,6 +995,12 @@ Generated: `2026-07-16T09:54:38+00:00`
 - Phase 7 ItemReport verification: npm test -- ItemReport.test.ts -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ItemReport.tsx src/pages/reports/ItemReport.test.ts -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; git diff --check scoped to ItemReport files -> clean; py_compile not applicable to TSX/TS frontend source
 - Phase 7 ItemReport security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Phase 7 ItemReport commit: 1248ff802868a5d899b7944d11453456a86c6212 at 2026-07-16T15:24:02+05:30, fix(reports): harden item report
+- Phase 7 NormCardGrid audit: reviewed 152-line React norm selector grid, props, malformed norm handling, duplicate key risk, active selection behavior, loading indicator, icon accessibility, empty-state rendering, and parent ItemPivotReport contract
+- Phase 7 NormCardGrid hardening: added typed norm input/normalized card model, filtered null/blank objects missing norm_class, deduplicated duplicate norm classes, removed negative letter spacing, added aria-pressed to norm buttons, and hid decorative icons from assistive tech
+- Phase 7 NormCardGrid regression: added frontend/src/pages/reports/NormCardGrid.test.tsx covering malformed/blank/duplicate normalization, active button accessibility, changed-norm report reset, and reselecting the active norm without clearing data
+- Phase 7 NormCardGrid verification: npm test -- NormCardGrid.test.tsx -> 3 passed after fixing object-without-norm_class normalization; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/NormCardGrid.tsx src/pages/reports/NormCardGrid.test.tsx -> passed; npm run build -> passed; Django check -> exit 0 with staticfiles.W004 frontend/dist/assets warning; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 NormCardGrid security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 NormCardGrid commit: 4b20a546b0b8c76e110237c1e155482ccc72a0ca at 2026-07-16T15:27:02+05:30, fix(reports): harden norm card grid
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

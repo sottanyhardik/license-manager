@@ -278,6 +278,50 @@
   - The page is still large; further component extraction should wait for the queued report component audits to avoid mixing unrelated files.
 - Status: COMPLETED
 
+## frontend/src/pages/reports/NormCardGrid.tsx
+
+- File Path: `frontend/src/pages/reports/NormCardGrid.tsx`
+- Module: Reporting & Exports / Frontend item-pivot norm selector
+- LOC: 152 (`NormCardGrid.tsx`) + 77 (`NormCardGrid.test.tsx`)
+- Lines Reviewed: 152
+- Functions Reviewed: 2 (`normalizeNormCards`, `NormCardGrid`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added defensive normalization for non-array, `null`, empty, whitespace, duplicate, and object-without-`norm_class` entries.
+  - Trimmed norm classes and descriptions before rendering.
+  - Prevented duplicate norm buttons and duplicate React keys.
+- Package Replacements:
+  - Used JavaScript `Set` for conversion norm membership and duplicate tracking.
+- Performance Improvements:
+  - Normalizes the available norm list once per render instead of branching repeatedly inside JSX.
+  - Deduplicates duplicate norm classes before rendering buttons.
+- Security Improvements:
+  - Malformed object input no longer renders `[object Object]` into the UI.
+  - Decorative icons are hidden from assistive tech and loading state has an explicit accessible label.
+- Dead Code Removed:
+  - Removed inline malformed-card guard that still allowed duplicate keys and object coercion edge cases.
+- Duplicate Logic Removed:
+  - Replaced repeated conversion-norm array checks with `CONVERSION_NORMS`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/NormCardGrid.test.tsx` covering malformed/blank/duplicate normalization, active button accessibility, changed-norm report reset, and active-norm reselection behavior.
+- Verification Results:
+  - Focused Vitest: `npm test -- NormCardGrid.test.tsx` -> 3 passed after fixing the object-without-`norm_class` regression found by the new test.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/NormCardGrid.tsx src/pages/reports/NormCardGrid.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> exit 0 with existing/staticfiles warning `staticfiles.W004` for `frontend/dist/assets`.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/reports/NormCardGrid.tsx frontend/src/pages/reports/NormCardGrid.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/NormCardGrid.tsx frontend/src/pages/reports/NormCardGrid.test.tsx` -> clean.
+- Commit SHA: `4b20a546b0b8c76e110237c1e155482ccc72a0ca`
+- Commit Timestamp: `2026-07-16T15:27:02+05:30`
+- Commit Summary: `fix(reports): harden norm card grid`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this component.
+- Status: COMPLETED
+
 ## frontend/src/pages/reports/ActiveLicenses.tsx
 
 - File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`

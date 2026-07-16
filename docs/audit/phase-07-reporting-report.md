@@ -126,3 +126,48 @@
 - Remaining Technical Debt:
   - None for this component.
 - Status: COMPLETED - REMOVED
+
+## backend/apps/allotment/views_export.py
+
+- File Path: `backend/apps/allotment/views_export.py`
+- Module: Reporting & Exports / Allotment grouped export API
+- LOC: 695
+- Lines Reviewed: 695
+- Functions Reviewed: 8 (`_text_response`, `_decimal_or_default`, `add_grouped_export_action`, `download_grouped_export`, `_export_grouped_pdf`, `_export_grouped_xlsx`, `_group_allotments`, `shorten_exporter`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Normalized `_export` with trim/lowercase and rejected unsupported values before querying/export generation.
+  - Normalized `type` defensively while preserving the existing internal helper signature.
+  - Added plain-text error responses with explicit content type.
+  - Returned 503 for missing optional PDF/XLSX dependencies instead of generic 500 responses.
+- Package Replacements:
+  - Removed unused ReportLab imports (`A4`, `landscape`, `getSampleStyleSheet`, `SimpleDocTemplate`, `Spacer`, `PageBreak`, `TA_LEFT`, `TA_RIGHT`).
+  - Moved `ExchangeRateModel` and `ParagraphStyle` to module imports instead of repeated hot-path imports.
+- Performance Improvements:
+  - Replaced FK `prefetch_related('company', 'port')` with `select_related('company', 'port')`.
+  - Added explicit nested prefetches for allocation item/license/exporter/port paths used by export grouping.
+  - Removed no-op exception handling from worksheet column sizing.
+- Security Improvements:
+  - Tightened invalid format handling before export work begins.
+  - Kept export responses generated in memory without disk writes.
+  - Preserved permission coverage through `AllotmentViewSet.permission_classes`.
+- Dead Code Removed:
+  - Removed unused imports and unused loop variables.
+- Duplicate Logic Removed:
+  - None extracted; the remaining PDF/XLSX builders still have parallel layout logic that is format-specific.
+- Tests Added:
+  - Expanded `backend/tests/test_api_allotment.py` with grouped export coverage for invalid `_export`, whitespace/case normalization, XLSX response shape, PDF response shape, and missing openpyxl dependency handling.
+- Verification Results:
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_allotment.py -q` -> 11 passed.
+  - Ruff selected validation: `.venv/bin/ruff check backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py --select F401,F821,F811,E741,F841,B007,B904,UP035,UP006,UP045` -> clean.
+  - Ruff full: `.venv/bin/ruff check backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py` -> clean.
+  - py_compile: `.venv/bin/python -m py_compile backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py` -> passed.
+  - compileall: `.venv/bin/python -m compileall -q backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Import verification: Django setup imported `AllotmentViewSet` with `download_grouped_export` and `_group_allotments` attached.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - PDF and XLSX layout generation remain intentionally separate because their output primitives diverge; deeper consolidation would risk visual/export regressions.
+- Status: COMPLETED

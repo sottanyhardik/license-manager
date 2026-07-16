@@ -1,9 +1,13 @@
 """
 API Tests for Allotment Endpoints
 """
+from decimal import Decimal
+
 import pytest
 from django.urls import reverse
 from rest_framework import status
+
+from apps.allotment.models import AllotmentItems
 
 
 @pytest.mark.api
@@ -64,3 +68,60 @@ class TestAllotmentAPI:
         response = authenticated_client.get(url, {'is_approved': 'false'})
         
         assert response.status_code == status.HTTP_200_OK
+
+    def test_download_grouped_export_rejects_invalid_format(self, authenticated_client):
+        url = reverse('allotment:allotment-download-grouped-export')
+
+        response = authenticated_client.get(url, {'_export': 'csv'})
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response['Content-Type'].startswith('text/plain')
+        assert b"Invalid export format" in response.content
+
+    def test_download_grouped_export_xlsx(self, authenticated_client, test_allotment, test_license):
+        item = test_license.import_license.first()
+        AllotmentItems.objects.create(
+            item=item,
+            allotment=test_allotment,
+            qty=Decimal("100.000"),
+            cif_fc=Decimal("250.00"),
+            cif_inr=Decimal("21125.00"),
+        )
+        test_allotment.is_allotted = True
+        test_allotment.save(update_fields=["is_allotted"])
+        url = reverse('allotment:allotment-download-grouped-export')
+
+        response = authenticated_client.get(url, {'_export': ' xlsx '})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response['Content-Type'] == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        assert 'filename="Allotment Report - ' in response['Content-Disposition']
+        assert response.content.startswith(b'PK')
+
+    def test_download_grouped_export_pdf(self, authenticated_client, test_allotment, test_license):
+        item = test_license.import_license.first()
+        AllotmentItems.objects.create(
+            item=item,
+            allotment=test_allotment,
+            qty=Decimal("100.000"),
+            cif_fc=Decimal("250.00"),
+            cif_inr=Decimal("21125.00"),
+        )
+        test_allotment.is_allotted = True
+        test_allotment.save(update_fields=["is_allotted"])
+        url = reverse('allotment:allotment-download-grouped-export')
+
+        response = authenticated_client.get(url, {'_export': ' PDF '})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response['Content-Type'] == 'application/pdf'
+        assert response.content.startswith(b'%PDF')
+
+    def test_download_grouped_export_missing_xlsx_dependency(self, authenticated_client, monkeypatch):
+        monkeypatch.setattr("apps.allotment.views_export.OPENPYXL_AVAILABLE", False)
+        url = reverse('allotment:allotment-download-grouped-export')
+
+        response = authenticated_client.get(url, {'_export': 'xlsx'})
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert b"Excel export not available" in response.content

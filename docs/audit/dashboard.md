@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:05:47+00:00`
+Generated: `2026-07-16T09:09:45+00:00`
 
 ## Repository Statistics
 
-- Files audited: `439`
+- Files audited: `441`
 - Files changed directly: `51`
-- Files requiring dependency recheck: `410`
+- Files requiring dependency recheck: `408`
 - Files not started: `15`
 - Files ignored/excluded: `595`
-- Files remaining: `476`
+- Files remaining: `474`
 - Total source files tracked: `915`
-- Total source LOC tracked: `240005`
-- Audited LOC: `103614`
-- Remaining LOC: `136391`
+- Total source LOC tracked: `240143`
+- Audited LOC: `104481`
+- Remaining LOC: `135662`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -32,15 +32,15 @@ Generated: `2026-07-16T09:05:47+00:00`
 
 | Module | Files | LOC | Completed | Changed | Recheck | Not Started |
 |---|---:|---:|---:|---:|---:|---:|
-| `backend` | 132 | 77271 | 22 | 6 | 101 | 3 |
+| `backend` | 132 | 77332 | 23 | 6 | 100 | 3 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 54 | 24185 | 17 | 3 | 34 | 0 |
+| `docs` | 54 | 24244 | 17 | 3 | 34 | 0 |
 | `frontend/src/pages` | 61 | 17245 | 34 | 0 | 27 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 68 | 8898 | 6 | 0 | 62 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
-| `backend/apps/allotment` | 38 | 4931 | 8 | 5 | 24 | 1 |
+| `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
 | `backend/apps/bill_of_entry` | 37 | 4792 | 6 | 6 | 23 | 2 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
@@ -925,6 +925,18 @@ Generated: `2026-07-16T09:05:47+00:00`
 - Phase 7 allotment pdf_base template Django check: .venv/bin/python backend/manage.py check -> no issues
 - Phase 7 allotment pdf_base template migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
 - Phase 7 allotment pdf_base template Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 7 allotment grouped export API line audit: reviewed all 695 lines, imports, endpoint args, queryset shaping, PDF builder, XLSX builder, grouping logic, dependency fallbacks, response headers, and null/default handling
+- Phase 7 allotment grouped export API hardening: normalized _export/type inputs, returned 400 before export work for unsupported formats, returned 503 for missing openpyxl/reportlab, preserved Decimal values in grouping, and removed unused ReportLab imports
+- Phase 7 allotment grouped export API performance: changed company/port relationship loading to select_related and added nested allocation/license/exporter/port prefetches used by grouping
+- Phase 7 allotment grouped export API regression: .venv/bin/python -m pytest backend/tests/test_api_allotment.py -q -> 11 passed
+- Phase 7 allotment grouped export API selected Ruff: .venv/bin/ruff check backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py --select F401,F821,F811,E741,F841,B007,B904,UP035,UP006,UP045 -> clean
+- Phase 7 allotment grouped export API Ruff: .venv/bin/ruff check backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py -> clean
+- Phase 7 allotment grouped export API py_compile: .venv/bin/python -m py_compile backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py -> passed
+- Phase 7 allotment grouped export API compileall: .venv/bin/python -m compileall -q backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py -> passed
+- Phase 7 allotment grouped export API Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 allotment grouped export API migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 allotment grouped export API import verification: Django setup imported AllotmentViewSet with download_grouped_export and _group_allotments attached
+- Phase 7 allotment grouped export API security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T09:05:47+00:00",
+  "generated_at": "2026-07-16T09:09:45+00:00",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -128,12 +128,12 @@
       "backend": {
         "blocked": 0,
         "changed": 6,
-        "completed": 22,
+        "completed": 23,
         "files": 132,
         "in_progress": 0,
-        "lines": 77271,
+        "lines": 77332,
         "not_started": 3,
-        "requires_recheck": 101
+        "requires_recheck": 100
       },
       "backend/apps/__init__.py": {
         "blocked": 0,
@@ -158,12 +158,12 @@
       "backend/apps/allotment": {
         "blocked": 0,
         "changed": 5,
-        "completed": 8,
+        "completed": 9,
         "files": 38,
         "in_progress": 0,
-        "lines": 4931,
+        "lines": 4949,
         "not_started": 1,
-        "requires_recheck": 24
+        "requires_recheck": 23
       },
       "backend/apps/bill_of_entry": {
         "blocked": 0,
@@ -221,7 +221,7 @@
         "completed": 17,
         "files": 54,
         "in_progress": 0,
-        "lines": 24185,
+        "lines": 24244,
         "not_started": 0,
         "requires_recheck": 34
       },
@@ -561,6 +561,7 @@
       "backend/apps/allotment/signals.py",
       "backend/apps/allotment/views.py",
       "backend/apps/allotment/views_actions.py",
+      "backend/apps/allotment/views_export.py",
       "backend/apps/bill_of_entry/admin.py",
       "backend/apps/bill_of_entry/models.py",
       "backend/apps/bill_of_entry/parsers/boe_pdf.py",
@@ -771,6 +772,7 @@
       "backend/tests/__init__.py",
       "backend/tests/balance/test_bd_implementations.py",
       "backend/tests/test_all_conditions.py",
+      "backend/tests/test_api_allotment.py",
       "backend/tests/test_api_integration.py",
       "backend/tests/test_api_license.py",
       "backend/tests/test_authentication_query_param.py",
@@ -895,10 +897,10 @@
   "repository": {
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "9c50d314",
+    "head": "9ac8fa92",
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
     "tracked_audit_files": 915,
-    "tracked_audit_lines": 240005,
+    "tracked_audit_lines": 240143,
     "working_tree": "dirty"
   },
   "schema_version": 1,

@@ -6,14 +6,65 @@ import { formatDate as formatDateUtil } from "../../utils/dateFormatter";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 
+type SionNormReportProps = {
+    sionNorm: string;
+    title: string;
+};
+
+type SionReportFilters = {
+    is_expired: string;
+    is_null: string;
+    sion_norm: string;
+};
+
+type ReportValueMap = Record<string, unknown>;
+
+const BOOLEAN_FILTER_VALUES = new Set(["False", "True"]);
+
+export function normalizeBooleanFilter(value: unknown, fallback = "False"): string {
+    const normalized = String(value ?? "").trim();
+    return BOOLEAN_FILTER_VALUES.has(normalized) ? normalized : fallback;
+}
+
+export function formatReportNumber(value: unknown, decimals = 2): string {
+    if (value === null || value === undefined || value === "") return "—";
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return "—";
+
+    const fractionDigits = Number.isInteger(decimals) && decimals >= 0 && decimals <= 6 ? decimals : 2;
+    return parsed.toLocaleString("en-IN", {
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+    });
+}
+
+export function buildSionReportPath(filters: SionReportFilters): string {
+    const params = new URLSearchParams({
+        is_expired: normalizeBooleanFilter(filters.is_expired),
+        is_null: normalizeBooleanFilter(filters.is_null),
+        sion_norm: String(filters.sion_norm ?? "").trim(),
+    });
+
+    return `licenses/active-dfia-report/?${params.toString()}`;
+}
+
+export function getSionReportGroups(data: unknown): any[] {
+    if (!data || typeof data !== "object" || !("groups" in data)) {
+        return [];
+    }
+
+    return Array.isArray(data.groups) ? data.groups : [];
+}
+
 /**
  * Reusable SION Norm Report — licenses for a specific SION norm, grouped by
  * notification. Pure presentation of API data; only markup chrome migrated to
  * Tailwind/shadcn. The dense table render helpers keep their exact data
  * bindings (Bootstrap text-end/text-center utilities remain until Phase 4).
  */
-export default function SionNormReport({ sionNorm, title }) {
-    const [data, setData] = useState(null);
+export default function SionNormReport({ sionNorm, title }: SionNormReportProps) {
+    const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState({
         is_expired: "False",
@@ -22,32 +73,47 @@ export default function SionNormReport({ sionNorm, title }) {
     });
 
     useEffect(() => {
+        let isMounted = true;
+
         const fetchReport = async () => {
             try {
                 setLoading(true);
-                const params = new URLSearchParams(filters).toString();
-                const response = await api.get(`licenses/active-dfia-report/?${params}`);
-                setData(response.data);
-            } catch (error) {
-                toast.error("Failed to load report data. Please try again.");
+                const response = await api.get(buildSionReportPath(filters));
+                if (isMounted) {
+                    setData(response.data);
+                }
+            } catch {
+                if (isMounted) {
+                    toast.error("Failed to load report data. Please try again.");
+                    setData(null);
+                }
             } finally {
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         };
         fetchReport();
+
+        return () => {
+            isMounted = false;
+        };
     }, [filters]);
 
-    const handleFilterChange = (filterName, value) =>
-        setFilters((prev) => ({ ...prev, [filterName]: value }));
+    useEffect(() => {
+        setFilters((prev) => ({ ...prev, sion_norm: sionNorm }));
+    }, [sionNorm]);
 
-    const formatNumber = (num, decimals = 2) => {
-        if (num === null || num === undefined) return "—";
-        return Number(num).toLocaleString("en-IN", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    const handleFilterChange = (filterName: "is_expired" | "is_null", value: string) =>
+        setFilters((prev) => ({ ...prev, [filterName]: normalizeBooleanFilter(value, prev[filterName]) }));
+
+    const formatNumber = (num: unknown, decimals = 2) => {
+        return formatReportNumber(num, decimals);
     };
 
-    const formatDate = (dateStr) => {
+    const formatDate = (dateStr: unknown) => {
         if (!dateStr) return "—";
-        return formatDateUtil(dateStr) || "—";
+        return formatDateUtil(String(dateStr)) || "—";
     };
 
     // Tailwind/token-styled header (replaces Bootstrap table-primary)
@@ -111,18 +177,24 @@ export default function SionNormReport({ sionNorm, title }) {
         </thead>
     );
 
-    const renderLicenseRow = (license, index) => (
-        <tr key={license.id} className="border-b border-border/60 [&_td]:border [&_td]:border-border/50 [&_td]:px-1.5 [&_td]:py-1" style={{fontSize: '9px'}}>
+    const renderLicenseRow = (license, index) => {
+        const licenseId = license?.id ?? license?.license_id;
+        const licenseNumber = license?.license_number || "—";
+
+        return (
+        <tr key={licenseId ?? `license-${index}`} className="border-b border-border/60 [&_td]:border [&_td]:border-border/50 [&_td]:px-1.5 [&_td]:py-1" style={{fontSize: '9px'}}>
             <td>{index + 1}</td>
             <td>
-                <a href={`/licenses/${license.id}`} target="_blank" rel="noopener noreferrer"
-                   className="text-primary no-underline" style={{fontSize: '9px'}}>
-                    {license.license_number}
-                </a>
+                {licenseId ? (
+                    <a href={`/licenses/${encodeURIComponent(String(licenseId))}`} target="_blank" rel="noopener noreferrer"
+                       className="text-primary no-underline" style={{fontSize: '9px'}}>
+                        {licenseNumber}
+                    </a>
+                ) : licenseNumber}
             </td>
             <td>{formatDate(license.license_date)}</td>
             <td>{formatDate(license.license_expiry_date)}</td>
-            <td style={{fontSize: '8px'}}>{license.exporter_name}</td>
+            <td style={{fontSize: '8px'}}>{license.exporter_name || "—"}</td>
             <td className="text-end">{formatNumber(license.total_cif)}</td>
             <td className="text-end">{formatNumber(license.balance_cif)}</td>
             <td>{license.vegetable_oil?.hsn_code}</td>
@@ -163,9 +235,10 @@ export default function SionNormReport({ sionNorm, title }) {
             <td className="text-end">{formatNumber(license.aluminium_foil?.qty, 2)}</td>
             <td className="text-end">{formatNumber(license.wastage_cif)}</td>
         </tr>
-    );
+        );
+    };
 
-    const renderTotalsRow = (totals, label) => (
+    const renderTotalsRow = (totals: ReportValueMap = {}, label: string) => (
         <tr className="bg-warning/15 font-bold text-warning [&_td]:border [&_td]:border-border/50 [&_td]:px-1.5 [&_td]:py-1" style={{fontSize: '9px'}}>
             <td colSpan={5} className="text-end">{label}:</td>
             <td className="text-end">{formatNumber(totals.total_cif)}</td>
@@ -209,28 +282,28 @@ export default function SionNormReport({ sionNorm, title }) {
     // Radio filter group
     const FilterRadios = () => (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-                <div className="mb-1.5 text-xs font-medium text-muted-foreground">Active / Expired</div>
+            <fieldset>
+                <legend className="mb-1.5 text-xs font-medium text-muted-foreground">Active / Expired</legend>
                 <div className="flex gap-4">
                     {[["False", "Active"], ["True", "Expired"]].map(([val, lbl]) => (
                         <label key={val} className="flex cursor-pointer items-center gap-1.5 text-sm">
-                            <input type="radio" className="accent-primary" checked={filters.is_expired === val} onChange={() => handleFilterChange("is_expired", val)} />
+                            <input type="radio" name={`${sionNorm}-is-expired`} className="accent-primary" checked={filters.is_expired === val} onChange={() => handleFilterChange("is_expired", val)} />
                             {lbl}
                         </label>
                     ))}
                 </div>
-            </div>
-            <div>
-                <div className="mb-1.5 text-xs font-medium text-muted-foreground">Balance CIF</div>
+            </fieldset>
+            <fieldset>
+                <legend className="mb-1.5 text-xs font-medium text-muted-foreground">Balance CIF</legend>
                 <div className="flex gap-4">
                     {[["False", "> 200"], ["True", "< 200"]].map(([val, lbl]) => (
                         <label key={val} className="flex cursor-pointer items-center gap-1.5 text-sm">
-                            <input type="radio" className="accent-primary" checked={filters.is_null === val} onChange={() => handleFilterChange("is_null", val)} />
+                            <input type="radio" name={`${sionNorm}-is-null`} className="accent-primary" checked={filters.is_null === val} onChange={() => handleFilterChange("is_null", val)} />
                             {lbl}
                         </label>
                     ))}
                 </div>
-            </div>
+            </fieldset>
         </div>
     );
 
@@ -239,13 +312,15 @@ export default function SionNormReport({ sionNorm, title }) {
             <>
                 <PageHeader pretitle="Reports" title={title} />
                 <div className="flex items-center gap-2 p-6 text-muted-foreground">
-                    <Loader2 className="size-5 animate-spin text-primary" /> Loading…
+                    <Loader2 className="size-5 animate-spin text-primary" aria-hidden="true" /> Loading…
                 </div>
             </>
         );
     }
 
-    if (!data || !data.groups || data.groups.length === 0) {
+    const groups = getSionReportGroups(data);
+
+    if (groups.length === 0) {
         return (
             <>
                 <PageHeader pretitle="Reports" title={title} />
@@ -255,7 +330,9 @@ export default function SionNormReport({ sionNorm, title }) {
         );
     }
 
-    const sionGroup = data.groups[0];
+    const sionGroup = groups[0] ?? {};
+    const notifications = Array.isArray(sionGroup.notifications) ? sionGroup.notifications : [];
+    const totals = sionGroup.totals ?? {};
     let globalSrNo = 0;
 
     return (
@@ -269,8 +346,8 @@ export default function SionNormReport({ sionNorm, title }) {
             <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {[
                     ["Total Licenses", sionGroup.license_count],
-                    ["Total CIF", formatNumber(sionGroup.totals.total_cif)],
-                    ["Balance CIF", formatNumber(sionGroup.totals.balance_cif)],
+                    ["Total CIF", formatNumber(totals.total_cif)],
+                    ["Balance CIF", formatNumber(totals.balance_cif)],
                 ].map(([label, value]) => (
                     <Card key={label}>
                         <CardContent className="pt-5">
@@ -282,11 +359,15 @@ export default function SionNormReport({ sionNorm, title }) {
             </div>
 
             {/* Tables by notification */}
-            {sionGroup.notifications.map((notifGroup, notifIndex) => (
-                <div key={notifIndex} className="mb-4">
+            {notifications.map((notifGroup, notifIndex) => {
+                const licenses = Array.isArray(notifGroup.licenses) ? notifGroup.licenses : [];
+                const notificationNumber = notifGroup.notification_number || "—";
+
+                return (
+                <div key={`${notificationNumber}-${notifIndex}`} className="mb-4">
                     <div className="mb-3 flex items-center gap-3 rounded-md bg-muted px-3 py-2">
-                        <span className="text-sm font-semibold text-foreground">Notification: {notifGroup.notification_number}</span>
-                        <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{notifGroup.license_count} licenses</span>
+                        <span className="text-sm font-semibold text-foreground">Notification: {notificationNumber}</span>
+                        <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{notifGroup.license_count ?? licenses.length} licenses</span>
                     </div>
                     <Card>
                         <CardContent className="p-0">
@@ -294,18 +375,19 @@ export default function SionNormReport({ sionNorm, title }) {
                                 <table className="w-full border-collapse">
                                     {renderTableHeaders()}
                                     <tbody>
-                                        {notifGroup.licenses.map((license) => {
+                                        {licenses.map((license) => {
                                             globalSrNo++;
                                             return renderLicenseRow(license, globalSrNo - 1);
                                         })}
-                                        {renderTotalsRow(notifGroup.totals, `Total - ${notifGroup.notification_number}`)}
+                                        {renderTotalsRow(notifGroup.totals, `Total - ${notificationNumber}`)}
                                     </tbody>
                                 </table>
                             </div>
                         </CardContent>
                     </Card>
                 </div>
-            ))}
+                );
+            })}
 
             {/* Grand total */}
             <Card className="mt-4 border-success/40">
@@ -316,7 +398,7 @@ export default function SionNormReport({ sionNorm, title }) {
                     <div className="overflow-auto">
                         <table className="w-full border-collapse">
                             {renderTableHeaders()}
-                            <tbody>{renderTotalsRow(sionGroup.totals, "Grand Total")}</tbody>
+                            <tbody>{renderTotalsRow(totals, "Grand Total")}</tbody>
                         </table>
                     </div>
                 </CardContent>

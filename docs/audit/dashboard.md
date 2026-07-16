@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:34:33+00:00`
+Generated: `2026-07-16T09:38:13+00:00`
 
 ## Repository Statistics
 
-- Files audited: `457`
+- Files audited: `459`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `395`
+- Files requiring dependency recheck: `394`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `459`
-- Total source files tracked: `916`
-- Total source LOC tracked: `239820`
-- Audited LOC: `106917`
-- Remaining LOC: `132903`
+- Files remaining: `458`
+- Total source files tracked: `917`
+- Total source LOC tracked: `240018`
+- Audited LOC: `107316`
+- Remaining LOC: `132702`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,8 +35,8 @@ Generated: `2026-07-16T09:34:33+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 23681 | 19 | 3 | 31 | 0 |
-| `frontend/src/pages` | 65 | 17612 | 42 | 0 | 23 | 0 |
+| `docs` | 53 | 23727 | 19 | 3 | 31 | 0 |
+| `frontend/src/pages` | 66 | 17764 | 44 | 0 | 22 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
@@ -981,6 +981,9 @@ Generated: `2026-07-16T09:34:33+00:00`
 - Phase 7 ExpiringLicenses page audit: reviewed React report wrapper, shared LicenseExportPanel integration, endpoint and filename callbacks, feature copy, route references, and expiring-license export semantics
 - Phase 7 ExpiringLicenses regression: added frontend/src/pages/reports/ExpiringLicenses.test.tsx covering rendered copy, default lookahead days, feature copy, and expiring-license export URL/filename generation
 - Phase 7 ExpiringLicenses verification: npm test -- ExpiringLicenses.test.tsx -> 2 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ExpiringLicenses.tsx src/pages/reports/ExpiringLicenses.test.tsx -> passed; npm run build -> passed
+- Phase 7 ItemPivotFilters audit: reviewed filter props, min-balance parsing, license status select, purchase-status multi-select, expiry date inputs, company include/exclude selectors, active-filter chips, clear action, and parent ItemPivotReport contract
+- Phase 7 ItemPivotFilters hardening: added typed select options, defensive min-balance normalization, stable labels for native controls, SSR-safe react-select portal target, boolean coercion for string-backed active-filter expressions, and focused tests
+- Phase 7 ItemPivotFilters verification: npm test -- ItemPivotFilters.test.tsx -> 4 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ItemPivotFilters.tsx src/pages/reports/ItemPivotFilters.test.tsx -> passed; npm run build -> passed
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

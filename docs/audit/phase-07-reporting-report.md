@@ -352,6 +352,47 @@
   - None for this file.
 - Status: COMPLETED
 
+## frontend/src/pages/reports/ItemPivotFilters.tsx
+
+- File Path: `frontend/src/pages/reports/ItemPivotFilters.tsx`
+- Module: Reporting & Exports / Frontend item pivot report filters
+- LOC: 241
+- Lines Reviewed: 241
+- Functions Reviewed: 2 (`normalizeMinBalance`, `ItemPivotFilters`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added `normalizeMinBalance()` so malformed balance values fall back instead of propagating `NaN`.
+  - Tightened purchase-status option typing and preserved code-array callbacks for the parent report API builder.
+  - Coerced `hasActiveFilters` at render boundaries because the parent expression can be a date string as well as a boolean.
+  - Added labels for all native controls and an `inputId` for the `react-select` purchase-status control.
+- Package Replacements:
+  - None. Existing React, `react-select`, project `AsyncSelectField`, and Lucide icon usage remain appropriate.
+- Performance Improvements:
+  - Hoisted static balance options out of render.
+  - Kept company selector loading lazy through the existing `loadOnMount={false}` behavior.
+- Security Improvements:
+  - Made `react-select` menu portal selection SSR/test safe by guarding `document.body`.
+  - No direct HTML injection, dynamic URL creation, export download, or local storage access exists in this filter component.
+- Dead Code Removed:
+  - Removed stale "extracted verbatim" assumptions by tightening formatting and validation.
+- Duplicate Logic Removed:
+  - Consolidated minimum-balance parsing into `normalizeMinBalance()`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ItemPivotFilters.test.tsx` covering balance normalization, active-filter chip rendering, clear action, native filter callbacks, and purchase-status selection mapping.
+- Verification Results:
+  - Dependency search: `rg -n "ItemPivotFilters|NormCardGrid|ItemPivotReport|purchase_status|expiring_soon|balance_status|handleFilterChange|filters\\." frontend/src/pages/reports frontend/src -g '!node_modules'` reviewed parent and related report filter dependencies.
+  - Focused Vitest: `npm test -- ItemPivotFilters.test.tsx` -> 4 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ItemPivotFilters.tsx src/pages/reports/ItemPivotFilters.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Shared `AsyncSelectField` does not currently expose `inputId`/ARIA hooks, so include/exclude company selectors still rely on placeholder text rather than true label association; complete that when the shared selector component is selected for audit.
+- Status: COMPLETED
+
 ## backend/apps/bill_of_entry/views_export.py
 
 - File Path: `backend/apps/bill_of_entry/views_export.py`

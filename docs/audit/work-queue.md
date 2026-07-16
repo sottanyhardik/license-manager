@@ -26,6 +26,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-16T17:27:18+05:30` - Phase 8 Bills of Entry deleted empty `backend/apps/bill_of_entry/tests.py` in commit `07cc55e742f061e66643eb02034f7c9078531b4c` (`cleanup(bill_of_entry): remove empty test stub`); Phase 8 now has zero BOE files marked `NOT_STARTED` or `REQUIRES_RECHECK`, and Phase 9 Inventory is queued next.
 - `2026-07-16T17:40:25+05:30` - Phase 9 Inventory deleted stale `backend/scripts/char_license_list_balance.py` in commit `1d7fb0713b09b25b7375f749c076a43b4734a9f0` (`cleanup(inventory): remove stale balance probe`); continue with the next Inventory file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T17:42:58+05:30` - Phase 9 Inventory deleted stale `backend/scripts/test_balance_calc.py` in commit `8058036a1a16d037cdd27c99ba2a26e81d7ba395` (`cleanup(inventory): remove stale balance test script`); continue with the next Inventory file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-16T17:50:32+05:30` - Phase 9 Inventory completed `docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md` in commit `a6246911dab2fcf96053f3e5b87dc6f92a93e74d` (`docs(inventory): update balance architecture guide`); continue with the next Inventory file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

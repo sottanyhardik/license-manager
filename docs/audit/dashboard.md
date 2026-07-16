@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `495`
+- Files audited: `496`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `358`
+- Files requiring dependency recheck: `357`
 - Files not started: `12`
 - Files ignored/excluded: `595`
 - Files remaining: `420`
 - Total source files tracked: `915`
-- Total source LOC tracked: `241418`
-- Audited LOC: `115639`
-- Remaining LOC: `125779`
+- Total source LOC tracked: `241320`
+- Audited LOC: `115772`
+- Remaining LOC: `125548`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,7 +35,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `backend` | 131 | 77342 | 26 | 6 | 97 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 24466 | 19 | 3 | 31 | 0 |
+| `docs` | 53 | 24368 | 20 | 3 | 30 | 0 |
 | `frontend/src/pages` | 77 | 19217 | 66 | 0 | 11 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
@@ -88,6 +88,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 Bills of Entry reached 100% for queued `NOT_STARTED` and `REQUIRES_RECHECK` BOE files in the active audit database.
 - Phase 9 Inventory started and removed stale `backend/scripts/char_license_list_balance.py`; active license balance regression coverage remains in maintained test modules.
 - Phase 9 Inventory removed stale `backend/scripts/test_balance_calc.py`; deterministic balance assertions remain in `backend/apps/license/tests/test_balance_calculator.py`.
+- Phase 9 Inventory completed `docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md`; stale deployment-era balance guidance now reflects current service, materialized balance, command, and regression-test contracts.
 
 ## Verification History
 
@@ -171,6 +172,15 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 inventory test_balance_calc Django check: .venv/bin/python backend/manage.py check -> no issues
 - Phase 9 inventory test_balance_calc makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
 - Phase 9 inventory test_balance_calc commit: 8058036a1a16d037cdd27c99ba2a26e81d7ba395 at 2026-07-16T17:42:58+05:30, cleanup(inventory): remove stale balance test script
+- Phase 9 balance architecture dependency scan: document remains live through docs/README.md and historical planning references; retained and updated rather than deleted
+- Phase 9 balance architecture stale-marker scan: removed obsolete host, duckdns, debug_balance, old commit IDs, old version branch, and obsolete backend/license path references
+- Phase 9 balance architecture Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py backend/tests/test_api_license.py -> clean
+- Phase 9 balance architecture py_compile: .venv/bin/python -m py_compile backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py backend/tests/test_api_license.py -> passed
+- Phase 9 balance architecture compileall: .venv/bin/python -m compileall -q scoped balance service/command/test files -> passed
+- Phase 9 balance architecture regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q -> 36 passed
+- Phase 9 balance architecture Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 9 balance architecture makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 9 balance architecture commit: a6246911dab2fcf96053f3e5b87dc6f92a93e74d at 2026-07-16T17:50:32+05:30, docs(inventory): update balance architecture guide
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

@@ -68,3 +68,37 @@ Append-only audit log for Phase 9 Inventory work.
 - Remaining Technical Debt:
   - Adjacent queued inventory/balance items remain: `docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md` and `frontend/src/components/LicenseBalanceModal.tsx`.
 - Status: DELETED
+
+## docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md
+
+- File Path(s): `docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md`
+- Module: Inventory / License balance architecture documentation
+- Total LOC: 133
+- Lines Reviewed: 133 plus referenced balance implementation, command, and test contracts
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Replaced stale deployment-era checklist content with current validation contracts for `LicenseBalanceCalculator`, materialized `LicenseBalance` rows, CIF updates, migration backfill expectations, and API/export consumers.
+- Package Replacements: None; no new dependency was required for a documentation-only architecture update.
+- Performance Improvements: Document now records current pre-aggregation and materialized-row responsibilities instead of obsolete manual/probe workflows.
+- Security Improvements: Removed stale server host, DuckDNS, old branch/version, old commit, and obsolete path references that could mislead production operators.
+- Dead Code Removed: None in this metadata commit; source commit updated the live architecture document.
+- Duplicate Logic Removed: Removed duplicate/obsolete balance-operation guidance already superseded by maintained service and management-command tests.
+- Tests Added: None; documentation-only source change. Existing balance regression tests were run.
+- Verification Results:
+  - Dependency scan found the document remains live through `docs/README.md` and historical planning references; it was retained and updated rather than deleted.
+  - Stale-marker scan confirmed obsolete `139.59`, `duckdns`, `debug_balance`, old commit IDs, old `backend/license/models.py`, and old branch/version references were removed.
+  - `.venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py backend/tests/test_api_license.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py backend/tests/test_api_license.py` -> passed.
+  - `.venv/bin/python -m compileall -q` scoped to balance service, command, and test files -> passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q` -> 36 passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `git diff --check -- docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md` -> clean before source commit.
+- Commit SHA: `a6246911dab2fcf96053f3e5b87dc6f92a93e74d`
+- Commit Timestamp: `2026-07-16T17:50:32+05:30`
+- Commit Summary: `docs(inventory): update balance architecture guide`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Adjacent queued inventory/balance item remains: `frontend/src/components/LicenseBalanceModal.tsx`.
+- Status: COMPLETED

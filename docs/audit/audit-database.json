@@ -37,6 +37,12 @@
       "event": "Phase 9 Inventory stale balance test script removed from active audit inventory.",
       "reason": "File was an ad hoc dev DB print script duplicated by maintained balance tests.",
       "commit_sha": "8058036a1a16d037cdd27c99ba2a26e81d7ba395"
+    },
+    {
+      "timestamp": "2026-07-16T17:50:32+05:30",
+      "event": "Phase 9 Inventory balance architecture guide completed.",
+      "reason": "Stale deployment checklist was replaced with current LicenseBalanceCalculator, LicenseBalance subrow, validation, and test contracts.",
+      "commit_sha": "a6246911dab2fcf96053f3e5b87dc6f92a93e74d"
     }
   ],
   "blocked_work": [
@@ -380,7 +386,8 @@
     "Phase 8 Bills of Entry deleted empty backend/apps/bill_of_entry/tests.py stub after dependency scan found no live imports or test discovery value; source commit 07cc55e742f061e66643eb02034f7c9078531b4c (cleanup(bill_of_entry): remove empty test stub).",
     "Phase 8 Bills of Entry completed: active audit database has zero backend/apps/bill_of_entry files marked NOT_STARTED or REQUIRES_RECHECK; Phase 9 Inventory queued next.",
     "Phase 9 Inventory deleted stale backend/scripts/char_license_list_balance.py characterization probe after dependency analysis found no live callers; source commit 1d7fb0713b09b25b7375f749c076a43b4734a9f0 (cleanup(inventory): remove stale balance probe).",
-    "Phase 9 Inventory deleted stale backend/scripts/test_balance_calc.py dev DB print script after dependency analysis found no live callers; source commit 8058036a1a16d037cdd27c99ba2a26e81d7ba395 (cleanup(inventory): remove stale balance test script)."
+    "Phase 9 Inventory deleted stale backend/scripts/test_balance_calc.py dev DB print script after dependency analysis found no live callers; source commit 8058036a1a16d037cdd27c99ba2a26e81d7ba395 (cleanup(inventory): remove stale balance test script).",
+    "Phase 9 Inventory completed docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md; stale deployment-era balance guide replaced with current LicenseBalanceCalculator architecture in source commit a6246911dab2fcf96053f3e5b87dc6f92a93e74d (docs(inventory): update balance architecture guide)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -19507,33 +19514,33 @@
       "total_lines": 233
     },
     "docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 15,
+      "audit_status": "COMPLETED",
+      "complexity": 5,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "5170c53b31bf6eafd8f047ee155a6386dff8c8fa291038a0ff6bb85363cf755b",
+      "file_checksum": "76f362e714280e5b836d6e81012d4efc2ee39668246ff0c525d7347ddc1e3efe",
       "file_fingerprint": {
-        "mtime_ns": 1784119299546702279,
-        "size": 6694,
+        "mtime_ns": 1784204359007214576,
+        "size": 4974,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "markdown",
-      "last_audit_timestamp": null,
-      "maintainability_score": 91,
+      "last_audit_timestamp": "2026-07-16T17:50:32+05:30",
+      "maintainability_score": 98,
       "module": "docs",
       "performance_score": 99,
       "previous_index_checksum": null,
-      "readability_score": 91,
-      "security_score": 80,
-      "technical_debt_score": 9,
+      "readability_score": 98,
+      "security_score": 96,
+      "technical_debt_score": 1,
       "todo_count": 0,
-      "total_classes": 1,
-      "total_functions": 5,
+      "total_classes": 0,
+      "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 231
+      "total_lines": 133
     },
     "docs/architecture/CODE_SPLITTING_GUIDE.md": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31438,12 +31445,12 @@
     "docs": {
       "blocked": 0,
       "changed": 3,
-      "completed": 19,
+      "completed": 20,
       "files": 53,
       "in_progress": 0,
-      "lines": 24466,
+      "lines": 24368,
       "not_started": 0,
-      "requires_recheck": 31
+      "requires_recheck": 30
     },
     "frontend": {
       "blocked": 0,
@@ -31839,18 +31846,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 115639,
+    "audited_lines": 115772,
     "blocked": 0,
     "changed": 50,
-    "completed": 495,
+    "completed": 496,
     "files": 915,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 241418,
+    "lines": 241320,
     "not_started": 12,
-    "remaining_lines": 125779,
-    "requires_recheck": 358,
+    "remaining_lines": 125548,
+    "requires_recheck": 357,
     "todo": 22
   },
   "verification_history": [
@@ -32934,6 +32941,16 @@
     "Phase 9 inventory test_balance_calc Django check: .venv/bin/python backend/manage.py check -> no issues.",
     "Phase 9 inventory test_balance_calc makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
     "Phase 9 inventory test_balance_calc diff check: git diff --check -- backend/scripts/test_balance_calc.py -> clean before source commit.",
-    "Phase 9 inventory test_balance_calc commit: 8058036a1a16d037cdd27c99ba2a26e81d7ba395 at 2026-07-16T17:42:58+05:30, cleanup(inventory): remove stale balance test script."
+    "Phase 9 inventory test_balance_calc commit: 8058036a1a16d037cdd27c99ba2a26e81d7ba395 at 2026-07-16T17:42:58+05:30, cleanup(inventory): remove stale balance test script.",
+    "Phase 9 balance architecture dependency scan: document remains live through docs/README.md and historical planning references; retained and updated rather than deleted.",
+    "Phase 9 balance architecture stale-marker scan: removed obsolete host, duckdns, debug_balance, old commit IDs, old version branch, and obsolete backend/license path references.",
+    "Phase 9 balance architecture Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py backend/tests/test_api_license.py -> clean.",
+    "Phase 9 balance architecture py_compile: .venv/bin/python -m py_compile backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py backend/tests/test_api_license.py -> passed.",
+    "Phase 9 balance architecture compileall: .venv/bin/python -m compileall -q scoped balance service/command/test files -> passed.",
+    "Phase 9 balance architecture regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q -> 36 passed.",
+    "Phase 9 balance architecture Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 9 balance architecture makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
+    "Phase 9 balance architecture diff check: git diff --check -- docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md -> clean before source commit.",
+    "Phase 9 balance architecture commit: a6246911dab2fcf96053f3e5b87dc6f92a93e74d at 2026-07-16T17:50:32+05:30, docs(inventory): update balance architecture guide."
   ]
 }

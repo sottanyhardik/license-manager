@@ -270,6 +270,49 @@
   - None for this file.
 - Status: COMPLETED
 
+## frontend/src/pages/reports/DownloadLicense.tsx
+
+- File Path: `frontend/src/pages/reports/DownloadLicense.tsx`
+- Module: Reporting & Exports / Frontend bulk license balance Excel export page
+- LOC: 283
+- Lines Reviewed: 283
+- Functions Reviewed: 7 (`normalizeDownloadDays`, `parseLicenseNumbers`, `extractLicenseNumbers`, `downloadBlob`, `DownloadLicense`, `handleDownload`, `handleBulkDownload`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added day normalization for status-based reports to clamp invalid, empty, negative, zero, and overflow values to the existing `1..3650` UI range.
+  - Added manual license-number trimming and deduplication before POSTing to `licenses/bulk-balance-excel/`.
+  - Added defensive extraction for status report responses so missing, null, empty, or non-string `license_number` values do not reach the bulk export payload.
+  - Preserved the existing disabled state for empty manual input and added regression coverage for it.
+- Package Replacements:
+  - None. Existing React state, Axios API client, Sonner toasts, and project UI primitives remain appropriate.
+- Performance Improvements:
+  - Avoids duplicate bulk-export work by deduplicating manual license numbers client-side before the POST request.
+  - Avoids unnecessary bulk POSTs when status-report responses contain no valid license numbers.
+- Security Improvements:
+  - Kept all API paths relative to the authenticated Axios base URL.
+  - Added delayed object URL revocation in `downloadBlob()` so generated Blob URLs are cleaned up without racing the browser download.
+  - Added stable label/help wiring for the textarea and day input plus `aria-pressed` on status toggle buttons.
+- Dead Code Removed:
+  - Removed duplicated inline anchor/object-URL download blocks from both export handlers.
+- Duplicate Logic Removed:
+  - Consolidated blob download behavior into local `downloadBlob()`.
+  - Consolidated license parsing and day normalization into direct helper functions with unit coverage.
+- Tests Added:
+  - Added `frontend/src/pages/reports/DownloadLicense.test.tsx` covering helper boundaries, license-number dedupe, disabled empty input, malformed status report rows, active status export, and expiring status export.
+- Verification Results:
+  - Dependency search: `rg -n "DownloadLicense|download-license|reports/download|License Downloads|active.*days|expiring.*days" frontend backend docs docs/audit -g '!node_modules'` reviewed route, docs, backend bulk-export endpoint, and report endpoint references.
+  - Focused Vitest: `npm test -- DownloadLicense.test.tsx` -> 6 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/DownloadLicense.tsx src/pages/reports/DownloadLicense.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED
+
 ## backend/apps/bill_of_entry/views_export.py
 
 - File Path: `backend/apps/bill_of_entry/views_export.py`

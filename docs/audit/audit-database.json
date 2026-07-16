@@ -13,6 +13,18 @@
       "event": "Phase 8 BOE legacy Django template-view stack removed from active audit inventory.",
       "reason": "Dependency analysis proved the legacy templates, views, and script utility were orphaned after URLConf/DRF migration; source deletion committed atomically.",
       "commit_sha": "0d42a515b6349520b665ad388f49fe92a78d45bc"
+    },
+    {
+      "timestamp": "2026-07-16T17:27:18+05:30",
+      "event": "Phase 8 BOE empty tests.py stub removed from active audit inventory.",
+      "reason": "Generated Django test stub had no executable tests and no live references; active BOE regressions live in backend/tests.",
+      "commit_sha": "07cc55e742f061e66643eb02034f7c9078531b4c"
+    },
+    {
+      "timestamp": "2026-07-16T17:27:18+05:30",
+      "event": "Phase 8 Bills of Entry completed and frozen in audit state.",
+      "reason": "All queued BOE NOT_STARTED/REQUIRES_RECHECK files were completed or deleted with verification and commits recorded.",
+      "commit_sha": "07cc55e742f061e66643eb02034f7c9078531b4c"
     }
   ],
   "blocked_work": [
@@ -352,10 +364,13 @@
     "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/scripts/generate_tl.py after repository-wide runtime reference scan found no imports, routes, commands, tests, or execution paths.",
     "Phase 8 Bills of Entry port dictionary audit completed for backend/apps/bill_of_entry/scripts/utils.py with source retained unchanged for the live BOE fetch dependency.",
     "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/tasks.py after dependency analysis found no active task callers and current BOE models use synchronous balance updates.",
-    "Phase 8 Bills of Entry deleted verified-dead legacy Django template-view stack after repository-wide dependency analysis found no live render, URL, include, command, test, middleware, signal, email, PDF/report/export, dynamic-import, or runtime execution path; source commit 0d42a515b6349520b665ad388f49fe92a78d45bc (cleanup(bill_of_entry): remove dead legacy template views)."
+    "Phase 8 Bills of Entry deleted verified-dead legacy Django template-view stack after repository-wide dependency analysis found no live render, URL, include, command, test, middleware, signal, email, PDF/report/export, dynamic-import, or runtime execution path; source commit 0d42a515b6349520b665ad388f49fe92a78d45bc (cleanup(bill_of_entry): remove dead legacy template views).",
+    "Phase 8 Bills of Entry deleted empty backend/apps/bill_of_entry/tests.py stub after dependency scan found no live imports or test discovery value; source commit 07cc55e742f061e66643eb02034f7c9078531b4c (cleanup(bill_of_entry): remove empty test stub).",
+    "Phase 8 Bills of Entry completed: active audit database has zero backend/apps/bill_of_entry files marked NOT_STARTED or REQUIRES_RECHECK; Phase 9 Inventory queued next."
   ],
   "dead_code_findings": [
-    "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py."
+    "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
+    "Phase 8 BOE empty test stub removed: backend/apps/bill_of_entry/tests.py contained only the generated TestCase import/comment and active BOE coverage remains in backend/tests/test_api_boe.py and backend/tests/test_boe_script_helpers.py."
   ],
   "duplicate_logic_findings": [],
   "excluded_files": {
@@ -6495,35 +6510,6 @@
       "total_functions": 10,
       "total_imports": 4,
       "total_lines": 310
-    },
-    "backend/apps/bill_of_entry/tests.py": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 0,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "9ab6c6191360e63c1b4c9b5659aef348a743c9e078be68190917369e4e9563e8",
-      "file_fingerprint": {
-        "mtime_ns": 1784119299581576265,
-        "size": 60,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "python",
-      "last_audit_timestamp": null,
-      "maintainability_score": 100,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 100,
-      "security_score": 80,
-      "technical_debt_score": 0,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 0,
-      "total_imports": 0,
-      "total_lines": 3
     },
     "backend/apps/bill_of_entry/urls.py": {
       "audit_status": "CHANGED",
@@ -31445,11 +31431,11 @@
       "blocked": 0,
       "changed": 5,
       "completed": 15,
-      "files": 21,
+      "files": 20,
       "in_progress": 0,
-      "lines": 3442,
+      "lines": 3439,
       "not_started": 0,
-      "requires_recheck": 1
+      "requires_recheck": 0
     },
     "backend/apps/core": {
       "blocked": 0,
@@ -31824,11 +31810,20 @@
     },
     {
       "id": "P8-BILLS-OF-ENTRY-AUDIT",
-      "impact": "Continue Phase 8 from existing backend/apps/bill_of_entry audit database and repository knowledge graph entries marked NOT_STARTED or REQUIRES_RECHECK.",
+      "impact": "Phase 8 Bills of Entry has no files marked NOT_STARTED or REQUIRES_RECHECK in the active audit database; do not reopen unless dependency changes mark a file REQUIRES_RECHECK.",
+      "priority": 1,
+      "status": "DONE",
+      "stream": "Bills of Entry",
+      "title": "Phase 8 Bills of Entry audit completed and frozen",
+      "verification": "Focused BOE regressions, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and security-tool blockers are recorded in docs/audit/phase-08-bills-of-entry-report.md."
+    },
+    {
+      "id": "P9-INVENTORY-AUDIT",
+      "impact": "Begin Phase 9 Inventory from existing audit database and repository knowledge graph entries marked NOT_STARTED or REQUIRES_RECHECK.",
       "priority": 1,
       "status": "PENDING",
-      "stream": "Bills of Entry",
-      "title": "Continue Phase 8 Bills of Entry audit from the next pending file",
+      "stream": "Inventory",
+      "title": "Begin Phase 9 Inventory audit from the next pending file",
       "verification": "Run focused backend/frontend tests as applicable, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and available security tooling after each completed logical unit."
     }
   ],
@@ -31855,7 +31850,7 @@
   "repository_inventory": {
     "excluded_files": 595,
     "inventory_rule": "Only source, tests, configs, migrations, scripts, and documentation are audited.",
-    "source_files": 918
+    "source_files": 917
   },
   "repository_metadata": {
     "branch": "feature/V2",
@@ -31890,14 +31885,14 @@
     "blocked": 0,
     "changed": 50,
     "completed": 495,
-    "files": 918,
+    "files": 917,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 241608,
+    "lines": 241605,
     "not_started": 12,
-    "remaining_lines": 125969,
-    "requires_recheck": 361,
+    "remaining_lines": 125966,
+    "requires_recheck": 360,
     "todo": 22
   },
   "verification_history": [
@@ -32953,6 +32948,15 @@
     "Phase 8 BOE legacy template deletion Django check: .venv/bin/python backend/manage.py check -> no issues.",
     "Phase 8 BOE legacy template deletion makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
     "Phase 8 BOE legacy template deletion diff check: git diff --check scoped to deleted stack and operations note -> clean.",
-    "Phase 8 BOE legacy template deletion commit: 0d42a515b6349520b665ad388f49fe92a78d45bc at 2026-07-16T17:17:06+05:30, cleanup(bill_of_entry): remove dead legacy template views."
+    "Phase 8 BOE legacy template deletion commit: 0d42a515b6349520b665ad388f49fe92a78d45bc at 2026-07-16T17:17:06+05:30, cleanup(bill_of_entry): remove dead legacy template views.",
+    "Phase 8 BOE tests.py dependency scan: no runtime imports or active references; remaining references before metadata update were audit docs/database only.",
+    "Phase 8 BOE tests.py scoped Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py backend/tests/test_api_boe.py -> clean.",
+    "Phase 8 BOE tests.py py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py -> passed.",
+    "Phase 8 BOE tests.py compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry -> passed.",
+    "Phase 8 BOE tests.py regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q -> 18 passed.",
+    "Phase 8 BOE tests.py Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 8 BOE tests.py makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
+    "Phase 8 BOE tests.py diff check: git diff --check -- backend/apps/bill_of_entry/tests.py -> clean before source commit.",
+    "Phase 8 BOE tests.py commit: 07cc55e742f061e66643eb02034f7c9078531b4c at 2026-07-16T17:27:18+05:30, cleanup(bill_of_entry): remove empty test stub."
   ]
 }

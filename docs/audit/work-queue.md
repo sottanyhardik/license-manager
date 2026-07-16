@@ -5,7 +5,8 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 | ID | Priority | Stream | Status | Work | Verification |
 |---|---:|---|---|---|---|
 | `P7-REPORTING-EXPORTS-AUDIT` | 1 | Reporting & Exports | DONE | Phase 7 Reporting & Exports is frozen; do not reopen completed Phase 7 files unless the Repository Knowledge Graph marks them `REQUIRES_RECHECK`. | Existing Phase 7 file-level verification recorded in `docs/audit/phase-07-reporting-report.md`, audit database, dashboard, and work queue history. |
-| `P8-BILLS-OF-ENTRY-AUDIT` | 1 | Bills of Entry | PENDING | Continue Phase 8 Bills of Entry audit from the highest-priority `NOT_STARTED` or `REQUIRES_RECHECK` file in the existing audit database and repository knowledge graph. | Run focused backend/frontend tests as applicable, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and available security tooling after each completed logical unit. |
+| `P8-BILLS-OF-ENTRY-AUDIT` | 1 | Bills of Entry | DONE | Phase 8 Bills of Entry completed all queued `NOT_STARTED` and `REQUIRES_RECHECK` files in the active audit database. | Focused backend tests, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and security-tool availability blockers are recorded in the Phase 8 report. |
+| `P9-INVENTORY-AUDIT` | 1 | Inventory | PENDING | Begin Phase 9 from the highest-priority Inventory file marked `NOT_STARTED` or `REQUIRES_RECHECK` in the existing audit database and repository knowledge graph. | Run focused backend/frontend tests as applicable, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and available security tooling after each completed logical unit. |
 
 ## Work Queue History
 
@@ -22,6 +23,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-16T17:08:36+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/scripts/utils.py`; retained live ICEGATE port dictionary unchanged and continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T17:11:47+05:30` - Phase 8 Bills of Entry deleted obsolete `backend/apps/bill_of_entry/tasks.py` in commit `b6bb035b05c8497f9c6c9a71fb3f609bf02ef521` (`cleanup(bill_of_entry): remove dead balance task`); continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T17:17:06+05:30` - Phase 8 Bills of Entry deleted the verified-dead BOE legacy Django template-view stack in commit `0d42a515b6349520b665ad388f49fe92a78d45bc` (`cleanup(bill_of_entry): remove dead legacy template views`); continue with `backend/apps/bill_of_entry/tests.py`, the remaining BOE file marked `REQUIRES_RECHECK`.
+- `2026-07-16T17:27:18+05:30` - Phase 8 Bills of Entry deleted empty `backend/apps/bill_of_entry/tests.py` in commit `07cc55e742f061e66643eb02034f7c9078531b4c` (`cleanup(bill_of_entry): remove empty test stub`); Phase 8 now has zero BOE files marked `NOT_STARTED` or `REQUIRES_RECHECK`, and Phase 9 Inventory is queued next.
 
 ## Module Pipeline
 

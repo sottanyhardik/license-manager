@@ -6,14 +6,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 - Files audited: `495`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `361`
+- Files requiring dependency recheck: `360`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `423`
-- Total source files tracked: `918`
-- Total source LOC tracked: `241608`
+- Files remaining: `422`
+- Total source files tracked: `917`
+- Total source LOC tracked: `241605`
 - Audited LOC: `115639`
-- Remaining LOC: `125969`
+- Remaining LOC: `125966`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -41,7 +41,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
-| `backend/apps/bill_of_entry` | 21 | 3442 | 15 | 5 | 1 | 0 |
+| `backend/apps/bill_of_entry` | 20 | 3439 | 15 | 5 | 0 | 0 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
 
@@ -84,6 +84,8 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 Bills of Entry port dictionary completed for `backend/apps/bill_of_entry/scripts/utils.py`; live `fetch_views.py` dependency retained source unchanged.
 - Phase 8 Bills of Entry removed obsolete unreferenced `backend/apps/bill_of_entry/tasks.py`; current BOE models use synchronous balance updates instead of the stale Celery task.
 - Phase 8 Bills of Entry removed verified-dead legacy Django template-view stack for BOE: six templates, four legacy views, and the orphaned `scripts/utils.py` port dictionary were deleted after repository-wide dependency analysis found no live runtime path.
+- Phase 8 Bills of Entry removed empty generated `backend/apps/bill_of_entry/tests.py` stub; active BOE regression coverage remains in `backend/tests/test_api_boe.py` and `backend/tests/test_boe_script_helpers.py`.
+- Phase 8 Bills of Entry reached 100% for queued `NOT_STARTED` and `REQUIRES_RECHECK` BOE files in the active audit database.
 
 ## Verification History
 
@@ -142,6 +144,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 BOE legacy template deletion Django check: .venv/bin/python backend/manage.py check -> no issues
 - Phase 8 BOE legacy template deletion makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
 - Phase 8 BOE legacy template deletion commit: 0d42a515b6349520b665ad388f49fe92a78d45bc at 2026-07-16T17:17:06+05:30, cleanup(bill_of_entry): remove dead legacy template views
+- Phase 8 BOE tests.py dependency scan: no runtime imports or active references; remaining references before metadata update were audit docs/database only
+- Phase 8 BOE tests.py scoped Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py backend/tests/test_api_boe.py -> clean
+- Phase 8 BOE tests.py py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py -> passed
+- Phase 8 BOE tests.py compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry -> passed
+- Phase 8 BOE tests.py regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q -> 18 passed
+- Phase 8 BOE tests.py Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE tests.py makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE tests.py commit: 07cc55e742f061e66643eb02034f7c9078531b4c at 2026-07-16T17:27:18+05:30, cleanup(bill_of_entry): remove empty test stub
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

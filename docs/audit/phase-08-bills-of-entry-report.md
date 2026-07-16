@@ -374,3 +374,36 @@
   - Stale legacy nav URL tags remain in `backend/templates/base/main.html`, `backend/apps/core/templates/base.html`, and `backend/apps/core/templates/core/list.html`; these are outside the current BOE unit and should be handled when their owning templates are selected.
   - `backend/apps/bill_of_entry/tests.py` remains the next BOE file marked `REQUIRES_RECHECK` in the active audit database.
 - Status: DELETED
+
+## backend/apps/bill_of_entry/tests.py
+
+- File Path(s): `backend/apps/bill_of_entry/tests.py`
+- Module: Bills of Entry / Empty Django test stub
+- Total LOC: 3
+- Lines Reviewed: 3 plus repository-wide dependency references
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None required; file contained no executable tests, validation paths, fixtures, imports beyond unused `TestCase`, or assertions.
+- Package Replacements: None; deletion was preferred over replacing an empty generated stub.
+- Performance Improvements: Removed a no-op test discovery file from active source inventory.
+- Security Improvements: None required; file had no runtime path.
+- Dead Code Removed: Deleted empty generated Django test stub.
+- Duplicate Logic Removed: None; active BOE coverage remains in `backend/tests/test_api_boe.py` and `backend/tests/test_boe_script_helpers.py`.
+- Tests Added: None; existing focused BOE API/helper regressions were run.
+- Verification Results:
+  - Repository-wide dependency scan found no runtime imports or active references; remaining references before metadata update were audit docs/database only.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py backend/tests/test_api_boe.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q` -> 18 passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `git diff --check -- backend/apps/bill_of_entry/tests.py` -> clean before source commit.
+- Commit SHA: `07cc55e742f061e66643eb02034f7c9078531b4c`
+- Commit Timestamp: `2026-07-16T17:27:18+05:30`
+- Commit Summary: `cleanup(bill_of_entry): remove empty test stub`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Phase 8 active audit database has no remaining BOE files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Status: DELETED

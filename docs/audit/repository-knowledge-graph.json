@@ -129,11 +129,11 @@
         "blocked": 0,
         "changed": 6,
         "completed": 23,
-        "files": 121,
+        "files": 120,
         "in_progress": 0,
-        "lines": 76270,
+        "lines": 76267,
         "not_started": 2,
-        "requires_recheck": 90
+        "requires_recheck": 89
       },
       "backend/apps/__init__.py": {
         "blocked": 0,
@@ -168,12 +168,12 @@
       "backend/apps/bill_of_entry": {
         "blocked": 0,
         "changed": 5,
-        "completed": 6,
-        "files": 23,
+        "completed": 15,
+        "files": 20,
         "in_progress": 0,
-        "lines": 3399,
-        "not_started": 2,
-        "requires_recheck": 10
+        "lines": 3439,
+        "not_started": 0,
+        "requires_recheck": 0
       },
       "backend/apps/core": {
         "blocked": 0,
@@ -561,13 +561,6 @@
       "backend/apps/allotment/signals.py",
       "backend/apps/allotment/views.py",
       "backend/apps/allotment/views_actions.py",
-      "backend/apps/bill_of_entry/admin.py",
-      "backend/apps/bill_of_entry/models.py",
-      "backend/apps/bill_of_entry/parsers/boe_pdf.py",
-      "backend/apps/bill_of_entry/serializers.py",
-      "backend/apps/bill_of_entry/services/boe_service.py",
-      "backend/apps/bill_of_entry/views/boe.py",
-      "backend/apps/bill_of_entry/views/parse_pdf.py",
       "backend/apps/core/__init__.py",
       "backend/apps/core/admin.py",
       "backend/apps/core/authentication.py",
@@ -834,9 +827,6 @@
       "frontend/vite.config.js",
       "frontend/vitest.config.ts",
       "legacy/backend/apps/allotment/views.py",
-      "legacy/backend/apps/bill_of_entry/services/boe_service.py",
-      "legacy/backend/apps/bill_of_entry/views/boe.py",
-      "legacy/backend/apps/bill_of_entry/views/parse_pdf.py",
       "legacy/backend/apps/core/management/commands/seed_e132_plan_items.py",
       "legacy/backend/apps/core/tests/test_mds_write_cutover.py",
       "legacy/backend/apps/license/management/commands/parse_existing_license_copies.py",
@@ -892,15 +882,20 @@
     "rule": "When a file changes, reload only the file, its imports, dependents, and mapped tests before updating this artifact."
   },
   "repository": {
-    "active_phase": "Phase 8 - Bills of Entry",
+    "active_phase": "Phase 9 - Inventory",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "0d42a515",
+    "head": "07cc55e7",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
         "status": "FROZEN",
         "timestamp": "2026-07-16T16:19:33+05:30"
+      },
+      {
+        "phase": "Phase 8 - Bills of Entry",
+        "status": "FROZEN",
+        "timestamp": "2026-07-16T17:27:18+05:30"
       }
     ],
     "phase_progress": [
@@ -983,11 +978,27 @@
         "phase": "Phase 8 - Bills of Entry",
         "status": "DELETED",
         "timestamp": "2026-07-16T17:17:06+05:30"
+      },
+      {
+        "commit_sha": "07cc55e742f061e66643eb02034f7c9078531b4c",
+        "commit_summary": "cleanup(bill_of_entry): remove empty test stub",
+        "file": "backend/apps/bill_of_entry/tests.py",
+        "phase": "Phase 8 - Bills of Entry",
+        "status": "DELETED",
+        "timestamp": "2026-07-16T17:27:18+05:30"
+      },
+      {
+        "phase": "Phase 8 - Bills of Entry",
+        "status": "COMPLETED",
+        "file": "backend/apps/bill_of_entry",
+        "timestamp": "2026-07-16T17:27:18+05:30",
+        "commit_sha": "07cc55e742f061e66643eb02034f7c9078531b4c",
+        "commit_summary": "cleanup(bill_of_entry): remove empty test stub"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 918,
-    "tracked_audit_lines": 241608,
+    "tracked_audit_files": 917,
+    "tracked_audit_lines": 241605,
     "working_tree": "dirty"
   },
   "schema_version": 1,

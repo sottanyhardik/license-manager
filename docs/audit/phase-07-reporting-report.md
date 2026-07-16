@@ -51,3 +51,40 @@
 - Final scoped Ruff: `.venv/bin/ruff check backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py` -> clean.
 - Final scoped py_compile: `.venv/bin/python -m py_compile backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py` -> passed.
 - Final scoped diff check: `git diff --check -- backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py docs/audit/phase-07-reporting-report.md docs/audit/audit-database.json docs/audit/repository-knowledge-graph.json docs/audit/dashboard.md docs/audit/work-queue.md` -> clean.
+
+## backend/apps/allotment/templates/allotment/download.html
+
+- File Path: `backend/apps/allotment/templates/allotment/download.html`
+- Module: Reporting & Exports / Legacy Allotment Django template
+- LOC: 209
+- Lines Reviewed: 209
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Removed verified-dead legacy template rather than preserving unvalidated server-rendered output.
+- Package Replacements:
+  - None. Active exports already use direct ReportLab/openpyxl paths in `backend/apps/allotment/views_export.py`.
+- Performance Improvements:
+  - Removed a dead nested-template rendering path that contained repeated related-manager lookups and template aggregation tags.
+- Security Improvements:
+  - Removed `{{ df|safe }}` from a dead template, eliminating a stale XSS-prone rendering surface if the template were accidentally reintroduced into a view path.
+- Dead Code Removed:
+  - Deleted the legacy template after repository-wide dependency analysis found no render, `template_name`, include/extends, email/PDF/report/export generation, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path.
+- Duplicate Logic Removed:
+  - Removed legacy table-rendered allotment export output. The active export logic is the DRF `allotments/download/` action.
+- Tests Added:
+  - None required for deletion; no live runtime path referenced the template.
+- Verification Results:
+  - Dependency search: `rg -n "allotment/download\\.html|download\\.html|template_name\\s*=\\s*['\\\"]allotment/download|render\\([^\\n]*allotment/download|TemplateResponse\\([^\\n]*allotment/download|extends ['\\\"]allotment/download|include ['\\\"]allotment/download|download_allotment|allotment.*download|download.*allotment" . -S` -> no live template render path.
+  - URL/view review: `backend/apps/allotment/urls.py` exposes only DRF router routes; active export action is `AllotmentViewSet.download_grouped_export` in `backend/apps/allotment/views_export.py`.
+  - Audit Database: deleted template no longer appears in tracked source files after `python3 docs/audit/build_audit_state.py`.
+  - Remaining exact-reference scan: only audit documentation references remain.
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_allotment.py -q` -> 7 passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Ruff: `.venv/bin/ruff check docs/audit/build_audit_state.py` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - `backend/apps/allotment/templates/allotment/card.html` still contains a stale `{% url 'allotment-download' object.id %}` link and should be evaluated when that template becomes the selected audit file.
+- Status: COMPLETED - REMOVED

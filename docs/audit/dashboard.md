@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:00:30+00:00`
+Generated: `2026-07-16T09:03:55+00:00`
 
 ## Repository Statistics
 
 - Files audited: `439`
 - Files changed directly: `51`
-- Files requiring dependency recheck: `413`
+- Files requiring dependency recheck: `412`
 - Files not started: `15`
 - Files ignored/excluded: `595`
-- Files remaining: `479`
-- Total source files tracked: `918`
-- Total source LOC tracked: `240328`
-- Audited LOC: `103539`
-- Remaining LOC: `136789`
+- Files remaining: `478`
+- Total source files tracked: `917`
+- Total source LOC tracked: `240164`
+- Audited LOC: `103576`
+- Remaining LOC: `136588`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,12 +35,12 @@ Generated: `2026-07-16T09:00:30+00:00`
 | `backend` | 132 | 77271 | 22 | 6 | 101 | 3 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 54 | 24094 | 17 | 3 | 34 | 0 |
+| `docs` | 54 | 24139 | 17 | 3 | 34 | 0 |
 | `frontend/src/pages` | 61 | 17245 | 34 | 0 | 27 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 68 | 8898 | 6 | 0 | 62 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
-| `backend/apps/allotment` | 41 | 5345 | 8 | 5 | 27 | 1 |
+| `backend/apps/allotment` | 40 | 5136 | 8 | 5 | 26 | 1 |
 | `backend/apps/bill_of_entry` | 37 | 4792 | 6 | 6 | 23 | 2 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
@@ -909,6 +909,14 @@ Generated: `2026-07-16T09:00:30+00:00`
 - Phase 7 pdf coordinate finder final py_compile: .venv/bin/python -m py_compile backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py -> passed
 - Phase 7 pdf coordinate finder diff check: git diff --check -- backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py docs/audit/phase-07-reporting-report.md docs/audit/audit-database.json docs/audit/repository-knowledge-graph.json docs/audit/dashboard.md docs/audit/work-queue.md -> clean
 - Phase 7 pdf coordinate finder security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 allotment download template dependency analysis: repository-wide search found no live render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/allotment/templates/allotment/download.html
+- Phase 7 allotment download template removal: deleted verified-dead legacy server-rendered export template; active allotment export uses DRF allotments/download action in backend/apps/allotment/views_export.py
+- Phase 7 allotment download template security review: removed stale {{ df|safe }} rendering surface from dead template; stale allotment-download link in card.html remains for that file's own audit pass
+- Phase 7 allotment download template audit-state verification: deleted template no longer appears in tracked source files after regenerating audit state
+- Phase 7 allotment download template focused pytest: .venv/bin/python -m pytest backend/tests/test_api_allotment.py -q -> 7 passed
+- Phase 7 allotment download template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 allotment download template migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 allotment download template Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

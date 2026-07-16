@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T09:59:47+00:00",
+  "generated_at": "2026-07-16T10:01:41+00:00",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -221,7 +221,7 @@
         "completed": 19,
         "files": 53,
         "in_progress": 0,
-        "lines": 23941,
+        "lines": 23990,
         "not_started": 0,
         "requires_recheck": 31
       },
@@ -348,12 +348,12 @@
       "frontend/src/pages": {
         "blocked": 0,
         "changed": 0,
-        "completed": 52,
-        "files": 70,
+        "completed": 54,
+        "files": 71,
         "in_progress": 0,
-        "lines": 18076,
+        "lines": 18097,
         "not_started": 0,
-        "requires_recheck": 18
+        "requires_recheck": 17
       },
       "frontend/src/routes": {
         "blocked": 0,
@@ -895,10 +895,10 @@
   "repository": {
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "ede878cc",
+    "head": "28f16385",
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 921,
-    "tracked_audit_lines": 240544,
+    "tracked_audit_files": 922,
+    "tracked_audit_lines": 240614,
     "working_tree": "dirty"
   },
   "schema_version": 1,

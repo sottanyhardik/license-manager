@@ -671,6 +671,52 @@
   - The page remains large and should eventually be split into filter, summary, and license-wise table components during a dedicated component extraction audit.
 - Status: COMPLETED
 
+## frontend/src/pages/LicenseLedgerDetail.tsx
+
+- File Path: `frontend/src/pages/LicenseLedgerDetail.tsx`
+- Module: Reporting & Exports / Frontend license ledger detail and single-license export page
+- LOC: 509 (`LicenseLedgerDetail.tsx`) + 114 (`LicenseLedgerDetail.test.tsx`)
+- Lines Reviewed: 509
+- Functions Reviewed: 12 (`isRecord`, `normalizeText`, `toFiniteNumber`, `encodeLedgerPathSegment`, `buildLedgerDetailPath`, `normalizeLedgerDetail`, `sanitizeLedgerFilenamePart`, `getTodayStamp`, `getApiErrorMessage`, `groupTransactionsByCompany`, `LicenseLedgerDetail`, plus local format/export handlers)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Encoded route IDs before building ledger-detail API paths and rejected missing IDs.
+  - Normalized malformed ledger-detail responses before rendering and export.
+  - Sanitized PDF/XLSX filename segments for unsafe filename/control characters.
+  - Normalized balances and currency values before formatting.
+- Package Replacements:
+  - None. Existing React, URLSearchParams, Axios API client, and ledger export utilities remain appropriate.
+- Performance Improvements:
+  - Centralized transaction grouping without changing table ordering semantics.
+  - Avoided rendering non-object transaction entries.
+- Security Improvements:
+  - Removed console logging of API failures.
+  - Prevented unsafe route-param strings from being interpolated directly into authenticated API paths.
+  - Prevented unsafe license numbers from reaching generated export filenames.
+- Dead Code Removed:
+  - Removed inline API path and company grouping duplication.
+- Duplicate Logic Removed:
+  - Centralized API path building, ledger normalization, filename sanitization, date stamping, and company grouping.
+- Tests Added:
+  - Added `frontend/src/pages/LicenseLedgerDetail.test.tsx` covering safe path encoding, malformed response normalization, filename sanitization, date stamps, unknown-company grouping, and PDF export filename generation.
+- Verification Results:
+  - Focused Vitest: `npm test -- LicenseLedgerDetail.test.tsx` -> 5 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/LicenseLedgerDetail.tsx src/pages/LicenseLedgerDetail.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues after build completion.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/LicenseLedgerDetail.tsx frontend/src/pages/LicenseLedgerDetail.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/LicenseLedgerDetail.tsx frontend/src/pages/LicenseLedgerDetail.test.tsx` -> clean.
+- Commit SHA: `ee071fcbf3a2a6930585b58faaae9c793446dd9f`
+- Commit Timestamp: `2026-07-16T15:56:54+05:30`
+- Commit Summary: `fix(reports): harden license ledger detail`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The table renderer remains large and should be split into a grouped transaction table component during a dedicated extraction pass.
+- Status: COMPLETED
+
 ## frontend/src/pages/reports/ActiveLicenses.tsx
 
 - File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`

@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T10:24:33+00:00`
+Generated: `2026-07-16T10:27:29+00:00`
 
 ## Repository Statistics
 
-- Files audited: `483`
+- Files audited: `485`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `381`
+- Files requiring dependency recheck: `380`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `445`
-- Total source files tracked: `928`
-- Total source LOC tracked: `242018`
-- Audited LOC: `113517`
-- Remaining LOC: `128501`
+- Files remaining: `444`
+- Total source files tracked: `929`
+- Total source LOC tracked: `242303`
+- Audited LOC: `114186`
+- Remaining LOC: `128117`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,8 +35,8 @@ Generated: `2026-07-16T10:24:33+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 24357 | 19 | 3 | 31 | 0 |
-| `frontend/src/pages` | 76 | 18986 | 64 | 0 | 12 | 0 |
+| `docs` | 53 | 24411 | 19 | 3 | 31 | 0 |
+| `frontend/src/pages` | 77 | 19217 | 66 | 0 | 11 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
@@ -1055,6 +1055,12 @@ Generated: `2026-07-16T10:24:33+00:00`
 - Phase 7 LicenseLedger verification: npm test -- LicenseLedger.test.tsx -> 6 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/LicenseLedger.tsx src/pages/LicenseLedger.test.tsx -> passed; npm run build -> passed; Django check -> no issues after build completion; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
 - Phase 7 LicenseLedger security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Phase 7 LicenseLedger commit: 08d50b2aa5fbd2a23ebcc3657be8c8425a268460 at 2026-07-16T15:54:00+05:30, fix(reports): harden license ledger
+- Phase 7 LicenseLedgerDetail audit: reviewed 392-line React ledger detail/export page, route-param API path construction, query company filter, ledger-detail response rendering, grouped transaction table, warning states, PDF/Excel export filename generation, and export utility dependencies
+- Phase 7 LicenseLedgerDetail hardening: added safe route segment encoding, normalized malformed ledger-detail responses, rejected blank IDs and malformed responses, removed console error leakage, sanitized export filename segments, centralized date stamping, grouped transactions through a reusable helper, and normalized currency balances
+- Phase 7 LicenseLedgerDetail regression: added frontend/src/pages/LicenseLedgerDetail.test.tsx covering path encoding, malformed response normalization, filename sanitization, date stamps, unknown-company grouping, and PDF export filename generation
+- Phase 7 LicenseLedgerDetail verification: npm test -- LicenseLedgerDetail.test.tsx -> 5 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/LicenseLedgerDetail.tsx src/pages/LicenseLedgerDetail.test.tsx -> passed; npm run build -> passed; Django check -> no issues after build completion; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 LicenseLedgerDetail security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 LicenseLedgerDetail commit: ee071fcbf3a2a6930585b58faaae9c793446dd9f at 2026-07-16T15:56:54+05:30, fix(reports): harden license ledger detail
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

@@ -44,6 +44,42 @@
   - None for this file.
 - Status: COMPLETED
 
+## docs/guides/PDF_VIEWER_IMPLEMENTATION.md
+
+- File Path: `docs/guides/PDF_VIEWER_IMPLEMENTATION.md`
+- Module: Reporting & Exports / Frontend PDF preview documentation
+- LOC: 165
+- Lines Reviewed: 165
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Replaced stale JSX/App documentation with current TypeScript paths and current route/helper behavior.
+  - Documented the accepted relative API path contract for `/pdf-viewer`.
+- Package Replacements:
+  - None. Existing React Router, Axios, browser Blob URL APIs, and `openPdfPreview()` helper remain appropriate.
+- Performance Improvements:
+  - Documented blob URL cleanup behavior and current preview flows.
+- Security Improvements:
+  - Hardened `frontend/src/pages/PDFViewer.tsx` so unsafe `url` query values are rejected before authenticated Axios requests.
+  - Added `normalizePdfApiPath()` coverage for empty, absolute, protocol-relative, `javascript:`, backslash-containing, and valid relative paths.
+- Dead Code Removed:
+  - Removed obsolete documentation references to `PDFViewer.jsx`, `App.jsx`, `LicenseLedger.jsx`, old commit IDs, and outdated "next steps".
+- Duplicate Logic Removed:
+  - Consolidated the guide around the two actual preview mechanisms: `/pdf-viewer` and `openPdfPreview()`.
+- Tests Added:
+  - Added `frontend/src/pages/PDFViewer.test.tsx` covering URL normalization, blocked unsafe URLs, and successful safe relative PDF rendering.
+- Verification Results:
+  - Dependency search: `PDFViewer.tsx`, `AppRoutes.tsx`, `pdfPreview.js`, and active callers reviewed.
+  - Focused Vitest: `npm test -- PDFViewer.test.tsx` -> 3 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/PDFViewer.tsx src/pages/PDFViewer.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this guide or the directly hardened viewer URL validation path.
+- Status: COMPLETED
+
 ### Final State Verification
 
 - Audit Database: `backend/apps/allotment/scripts/pdf_coordinate_finder.py`, `backend/tests/test_pdf_coordinate_finder.py`, and `docs/audit/phase-07-reporting-report.md` marked `COMPLETED`.

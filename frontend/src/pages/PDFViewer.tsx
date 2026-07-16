@@ -5,6 +5,18 @@ import { Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 import api from "../api/axios";
 import { Button } from "@/components/ui/button";
 
+export function normalizePdfApiPath(value: string | null): string | null {
+    const trimmed = value?.trim();
+    if (!trimmed) return null;
+    if (Array.from(trimmed).some((char) => {
+        const code = char.charCodeAt(0);
+        return code <= 31 || code === 127;
+    })) return null;
+    if (/^[a-z][a-z\d+\-.]*:/i.test(trimmed)) return null;
+    if (trimmed.startsWith("//") || trimmed.includes("\\")) return null;
+    return trimmed;
+}
+
 /**
  * PDF Viewer — opens PDFs in a dedicated route that regenerates on refresh.
  * URL format: /pdf-viewer?url=/license-ledger/export/all/?params...
@@ -14,7 +26,7 @@ export default function PDFViewer() {
     const [pdfUrl, setPdfUrl] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const apiUrl = searchParams.get("url");
+    const apiUrl = normalizePdfApiPath(searchParams.get("url"));
 
     useEffect(() => {
         let isMounted = true;
@@ -22,7 +34,7 @@ export default function PDFViewer() {
 
         const fetchPDF = async () => {
             if (!apiUrl) {
-                if (isMounted) { setError("No PDF URL provided"); setLoading(false); }
+                if (isMounted) { setError("Invalid or missing PDF URL"); setLoading(false); }
                 return;
             }
             try {

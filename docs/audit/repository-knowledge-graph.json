@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T09:18:18+00:00",
+  "generated_at": "2026-07-16T09:22:37+00:00",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -218,12 +218,12 @@
       "docs": {
         "blocked": 0,
         "changed": 3,
-        "completed": 17,
+        "completed": 18,
         "files": 54,
         "in_progress": 0,
-        "lines": 24396,
+        "lines": 24264,
         "not_started": 0,
-        "requires_recheck": 34
+        "requires_recheck": 33
       },
       "frontend": {
         "blocked": 0,
@@ -348,12 +348,12 @@
       "frontend/src/pages": {
         "blocked": 0,
         "changed": 0,
-        "completed": 34,
-        "files": 61,
+        "completed": 36,
+        "files": 62,
         "in_progress": 0,
-        "lines": 17245,
+        "lines": 17334,
         "not_started": 0,
-        "requires_recheck": 27
+        "requires_recheck": 26
       },
       "frontend/src/routes": {
         "blocked": 0,
@@ -785,6 +785,7 @@
       "docs/architecture/RBAC_DOCUMENTATION.md",
       "docs/audit/build_audit_state.py",
       "docs/audit/phase-07-reporting-report.md",
+      "docs/guides/PDF_VIEWER_IMPLEMENTATION.md",
       "docs/operations/RBAC_SETUP_INSTRUCTIONS.md",
       "docs/operations/master-consolidation.md",
       "frontend/package-lock.json",
@@ -797,6 +798,8 @@
       "frontend/src/pages/Dashboard.tsx",
       "frontend/src/pages/Login.test.tsx",
       "frontend/src/pages/Login.tsx",
+      "frontend/src/pages/PDFViewer.test.tsx",
+      "frontend/src/pages/PDFViewer.tsx",
       "frontend/src/pages/TradeForm.smoke.test.tsx",
       "frontend/src/pages/TradeForm.tsx",
       "frontend/src/pages/admin/UserForm.test.tsx",
@@ -895,10 +898,10 @@
   "repository": {
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "a7b5be7c",
+    "head": "f4e08a4a",
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 912,
-    "tracked_audit_lines": 240074,
+    "tracked_audit_files": 913,
+    "tracked_audit_lines": 240031,
     "working_tree": "dirty"
   },
   "schema_version": 1,

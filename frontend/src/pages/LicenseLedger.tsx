@@ -11,8 +11,217 @@ import { Switch } from "@/components/ui/switch";
 import DebouncedSearchInput from '../components/DebouncedSearchInput';
 import { ArrowDownCircle, ArrowUpCircle, BookOpen, Building2, Calendar, CalendarCheck, CalendarRange, CalendarX, FileSpreadsheet, FileText, Filter, Globe, Inbox, Loader2, Trophy, XCircle } from "lucide-react";
 
-function LicenseWiseLedger({ data, navigate }) {
-    const { licenses } = data;
+type CompanyFilter = { value: string | number; label?: string } | string | null;
+
+type LedgerFilters = {
+    license_type: string;
+    min_balance: string;
+    search: string;
+    company: CompanyFilter;
+    active_only: boolean;
+    ordering: string;
+    purchase_date_from: string;
+    purchase_date_to: string;
+    no_purchases?: boolean;
+};
+
+type LedgerTransaction = {
+    trade_id: string | number;
+    invoice_date: string;
+    amount: number;
+};
+
+type LedgerCompany = {
+    company_id: string | number;
+    company_name: string;
+    purchases: LedgerTransaction[];
+    sales: LedgerTransaction[];
+    purchase_total: number;
+    sale_total: number;
+    profit_loss: number;
+};
+
+type LicenseWiseEntry = {
+    license_id: string | number;
+    license_number: string;
+    license_date: string;
+    license_type: string;
+    companies: LedgerCompany[];
+};
+
+type LicenseWiseData = {
+    licenses: LicenseWiseEntry[];
+};
+
+const VALID_LICENSE_TYPES = new Set(['ALL', 'DFIA', 'INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']);
+const VALID_ORDERING = new Set(['-license_date', 'license_date', '-balance_value', 'balance_value']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+function normalizeText(value: unknown, fallback = ''): string {
+    const normalized = String(value ?? '').trim();
+    return normalized || fallback;
+}
+
+function toFiniteNumber(value: unknown): number {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function normalizeId(value: unknown, fallback: string | number): string | number {
+    if (typeof value === 'string') {
+        return normalizeText(value, String(fallback));
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+    return fallback;
+}
+
+export function getFinancialYearRange(date = new Date(), offset = 0) {
+    const currentYear = date.getFullYear();
+    const currentMonth = date.getMonth();
+    const currentFyStartYear = currentMonth <= 2 ? currentYear - 1 : currentYear;
+    const fyStartYear = currentFyStartYear + offset;
+
+    return {
+        fyStart: `${fyStartYear}-04-01`,
+        fyEnd: `${fyStartYear + 1}-03-31`,
+    };
+}
+
+export function normalizeMinBalance(value: unknown): string {
+    const rawValue = String(value ?? '').trim();
+    if (!rawValue) {
+        return '';
+    }
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+        return '';
+    }
+    return String(parsed);
+}
+
+export function getCompanyFilterValue(company: CompanyFilter): string {
+    if (!company) {
+        return '';
+    }
+    if (typeof company === 'object') {
+        return normalizeText(company.value);
+    }
+    return normalizeText(company);
+}
+
+export function buildLedgerFilterParams(filters: LedgerFilters, additionalFilters: Partial<LedgerFilters> = {}) {
+    const currentFilters = { ...filters, ...additionalFilters };
+    const params = new URLSearchParams();
+    const licenseType = VALID_LICENSE_TYPES.has(currentFilters.license_type) ? currentFilters.license_type : 'ALL';
+    const minBalance = normalizeMinBalance(currentFilters.min_balance);
+    const company = getCompanyFilterValue(currentFilters.company);
+    const ordering = VALID_ORDERING.has(currentFilters.ordering) ? currentFilters.ordering : '-license_date';
+
+    params.append('license_type', licenseType);
+    if (minBalance) params.append('min_balance', minBalance);
+    if (currentFilters.search.trim()) params.append('search', currentFilters.search.trim());
+    if (company) params.append('company', company);
+    params.append('ordering', ordering);
+    if (currentFilters.purchase_date_from) params.append('purchase_date_from', currentFilters.purchase_date_from);
+    if (currentFilters.purchase_date_to) params.append('purchase_date_to', currentFilters.purchase_date_to);
+    params.append('active_only', String(Boolean(currentFilters.active_only)));
+    if (currentFilters.no_purchases) params.append('no_purchases', 'true');
+
+    return params;
+}
+
+function normalizeTransactions(value: unknown): LedgerTransaction[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.flatMap((row, index) => {
+        if (!isRecord(row)) {
+            return [];
+        }
+        return [{
+            trade_id: normalizeId(row.trade_id, index),
+            invoice_date: normalizeText(row.invoice_date, '-'),
+            amount: toFiniteNumber(row.amount),
+        }];
+    });
+}
+
+export function normalizeLicenseWiseData(value: unknown): LicenseWiseData {
+    const rawLicenses = isRecord(value) && Array.isArray(value.licenses) ? value.licenses : [];
+
+    return {
+        licenses: rawLicenses.flatMap((license) => {
+            if (!isRecord(license)) {
+                return [];
+            }
+            const licenseId = license.license_id ?? license.id;
+            if (licenseId === null || licenseId === undefined || String(licenseId).trim() === '') {
+                return [];
+            }
+
+            const rawCompanies = Array.isArray(license.companies) ? license.companies : [];
+            const companies = rawCompanies.flatMap((company, index) => {
+                if (!isRecord(company)) {
+                    return [];
+                }
+                return [{
+                    company_id: normalizeId(company.company_id, index),
+                    company_name: normalizeText(company.company_name, 'Unknown company'),
+                    purchases: normalizeTransactions(company.purchases),
+                    sales: normalizeTransactions(company.sales),
+                    purchase_total: toFiniteNumber(company.purchase_total),
+                    sale_total: toFiniteNumber(company.sale_total),
+                    profit_loss: toFiniteNumber(company.profit_loss),
+                }];
+            });
+
+            return [{
+                license_id: normalizeId(licenseId, 'unknown-license'),
+                license_number: normalizeText(license.license_number, 'Unknown license'),
+                license_date: normalizeText(license.license_date, '-'),
+                license_type: normalizeText(license.license_type, 'UNKNOWN'),
+                companies,
+            }];
+        }),
+    };
+}
+
+export function normalizeLedgerExportDetails(value: unknown) {
+    if (!isRecord(value)) {
+        return null;
+    }
+    const licenseId = value.license_id ?? value.id;
+    if (licenseId === null || licenseId === undefined || String(licenseId).trim() === '') {
+        return null;
+    }
+    return value;
+}
+
+export function getTodayStamp(date = new Date()): string {
+    return date.toISOString().slice(0, 10);
+}
+
+function getApiErrorMessage(error: unknown, fallback: string): string {
+    if (isRecord(error) && isRecord(error.response) && isRecord(error.response.data)) {
+        const message = error.response.data.error ?? error.response.data.detail ?? error.response.data.message;
+        if (message) {
+            return normalizeText(message, fallback);
+        }
+    }
+    if (error instanceof Error) {
+        return normalizeText(error.message, fallback);
+    }
+    return fallback;
+}
+
+function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate: ReturnType<typeof useNavigate> }) {
+    const { licenses } = normalizeLicenseWiseData(data);
     const fmt = (v) => `₹${formatIndianNumber(v, 2)}`;
     const plColor = (v) => v >= 0 ? 'var(--tb-success)' : 'var(--tb-danger)';
 
@@ -33,6 +242,7 @@ function LicenseWiseLedger({ data, navigate }) {
                         </span>
                         {navigate && (
                             <button
+                                type="button"
                                 onClick={() => navigate(`/license-ledger/${lic.license_id}`)}
                                 style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 'var(--tb-r-sm)', padding: '3px 10px', fontSize: 12, fontWeight: '600', cursor: 'pointer' }}
                             >
@@ -122,47 +332,12 @@ export default function LicenseLedger() {
     const [, setLicenses] = useState([]);
     const [summary, setSummary] = useState(null);
     const [, setLoading] = useState(true);
-    const [companyWiseData, setCompanyWiseData] = useState(null);
+    const [companyWiseData, setCompanyWiseData] = useState<LicenseWiseData | null>(null);
     const [companyWiseLoading, setCompanyWiseLoading] = useState(false);
 
-    // Get current financial year dates (April 1 to March 31)
-    const getCurrentFinancialYear = () => {
-        const today = new Date();
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth(); // 0-11
+    const { fyStart: currentFYStart, fyEnd: currentFYEnd } = getFinancialYearRange();
 
-        // If current month is Jan-Mar (0-2), FY started last year
-        // If current month is Apr-Dec (3-11), FY started this year
-        const fyStartYear = currentMonth <= 2 ? currentYear - 1 : currentYear;
-
-        const fyStart = `${fyStartYear}-04-01`;
-        const fyEnd = `${fyStartYear + 1}-03-31`;
-
-        return { fyStart, fyEnd };
-    };
-
-    const getPreviousFinancialYear = () => {
-        const today = new Date();
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth();
-
-        const fyStartYear = currentMonth <= 2 ? currentYear - 2 : currentYear - 1;
-
-        const fyStart = `${fyStartYear}-04-01`;
-        const fyEnd = `${fyStartYear + 1}-03-31`;
-
-        return { fyStart, fyEnd };
-    };
-
-    const { fyStart: currentFYStart, fyEnd: currentFYEnd } = getCurrentFinancialYear();
-
-    const [filters, setFilters] = useState<{
-        license_type: string; min_balance: string; search: string;
-        company: { value: string | number } | string | null;
-        active_only: boolean; ordering: string;
-        purchase_date_from: string; purchase_date_to: string;
-        no_purchases?: boolean;
-    }>({
+    const [filters, setFilters] = useState<LedgerFilters>({
         license_type: 'ALL', min_balance: '', search: '', company: null,
         active_only: true, ordering: '-license_date',
         purchase_date_from: currentFYStart, purchase_date_to: currentFYEnd,
@@ -178,27 +353,8 @@ export default function LicenseLedger() {
     ];
 
     // Centralized function to build filter params
-    const buildFilterParams = useCallback((additionalFilters = {}) => {
-        const params = new URLSearchParams();
-
-        const currentFilters = { ...filters, ...additionalFilters };
-
-        if (currentFilters.license_type) params.append('license_type', currentFilters.license_type);
-        if (currentFilters.min_balance) params.append('min_balance', currentFilters.min_balance);
-        if (currentFilters.search) params.append('search', currentFilters.search);
-        if (currentFilters.company) {
-            const co = currentFilters.company;
-            params.append('company', String(typeof co === 'object' && co !== null ? co.value : co));
-        }
-        if (currentFilters.ordering) params.append('ordering', currentFilters.ordering);
-        if (currentFilters.purchase_date_from) params.append('purchase_date_from', currentFilters.purchase_date_from);
-        if (currentFilters.purchase_date_to) params.append('purchase_date_to', currentFilters.purchase_date_to);
-        params.append('active_only', String(currentFilters.active_only));
-
-        // Include no_purchases parameter if provided
-        if (currentFilters.no_purchases) params.append('no_purchases', String(currentFilters.no_purchases));
-
-        return params;
+    const buildFilterParams = useCallback((additionalFilters: Partial<LedgerFilters> = {}) => {
+        return buildLedgerFilterParams(filters, additionalFilters);
     }, [filters]);
 
     useEffect(() => {
@@ -252,7 +408,7 @@ export default function LicenseLedger() {
                 setLicenses([]);
             }
         } catch (error) {
-            toast.error(error?.response?.data?.error || 'Failed to load ledger data.');
+            toast.error(getApiErrorMessage(error, 'Failed to load ledger data.'));
             setLicenses([]);
         } finally {
             setLoading(false);
@@ -271,7 +427,7 @@ export default function LicenseLedger() {
             const response = await api.get(`license-ledger/summary/?${params.toString()}`);
             setSummary(response.data);
         } catch (error) {
-            toast.error('Failed to load summary data.');
+            toast.error(getApiErrorMessage(error, 'Failed to load summary data.'));
         }
     };
 
@@ -281,21 +437,21 @@ export default function LicenseLedger() {
             const params = buildFilterParams();
             params.delete('company'); // company-wise view has no company selected
             const response = await api.get(`license-ledger/license-wise/?${params.toString()}`);
-            setCompanyWiseData(response.data);
+            setCompanyWiseData(normalizeLicenseWiseData(response.data));
         } catch (error) {
-            toast.error('Failed to load company-wise ledger.');
+            toast.error(getApiErrorMessage(error, 'Failed to load company-wise ledger.'));
             setCompanyWiseData(null);
         } finally {
             setCompanyWiseLoading(false);
         }
     };
 
-    const handleFilterChange = (field, value) => {
+    const handleFilterChange = (field: keyof LedgerFilters, value: LedgerFilters[keyof LedgerFilters]) => {
         setFilters(prev => ({ ...prev, [field]: value }));
     };
 
     const setCurrentFinancialYear = () => {
-        const { fyStart, fyEnd } = getCurrentFinancialYear();
+        const { fyStart, fyEnd } = getFinancialYearRange();
         setFilters(prev => ({
             ...prev,
             purchase_date_from: fyStart,
@@ -304,7 +460,7 @@ export default function LicenseLedger() {
     };
 
     const setPreviousFinancialYear = () => {
-        const { fyStart, fyEnd } = getPreviousFinancialYear();
+        const { fyStart, fyEnd } = getFinancialYearRange(undefined, -1);
         setFilters(prev => ({
             ...prev,
             purchase_date_from: fyStart,
@@ -323,28 +479,36 @@ export default function LicenseLedger() {
     const [bulkExporting, setBulkExporting] = useState(false);
 
     const fetchFullLedgerDetails = async () => {
-        const licenses = companyWiseData?.licenses || [];
-        if (!licenses.length) return [];
+        const licenses = normalizeLicenseWiseData(companyWiseData).licenses;
+        if (!licenses.length) return { results: [], failures: 0 };
         const results = [];
+        let failures = 0;
         for (const lic of licenses) {
             try {
                 const { data } = await api.get(`license-ledger/${lic.license_id}/ledger_detail/`);
-                results.push(data);
-            } catch (e) { /* skip failed */ }
+                const detail = normalizeLedgerExportDetails(data);
+                if (detail) {
+                    results.push(detail);
+                } else {
+                    failures += 1;
+                }
+            } catch {
+                failures += 1;
+            }
         }
-        return results;
+        return { results, failures };
     };
 
     const handleBulkExportPDF = async () => {
-        if (!companyWiseData?.licenses?.length) { toast.error('No data to export'); return; }
+        if (!normalizeLicenseWiseData(companyWiseData).licenses.length) { toast.error('No data to export'); return; }
         setBulkExporting(true);
         try {
             toast.info('Fetching ledger details…', { duration: Infinity, id: 'bulk-pdf' });
-            const allLedgers = await fetchFullLedgerDetails();
+            const { results: allLedgers, failures } = await fetchFullLedgerDetails();
             toast.dismiss('bulk-pdf');
             if (!allLedgers.length) { toast.error('No ledger data available'); return; }
-            generatePDF(allLedgers, `License_Ledger_Bulk_${new Date().toISOString().split('T')[0]}.pdf`);
-            toast.success(`Exported ${allLedgers.length} license(s) to PDF`);
+            generatePDF(allLedgers, `License_Ledger_Bulk_${getTodayStamp()}.pdf`);
+            toast.success(`Exported ${allLedgers.length} license(s) to PDF${failures ? `; ${failures} failed` : ''}`);
         } catch (e) {
             toast.dismiss('bulk-pdf');
             toast.error('Failed to generate PDF');
@@ -354,15 +518,15 @@ export default function LicenseLedger() {
     };
 
     const handleBulkExportExcel = async () => {
-        if (!companyWiseData?.licenses?.length) { toast.error('No data to export'); return; }
+        if (!normalizeLicenseWiseData(companyWiseData).licenses.length) { toast.error('No data to export'); return; }
         setBulkExporting(true);
         try {
             toast.info('Fetching ledger details…', { duration: Infinity, id: 'bulk-xlsx' });
-            const allLedgers = await fetchFullLedgerDetails();
+            const { results: allLedgers, failures } = await fetchFullLedgerDetails();
             toast.dismiss('bulk-xlsx');
             if (!allLedgers.length) { toast.error('No ledger data available'); return; }
-            await generateExcel(allLedgers, `License_Ledger_Bulk_${new Date().toISOString().split('T')[0]}.xlsx`);
-            toast.success(`Exported ${allLedgers.length} license(s) to Excel`);
+            await generateExcel(allLedgers, `License_Ledger_Bulk_${getTodayStamp()}.xlsx`);
+            toast.success(`Exported ${allLedgers.length} license(s) to Excel${failures ? `; ${failures} failed` : ''}`);
         } catch (e) {
             toast.dismiss('bulk-xlsx');
             toast.error('Failed to generate Excel');
@@ -370,6 +534,13 @@ export default function LicenseLedger() {
             setBulkExporting(false);
         }
     };
+
+    const exportableLicenses = normalizeLicenseWiseData(companyWiseData).licenses;
+    const companyLabel = normalizeText(
+        filters.company && typeof filters.company === 'object'
+            ? filters.company.label ?? filters.company.value
+            : filters.company,
+    );
 
     return (
         <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
@@ -383,13 +554,13 @@ export default function LicenseLedger() {
                     <small className="text-muted">Track available balance for DFIA and Incentive licenses</small>
                 </div>
                 <div className="flex gap-2">
-                    {companyWiseData?.licenses?.length > 0 && (
+                    {exportableLicenses.length > 0 && (
                         <>
-                            <Button variant="outline" size="sm" onClick={handleBulkExportPDF} disabled={bulkExporting}>
+                            <Button variant="outline" size="sm" onClick={handleBulkExportPDF} disabled={bulkExporting} aria-label="Export license ledger as PDF">
                                 {bulkExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
                                 Export PDF
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleBulkExportExcel} disabled={bulkExporting}>
+                            <Button variant="outline" size="sm" onClick={handleBulkExportExcel} disabled={bulkExporting} aria-label="Export license ledger as Excel">
                                 {bulkExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
                                 Export Excel
                             </Button>
@@ -470,7 +641,7 @@ export default function LicenseLedger() {
                         <h6 className="mb-0 font-semibold">Filters & Search</h6>
                         {filters.company && (
                             <span className="chip chip-info ml-1" style={{ fontSize: 11 }}>
-                                <Building2 className="size-4" aria-hidden="true" />{typeof filters.company === 'object' && filters.company !== null ? (filters.company as any).label : filters.company}
+                                <Building2 className="size-4" aria-hidden="true" />{companyLabel}
                             </span>
                         )}
                     </div>
@@ -483,8 +654,8 @@ export default function LicenseLedger() {
                 <div className="card-body p-3">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
                         <div className="lg:col-span-2">
-                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><Building2 className="size-4" aria-hidden="true" />Company Filter</label>
-                            <AsyncSelectField endpoint="masters/companies/" labelField="name" valueField="id" value={filters.company} onChange={(value) => handleFilterChange('company', value)} isMulti={false} placeholder="Select company to view their ledger..." loadOnMount={false} />
+                            <label id="company-filter-label" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><Building2 className="size-4" aria-hidden="true" />Company Filter</label>
+                            <AsyncSelectField endpoint="masters/companies/" labelField="name" valueField="id" value={filters.company} onChange={(value) => handleFilterChange('company', value)} isMulti={false} placeholder="Select company to view their ledger..." loadOnMount={false} aria-labelledby="company-filter-label" />
                             <p className="mt-0.5 text-[11px] text-muted-foreground">Filter by trades with specific company</p>
                         </div>
                         <div className="lg:col-span-2">
@@ -493,7 +664,7 @@ export default function LicenseLedger() {
                                 {licenseTypeOptions.map(opt => {
                                     const active = filters.license_type === opt.value;
                                     return (
-                                        <button key={opt.value} type="button" onClick={() => handleFilterChange('license_type', opt.value)} className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:bg-muted'}`}>
+                                        <button key={opt.value} type="button" aria-pressed={active} onClick={() => handleFilterChange('license_type', opt.value)} className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:bg-muted'}`}>
                                             {opt.label}
                                         </button>
                                     );
@@ -501,18 +672,18 @@ export default function LicenseLedger() {
                             </div>
                         </div>
                         <div>
-                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Min Balance</label>
-                            <Input type="number" value={filters.min_balance} onChange={(e) => handleFilterChange('min_balance', e.target.value)} placeholder="0" step="100" />
+                            <label htmlFor="ledger-min-balance" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Min Balance</label>
+                            <Input id="ledger-min-balance" type="number" value={filters.min_balance} onChange={(e) => handleFilterChange('min_balance', e.target.value)} placeholder="0" step="100" min="0" />
                         </div>
                         <div>
-                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Search</label>
+                            <label htmlFor="ledger-search" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Search</label>
                             <DebouncedSearchInput value={filters.search} onChange={(v) => handleFilterChange('search', v)} placeholder="License # or exporter..." />
                         </div>
                     </div>
                     <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <div>
-                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Sort By</label>
-                            <select className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm" value={filters.ordering} onChange={(e) => handleFilterChange('ordering', e.target.value)}>
+                            <label htmlFor="ledger-sort" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Sort By</label>
+                            <select id="ledger-sort" className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm" value={filters.ordering} onChange={(e) => handleFilterChange('ordering', e.target.value)}>
                                 <option value="-license_date">Latest First</option>
                                 <option value="license_date">Oldest First</option>
                                 <option value="-balance_value">Highest Balance</option>
@@ -543,12 +714,12 @@ export default function LicenseLedger() {
                         </div>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <div>
-                                <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><CalendarCheck className="size-4" aria-hidden="true" />From Date</label>
-                                <Input type="date" value={filters.purchase_date_from} onChange={(e) => handleFilterChange('purchase_date_from', e.target.value)} />
+                                <label htmlFor="ledger-purchase-from" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><CalendarCheck className="size-4" aria-hidden="true" />From Date</label>
+                                <Input id="ledger-purchase-from" type="date" value={filters.purchase_date_from} onChange={(e) => handleFilterChange('purchase_date_from', e.target.value)} />
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><CalendarX className="size-4" aria-hidden="true" />To Date</label>
-                                <Input type="date" value={filters.purchase_date_to} onChange={(e) => handleFilterChange('purchase_date_to', e.target.value)} />
+                                <label htmlFor="ledger-purchase-to" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><CalendarX className="size-4" aria-hidden="true" />To Date</label>
+                                <Input id="ledger-purchase-to" type="date" value={filters.purchase_date_to} onChange={(e) => handleFilterChange('purchase_date_to', e.target.value)} />
                             </div>
                         </div>
                     </div>

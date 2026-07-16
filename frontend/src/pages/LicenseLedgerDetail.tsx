@@ -7,13 +7,135 @@ import { generatePDF, generateExcel } from '../utils/ledgerExport';
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, TriangleAlert } from "lucide-react";
 
+type LedgerTransaction = Record<string, any> & {
+    type?: string;
+    company_id?: string | number | null;
+    company_name?: string;
+};
+
+type LedgerDetail = Record<string, any> & {
+    license_number: string;
+    license_type: string;
+    transactions: LedgerTransaction[];
+};
+
+function isRecord(value: unknown): value is Record<string, any> {
+    return typeof value === 'object' && value !== null;
+}
+
+function normalizeText(value: unknown, fallback = ''): string {
+    const normalized = String(value ?? '').trim();
+    return normalized || fallback;
+}
+
+function toFiniteNumber(value: unknown): number {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function encodeLedgerPathSegment(value: unknown): string | null {
+    const normalized = normalizeText(value);
+    return normalized ? encodeURIComponent(normalized) : null;
+}
+
+export function buildLedgerDetailPath(id: unknown, companyId?: unknown): string | null {
+    const safeId = encodeLedgerPathSegment(id);
+    if (!safeId) {
+        return null;
+    }
+
+    const params = new URLSearchParams();
+    const safeCompanyId = normalizeText(companyId);
+    if (safeCompanyId) {
+        params.append('company', safeCompanyId);
+    }
+    const queryString = params.toString();
+
+    return `license-ledger/${safeId}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
+}
+
+export function normalizeLedgerDetail(value: unknown): LedgerDetail | null {
+    if (!isRecord(value)) {
+        return null;
+    }
+
+    const transactions = Array.isArray(value.transactions)
+        ? value.transactions.flatMap((transaction) => {
+            if (!isRecord(transaction)) {
+                return [];
+            }
+            return [{
+                ...transaction,
+                type: normalizeText(transaction.type, 'UNKNOWN'),
+                company_name: normalizeText(transaction.company_name, 'N/A'),
+            }];
+        })
+        : [];
+
+    return {
+        ...value,
+        license_number: normalizeText(value.license_number, 'Unknown license'),
+        license_type: normalizeText(value.license_type, 'UNKNOWN'),
+        available_balance: toFiniteNumber(value.available_balance),
+        total_value: toFiniteNumber(value.total_value),
+        transactions,
+    };
+}
+
+export function sanitizeLedgerFilenamePart(value: unknown): string {
+    return normalizeText(value, 'license')
+        .split('')
+        .map((char) => {
+            const code = char.charCodeAt(0);
+            return code < 32 || code === 127 || '\\/:*?"<>|'.includes(char) ? '-' : char;
+        })
+        .join('')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 120) || 'license';
+}
+
+export function getTodayStamp(date = new Date()): string {
+    return date.toISOString().slice(0, 10);
+}
+
+function getApiErrorMessage(error: unknown, fallback: string): string {
+    if (isRecord(error) && isRecord(error.response) && isRecord(error.response.data)) {
+        const message = error.response.data.error ?? error.response.data.detail ?? error.response.data.message;
+        if (message) {
+            return normalizeText(message, fallback);
+        }
+    }
+    if (error instanceof Error) {
+        return normalizeText(error.message, fallback);
+    }
+    return fallback;
+}
+
+export function groupTransactionsByCompany(transactions: LedgerTransaction[]) {
+    const companiesMap: Record<string, { company_id: string | number | null; company_name: string; transactions: LedgerTransaction[] }> = {};
+    transactions.forEach((txn, index) => {
+        const key = txn.company_id != null ? String(txn.company_id) : `unknown-${index}`;
+        if (!companiesMap[key]) {
+            companiesMap[key] = {
+                company_id: txn.company_id ?? key,
+                company_name: normalizeText(txn.company_name, 'N/A'),
+                transactions: [],
+            };
+        }
+        companiesMap[key].transactions.push(txn);
+    });
+    return Object.values(companiesMap);
+}
+
 export default function LicenseLedgerDetail() {
     const { id, companyId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
     const [ledger, setLedger] = useState<Record<string, any> | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState<string | null>(null);
 
     // Get license_type from query params or location state
     const queryParams = new URLSearchParams(location.search);
@@ -24,15 +146,22 @@ export default function LicenseLedgerDetail() {
             setLoading(true);
             setError(null);
             try {
-                const params = new URLSearchParams();
-                if (companyId) params.append('company', companyId);
-                const queryString = params.toString();
-                const url = `license-ledger/${id}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
+                const url = buildLedgerDetailPath(id, companyId);
+                if (!url) {
+                    setLedger(null);
+                    setError('Missing license ledger identifier');
+                    return;
+                }
                 const response = await api.get(url);
-                setLedger(response.data);
+                const normalizedLedger = normalizeLedgerDetail(response.data);
+                if (!normalizedLedger) {
+                    setLedger(null);
+                    setError('Ledger details response was malformed');
+                    return;
+                }
+                setLedger(normalizedLedger);
             } catch (err) {
-                console.error('Error fetching ledger detail:', err);
-                setError(err.response?.data?.error || 'Failed to load ledger details');
+                setError(getApiErrorMessage(err, 'Failed to load ledger details'));
             } finally {
                 setLoading(false);
             }
@@ -49,7 +178,7 @@ export default function LicenseLedgerDetail() {
     const formatCurrency = (value, currency = 'INR') => {
         if (!value && value !== 0) return '-';
         const symbol = currency === 'USD' ? '$' : '₹';
-        return `${symbol}${formatIndianNumber(value, 2)}`;
+        return `${symbol}${formatIndianNumber(toFiniteNumber(value), 2)}`;
     };
 
     if (loading) {
@@ -81,17 +210,17 @@ export default function LicenseLedgerDetail() {
 
     const isDFIA = ledger.license_type === 'DFIA';
     const hasPurchases = (ledger.transactions || []).some(t => t.type === 'PURCHASE' || t.type === 'OPENING');
-    const currentBalance = ledger.available_balance || 0;
+    const currentBalance = toFiniteNumber(ledger.available_balance);
     const isNegativeBalance = currentBalance < 0;
     const showPurchaseWarning = !hasPurchases || isNegativeBalance;
 
     const handleDownloadPDF = () => {
-        const filename = `License_Ledger_${String(ledger.license_number).replace(/\//g, '-')}_${new Date().toISOString().split('T')[0]}.pdf`;
+        const filename = `License_Ledger_${sanitizeLedgerFilenamePart(ledger.license_number)}_${getTodayStamp()}.pdf`;
         generatePDF([ledger], filename);
     };
 
     const handleDownloadExcel = async () => {
-        const filename = `License_Ledger_${String(ledger.license_number).replace(/\//g, '-')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const filename = `License_Ledger_${sanitizeLedgerFilenamePart(ledger.license_number)}_${getTodayStamp()}.xlsx`;
         await generateExcel([ledger], filename);
     };
 
@@ -239,19 +368,7 @@ export default function LicenseLedgerDetail() {
 
             {/* Company-grouped Ledger Table */}
             {(() => {
-                const companiesMap: Record<string, { company_id: any; company_name: string; transactions: Record<string, any>[] }> = {};
-                (ledger.transactions || []).forEach(txn => {
-                    const key = txn.company_id != null ? txn.company_id : 'unknown';
-                    if (!companiesMap[key]) {
-                        companiesMap[key] = {
-                            company_id: txn.company_id,
-                            company_name: txn.company_name || 'N/A',
-                            transactions: []
-                        };
-                    }
-                    companiesMap[key].transactions.push(txn);
-                });
-                const companiesGrouped = Object.values(companiesMap);
+                const companiesGrouped = groupTransactionsByCompany(ledger.transactions);
 
                 const TXN_SORT_ORDER = { OPENING: 0, PURCHASE: 1, SALE: 2 };
 

@@ -11,6 +11,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FileText, FileSpreadsheet, X, Loader2, Check, CheckCircle, Inbox, Package, PenSquare, Pencil, Plus } from "lucide-react";
 
+const UNSAFE_PATH_SEGMENT_CHARS = new Set(["/", "?", "#", "\\"]);
+
 // License Marking values map directly to the backend `condition_type` field.
 // "" is rendered as "None" and clears the restriction.
 const LICENSE_MARKING_OPTIONS = [
@@ -21,6 +23,61 @@ const LICENSE_MARKING_OPTIONS = [
     { value: "3%",  label: "3%"   },
     { value: "2%",  label: "2%"   },
 ];
+
+export function toSafeLicensePathSegment(licenseId) {
+    const value = String(licenseId ?? "").trim();
+    const hasUnsafePathSegmentChar = [...value].some((char) => {
+        const code = char.charCodeAt(0);
+        return UNSAFE_PATH_SEGMENT_CHARS.has(char) || code < 32 || code === 127;
+    });
+
+    if (!value || hasUnsafePathSegmentChar) {
+        throw new Error("A valid license id is required.");
+    }
+
+    return encodeURIComponent(value);
+}
+
+export function buildLicenseEndpoint(licenseId, suffix = "") {
+    return `licenses/${toSafeLicensePathSegment(licenseId)}/${suffix}`;
+}
+
+export function formatFiniteDecimal(value, fractionDigits = 2) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toFixed(fractionDigits) : Number(0).toFixed(fractionDigits);
+}
+
+function normalizeArray(value) {
+    return Array.isArray(value) ? value : [];
+}
+
+export function normalizeItemOptions(data) {
+    return normalizeArray(data?.results)
+        .filter((item) => item && item.id != null && item.name != null)
+        .map((item) => ({
+            value: item.id,
+            label: String(item.name),
+        }));
+}
+
+export function normalizeUsageData(data) {
+    return {
+        boes: normalizeArray(data?.boes),
+        allotments: normalizeArray(data?.allotments),
+    };
+}
+
+export function normalizeLicenseBalanceData(data) {
+    if (!data || typeof data !== "object") {
+        return null;
+    }
+
+    return {
+        ...data,
+        export_license: normalizeArray(data.export_license),
+        import_license: normalizeArray(data.import_license),
+    };
+}
 
 // Inline Editable Text Component
 function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
@@ -141,8 +198,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         const fetchLicenseData = async () => {
             setLoading(true);
             try {
-                const { data } = await api.get(`licenses/${licenseId}/`);
-                setLicenseData(data);
+                const { data } = await api.get(buildLicenseEndpoint(licenseId));
+                const normalizedData = normalizeLicenseBalanceData(data);
+                if (!normalizedData) {
+                    throw new Error("Malformed license response");
+                }
+                setLicenseData(normalizedData);
             } catch (error) {
                 console.error('Error fetching license data:', error);
                 toast.error('Failed to load license data');
@@ -158,19 +219,16 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
     const fetchItemUsage = async (item, type) => {
         try {
-            const response = await api.get(`licenses/${licenseId}/item-usage/`, {
+            const response = await api.get(buildLicenseEndpoint(licenseId, "item-usage/"), {
                 params: {
                     item_id: item.id,
                     type: type
                 }
             });
-            setUsageData(response.data);
+            setUsageData(normalizeUsageData(response.data));
         } catch (error) {
             toast.error('Failed to load usage details.');
-            setUsageData({
-                boes: [],
-                allotments: []
-            });
+            setUsageData(normalizeUsageData(null));
         }
     };
 
@@ -203,10 +261,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             const { data } = await api.get('masters/item-names/', {
                 params
             });
-            return data.results.map(item => ({
-                value: item.id,
-                label: item.name
-            }));
+            return normalizeItemOptions(data);
         } catch (error) {
             console.error('Error loading items:', error);
             return [];
@@ -240,7 +295,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             // Update local state without reloading
             setLicenseData(prevData => ({
                 ...prevData,
-                import_license: prevData.import_license.map(importItem => {
+                import_license: normalizeArray(prevData?.import_license).map(importItem => {
                     if (importItem.id === item.id) {
                         return {
                             ...importItem,
@@ -272,7 +327,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         // Optimistic update.
         setLicenseData((prev) => ({
             ...prev,
-            import_license: prev.import_license.map((it) =>
+            import_license: normalizeArray(prev?.import_license).map((it) =>
                 it.id === item.id ? { ...it, items: itemIds, items_detail: newDetails } : it),
         }));
         setTagSaving((s) => ({ ...s, [item.id]: true }));
@@ -306,7 +361,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         // Optimistic UI: update local state first; revert if the PATCH fails.
         setLicenseData(prev => ({
             ...prev,
-            import_license: prev.import_license.map(it =>
+            import_license: normalizeArray(prev?.import_license).map(it =>
                 it.id === item.id ? { ...it, condition_type: newValue } : it
             ),
         }));
@@ -316,7 +371,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         } catch (err) {
             setLicenseData(prev => ({
                 ...prev,
-                import_license: prev.import_license.map(it =>
+                import_license: normalizeArray(prev?.import_license).map(it =>
                     it.id === item.id ? { ...it, condition_type: previous } : it
                 ),
             }));
@@ -338,10 +393,8 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         try {
             toast.info('Generating PDF file...');
 
-            // Call backend to generate PDF using license ID with Authorization header
-            const response = await api.get(`licenses/${licenseId}/balance-pdf/`, {
+            const response = await api.get(buildLicenseEndpoint(licenseId, "balance-pdf/"), {
                 responseType: 'blob',
-                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
             });
             openPdfPreview(response.data, `${licenseData?.license_number || licenseId}-balance.pdf`);
 
@@ -359,7 +412,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             // Download via the authenticated axios instance (Authorization header),
             // not a ?access_token= URL which leaks the JWT into logs/history.
             await openAuthedFile(
-                `licenses/${licenseId}/balance-excel/`,
+                buildLicenseEndpoint(licenseId, "balance-excel/"),
                 `${licenseData?.license_number || licenseId}-balance.xlsx`,
             );
 
@@ -462,9 +515,8 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         e.preventDefault();
                                                                         e.stopPropagation();
                                                                         try {
-                                                                            const response = await api.get(`licenses/${licenseData.id}/merged-documents/`, {
+                                                                            const response = await api.get(buildLicenseEndpoint(licenseData.id, "merged-documents/"), {
                                                                                 responseType: 'blob',
-                                                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                                                             });
                                                                             openPdfPreview(response.data, `${licenseData?.license_number || licenseData?.id}-copy.pdf`);
                                                                         } catch {
@@ -526,7 +578,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                         {licenseData.purchase_status || '-'}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
-                                                        {parseFloat(licenseData.balance_cif || 0).toFixed(2)}
+                                                        {formatFiniteDecimal(licenseData.balance_cif)}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.get_norm_class || '-'}
@@ -659,10 +711,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                 {item.description || item.norm_class_label || 'None'}
                                                             </td>
                                                             <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
-                                                                {parseFloat(item.cif_fc || item.fob_fc || 0).toFixed(2)}
+                                                                {formatFiniteDecimal(item.cif_fc ?? item.fob_fc)}
                                                             </td>
                                                             <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
-                                                                {parseFloat(licenseData.balance_cif || 0).toFixed(2)}
+                                                                {formatFiniteDecimal(licenseData.balance_cif)}
                                                             </td>
                                                         </tr>
                                                         {expandedItem?.id === item.id && usageData && (
@@ -694,9 +746,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                                 <td>{boe.date ? formatDate(boe.date) : '-'}</td>
                                                                                                 <td>{boe.port || '-'}</td>
                                                                                                 <td>{boe.company || '-'}</td>
-                                                                                                <td>{parseFloat(boe.quantity || 0).toFixed(2)}</td>
-                                                                                                <td>{parseFloat(boe.cif_fc || 0).toFixed(2)}</td>
-                                                                                                <td>{parseFloat(boe.cif_inr || 0).toFixed(2)}</td>
+                                                                                                <td>{formatFiniteDecimal(boe.quantity)}</td>
+                                                                                                <td>{formatFiniteDecimal(boe.cif_fc)}</td>
+                                                                                                <td>{formatFiniteDecimal(boe.cif_inr)}</td>
                                                                                             </tr>
                                                                                         ))}
                                                                                     </tbody>
@@ -723,9 +775,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                         {usageData.allotments.map((allotment) => (
                                                                                             <tr key={allotment.id}>
                                                                                                 <td>{allotment.company || '-'}</td>
-                                                                                                <td>{parseFloat(allotment.quantity || 0).toFixed(2)}</td>
-                                                                                                <td>{parseFloat(allotment.cif_fc || 0).toFixed(2)}</td>
-                                                                                                <td>{parseFloat(allotment.cif_inr || 0).toFixed(2)}</td>
+                                                                                                <td>{formatFiniteDecimal(allotment.quantity)}</td>
+                                                                                                <td>{formatFiniteDecimal(allotment.cif_fc)}</td>
+                                                                                                <td>{formatFiniteDecimal(allotment.cif_inr)}</td>
                                                                                             </tr>
                                                                                         ))}
                                                                                     </tbody>
@@ -944,16 +996,16 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                     )}
                                                                 </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
-                                                                    {parseFloat(item.quantity || 0).toFixed(2)}
+                                                                    {formatFiniteDecimal(item.quantity)}
                                                                 </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
-                                                                    {parseFloat(item.allotted_quantity || 0).toFixed(2)}
+                                                                    {formatFiniteDecimal(item.allotted_quantity)}
                                                                 </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
-                                                                    {parseFloat(item.debited_quantity || 0).toFixed(2)}
+                                                                    {formatFiniteDecimal(item.debited_quantity)}
                                                                 </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
-                                                                    {parseFloat(item.available_quantity || 0).toFixed(2)}
+                                                                    {formatFiniteDecimal(item.available_quantity)}
                                                                 </td>
                                                                 <td
                                                                     onClick={(e) => e.stopPropagation()}
@@ -994,10 +1046,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                     />
                                                                 </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
-                                                                    {parseFloat(item.cif_fc || 0).toFixed(2)}
+                                                                    {formatFiniteDecimal(item.cif_fc)}
                                                                 </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
-                                                                    {parseFloat(item.balance_cif_fc || 0).toFixed(2)}
+                                                                    {formatFiniteDecimal(item.balance_cif_fc)}
                                                                 </td>
                                                             </tr>
                                                             {expandedItem?.id === item.id && usageData && (
@@ -1029,9 +1081,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                                     <td>{boe.date ? formatDate(boe.date) : '-'}</td>
                                                                                                     <td>{boe.port || '-'}</td>
                                                                                                     <td>{boe.company || '-'}</td>
-                                                                                                    <td>{parseFloat(boe.quantity || 0).toFixed(2)}</td>
-                                                                                                    <td>{parseFloat(boe.cif_fc || 0).toFixed(2)}</td>
-                                                                                                    <td>{parseFloat(boe.cif_inr || 0).toFixed(2)}</td>
+                                                                                                    <td>{formatFiniteDecimal(boe.quantity)}</td>
+                                                                                                    <td>{formatFiniteDecimal(boe.cif_fc)}</td>
+                                                                                                    <td>{formatFiniteDecimal(boe.cif_inr)}</td>
                                                                                                 </tr>
                                                                                             ))}
                                                                                         </tbody>
@@ -1058,9 +1110,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                             {usageData.allotments.map((allotment) => (
                                                                                                 <tr key={allotment.id}>
                                                                                                     <td>{allotment.company || '-'}</td>
-                                                                                                    <td>{parseFloat(allotment.quantity || 0).toFixed(2)}</td>
-                                                                                                    <td>{parseFloat(allotment.cif_fc || 0).toFixed(2)}</td>
-                                                                                                    <td>{parseFloat(allotment.cif_inr || 0).toFixed(2)}</td>
+                                                                                                    <td>{formatFiniteDecimal(allotment.quantity)}</td>
+                                                                                                    <td>{formatFiniteDecimal(allotment.cif_fc)}</td>
+                                                                                                    <td>{formatFiniteDecimal(allotment.cif_inr)}</td>
                                                                                                 </tr>
                                                                                             ))}
                                                                                         </tbody>
@@ -1082,11 +1134,11 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                         </div>
                                                                                         <div className="flex-1 text-right">
                                                                                             <strong>
-                                                                                                Balance: {(
-                                                                                                    (Number(item.quantity) || 0) -
-                                                                                                    (Number(item.debited_quantity) || 0) -
-                                                                                                    (Number(item.allotted_quantity) || 0)
-                                                                                                ).toFixed(2)}
+                                                                                                Balance: {formatFiniteDecimal(
+                                                                                                    Number(item.quantity || 0) -
+                                                                                                    Number(item.debited_quantity || 0) -
+                                                                                                    Number(item.allotted_quantity || 0)
+                                                                                                )}
                                                                                             </strong>
                                                                                         </div>
                                                                                     </div>

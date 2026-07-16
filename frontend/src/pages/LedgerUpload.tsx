@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     FileSpreadsheet, CloudUpload, Upload, FolderOpen, Paperclip, Trash2, X,
     FileText, CheckCircle2, XCircle, Hourglass, ListChecks, Info, Lightbulb, Zap, Cog, Loader2,
@@ -11,17 +11,147 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
 const UPLOAD_BATCH_SIZE = 20;
 const POLL_CONCURRENT = 5; // simultaneous status requests per tick
+const MAX_ERROR_DETAILS = 10;
+
+type LedgerTaskRef = {
+    task_id: string;
+    license: string;
+};
+
+type LedgerFileTask = {
+    file: string;
+    total: number;
+    tasks: LedgerTaskRef[];
+};
+
+type LedgerUploadError = {
+    file: string;
+    error: string;
+};
+
+type TaskStatus = {
+    state?: string;
+    error?: string;
+};
+
+type BatchProgress = {
+    current: number;
+    total: number;
+};
+
+type TaskStatusModalProps = {
+    fileTasks: LedgerFileTask[];
+    show: boolean;
+    onHide: () => void;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+}
+
+function normalizeText(value: unknown, fallback: string): string {
+    const normalized = String(value ?? "").trim();
+    return normalized || fallback;
+}
+
+export function normalizeLedgerFileTasks(value: unknown): LedgerFileTask[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.flatMap((fileEntry, fileIndex) => {
+        if (!isRecord(fileEntry) || !Array.isArray(fileEntry.tasks)) {
+            return [];
+        }
+
+        const seenTaskIds = new Set<string>();
+        const tasks = fileEntry.tasks.flatMap((taskEntry) => {
+            if (!isRecord(taskEntry)) {
+                return [];
+            }
+            const taskId = String(taskEntry.task_id ?? "").trim();
+            if (!taskId || seenTaskIds.has(taskId)) {
+                return [];
+            }
+            seenTaskIds.add(taskId);
+            return [{
+                task_id: taskId,
+                license: normalizeText(taskEntry.license, "Unknown license"),
+            }];
+        });
+
+        if (tasks.length === 0) {
+            return [];
+        }
+
+        return [{
+            file: normalizeText(fileEntry.file, `File ${fileIndex + 1}`),
+            total: tasks.length,
+            tasks,
+        }];
+    });
+}
+
+export function normalizeLedgerUploadErrors(value: unknown): LedgerUploadError[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.flatMap((entry, index) => {
+        if (!isRecord(entry)) {
+            return [];
+        }
+        return [{
+            file: normalizeText(entry.file, `File ${index + 1}`),
+            error: normalizeText(entry.error, "Unknown upload error"),
+        }];
+    });
+}
+
+export function buildAsyncUploadErrorMessage(errors: LedgerUploadError[]): string {
+    const shownErrors = errors
+        .slice(0, MAX_ERROR_DETAILS)
+        .map((error) => `${error.file}: ${error.error}`)
+        .join("; ");
+    const remaining = errors.length > MAX_ERROR_DETAILS ? `; ${errors.length - MAX_ERROR_DETAILS} more not shown` : "";
+
+    return `${errors.length} file(s) failed: ${shownErrors}${remaining}`;
+}
+
+export function getLedgerUploadErrorMessage(error: unknown): string {
+    if (isRecord(error) && isRecord(error.response) && isRecord(error.response.data)) {
+        const data = error.response.data;
+        const detail = data.error ?? data.detail ?? data.message;
+        if (detail) {
+            return normalizeText(detail, "Upload failed. Please try again.");
+        }
+    }
+    if (error instanceof Error) {
+        return normalizeText(error.message, "Upload failed. Please try again.");
+    }
+
+    return "Upload failed. Please try again.";
+}
+
+export function normalizeProgressValue(value: unknown): number {
+    const progress = Number(value);
+    if (!Number.isFinite(progress)) {
+        return 0;
+    }
+
+    return Math.min(100, Math.max(0, Math.round(progress)));
+}
 
 // Defined outside LedgerUpload so React doesn't remount it on every parent render,
 // which would destroy polling intervals.
-const TaskStatusModal = ({ fileTasks, show, onHide }) => {
-    const [taskStatuses, setTaskStatuses] = useState<Record<string, any>>({});
-    const doneRef = useRef(new Set());
+const TaskStatusModal = ({ fileTasks, show, onHide }: TaskStatusModalProps) => {
+    const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>({});
+    const doneRef = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         if (!show || fileTasks.length === 0) return;
@@ -44,7 +174,11 @@ const TaskStatusModal = ({ fileTasks, show, onHide }) => {
                         doneRef.current.add(task_id);
                     }
                 } catch (err) {
-                    console.error("Error polling task:", task_id, err);
+                    setTaskStatuses((prev) => ({
+                        ...prev,
+                        [task_id]: { state: "FAILURE", error: getLedgerUploadErrorMessage(err) },
+                    }));
+                    doneRef.current.add(task_id);
                 }
             }));
         }, 1000);
@@ -65,6 +199,9 @@ const TaskStatusModal = ({ fileTasks, show, onHide }) => {
                         <Cog className="size-4 text-primary" />
                         Processing Ledger Files
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Per-license processing progress for uploaded ledger files.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="max-h-[60vh] overflow-y-auto pr-1">
@@ -77,18 +214,26 @@ const TaskStatusModal = ({ fileTasks, show, onHide }) => {
                         const allDone = pending === 0;
 
                         return (
-                            <Card key={fi} className="mb-3">
+                            <Card key={`${fileEntry.file}-${fi}`} className="mb-3">
                                 <CardContent className="pt-4">
                                     <div className="mb-2 flex items-center justify-between">
-                                        <span className="flex items-center gap-2 text-sm font-medium">
-                                            <FileText className="size-4" />{fileEntry.file}
+                                        <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                                            <FileText className="size-4 shrink-0" />
+                                            <span className="truncate" title={fileEntry.file}>{fileEntry.file}</span>
                                         </span>
                                         <Badge variant={allDone ? (failed > 0 ? "warning" : "success") : "default"}>
                                             {allDone ? "Done" : `Processing ${done + failed}/${total}`}
                                         </Badge>
                                     </div>
 
-                                    <div className="mb-2 h-2 overflow-hidden rounded-full bg-muted">
+                                    <div
+                                        className="mb-2 h-2 overflow-hidden rounded-full bg-muted"
+                                        role="progressbar"
+                                        aria-label={`${fileEntry.file} processing progress`}
+                                        aria-valuemin={0}
+                                        aria-valuemax={100}
+                                        aria-valuenow={pct}
+                                    >
                                         <div
                                             className={`h-full rounded-full transition-[width] ${allDone ? (failed === 0 ? "bg-success" : "bg-warning") : "bg-primary"}`}
                                             style={{ width: `${pct}%` }}
@@ -136,12 +281,19 @@ const TaskStatusModal = ({ fileTasks, show, onHide }) => {
 };
 
 const LedgerUpload = () => {
-    const [asyncFileTasks, setAsyncFileTasks] = useState([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [asyncFileTasks, setAsyncFileTasks] = useState<LedgerFileTask[]>([]);
     const [showTaskModal, setShowTaskModal] = useState(false);
     const [useAsyncMode, setUseAsyncMode] = useState(true);
-    const [asyncError, setAsyncError] = useState(null);
+    const [asyncError, setAsyncError] = useState<string | null>(null);
     const [asyncUploading, setAsyncUploading] = useState(false);
-    const [batchProgress, setBatchProgress] = useState(null);
+    const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+
+    const resetFileInput = useCallback(() => {
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+    }, []);
 
     const {
         files, uploading, results, error, dragActive, fileProgress,
@@ -156,8 +308,9 @@ const LedgerUpload = () => {
         maxFileSize: 50 * 1024 * 1024,
         timeout: 300000,
         onSuccess: (results) => {
-            const fileInput = document.getElementById("file-input");
-            if (fileInput && results.some((r) => r.success)) (fileInput as HTMLInputElement).value = "";
+            if (results.some((r) => r.success)) {
+                resetFileInput();
+            }
         },
     });
 
@@ -185,22 +338,21 @@ const LedgerUpload = () => {
                     headers: { "Content-Type": "multipart/form-data" },
                 });
 
-                if (response.data.file_tasks) allFileTasks.push(...response.data.file_tasks);
-                if (response.data.errors?.length) allErrors.push(...response.data.errors);
+                allFileTasks.push(...normalizeLedgerFileTasks(response.data?.file_tasks));
+                allErrors.push(...normalizeLedgerUploadErrors(response.data?.errors));
             }
 
             if (allFileTasks.length > 0) {
                 setAsyncFileTasks(allFileTasks);
                 setShowTaskModal(true);
                 clearFiles();
-                const _inp = document.getElementById("file-input") as HTMLInputElement | null; if (_inp) _inp.value = "";
+                resetFileInput();
             }
             if (allErrors.length > 0) {
-                setAsyncError(`${allErrors.length} file(s) failed: ${allErrors.map((e) => `${e.file}: ${e.error}`).join("; ")}`);
+                setAsyncError(buildAsyncUploadErrorMessage(allErrors));
             }
         } catch (err) {
-            console.error("Upload error:", err);
-            setAsyncError(err.response?.data?.error || err.message || "Upload failed. Please try again.");
+            setAsyncError(getLedgerUploadErrorMessage(err));
         } finally {
             setAsyncUploading(false);
             setBatchProgress(null);
@@ -208,7 +360,7 @@ const LedgerUpload = () => {
     };
 
     const handleUpload = () => {
-        if (useAsyncMode) handleAsyncUpload();
+        if (useAsyncMode) void handleAsyncUpload();
         else originalHandleUpload();
     };
 
@@ -264,7 +416,7 @@ const LedgerUpload = () => {
                                     <FolderOpen className="size-3.5" />Browse Files
                                 </span>
                                 <small className="mt-3 block text-muted-foreground">CSV or HTM/HTML files · Max 50MB per file</small>
-                                <input id="file-input" type="file" accept=".csv,.htm,.html" multiple onChange={handleFileChange} className="hidden" />
+                                <input ref={fileInputRef} id="file-input" type="file" accept=".csv,.htm,.html" multiple onChange={handleFileChange} className="hidden" />
                             </label>
 
                             {/* Selected files */}
@@ -277,21 +429,28 @@ const LedgerUpload = () => {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            disabled={uploading}
-                                            onClick={() => { clearFiles(); const _inp = document.getElementById("file-input") as HTMLInputElement | null; if (_inp) _inp.value = ""; }}
+                                            disabled={busy}
+                                            onClick={() => { clearFiles(); resetFileInput(); }}
                                         >
                                             <Trash2 className="size-3.5" />Clear All
                                         </Button>
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         {files.map((file, index) => (
-                                            <div key={index} className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-2.5 py-2">
+                                            <div key={`${file.name}-${file.lastModified}-${file.size}`} className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-2.5 py-2">
                                                 <FileText className="size-4 shrink-0 text-success" />
                                                 <div className="min-w-0 flex-1">
-                                                    <div className="truncate text-sm font-medium">{file.name}</div>
+                                                    <div className="truncate text-sm font-medium" title={file.name}>{file.name}</div>
                                                     <small className="text-muted-foreground">{formatFileSize(file.size)}</small>
                                                 </div>
-                                                <Button variant="outline" size="icon" className="size-8 shrink-0 text-destructive hover:bg-destructive/10" disabled={uploading} onClick={() => removeFile(index)}>
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="size-8 shrink-0 text-destructive hover:bg-destructive/10"
+                                                    disabled={busy}
+                                                    onClick={() => removeFile(index)}
+                                                    aria-label={`Remove ${file.name}`}
+                                                >
                                                     <X className="size-3.5" />
                                                 </Button>
                                             </div>
@@ -312,27 +471,38 @@ const LedgerUpload = () => {
                             {uploading && Object.keys(fileProgress).length > 0 && (
                                 <div className="mb-4">
                                     <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><CloudUpload className="size-4" />Uploading Files</h3>
-                                    {Object.entries(fileProgress as Record<string, any>).map(([index, fileData]) => (
-                                        <div key={index} className="mb-3">
-                                            <div className="mb-1 flex items-center justify-between">
-                                                <small className="flex items-center gap-1 truncate text-muted-foreground" style={{ maxWidth: "70%" }}>
-                                                    {fileData.status === "completed" ? <CheckCircle2 className="size-3.5 text-success" />
-                                                        : fileData.status === "failed" ? <XCircle className="size-3.5 text-destructive" />
-                                                        : <Hourglass className="size-3.5 text-primary" />}
-                                                    {fileData.name}
-                                                </small>
-                                                <small className="text-muted-foreground">
-                                                    {fileData.status === "completed" ? "✓ Done" : fileData.status === "failed" ? "✗ Failed" : `${fileData.progress}%`}
-                                                </small>
-                                            </div>
-                                            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                                    {Object.entries(fileProgress as Record<string, any>).map(([index, fileData]) => {
+                                        const progressValue = fileData.status === "failed" ? 100 : normalizeProgressValue(fileData.progress);
+
+                                        return (
+                                            <div key={index} className="mb-3">
+                                                <div className="mb-1 flex items-center justify-between">
+                                                    <small className="flex items-center gap-1 truncate text-muted-foreground" style={{ maxWidth: "70%" }} title={fileData.name}>
+                                                        {fileData.status === "completed" ? <CheckCircle2 className="size-3.5 text-success" />
+                                                            : fileData.status === "failed" ? <XCircle className="size-3.5 text-destructive" />
+                                                            : <Hourglass className="size-3.5 text-primary" />}
+                                                        {fileData.name}
+                                                    </small>
+                                                    <small className="text-muted-foreground">
+                                                        {fileData.status === "completed" ? "✓ Done" : fileData.status === "failed" ? "✗ Failed" : `${progressValue}%`}
+                                                    </small>
+                                                </div>
                                                 <div
-                                                    className={`h-full ${fileData.status === "completed" ? "bg-success" : fileData.status === "failed" ? "bg-destructive" : "bg-primary"}`}
-                                                    style={{ width: `${fileData.status === "failed" ? 100 : fileData.progress}%` }}
-                                                />
+                                                    className="h-1.5 overflow-hidden rounded-full bg-muted"
+                                                    role="progressbar"
+                                                    aria-label={`${fileData.name} upload progress`}
+                                                    aria-valuemin={0}
+                                                    aria-valuemax={100}
+                                                    aria-valuenow={progressValue}
+                                                >
+                                                    <div
+                                                        className={`h-full ${fileData.status === "completed" ? "bg-success" : fileData.status === "failed" ? "bg-destructive" : "bg-primary"}`}
+                                                        style={{ width: `${progressValue}%` }}
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
 
@@ -362,11 +532,11 @@ const LedgerUpload = () => {
                             </CardHeader>
                             <CardContent className="max-h-[500px] overflow-y-auto pt-4">
                                 {results.map((result, index) => (
-                                    <div key={index} className={`mb-2 rounded-lg border px-3.5 py-2.5 text-[13px] ${result.success ? "border-success/30 bg-success/10" : "border-destructive/30 bg-destructive/10"}`}>
+                                    <div key={`${result.fileName}-${index}`} className={`mb-2 rounded-lg border px-3.5 py-2.5 text-[13px] ${result.success ? "border-success/30 bg-success/10" : "border-destructive/30 bg-destructive/10"}`}>
                                         <div className="flex items-start gap-3">
                                             {result.success ? <CheckCircle2 className="size-5 shrink-0 text-success" /> : <XCircle className="size-5 shrink-0 text-destructive" />}
                                             <div className="flex-1">
-                                                <h4 className="mb-1.5 font-semibold text-foreground">{result.fileName}</h4>
+                                                <h4 className="mb-1.5 font-semibold text-foreground">{result.fileName || "Ledger file"}</h4>
                                                 {result.success ? (
                                                     <>
                                                         <p className="mb-2">{result.message}</p>
@@ -379,7 +549,7 @@ const LedgerUpload = () => {
                                                             <details className="mt-2">
                                                                 <summary className="cursor-pointer text-xs font-semibold">View License Numbers ({result.licenses.length})</summary>
                                                                 <div className="mt-2 flex flex-wrap gap-1">
-                                                                    {result.licenses.map((license, idx) => <Badge key={idx} variant="success">{license}</Badge>)}
+                                                                    {result.licenses.map((license, idx) => <Badge key={`${license}-${idx}`} variant="success">{license}</Badge>)}
                                                                 </div>
                                                             </details>
                                                         )}

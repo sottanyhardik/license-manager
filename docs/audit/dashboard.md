@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T10:03:32+00:00`
+Generated: `2026-07-16T10:05:35+00:00`
 
 ## Repository Statistics
 
-- Files audited: `471`
+- Files audited: `473`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `388`
+- Files requiring dependency recheck: `387`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `452`
-- Total source files tracked: `923`
-- Total source LOC tracked: `240684`
-- Audited LOC: `110719`
-- Remaining LOC: `129965`
+- Files remaining: `451`
+- Total source files tracked: `924`
+- Total source LOC tracked: `240754`
+- Audited LOC: `110791`
+- Remaining LOC: `129963`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,8 +35,8 @@ Generated: `2026-07-16T10:03:32+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 24039 | 19 | 3 | 31 | 0 |
-| `frontend/src/pages` | 72 | 18118 | 56 | 0 | 16 | 0 |
+| `docs` | 53 | 24088 | 19 | 3 | 31 | 0 |
+| `frontend/src/pages` | 73 | 18139 | 58 | 0 | 15 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
@@ -1019,6 +1019,12 @@ Generated: `2026-07-16T10:03:32+00:00`
 - Phase 7 SionE132 verification: npm test -- SionE132.test.tsx -> 1 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/SionE132.tsx src/pages/reports/SionE132.test.tsx -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
 - Phase 7 SionE132 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Phase 7 SionE132 commit: bb40f71130e8c5090ae682859dbea5da2f2f62bc at 2026-07-16T15:33:00+05:30, test(reports): cover sion e132 wrapper
+- Phase 7 SionE5 audit: reviewed 10-line React wrapper, SionNormReport dependency, route registration, fixed sionNorm prop, title prop, render path, and absence of local validation/query/export state
+- Phase 7 SionE5 hardening: no runtime code change required; wrapper is intentionally a thin route adapter to shared SionNormReport
+- Phase 7 SionE5 regression: added frontend/src/pages/reports/SionE5.test.tsx mocking SionNormReport and asserting the E5 norm/title contract
+- Phase 7 SionE5 verification: npm test -- SionE5.test.tsx -> 1 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/SionE5.tsx src/pages/reports/SionE5.test.tsx -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 SionE5 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 SionE5 commit: 4574c8d35370e8547f6dd1386ce62e4457e34b58 at 2026-07-16T15:34:56+05:30, test(reports): cover sion e5 wrapper
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

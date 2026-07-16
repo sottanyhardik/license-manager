@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:03:55+00:00`
+Generated: `2026-07-16T09:05:47+00:00`
 
 ## Repository Statistics
 
 - Files audited: `439`
 - Files changed directly: `51`
-- Files requiring dependency recheck: `412`
+- Files requiring dependency recheck: `410`
 - Files not started: `15`
 - Files ignored/excluded: `595`
-- Files remaining: `478`
-- Total source files tracked: `917`
-- Total source LOC tracked: `240164`
-- Audited LOC: `103576`
-- Remaining LOC: `136588`
+- Files remaining: `476`
+- Total source files tracked: `915`
+- Total source LOC tracked: `240005`
+- Audited LOC: `103614`
+- Remaining LOC: `136391`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,12 +35,12 @@ Generated: `2026-07-16T09:03:55+00:00`
 | `backend` | 132 | 77271 | 22 | 6 | 101 | 3 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 54 | 24139 | 17 | 3 | 34 | 0 |
+| `docs` | 54 | 24185 | 17 | 3 | 34 | 0 |
 | `frontend/src/pages` | 61 | 17245 | 34 | 0 | 27 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 68 | 8898 | 6 | 0 | 62 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
-| `backend/apps/allotment` | 40 | 5136 | 8 | 5 | 26 | 1 |
+| `backend/apps/allotment` | 38 | 4931 | 8 | 5 | 24 | 1 |
 | `backend/apps/bill_of_entry` | 37 | 4792 | 6 | 6 | 23 | 2 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
@@ -917,6 +917,14 @@ Generated: `2026-07-16T09:03:55+00:00`
 - Phase 7 allotment download template Django check: .venv/bin/python backend/manage.py check -> no issues
 - Phase 7 allotment download template migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
 - Phase 7 allotment download template Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 7 allotment pdf_base template dependency analysis: repository-wide search found no live direct render path; only backend/apps/allotment/templates/allotment/send.html extended it
+- Phase 7 allotment send template dependency analysis: repository-wide search found no live render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path
+- Phase 7 allotment pdf_base template removal: deleted verified-dead legacy PDF base and recursively removed its orphaned send.html child template
+- Phase 7 allotment pdf_base template audit-state verification: deleted pdf_base.html and send.html no longer appear in tracked source files after regenerating audit state
+- Phase 7 allotment pdf_base template focused pytest: .venv/bin/python -m pytest backend/tests/test_api_allotment.py -q -> 7 passed
+- Phase 7 allotment pdf_base template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 allotment pdf_base template migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 allotment pdf_base template Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

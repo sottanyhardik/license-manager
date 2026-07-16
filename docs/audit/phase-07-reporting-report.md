@@ -88,3 +88,41 @@
 - Remaining Technical Debt:
   - `backend/apps/allotment/templates/allotment/card.html` still contains a stale `{% url 'allotment-download' object.id %}` link and should be evaluated when that template becomes the selected audit file.
 - Status: COMPLETED - REMOVED
+
+## backend/apps/allotment/templates/allotment/pdf_base.html
+
+- File Path: `backend/apps/allotment/templates/allotment/pdf_base.html`
+- Module: Reporting & Exports / Legacy Allotment PDF template base
+- LOC: 36
+- Lines Reviewed: 36
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Removed verified-dead legacy base template rather than retaining a server-rendered PDF surface with no live caller.
+- Package Replacements:
+  - None. Active allotment PDF exports use ReportLab builders directly.
+- Performance Improvements:
+  - Removed obsolete external Bootstrap/jQuery/Popper script/style loading from the legacy PDF base path.
+- Security Improvements:
+  - Removed stale third-party CDN references and malformed script URLs from a dead server-rendered template.
+- Dead Code Removed:
+  - Deleted `backend/apps/allotment/templates/allotment/pdf_base.html`.
+  - Recursively deleted `backend/apps/allotment/templates/allotment/send.html`, the only child template extending this base.
+- Duplicate Logic Removed:
+  - Removed legacy transfer-letter/allotment PDF HTML rendering in favor of active ReportLab-based generation paths.
+- Tests Added:
+  - None required for deletion; no live runtime path referenced either template.
+- Verification Results:
+  - Dependency search for `pdf_base.html` found only `backend/apps/allotment/templates/allotment/send.html` as an allotment child template.
+  - Dependency search for `send.html` found no live render, `template_name`, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path.
+  - Audit Database: both deleted templates no longer appear in tracked source files after `python3 docs/audit/build_audit_state.py`.
+  - Remaining exact-reference scan: only audit documentation references remain.
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_allotment.py -q` -> 7 passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Ruff: `.venv/bin/ruff check docs/audit/build_audit_state.py` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this component.
+- Status: COMPLETED - REMOVED

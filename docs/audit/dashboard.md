@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:33:12+00:00`
+Generated: `2026-07-16T09:34:33+00:00`
 
 ## Repository Statistics
 
-- Files audited: `455`
+- Files audited: `457`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `396`
+- Files requiring dependency recheck: `395`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `460`
-- Total source files tracked: `915`
-- Total source LOC tracked: `239739`
-- Audited LOC: `106818`
-- Remaining LOC: `132921`
+- Files remaining: `459`
+- Total source files tracked: `916`
+- Total source LOC tracked: `239820`
+- Audited LOC: `106917`
+- Remaining LOC: `132903`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,8 +35,8 @@ Generated: `2026-07-16T09:33:12+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 23637 | 19 | 3 | 31 | 0 |
-| `frontend/src/pages` | 64 | 17575 | 40 | 0 | 24 | 0 |
+| `docs` | 53 | 23681 | 19 | 3 | 31 | 0 |
+| `frontend/src/pages` | 65 | 17612 | 42 | 0 | 23 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
@@ -978,6 +978,9 @@ Generated: `2026-07-16T09:33:12+00:00`
 - Phase 7 DownloadLicense hardening: added day normalization to 1-3650, manual license-number trim/dedupe, malformed report-row filtering, delayed object URL revocation, textarea labels/help text, and aria-pressed status controls
 - Phase 7 DownloadLicense regression: added frontend/src/pages/reports/DownloadLicense.test.tsx covering helper boundaries, dedupe, empty input, malformed report rows, active endpoint export, and expiring endpoint export
 - Phase 7 DownloadLicense verification: npm test -- DownloadLicense.test.tsx -> 6 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/DownloadLicense.tsx src/pages/reports/DownloadLicense.test.tsx -> passed; npm run build -> passed
+- Phase 7 ExpiringLicenses page audit: reviewed React report wrapper, shared LicenseExportPanel integration, endpoint and filename callbacks, feature copy, route references, and expiring-license export semantics
+- Phase 7 ExpiringLicenses regression: added frontend/src/pages/reports/ExpiringLicenses.test.tsx covering rendered copy, default lookahead days, feature copy, and expiring-license export URL/filename generation
+- Phase 7 ExpiringLicenses verification: npm test -- ExpiringLicenses.test.tsx -> 2 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ExpiringLicenses.tsx src/pages/reports/ExpiringLicenses.test.tsx -> passed; npm run build -> passed
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

@@ -313,6 +313,45 @@
   - None for this file.
 - Status: COMPLETED
 
+## frontend/src/pages/reports/ExpiringLicenses.tsx
+
+- File Path: `frontend/src/pages/reports/ExpiringLicenses.tsx`
+- Module: Reporting & Exports / Frontend expiring-license Excel report page
+- LOC: 23
+- Lines Reviewed: 23
+- Functions Reviewed: 1 (`ExpiringLicenses`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Rechecked all page-level props passed into the shared `LicenseExportPanel`.
+  - Confirmed day input validation, clamping, ARIA wiring, loading state, toast failure path, and authenticated download handling are delegated to the already hardened shared report component.
+  - Confirmed endpoint generation uses `format=excel` and normalized day values from the shared component.
+- Package Replacements:
+  - None. Existing React composition and the shared `LicenseExportPanel` remain appropriate.
+- Performance Improvements:
+  - No extra rendering loop, duplicate query, or client-side export work exists in this wrapper.
+- Security Improvements:
+  - Confirmed this page performs no direct DOM injection, HTML rendering, localStorage/session access, or unauthenticated download logic.
+  - Regression coverage confirms generated expiring-license export URLs remain relative API paths.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - None needed; report validation/download behavior remains centralized in `LicenseExportPanel`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ExpiringLicenses.test.tsx` covering rendered copy, default lookahead days, feature copy, and expiring-license export URL/filename generation.
+- Verification Results:
+  - Dependency search: `rg -n "ExpiringLicenses|expiring-licenses|Expiring Licenses|LicenseExportPanel" frontend backend docs docs/audit -g '!node_modules'` reviewed route, backend endpoint, docs, and shared component references.
+  - Focused Vitest: `npm test -- ExpiringLicenses.test.tsx` -> 2 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ExpiringLicenses.tsx src/pages/reports/ExpiringLicenses.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED
+
 ## backend/apps/bill_of_entry/views_export.py
 
 - File Path: `backend/apps/bill_of_entry/views_export.py`

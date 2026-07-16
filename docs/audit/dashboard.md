@@ -6,14 +6,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 - Files audited: `495`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `359`
+- Files requiring dependency recheck: `358`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `421`
-- Total source files tracked: `916`
-- Total source LOC tracked: `241472`
+- Files remaining: `420`
+- Total source files tracked: `915`
+- Total source LOC tracked: `241418`
 - Audited LOC: `115639`
-- Remaining LOC: `125833`
+- Remaining LOC: `125779`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -32,7 +32,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 | Module | Files | LOC | Completed | Changed | Recheck | Not Started |
 |---|---:|---:|---:|---:|---:|---:|
-| `backend` | 132 | 77396 | 26 | 6 | 98 | 2 |
+| `backend` | 131 | 77342 | 26 | 6 | 97 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
 | `docs` | 53 | 24466 | 19 | 3 | 31 | 0 |
@@ -87,6 +87,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 Bills of Entry removed empty generated `backend/apps/bill_of_entry/tests.py` stub; active BOE regression coverage remains in `backend/tests/test_api_boe.py` and `backend/tests/test_boe_script_helpers.py`.
 - Phase 8 Bills of Entry reached 100% for queued `NOT_STARTED` and `REQUIRES_RECHECK` BOE files in the active audit database.
 - Phase 9 Inventory started and removed stale `backend/scripts/char_license_list_balance.py`; active license balance regression coverage remains in maintained test modules.
+- Phase 9 Inventory removed stale `backend/scripts/test_balance_calc.py`; deterministic balance assertions remain in `backend/apps/license/tests/test_balance_calculator.py`.
 
 ## Verification History
 
@@ -162,6 +163,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 inventory char_license_list_balance Django check: .venv/bin/python backend/manage.py check -> no issues
 - Phase 9 inventory char_license_list_balance makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
 - Phase 9 inventory char_license_list_balance commit: 1d7fb0713b09b25b7375f749c076a43b4734a9f0 at 2026-07-16T17:40:25+05:30, cleanup(inventory): remove stale balance probe
+- Phase 9 inventory test_balance_calc dependency scan: no live imports or runtime callers; remaining references are historical planning docs only
+- Phase 9 inventory test_balance_calc scoped Ruff: .venv/bin/ruff check backend/apps/license/tests/test_balance_calculator.py backend/apps/license/services/balance_calculator.py -> clean
+- Phase 9 inventory test_balance_calc py_compile: .venv/bin/python -m py_compile backend/apps/license/tests/test_balance_calculator.py backend/apps/license/services/balance_calculator.py -> passed
+- Phase 9 inventory test_balance_calc compileall: .venv/bin/python -m compileall -q backend/scripts backend/apps/license/tests/test_balance_calculator.py backend/apps/license/services/balance_calculator.py -> passed
+- Phase 9 inventory test_balance_calc regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py -q -> 30 passed
+- Phase 9 inventory test_balance_calc Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 9 inventory test_balance_calc makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 9 inventory test_balance_calc commit: 8058036a1a16d037cdd27c99ba2a26e81d7ba395 at 2026-07-16T17:42:58+05:30, cleanup(inventory): remove stale balance test script
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

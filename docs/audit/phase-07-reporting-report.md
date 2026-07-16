@@ -127,6 +127,49 @@
   - None for this component.
 - Status: COMPLETED - REMOVED
 
+## backend/apps/bill_of_entry/views_export.py
+
+- File Path: `backend/apps/bill_of_entry/views_export.py`
+- Module: Reporting & Exports / Bill of Entry export API
+- LOC: 820
+- Lines Reviewed: 820
+- Functions Reviewed: 9 (`_text_response`, `_decimal_or_default`, `add_grouped_export_action`, `export_bill_of_entries`, `_export_grouped_pdf`, `_export_grouped_xlsx`, `_export_port_xlsx`, `_group_boe`, `shorten_exporter`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Normalized `_export` with trim/lowercase and rejected unsupported values before queryset evaluation or export generation.
+  - Added explicit text responses for invalid format and unavailable optional export libraries.
+  - Guarded nullable license dates when grouping row details.
+- Package Replacements:
+  - No new dependency added. Retained existing `openpyxl`, ReportLab, Django ORM, and shared `create_pdf_exporter` utilities.
+- Performance Improvements:
+  - Replaced FK prefetching of `company`/`port` with `select_related`.
+  - Added export-specific `Prefetch` for `item_details` with `select_related` across `sr_number`, `license`, `exporter`, `port`, and `hs_code`.
+  - Cleared inherited viewset prefetches before applying the export-specific prefetch plan, fixing a runtime duplicate-prefetch failure.
+  - Avoided prefetched-manager `.first()` by using the already materialized `item_details` list in grouping.
+- Security Improvements:
+  - Invalid export formats now return 400 before database/export work.
+  - Missing PDF/XLSX libraries now return 503 instead of surfacing as generic server errors.
+  - Export remains permission-protected through `BillOfEntryViewSet.permission_classes`.
+- Dead Code Removed:
+  - Removed repeated hot-path imports from the PDF builder by moving optional dependency imports to module scope behind availability flags.
+- Duplicate Logic Removed:
+  - Introduced shared local constants for supported export formats and a local text response helper.
+- Tests Added:
+  - Expanded `backend/tests/test_api_boe.py` with export regressions for invalid `_export`, whitespace/case normalization, grouped XLSX workbook shape, port XLSX workbook shape, PDF response shape, and missing `openpyxl` dependency handling.
+- Verification Results:
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_boe.py -q` -> 12 passed.
+  - Ruff: `.venv/bin/ruff check backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py` -> clean.
+  - py_compile: `.venv/bin/python -m py_compile backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py` -> passed.
+  - compileall: `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Import verification: `BillOfEntryViewSet` imports with `export_bill_of_entries` and `_group_boe` attached; export route reverses to `/api/bill-of-entries/export/`.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - PDF and XLSX layout code remains separate because the output primitives and layout constraints differ; deeper consolidation would risk report formatting regressions.
+- Status: COMPLETED
+
 ## backend/apps/allotment/views_export.py
 
 - File Path: `backend/apps/allotment/views_export.py`

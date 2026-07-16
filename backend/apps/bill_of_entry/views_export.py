@@ -1,11 +1,15 @@
 # bill_of_entry/views_export.py
 from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
 from io import BytesIO
 
+from django.db.models import Prefetch
 from django.http import HttpResponse
 from rest_framework.decorators import action
 
+from apps.bill_of_entry.models import RowDetails
+from apps.core.models import ExchangeRateModel
 from apps.core.utils.pdf_utils import create_pdf_exporter
 
 try:
@@ -15,6 +19,38 @@ try:
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
+
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Paragraph, Table as RLTable, TableStyle
+
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+
+EXPORT_FORMAT_PDF = 'pdf'
+EXPORT_FORMAT_XLSX = 'xlsx'
+EXPORT_FORMAT_PORT_XLSX = 'port_xlsx'
+SUPPORTED_EXPORT_FORMATS = {EXPORT_FORMAT_PDF, EXPORT_FORMAT_XLSX, EXPORT_FORMAT_PORT_XLSX}
+
+
+def _text_response(message, status_code):
+    return HttpResponse(message, status=status_code, content_type='text/plain; charset=utf-8')
+
+
+def _decimal_or_default(value, default=Decimal('0')):
+    if value is None:
+        return default
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (ArithmeticError, TypeError, ValueError):
+        return default
 
 
 def add_grouped_export_action(viewset_class):
@@ -34,39 +70,44 @@ def add_grouped_export_action(viewset_class):
             - bill_of_entry_date_after: filter by date
             - bill_of_entry_date_before: filter by date
         """
-        export_format = request.query_params.get('_export', 'pdf').lower()
+        export_format = (request.query_params.get('_export') or EXPORT_FORMAT_PDF).strip().lower()
+        if export_format not in SUPPORTED_EXPORT_FORMATS:
+            return _text_response("Invalid export format. Use 'pdf', 'xlsx', or 'port_xlsx'.", 400)
 
         # Get filtered queryset
-        queryset = self.filter_queryset(self.get_queryset())
+        queryset = self.filter_queryset(self.get_queryset()).prefetch_related(None)
 
         # Filter only BOEs with item details and order by date first, then company, item, port
         queryset = queryset.filter(
             item_details__isnull=False
+        ).select_related(
+            'company',
+            'port',
+        ).prefetch_related(
+            Prefetch(
+                'item_details',
+                queryset=RowDetails.objects.select_related(
+                    'sr_number',
+                    'sr_number__license',
+                    'sr_number__license__exporter',
+                    'sr_number__license__port',
+                    'sr_number__hs_code',
+                ),
+            ),
         ).distinct().order_by(
             'bill_of_entry_date', 'company__name', 'product_name', 'port__code'
-        ).prefetch_related(
-            'item_details__sr_number__license',
-            'item_details__sr_number__hs_code',
-            'company',
-            'port'
         )
 
-        if export_format == 'pdf':
+        if export_format == EXPORT_FORMAT_PDF:
             return self._export_grouped_pdf(queryset)
-        elif export_format == 'xlsx':
+        elif export_format == EXPORT_FORMAT_XLSX:
             return self._export_grouped_xlsx(queryset)
-        elif export_format == 'port_xlsx':
-            return self._export_port_xlsx(queryset)
-        else:
-            return HttpResponse("Invalid export format. Use 'pdf', 'xlsx', or 'port_xlsx'.", status=400)
+        return self._export_port_xlsx(queryset)
 
     def _export_grouped_pdf(self, queryset):
         """Export grouped bill of entries to PDF grouped by Company → Item → Port"""
-        from reportlab.lib.units import inch
-        from reportlab.platypus import TableStyle, Paragraph
-        from reportlab.lib.styles import ParagraphStyle
-        from reportlab.lib.colors import HexColor
-        from reportlab.lib import colors
+        if not REPORTLAB_AVAILABLE:
+            return _text_response("PDF export not available", 503)
 
         pdf_exporter = create_pdf_exporter(
             title="Bill of Entry Report",
@@ -75,13 +116,12 @@ def add_grouped_export_action(viewset_class):
         )
 
         if not pdf_exporter:
-            return HttpResponse("PDF export not available", status=500)
+            return _text_response("PDF export not available", 503)
 
         # Group data
         grouped_data = self._group_boe(queryset)
 
         # Active exchange rate for the mini-table in the header
-        from apps.core.models import ExchangeRateModel
         active_rate = ExchangeRateModel.get_active_rate()
 
         # Calculate grand totals
@@ -134,10 +174,6 @@ def add_grouped_export_action(viewset_class):
                          f"Total CIF (INR): {pdf_exporter.format_number(total_inr)}")
 
         if active_rate:
-            from reportlab.platypus import Table as RLTable
-            from reportlab.lib.styles import ParagraphStyle as PSArg
-            from reportlab.lib.enums import TA_CENTER as TA_C
-
             exch_data = [
                 ['Exch. Rate', active_rate.date.strftime('%d-%m-%Y')],
                 ['USD', str(active_rate.usd)],
@@ -160,8 +196,14 @@ def add_grouped_export_action(viewset_class):
 
             title_para = Paragraph("Bill of Entry Report", pdf_exporter.title_style)
             subtitle_para = Paragraph(subtitle_text, pdf_exporter.subtitle_style)
-            ts_style = PSArg('TS', parent=pdf_exporter.styles['Normal'],
-                             fontSize=9, textColor=colors.grey, alignment=TA_C, spaceAfter=10)
+            ts_style = ParagraphStyle(
+                'TS',
+                parent=pdf_exporter.styles['Normal'],
+                fontSize=9,
+                textColor=colors.grey,
+                alignment=TA_CENTER,
+                spaceAfter=10,
+            )
             ts_para = Paragraph(f"Generated on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", ts_style)
 
             header_layout = RLTable([[title_para, exch_table]], colWidths=[8.85 * inch, 1.5 * inch])
@@ -345,7 +387,7 @@ def add_grouped_export_action(viewset_class):
     def _export_grouped_xlsx(self, queryset):
         """Export grouped bill of entries to Excel"""
         if not OPENPYXL_AVAILABLE:
-            return HttpResponse("Excel export not available", status=500)
+            return _text_response("Excel export not available", 503)
 
         # Group data
         grouped_data = self._group_boe(queryset)
@@ -611,7 +653,7 @@ def add_grouped_export_action(viewset_class):
     def _export_port_xlsx(self, queryset):
         """Export simplified flat BOE list: single sheet, one header, no grouping."""
         if not OPENPYXL_AVAILABLE:
-            return HttpResponse("Excel export not available", status=500)
+            return _text_response("Excel export not available", 503)
 
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -648,8 +690,8 @@ def add_grouped_export_action(viewset_class):
             boe_date = boe.bill_of_entry_date.strftime('%d-%m-%Y') if boe.bill_of_entry_date else '--'
             port_code = boe.port.code if boe.port else '--'
             company_name = boe.company.name if boe.company else '--'
-            total_quantity = float(boe.get_total_quantity or 0)
-            total_inr = float(boe.get_total_inr or 0)
+            total_quantity = _decimal_or_default(boe.get_total_quantity)
+            total_inr = _decimal_or_default(boe.get_total_inr)
             product_name = (boe.product_name or '').strip().upper() or '--'
 
             data = [boe_number, boe_date, port_code, company_name, int(total_quantity), round(total_inr, 2), product_name]
@@ -703,7 +745,8 @@ def add_grouped_export_action(viewset_class):
             product_name = raw_product_name.strip().upper()
 
             # Get first license serial number from item details
-            first_item = boe.item_details.first()
+            item_details = list(boe.item_details.all())
+            first_item = item_details[0] if item_details else None
             license_serial = "Unknown License"
             if first_item and first_item.sr_number:
                 license_obj = first_item.sr_number.license if first_item.sr_number else None
@@ -712,7 +755,7 @@ def add_grouped_export_action(viewset_class):
 
             # Collect license details for this BOE
             license_details = []
-            for detail in boe.item_details.all():
+            for detail in item_details:
                 license_obj = detail.sr_number.license if detail.sr_number else None
 
                 # Store exporter name and license number separately
@@ -727,23 +770,28 @@ def add_grouped_export_action(viewset_class):
                     'exporter_name': exporter_name,
                     'license_no': license_number,
                     'license_port': license_obj.port.code if (license_obj and license_obj.port) else '--',
-                    'license_date': license_obj.license_date.strftime('%d-%m-%Y') if license_obj else '--',
+                    'license_date': (
+                        license_obj.license_date.strftime('%d-%m-%Y')
+                        if license_obj and license_obj.license_date
+                        else '--'
+                    ),
                     'item_sr_no': str(detail.sr_number.serial_number) if detail.sr_number else '--',
-                    'qty': float(detail.qty or 0),
-                    'cif_fc': float(detail.cif_fc or 0),
-                    'cif_inr': float(detail.cif_inr or 0)
+                    'qty': _decimal_or_default(detail.qty),
+                    'cif_fc': _decimal_or_default(detail.cif_fc),
+                    'cif_inr': _decimal_or_default(detail.cif_inr),
                 })
 
             # Calculate exchange rate: use boe.exchange_rate if exists, otherwise calculate from total_inr / total_fc
-            total_fc = float(boe.get_total_fc or 0)
-            total_inr = float(boe.get_total_inr or 0)
+            total_fc = _decimal_or_default(boe.get_total_fc)
+            total_inr = _decimal_or_default(boe.get_total_inr)
 
-            if boe.exchange_rate and float(boe.exchange_rate) > 0:
-                exchange_rate = float(boe.exchange_rate)
+            boe_exchange_rate = _decimal_or_default(boe.exchange_rate)
+            if boe_exchange_rate > 0:
+                exchange_rate = boe_exchange_rate
             elif total_fc > 0:
                 exchange_rate = total_inr / total_fc
             else:
-                exchange_rate = 0
+                exchange_rate = Decimal('0')
 
             boe_data = {
                 'boe_number': boe.bill_of_entry_number or '--',
@@ -751,7 +799,7 @@ def add_grouped_export_action(viewset_class):
                 'port': port_code,
                 'product_name': product_name,
                 'invoice_no': boe.invoice_no or '--',
-                'total_quantity': float(boe.get_total_quantity or 0),
+                'total_quantity': _decimal_or_default(boe.get_total_quantity),
                 'total_fc': total_fc,
                 'total_inr': total_inr,
                 'exchange_rate': exchange_rate,  # Add exchange rate

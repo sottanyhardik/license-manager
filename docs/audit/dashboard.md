@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:13:28+00:00`
+Generated: `2026-07-16T09:16:52+00:00`
 
 ## Repository Statistics
 
-- Files audited: `442`
+- Files audited: `444`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `405`
+- Files requiring dependency recheck: `403`
 - Files not started: `15`
 - Files ignored/excluded: `595`
-- Files remaining: `470`
+- Files remaining: `468`
 - Total source files tracked: `912`
-- Total source LOC tracked: `239878`
-- Audited LOC: `104527`
-- Remaining LOC: `135351`
+- Total source LOC tracked: `240037`
+- Audited LOC: `105525`
+- Remaining LOC: `134512`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -32,16 +32,16 @@ Generated: `2026-07-16T09:13:28+00:00`
 
 | Module | Files | LOC | Completed | Changed | Recheck | Not Started |
 |---|---:|---:|---:|---:|---:|---:|
-| `backend` | 132 | 77332 | 23 | 6 | 100 | 3 |
+| `backend` | 132 | 77387 | 24 | 6 | 99 | 3 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 54 | 24303 | 17 | 3 | 34 | 0 |
+| `docs` | 54 | 24359 | 17 | 3 | 34 | 0 |
 | `frontend/src/pages` | 61 | 17245 | 34 | 0 | 27 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 68 | 8898 | 6 | 0 | 62 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
-| `backend/apps/bill_of_entry` | 34 | 4468 | 7 | 5 | 20 | 2 |
+| `backend/apps/bill_of_entry` | 34 | 4516 | 8 | 5 | 19 | 2 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
 
@@ -949,6 +949,17 @@ Generated: `2026-07-16T09:13:28+00:00`
 - Phase 7 BOE pending-bill template import/template verification: reversed active BOE API routes and confirmed removed legacy templates no longer resolve
 - Phase 7 BOE pending-bill template diff check: git diff --check for scoped BOE removal and audit artifacts -> clean
 - Phase 7 BOE pending-bill template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 BOE export API line audit: reviewed all 820 lines, endpoint parameter handling, queryset shaping, PDF builder, grouped XLSX builder, port XLSX builder, grouping helper, optional dependency paths, response headers, and null/default handling
+- Phase 7 BOE export API hardening: normalized _export input, rejected unsupported formats before query/export work, returned 503 for missing openpyxl/reportlab, guarded nullable license_date, and preserved Decimal values in grouping
+- Phase 7 BOE export API performance: cleared inherited prefetches before applying export-specific select_related/Prefetch plan for RowDetails -> license/exporter/port/hs_code, avoiding duplicate-prefetch runtime failure and N+1 related lookups
+- Phase 7 BOE export API regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py -q -> 12 passed
+- Phase 7 BOE export API Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py -> clean
+- Phase 7 BOE export API py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py -> passed
+- Phase 7 BOE export API compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py -> passed
+- Phase 7 BOE export API Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 BOE export API migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 BOE export API import verification: Django setup imported BillOfEntryViewSet with export_bill_of_entries and _group_boe attached; export route reverses to /api/bill-of-entries/export/
+- Phase 7 BOE export API security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

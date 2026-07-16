@@ -345,7 +345,8 @@
     "Phase 8 Bills of Entry scripts package marker audit completed for backend/apps/bill_of_entry/scripts/__init__.py with no source changes required.",
     "Phase 8 Bills of Entry ICEGATE helper hardening completed for backend/apps/bill_of_entry/scripts/boe.py with standard-library HTML parsing, bounded HTTP calls, validation guards, and focused regression coverage.",
     "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/scripts/generate_tl.py after repository-wide runtime reference scan found no imports, routes, commands, tests, or execution paths.",
-    "Phase 8 Bills of Entry port dictionary audit completed for backend/apps/bill_of_entry/scripts/utils.py with source retained unchanged for the live BOE fetch dependency."
+    "Phase 8 Bills of Entry port dictionary audit completed for backend/apps/bill_of_entry/scripts/utils.py with source retained unchanged for the live BOE fetch dependency.",
+    "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/tasks.py after dependency analysis found no active task callers and current BOE models use synchronous balance updates."
   ],
   "dead_code_findings": [],
   "duplicate_logic_findings": [],
@@ -6515,35 +6516,6 @@
       "total_functions": 10,
       "total_imports": 4,
       "total_lines": 310
-    },
-    "backend/apps/bill_of_entry/tasks.py": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 2,
-      "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "48c87a412d6cb2ef3c57988182d31bf3e75e2defa42af7d7c6cfc81204b6d53f",
-      "file_fingerprint": {
-        "mtime_ns": 1784119299581311680,
-        "size": 337,
-        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-      },
-      "fixme_count": 0,
-      "imported_modules": [],
-      "index_checksum_mismatch": false,
-      "language": "python",
-      "last_audit_timestamp": null,
-      "maintainability_score": 99,
-      "module": "backend/apps/bill_of_entry",
-      "performance_score": 100,
-      "previous_index_checksum": null,
-      "readability_score": 99,
-      "security_score": 80,
-      "technical_debt_score": 1,
-      "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 1,
-      "total_imports": 0,
-      "total_lines": 10
     },
     "backend/apps/bill_of_entry/templates/bill_of_entry/add.html": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31785,11 +31757,11 @@
       "blocked": 0,
       "changed": 5,
       "completed": 17,
-      "files": 33,
+      "files": 32,
       "in_progress": 0,
-      "lines": 4569,
+      "lines": 4559,
       "not_started": 0,
-      "requires_recheck": 11
+      "requires_recheck": 10
     },
     "backend/apps/core": {
       "blocked": 0,
@@ -32195,7 +32167,7 @@
   "repository_inventory": {
     "excluded_files": 595,
     "inventory_rule": "Only source, tests, configs, migrations, scripts, and documentation are audited.",
-    "source_files": 930
+    "source_files": 929
   },
   "repository_metadata": {
     "branch": "feature/V2",
@@ -32230,14 +32202,14 @@
     "blocked": 0,
     "changed": 50,
     "completed": 497,
-    "files": 930,
+    "files": 929,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 242735,
+    "lines": 242725,
     "not_started": 12,
-    "remaining_lines": 126779,
-    "requires_recheck": 371,
+    "remaining_lines": 126769,
+    "requires_recheck": 370,
     "todo": 22
   },
   "verification_history": [
@@ -33277,6 +33249,13 @@
     "Phase 8 BOE port dictionary decision: retained source unchanged because the mapping is a live dependency and replacing the mutable dict with MappingProxyType or another wrapper could break Celery serialization of the fetch task payload",
     "Phase 8 BOE port dictionary verification: dependency search found only fetch_views.py importing port_dict; Ruff utils.py -> clean; py_compile utils.py and fetch_views.py -> passed; compileall utils.py and fetch_views.py -> passed; pytest backend/tests/test_api_boe.py -q -> 12 passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; direct import check -> len(port_dict)=235 and INNSA1 maps to NHAVA SHEVA SEA (INNSA1)",
     "Phase 8 BOE port dictionary dependent-file note: broad Ruff including pending backend/apps/bill_of_entry/views/fetch_views.py found an existing unused reverse import; fetch_views.py remains queued separately as REQUIRES_RECHECK",
-    "Phase 8 BOE port dictionary security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked for this phase"
+    "Phase 8 BOE port dictionary security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked for this phase",
+    "Phase 8 BOE tasks audit: reviewed 10-line Celery task module, shared_task registration, import-time update_balance_values dependency, deferred LicenseImportItemsModel import, missing object path, update_balance_values call, and current synchronous model update replacement",
+    "Phase 8 BOE tasks dependency analysis: repository-wide search found no update_balance_values_task delay/apply_async/imports; only a historical comment in backend/apps/license/models/core.py documents the removed import; Celery autodiscover can tolerate absent app task modules",
+    "Phase 8 BOE tasks removal: deleted obsolete backend/apps/bill_of_entry/tasks.py to remove stale external task surface and duplicate balance update path",
+    "Phase 8 BOE tasks verification: reference scan found no runtime task callers; scoped Ruff package/script/API paths -> clean; py_compile remaining BOE model/view/script dependencies -> passed; compileall backend/apps/bill_of_entry -> passed; pytest backend/tests/test_api_boe.py -q -> 12 passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning",
+    "Phase 8 BOE tasks broad Ruff note: broad backend/apps/bill_of_entry Ruff remains blocked by existing findings in queued files models.py, tests.py, views/common.py, detail_update_views.py, and fetch_views.py",
+    "Phase 8 BOE tasks security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked for this phase",
+    "Phase 8 BOE tasks commit: b6bb035b05c8497f9c6c9a71fb3f609bf02ef521 at 2026-07-16T17:11:47+05:30, cleanup(bill_of_entry): remove dead balance task"
   ]
 }

@@ -6,14 +6,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 - Files audited: `497`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `371`
+- Files requiring dependency recheck: `370`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `433`
-- Total source files tracked: `930`
-- Total source LOC tracked: `242735`
+- Files remaining: `432`
+- Total source files tracked: `929`
+- Total source LOC tracked: `242725`
 - Audited LOC: `115956`
-- Remaining LOC: `126779`
+- Remaining LOC: `126769`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -41,7 +41,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
-| `backend/apps/bill_of_entry` | 33 | 4569 | 17 | 5 | 11 | 0 |
+| `backend/apps/bill_of_entry` | 32 | 4559 | 17 | 5 | 10 | 0 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
 
@@ -82,6 +82,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 Bills of Entry ICEGATE helper completed for `backend/apps/bill_of_entry/scripts/boe.py`; removed missing `bs4` dependency usage, added bounded HTTP handling, and covered helper parsing/validation with focused regressions in `backend/tests/test_boe_script_helpers.py`.
 - Phase 8 Bills of Entry removed obsolete unreferenced `backend/apps/bill_of_entry/scripts/generate_tl.py`; active transfer-letter generation remains in BOE transfer views and core transfer-letter utilities.
 - Phase 8 Bills of Entry port dictionary completed for `backend/apps/bill_of_entry/scripts/utils.py`; live `fetch_views.py` dependency retained source unchanged.
+- Phase 8 Bills of Entry removed obsolete unreferenced `backend/apps/bill_of_entry/tasks.py`; current BOE models use synchronous balance updates instead of the stale Celery task.
 
 ## Verification History
 
@@ -125,6 +126,13 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 BOE port dictionary regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py -q -> 12 passed
 - Phase 8 BOE port dictionary Django check: .venv/bin/python backend/manage.py check -> no issues
 - Phase 8 BOE port dictionary makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE tasks dependency scan: no runtime task callers; only historical removed-import comment remains
+- Phase 8 BOE tasks scoped Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/scripts backend/tests/test_api_boe.py -> clean
+- Phase 8 BOE tasks py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/models.py backend/apps/bill_of_entry/views/fetch_views.py backend/apps/bill_of_entry/scripts/utils.py -> passed
+- Phase 8 BOE tasks compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry -> passed
+- Phase 8 BOE tasks regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py -q -> 12 passed
+- Phase 8 BOE tasks Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE tasks makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

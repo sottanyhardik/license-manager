@@ -305,3 +305,37 @@
 - Remaining Technical Debt:
   - Broad Ruff including pending `backend/apps/bill_of_entry/views/fetch_views.py` found an existing unused `reverse` import; that file remains queued separately as `REQUIRES_RECHECK`.
 - Status: COMPLETED
+
+## backend/apps/bill_of_entry/tasks.py
+
+- File Path(s): `backend/apps/bill_of_entry/tasks.py`
+- Module: Bills of Entry / Obsolete Celery balance task
+- Total LOC: 10
+- Lines Reviewed: 10 plus repository-wide task dependency references
+- Functions Reviewed: 1 (`update_balance_values_task`)
+- Classes Reviewed: 0
+- Validation Improvements: Removed a stale task path that accepted arbitrary item IDs without type validation, missing-object handling, transaction boundaries, retry policy, or permission context.
+- Package Replacements: None; active balance updates already use synchronous model/signal paths and the shared `update_balance_values` implementation.
+- Performance Improvements: Removed duplicate asynchronous balance-update surface and import-time Celery task registration for an uncalled task.
+- Security Improvements: Removed an unused externally addressable Celery task name that could load and mutate license import item balances by ID if invoked out of band.
+- Dead Code Removed: Deleted verified-dead `backend/apps/bill_of_entry/tasks.py`.
+- Duplicate Logic Removed: Removed duplicate wrapper around `apps.core.scripts.calculate_balance.update_balance_values`; current BOE row saves call the synchronous model update path.
+- Tests Added: None; no live task caller remained. Existing BOE API regressions were run to guard adjacent behavior.
+- Verification Results:
+  - Repository-wide dependency search found no `update_balance_values_task` imports, `.delay()`, `.apply_async()`, URL paths, commands, tests, middleware, or signals; only a historical removed-import comment remains.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/scripts backend/tests/test_api_boe.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/models.py backend/apps/bill_of_entry/views/fetch_views.py backend/apps/bill_of_entry/scripts/utils.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_api_boe.py -q` -> 12 passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `git diff --check -- backend/apps/bill_of_entry/tasks.py` -> clean before source commit.
+- Commit SHA: `b6bb035b05c8497f9c6c9a71fb3f609bf02ef521`
+- Commit Timestamp: `2026-07-16T17:11:47+05:30`
+- Commit Summary: `cleanup(bill_of_entry): remove dead balance task`
+- Blocked Items:
+  - Broad `ruff check backend/apps/bill_of_entry backend/tests/test_api_boe.py` remains blocked by existing findings in queued files `models.py`, `tests.py`, `views/common.py`, `views/detail_update_views.py`, and `views/fetch_views.py`.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Queued BOE files own the broad Ruff findings and must be completed separately.
+- Status: DELETED

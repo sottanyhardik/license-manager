@@ -896,7 +896,7 @@
     "active_phase": "Phase 8 - Bills of Entry",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "ad0273eb",
+    "head": "b6bb035b",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -968,11 +968,19 @@
         "phase": "Phase 8 - Bills of Entry",
         "status": "COMPLETED",
         "timestamp": "2026-07-16T17:08:36+05:30"
+      },
+      {
+        "commit_sha": "b6bb035b05c8497f9c6c9a71fb3f609bf02ef521",
+        "commit_summary": "cleanup(bill_of_entry): remove dead balance task",
+        "file": "backend/apps/bill_of_entry/tasks.py",
+        "phase": "Phase 8 - Bills of Entry",
+        "status": "DELETED",
+        "timestamp": "2026-07-16T17:11:47+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 930,
-    "tracked_audit_lines": 242735,
+    "tracked_audit_files": 929,
+    "tracked_audit_lines": 242725,
     "working_tree": "dirty"
   },
   "schema_version": 1,

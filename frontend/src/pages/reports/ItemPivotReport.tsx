@@ -1,7 +1,5 @@
 import React, {useEffect, useState, useCallback} from "react";
 import {useNavigate} from "react-router-dom";
-import Select from "react-select";
-import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
@@ -10,11 +8,12 @@ import {toast} from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeftRight, Bell, Building2, Calculator, CalendarCheck, CalendarDays, CalendarRange, DollarSign, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, MinusCircle, Package, RefreshCw, ShoppingCart, SlidersHorizontal, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
+import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
 import ItemPivotFilters from "./ItemPivotFilters";
+import { openAuthedFile } from "../../utils/documentDownload";
 
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
@@ -33,6 +32,67 @@ const ITEM_BG_COLORS = [
     'rgba(107,114,128,0.10)',  // gray
 ];
 const itemBgColor = (idx) => ITEM_BG_COLORS[idx % ITEM_BG_COLORS.length];
+
+type ItemPivotPathOptions = {
+    format: "json" | "excel";
+    normClass?: unknown;
+    selectedCompanies?: unknown[];
+    excludeCompanies?: unknown[];
+    minBalance?: unknown;
+    licenseStatus?: unknown;
+    expiryDateFrom?: unknown;
+    expiryDateTo?: unknown;
+    purchaseStatus?: unknown[];
+};
+
+export function toFiniteNumber(value: unknown, fallback = 0): number {
+    const parsed = Number.parseFloat(String(value ?? ""));
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeFilterValues(values?: unknown[]): string[] {
+    if (!Array.isArray(values)) {
+        return [];
+    }
+
+    return values
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean);
+}
+
+export function buildItemPivotReportPath({
+    format,
+    normClass,
+    selectedCompanies = [],
+    excludeCompanies = [],
+    minBalance = 200,
+    licenseStatus = "active",
+    expiryDateFrom,
+    expiryDateTo,
+    purchaseStatus = [],
+}: ItemPivotPathOptions): string {
+    const params = new URLSearchParams({
+        format,
+        days: "30",
+    });
+    const normClassValue = String(normClass ?? "").trim();
+    const includeCompanyIds = normalizeFilterValues(selectedCompanies);
+    const excludeCompanyIds = normalizeFilterValues(excludeCompanies);
+    const purchaseStatuses = normalizeFilterValues(purchaseStatus);
+    const expiryFrom = String(expiryDateFrom ?? "").trim();
+    const expiryTo = String(expiryDateTo ?? "").trim();
+
+    if (normClassValue) params.set("sion_norm", normClassValue);
+    if (includeCompanyIds.length > 0) params.set("company_ids", includeCompanyIds.join(","));
+    if (excludeCompanyIds.length > 0) params.set("exclude_company_ids", excludeCompanyIds.join(","));
+    params.set("min_balance", String(toFiniteNumber(minBalance, 200)));
+    params.set("license_status", String(licenseStatus || "active"));
+    if (expiryFrom) params.set("expiry_date_from", expiryFrom);
+    if (expiryTo) params.set("expiry_date_to", expiryTo);
+    if (purchaseStatuses.length > 0) params.set("purchase_status", purchaseStatuses.join(","));
+
+    return `reports/item-pivot/?${params.toString()}`;
+}
 
 // Shared style for the compact Condition / Transfer / Note action pills that
 // sit next to each DFIA number. Soft tint + coloured text/border, icon inline.
@@ -162,23 +222,17 @@ export default function ItemPivotReport() {
 
         setLoading(true);
         try {
-            let url = `reports/item-pivot/?format=json&days=30&sion_norm=${normClass}`;
-
-            if (selectedCompanies.length > 0) {
-                url += `&company_ids=${selectedCompanies.join(',')}`;
-            }
-            if (excludeCompanies.length > 0) {
-                url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
-            }
-            url += `&min_balance=${minBalance}`;
-            url += `&license_status=${licenseStatus}`;
-            if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
-            if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
-            if (purchaseStatus.length > 0) {
-                url += `&purchase_status=${purchaseStatus.join(',')}`;
-            }
-
-            const response = await api.get(url);
+            const response = await api.get(buildItemPivotReportPath({
+                format: "json",
+                normClass,
+                selectedCompanies,
+                excludeCompanies,
+                minBalance,
+                licenseStatus,
+                expiryDateFrom,
+                expiryDateTo,
+                purchaseStatus,
+            }));
             setReportData(response.data);
         } catch (error) {
             toast.error(error?.response?.data?.error || 'Failed to load report. Please try again.');
@@ -204,6 +258,10 @@ export default function ItemPivotReport() {
                 license_status: licenseStatus
             });
             const taskId = response.data.task_id;
+            if (!taskId) {
+                toast.error('Balance update did not return a task id.');
+                return;
+            }
 
             // Show immediate toast notification
             toast.info(`Balance update started for ${statusText} licenses. You'll be notified when complete.`, {
@@ -224,8 +282,10 @@ export default function ItemPivotReport() {
 
             if (state === 'SUCCESS') {
                 // Show success notification
+                const updatedCount = toFiniteNumber(result?.updated, 0);
+                const elapsedSeconds = toFiniteNumber(result?.elapsed_seconds, 0);
                 toast.success(
-                    `Balance update completed! Updated ${result.updated} licenses in ${result.elapsed_seconds.toFixed(1)}s`,
+                    `Balance update completed! Updated ${updatedCount} licenses in ${elapsedSeconds.toFixed(1)}s`,
                     { duration: 6000 }
                 );
 
@@ -248,37 +308,17 @@ export default function ItemPivotReport() {
     const handleExport = async () => {
         setDownloading(true);
         try {
-            let url = `reports/item-pivot/?format=excel&days=30`;
-
-            if (activeNormTab) {
-                url += `&sion_norm=${activeNormTab}`;
-            }
-            if (selectedCompanies.length > 0) {
-                url += `&company_ids=${selectedCompanies.join(',')}`;
-            }
-            if (excludeCompanies.length > 0) {
-                url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
-            }
-            url += `&min_balance=${minBalance}`;
-            url += `&license_status=${licenseStatus}`;
-            if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
-            if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
-            if (purchaseStatus.length > 0) {
-                url += `&purchase_status=${purchaseStatus.join(',')}`;
-            }
-
-            const response = await api.get(url, {
-                responseType: 'blob',
-            });
-
-            const downloadUrl = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.setAttribute('download', `item_pivot_report.xlsx`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(downloadUrl);
+            await openAuthedFile(buildItemPivotReportPath({
+                format: "excel",
+                normClass: activeNormTab,
+                selectedCompanies,
+                excludeCompanies,
+                minBalance,
+                licenseStatus,
+                expiryDateFrom,
+                expiryDateTo,
+                purchaseStatus,
+            }), "item_pivot_report.xlsx");
         } catch (error) {
             toast.error(error?.response?.data?.error || 'Failed to download report. Please try again.');
         } finally {
@@ -341,7 +381,7 @@ export default function ItemPivotReport() {
 
         // Calculate opening balance (sum of all license balances)
         licenses.forEach(license => {
-            const balance = parseFloat(license.balance_cif || 0);
+            const balance = toFiniteNumber(license.balance_cif);
             summary.openingBalance += balance;
         });
 
@@ -352,7 +392,7 @@ export default function ItemPivotReport() {
                 reportData.items.forEach(item => {
                     const itemData = license.items?.[item.name];
                     if (itemData && itemData.restriction !== null && itemData.restriction !== undefined) {
-                        const restrictionPercentage = parseFloat(itemData.restriction || 0);
+                        const restrictionPercentage = toFiniteNumber(itemData.restriction);
                         const restrictionKey = `${license.license_number}_${restrictionPercentage}`;
 
                         // Only add restriction value once per license per percentage
@@ -365,7 +405,7 @@ export default function ItemPivotReport() {
                                     sharedRestrictionValue: 0
                                 };
                             }
-                            summary.restrictedItemsByPercentage[restrictionPercentage].sharedRestrictionValue += parseFloat(itemData.restriction_value || 0);
+                            summary.restrictedItemsByPercentage[restrictionPercentage].sharedRestrictionValue += toFiniteNumber(itemData.restriction_value);
                         }
                     }
                 });
@@ -385,22 +425,22 @@ export default function ItemPivotReport() {
                     const itemData = license.items?.[item.name];
                     if (itemData) {
                         // Available quantity
-                        itemAvailable += parseFloat(itemData.available_quantity || 0);
+                        itemAvailable += toFiniteNumber(itemData.available_quantity);
                         // Planned CIF + quantity. A manually-planned DFIA uses its
                         // authored plan (plan_cif / plan_quantity); otherwise fall
                         // back to the norm-derived planned_cif over available qty.
                         const manual = license.plan_source === 'manual';
                         itemPlanned    += manual
-                            ? parseFloat(itemData.plan_cif || 0)
-                            : parseFloat(itemData.planned_cif || 0);
+                            ? toFiniteNumber(itemData.plan_cif)
+                            : toFiniteNumber(itemData.planned_cif);
                         itemPlannedQty += manual
-                            ? parseFloat(itemData.plan_quantity || 0)
-                            : parseFloat(itemData.available_quantity || 0);
+                            ? toFiniteNumber(itemData.plan_quantity)
+                            : toFiniteNumber(itemData.available_quantity);
 
                         // Check if item has restriction
                         if (itemData.restriction !== null && itemData.restriction !== undefined) {
                             hasRestriction = true;
-                            restrictionPercentage = parseFloat(itemData.restriction || 0);
+                            restrictionPercentage = toFiniteNumber(itemData.restriction);
                         }
                     }
                 });
@@ -859,11 +899,7 @@ export default function ItemPivotReport() {
                                                                                     e.preventDefault();
                                                                                     e.stopPropagation();
                                                                                     try {
-                                                                                        const response = await api.get(`licenses/${license.id}/merged-documents/`, {
-                                                                                            responseType: 'blob',
-                                                                                            headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
-                                                                                        });
-                                                                                        window.open(URL.createObjectURL(response.data), '_blank', 'noopener');
+                                                                                        await openAuthedFile(`licenses/${license.id}/merged-documents/`);
                                                                                     } catch {
                                                                                         toast.error('Failed to open DFIA documents');
                                                                                     }

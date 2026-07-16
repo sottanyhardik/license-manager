@@ -577,6 +577,53 @@
   - None for this helper.
 - Status: COMPLETED
 
+## frontend/src/pages/LedgerUpload.tsx
+
+- File Path: `frontend/src/pages/LedgerUpload.tsx`
+- Module: Reporting & Exports / Frontend ledger upload and async processing page
+- LOC: 614 (`LedgerUpload.tsx`) + 164 (`LedgerUpload.test.tsx`)
+- Lines Reviewed: 614
+- Functions Reviewed: 8 (`isRecord`, `normalizeText`, `normalizeLedgerFileTasks`, `normalizeLedgerUploadErrors`, `buildAsyncUploadErrorMessage`, `getLedgerUploadErrorMessage`, `normalizeProgressValue`, `LedgerUpload`) plus `TaskStatusModal`
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added explicit normalization for malformed async `file_tasks` and `errors` response payloads.
+  - Filtered blank and duplicate task IDs before polling status endpoints.
+  - Added fallback display names for missing files, licenses, and upload errors.
+  - Added progress clamping so malformed values cannot render invalid percentages or ARIA values.
+- Package Replacements:
+  - None. Existing React, browser FormData, Axios API client, shared upload hook, and UI components remain appropriate.
+- Performance Improvements:
+  - Preserved upload batching and bounded polling concurrency.
+  - Capped rendered async error details to avoid unbounded UI strings for large failed batches.
+  - Kept polling completion tracking in a `Set` to avoid repeated status calls for terminal tasks.
+- Security Improvements:
+  - Removed console error logging of upload and polling failures.
+  - React escaping is preserved for file, license, and error display values.
+  - Invalid/malformed task IDs are rejected before authenticated status requests are made.
+- Dead Code Removed:
+  - Removed repeated `document.getElementById("file-input")` reset logic in favor of a typed input ref.
+- Duplicate Logic Removed:
+  - Centralized async task/error/progress normalization into test-covered helpers.
+- Tests Added:
+  - Added `frontend/src/pages/LedgerUpload.test.tsx` covering async response normalization, capped error messages, API/native error extraction, progress clamping, accessible remove action, and async upload FormData/task rendering.
+- Verification Results:
+  - Focused Vitest: `npm test -- LedgerUpload.test.tsx` -> 6 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/LedgerUpload.tsx src/pages/LedgerUpload.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues after build completion.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/LedgerUpload.tsx frontend/src/pages/LedgerUpload.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/LedgerUpload.tsx frontend/src/pages/LedgerUpload.test.tsx` -> clean.
+- Commit SHA: `1739ad2ae3213cc09310a9619de38e57b49685f5`
+- Commit Timestamp: `2026-07-16T15:49:41+05:30`
+- Commit Summary: `fix(reports): harden ledger upload`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The component is still large and could be split into a task-status modal module and upload-results renderer in a later component-extraction audit.
+- Status: COMPLETED
+
 ## frontend/src/pages/reports/ActiveLicenses.tsx
 
 - File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`

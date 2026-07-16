@@ -6,12 +6,109 @@ import { formatDate } from './dateFormatter';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
+function isRecord(value) {
+    return typeof value === 'object' && value !== null;
+}
+
+function normalizeText(value, fallback = '') {
+    const normalized = String(value ?? '').trim();
+    return normalized || fallback;
+}
+
+function toFiniteNumber(value) {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function normalizeTransaction(txn, index) {
+    if (!isRecord(txn)) return null;
+    return {
+        ...txn,
+        type: normalizeText(txn.type, 'UNKNOWN'),
+        company_id: txn.company_id ?? null,
+        company_name: normalizeText(txn.company_name, 'N/A'),
+        date: txn.date ?? null,
+        particular: normalizeText(txn.particular, '-'),
+        invoice_number: normalizeText(txn.invoice_number),
+        items: normalizeText(txn.items),
+        debit_cif: toFiniteNumber(txn.debit_cif),
+        credit_cif: toFiniteNumber(txn.credit_cif),
+        debit_license_value: toFiniteNumber(txn.debit_license_value),
+        credit_license_value: toFiniteNumber(txn.credit_license_value),
+        debit_amount: toFiniteNumber(txn.debit_amount),
+        credit_amount: toFiniteNumber(txn.credit_amount),
+        rate: toFiniteNumber(txn.rate),
+        profit_loss: txn.profit_loss == null ? null : toFiniteNumber(txn.profit_loss),
+        _row_key: txn.id ?? txn.trade_id ?? index,
+    };
+}
+
+export function normalizeLedgerLicensesData(licensesData) {
+    if (!Array.isArray(licensesData)) return [];
+
+    return licensesData.flatMap((license, index) => {
+        if (!isRecord(license)) return [];
+        const transactions = Array.isArray(license.transactions)
+            ? license.transactions.map(normalizeTransaction).filter(Boolean)
+            : [];
+
+        return [{
+            ...license,
+            id: license.id ?? license.license_id ?? index,
+            license_number: normalizeText(license.license_number, `License ${index + 1}`),
+            license_type: normalizeText(license.license_type, 'UNKNOWN'),
+            license_date: license.license_date ?? null,
+            expiry_date: license.expiry_date ?? null,
+            exporter: normalizeText(license.exporter, 'N/A'),
+            total_value: toFiniteNumber(license.total_value),
+            available_balance: toFiniteNumber(license.available_balance),
+            transactions,
+        }];
+    });
+}
+
+export function sanitizeExportFilename(filename, fallback) {
+    const value = normalizeText(filename, fallback);
+    const sanitized = value
+        .split('')
+        .map((char) => {
+            const code = char.charCodeAt(0);
+            return code < 32 || code === 127 || '\\/:*?"<>|'.includes(char) ? '_' : char;
+        })
+        .join('')
+        .replace(/\s+/g, ' ')
+        .replace(/_+/g, '_')
+        .replace(/^[_ .]+|[_ .]+$/g, '');
+    return sanitized || fallback;
+}
+
+export function sanitizeWorksheetName(value) {
+    return normalizeText(value, 'License')
+        .replace(/[\\/:*?[\]]/g, '-')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 31) || 'License';
+}
+
+export function buildLicenseLedgerUrl(licenseId) {
+    const normalizedId = normalizeText(licenseId);
+    if (!normalizedId || typeof window === 'undefined') return null;
+    return `${window.location.origin}/license-ledger/${encodeURIComponent(normalizedId)}`;
+}
+
+function getTodayStamp(date = new Date()) {
+    return date.toISOString().slice(0, 10);
+}
+
 export function groupByCompany(transactions) {
     const map = {};
-    (transactions || []).forEach(txn => {
-        const key = txn.company_id != null ? String(txn.company_id) : 'unknown';
+    const normalizedTransactions = Array.isArray(transactions)
+        ? transactions.map(normalizeTransaction).filter(Boolean)
+        : [];
+    normalizedTransactions.forEach((txn, index) => {
+        const key = txn.company_id != null ? String(txn.company_id) : `unknown-${index}`;
         if (!map[key]) {
-            map[key] = { company_id: txn.company_id, company_name: txn.company_name || 'N/A', transactions: [] };
+            map[key] = { company_id: txn.company_id ?? key, company_name: normalizeText(txn.company_name, 'N/A'), transactions: [] };
         }
         map[key].transactions.push(txn);
     });
@@ -22,11 +119,11 @@ const TXN_ORDER = { OPENING: 0, PURCHASE: 1, SALE: 2 };
 const sortTxns = (txns) => [...txns].sort((a, b) => (TXN_ORDER[a.type] ?? 1) - (TXN_ORDER[b.type] ?? 1));
 
 function fmtDate(d) { return d ? (formatDate(d) || String(d)) : '-'; }
-function fmtNum(v, dp = 2) { return v != null && v !== '' && v !== 0 ? formatIndianNumber(v, dp) : '-'; }
+function fmtNum(v, dp = 2) { return v != null && v !== '' && toFiniteNumber(v) !== 0 ? formatIndianNumber(toFiniteNumber(v), dp) : '-'; }
 function fmtCur(v, currency = 'INR') {
     if (v == null) return '-';
     const sym = currency === 'USD' ? '$' : 'Rs.';
-    return `${sym}${formatIndianNumber(v, 2)}`;
+    return `${sym}${formatIndianNumber(toFiniteNumber(v), 2)}`;
 }
 
 // ─── PDF ────────────────────────────────────────────────────────────────────
@@ -218,7 +315,8 @@ function writeSummaryPageToPdf(doc, licensesData) {
         let companyPurchase = 0, companySale = 0, companyPL = 0;
         for (const { license, totalPurchase, totalSale, pl } of entries) {
             const rowIdx = summaryBody.length;
-            if (license.id) licenseUrlMap[rowIdx] = `${window.location.origin}/license-ledger/${license.id}`;
+            const ledgerUrl = buildLicenseLedgerUrl(license.id);
+            if (ledgerUrl) licenseUrlMap[rowIdx] = ledgerUrl;
             summaryBody.push([
                 license.license_number,
                 license.license_type,
@@ -272,15 +370,16 @@ function writeSummaryPageToPdf(doc, licensesData) {
 }
 
 export function generatePDF(licensesData, filename) {
-    if (!licensesData?.length) return;
+    const normalizedLicenses = normalizeLedgerLicensesData(licensesData);
+    if (!normalizedLicenses.length) return;
 
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
 
     // Summary page first
-    writeSummaryPageToPdf(doc, licensesData);
+    writeSummaryPageToPdf(doc, normalizedLicenses);
 
-    licensesData.forEach((license, idx) => {
+    normalizedLicenses.forEach((license, idx) => {
         doc.addPage(); // summary is always page 1
 
         const isDFIA = license.license_type === 'DFIA';
@@ -351,10 +450,10 @@ export function generatePDF(licensesData, filename) {
         doc.text(`Generated: ${fmtDate(new Date())} | License Manager System`, 14, finalY + 10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(74, 85, 104);
-        doc.text(`Page ${idx + 2} of ${licensesData.length + 1}`, pageWidth - 14, finalY + 10, { align: 'right' });
+        doc.text(`Page ${idx + 2} of ${normalizedLicenses.length + 1}`, pageWidth - 14, finalY + 10, { align: 'right' });
     });
 
-    const fname = filename || `License_Ledger_${new Date().toISOString().split('T')[0]}.pdf`;
+    const fname = sanitizeExportFilename(filename, `License_Ledger_${getTodayStamp()}.pdf`);
     doc.save(fname);
 }
 
@@ -443,10 +542,11 @@ function buildSummarySheet(wb, licensesData) {
             ]);
 
             // Hyperlink on license number
-            if (license.id) {
+            const ledgerUrl = buildLicenseLedgerUrl(license.id);
+            if (ledgerUrl) {
                 ws.getCell(rowNum, 1).value = {
                     text: String(license.license_number),
-                    hyperlink: `${window.location.origin}/license-ledger/${license.id}`,
+                    hyperlink: ledgerUrl,
                     tooltip: `Open ${license.license_number}`,
                 };
                 ws.getCell(rowNum, 1).font = { color: { argb: 'FF0563C1' }, underline: true, bold: false };
@@ -489,7 +589,8 @@ function buildSummarySheet(wb, licensesData) {
 // ─── Excel ──────────────────────────────────────────────────────────────────
 
 export async function generateExcel(licensesData, filename) {
-    if (!licensesData?.length) return;
+    const normalizedLicenses = normalizeLedgerLicensesData(licensesData);
+    if (!normalizedLicenses.length) return;
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'License Manager';
@@ -502,14 +603,12 @@ export async function generateExcel(licensesData, filename) {
     });
 
     // Summary sheet first (tab 1)
-    buildSummarySheet(wb, licensesData);
+    buildSummarySheet(wb, normalizedLicenses);
 
-    for (const license of licensesData) {
+    for (const license of normalizedLicenses) {
         const isDFIA = license.license_type === 'DFIA';
         const currentBalance = license.available_balance ?? 0;
-        const sheetName = String(license.license_number || 'License')
-            .replace(/[\\/:*?[\]]/g, '-')
-            .substring(0, 31);
+        const sheetName = sanitizeWorksheetName(license.license_number);
         const ws = wb.addWorksheet(sheetName);
 
         const headers = ['Date', 'Particulars'];
@@ -673,9 +772,9 @@ export async function generateExcel(licensesData, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename || `License_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`;
+    a.download = sanitizeExportFilename(filename, `License_Ledger_${getTodayStamp()}.xlsx`);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
 }

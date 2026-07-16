@@ -129,11 +129,11 @@
         "blocked": 0,
         "changed": 6,
         "completed": 23,
-        "files": 120,
+        "files": 119,
         "in_progress": 0,
-        "lines": 76267,
+        "lines": 76134,
         "not_started": 2,
-        "requires_recheck": 89
+        "requires_recheck": 88
       },
       "backend/apps/__init__.py": {
         "blocked": 0,
@@ -519,11 +519,11 @@
         "blocked": 0,
         "changed": 0,
         "completed": 11,
-        "files": 33,
+        "files": 32,
         "in_progress": 0,
-        "lines": 5914,
+        "lines": 5781,
         "not_started": 0,
-        "requires_recheck": 22
+        "requires_recheck": 21
       },
       "tests": {
         "blocked": 0,
@@ -885,7 +885,7 @@
     "active_phase": "Phase 9 - Inventory",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "07cc55e7",
+    "head": "1d7fb071",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -994,11 +994,19 @@
         "timestamp": "2026-07-16T17:27:18+05:30",
         "commit_sha": "07cc55e742f061e66643eb02034f7c9078531b4c",
         "commit_summary": "cleanup(bill_of_entry): remove empty test stub"
+      },
+      {
+        "commit_sha": "1d7fb0713b09b25b7375f749c076a43b4734a9f0",
+        "commit_summary": "cleanup(inventory): remove stale balance probe",
+        "file": "backend/scripts/char_license_list_balance.py",
+        "phase": "Phase 9 - Inventory",
+        "status": "DELETED",
+        "timestamp": "2026-07-16T17:40:25+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 917,
-    "tracked_audit_lines": 241605,
+    "tracked_audit_files": 916,
+    "tracked_audit_lines": 241472,
     "working_tree": "dirty"
   },
   "schema_version": 1,

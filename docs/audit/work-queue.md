@@ -24,6 +24,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-16T17:11:47+05:30` - Phase 8 Bills of Entry deleted obsolete `backend/apps/bill_of_entry/tasks.py` in commit `b6bb035b05c8497f9c6c9a71fb3f609bf02ef521` (`cleanup(bill_of_entry): remove dead balance task`); continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T17:17:06+05:30` - Phase 8 Bills of Entry deleted the verified-dead BOE legacy Django template-view stack in commit `0d42a515b6349520b665ad388f49fe92a78d45bc` (`cleanup(bill_of_entry): remove dead legacy template views`); continue with `backend/apps/bill_of_entry/tests.py`, the remaining BOE file marked `REQUIRES_RECHECK`.
 - `2026-07-16T17:27:18+05:30` - Phase 8 Bills of Entry deleted empty `backend/apps/bill_of_entry/tests.py` in commit `07cc55e742f061e66643eb02034f7c9078531b4c` (`cleanup(bill_of_entry): remove empty test stub`); Phase 8 now has zero BOE files marked `NOT_STARTED` or `REQUIRES_RECHECK`, and Phase 9 Inventory is queued next.
+- `2026-07-16T17:40:25+05:30` - Phase 9 Inventory deleted stale `backend/scripts/char_license_list_balance.py` in commit `1d7fb0713b09b25b7375f749c076a43b4734a9f0` (`cleanup(inventory): remove stale balance probe`); continue with the next Inventory file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

@@ -11,6 +11,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 
 - `2026-07-16T16:21:03+05:30` - `P7-REPORTING-EXPORTS-AUDIT` frozen in commit `f5e4f3f80f81907a67f505455db75dc0459e9032`.
 - `2026-07-16T16:19:33+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/__init__.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-16T16:24:27+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/migrations/0001_initial.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

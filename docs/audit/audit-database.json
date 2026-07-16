@@ -336,7 +336,8 @@
     "Phase 6 invoice model production hardening completed with normalization, validation, DB constraints, migrations, and 19 focused regression tests.",
     "Phase 6 license balance Excel hardening completed with bulk payload validation, duplicate worksheet formula fix, unused import cleanup, and 13 focused API regressions.",
     "Phase 7 Reporting & Exports frozen after the existing audit database reported phase7_remaining 0; Phase 8 Bills of Entry queued from the existing module pipeline and audit database.",
-    "Phase 8 Bills of Entry package marker audit completed for backend/apps/bill_of_entry/__init__.py with no source changes required."
+    "Phase 8 Bills of Entry package marker audit completed for backend/apps/bill_of_entry/__init__.py with no source changes required.",
+    "Phase 8 Bills of Entry initial migration audit completed for backend/apps/bill_of_entry/migrations/0001_initial.py with no source changes required."
   ],
   "dead_code_findings": [],
   "duplicate_logic_findings": [],
@@ -6050,7 +6051,7 @@
       "total_lines": 11
     },
     "backend/apps/bill_of_entry/migrations/0001_initial.py": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 3,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -6064,7 +6065,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "python",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-16T16:24:27+05:30",
       "maintainability_score": 98,
       "module": "backend/apps/bill_of_entry",
       "performance_score": 100,
@@ -31765,12 +31766,12 @@
     "backend/apps/bill_of_entry": {
       "blocked": 0,
       "changed": 5,
-      "completed": 9,
+      "completed": 10,
       "files": 34,
       "in_progress": 0,
       "lines": 4516,
       "not_started": 1,
-      "requires_recheck": 19
+      "requires_recheck": 18
     },
     "backend/apps/core": {
       "blocked": 0,
@@ -32206,18 +32207,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 115096,
+    "audited_lines": 115171,
     "blocked": 0,
     "changed": 50,
-    "completed": 488,
+    "completed": 489,
     "files": 930,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
     "lines": 242540,
     "not_started": 13,
-    "remaining_lines": 127444,
-    "requires_recheck": 379,
+    "remaining_lines": 127369,
+    "requires_recheck": 378,
     "todo": 22
   },
   "verification_history": [
@@ -33219,6 +33220,9 @@
     "Phase 8 BOE package marker audit: backend/apps/bill_of_entry/__init__.py reviewed as an empty Django package marker; no imports, symbols, side effects, database reads/writes, transactions, validation paths, or exception paths exist",
     "Phase 8 BOE package marker verification: Ruff -> clean; py_compile -> passed; compileall -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; audit JSON validation -> passed",
     "Phase 8 BOE security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked",
+    "Phase 8 BOE package marker commit: 92ce5c29ce18b04542342c519b5d4c20839f0ee6 at 2026-07-16T16:23:23+05:30, docs(audit): record boe package marker completion",
+    "Phase 8 BOE initial migration audit: reviewed 75-line initial migration, imports, Decimal defaults, swappable user dependency, allotment/core dependencies, BillOfEntryModel fields/options, RowDetails fields/options, validators, FKs, M2M relationship, and historical follow-up migrations",
+    "Phase 8 BOE initial migration verification: Ruff -> clean; py_compile -> passed; compileall -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; configured import verification -> initial=True, dependencies=3, operations=2; scoped git diff --check -> clean",
     "Ruff F821 undefined-name sweep: clean",
     "Previous Ruff selected F811/E741 baseline: 23 findings, now resolved",
     "Ruff full baseline: 547 findings remain"

@@ -19,6 +19,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-16T16:30:12+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/scripts/__init__.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T16:57:31+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/scripts/boe.py` in commit `e912f2242b1202cf87524998e4cdd1c2ca2d5230` (`fix(bill_of_entry): harden icegate helpers`); continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T17:05:46+05:30` - Phase 8 Bills of Entry deleted obsolete `backend/apps/bill_of_entry/scripts/generate_tl.py` in commit `1e4ecac9cb814cdb40dfbee97401e0de10c5a9ae` (`cleanup(bill_of_entry): remove dead transfer letter script`); continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-16T17:08:36+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/scripts/utils.py`; retained live ICEGATE port dictionary unchanged and continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

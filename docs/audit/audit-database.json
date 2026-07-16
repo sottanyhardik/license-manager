@@ -344,7 +344,8 @@
     "Phase 8 Bills of Entry parsers package marker audit completed for backend/apps/bill_of_entry/parsers/__init__.py with no source changes required.",
     "Phase 8 Bills of Entry scripts package marker audit completed for backend/apps/bill_of_entry/scripts/__init__.py with no source changes required.",
     "Phase 8 Bills of Entry ICEGATE helper hardening completed for backend/apps/bill_of_entry/scripts/boe.py with standard-library HTML parsing, bounded HTTP calls, validation guards, and focused regression coverage.",
-    "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/scripts/generate_tl.py after repository-wide runtime reference scan found no imports, routes, commands, tests, or execution paths."
+    "Phase 8 Bills of Entry removed obsolete unreferenced backend/apps/bill_of_entry/scripts/generate_tl.py after repository-wide runtime reference scan found no imports, routes, commands, tests, or execution paths.",
+    "Phase 8 Bills of Entry port dictionary audit completed for backend/apps/bill_of_entry/scripts/utils.py with source retained unchanged for the live BOE fetch dependency."
   ],
   "dead_code_findings": [],
   "duplicate_logic_findings": [],
@@ -6369,7 +6370,7 @@
       "total_lines": 333
     },
     "backend/apps/bill_of_entry/scripts/utils.py": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 2,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -6383,14 +6384,14 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "python",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-16T17:08:36+05:30",
       "maintainability_score": 98,
       "module": "backend/apps/bill_of_entry",
       "performance_score": 99,
       "previous_index_checksum": null,
       "readability_score": 98,
-      "security_score": 80,
-      "technical_debt_score": 2,
+      "security_score": 92,
+      "technical_debt_score": 1,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
@@ -31783,12 +31784,12 @@
     "backend/apps/bill_of_entry": {
       "blocked": 0,
       "changed": 5,
-      "completed": 16,
+      "completed": 17,
       "files": 33,
       "in_progress": 0,
       "lines": 4569,
       "not_started": 0,
-      "requires_recheck": 12
+      "requires_recheck": 11
     },
     "backend/apps/core": {
       "blocked": 0,
@@ -32225,18 +32226,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 115719,
+    "audited_lines": 115956,
     "blocked": 0,
     "changed": 50,
-    "completed": 496,
+    "completed": 497,
     "files": 930,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
     "lines": 242735,
     "not_started": 12,
-    "remaining_lines": 127016,
-    "requires_recheck": 372,
+    "remaining_lines": 126779,
+    "requires_recheck": 371,
     "todo": 22
   },
   "verification_history": [
@@ -33271,6 +33272,11 @@
     "Phase 8 BOE generate_tl removal: deleted obsolete one-off script with import-time database/file-generation side effects; active transfer-letter generation remains in backend/apps/bill_of_entry/views/transfer_views.py and backend/apps/core/utils/transfer_letter.py",
     "Phase 8 BOE generate_tl verification: runtime reference scan excluding docs/audit -> no results; pytest backend/tests/test_boe_script_helpers.py backend/tests/test_api_boe.py -q -> 18 passed; Ruff backend/apps/bill_of_entry/scripts and operations note -> clean; py_compile remaining BOE scripts -> passed; compileall scripts package -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning",
     "Phase 8 BOE generate_tl security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked for this phase",
-    "Phase 8 BOE generate_tl commit: 1e4ecac9cb814cdb40dfbee97401e0de10c5a9ae at 2026-07-16T17:05:46+05:30, cleanup(bill_of_entry): remove dead transfer letter script"
+    "Phase 8 BOE generate_tl commit: 1e4ecac9cb814cdb40dfbee97401e0de10c5a9ae at 2026-07-16T17:05:46+05:30, cleanup(bill_of_entry): remove dead transfer letter script",
+    "Phase 8 BOE port dictionary audit: reviewed 237-line static ICEGATE port-code mapping, live dependency from backend/apps/bill_of_entry/views/fetch_views.py, Celery task payload usage, duplicate lookup search, null/invalid lookup behavior, and serialization constraints",
+    "Phase 8 BOE port dictionary decision: retained source unchanged because the mapping is a live dependency and replacing the mutable dict with MappingProxyType or another wrapper could break Celery serialization of the fetch task payload",
+    "Phase 8 BOE port dictionary verification: dependency search found only fetch_views.py importing port_dict; Ruff utils.py -> clean; py_compile utils.py and fetch_views.py -> passed; compileall utils.py and fetch_views.py -> passed; pytest backend/tests/test_api_boe.py -q -> 12 passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; direct import check -> len(port_dict)=235 and INNSA1 maps to NHAVA SHEVA SEA (INNSA1)",
+    "Phase 8 BOE port dictionary dependent-file note: broad Ruff including pending backend/apps/bill_of_entry/views/fetch_views.py found an existing unused reverse import; fetch_views.py remains queued separately as REQUIRES_RECHECK",
+    "Phase 8 BOE port dictionary security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked for this phase"
   ]
 }

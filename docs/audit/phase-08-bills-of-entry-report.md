@@ -275,3 +275,33 @@
 - Remaining Technical Debt:
   - Adjacent BOE script utilities remain queued and must be audited separately.
 - Status: DELETED
+
+## backend/apps/bill_of_entry/scripts/utils.py
+
+- File Path(s): `backend/apps/bill_of_entry/scripts/utils.py`
+- Module: Bills of Entry / ICEGATE port-code lookup
+- Total LOC: 237
+- Lines Reviewed: 237
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None applied; this file is a static lookup map and performs no input parsing, request handling, database access, file I/O, or validation.
+- Package Replacements: None; the static mapping remains a live BOE fetch dependency, and no existing project utility or standard-library wrapper reduces risk without changing the Celery payload contract.
+- Performance Improvements: None required; import loads a single 235-entry dictionary.
+- Security Improvements: Reviewed for executable side effects, dynamic imports, path handling, SQL, templates, request handling, and external I/O; none exist.
+- Dead Code Removed: None; repository-wide search found `port_dict` is imported by `backend/apps/bill_of_entry/views/fetch_views.py`.
+- Duplicate Logic Removed: None; no duplicate port-code dictionary was found elsewhere in active source.
+- Tests Added: None; source behavior was retained unchanged.
+- Verification Results:
+  - Repository-wide dependency search found `port_dict` imported only by `backend/apps/bill_of_entry/views/fetch_views.py` and passed to `fetch_data_to_model`.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/scripts/utils.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/utils.py backend/apps/bill_of_entry/views/fetch_views.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts/utils.py backend/apps/bill_of_entry/views/fetch_views.py` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_api_boe.py -q` -> 12 passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Direct import check from `backend/` -> `len(port_dict)=235`, `port_dict["INNSA1"] == "NHAVA SHEVA SEA (INNSA1)"`.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Broad Ruff including pending `backend/apps/bill_of_entry/views/fetch_views.py` found an existing unused `reverse` import; that file remains queued separately as `REQUIRES_RECHECK`.
+- Status: COMPLETED

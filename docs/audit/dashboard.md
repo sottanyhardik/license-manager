@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T10:08:49+00:00`
+Generated: `2026-07-16T10:12:04+00:00`
 
 ## Repository Statistics
 
-- Files audited: `475`
+- Files audited: `477`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `386`
+- Files requiring dependency recheck: `384`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `450`
+- Files remaining: `448`
 - Total source files tracked: `925`
-- Total source LOC tracked: `240981`
-- Audited LOC: `111336`
-- Remaining LOC: `129645`
+- Total source LOC tracked: `241107`
+- Audited LOC: `111532`
+- Remaining LOC: `129575`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,7 +35,7 @@ Generated: `2026-07-16T10:08:49+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 24144 | 19 | 3 | 31 | 0 |
+| `docs` | 53 | 24195 | 19 | 3 | 31 | 0 |
 | `frontend/src/pages` | 74 | 18310 | 60 | 0 | 14 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
@@ -1031,6 +1031,12 @@ Generated: `2026-07-16T10:08:49+00:00`
 - Phase 7 SionNormReport verification: npm test -- SionNormReport.test.tsx -> 5 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/SionNormReport.tsx src/pages/reports/SionNormReport.test.tsx -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
 - Phase 7 SionNormReport security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Phase 7 SionNormReport commit: 78e9c91eebad9007552cd95e7519dca062021b08 at 2026-07-16T15:38:09+05:30, fix(reports): harden sion norm report
+- Phase 7 documentDownload audit: reviewed shared authenticated blob download helper, protected media path normalization, report/export download callers, object URL lifecycle, new-tab/download branches, and unsafe external URL risk
+- Phase 7 documentDownload hardening: added normalizeAuthedFilePath, rejected blank absolute protocol-relative backslash and control-character paths before Axios requests, trimmed media paths, supported protocol-relative media URLs by stripping origin, and rejected empty/unsafe media paths
+- Phase 7 documentDownload regression: expanded frontend/src/utils/documentDownload.test.ts to cover unsafe media paths, safe relative report paths, absolute/protocol-relative rejection, backslash rejection, and pre-request failure for unsafe openAuthedFile paths
+- Phase 7 documentDownload verification: npm test -- documentDownload.test.ts -> 8 passed; npm run typecheck -> passed; npm run lint -- --quiet src/utils/documentDownload.ts src/utils/documentDownload.test.ts -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 documentDownload security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 documentDownload commit: bf5ad0010a89381311d2542d3eb4c613dbed68fa at 2026-07-16T15:41:27+05:30, fix(reports): validate authenticated download paths
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

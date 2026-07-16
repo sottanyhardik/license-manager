@@ -534,6 +534,49 @@
   - Dense SION table layout remains intentionally monolithic to avoid changing report column semantics during this audit pass.
 - Status: COMPLETED
 
+## frontend/src/utils/documentDownload.ts
+
+- File Path: `frontend/src/utils/documentDownload.ts`
+- Module: Reporting & Exports / Shared authenticated document and export download helper
+- LOC: 91 (`documentDownload.ts`) + 62 (`documentDownload.test.ts`)
+- Lines Reviewed: 91
+- Functions Reviewed: 4 (`hasUnsafePathCharacters`, `normalizeAuthedFilePath`, `toProtectedMediaPath`, `openAuthedFile`, plus `openDocument` wrapper)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added `normalizeAuthedFilePath()` to reject blank, absolute, protocol-relative, backslash-containing, and control-character paths before authenticated Axios requests.
+  - Trimmed input paths before media/API normalization.
+  - Rejected empty and unsafe media paths.
+- Package Replacements:
+  - None. Existing Axios/browser Blob URL APIs remain appropriate.
+- Performance Improvements:
+  - Unsafe paths fail before network work begins.
+- Security Improvements:
+  - Prevents accidental auth-bearing export/document requests to absolute or protocol-relative external URLs.
+  - Keeps full media URL support by stripping the origin before routing through the authenticated `/media/` API path.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - Centralized authenticated-path validation for all report/document download callers.
+- Tests Added:
+  - Expanded `frontend/src/utils/documentDownload.test.ts` to cover unsafe media paths, safe relative report paths, absolute/protocol-relative rejection, backslash rejection, and pre-request failure for unsafe `openAuthedFile()` paths.
+- Verification Results:
+  - Focused Vitest: `npm test -- documentDownload.test.ts` -> 8 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/utils/documentDownload.ts src/utils/documentDownload.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/utils/documentDownload.ts frontend/src/utils/documentDownload.test.ts` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/utils/documentDownload.ts frontend/src/utils/documentDownload.test.ts` -> clean.
+- Commit SHA: `bf5ad0010a89381311d2542d3eb4c613dbed68fa`
+- Commit Timestamp: `2026-07-16T15:41:27+05:30`
+- Commit Summary: `fix(reports): validate authenticated download paths`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this helper.
+- Status: COMPLETED
+
 ## frontend/src/pages/reports/ActiveLicenses.tsx
 
 - File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`

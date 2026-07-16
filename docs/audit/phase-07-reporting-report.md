@@ -230,6 +230,46 @@
   - None for this component.
 - Status: COMPLETED - REMOVED
 
+## frontend/src/pages/reports/ActiveLicenses.tsx
+
+- File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`
+- Module: Reporting & Exports / Frontend active-license Excel report page
+- LOC: 24
+- Lines Reviewed: 24
+- Functions Reviewed: 1 (`ActiveLicenses`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Rechecked all page-level props passed into the shared `LicenseExportPanel`.
+  - Confirmed day input validation, clamping, ARIA wiring, loading state, toast failure path, and authenticated download handling are delegated to the already hardened shared report component.
+  - Removed stale hard-coded `2026/2027` helper text so the report copy remains valid across years.
+- Package Replacements:
+  - None. Existing React composition and the shared `LicenseExportPanel` remain the correct abstraction.
+- Performance Improvements:
+  - No extra rendering loop, duplicate query, or client-side export work exists in this wrapper.
+  - Kept endpoint and filename generation as pure callbacks evaluated only by the shared export action.
+- Security Improvements:
+  - Confirmed this page performs no direct DOM injection, HTML rendering, localStorage/session access, or unauthenticated download logic.
+  - Regression coverage confirms generated active-license export URLs remain relative API paths.
+- Dead Code Removed:
+  - Removed stale year-specific copy.
+- Duplicate Logic Removed:
+  - None needed; report validation/download behavior remains centralized in `LicenseExportPanel`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ActiveLicenses.test.tsx` covering visible copy, default lookback days, stale-year absence, and active-license export URL/filename generation.
+- Verification Results:
+  - Dependency search: `rg -n "ActiveLicenses|active-licenses|Active Licenses|LicenseExportPanel" frontend backend docs/audit docs -g '!node_modules'` reviewed route, backend endpoint, docs, and shared component references.
+  - Focused Vitest: `npm test -- ActiveLicenses.test.tsx` -> 2 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ActiveLicenses.tsx src/pages/reports/ActiveLicenses.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED
+
 ## backend/apps/bill_of_entry/views_export.py
 
 - File Path: `backend/apps/bill_of_entry/views_export.py`

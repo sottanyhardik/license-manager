@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:27:20+00:00`
+Generated: `2026-07-16T09:29:59+00:00`
 
 ## Repository Statistics
 
-- Files audited: `451`
+- Files audited: `453`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `398`
+- Files requiring dependency recheck: `397`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `462`
-- Total source files tracked: `913`
-- Total source LOC tracked: `239403`
-- Audited LOC: `106256`
-- Remaining LOC: `133147`
+- Files remaining: `461`
+- Total source files tracked: `914`
+- Total source LOC tracked: `239489`
+- Audited LOC: `106360`
+- Remaining LOC: `133129`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,8 +35,8 @@ Generated: `2026-07-16T09:27:20+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 23542 | 19 | 3 | 31 | 0 |
-| `frontend/src/pages` | 62 | 17334 | 36 | 0 | 26 | 0 |
+| `docs` | 53 | 23588 | 19 | 3 | 31 | 0 |
+| `frontend/src/pages` | 63 | 17374 | 38 | 0 | 25 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
@@ -970,6 +970,10 @@ Generated: `2026-07-16T09:27:20+00:00`
 - Phase 7 LicenseExportPanel audit: reviewed shared active/expiring license Excel export component, props, days input, endpoint/filename callbacks, blob download path, loading state, toast error path, and feature rendering
 - Phase 7 LicenseExportPanel hardening: added typed props, normalized/clamped days to 1-365, stable input/help IDs, shared authenticated download helper usage, and focused regression tests
 - Phase 7 LicenseExportPanel verification: npm test -- LicenseExportPanel.test.tsx -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/components/reports/LicenseExportPanel.tsx src/components/reports/LicenseExportPanel.test.tsx -> passed; npm run build -> passed
+- Phase 7 ActiveLicenses page audit: reviewed React report wrapper, shared LicenseExportPanel integration, endpoint and filename callbacks, feature copy, route references, and active-license export semantics
+- Phase 7 ActiveLicenses hardening: removed stale hard-coded 2026/2027 copy and replaced symbolic date phrasing with accessible plain-language lookback text
+- Phase 7 ActiveLicenses regression: added frontend/src/pages/reports/ActiveLicenses.test.tsx covering visible copy, default days, stale-year absence, and active-license export URL/filename generation
+- Phase 7 ActiveLicenses verification: npm test -- ActiveLicenses.test.tsx -> 2 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ActiveLicenses.tsx src/pages/reports/ActiveLicenses.test.tsx -> passed; npm run build -> passed
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

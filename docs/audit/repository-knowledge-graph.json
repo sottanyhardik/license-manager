@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T09:27:20+00:00",
+  "generated_at": "2026-07-16T09:29:59+00:00",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -221,7 +221,7 @@
         "completed": 19,
         "files": 53,
         "in_progress": 0,
-        "lines": 23542,
+        "lines": 23588,
         "not_started": 0,
         "requires_recheck": 31
       },
@@ -348,12 +348,12 @@
       "frontend/src/pages": {
         "blocked": 0,
         "changed": 0,
-        "completed": 36,
-        "files": 62,
+        "completed": 38,
+        "files": 63,
         "in_progress": 0,
-        "lines": 17334,
+        "lines": 17374,
         "not_started": 0,
-        "requires_recheck": 26
+        "requires_recheck": 25
       },
       "frontend/src/routes": {
         "blocked": 0,
@@ -793,8 +793,6 @@
       "frontend/src/components/CommandPalette.tsx",
       "frontend/src/components/TopNav.test.tsx",
       "frontend/src/components/TopNav.tsx",
-      "frontend/src/components/reports/LicenseExportPanel.test.tsx",
-      "frontend/src/components/reports/LicenseExportPanel.tsx",
       "frontend/src/context/AuthContext.tsx",
       "frontend/src/pages/Dashboard.tsx",
       "frontend/src/pages/Login.test.tsx",
@@ -819,6 +817,8 @@
       "frontend/src/pages/masters/tables/AllotmentsTable.tsx",
       "frontend/src/pages/masters/tables/GenericMasterCards.tsx",
       "frontend/src/pages/masters/tables/IncentiveLicensesTable.tsx",
+      "frontend/src/pages/reports/ActiveLicenses.test.tsx",
+      "frontend/src/pages/reports/ActiveLicenses.tsx",
       "frontend/src/pages/tradeFormHelpers.test.ts",
       "frontend/src/pages/tradeFormHelpers.ts",
       "frontend/src/routes/AppRoutes.tsx",
@@ -897,10 +897,10 @@
   "repository": {
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "40262851",
+    "head": "92ac5af6",
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 913,
-    "tracked_audit_lines": 239403,
+    "tracked_audit_files": 914,
+    "tracked_audit_lines": 239489,
     "working_tree": "dirty"
   },
   "schema_version": 1,

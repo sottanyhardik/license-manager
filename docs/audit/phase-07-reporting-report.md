@@ -717,6 +717,53 @@
   - The table renderer remains large and should be split into a grouped transaction table component during a dedicated extraction pass.
 - Status: COMPLETED
 
+## frontend/src/utils/ledgerExport.js
+
+- File Path: `frontend/src/utils/ledgerExport.js`
+- Module: Reporting & Exports / Shared frontend PDF and Excel ledger export utility
+- LOC: 780 (`ledgerExport.js`) + 83 (`ledgerExport.test.ts`)
+- Lines Reviewed: 780
+- Functions Reviewed: 17 (`isRecord`, `normalizeText`, `toFiniteNumber`, `normalizeTransaction`, `normalizeLedgerLicensesData`, `sanitizeExportFilename`, `sanitizeWorksheetName`, `buildLicenseLedgerUrl`, `getTodayStamp`, `groupByCompany`, `sortTxns`, `fmtDate`, `fmtNum`, `fmtCur`, `generatePDF`, `buildSummarySheet`, `generateExcel`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added export-boundary normalization for malformed license and transaction rows.
+  - Coerced non-finite numeric values before report calculations and formatting.
+  - Sanitized generated PDF/XLSX filenames and Excel worksheet names.
+  - Encoded license IDs before embedding ledger hyperlinks.
+- Package Replacements:
+  - None. Existing `jspdf`, `jspdf-autotable`, and `exceljs` remain the approved export libraries for this utility.
+- Performance Improvements:
+  - Preserved existing in-memory PDF/XLSX generation semantics.
+  - Avoided processing non-object rows and empty export batches.
+  - Delayed object URL revocation until after the browser can consume the generated workbook download.
+- Security Improvements:
+  - Prevented unsafe filename characters and control characters from reaching generated downloads.
+  - Prevented raw license IDs from being interpolated into hyperlink URLs.
+  - Normalized malformed text/numeric API data before inserting it into PDF/XLSX outputs.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - Centralized license/transaction normalization, filename sanitization, worksheet-name sanitization, and ledger-link construction.
+- Tests Added:
+  - Added `frontend/src/utils/ledgerExport.test.ts` covering malformed export data normalization, filename and worksheet sanitization, unknown-company grouping, and encoded ledger links.
+- Verification Results:
+  - Focused Vitest: `npm test -- ledgerExport.test.ts` -> 4 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/utils/ledgerExport.js src/utils/ledgerExport.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues after build completion.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/utils/ledgerExport.js frontend/src/utils/ledgerExport.test.ts` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/utils/ledgerExport.js frontend/src/utils/ledgerExport.test.ts` -> clean.
+- Commit SHA: `10bcbcdf14ab7a5892f1a970fda56d9bba252fad`
+- Commit Timestamp: `2026-07-16T16:00:46+05:30`
+- Commit Summary: `fix(reports): harden ledger export utility`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The utility remains large and would benefit from a future split into shared data normalization, PDF writer, and Excel writer modules.
+- Status: COMPLETED
+
 ## frontend/src/pages/reports/ActiveLicenses.tsx
 
 - File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`

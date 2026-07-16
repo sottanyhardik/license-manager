@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T10:27:29+00:00`
+Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `485`
+- Files audited: `487`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `380`
+- Files requiring dependency recheck: `379`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `444`
-- Total source files tracked: `929`
-- Total source LOC tracked: `242303`
-- Audited LOC: `114186`
-- Remaining LOC: `128117`
+- Files remaining: `443`
+- Total source files tracked: `930`
+- Total source LOC tracked: `242540`
+- Audited LOC: `115096`
+- Remaining LOC: `127444`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,7 +35,7 @@ Generated: `2026-07-16T10:27:29+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 24411 | 19 | 3 | 31 | 0 |
+| `docs` | 53 | 24466 | 19 | 3 | 31 | 0 |
 | `frontend/src/pages` | 77 | 19217 | 66 | 0 | 11 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
@@ -1061,6 +1061,12 @@ Generated: `2026-07-16T10:27:29+00:00`
 - Phase 7 LicenseLedgerDetail verification: npm test -- LicenseLedgerDetail.test.tsx -> 5 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/LicenseLedgerDetail.tsx src/pages/LicenseLedgerDetail.test.tsx -> passed; npm run build -> passed; Django check -> no issues after build completion; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
 - Phase 7 LicenseLedgerDetail security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Phase 7 LicenseLedgerDetail commit: ee071fcbf3a2a6930585b58faaae9c793446dd9f at 2026-07-16T15:56:54+05:30, fix(reports): harden license ledger detail
+- Phase 7 ledgerExport audit: reviewed 681-line shared PDF/XLSX ledger export utility, ReportLab/jsPDF table body generation, Excel workbook generation, summary sheets, company grouping, running-balance calculations, hyperlink generation, filename defaults, object URL cleanup, and callers
+- Phase 7 ledgerExport hardening: added export-boundary license/transaction normalization, finite numeric coercion, safe filename and worksheet-name sanitization, encoded ledger hyperlinks, explicit unknown-company grouping, sanitized default filenames, and delayed workbook object URL revocation
+- Phase 7 ledgerExport regression: added frontend/src/utils/ledgerExport.test.ts covering malformed export data normalization, filename and worksheet sanitization, unknown-company grouping, and encoded ledger links
+- Phase 7 ledgerExport verification: npm test -- ledgerExport.test.ts -> 4 passed; npm run typecheck -> passed; npm run lint -- --quiet src/utils/ledgerExport.js src/utils/ledgerExport.test.ts -> passed; npm run build -> passed; Django check -> no issues after build completion; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 ledgerExport security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 ledgerExport commit: 10bcbcdf14ab7a5892f1a970fda56d9bba252fad at 2026-07-16T16:00:46+05:30, fix(reports): harden ledger export utility
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

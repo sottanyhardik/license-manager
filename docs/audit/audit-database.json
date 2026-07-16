@@ -342,7 +342,8 @@
     "Phase 8 Bills of Entry unique constraint migration audit completed for backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py with no source changes required.",
     "Phase 8 Bills of Entry migrations package marker audit completed for backend/apps/bill_of_entry/migrations/__init__.py with no source changes required.",
     "Phase 8 Bills of Entry parsers package marker audit completed for backend/apps/bill_of_entry/parsers/__init__.py with no source changes required.",
-    "Phase 8 Bills of Entry scripts package marker audit completed for backend/apps/bill_of_entry/scripts/__init__.py with no source changes required."
+    "Phase 8 Bills of Entry scripts package marker audit completed for backend/apps/bill_of_entry/scripts/__init__.py with no source changes required.",
+    "Phase 8 Bills of Entry ICEGATE helper hardening completed for backend/apps/bill_of_entry/scripts/boe.py with standard-library HTML parsing, bounded HTTP calls, validation guards, and focused regression coverage."
   ],
   "dead_code_findings": [],
   "duplicate_logic_findings": [],
@@ -6331,33 +6332,40 @@
       "total_lines": 0
     },
     "backend/apps/bill_of_entry/scripts/boe.py": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 20,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "c50e55905ec7046664e8d269033bddaa0420b95b2a8542b790189cd4c092571b",
+      "file_checksum": "c9269c62438ba63e58018c30e9eb34846f4acf4d0fa7b70c7e762d8e9f4c4cdd",
       "file_fingerprint": {
-        "mtime_ns": 1784119299579780001,
-        "size": 10555,
+        "mtime_ns": 1784199777618177228,
+        "size": 13698,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
-      "imported_modules": [],
+      "imported_modules": [
+        "base64",
+        "logging",
+        "collections.abc",
+        "html.parser",
+        "typing",
+        "requests"
+      ],
       "index_checksum_mismatch": false,
       "language": "python",
-      "last_audit_timestamp": null,
-      "maintainability_score": 88,
+      "last_audit_timestamp": "2026-07-16T16:57:31+05:30",
+      "maintainability_score": 92,
       "module": "backend/apps/bill_of_entry",
       "performance_score": 98,
       "previous_index_checksum": null,
-      "readability_score": 88,
-      "security_score": 80,
-      "technical_debt_score": 12,
+      "readability_score": 92,
+      "security_score": 90,
+      "technical_debt_score": 8,
       "todo_count": 0,
-      "total_classes": 0,
-      "total_functions": 9,
-      "total_imports": 0,
-      "total_lines": 253
+      "total_classes": 1,
+      "total_functions": 18,
+      "total_imports": 6,
+      "total_lines": 333
     },
     "backend/apps/bill_of_entry/scripts/generate_tl.py": {
       "audit_status": "REQUIRES_RECHECK",
@@ -18408,6 +18416,38 @@
       "total_functions": 14,
       "total_imports": 0,
       "total_lines": 212
+    },
+    "backend/tests/test_boe_script_helpers.py": {
+      "audit_status": "COMPLETED",
+      "complexity": 20,
+      "duplicate_score": 0,
+      "exported_symbols": [],
+      "file_checksum": "a72b94785ff294b2d3fe51598cfcf34572609a2071000c79ad9742b0c77caa0a",
+      "file_fingerprint": {
+        "mtime_ns": 1784201198204530455,
+        "size": 4555,
+        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "fixme_count": 0,
+      "imported_modules": [
+        "requests",
+        "apps.bill_of_entry.scripts"
+      ],
+      "index_checksum_mismatch": false,
+      "language": "python",
+      "last_audit_timestamp": "2026-07-16T16:57:31+05:30",
+      "maintainability_score": 95,
+      "module": "backend",
+      "performance_score": 100,
+      "previous_index_checksum": null,
+      "readability_score": 95,
+      "security_score": 100,
+      "technical_debt_score": 5,
+      "todo_count": 0,
+      "total_classes": 3,
+      "total_functions": 13,
+      "total_imports": 2,
+      "total_lines": 142
     },
     "backend/tests/test_export_masters_mds.py": {
       "audit_status": "COMPLETED",
@@ -31731,10 +31771,10 @@
     "backend": {
       "blocked": 0,
       "changed": 6,
-      "completed": 25,
-      "files": 132,
+      "completed": 26,
+      "files": 133,
       "in_progress": 0,
-      "lines": 77387,
+      "lines": 77529,
       "not_started": 2,
       "requires_recheck": 99
     },
@@ -31771,12 +31811,12 @@
     "backend/apps/bill_of_entry": {
       "blocked": 0,
       "changed": 5,
-      "completed": 15,
+      "completed": 16,
       "files": 34,
       "in_progress": 0,
-      "lines": 4516,
+      "lines": 4596,
       "not_started": 0,
-      "requires_recheck": 14
+      "requires_recheck": 13
     },
     "backend/apps/core": {
       "blocked": 0,
@@ -32166,6 +32206,7 @@
     "backend/apps/license/tests/test_invoice_models.py",
     "backend/tests/test_authentication_query_param.py",
     "backend/tests/test_authorization_permissions.py",
+    "backend/tests/test_boe_script_helpers.py",
     "backend/apps/accounts/tests.py",
     "master-data-service/masters/tests/test_api.py",
     "frontend/src/test/useAuth.test.tsx",
@@ -32181,7 +32222,7 @@
   "repository_inventory": {
     "excluded_files": 595,
     "inventory_rule": "Only source, tests, configs, migrations, scripts, and documentation are audited.",
-    "source_files": 930
+    "source_files": 931
   },
   "repository_metadata": {
     "branch": "feature/V2",
@@ -32212,18 +32253,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 115244,
+    "audited_lines": 115719,
     "blocked": 0,
     "changed": 50,
-    "completed": 494,
-    "files": 930,
+    "completed": 496,
+    "files": 931,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 242540,
+    "lines": 242762,
     "not_started": 12,
-    "remaining_lines": 127296,
-    "requires_recheck": 374,
+    "remaining_lines": 127043,
+    "requires_recheck": 373,
     "todo": 22
   },
   "verification_history": [
@@ -33243,6 +33284,13 @@
     "Phase 8 BOE parsers package marker commit: f5e320c0579847dfbc2d2be2b1603ea625195c05 at 2026-07-16T16:29:45+05:30, docs(audit): record boe parsers package completion",
     "Phase 8 BOE scripts package marker audit: backend/apps/bill_of_entry/scripts/__init__.py reviewed as an empty scripts package marker; no imports, symbols, side effects, validation paths, script logic, shell execution, or file handling exist",
     "Phase 8 BOE scripts package marker verification: wc/xxd -> empty; Ruff -> clean; py_compile -> passed; compileall -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning",
+    "Phase 8 BOE scripts package marker commit: 8bfd601c8cef04913c5b37a826f2fe963416d866 at 2026-07-16T16:30:51+05:30, docs(audit): record boe scripts package completion",
+    "Phase 8 BOE ICEGATE helper audit: reviewed 333-line helper, 18 functions/methods, 1 parser class, imports, constants, session/cookie handling, CSRF parsing, captcha fetch, form submission, BE detail/RMS parsing, scrap variants, logging paths, exception paths, and live fetch view dependency",
+    "Phase 8 BOE ICEGATE helper hardening: replaced missing bs4 dependency with standard-library html.parser, removed global urllib3 warning suppression, added bounded request timeouts, handled requests.RequestException paths, normalized cookie/form values, rejected incomplete BE form payloads before network calls, bounded logged response snippets, and preserved public helper return contracts",
+    "Phase 8 BOE ICEGATE helper regression: added backend/tests/test_boe_script_helpers.py with 6 focused tests covering network errors, timeout propagation, CSRF extraction, non-image captcha rejection, cookie coercion, trimmed BE payloads, pre-network missing-value rejection, and detail/current-status parsing",
+    "Phase 8 BOE ICEGATE helper verification: pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed; Ruff -> clean; py_compile -> passed; compileall -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; configured import verification -> DEFAULT_TIMEOUT=15 and CSRF parser returned abc; scoped git diff --check -> clean",
+    "Phase 8 BOE ICEGATE helper security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked",
+    "Phase 8 BOE ICEGATE helper commit: e912f2242b1202cf87524998e4cdd1c2ca2d5230 at 2026-07-16T16:57:31+05:30, fix(bill_of_entry): harden icegate helpers",
     "Ruff F821 undefined-name sweep: clean",
     "Previous Ruff selected F811/E741 baseline: 23 findings, now resolved",
     "Ruff full baseline: 547 findings remain"

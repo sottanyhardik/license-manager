@@ -896,7 +896,7 @@
     "active_phase": "Phase 8 - Bills of Entry",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "10bcbcdf",
+    "head": "e912f224",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -946,11 +946,19 @@
         "phase": "Phase 8 - Bills of Entry",
         "status": "COMPLETED",
         "timestamp": "2026-07-16T16:30:12+05:30"
+      },
+      {
+        "commit_sha": "e912f2242b1202cf87524998e4cdd1c2ca2d5230",
+        "commit_summary": "fix(bill_of_entry): harden icegate helpers",
+        "file": "backend/apps/bill_of_entry/scripts/boe.py",
+        "phase": "Phase 8 - Bills of Entry",
+        "status": "COMPLETED",
+        "timestamp": "2026-07-16T16:57:31+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 930,
-    "tracked_audit_lines": 242540,
+    "tracked_audit_files": 931,
+    "tracked_audit_lines": 242762,
     "working_tree": "dirty"
   },
   "schema_version": 1,

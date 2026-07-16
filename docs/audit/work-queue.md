@@ -17,6 +17,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-16T16:27:57+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/migrations/__init__.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T16:29:02+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/parsers/__init__.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T16:30:12+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/scripts/__init__.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-16T16:57:31+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/scripts/boe.py` in commit `e912f2242b1202cf87524998e4cdd1c2ca2d5230` (`fix(bill_of_entry): harden icegate helpers`); continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

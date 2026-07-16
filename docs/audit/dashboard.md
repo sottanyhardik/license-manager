@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `494`
+- Files audited: `496`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `374`
+- Files requiring dependency recheck: `373`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `436`
-- Total source files tracked: `930`
-- Total source LOC tracked: `242540`
-- Audited LOC: `115244`
-- Remaining LOC: `127296`
+- Files remaining: `435`
+- Total source files tracked: `931`
+- Total source LOC tracked: `242762`
+- Audited LOC: `115719`
+- Remaining LOC: `127043`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -32,7 +32,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 | Module | Files | LOC | Completed | Changed | Recheck | Not Started |
 |---|---:|---:|---:|---:|---:|---:|
-| `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
+| `backend` | 133 | 77529 | 26 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
 | `docs` | 53 | 24466 | 19 | 3 | 31 | 0 |
@@ -41,7 +41,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
-| `backend/apps/bill_of_entry` | 34 | 4516 | 15 | 5 | 14 | 0 |
+| `backend/apps/bill_of_entry` | 34 | 4596 | 16 | 5 | 13 | 0 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
 
@@ -79,6 +79,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 Bills of Entry migrations package marker completed for `backend/apps/bill_of_entry/migrations/__init__.py`; no source changes were required for the empty package marker.
 - Phase 8 Bills of Entry parsers package marker completed for `backend/apps/bill_of_entry/parsers/__init__.py`; no source changes were required for the empty package marker.
 - Phase 8 Bills of Entry scripts package marker completed for `backend/apps/bill_of_entry/scripts/__init__.py`; no source changes were required for the empty package marker.
+- Phase 8 Bills of Entry ICEGATE helper completed for `backend/apps/bill_of_entry/scripts/boe.py`; removed missing `bs4` dependency usage, added bounded HTTP handling, and covered helper parsing/validation with focused regressions in `backend/tests/test_boe_script_helpers.py`.
 
 ## Verification History
 
@@ -102,6 +103,12 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 2 domain authorization Ruff: .venv/bin/ruff check backend/apps/allotment/views.py backend/apps/bill_of_entry/views/boe.py backend/apps/core/urls.py backend/apps/tasks/views.py backend/apps/core/views/mds_status.py backend/apps/core/views/media.py backend/apps/license/views/dashboard.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 BOE parser authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_boe.py -q -> 12 passed
 - Phase 2 BOE parser authorization Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/views/parse_pdf.py backend/tests/test_authorization_permissions.py --select F821,F811,E741,F841,F401 -> clean
+- Phase 8 BOE ICEGATE helper regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed
+- Phase 8 BOE ICEGATE helper Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> clean
+- Phase 8 BOE ICEGATE helper py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed
+- Phase 8 BOE ICEGATE helper compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed
+- Phase 8 BOE ICEGATE helper Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE ICEGATE helper makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

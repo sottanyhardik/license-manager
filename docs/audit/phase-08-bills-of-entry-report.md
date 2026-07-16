@@ -207,3 +207,37 @@
 - Remaining Technical Debt:
   - None for this package marker.
 - Status: COMPLETED
+
+## backend/apps/bill_of_entry/scripts/boe.py
+
+- File Path(s): `backend/apps/bill_of_entry/scripts/boe.py`; `backend/tests/test_boe_script_helpers.py`
+- Module: Bills of Entry / ICEGATE helper script
+- Total LOC: 333 source lines; 142 focused test lines
+- Lines Reviewed: 333 source lines plus 142 regression-test lines
+- Functions Reviewed: 18 helper/parser methods and test helpers
+- Classes Reviewed: 1 (`_InputValueParser`) plus 3 focused test doubles
+- Validation Improvements: Trimmed and normalized submitted BE form values, rejected incomplete BE payloads before network calls, normalized cookie/form value extraction, rejected non-image captcha payloads, handled `requests.RequestException` paths, and preserved the existing helper return contracts for callers.
+- Package Replacements: Replaced missing `bs4`/BeautifulSoup usage with Python standard-library `html.parser`; no new dependency introduced.
+- Performance Improvements: Added bounded `DEFAULT_TIMEOUT = 15` request timeouts to avoid unbounded external ICEGATE calls; bounded response snippets logged from failed submissions.
+- Security Improvements: Removed global `urllib3.disable_warnings`, constrained logging of remote response bodies, avoided implicit network calls for incomplete input, and covered network error paths without leaking full response content.
+- Dead Code Removed: Removed dependency on unavailable BeautifulSoup import path.
+- Duplicate Logic Removed: None; parser extraction keeps behavior local to this helper until adjacent BOE script files are audited.
+- Tests Added: `backend/tests/test_boe_script_helpers.py` with 6 focused tests for CSRF extraction, non-image captcha rejection, network exceptions, timeout propagation, cookie coercion, BE form normalization, incomplete payload short-circuiting, and detail/current-status parsing.
+- Verification Results:
+  - `.venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q` -> 6 passed.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Configured import verification from `backend/` -> `DEFAULT_TIMEOUT=15` and `_input_value(...) == "abc"`.
+  - `git diff --check -- backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py` -> clean before code commit.
+  - `python3 -m json.tool docs/audit/audit-database.json` -> valid JSON after audit database update.
+- Commit SHA: `e912f2242b1202cf87524998e4cdd1c2ca2d5230`
+- Commit Timestamp: `2026-07-16T16:57:31+05:30`
+- Commit Summary: `fix(bill_of_entry): harden icegate helpers`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Adjacent BOE scripts remain queued and must be audited separately; no additional helper extraction was safe until their call contracts are reviewed.
+- Status: COMPLETED

@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `490`
+- Files audited: `491`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `377`
+- Files requiring dependency recheck: `376`
 - Files not started: `13`
 - Files ignored/excluded: `595`
-- Files remaining: `440`
+- Files remaining: `439`
 - Total source files tracked: `930`
 - Total source LOC tracked: `242540`
-- Audited LOC: `115229`
-- Remaining LOC: `127311`
+- Audited LOC: `115244`
+- Remaining LOC: `127296`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -41,7 +41,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
-| `backend/apps/bill_of_entry` | 34 | 4516 | 11 | 5 | 17 | 1 |
+| `backend/apps/bill_of_entry` | 34 | 4516 | 12 | 5 | 16 | 1 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
 
@@ -75,6 +75,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 8 Bills of Entry package marker completed for `backend/apps/bill_of_entry/__init__.py`; no source changes were required for the empty package marker.
 - Phase 8 Bills of Entry initial migration completed for `backend/apps/bill_of_entry/migrations/0001_initial.py`; historical migration source was verified unchanged.
 - Phase 8 Bills of Entry secondary initial migration completed for `backend/apps/bill_of_entry/migrations/0002_initial.py`; historical FK/index/constraint migration source was verified unchanged.
+- Phase 8 Bills of Entry unique constraint migration completed for `backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py`; historical constraint migration source was verified unchanged.
 
 ## Verification History
 

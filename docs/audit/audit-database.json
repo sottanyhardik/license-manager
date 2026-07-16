@@ -338,7 +338,8 @@
     "Phase 7 Reporting & Exports frozen after the existing audit database reported phase7_remaining 0; Phase 8 Bills of Entry queued from the existing module pipeline and audit database.",
     "Phase 8 Bills of Entry package marker audit completed for backend/apps/bill_of_entry/__init__.py with no source changes required.",
     "Phase 8 Bills of Entry initial migration audit completed for backend/apps/bill_of_entry/migrations/0001_initial.py with no source changes required.",
-    "Phase 8 Bills of Entry secondary initial migration audit completed for backend/apps/bill_of_entry/migrations/0002_initial.py with no source changes required."
+    "Phase 8 Bills of Entry secondary initial migration audit completed for backend/apps/bill_of_entry/migrations/0002_initial.py with no source changes required.",
+    "Phase 8 Bills of Entry unique constraint migration audit completed for backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py with no source changes required."
   ],
   "dead_code_findings": [],
   "duplicate_logic_findings": [],
@@ -6110,7 +6111,7 @@
       "total_lines": 58
     },
     "backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 3,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -6124,7 +6125,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "python",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-16T16:26:49+05:30",
       "maintainability_score": 98,
       "module": "backend/apps/bill_of_entry",
       "performance_score": 100,
@@ -31767,12 +31768,12 @@
     "backend/apps/bill_of_entry": {
       "blocked": 0,
       "changed": 5,
-      "completed": 11,
+      "completed": 12,
       "files": 34,
       "in_progress": 0,
       "lines": 4516,
       "not_started": 1,
-      "requires_recheck": 17
+      "requires_recheck": 16
     },
     "backend/apps/core": {
       "blocked": 0,
@@ -32208,18 +32209,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 115229,
+    "audited_lines": 115244,
     "blocked": 0,
     "changed": 50,
-    "completed": 490,
+    "completed": 491,
     "files": 930,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
     "lines": 242540,
     "not_started": 13,
-    "remaining_lines": 127311,
-    "requires_recheck": 377,
+    "remaining_lines": 127296,
+    "requires_recheck": 376,
     "todo": 22
   },
   "verification_history": [
@@ -33227,6 +33228,9 @@
     "Phase 8 BOE initial migration commit: 9a2d617c68ee61c6c734700dd637d4c943b32653 at 2026-07-16T16:25:14+05:30, docs(audit): record boe initial migration completion",
     "Phase 8 BOE secondary initial migration audit: reviewed 58-line migration, dependency on bill_of_entry.0001/license.0001, LicenseImportItems FK, seven explicit indexes, BillOfEntryModel temporary unique_together, RowDetails unique_together, and follow-up 0003 constraint compatibility",
     "Phase 8 BOE secondary initial migration verification: Ruff -> clean; py_compile -> passed; compileall -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; configured import verification -> initial=True, dependencies=2, operations=10; scoped git diff --check -> clean",
+    "Phase 8 BOE secondary initial migration commit: 0489e0db393e0f99f688eb662fc5a25376d99548 at 2026-07-16T16:26:21+05:30, docs(audit): record boe secondary migration completion",
+    "Phase 8 BOE unique constraint migration audit: reviewed 15-line migration, dependency on bill_of_entry.0002, AlterUniqueTogether operation, and alignment with current BillOfEntryModel.Meta.unique_together",
+    "Phase 8 BOE unique constraint migration verification: Ruff -> clean; py_compile -> passed; compileall -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; configured import verification -> dependencies=1, operations=1; scoped git diff --check -> clean",
     "Ruff F821 undefined-name sweep: clean",
     "Previous Ruff selected F811/E741 baseline: 23 findings, now resolved",
     "Ruff full baseline: 547 findings remain"

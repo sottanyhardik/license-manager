@@ -90,3 +90,33 @@
 - Remaining Technical Debt:
   - None for this migration. Runtime validation and duplicate-record behavior remain queued for serializers/services/views.
 - Status: COMPLETED
+
+## backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py
+
+- File Path(s): `backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py`
+- Module: Bills of Entry / Unique constraint migration
+- Total LOC: 15
+- Lines Reviewed: 15
+- Functions Reviewed: 0
+- Classes Reviewed: 1 (`Migration`)
+- Validation Improvements: None applied; the migration intentionally restores the current model-level uniqueness contract for `bill_of_entry_number` and `bill_of_entry_date`.
+- Package Replacements: None; the Django `AlterUniqueTogether` operation is the correct historical migration primitive.
+- Performance Improvements: None required; no data scan or custom operation exists in this migration file.
+- Security Improvements: Reviewed duplicate-record constraint behavior and absence of raw SQL, data operations, request handling, file handling, or executable side effects.
+- Dead Code Removed: None
+- Duplicate Logic Removed: None
+- Tests Added: None; no behavior changed.
+- Verification Results:
+  - Line-by-line review covered import, dependency on `0002_initial`, `AlterUniqueTogether`, and alignment with `BillOfEntryModel.Meta.unique_together`.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Configured migration import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` -> 1 dependency, 1 operation.
+  - `git diff --check -- backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this migration.
+- Status: COMPLETED

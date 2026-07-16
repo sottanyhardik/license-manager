@@ -15,6 +15,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-16T16:25:46+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/migrations/0002_initial.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T16:26:49+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-16T16:27:57+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/migrations/__init__.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-16T16:29:02+05:30` - Phase 8 Bills of Entry completed `backend/apps/bill_of_entry/parsers/__init__.py`; continue with the next `backend/apps/bill_of_entry` file marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

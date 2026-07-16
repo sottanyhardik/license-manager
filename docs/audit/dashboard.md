@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:22:37+00:00`
+Generated: `2026-07-16T09:25:06+00:00`
 
 ## Repository Statistics
 
-- Files audited: `448`
+- Files audited: `449`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `401`
+- Files requiring dependency recheck: `399`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `465`
-- Total source files tracked: `913`
-- Total source LOC tracked: `240031`
-- Audited LOC: `105950`
-- Remaining LOC: `134081`
+- Files remaining: `463`
+- Total source files tracked: `912`
+- Total source LOC tracked: `239268`
+- Audited LOC: `106033`
+- Remaining LOC: `133235`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,7 +35,7 @@ Generated: `2026-07-16T09:22:37+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 54 | 24264 | 18 | 3 | 33 | 0 |
+| `docs` | 53 | 23501 | 19 | 3 | 31 | 0 |
 | `frontend/src/pages` | 62 | 17334 | 36 | 0 | 26 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 68 | 8898 | 6 | 0 | 62 | 0 |
@@ -965,6 +965,8 @@ Generated: `2026-07-16T09:22:37+00:00`
 - Phase 7 PDF viewer guide audit: rewrote stale PDF viewer implementation guide to match current TypeScript route/component/helper paths and active blob preview behavior
 - Phase 7 PDF viewer security hardening: PDFViewer now rejects empty, absolute, protocol-relative, backslash-containing, and control-character url query values before Axios requests
 - Phase 7 PDF viewer regression: npm test -- PDFViewer.test.tsx -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/PDFViewer.tsx src/pages/PDFViewer.test.tsx -> passed; npm run build -> passed
+- Phase 7 UX/UI audit report dependency analysis: repository-wide search found docs/guides/UX_UI_AUDIT_REPORT.md referenced only by docs/README.md and audit metadata; content was stale JSX-era planning documentation and not a live reporting/export path
+- Phase 7 UX/UI audit report removal: deleted verified-dead stale guide and removed its docs/README.md index entry instead of carrying obsolete unresolved future-action content in the active audit knowledge base
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

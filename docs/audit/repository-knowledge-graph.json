@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T09:22:37+00:00",
+  "generated_at": "2026-07-16T09:25:06+00:00",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -218,12 +218,12 @@
       "docs": {
         "blocked": 0,
         "changed": 3,
-        "completed": 18,
-        "files": 54,
+        "completed": 19,
+        "files": 53,
         "in_progress": 0,
-        "lines": 24264,
+        "lines": 23501,
         "not_started": 0,
-        "requires_recheck": 33
+        "requires_recheck": 31
       },
       "frontend": {
         "blocked": 0,
@@ -779,13 +779,13 @@
       "backend/tests/test_ledger_parser.py",
       "docs/04-api.md",
       "docs/08-security.md",
+      "docs/README.md",
       "docs/architecture/ADR-001-master-data-service.md",
       "docs/architecture/MODULARIZATION_MASTER_PLAN.md",
       "docs/architecture/NAVBAR_ROLE_MAPPING.md",
       "docs/architecture/RBAC_DOCUMENTATION.md",
       "docs/audit/build_audit_state.py",
       "docs/audit/phase-07-reporting-report.md",
-      "docs/guides/PDF_VIEWER_IMPLEMENTATION.md",
       "docs/operations/RBAC_SETUP_INSTRUCTIONS.md",
       "docs/operations/master-consolidation.md",
       "frontend/package-lock.json",
@@ -798,8 +798,6 @@
       "frontend/src/pages/Dashboard.tsx",
       "frontend/src/pages/Login.test.tsx",
       "frontend/src/pages/Login.tsx",
-      "frontend/src/pages/PDFViewer.test.tsx",
-      "frontend/src/pages/PDFViewer.tsx",
       "frontend/src/pages/TradeForm.smoke.test.tsx",
       "frontend/src/pages/TradeForm.tsx",
       "frontend/src/pages/admin/UserForm.test.tsx",
@@ -898,10 +896,10 @@
   "repository": {
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "f4e08a4a",
+    "head": "fec269e2",
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 913,
-    "tracked_audit_lines": 240031,
+    "tracked_audit_files": 912,
+    "tracked_audit_lines": 239268,
     "working_tree": "dirty"
   },
   "schema_version": 1,

@@ -80,6 +80,37 @@
   - None for this guide or the directly hardened viewer URL validation path.
 - Status: COMPLETED
 
+## docs/guides/UX_UI_AUDIT_REPORT.md
+
+- File Path: `docs/guides/UX_UI_AUDIT_REPORT.md`
+- Module: Reporting & Exports / Stale documentation matched by report filename
+- LOC: 796
+- Lines Reviewed: 796
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Removed stale documentation rather than preserving obsolete JSX-era validation/accessibility recommendations as active guidance.
+- Package Replacements:
+  - None.
+- Performance Improvements:
+  - None; documentation-only file with no runtime path.
+- Security Improvements:
+  - Removed outdated guidance that no longer matched the current TypeScript frontend, reducing risk of engineers following stale remediation steps.
+- Dead Code Removed:
+  - Deleted `docs/guides/UX_UI_AUDIT_REPORT.md` after repository-wide reference analysis found no live runtime references and only one documentation-index reference.
+  - Removed the stale `docs/README.md` link to the deleted guide.
+- Duplicate Logic Removed:
+  - Removed duplicate historical UX planning content now superseded by the active audit database, dashboard, and phase reports.
+- Tests Added:
+  - None required; no executable behavior changed.
+- Verification Results:
+  - Dependency search: `rg -n "UX_UI_AUDIT_REPORT|UX/UI|audit report|reports/|PDF|export|download|license-ledger|MasterList|TradeForm|Login" docs/guides/UX_UI_AUDIT_REPORT.md frontend/src docs -S` confirmed the file had no import, route, runtime, or generated-report dependency; the only non-audit reference was the removed `docs/README.md` index link.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED - REMOVED
+
 ### Final State Verification
 
 - Audit Database: `backend/apps/allotment/scripts/pdf_coordinate_finder.py`, `backend/tests/test_pdf_coordinate_finder.py`, and `docs/audit/phase-07-reporting-report.md` marked `COMPLETED`.

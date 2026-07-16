@@ -322,6 +322,47 @@
   - None for this component.
 - Status: COMPLETED
 
+## frontend/src/pages/reports/SionE1.tsx
+
+- File Path: `frontend/src/pages/reports/SionE1.tsx`
+- Module: Reporting & Exports / Frontend SION E1 route wrapper
+- LOC: 10 (`SionE1.tsx`) + 21 (`SionE1.test.tsx`)
+- Lines Reviewed: 10
+- Functions Reviewed: 1 (`SionE1`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Verified the wrapper has no local user input, query construction, export path, or mutable validation state.
+  - Locked the fixed `sionNorm="E1"` and title contract with a focused regression test.
+- Package Replacements:
+  - None. The wrapper correctly delegates to existing `SionNormReport`.
+- Performance Improvements:
+  - None required; this file renders one shared report component.
+- Security Improvements:
+  - No direct security surface in this wrapper; shared API/data handling remains in `SionNormReport`.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - None. This wrapper exists for route-level code splitting and route clarity.
+- Tests Added:
+  - Added `frontend/src/pages/reports/SionE1.test.tsx` mocking `SionNormReport` and asserting the E1 norm/title props.
+- Verification Results:
+  - Focused Vitest: `npm test -- SionE1.test.tsx` -> 1 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/SionE1.tsx src/pages/reports/SionE1.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/reports/SionE1.tsx frontend/src/pages/reports/SionE1.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/SionE1.tsx frontend/src/pages/reports/SionE1.test.tsx` -> clean.
+- Commit SHA: `ede878cce8184292ee2b142c5990af29b34e881e`
+- Commit Timestamp: `2026-07-16T15:29:16+05:30`
+- Commit Summary: `test(reports): cover sion e1 wrapper`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Shared SION report table and API handling remain queued under `SionNormReport.tsx`.
+- Status: COMPLETED
+
 ## frontend/src/pages/reports/ActiveLicenses.tsx
 
 - File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`

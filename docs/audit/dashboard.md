@@ -1,19 +1,19 @@
 # Stateful Audit Dashboard
 
-Generated: `2026-07-16T09:57:32+00:00`
+Generated: `2026-07-16T09:59:47+00:00`
 
 ## Repository Statistics
 
-- Files audited: `465`
+- Files audited: `467`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `391`
+- Files requiring dependency recheck: `390`
 - Files not started: `14`
 - Files ignored/excluded: `595`
-- Files remaining: `455`
-- Total source files tracked: `920`
-- Total source LOC tracked: `240474`
-- Audited LOC: `110503`
-- Remaining LOC: `129971`
+- Files remaining: `454`
+- Total source files tracked: `921`
+- Total source LOC tracked: `240544`
+- Audited LOC: `110575`
+- Remaining LOC: `129969`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,8 +35,8 @@ Generated: `2026-07-16T09:57:32+00:00`
 | `backend` | 132 | 77387 | 25 | 6 | 99 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 23892 | 19 | 3 | 31 | 0 |
-| `frontend/src/pages` | 69 | 18055 | 50 | 0 | 19 | 0 |
+| `docs` | 53 | 23941 | 19 | 3 | 31 | 0 |
+| `frontend/src/pages` | 70 | 18076 | 52 | 0 | 18 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
@@ -1001,6 +1001,12 @@ Generated: `2026-07-16T09:57:32+00:00`
 - Phase 7 NormCardGrid verification: npm test -- NormCardGrid.test.tsx -> 3 passed after fixing object-without-norm_class normalization; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/NormCardGrid.tsx src/pages/reports/NormCardGrid.test.tsx -> passed; npm run build -> passed; Django check -> exit 0 with staticfiles.W004 frontend/dist/assets warning; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
 - Phase 7 NormCardGrid security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
 - Phase 7 NormCardGrid commit: 4b20a546b0b8c76e110237c1e155482ccc72a0ca at 2026-07-16T15:27:02+05:30, fix(reports): harden norm card grid
+- Phase 7 SionE1 audit: reviewed 10-line React wrapper, SionNormReport dependency, route registration, fixed sionNorm prop, title prop, render path, and absence of local validation/query/export state
+- Phase 7 SionE1 hardening: no runtime code change required; wrapper is intentionally a thin typed route adapter to shared SionNormReport
+- Phase 7 SionE1 regression: added frontend/src/pages/reports/SionE1.test.tsx mocking SionNormReport and asserting the E1 norm/title contract
+- Phase 7 SionE1 verification: npm test -- SionE1.test.tsx -> 1 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/SionE1.tsx src/pages/reports/SionE1.test.tsx -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 SionE1 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 SionE1 commit: ede878cce8184292ee2b142c5990af29b34e881e at 2026-07-16T15:29:16+05:30, test(reports): cover sion e1 wrapper
 - Ruff F821 undefined-name sweep: clean
 - Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
 - Ruff full baseline: 547 findings remain

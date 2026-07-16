@@ -624,6 +624,53 @@
   - The component is still large and could be split into a task-status modal module and upload-results renderer in a later component-extraction audit.
 - Status: COMPLETED
 
+## frontend/src/pages/LicenseLedger.tsx
+
+- File Path: `frontend/src/pages/LicenseLedger.tsx`
+- Module: Reporting & Exports / Frontend license ledger and bulk export page
+- LOC: 753 (`LicenseLedger.tsx`) + 171 (`LicenseLedger.test.tsx`)
+- Lines Reviewed: 753
+- Functions Reviewed: 16 (`isRecord`, `normalizeText`, `toFiniteNumber`, `normalizeId`, `getFinancialYearRange`, `normalizeMinBalance`, `getCompanyFilterValue`, `buildLedgerFilterParams`, `normalizeTransactions`, `normalizeLicenseWiseData`, `normalizeLedgerExportDetails`, `getTodayStamp`, `getApiErrorMessage`, `LicenseWiseLedger`, `fetchFullLedgerDetails`, `LicenseLedger`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Sanitized filter query parameters for invalid license type, negative/non-finite minimum balance, whitespace search/company values, invalid ordering, and boolean flags.
+  - Normalized malformed license-wise API rows before rendering and before bulk export.
+  - Rejected malformed ledger detail responses before passing data to PDF/Excel builders.
+  - Added deterministic financial-year and export filename date helpers.
+- Package Replacements:
+  - None. Existing React, URLSearchParams, Axios API client, and existing ledger export utilities remain appropriate.
+- Performance Improvements:
+  - Preserved sequential detail fetching to avoid burst-loading the ledger-detail API.
+  - Added failure counts for skipped/malformed detail rows instead of silently swallowing failures.
+  - Avoided rendering/exporting malformed license entries with missing IDs.
+- Security Improvements:
+  - React escaping is preserved for API-provided file, company, license, and error values.
+  - Invalid filter values are normalized before authenticated API requests.
+  - Malformed export detail rows are rejected before reaching client-side PDF/Excel generation.
+- Dead Code Removed:
+  - Removed duplicate in-component financial-year helpers and replaced them with a single test-covered helper.
+- Duplicate Logic Removed:
+  - Centralized filter query construction, financial-year range calculation, API row normalization, and export date stamping.
+- Tests Added:
+  - Added `frontend/src/pages/LicenseLedger.test.tsx` covering financial-year ranges, filter query normalization, company/min-balance edge cases, malformed license-wise data normalization, deterministic date stamps, and bulk PDF export detail fetching.
+- Verification Results:
+  - Focused Vitest: `npm test -- LicenseLedger.test.tsx` -> 6 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/LicenseLedger.tsx src/pages/LicenseLedger.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues after build completion.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/LicenseLedger.tsx frontend/src/pages/LicenseLedger.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/LicenseLedger.tsx frontend/src/pages/LicenseLedger.test.tsx` -> clean.
+- Commit SHA: `08d50b2aa5fbd2a23ebcc3657be8c8425a268460`
+- Commit Timestamp: `2026-07-16T15:54:00+05:30`
+- Commit Summary: `fix(reports): harden license ledger`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The page remains large and should eventually be split into filter, summary, and license-wise table components during a dedicated component extraction audit.
+- Status: COMPLETED
+
 ## frontend/src/pages/reports/ActiveLicenses.tsx
 
 - File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`

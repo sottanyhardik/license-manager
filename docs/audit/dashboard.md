@@ -70,6 +70,8 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Ruff F811/E741 findings reduced from 23 to 0 across the targeted Python source set.
 - Ruff F841 unused-local findings reduced to 0 across the targeted Python source set.
 - Phase 7 Reporting & Exports started with the allotment PDF coordinate-grid helper hardened and covered by direct CLI tests.
+- Phase 7 Reporting & Exports frozen after the existing audit database reported `phase7_remaining 0`; completed Phase 7 files must not be reopened unless dependency analysis marks them `REQUIRES_RECHECK`.
+- Phase 8 Bills of Entry queued from the existing module pipeline and audit database; first selection must come from `backend/apps/bill_of_entry` entries marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Verification History
 

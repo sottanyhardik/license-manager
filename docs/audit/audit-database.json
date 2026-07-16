@@ -329,7 +329,8 @@
     "Phase 5 shell-script consolidation extracted shared legacy master-sync SSH/logging/server configuration and shared MDS usage handling.",
     "Phase 5 documentation updated ADR/runbook status and replaced stale modularization plan with current audited module map.",
     "Phase 6 invoice model production hardening completed with normalization, validation, DB constraints, migrations, and 19 focused regression tests.",
-    "Phase 6 license balance Excel hardening completed with bulk payload validation, duplicate worksheet formula fix, unused import cleanup, and 13 focused API regressions."
+    "Phase 6 license balance Excel hardening completed with bulk payload validation, duplicate worksheet formula fix, unused import cleanup, and 13 focused API regressions.",
+    "Phase 7 Reporting & Exports frozen after the existing audit database reported phase7_remaining 0; Phase 8 Bills of Entry queued from the existing module pipeline and audit database."
   ],
   "dead_code_findings": [],
   "duplicate_logic_findings": [],
@@ -32129,12 +32130,21 @@
   "pending_work": [
     {
       "id": "P7-REPORTING-EXPORTS-AUDIT",
-      "impact": "Phase 6 License is frozen; continue with reporting, export, PDF, Excel, CSV, download, and report-helper files from the dependency graph.",
+      "impact": "Phase 7 Reporting & Exports is frozen; do not reopen completed Phase 7 files unless the Repository Knowledge Graph marks them REQUIRES_RECHECK because of dependency changes.",
+      "priority": 1,
+      "status": "DONE",
+      "stream": "Reporting & Exports",
+      "title": "Phase 7 Reporting & Exports audit completed and frozen",
+      "verification": "Existing audit database query reported phase7_remaining 0; file-level verification remains recorded in docs/audit/phase-07-reporting-report.md."
+    },
+    {
+      "id": "P8-BILLS-OF-ENTRY-AUDIT",
+      "impact": "Continue Phase 8 from existing backend/apps/bill_of_entry audit database and repository knowledge graph entries marked NOT_STARTED or REQUIRES_RECHECK.",
       "priority": 1,
       "status": "PENDING",
-      "stream": "Reporting & Exports",
-      "title": "Continue Phase 7 Reporting & Exports audit from the next pending report/export file",
-      "verification": "Run focused backend tests, Ruff, py_compile, compileall, Django check, migration checks, static analysis, and available security tooling after each completed file."
+      "stream": "Bills of Entry",
+      "title": "Continue Phase 8 Bills of Entry audit from the next pending file",
+      "verification": "Run focused backend/frontend tests as applicable, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and available security tooling after each completed logical unit."
     }
   ],
   "performance_findings": [],

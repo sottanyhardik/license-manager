@@ -893,9 +893,17 @@
     "rule": "When a file changes, reload only the file, its imports, dependents, and mapped tests before updating this artifact."
   },
   "repository": {
+    "active_phase": "Phase 8 - Bills of Entry",
     "branch": "feature/V2",
     "excluded_files": 595,
     "head": "10bcbcdf",
+    "phase_freezes": [
+      {
+        "phase": "Phase 7 - Reporting & Exports",
+        "status": "FROZEN",
+        "timestamp": "2026-07-16T16:19:33+05:30"
+      }
+    ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
     "tracked_audit_files": 930,
     "tracked_audit_lines": 242540,

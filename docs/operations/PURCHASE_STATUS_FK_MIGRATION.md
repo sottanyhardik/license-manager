@@ -123,7 +123,7 @@ if license.purchase_status and license.purchase_status.code == GE:
     - Update filter queries
 
 16. **bill_of_entry/scripts/generate_tl.py**
-    - Update filter queries
+    - Removed as an obsolete, unreferenced one-off script; active transfer-letter generation lives in BOE transfer views and core transfer-letter utilities.
 
 17. **core/utils/transfer_letter.py**
     - Update filter queries

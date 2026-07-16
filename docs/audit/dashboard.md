@@ -4,12 +4,12 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `487`
+- Files audited: `488`
 - Files changed directly: `50`
 - Files requiring dependency recheck: `379`
-- Files not started: `14`
+- Files not started: `13`
 - Files ignored/excluded: `595`
-- Files remaining: `443`
+- Files remaining: `442`
 - Total source files tracked: `930`
 - Total source LOC tracked: `242540`
 - Audited LOC: `115096`
@@ -41,7 +41,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
-| `backend/apps/bill_of_entry` | 34 | 4516 | 8 | 5 | 19 | 2 |
+| `backend/apps/bill_of_entry` | 34 | 4516 | 9 | 5 | 19 | 1 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
 
@@ -72,6 +72,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 7 Reporting & Exports started with the allotment PDF coordinate-grid helper hardened and covered by direct CLI tests.
 - Phase 7 Reporting & Exports frozen after the existing audit database reported `phase7_remaining 0`; completed Phase 7 files must not be reopened unless dependency analysis marks them `REQUIRES_RECHECK`.
 - Phase 8 Bills of Entry queued from the existing module pipeline and audit database; first selection must come from `backend/apps/bill_of_entry` entries marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Phase 8 Bills of Entry package marker completed for `backend/apps/bill_of_entry/__init__.py`; no source changes were required for the empty package marker.
 
 ## Verification History
 

@@ -24,6 +24,11 @@
       "item": "Phase 6 legacy license ajax-list template full render",
       "reason": "Current URLConf does not register legacy URL names `license-list` and `license-ajax-list`; rendering `license/ajax-list.html` raises NoReverseMatch.",
       "recommended_action": "Audit the remaining legacy license templates together with their route ownership and either restore compatibility URL names or migrate the templates to current namespaced DRF/frontend routes."
+    },
+    {
+      "item": "Phase 8 Bills of Entry Python security/dependency audit",
+      "reason": ".venv/bin contains no bandit, pip-audit, safety, or semgrep executable.",
+      "recommended_action": "Install or provide an approved security scanner, then run it against audited Bills of Entry files and backend/requirements.txt."
     }
   ],
   "changed_files": [
@@ -330,7 +335,8 @@
     "Phase 5 documentation updated ADR/runbook status and replaced stale modularization plan with current audited module map.",
     "Phase 6 invoice model production hardening completed with normalization, validation, DB constraints, migrations, and 19 focused regression tests.",
     "Phase 6 license balance Excel hardening completed with bulk payload validation, duplicate worksheet formula fix, unused import cleanup, and 13 focused API regressions.",
-    "Phase 7 Reporting & Exports frozen after the existing audit database reported phase7_remaining 0; Phase 8 Bills of Entry queued from the existing module pipeline and audit database."
+    "Phase 7 Reporting & Exports frozen after the existing audit database reported phase7_remaining 0; Phase 8 Bills of Entry queued from the existing module pipeline and audit database.",
+    "Phase 8 Bills of Entry package marker audit completed for backend/apps/bill_of_entry/__init__.py with no source changes required."
   ],
   "dead_code_findings": [],
   "duplicate_logic_findings": [],
@@ -5948,7 +5954,7 @@
       "total_lines": 695
     },
     "backend/apps/bill_of_entry/__init__.py": {
-      "audit_status": "NOT_STARTED",
+      "audit_status": "COMPLETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5962,7 +5968,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "python",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-16T16:19:33+05:30",
       "maintainability_score": 100,
       "module": "backend/apps/bill_of_entry",
       "performance_score": 100,
@@ -31759,11 +31765,11 @@
     "backend/apps/bill_of_entry": {
       "blocked": 0,
       "changed": 5,
-      "completed": 8,
+      "completed": 9,
       "files": 34,
       "in_progress": 0,
       "lines": 4516,
-      "not_started": 2,
+      "not_started": 1,
       "requires_recheck": 19
     },
     "backend/apps/core": {
@@ -32203,13 +32209,13 @@
     "audited_lines": 115096,
     "blocked": 0,
     "changed": 50,
-    "completed": 487,
+    "completed": 488,
     "files": 930,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
     "lines": 242540,
-    "not_started": 14,
+    "not_started": 13,
     "remaining_lines": 127444,
     "requires_recheck": 379,
     "todo": 22
@@ -33209,6 +33215,10 @@
     "Phase 7 ledgerExport verification: npm test -- ledgerExport.test.ts -> 4 passed; npm run typecheck -> passed; npm run lint -- --quiet src/utils/ledgerExport.js src/utils/ledgerExport.test.ts -> passed; npm run build -> passed; Django check -> no issues after build completion; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean",
     "Phase 7 ledgerExport security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked",
     "Phase 7 ledgerExport commit: 10bcbcdf14ab7a5892f1a970fda56d9bba252fad at 2026-07-16T16:00:46+05:30, fix(reports): harden ledger export utility",
+    "Phase 7 freeze commit: f5e4f3f80f81907a67f505455db75dc0459e9032 at 2026-07-16T16:21:03+05:30, docs(audit): freeze phase 7 reporting",
+    "Phase 8 BOE package marker audit: backend/apps/bill_of_entry/__init__.py reviewed as an empty Django package marker; no imports, symbols, side effects, database reads/writes, transactions, validation paths, or exception paths exist",
+    "Phase 8 BOE package marker verification: Ruff -> clean; py_compile -> passed; compileall -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; audit JSON validation -> passed",
+    "Phase 8 BOE security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked",
     "Ruff F821 undefined-name sweep: clean",
     "Previous Ruff selected F811/E741 baseline: 23 findings, now resolved",
     "Ruff full baseline: 547 findings remain"

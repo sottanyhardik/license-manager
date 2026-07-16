@@ -341,7 +341,8 @@
     "Phase 8 Bills of Entry secondary initial migration audit completed for backend/apps/bill_of_entry/migrations/0002_initial.py with no source changes required.",
     "Phase 8 Bills of Entry unique constraint migration audit completed for backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py with no source changes required.",
     "Phase 8 Bills of Entry migrations package marker audit completed for backend/apps/bill_of_entry/migrations/__init__.py with no source changes required.",
-    "Phase 8 Bills of Entry parsers package marker audit completed for backend/apps/bill_of_entry/parsers/__init__.py with no source changes required."
+    "Phase 8 Bills of Entry parsers package marker audit completed for backend/apps/bill_of_entry/parsers/__init__.py with no source changes required.",
+    "Phase 8 Bills of Entry scripts package marker audit completed for backend/apps/bill_of_entry/scripts/__init__.py with no source changes required."
   ],
   "dead_code_findings": [],
   "duplicate_logic_findings": [],
@@ -6301,7 +6302,7 @@
       "total_lines": 322
     },
     "backend/apps/bill_of_entry/scripts/__init__.py": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -6315,7 +6316,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "python",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-16T16:30:12+05:30",
       "maintainability_score": 100,
       "module": "backend/apps/bill_of_entry",
       "performance_score": 100,
@@ -31770,12 +31771,12 @@
     "backend/apps/bill_of_entry": {
       "blocked": 0,
       "changed": 5,
-      "completed": 14,
+      "completed": 15,
       "files": 34,
       "in_progress": 0,
       "lines": 4516,
       "not_started": 0,
-      "requires_recheck": 15
+      "requires_recheck": 14
     },
     "backend/apps/core": {
       "blocked": 0,
@@ -32214,7 +32215,7 @@
     "audited_lines": 115244,
     "blocked": 0,
     "changed": 50,
-    "completed": 493,
+    "completed": 494,
     "files": 930,
     "fixme": 2,
     "ignored": 595,
@@ -32222,7 +32223,7 @@
     "lines": 242540,
     "not_started": 12,
     "remaining_lines": 127296,
-    "requires_recheck": 375,
+    "requires_recheck": 374,
     "todo": 22
   },
   "verification_history": [
@@ -33239,6 +33240,9 @@
     "Phase 8 BOE migrations package marker commit: 58285e4bd7c2ab577c8d1e175cb41d7f28a0ade0 at 2026-07-16T16:28:34+05:30, docs(audit): record boe migrations package completion",
     "Phase 8 BOE parsers package marker audit: backend/apps/bill_of_entry/parsers/__init__.py reviewed as an empty parser package marker; no imports, symbols, side effects, validation paths, parser logic, or file handling exist",
     "Phase 8 BOE parsers package marker verification: wc/xxd -> empty; Ruff -> clean; py_compile -> passed; compileall -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning",
+    "Phase 8 BOE parsers package marker commit: f5e320c0579847dfbc2d2be2b1603ea625195c05 at 2026-07-16T16:29:45+05:30, docs(audit): record boe parsers package completion",
+    "Phase 8 BOE scripts package marker audit: backend/apps/bill_of_entry/scripts/__init__.py reviewed as an empty scripts package marker; no imports, symbols, side effects, validation paths, script logic, shell execution, or file handling exist",
+    "Phase 8 BOE scripts package marker verification: wc/xxd -> empty; Ruff -> clean; py_compile -> passed; compileall -> passed; Django check -> no issues; makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning",
     "Ruff F821 undefined-name sweep: clean",
     "Previous Ruff selected F811/E741 baseline: 23 findings, now resolved",
     "Ruff full baseline: 547 findings remain"

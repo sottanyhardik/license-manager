@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useMemo, useCallback} from "react";
+import React, {useEffect, useState, useMemo, useCallback, useId} from "react";
 import {useNavigate} from "react-router-dom";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
@@ -12,8 +12,117 @@ import {useDebouncedFilters} from "../../hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import { Bell, Building2, CalendarCheck, CalendarDays, CalendarRange, Check, DollarSign, FileSpreadsheet, FileText, Filter, Inbox, Loader2, MinusCircle, Package, Pencil, ScanBarcode, ShieldCheck, ShoppingCart, SlidersHorizontal, Tag, Tags, X, XCircle } from "lucide-react";
 
+type ItemReportPathOptions = {
+    format: "json" | "excel";
+    selectedItemNames?: unknown[];
+    selectedCompanies?: unknown[];
+    excludeCompanies?: unknown[];
+    minBalance?: unknown;
+    minAvailQty?: unknown;
+    licenseStatus?: unknown;
+    isRestricted?: unknown;
+    purchaseStatus?: unknown[];
+    productDescSearch?: unknown;
+    hsnCodeSearch?: unknown;
+    selectedNorms?: unknown[];
+    selectedNotifications?: unknown[];
+    expiryDateFrom?: unknown;
+    expiryDateTo?: unknown;
+};
+
+const PURCHASE_STATUS_OPTIONS = [
+    {value: 'GE', label: 'GE Purchase'},
+    {value: 'GO', label: 'GE Operating'},
+    {value: 'SM', label: 'SM Purchase'},
+    {value: 'MI', label: 'Conversion'},
+    {value: 'IP', label: 'IP'},
+    {value: 'CO', label: 'CO'}
+];
+
+const NORM_OPTIONS = [
+    {value: 'E1', label: 'E1'},
+    {value: 'E5', label: 'E5'},
+    {value: 'E126', label: 'E126'},
+    {value: 'E132', label: 'E132'}
+];
+
+export function normalizeReportNumber(value: unknown, fallback = 0): number {
+    const parsed = Number.parseInt(String(value ?? ""), 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export function normalizeFilterValues(values?: unknown[]): string[] {
+    if (!Array.isArray(values)) {
+        return [];
+    }
+
+    return values
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean);
+}
+
+export function buildItemReportPath({
+    format,
+    selectedItemNames = [],
+    selectedCompanies = [],
+    excludeCompanies = [],
+    minBalance = 200,
+    minAvailQty = 0,
+    licenseStatus = "active",
+    isRestricted = "all",
+    purchaseStatus = [],
+    productDescSearch,
+    hsnCodeSearch,
+    selectedNorms = [],
+    selectedNotifications = [],
+    expiryDateFrom,
+    expiryDateTo,
+}: ItemReportPathOptions): string {
+    const params = new URLSearchParams({format});
+    const itemNames = normalizeFilterValues(selectedItemNames);
+    const companyIds = normalizeFilterValues(selectedCompanies);
+    const excludedCompanyIds = normalizeFilterValues(excludeCompanies);
+    const purchaseStatuses = normalizeFilterValues(purchaseStatus);
+    const norms = normalizeFilterValues(selectedNorms);
+    const notifications = normalizeFilterValues(selectedNotifications);
+    const productDescription = String(productDescSearch ?? "").trim();
+    const hsnCode = String(hsnCodeSearch ?? "").trim();
+    const restricted = String(isRestricted ?? "all").trim();
+    const expiryFrom = String(expiryDateFrom ?? "").trim();
+    const expiryTo = String(expiryDateTo ?? "").trim();
+
+    if (itemNames.length > 0) params.set("item_names", itemNames.join(","));
+    if (companyIds.length > 0) params.set("company_ids", companyIds.join(","));
+    if (excludedCompanyIds.length > 0) params.set("exclude_company_ids", excludedCompanyIds.join(","));
+    params.set("min_balance", String(normalizeReportNumber(minBalance, 200)));
+    params.set("min_avail_qty", String(normalizeReportNumber(minAvailQty, 0)));
+    params.set("license_status", String(licenseStatus || "active"));
+    if (restricted && restricted !== "all") params.set("is_restricted", restricted);
+    if (purchaseStatuses.length > 0) params.set("purchase_status", purchaseStatuses.join(","));
+    if (productDescription) params.set("product_description", productDescription);
+    if (hsnCode) params.set("hsn_code", hsnCode);
+    if (norms.length > 0) params.set("norms", norms.join(","));
+    if (notifications.length > 0) params.set("notification_numbers", notifications.join(","));
+    if (expiryFrom) params.set("expiry_date_from", expiryFrom);
+    if (expiryTo) params.set("expiry_date_to", expiryTo);
+
+    return `reports/item-report/?${params.toString()}`;
+}
+
 export default function ItemReport() {
     const navigate = useNavigate();
+    const minBalanceId = useId();
+    const minAvailQtyId = useId();
+    const licenseStatusId = useId();
+    const expiryDateFromId = useId();
+    const expiryDateToId = useId();
+    const purchaseStatusId = useId();
+    const normsId = useId();
+    const notificationId = useId();
+    const restrictedId = useId();
+    const productDescriptionId = useId();
+    const hsnCodeId = useId();
+    const itemNameFilterId = useId();
     const [reportData, setReportData] = useState<Record<string, any> | null>(null);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -70,8 +179,7 @@ export default function ItemReport() {
                 if (isMounted) {
                     setAvailableItems(items.map(item => ({value: item.id, label: item.name})));
                 }
-            } catch (error) {
-                console.error('Failed to load available items:', error);
+            } catch {
                 if (isMounted) {
                     setAvailableItems([]);
                 }
@@ -92,8 +200,7 @@ export default function ItemReport() {
                         }))
                     );
                 }
-            } catch (error) {
-                console.error('Failed to load notification options:', error);
+            } catch {
                 if (isMounted) {
                     setNotificationOptions([]);
                 }
@@ -111,9 +218,6 @@ export default function ItemReport() {
     const loadReport = useCallback(async () => {
         setLoading(true);
         try {
-            let url = `reports/item-report/?format=json`;
-
-            // Use debounced filter values
             const {
                 selectedItemNames: items,
                 selectedCompanies: companies,
@@ -131,52 +235,25 @@ export default function ItemReport() {
                 expiryDateTo: expTo
             } = debouncedFilters;
 
-            if (items.length > 0) {
-                url += `&item_names=${items.join(',')}`;
-            }
-
-            if (companies.length > 0) {
-                url += `&company_ids=${companies.join(',')}`;
-            }
-
-            if (excluded.length > 0) {
-                url += `&exclude_company_ids=${excluded.join(',')}`;
-            }
-
-            url += `&min_balance=${minBal}`;
-            url += `&min_avail_qty=${minQty}`;
-            url += `&license_status=${status}`;
-
-            if (restricted !== 'all') {
-                url += `&is_restricted=${restricted}`;
-            }
-
-            if (pStatus.length > 0) {
-                url += `&purchase_status=${pStatus.join(',')}`;
-            }
-
-            if (prodDesc) {
-                url += `&product_description=${encodeURIComponent(prodDesc)}`;
-            }
-
-            if (hsnCode) {
-                url += `&hsn_code=${encodeURIComponent(hsnCode)}`;
-            }
-
-            if (norms.length > 0) {
-                url += `&norms=${norms.join(',')}`;
-            }
-
-            if (notifications.length > 0) {
-                url += `&notification_numbers=${notifications.join(',')}`;
-            }
-
-            if (expFrom) url += `&expiry_date_from=${expFrom}`;
-            if (expTo) url += `&expiry_date_to=${expTo}`;
-
-            const response = await api.get(url);
+            const response = await api.get(buildItemReportPath({
+                format: "json",
+                selectedItemNames: items,
+                selectedCompanies: companies,
+                excludeCompanies: excluded,
+                minBalance: minBal,
+                minAvailQty: minQty,
+                licenseStatus: status,
+                isRestricted: restricted,
+                purchaseStatus: pStatus,
+                productDescSearch: prodDesc,
+                hsnCodeSearch: hsnCode,
+                selectedNorms: norms,
+                selectedNotifications: notifications,
+                expiryDateFrom: expFrom,
+                expiryDateTo: expTo,
+            }));
             setReportData(response.data);
-        } catch (error) {
+        } catch {
             toast.error('Failed to load report. Please try again.');
             setReportData(null);
         } finally {
@@ -195,64 +272,24 @@ export default function ItemReport() {
     const handleExport = async () => {
         setDownloading(true);
         try {
-            let url = `reports/item-report/?format=excel`;
-
-            if (selectedItemNames.length > 0) {
-                url += `&item_names=${selectedItemNames.join(',')}`;
-            }
-
-            if (selectedCompanies.length > 0) {
-                url += `&company_ids=${selectedCompanies.join(',')}`;
-            }
-
-            if (excludeCompanies.length > 0) {
-                url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
-            }
-
-            url += `&min_balance=${minBalance}`;
-            url += `&min_avail_qty=${minAvailQty}`;
-            url += `&license_status=${licenseStatus}`;
-
-            if (isRestricted !== 'all') {
-                url += `&is_restricted=${isRestricted}`;
-            }
-
-            if (purchaseStatus.length > 0) {
-                url += `&purchase_status=${purchaseStatus.join(',')}`;
-            }
-
-            if (productDescSearch) {
-                url += `&product_description=${encodeURIComponent(productDescSearch)}`;
-            }
-
-            if (hsnCodeSearch) {
-                url += `&hsn_code=${encodeURIComponent(hsnCodeSearch)}`;
-            }
-
-            if (selectedNorms.length > 0) {
-                url += `&norms=${selectedNorms.join(',')}`;
-            }
-
-            if (selectedNotifications.length > 0) {
-                url += `&notification_numbers=${selectedNotifications.join(',')}`;
-            }
-
-            if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
-            if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
-
-            const response = await api.get(url, {
-                responseType: 'blob',
-            });
-
-            const downloadUrl = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.setAttribute('download', `item_report.xlsx`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(downloadUrl);
-        } catch (error) {
+            await openAuthedFile(buildItemReportPath({
+                format: "excel",
+                selectedItemNames,
+                selectedCompanies,
+                excludeCompanies,
+                minBalance,
+                minAvailQty,
+                licenseStatus,
+                isRestricted,
+                purchaseStatus,
+                productDescSearch,
+                hsnCodeSearch,
+                selectedNorms,
+                selectedNotifications,
+                expiryDateFrom,
+                expiryDateTo,
+            }), "item_report.xlsx");
+        } catch {
             toast.error('Failed to download report. Please try again.');
         } finally {
             setDownloading(false);
@@ -347,7 +384,7 @@ export default function ItemReport() {
                 ...reportData,
                 items: updatedItems
             });
-        } catch (error) {
+        } catch {
             toast.error('Failed to update. Please try again.');
         }
     };
@@ -361,23 +398,23 @@ export default function ItemReport() {
             toast.success('Item names updated successfully');
 
             // Fetch updated item data to check if it still matches filters
-            let url = `reports/item-report/?format=json`;
-            if (selectedItemNames.length > 0) {
-                url += `&item_names=${selectedItemNames.join(',')}`;
-            }
-            if (selectedCompanies.length > 0) {
-                url += `&company_ids=${selectedCompanies.join(',')}`;
-            }
-            if (excludeCompanies.length > 0) {
-                url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
-            }
-            url += `&min_balance=${minBalance}`;
-            url += `&license_status=${licenseStatus}`;
-            if (isRestricted !== 'all') {
-                url += `&is_restricted=${isRestricted}`;
-            }
-
-            const response = await api.get(url);
+            const response = await api.get(buildItemReportPath({
+                format: "json",
+                selectedItemNames,
+                selectedCompanies,
+                excludeCompanies,
+                minBalance,
+                minAvailQty,
+                licenseStatus,
+                isRestricted,
+                purchaseStatus,
+                productDescSearch,
+                hsnCodeSearch,
+                selectedNorms,
+                selectedNotifications,
+                expiryDateFrom,
+                expiryDateTo,
+            }));
             const updatedReportData = response.data;
 
             // Find the updated item in the new data
@@ -402,7 +439,7 @@ export default function ItemReport() {
                 });
                 toast.info('Item removed from list as it no longer matches the filters');
             }
-        } catch (error) {
+        } catch {
             toast.error('Failed to update item names. Please try again.');
         }
     };
@@ -477,14 +514,15 @@ export default function ItemReport() {
                         <div style={{ padding: '14px 16px' }}>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div>
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={minBalanceId}>
                                         <DollarSign className="size-4" aria-hidden="true" />
                                         Min Balance (CIF)
                                     </label>
                                     <select
+                                        id={minBalanceId}
                                         className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={minBalance}
-                                        onChange={(e) => setMinBalance(parseInt(e.target.value))}
+                                        onChange={(e) => setMinBalance(normalizeReportNumber(e.target.value, minBalance))}
                                     >
                                         <option value="100">₹ 100</option>
                                         <option value="200">₹ 200</option>
@@ -496,14 +534,15 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={minAvailQtyId}>
                                         <Package className="size-4" aria-hidden="true" />
                                         Min Avail Qty
                                     </label>
                                     <select
+                                        id={minAvailQtyId}
                                         className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={minAvailQty}
-                                        onChange={(e) => setMinAvailQty(parseInt(e.target.value))}
+                                        onChange={(e) => setMinAvailQty(normalizeReportNumber(e.target.value, minAvailQty))}
                                     >
                                         <option value="0">0</option>
                                         <option value="100">100</option>
@@ -515,11 +554,12 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={licenseStatusId}>
                                         <CalendarCheck className="size-4" aria-hidden="true" />
                                         License Status
                                     </label>
                                     <select
+                                        id={licenseStatusId}
                                         className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={licenseStatus}
                                         onChange={(e) => setLicenseStatus(e.target.value)}
@@ -532,11 +572,12 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={expiryDateFromId}>
                                         <CalendarRange className="size-4" aria-hidden="true" />
                                         Expiry Date From
                                     </label>
                                     <input
+                                        id={expiryDateFromId}
                                         type="date"
                                         className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={expiryDateFrom}
@@ -545,11 +586,12 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={expiryDateToId}>
                                         <CalendarRange className="size-4" aria-hidden="true" />
                                         Expiry Date To
                                     </label>
                                     <input
+                                        id={expiryDateToId}
                                         type="date"
                                         className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={expiryDateTo}
@@ -598,11 +640,12 @@ export default function ItemReport() {
 
                             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div>
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={restrictedId}>
                                         <ShieldCheck className="size-4" aria-hidden="true" />
                                         Is Restricted
                                     </label>
                                     <select
+                                        id={restrictedId}
                                         className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         value={isRestricted}
                                         onChange={(e) => setIsRestricted(e.target.value)}
@@ -614,29 +657,16 @@ export default function ItemReport() {
                                 </div>
 
                                 <div className="sm:col-span-2">
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={purchaseStatusId}>
                                         <ShoppingCart className="size-4" aria-hidden="true" />
                                         Purchase Status
                                     </label>
                                     <Select
+                                        inputId={purchaseStatusId}
                                         isMulti
-                                        value={[
-                                            {value: 'GE', label: 'GE Purchase'},
-                                            {value: 'GO', label: 'GE Operating'},
-                                            {value: 'SM', label: 'SM Purchase'},
-                                            {value: 'MI', label: 'Conversion'},
-                                            {value: 'IP', label: 'IP'},
-                                            {value: 'CO', label: 'CO'}
-                                        ].filter(opt => purchaseStatus.includes(opt.value))}
+                                        value={PURCHASE_STATUS_OPTIONS.filter(opt => purchaseStatus.includes(opt.value))}
                                         onChange={(selected) => handlePurchaseStatusChange(selected ? selected.map(s => s.value) : [])}
-                                        options={[
-                                            {value: 'GE', label: 'GE Purchase'},
-                                            {value: 'GO', label: 'GE Operating'},
-                                            {value: 'SM', label: 'SM Purchase'},
-                                            {value: 'MI', label: 'Conversion'},
-                                            {value: 'IP', label: 'IP'},
-                                            {value: 'CO', label: 'CO'}
-                                        ]}
+                                        options={PURCHASE_STATUS_OPTIONS}
                                         placeholder="Select purchase status..."
                                         className="basic-multi-select"
                                         classNamePrefix="select"
@@ -644,25 +674,16 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={normsId}>
                                         <Tags className="size-4" aria-hidden="true" />
                                         Norms
                                     </label>
                                     <Select
+                                        inputId={normsId}
                                         isMulti
-                                        value={[
-                                            {value: 'E1', label: 'E1'},
-                                            {value: 'E5', label: 'E5'},
-                                            {value: 'E126', label: 'E126'},
-                                            {value: 'E132', label: 'E132'}
-                                        ].filter(opt => selectedNorms.includes(opt.value))}
+                                        value={NORM_OPTIONS.filter(opt => selectedNorms.includes(opt.value))}
                                         onChange={(selected) => handleNormsChange(selected ? selected.map(s => s.value) : [])}
-                                        options={[
-                                            {value: 'E1', label: 'E1'},
-                                            {value: 'E5', label: 'E5'},
-                                            {value: 'E126', label: 'E126'},
-                                            {value: 'E132', label: 'E132'}
-                                        ]}
+                                        options={NORM_OPTIONS}
                                         placeholder="Select norms..."
                                         className="basic-multi-select"
                                         classNamePrefix="select"
@@ -670,11 +691,12 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={notificationId}>
                                         <Bell className="size-4" aria-hidden="true" />
                                         Notification
                                     </label>
                                     <Select
+                                        inputId={notificationId}
                                         isMulti
                                         value={notificationOptions.filter(opt => selectedNotifications.includes(opt.value))}
                                         onChange={(selected) => handleNotificationsChange(selected ? selected.map(s => s.value) : [])}
@@ -688,11 +710,12 @@ export default function ItemReport() {
 
                             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="sm:col-span-full">
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={productDescriptionId}>
                                         <FileText className="size-4" aria-hidden="true" />
                                         Product Description
                                     </label>
                                     <input
+                                        id={productDescriptionId}
                                         type="text"
                                         className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         placeholder="Search by product description..."
@@ -701,11 +724,12 @@ export default function ItemReport() {
                                     />
                                 </div>
                                 <div className="sm:col-span-full">
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={hsnCodeId}>
                                         <ScanBarcode className="size-4" aria-hidden="true" />
                                         HSN Code
                                     </label>
                                     <input
+                                        id={hsnCodeId}
                                         type="text"
                                         className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
                                         placeholder="Search by HSN code..."
@@ -717,11 +741,12 @@ export default function ItemReport() {
 
                             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="col-span-full">
-                                    <label className="form-label font-bold mb-2">
+                                    <label className="form-label font-bold mb-2" htmlFor={itemNameFilterId}>
                                         <Tag className="size-4" aria-hidden="true" />
                                         Filter by Item Name (Multi-select)
                                     </label>
                                     <Select
+                                        inputId={itemNameFilterId}
                                         isMulti
                                         value={itemNameOptions.filter(opt => selectedItemNames.includes(opt.value))}
                                         onChange={(selected) => handleItemNameChange(selected ? selected.map(s => s.value) : [])}

@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "6ed96a35",
+    "head": "9d56821b",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1157,6 +1157,14 @@
         "phase": "Phase 11 - Documents",
         "status": "COMPLETED",
         "timestamp": "2026-07-17T16:11:22+05:30"
+      },
+      {
+        "commit_sha": "9d56821b2e08bcf5f9c35ccb54a705c208c6a84d",
+        "commit_summary": "cleanup(documents): remove dead base template stack",
+        "file": "backend/templates/base/main.html + backend/templates/blank.html + backend/templates/dfia/*.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T16:15:04+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1187,6 +1195,14 @@
         "status": "COMPLETED",
         "source_commit_sha": "6ed96a35cfed4a23c98530b8e232c90d22511876",
         "finding": "Retained as Django conventional 500 template from backend/templates; hardened to self-contained noindex markup with focused render regression."
+      },
+      {
+        "timestamp": "2026-07-17T16:15:04+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "legacy base/DFIA DAdmin template stack",
+        "status": "DELETED",
+        "source_commit_sha": "9d56821b2e08bcf5f9c35ccb54a705c208c6a84d",
+        "finding": "No live render/template-loader/runtime path remained for base/main.html, blank.html, dfia/box.html, or dfia/list.html; remaining blank.html hits are queued stale template links."
       }
     ]
   },

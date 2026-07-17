@@ -381,3 +381,39 @@
 - Remaining Technical Debt:
   - Queued legacy DAdmin templates still link to `500.html`; audit them only when selected by the Phase 11 queue.
 - Status: COMPLETED
+
+
+## Legacy Base/DFIA Template Stack
+
+- File Path(s): `backend/templates/base/main.html`, `backend/templates/blank.html`, `backend/templates/dfia/box.html`, `backend/templates/dfia/list.html`
+- Module: Documents / legacy DAdmin Django template stack
+- Total LOC: 956
+- Lines Reviewed: 956 plus exact template inheritance, Django render/template loader, URLConf, command, test, frontend runtime, and queued legacy-template reference scans
+- Functions Reviewed: 3 legacy JavaScript helper functions in `dfia/list.html`
+- Classes Reviewed: 0
+- Validation Improvements: Removed orphaned templates containing stale URL tags, inline AJAX helpers, and context-dependent filter/pagination paths that no active Django route renders.
+- Package Replacements: None; removed verified-dead Django templates instead of replacing them.
+- Performance Improvements: Removed an unused base template that loaded multiple stale CSS/JS bundles and external fonts.
+- Security Improvements: Removed stale inline AJAX/CSRF JavaScript, broken legacy route links, and external Google Font loading from an unreachable template surface.
+- Dead Code Removed: Deleted the legacy DAdmin base template, blank child page, and orphaned DFIA list/box templates.
+- Duplicate Logic Removed: Removed duplicate legacy DFIA list/card rendering superseded by active DRF/React license flows.
+- Tests Added: None; behavior preserved by deletion of verified-dead templates.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, include, URLConf, management command, test, frontend runtime, or third-party runtime path for the deleted templates.
+  - Remaining `blank.html` references are stale links inside other queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletions -> clean before source commit.
+- Source Commit SHA: `9d56821b2e08bcf5f9c35ccb54a705c208c6a84d`
+- Source Commit Timestamp: `2026-07-17T16:15:04+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead base template stack`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `blank.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED

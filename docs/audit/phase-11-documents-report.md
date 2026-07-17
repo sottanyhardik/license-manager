@@ -633,3 +633,39 @@
 - Remaining Technical Debt:
   - Other queued legacy DAdmin templates still contain static `dropzone.html` hrefs; audit them only when selected by the Phase 11 queue.
 - Status: COMPLETED
+
+
+## Legacy Ecommerce Template
+
+- File Path(s): `backend/templates/ecommerce.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 1076
+- Lines Reviewed: 1076 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, form/action, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin ecommerce dashboard demo page that no active Django route renders and whose search, todo, dropdown, export, timeline, chart, and table actions had no backend validation path.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static ecommerce widgets, product/order demo rows, chart placeholders, and unused plugin script loading from the active template tree.
+- Security Improvements: Removed stale external/static asset loading, unreachable form/action surfaces, dummy user/order data, and unauthenticated static dashboard controls from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/ecommerce.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `ecommerce.html`.
+  - Remaining `ecommerce.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `352896d1fafcde024e78295a5b79b5d0133e5b06`
+- Source Commit Timestamp: `2026-07-17T17:07:44+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead ecommerce template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `ecommerce.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED

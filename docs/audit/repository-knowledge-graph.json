@@ -1213,6 +1213,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T17:04:51+05:30"
+      },
+      {
+        "commit_sha": "352896d1fafcde024e78295a5b79b5d0133e5b06",
+        "commit_summary": "cleanup(documents): remove dead ecommerce template",
+        "file": "backend/templates/ecommerce.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T17:07:44+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1299,6 +1307,14 @@
         "status": "DELETED",
         "source_commit_sha": "cab26558c5a2a7d9bd24c3e48872cf725a5dfc88",
         "finding": "No live render/template-loader/runtime path remained; remaining dropzone.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T17:07:44+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/ecommerce.html",
+        "status": "DELETED",
+        "source_commit_sha": "352896d1fafcde024e78295a5b79b5d0133e5b06",
+        "finding": "No live render/template-loader/runtime path remained; remaining ecommerce.html hits are queued stale template links."
       }
     ]
   },

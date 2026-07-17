@@ -1237,6 +1237,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T18:03:20+05:30"
+      },
+      {
+        "commit_sha": "71ae4b146fd625f6918e3532743c150b86a6551e",
+        "commit_summary": "cleanup(documents): remove dead footer transparent template",
+        "file": "backend/templates/footer-transparent.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T18:05:43+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1347,6 +1355,14 @@
         "status": "DELETED",
         "source_commit_sha": "d5a38159aa65c90ae1f08aa638a2c230ce5d0ccc",
         "finding": "No live render/template-loader/runtime path remained; remaining footer-light.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T18:05:43+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/footer-transparent.html",
+        "status": "DELETED",
+        "source_commit_sha": "71ae4b146fd625f6918e3532743c150b86a6551e",
+        "finding": "No live render/template-loader/runtime path remained; remaining footer-transparent.html hits are queued stale template links."
       }
     ]
   },

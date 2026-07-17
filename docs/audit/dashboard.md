@@ -6,14 +6,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 - Files audited: `498`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `356`
+- Files requiring dependency recheck: `355`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `420`
-- Total source files tracked: `916`
-- Total source LOC tracked: `241448`
+- Files remaining: `419`
+- Total source files tracked: `915`
+- Total source LOC tracked: `240547`
 - Audited LOC: `117017`
-- Remaining LOC: `124431`
+- Remaining LOC: `123530`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -32,7 +32,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 | Module | Files | LOC | Completed | Changed | Recheck | Not Started |
 |---|---:|---:|---:|---:|---:|---:|
-| `backend` | 131 | 77342 | 26 | 6 | 97 | 2 |
+| `backend` | 130 | 76441 | 26 | 6 | 96 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
 | `docs` | 53 | 24368 | 20 | 3 | 30 | 0 |
@@ -92,6 +92,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 Inventory completed `frontend/src/components/LicenseBalanceModal.tsx`; license balance modal validation, finite numeric rendering, authenticated PDF/export requests, and malformed API response handling are covered by focused helper regressions.
 - Phase 9 Inventory frozen after the active audit database query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - Phase 10 Reports frozen without reopening Phase 7; active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Phase 11 Documents removed verified-dead legacy Django template `backend/templates/profile.html`; dependency analysis found no live Django render/template-loader/runtime path, and React entry HTML remains preserved.
 
 ## Verification History
 
@@ -115,6 +116,13 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 2 domain authorization Ruff: .venv/bin/ruff check backend/apps/allotment/views.py backend/apps/bill_of_entry/views/boe.py backend/apps/core/urls.py backend/apps/tasks/views.py backend/apps/core/views/mds_status.py backend/apps/core/views/media.py backend/apps/license/views/dashboard.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 BOE parser authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_boe.py -q -> 12 passed
 - Phase 2 BOE parser authorization Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/views/parse_pdf.py backend/tests/test_authorization_permissions.py --select F821,F811,E741,F841,F401 -> clean
+- Phase 11 profile template route regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 14 passed
+- Phase 11 profile template py_compile: .venv/bin/python -m py_compile backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py -> passed
+- Phase 11 profile template compileall: .venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py -> passed
+- Phase 11 profile template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 profile template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 profile template scoped Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
+- Phase 11 profile template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
 - Phase 8 BOE ICEGATE helper regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed
 - Phase 8 BOE ICEGATE helper Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> clean
 - Phase 8 BOE ICEGATE helper py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed

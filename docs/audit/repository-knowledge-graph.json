@@ -1325,6 +1325,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T21:44:18+05:30"
+      },
+      {
+        "commit_sha": "7900d79df12518cba4cc5259e986314190c46152",
+        "commit_summary": "cleanup(documents): remove dead order view template",
+        "file": "backend/templates/order-view.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T21:50:43+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1523,6 +1531,14 @@
         "status": "DELETED",
         "source_commit_sha": "608deb78e29db73d6228b2ec2c60aca8aa589f91",
         "finding": "No live render/template-loader/runtime path remained; remaining notes.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T21:50:43+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/order-view.html",
+        "status": "DELETED",
+        "source_commit_sha": "7900d79df12518cba4cc5259e986314190c46152",
+        "finding": "No live render/template-loader/runtime path remained; remaining order-view.html hits are queued stale template links."
       }
     ]
   },

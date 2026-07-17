@@ -1389,6 +1389,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T22:19:22+05:30"
+      },
+      {
+        "commit_sha": "ca6fa5d28bcac0c7a57f42c4263ec492ecdef8f2",
+        "commit_summary": "cleanup(documents): remove dead register template",
+        "file": "backend/templates/register.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T22:21:10+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1651,6 +1659,14 @@
         "status": "DELETED",
         "source_commit_sha": "7c2383c933653b70b65814feec01bcf7b6196296",
         "finding": "No live render/template-loader/runtime path remained; remaining progress-bars.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T22:21:10+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/register.html",
+        "status": "DELETED",
+        "source_commit_sha": "ca6fa5d28bcac0c7a57f42c4263ec492ecdef8f2",
+        "finding": "No live render/template-loader/auth-runtime path remained; remaining register.html hits are queued stale template/theme links, and top-level register.html is not a required Django auth convention template."
       }
     ]
   },

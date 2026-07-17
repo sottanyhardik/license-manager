@@ -1509,6 +1509,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 pagination template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
 - Phase 11 pagination template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
 - Phase 11 pagination template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 pricing-tables template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `pricing-tables.html` hits are stale queued template links.
+- Phase 11 pricing-tables template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 pricing-tables template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 pricing-tables template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 pricing-tables template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 pricing-tables template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 pricing-tables template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 pricing-tables template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
 
 ## Blocked Work
 

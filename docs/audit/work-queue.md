@@ -8,7 +8,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 | `P8-BILLS-OF-ENTRY-AUDIT` | 1 | Bills of Entry | DONE | Phase 8 Bills of Entry completed all queued `NOT_STARTED` and `REQUIRES_RECHECK` files in the active audit database. | Focused backend tests, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and security-tool availability blockers are recorded in the Phase 8 report. |
 | `P9-INVENTORY-AUDIT` | 1 | Inventory | DONE | Phase 9 Inventory is frozen; do not reopen completed Phase 9 files unless the Repository Knowledge Graph marks them `REQUIRES_RECHECK`. | Phase 9 queue query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`; completed unit verification is recorded in `docs/audit/phase-09-inventory-report.md`. |
 | `P10-REPORTS-AUDIT` | 1 | Reports | DONE | Phase 10 Reports is frozen; Phase 7 Reporting & Exports remains frozen and was not reopened. | Active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`. |
-| `P11-DOCUMENTS-AUDIT` | 1 | Documents | IN_PROGRESS | Continue Phase 11 Documents from the existing audit database and process the next document/media/file/PDF/copy/upload item marked `NOT_STARTED` or `REQUIRES_RECHECK`. | `backend/templates/order-view.html` deleted in source commit `7900d79df12518cba4cc5259e986314190c46152`; select the next Phase 11 item from the audit database queue. |
+| `P11-DOCUMENTS-AUDIT` | 1 | Documents | IN_PROGRESS | Continue Phase 11 Documents from the existing audit database and process the next document/media/file/PDF/copy/upload item marked `NOT_STARTED` or `REQUIRES_RECHECK`. | `backend/templates/orders.html` deleted in source commit `65a1b886a87bcdc2d296f49d57bd70b66b7dc8f5`; select the next Phase 11 item from the audit database queue. |
 
 ## Work Queue History
 
@@ -66,6 +66,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-17T20:39:17+05:30` - Phase 11 Documents deleted verified-dead `backend/templates/modals.html` in commit `14b3c52373baa290945ca53b96451cda5095dd65` (`cleanup(documents): remove dead modals template`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-17T21:44:18+05:30` - Phase 11 Documents deleted verified-dead `backend/templates/notes.html` in commit `608deb78e29db73d6228b2ec2c60aca8aa589f91` (`cleanup(documents): remove dead notes template`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-17T21:50:43+05:30` - Phase 11 Documents deleted verified-dead `backend/templates/order-view.html` in commit `7900d79df12518cba4cc5259e986314190c46152` (`cleanup(documents): remove dead order view template`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-17T21:53:25+05:30` - Phase 11 Documents deleted verified-dead `backend/templates/orders.html` in commit `65a1b886a87bcdc2d296f49d57bd70b66b7dc8f5` (`cleanup(documents): remove dead orders template`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

@@ -1221,6 +1221,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T17:07:44+05:30"
+      },
+      {
+        "commit_sha": "27de35568432be9f954f348378a5539d9380bc2f",
+        "commit_summary": "cleanup(documents): remove dead footer dark template",
+        "file": "backend/templates/footer-dark.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T17:10:42+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1315,6 +1323,14 @@
         "status": "DELETED",
         "source_commit_sha": "352896d1fafcde024e78295a5b79b5d0133e5b06",
         "finding": "No live render/template-loader/runtime path remained; remaining ecommerce.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T17:10:42+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/footer-dark.html",
+        "status": "DELETED",
+        "source_commit_sha": "27de35568432be9f954f348378a5539d9380bc2f",
+        "finding": "No live render/template-loader/runtime path remained; remaining footer-dark.html hits are queued stale template links."
       }
     ]
   },

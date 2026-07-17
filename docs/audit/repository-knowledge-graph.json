@@ -1365,6 +1365,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T22:06:30+05:30"
+      },
+      {
+        "commit_sha": "a9112acf849e3e453c41e491d02c858cee88fd80",
+        "commit_summary": "cleanup(documents): remove dead products edit template",
+        "file": "backend/templates/products-edit.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T22:14:10+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1603,6 +1611,14 @@
         "status": "DELETED",
         "source_commit_sha": "6a2926338790014f5a62d041fe05f353eb088c88",
         "finding": "No live render/template-loader/runtime path remained; remaining pricing-tables.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T22:14:10+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/products-edit.html",
+        "status": "DELETED",
+        "source_commit_sha": "a9112acf849e3e453c41e491d02c858cee88fd80",
+        "finding": "No live render/template-loader/runtime path remained; remaining products-edit.html hits are queued stale template links."
       }
     ]
   },

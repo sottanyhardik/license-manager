@@ -431,7 +431,8 @@
     "Phase 11 Documents completed docs/media-security-cutover.md; runbook now reflects authenticated frontend media helpers, restricted query-token fallback state, and current nginx cutover verification in source commit 96f0da8f0903b8a18c7ddc1460146572b8994689 (docs(documents): update media security cutover).",
     "Phase 11 Documents completed frontend/src/hooks/useFileUpload.js and frontend/src/test/useFileUpload.test.ts; upload endpoint, file object, MIME, size, progress, malformed response, and error handling are hardened in source commit 70602d69d878a865aa7b71bd064f194cd927ad5b (fix(documents): harden file upload hook).",
     "Phase 11 Documents completed frontend/src/pages/Profile.tsx with AuthContext updateUser support and focused frontend/src/pages/Profile.test.tsx regressions in source commit f0bb9e719b23ad4dc17ae53f187366e135bfdb64 (fix(documents): harden profile page updates).",
-    "Phase 11 Documents completed nginx-protected-media.conf; reusable internal X-Accel-Redirect media snippet now documents trailing-slash MEDIA_ROOT aliasing and adds private no-store cache headers in source commit 95bc45513b56f735540d92aefc6508c08cba34ae (fix(documents): harden protected media nginx snippet)."
+    "Phase 11 Documents completed nginx-protected-media.conf; reusable internal X-Accel-Redirect media snippet now documents trailing-slash MEDIA_ROOT aliasing and adds private no-store cache headers in source commit 95bc45513b56f735540d92aefc6508c08cba34ae (fix(documents): harden protected media nginx snippet).",
+    "Phase 11 Documents completed scripts/diagnostics/sync-media.sh; media sync now targets backend/media, validates options and absolute paths, quotes SSH/rsync calls, supports sync --dry-run, and rejects unsafe two-way --delete in source commit 9bddcf84789ce0825b165f34b1db940a44a2532c (fix(documents): harden media sync diagnostics)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -30278,33 +30279,33 @@
       "total_lines": 508
     },
     "scripts/diagnostics/sync-media.sh": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 3,
+      "audit_status": "COMPLETED",
+      "complexity": 4,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "9483b84564f3b128c4efb4ab2a0df0434804eadb8f64950117a22c875b6ba4d5",
+      "file_checksum": "16b3b5729c1e4736eb244a0b9ce4728d6c0e00ec57b972605fae1e2ed4556716",
       "file_fingerprint": {
-        "mtime_ns": 1784135615332504139,
-        "size": 8172,
+        "mtime_ns": 1784267228252703581,
+        "size": 9803,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "shell",
-      "last_audit_timestamp": null,
-      "maintainability_score": 96,
-      "module": "scripts",
+      "last_audit_timestamp": "2026-07-17T11:18:04+05:30",
+      "maintainability_score": 98,
+      "module": "scripts/diagnostics",
       "performance_score": 98,
       "previous_index_checksum": null,
-      "readability_score": 96,
-      "security_score": 80,
-      "technical_debt_score": 4,
+      "readability_score": 97,
+      "security_score": 96,
+      "technical_debt_score": 1,
       "todo_count": 0,
       "total_classes": 0,
-      "total_functions": 0,
+      "total_functions": 12,
       "total_imports": 0,
-      "total_lines": 336
+      "total_lines": 371
     },
     "scripts/imports/fetch-all-sion-from-dgft.sh": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31913,7 +31914,7 @@
   },
   "repository_metadata": {
     "branch": "feature/V2",
-    "head": "95bc4551",
+    "head": "9bddcf84",
     "working_tree": "dirty"
   },
   "schema_version": 1,
@@ -31921,7 +31922,8 @@
     "Phase 11 Documents media cutover runbook now records that frontend public media/token links have been migrated to authenticated blob helpers while public nginx /media/ remains the operational cutover risk until Step 3 ships.",
     "Phase 11 Documents useFileUpload now rejects absolute/protocol-relative upload endpoints and unsafe path characters before Axios posts multipart data.",
     "Phase 11 Documents Profile page no longer refreshes user state by rewriting access/refresh tokens from localStorage after /auth/me/ PATCH.",
-    "Phase 11 Documents nginx protected-media snippet adds Cache-Control private, no-store for authenticated customs/PII document responses served through internal X-Accel-Redirect."
+    "Phase 11 Documents nginx protected-media snippet adds Cache-Control private, no-store for authenticated customs/PII document responses served through internal X-Accel-Redirect.",
+    "Phase 11 Documents media sync diagnostics now rejects relative media paths, unsupported remote path shell characters, unknown options, and destructive two-way --delete before SSH/rsync execution."
   ],
   "source_index": {
     "generated_file_count": 1251,
@@ -31948,7 +31950,7 @@
     "audited_lines": 118041,
     "blocked": 0,
     "changed": 50,
-    "completed": 504,
+    "completed": 505,
     "files": 916,
     "fixme": 2,
     "ignored": 595,
@@ -31956,7 +31958,7 @@
     "lines": 240717,
     "not_started": 12,
     "remaining_lines": 122676,
-    "requires_recheck": 350,
+    "requires_recheck": 349,
     "todo": 22
   },
   "verification_history": [
@@ -33134,6 +33136,25 @@
     "Phase 11 nginx protected-media Ruff: .venv/bin/ruff check backend/apps/core/views/media.py backend/lmanagement/settings.py backend/lmanagement/urls.py backend/tests/test_url_routing.py blocked by pre-existing unused imports in backend/tests/test_url_routing.py (pytest and django.test.TestCase).",
     "Phase 11 nginx protected-media security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 nginx protected-media diff check: git diff --check and git diff --cached --check for nginx-protected-media.conf -> clean before source commit.",
-    "Phase 11 nginx protected-media source commit: 95bc45513b56f735540d92aefc6508c08cba34ae at 2026-07-17T11:14:12+05:30, fix(documents): harden protected media nginx snippet."
+    "Phase 11 nginx protected-media source commit: 95bc45513b56f735540d92aefc6508c08cba34ae at 2026-07-17T11:14:12+05:30, fix(documents): harden protected media nginx snippet.",
+    "Phase 11 media sync dependency scan: scripts/diagnostics/sync-media.sh is live through docs/guides/SCRIPTS_README.md and scripts/README.md; duplicate media sync helper in scripts/database/db-tools.sh uses backend/media path contract.",
+    "Phase 11 media sync validation hardening: default local path changed to backend/media and remote path to /home/django/license-manager/backend/media, matching Django MEDIA_ROOT/deploy docs.",
+    "Phase 11 media sync shell hardening: enabled set -Eeuo pipefail, quoted SSH/rsync calls, added configurable SSH_BIN/RSYNC_BIN, rejected unknown options, rejected relative paths, rejected unsafe remote path characters, added sync --dry-run, and rejected sync --delete.",
+    "Phase 11 media sync syntax: bash -n scripts/diagnostics/sync-media.sh -> passed.",
+    "Phase 11 media sync usage: bash scripts/diagnostics/sync-media.sh -> usage printed, exit 0.",
+    "Phase 11 media sync invalid option: bash scripts/diagnostics/sync-media.sh download --bad-option -> rejected before SSH/rsync.",
+    "Phase 11 media sync destructive option guard: bash scripts/diagnostics/sync-media.sh sync --delete -> rejected before SSH/rsync.",
+    "Phase 11 media sync invalid path guard: REMOTE_MEDIA_PATH=relative bash scripts/diagnostics/sync-media.sh status -> rejected before SSH/rsync.",
+    "Phase 11 media sync shfmt: command not found; shell formatter unavailable locally.",
+    "Phase 11 media sync shellcheck: command not found; shell linter unavailable locally.",
+    "Phase 11 media sync backend regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 14 passed.",
+    "Phase 11 media sync py_compile: .venv/bin/python -m py_compile backend/manage.py backend/lmanagement/settings.py backend/lmanagement/urls.py -> passed.",
+    "Phase 11 media sync compileall: .venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py -> passed.",
+    "Phase 11 media sync Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 media sync makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 media sync Ruff: .venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py blocked by pre-existing unused imports in backend/tests/test_url_routing.py (pytest and django.test.TestCase).",
+    "Phase 11 media sync security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 media sync diff check: git diff --check and git diff --cached --check for scripts/diagnostics/sync-media.sh -> clean before source commit.",
+    "Phase 11 media sync source commit: 9bddcf84789ce0825b165f34b1db940a44a2532c at 2026-07-17T11:18:04+05:30, fix(documents): harden media sync diagnostics."
   ]
 }

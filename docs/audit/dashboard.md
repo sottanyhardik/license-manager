@@ -97,6 +97,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents completed `frontend/src/hooks/useFileUpload.js` with its focused test; upload endpoint, file input, MIME, progress, malformed response, and size formatting paths are hardened.
 - Phase 11 Documents completed `frontend/src/pages/Profile.tsx`; profile form hydration, PATCH payload normalization, field-level errors, role rendering, and AuthContext user refresh are hardened without rewriting tokens.
 - Phase 11 Documents completed `nginx-protected-media.conf`; protected media X-Accel snippet now documents trailing-slash MEDIA_ROOT aliasing and private no-store cache headers.
+- Phase 11 Documents completed `scripts/diagnostics/sync-media.sh`; media sync now targets `backend/media`, validates options/paths, and hardens SSH/rsync execution paths.
 
 ## Verification History
 
@@ -164,6 +165,15 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 nginx protected-media makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
 - Phase 11 nginx protected-media Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
 - Phase 11 nginx protected-media security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 media sync syntax: bash -n scripts/diagnostics/sync-media.sh -> passed
+- Phase 11 media sync usage/validation: usage command passed; invalid option, sync --delete, and relative remote path guards rejected before SSH/rsync
+- Phase 11 media sync shfmt/shellcheck: commands not found; unavailable locally
+- Phase 11 media sync backend regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 14 passed
+- Phase 11 media sync py_compile/compileall: scoped backend URL/settings files -> passed
+- Phase 11 media sync Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 media sync makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 media sync Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
+- Phase 11 media sync security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
 - Phase 8 BOE ICEGATE helper regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed
 - Phase 8 BOE ICEGATE helper Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> clean
 - Phase 8 BOE ICEGATE helper py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed

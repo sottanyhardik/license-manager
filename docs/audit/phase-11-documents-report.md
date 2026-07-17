@@ -189,3 +189,48 @@
 - Remaining Technical Debt:
   - Active concrete nginx configs should be audited separately when their queued `REQUIRES_RECHECK` items are selected, especially for cache-header parity.
 - Status: COMPLETED
+
+
+## scripts/diagnostics/sync-media.sh
+
+- File Path(s): `scripts/diagnostics/sync-media.sh`
+- Module: Documents / media sync diagnostics script
+- Total LOC: 371
+- Lines Reviewed: 371 plus `scripts/database/db-tools.sh`, `docs/guides/SCRIPTS_README.md`, `scripts/README.md`, deployment media paths, and Django `MEDIA_ROOT`
+- Functions Reviewed: 12 shell functions / command branches
+- Classes Reviewed: 0
+- Validation Improvements: Added strict mode, explicit config validation, absolute path enforcement, unsupported remote-path character rejection, unknown-option rejection, `sync --dry-run` handling, and `sync --delete` rejection.
+- Package Replacements: Reused shell built-ins plus existing `ssh`/`rsync`; no new dependency introduced.
+- Performance Improvements: Preserved rsync incremental transfer behavior while making failure handling explicit under `set -e`.
+- Security Improvements: Corrected stale root-level `media` paths to `backend/media`, quoted SSH/rsync invocations, made SSH/rsync binaries environment-overridable, and blocked unsafe/destructive option paths before network execution.
+- Dead Code Removed: None; docs prove this diagnostics script remains live.
+- Duplicate Logic Removed: Aligned path contract with `scripts/database/db-tools.sh` rather than maintaining a conflicting media location.
+- Tests Added: None; shell-script behavior verified through syntax and non-network command-path checks.
+- Verification Results:
+  - Dependency scan found live references from `docs/guides/SCRIPTS_README.md` and `scripts/README.md`.
+  - Duplicate/path scan found `scripts/database/db-tools.sh` already uses `backend/media`, which this script now matches.
+  - `bash -n scripts/diagnostics/sync-media.sh` -> passed.
+  - `bash scripts/diagnostics/sync-media.sh` -> usage printed, exit 0.
+  - `bash scripts/diagnostics/sync-media.sh download --bad-option` -> rejected before SSH/rsync.
+  - `bash scripts/diagnostics/sync-media.sh sync --delete` -> rejected before SSH/rsync.
+  - `REMOTE_MEDIA_PATH=relative bash scripts/diagnostics/sync-media.sh status` -> rejected before SSH/rsync.
+  - `shfmt -d scripts/diagnostics/sync-media.sh` -> command not found; shell formatter unavailable locally.
+  - `shellcheck scripts/diagnostics/sync-media.sh` -> command not found; shell linter unavailable locally.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+  - `.venv/bin/python -m py_compile backend/manage.py backend/lmanagement/settings.py backend/lmanagement/urls.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for `scripts/diagnostics/sync-media.sh` -> clean before source commit.
+- Source Commit SHA: `9bddcf84789ce0825b165f34b1db940a44a2532c`
+- Source Commit Timestamp: `2026-07-17T11:18:04+05:30`
+- Source Commit Summary: `fix(documents): harden media sync diagnostics`
+- Blocked Items:
+  - `shfmt` and `shellcheck` are unavailable locally.
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Actual SSH/rsync transfer paths were not executed because they require remote server credentials/network access.
+- Status: COMPLETED

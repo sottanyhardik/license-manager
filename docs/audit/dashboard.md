@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `499`
+- Files audited: `501`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `354`
+- Files requiring dependency recheck: `352`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `418`
+- Files remaining: `416`
 - Total source files tracked: `915`
-- Total source LOC tracked: `240554`
-- Audited LOC: `117122`
-- Remaining LOC: `123432`
+- Total source LOC tracked: `240717`
+- Audited LOC: `118041`
+- Remaining LOC: `122676`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -94,6 +94,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 10 Reports frozen without reopening Phase 7; active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - Phase 11 Documents removed verified-dead legacy Django template `backend/templates/profile.html`; dependency analysis found no live Django render/template-loader/runtime path, and React entry HTML remains preserved.
 - Phase 11 Documents completed `docs/media-security-cutover.md`; retained live runbook and updated stale frontend media/token and restricted query-token guidance to match current code.
+- Phase 11 Documents completed `frontend/src/hooks/useFileUpload.js` with its focused test; upload endpoint, file input, MIME, progress, malformed response, and size formatting paths are hardened.
 
 ## Verification History
 
@@ -133,6 +134,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 media cutover makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
 - Phase 11 media cutover Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
 - Phase 11 media cutover security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 useFileUpload regression: npm test -- useFileUpload.test.ts -> 18 passed
+- Phase 11 useFileUpload TypeScript: npm run typecheck -> passed
+- Phase 11 useFileUpload ESLint: npm run lint -- --quiet src/hooks/useFileUpload.js src/test/useFileUpload.test.ts -> clean
+- Phase 11 useFileUpload React build: npm run build -> passed
+- Phase 11 useFileUpload Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 useFileUpload makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 useFileUpload py_compile/compileall: not applicable to JS/TS source; frontend typecheck/build executed instead
+- Phase 11 useFileUpload security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
 - Phase 8 BOE ICEGATE helper regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed
 - Phase 8 BOE ICEGATE helper Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> clean
 - Phase 8 BOE ICEGATE helper py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed

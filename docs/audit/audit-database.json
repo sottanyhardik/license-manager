@@ -73,6 +73,12 @@
       "event": "Phase 11 Documents media security cutover runbook completed.",
       "reason": "Runbook was retained because deployment scripts and authenticated media helpers reference it; stale frontend migration and query-token status guidance was updated to match current code.",
       "commit_sha": "96f0da8f0903b8a18c7ddc1460146572b8994689"
+    },
+    {
+      "timestamp": "2026-07-17T11:02:48+05:30",
+      "event": "Phase 11 Documents file upload hook completed.",
+      "reason": "Live upload hook and focused regression tests were audited together; validation, endpoint normalization, malformed response handling, and progress formatting were hardened.",
+      "commit_sha": "70602d69d878a865aa7b71bd064f194cd927ad5b"
     }
   ],
   "blocked_work": [
@@ -422,7 +428,8 @@
     "Phase 9 Inventory completed and frozen after the active audit database query returned zero Inventory or Balance files marked NOT_STARTED or REQUIRES_RECHECK; latest metadata recovery commit 3c18e899a67b024418137ed7f8232694751715b3 (docs(audit): record license balance modal audit).",
     "Phase 10 Reports completed and frozen without reopening Phase 7; active report/export/PDF/Excel/CSV/ledger query returned zero files marked NOT_STARTED or REQUIRES_RECHECK, latest recovery commit 919f53d1f8273eaf59e8e5d70b98593c4b86b6f3 (docs(audit): freeze inventory phase).",
     "Phase 11 Documents deleted verified-dead backend/templates/profile.html legacy Django template after dependency analysis found no live runtime path; source commit 08269148be7f2eea870d8c61158372764e388572 (cleanup(documents): remove dead profile template).",
-    "Phase 11 Documents completed docs/media-security-cutover.md; runbook now reflects authenticated frontend media helpers, restricted query-token fallback state, and current nginx cutover verification in source commit 96f0da8f0903b8a18c7ddc1460146572b8994689 (docs(documents): update media security cutover)."
+    "Phase 11 Documents completed docs/media-security-cutover.md; runbook now reflects authenticated frontend media helpers, restricted query-token fallback state, and current nginx cutover verification in source commit 96f0da8f0903b8a18c7ddc1460146572b8994689 (docs(documents): update media security cutover).",
+    "Phase 11 Documents completed frontend/src/hooks/useFileUpload.js and frontend/src/test/useFileUpload.test.ts; upload endpoint, file object, MIME, size, progress, malformed response, and error handling are hardened in source commit 70602d69d878a865aa7b71bd064f194cd927ad5b (fix(documents): harden file upload hook)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -23569,33 +23576,33 @@
       "total_lines": 160
     },
     "frontend/src/hooks/useFileUpload.js": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 4,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "b685381a01bf09ce44d70767ddcc8ddde17e13fa64b6dbbb55249e9f7d0752ee",
+      "file_checksum": "b9ef82b372da0c0e4f28535e07b86fe8efc9e0a38fb0ece49aa08ba68e17984f",
       "file_fingerprint": {
-        "mtime_ns": 1784118789251633640,
-        "size": 11491,
+        "mtime_ns": 1784266289113113486,
+        "size": 14360,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "javascript",
-      "last_audit_timestamp": null,
-      "maintainability_score": 95,
+      "last_audit_timestamp": "2026-07-17T11:02:48+05:30",
+      "maintainability_score": 96,
       "module": "frontend/src/hooks",
-      "performance_score": 97,
+      "performance_score": 98,
       "previous_index_checksum": null,
-      "readability_score": 95,
-      "security_score": 80,
-      "technical_debt_score": 5,
+      "readability_score": 96,
+      "security_score": 92,
+      "technical_debt_score": 4,
       "todo_count": 0,
       "total_classes": 0,
-      "total_functions": 0,
+      "total_functions": 12,
       "total_imports": 0,
-      "total_lines": 436
+      "total_lines": 515
     },
     "frontend/src/hooks/useModal.js": {
       "audit_status": "REQUIRES_RECHECK",
@@ -26660,33 +26667,33 @@
       "total_lines": 100
     },
     "frontend/src/test/useFileUpload.test.ts": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 9,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "6abe52a08f73eb77dbaad27c96c8c4c5fb89615196908a9897b18145e4a7aed8",
+      "file_checksum": "acf4602d824862df0a74076f714842d7aab152a729d6366999f28caafc6728c5",
       "file_fingerprint": {
-        "mtime_ns": 1784118789262094348,
-        "size": 12057,
+        "mtime_ns": 1784266327414526246,
+        "size": 14868,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "typescript",
-      "last_audit_timestamp": null,
-      "maintainability_score": 93,
+      "last_audit_timestamp": "2026-07-17T11:02:48+05:30",
+      "maintainability_score": 94,
       "module": "frontend/src/test",
       "performance_score": 98,
       "previous_index_checksum": null,
-      "readability_score": 93,
-      "security_score": 80,
-      "technical_debt_score": 7,
+      "readability_score": 94,
+      "security_score": 90,
+      "technical_debt_score": 6,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 3,
       "total_imports": 0,
-      "total_lines": 320
+      "total_lines": 404
     },
     "frontend/src/theme/tabler.css": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31572,12 +31579,12 @@
     "frontend/src/hooks": {
       "blocked": 0,
       "changed": 0,
-      "completed": 0,
+      "completed": 1,
       "files": 11,
       "in_progress": 0,
-      "lines": 1461,
+      "lines": 1540,
       "not_started": 0,
-      "requires_recheck": 11
+      "requires_recheck": 10
     },
     "frontend/src/index.css": {
       "blocked": 0,
@@ -31662,12 +31669,12 @@
     "frontend/src/test": {
       "blocked": 0,
       "changed": 0,
-      "completed": 2,
+      "completed": 3,
       "files": 5,
       "in_progress": 0,
-      "lines": 724,
+      "lines": 808,
       "not_started": 0,
-      "requires_recheck": 3
+      "requires_recheck": 2
     },
     "frontend/src/theme": {
       "blocked": 0,
@@ -31875,12 +31882,13 @@
   },
   "repository_metadata": {
     "branch": "feature/V2",
-    "head": "96f0da8f",
+    "head": "70602d69",
     "working_tree": "dirty"
   },
   "schema_version": 1,
   "security_findings": [
-    "Phase 11 Documents media cutover runbook now records that frontend public media/token links have been migrated to authenticated blob helpers while public nginx /media/ remains the operational cutover risk until Step 3 ships."
+    "Phase 11 Documents media cutover runbook now records that frontend public media/token links have been migrated to authenticated blob helpers while public nginx /media/ remains the operational cutover risk until Step 3 ships.",
+    "Phase 11 Documents useFileUpload now rejects absolute/protocol-relative upload endpoints and unsafe path characters before Axios posts multipart data."
   ],
   "source_index": {
     "generated_file_count": 1251,
@@ -31904,18 +31912,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 117122,
+    "audited_lines": 118041,
     "blocked": 0,
     "changed": 50,
-    "completed": 499,
+    "completed": 501,
     "files": 915,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 240554,
+    "lines": 240717,
     "not_started": 12,
-    "remaining_lines": 123432,
-    "requires_recheck": 354,
+    "remaining_lines": 122676,
+    "requires_recheck": 352,
     "todo": 22
   },
   "verification_history": [
@@ -33051,6 +33059,18 @@
     "Phase 11 media cutover makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
     "Phase 11 media cutover security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 media cutover diff check: git diff --check -- docs/media-security-cutover.md -> clean before source commit.",
-    "Phase 11 media cutover commit: 96f0da8f0903b8a18c7ddc1460146572b8994689 at 2026-07-17T10:58:35+05:30, docs(documents): update media security cutover."
+    "Phase 11 media cutover commit: 96f0da8f0903b8a18c7ddc1460146572b8994689 at 2026-07-17T10:58:35+05:30, docs(documents): update media security cutover.",
+    "Phase 11 useFileUpload dependency scan: live imports found in frontend/src/pages/LedgerUpload.tsx and frontend/src/hooks/index.js; focused tests live in frontend/src/test/useFileUpload.test.ts and page-level mocks live in frontend/src/pages/LedgerUpload.test.tsx.",
+    "Phase 11 useFileUpload validation hardening: malformed file-like objects, invalid/negative/non-finite file sizes, invalid maxFileSize options, case-insensitive MIME matches, unsafe absolute/protocol-relative endpoints, missing upload progress totals, malformed success responses, and blank server errors are normalized.",
+    "Phase 11 useFileUpload regression: npm test -- useFileUpload.test.ts -> 18 passed after correcting the GB unit-cap expectation.",
+    "Phase 11 useFileUpload TypeScript: npm run typecheck -> passed.",
+    "Phase 11 useFileUpload ESLint: npm run lint -- --quiet src/hooks/useFileUpload.js src/test/useFileUpload.test.ts -> clean.",
+    "Phase 11 useFileUpload React build: npm run build -> passed.",
+    "Phase 11 useFileUpload Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 useFileUpload makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 useFileUpload py_compile/compileall: not applicable to JavaScript/TypeScript source; frontend typecheck/build executed instead.",
+    "Phase 11 useFileUpload security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 useFileUpload diff check: git diff --check -- frontend/src/hooks/useFileUpload.js frontend/src/test/useFileUpload.test.ts -> clean before source commit.",
+    "Phase 11 useFileUpload commit: 70602d69d878a865aa7b71bd064f194cd927ad5b at 2026-07-17T11:02:48+05:30, fix(documents): harden file upload hook."
   ]
 }

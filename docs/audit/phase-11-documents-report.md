@@ -73,3 +73,38 @@
   - Public nginx `/media/` remains an operational cutover risk until Step 3 is applied on deployed servers.
   - Restricted query-token JWT fallback remains configured until production logs prove it can be removed.
 - Status: COMPLETED
+
+## frontend/src/hooks/useFileUpload.js
+
+- File Path(s): `frontend/src/hooks/useFileUpload.js`, `frontend/src/test/useFileUpload.test.ts`
+- Module: Documents / Upload hook
+- Total LOC: 919
+- Lines Reviewed: 515 hook lines plus 404 focused regression-test lines and live `LedgerUpload.tsx` import paths
+- Functions Reviewed: 12 hook/helper/callback functions plus 18 focused test cases
+- Classes Reviewed: 0
+- Validation Improvements: Added malformed file-object rejection, invalid/non-finite size rejection, invalid max-file-size fallback, case-insensitive MIME matching, safe empty event file-list handling, unsafe endpoint rejection, bounded progress percentages, malformed success response normalization, trimmed error extraction, and non-finite file-size formatting.
+- Package Replacements: Reused existing React hooks, Axios API client, and Vitest/testing-library coverage; no new dependency introduced.
+- Performance Improvements: Prevented NaN/Infinity progress state and exception-prone response access during upload progress/render cycles.
+- Security Improvements: Rejected absolute/protocol-relative upload endpoints and backslash/control-character endpoint paths before multipart POST.
+- Dead Code Removed: None; dependency analysis confirmed the hook is live through `frontend/src/pages/LedgerUpload.tsx` and exported by `frontend/src/hooks/index.js`.
+- Duplicate Logic Removed: Consolidated repeated response/error/progress handling into local helpers inside the hook.
+- Tests Added: Extended `frontend/src/test/useFileUpload.test.ts` with malformed file, MIME case, unsafe endpoint, malformed response/progress, and size-formatting regressions.
+- Verification Results:
+  - Dependency scan found live imports in `frontend/src/pages/LedgerUpload.tsx` and `frontend/src/hooks/index.js`.
+  - `npm test -- useFileUpload.test.ts` -> 18 passed.
+  - `npm run typecheck` -> passed.
+  - `npm run lint -- --quiet src/hooks/useFileUpload.js src/test/useFileUpload.test.ts` -> clean.
+  - `npm run build` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `py_compile`/`compileall` not applicable to JavaScript/TypeScript source; frontend typecheck/build executed instead.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check -- frontend/src/hooks/useFileUpload.js frontend/src/test/useFileUpload.test.ts` -> clean before source commit.
+- Source Commit SHA: `70602d69d878a865aa7b71bd064f194cd927ad5b`
+- Source Commit Timestamp: `2026-07-17T11:02:48+05:30`
+- Source Commit Summary: `fix(documents): harden file upload hook`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - `frontend/src/pages/LedgerUpload.tsx` remains its own audited page/component surface and should stay frozen unless dependency changes mark it `REQUIRES_RECHECK`.
+- Status: COMPLETED

@@ -106,6 +106,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents completed `backend/templates/500.html`; the conventional Django production 500 template is now self-contained, noindex, and covered by a render regression.
 - Phase 11 Documents removed the verified-dead legacy base/DFIA DAdmin template stack; `base/main.html`, `blank.html`, `dfia/box.html`, and `dfia/list.html` had no live render/template-loader/runtime path.
 - Phase 11 Documents removed verified-dead `backend/templates/buttons.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/calendar.html`; only stale links from other queued legacy DAdmin templates and theme demo HTML remained.
 
 ## Verification History
 
@@ -211,6 +212,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 500 template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
 - Phase 11 500 template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
 - Phase 11 500 template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 calendar template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `calendar.html` hits are stale queued template/demo links.
+- Phase 11 calendar template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 calendar template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 calendar template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 calendar template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 calendar template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 calendar template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 calendar template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
 - Phase 11 base/DFIA template dependency scan: no live render, TemplateResponse, template_name, template-loader, include, URLConf, command, test, frontend runtime, or third-party runtime path remained; only stale `blank.html` links in queued DAdmin templates remain.
 - Phase 11 base/DFIA template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
 - Phase 11 base/DFIA template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.

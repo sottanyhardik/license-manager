@@ -1173,6 +1173,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T16:18:07+05:30"
+      },
+      {
+        "commit_sha": "d7bd46dd1d86c235a43d33b30be25dafbc053937",
+        "commit_summary": "cleanup(documents): remove dead calendar template",
+        "file": "backend/templates/calendar.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T16:32:14+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1219,6 +1227,14 @@
         "status": "DELETED",
         "source_commit_sha": "d5acf8867c565340f98d260be80ab6bbe4275c40",
         "finding": "No live render/template-loader/runtime path remained; remaining buttons.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T16:32:14+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/calendar.html",
+        "status": "DELETED",
+        "source_commit_sha": "d7bd46dd1d86c235a43d33b30be25dafbc053937",
+        "finding": "No live render/template-loader/runtime path remained; remaining calendar.html hits are queued stale template/demo links."
       }
     ]
   },

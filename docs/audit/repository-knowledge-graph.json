@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T10:31:21+00:00",
+  "generated_at": "2026-07-17T11:21:21+05:30",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -458,12 +458,21 @@
       "nginx-http-only-tractor.conf": {
         "blocked": 0,
         "changed": 0,
-        "completed": 0,
+        "completed": 1,
         "files": 1,
         "in_progress": 0,
-        "lines": 19,
+        "lines": 30,
         "not_started": 0,
-        "requires_recheck": 1
+        "requires_recheck": 0,
+        "audit_status": "COMPLETED",
+        "file_checksum": "063aae2df1ff4fdb30882f410f3660074ed255326ad4c99e9db1415119828a3c",
+        "file_fingerprint": {
+          "mtime_ns": 1784267398262075969,
+          "size": 928
+        },
+        "last_audit_timestamp": "2026-07-17T11:21:21+05:30",
+        "security_score": 95,
+        "total_lines": 30
       },
       "nginx-http-only.conf": {
         "blocked": 0,
@@ -885,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "9bddcf84",
+    "head": "45a2223b",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1100,11 +1109,19 @@
         "phase": "Phase 11 - Documents",
         "status": "COMPLETED",
         "timestamp": "2026-07-17T11:18:04+05:30"
+      },
+      {
+        "commit_sha": "45a2223bc7f7ad1ac954e2c87de62c775cd106ac",
+        "commit_summary": "fix(documents): harden tractor http nginx bootstrap",
+        "file": "nginx-http-only-tractor.conf",
+        "phase": "Phase 11 - Documents",
+        "status": "COMPLETED",
+        "timestamp": "2026-07-17T11:21:21+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
     "tracked_audit_files": 916,
-    "tracked_audit_lines": 241448,
+    "tracked_audit_lines": 241459,
     "working_tree": "dirty"
   },
   "schema_version": 1,

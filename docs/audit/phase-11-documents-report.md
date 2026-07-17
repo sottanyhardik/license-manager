@@ -234,3 +234,41 @@
 - Remaining Technical Debt:
   - Actual SSH/rsync transfer paths were not executed because they require remote server credentials/network access.
 - Status: COMPLETED
+
+
+## nginx-http-only-tractor.conf
+
+- File Path(s): `nginx-http-only-tractor.conf`
+- Module: Documents / tractor HTTP-only nginx bootstrap config
+- Total LOC: 30
+- Lines Reviewed: 30 plus `scripts/deployment/auto-deploy.sh`, `docs/media-security-cutover.md`, `nginx-license-tractor.conf`, and related nginx config parity
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Retained the live cert-bootstrap server block and aligned proxy timeout handling with the production nginx config family.
+- Package Replacements: None; nginx built-in proxy/header directives remain the correct implementation.
+- Performance Improvements: Added explicit client/proxy timeout directives to avoid premature upload/download interruption during bootstrap traffic.
+- Security Improvements: Added `proxy_redirect off`, `X-Frame-Options`, `X-Content-Type-Options`, and `Referrer-Policy` headers to the HTTP-only bootstrap config.
+- Dead Code Removed: None; dependency analysis confirmed the file is live through `scripts/deployment/auto-deploy.sh` for `165.232.185.220`.
+- Duplicate Logic Removed: None; this file is a distinct HTTP-only certbot bootstrap config and should not be merged with TLS nginx configs.
+- Tests Added: None; nginx config hardening only.
+- Verification Results:
+  - Dependency scan found live references in `scripts/deployment/auto-deploy.sh`, deployment documentation, and tractor nginx config references.
+  - `nginx -v` -> command not found; local nginx syntax validation unavailable.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+  - `.venv/bin/python -m py_compile backend/manage.py backend/lmanagement/settings.py backend/lmanagement/urls.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for `nginx-http-only-tractor.conf` -> clean before source commit.
+- Source Commit SHA: `45a2223bc7f7ad1ac954e2c87de62c775cd106ac`
+- Source Commit Timestamp: `2026-07-17T11:21:21+05:30`
+- Source Commit Summary: `fix(documents): harden tractor http nginx bootstrap`
+- Blocked Items:
+  - `nginx` binary is unavailable locally, so full nginx syntax validation could not be run.
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other active nginx configs remain separate queued Phase 11 `REQUIRES_RECHECK` items and should be audited only when selected.
+- Status: COMPLETED

@@ -119,6 +119,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents removed verified-dead `backend/templates/form-wizard.html`; only stale links from other queued legacy DAdmin templates remained.
 - Phase 11 Documents removed verified-dead `backend/templates/index.html`; Django loader analysis proved the live SPA catch-all resolves `frontend/dist/index.html` first.
 - Phase 11 Documents removed verified-dead `backend/templates/invoice.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/lock-screen.html`; only stale links from other queued legacy DAdmin templates remained.
 
 ## Verification History
 
@@ -328,6 +329,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 invoice template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
 - Phase 11 invoice template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
 - Phase 11 invoice template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 lock-screen template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `lock-screen.html` hits are stale queued template links.
+- Phase 11 lock-screen template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 lock-screen template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 lock-screen template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 lock-screen template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 lock-screen template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 lock-screen template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 lock-screen template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
 - Phase 11 base/DFIA template dependency scan: no live render, TemplateResponse, template_name, template-loader, include, URLConf, command, test, frontend runtime, or third-party runtime path remained; only stale `blank.html` links in queued DAdmin templates remain.
 - Phase 11 base/DFIA template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
 - Phase 11 base/DFIA template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.

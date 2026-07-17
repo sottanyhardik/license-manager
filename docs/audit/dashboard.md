@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `498`
+- Files audited: `499`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `355`
+- Files requiring dependency recheck: `354`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `419`
+- Files remaining: `418`
 - Total source files tracked: `915`
-- Total source LOC tracked: `240547`
-- Audited LOC: `117017`
-- Remaining LOC: `123530`
+- Total source LOC tracked: `240554`
+- Audited LOC: `117122`
+- Remaining LOC: `123432`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -35,7 +35,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `backend` | 130 | 76441 | 26 | 6 | 96 | 2 |
 | `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
 | `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
-| `docs` | 53 | 24368 | 20 | 3 | 30 | 0 |
+| `docs` | 53 | 24375 | 21 | 3 | 29 | 0 |
 | `frontend/src/pages` | 77 | 19217 | 66 | 0 | 11 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 70 | 9120 | 10 | 0 | 60 | 0 |
@@ -93,6 +93,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 Inventory frozen after the active audit database query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - Phase 10 Reports frozen without reopening Phase 7; active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - Phase 11 Documents removed verified-dead legacy Django template `backend/templates/profile.html`; dependency analysis found no live Django render/template-loader/runtime path, and React entry HTML remains preserved.
+- Phase 11 Documents completed `docs/media-security-cutover.md`; retained live runbook and updated stale frontend media/token and restricted query-token guidance to match current code.
 
 ## Verification History
 
@@ -123,6 +124,15 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 profile template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
 - Phase 11 profile template scoped Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
 - Phase 11 profile template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 media cutover dependency scan: retained because `scripts/deployment/auto-deploy.sh` and `frontend/src/utils/documentDownload.ts` reference the runbook
+- Phase 11 media cutover frontend token/media scan: direct public media/token grep returned only authenticated helper implementation, comments, tests, and `AuthedImage`-style authenticated consumers
+- Phase 11 media cutover regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py backend/tests/test_authentication_query_param.py -q -> 17 passed
+- Phase 11 media cutover py_compile: .venv/bin/python -m py_compile scoped media/auth/url/settings/test files -> passed
+- Phase 11 media cutover compileall: .venv/bin/python -m compileall -q scoped media/auth/url/settings/test files -> passed
+- Phase 11 media cutover Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 media cutover makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 media cutover Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
+- Phase 11 media cutover security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
 - Phase 8 BOE ICEGATE helper regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed
 - Phase 8 BOE ICEGATE helper Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> clean
 - Phase 8 BOE ICEGATE helper py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed

@@ -36,3 +36,40 @@
 - Remaining Technical Debt:
   - Other legacy `backend/templates/*.html` files still contain stale static links to `profile.html`; audit them only when selected by the Phase 11 queue or marked `REQUIRES_RECHECK`.
 - Status: DELETED
+
+## docs/media-security-cutover.md
+
+- File Path(s): `docs/media-security-cutover.md`
+- Module: Documents / Media security runbook
+- Total LOC: 105
+- Lines Reviewed: 105 plus deployment script, nginx snippet, authenticated media view, query-token auth, frontend media helpers, and referenced tests
+- Functions Reviewed: 0 in the document; referenced `ProtectedMediaView.get`, `JWTAuthenticationFromQueryParam.authenticate`, `toProtectedMediaPath`, `openAuthedFile`, and `openDocument`
+- Classes Reviewed: 0 in the document; referenced `ProtectedMediaView` and `JWTAuthenticationFromQueryParam`
+- Validation Improvements: Updated stale instructions to reflect current authenticated blob helper usage and the restricted `GET`/`HEAD` download/export query-token fallback.
+- Package Replacements: Replaced obsolete `grep` guidance with project-standard `rg`; no dependency added.
+- Performance Improvements: Preserved the X-Accel-Redirect operational path and clarified that nginx should serve bytes only from the internal protected-media location after cutover.
+- Security Improvements: Removed stale claims that frontend direct media/token flows still exist, documented the remaining public nginx `/media/` operational risk, and clarified final query-token fallback removal criteria.
+- Dead Code Removed: None; dependency analysis proved the runbook is live through deployment and frontend helper references.
+- Duplicate Logic Removed: None; this is an operational document, not an implementation module.
+- Tests Added: None; documentation-only source update. Existing media/auth routing regressions were run.
+- Verification Results:
+  - Dependency scan found live references from `scripts/deployment/auto-deploy.sh` and `frontend/src/utils/documentDownload.ts`; retained and updated rather than deleted.
+  - Frontend direct token/media scan returned only authenticated helper implementation, comments, tests, and `AuthedImage`-style authenticated media consumers.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py backend/tests/test_authentication_query_param.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/apps/core/views/media.py backend/apps/core/authentication.py backend/tests/test_authentication_query_param.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - `.venv/bin/python -m py_compile backend/apps/core/views/media.py backend/apps/core/authentication.py backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_authentication_query_param.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/core/views/media.py backend/apps/core/authentication.py backend/lmanagement backend/tests/test_authentication_query_param.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check -- docs/media-security-cutover.md` -> clean before source commit.
+- Source Commit SHA: `96f0da8f0903b8a18c7ddc1460146572b8994689`
+- Source Commit Timestamp: `2026-07-17T10:58:35+05:30`
+- Source Commit Summary: `docs(documents): update media security cutover`
+- Blocked Items:
+  - Scoped Ruff is blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Public nginx `/media/` remains an operational cutover risk until Step 3 is applied on deployed servers.
+  - Restricted query-token JWT fallback remains configured until production logs prove it can be removed.
+- Status: COMPLETED

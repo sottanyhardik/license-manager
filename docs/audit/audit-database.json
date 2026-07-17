@@ -67,6 +67,12 @@
       "event": "Phase 11 Documents legacy profile template removed from active audit inventory.",
       "reason": "Repository-wide dependency analysis found no live Django render, TemplateResponse, URL, command, test, middleware, signal, email, PDF/report/export, dynamic import, cached template path, third-party, or runtime execution path; only stale static legacy template hrefs remained.",
       "commit_sha": "08269148be7f2eea870d8c61158372764e388572"
+    },
+    {
+      "timestamp": "2026-07-17T10:58:35+05:30",
+      "event": "Phase 11 Documents media security cutover runbook completed.",
+      "reason": "Runbook was retained because deployment scripts and authenticated media helpers reference it; stale frontend migration and query-token status guidance was updated to match current code.",
+      "commit_sha": "96f0da8f0903b8a18c7ddc1460146572b8994689"
     }
   ],
   "blocked_work": [
@@ -415,7 +421,8 @@
     "Phase 9 Inventory completed frontend/src/components/LicenseBalanceModal.tsx; balance modal now validates license path segments, normalizes malformed API arrays, renders finite numeric cells, removes manual localStorage Authorization header construction, and is covered by frontend/src/components/LicenseBalanceModal.test.tsx in source commit e9a690e24c02dd80960299e2e213b3b879e77c38 (fix(inventory): harden license balance modal).",
     "Phase 9 Inventory completed and frozen after the active audit database query returned zero Inventory or Balance files marked NOT_STARTED or REQUIRES_RECHECK; latest metadata recovery commit 3c18e899a67b024418137ed7f8232694751715b3 (docs(audit): record license balance modal audit).",
     "Phase 10 Reports completed and frozen without reopening Phase 7; active report/export/PDF/Excel/CSV/ledger query returned zero files marked NOT_STARTED or REQUIRES_RECHECK, latest recovery commit 919f53d1f8273eaf59e8e5d70b98593c4b86b6f3 (docs(audit): freeze inventory phase).",
-    "Phase 11 Documents deleted verified-dead backend/templates/profile.html legacy Django template after dependency analysis found no live runtime path; source commit 08269148be7f2eea870d8c61158372764e388572 (cleanup(documents): remove dead profile template)."
+    "Phase 11 Documents deleted verified-dead backend/templates/profile.html legacy Django template after dependency analysis found no live runtime path; source commit 08269148be7f2eea870d8c61158372764e388572 (cleanup(documents): remove dead profile template).",
+    "Phase 11 Documents completed docs/media-security-cutover.md; runbook now reflects authenticated frontend media helpers, restricted query-token fallback state, and current nginx cutover verification in source commit 96f0da8f0903b8a18c7ddc1460146572b8994689 (docs(documents): update media security cutover)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -20413,33 +20420,33 @@
       "total_lines": 343
     },
     "docs/media-security-cutover.md": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "3ec4455f0d6c5d8c4c413b25c68f2e6993150956175f617dfd37559f59993e95",
+      "file_checksum": "4ce44cca752d305702df5279ae55469483fbf6c383c3877ae67a9a99daed5d56",
       "file_fingerprint": {
-        "mtime_ns": 1784119299554519424,
-        "size": 4453,
+        "mtime_ns": 1784266062395177343,
+        "size": 4830,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "markdown",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T10:58:35+05:30",
       "maintainability_score": 99,
       "module": "docs",
       "performance_score": 100,
       "previous_index_checksum": null,
       "readability_score": 99,
-      "security_score": 80,
+      "security_score": 90,
       "technical_debt_score": 1,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 98
+      "total_lines": 105
     },
     "docs/operations/PURCHASE_STATUS_FK_MIGRATION.md": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31485,12 +31492,12 @@
     "docs": {
       "blocked": 0,
       "changed": 3,
-      "completed": 20,
+      "completed": 21,
       "files": 53,
       "in_progress": 0,
-      "lines": 24368,
+      "lines": 24375,
       "not_started": 0,
-      "requires_recheck": 30
+      "requires_recheck": 29
     },
     "frontend": {
       "blocked": 0,
@@ -31868,11 +31875,13 @@
   },
   "repository_metadata": {
     "branch": "feature/V2",
-    "head": "08269148",
+    "head": "96f0da8f",
     "working_tree": "dirty"
   },
   "schema_version": 1,
-  "security_findings": [],
+  "security_findings": [
+    "Phase 11 Documents media cutover runbook now records that frontend public media/token links have been migrated to authenticated blob helpers while public nginx /media/ remains the operational cutover risk until Step 3 ships."
+  ],
   "source_index": {
     "generated_file_count": 1251,
     "path": ".claude/index/manifest.json",
@@ -31895,18 +31904,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 117017,
+    "audited_lines": 117122,
     "blocked": 0,
     "changed": 50,
-    "completed": 498,
+    "completed": 499,
     "files": 915,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 240547,
+    "lines": 240554,
     "not_started": 12,
-    "remaining_lines": 123530,
-    "requires_recheck": 355,
+    "remaining_lines": 123432,
+    "requires_recheck": 354,
     "todo": 22
   },
   "verification_history": [
@@ -33031,6 +33040,17 @@
     "Phase 11 profile template scoped Ruff: .venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py blocked by pre-existing unused imports in backend/tests/test_url_routing.py (pytest and django.test.TestCase).",
     "Phase 11 profile template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 profile template diff check: git diff --check -- backend/templates/profile.html -> clean before source commit.",
-    "Phase 11 profile template commit: 08269148be7f2eea870d8c61158372764e388572 at 2026-07-17T10:54:25+05:30, cleanup(documents): remove dead profile template."
+    "Phase 11 profile template commit: 08269148be7f2eea870d8c61158372764e388572 at 2026-07-17T10:54:25+05:30, cleanup(documents): remove dead profile template.",
+    "Phase 11 media cutover dependency scan: docs/media-security-cutover.md remains live through scripts/deployment/auto-deploy.sh and frontend/src/utils/documentDownload.ts references; retained and updated rather than deleted.",
+    "Phase 11 media cutover frontend token/media scan: rg access_token/direct-media patterns in frontend/src returned only authenticated helper implementation, comments, tests, and AuthedImage-style authenticated media consumers.",
+    "Phase 11 media cutover regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py backend/tests/test_authentication_query_param.py -q -> 17 passed.",
+    "Phase 11 media cutover Ruff: .venv/bin/ruff check backend/apps/core/views/media.py backend/apps/core/authentication.py backend/tests/test_authentication_query_param.py backend/tests/test_url_routing.py blocked by pre-existing unused imports in backend/tests/test_url_routing.py (pytest and django.test.TestCase).",
+    "Phase 11 media cutover py_compile: .venv/bin/python -m py_compile backend/apps/core/views/media.py backend/apps/core/authentication.py backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_authentication_query_param.py backend/tests/test_url_routing.py -> passed.",
+    "Phase 11 media cutover compileall: .venv/bin/python -m compileall -q backend/apps/core/views/media.py backend/apps/core/authentication.py backend/lmanagement backend/tests/test_authentication_query_param.py backend/tests/test_url_routing.py -> passed.",
+    "Phase 11 media cutover Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 media cutover makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 media cutover security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 media cutover diff check: git diff --check -- docs/media-security-cutover.md -> clean before source commit.",
+    "Phase 11 media cutover commit: 96f0da8f0903b8a18c7ddc1460146572b8994689 at 2026-07-17T10:58:35+05:30, docs(documents): update media security cutover."
   ]
 }

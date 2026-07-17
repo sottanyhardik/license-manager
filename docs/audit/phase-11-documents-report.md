@@ -777,3 +777,39 @@
 - Remaining Technical Debt:
   - Other queued legacy DAdmin templates still contain static `footer-transparent.html` hrefs; audit them only when selected by the Phase 11 queue.
 - Status: COMPLETED
+
+
+## Legacy Form Elements Template
+
+- File Path(s): `backend/templates/form-elements.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 1164
+- Lines Reviewed: 1164 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, form/action, modal, input, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin form demo page that no active Django route renders and whose email/password/file/select/checkbox/radio/number/modal controls had no backend validation or submission path.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static form demo markup, modal demo markup, and unused plugin script loading from the active template tree.
+- Security Improvements: Removed stale external/static asset loading, unreachable form/action surfaces, dummy user data, unauthenticated static form controls, and modal/dropdown surfaces from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/form-elements.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo form component markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `form-elements.html`.
+  - Remaining `form-elements.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `6274c78e293cc8b3613d7698bac7bcece05872f6`
+- Source Commit Timestamp: `2026-07-17T18:08:38+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead form elements template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `form-elements.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED

@@ -1245,6 +1245,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T18:05:43+05:30"
+      },
+      {
+        "commit_sha": "6274c78e293cc8b3613d7698bac7bcece05872f6",
+        "commit_summary": "cleanup(documents): remove dead form elements template",
+        "file": "backend/templates/form-elements.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T18:08:38+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1363,6 +1371,14 @@
         "status": "DELETED",
         "source_commit_sha": "71ae4b146fd625f6918e3532743c150b86a6551e",
         "finding": "No live render/template-loader/runtime path remained; remaining footer-transparent.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T18:08:38+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/form-elements.html",
+        "status": "DELETED",
+        "source_commit_sha": "6274c78e293cc8b3613d7698bac7bcece05872f6",
+        "finding": "No live render/template-loader/runtime path remained; remaining form-elements.html hits are queued stale template links."
       }
     ]
   },

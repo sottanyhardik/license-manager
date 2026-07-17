@@ -167,3 +167,42 @@ Append-only audit log for Phase 9 Inventory work.
 - Remaining Technical Debt:
   - None blocking Phase 9 freeze.
 - Status: FROZEN
+
+
+## frontend/src/components/AllotmentAllocationModal.tsx + frontend/src/services/calculators/allocationCalculator.js
+
+- File Path(s): `frontend/src/components/AllotmentAllocationModal.tsx`, `frontend/src/services/calculators/allocationCalculator.js`, `frontend/src/services/calculators/index.js`
+- Module: Inventory / Allotment allocation frontend helpers
+- Total LOC: 225 before removal
+- Lines Reviewed: 26 modal lines, 190 allocation calculator lines, 9 calculator barrel lines, plus repository-wide references
+- Functions Reviewed: 8 exported allocation calculator helpers plus the modal component
+- Classes Reviewed: 0
+- Validation Improvements: Removed an unused frontend allocation calculator whose validation logic diverged from the live `AllotmentAction.tsx` and backend allocation services.
+- Package Replacements: None; removal was preferred because no live consumer remained.
+- Performance Improvements: Removed unused bundle surface and stale duplicate calculation code from the frontend source tree.
+- Security Improvements: Removed a dead modal path that could have bypassed current route/layout assumptions if accidentally reintroduced.
+- Dead Code Removed: Deleted `frontend/src/components/AllotmentAllocationModal.tsx` and `frontend/src/services/calculators/allocationCalculator.js`.
+- Duplicate Logic Removed: Removed duplicate frontend allocation calculation helpers; the active allocation flow keeps its current page-local calculation path and backend validation remains authoritative.
+- Tests Added: None; dependency analysis proved the deleted files have no live callers.
+- Verification Results:
+  - Dependency scan found no live `AllotmentAllocationModal`, `allocationCalculator`, `allocationCalculatorDefault`, `validateAllocation`, or `formatAllocationSummary` references outside the files removed.
+  - Remaining `calculateMaxAllocation` references are the active local helper inside `frontend/src/pages/AllotmentAction.tsx`.
+  - `npm run typecheck` -> passed.
+  - `npm run lint -- --quiet src/services/calculators/index.js src/pages/AllotmentAction.tsx src/components/TransferLetterModal.tsx` -> clean.
+  - `npm run build` -> passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q` -> 36 passed.
+  - `.venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py` -> clean.
+  - `.venv/bin/python -m py_compile` scoped balance service/command/test files -> passed.
+  - `.venv/bin/python -m compileall -q` scoped balance service/command/test files -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for the source unit -> clean before source commit.
+- Source Commit SHA: `b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e`
+- Source Commit Timestamp: `2026-07-17T12:08:27+05:30`
+- Source Commit Summary: `cleanup(inventory): remove dead allocation helpers`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Active allocation validation remains split between `frontend/src/pages/AllotmentAction.tsx` and backend allotment services; consolidate only when that live page/service unit is selected for audit.
+- Status: DELETED

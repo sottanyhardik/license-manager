@@ -91,6 +91,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 Inventory completed `docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md`; stale deployment-era balance guidance now reflects current service, materialized balance, command, and regression-test contracts.
 - Phase 9 Inventory completed `frontend/src/components/LicenseBalanceModal.tsx`; license balance modal validation, finite numeric rendering, authenticated PDF/export requests, and malformed API response handling are covered by focused helper regressions.
 - Phase 9 Inventory frozen after the active audit database query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Phase 9 Inventory reopened only for dependency-marked `REQUIRES_RECHECK` allocation helpers; verified-dead `frontend/src/components/AllotmentAllocationModal.tsx` and `frontend/src/services/calculators/allocationCalculator.js` were removed, and the calculator barrel no longer exports the orphaned helper.
 - Phase 10 Reports frozen without reopening Phase 7; active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - Phase 11 Documents removed verified-dead legacy Django template `backend/templates/profile.html`; dependency analysis found no live Django render/template-loader/runtime path, and React entry HTML remains preserved.
 - Phase 11 Documents completed `docs/media-security-cutover.md`; retained live runbook and updated stale frontend media/token and restricted query-token guidance to match current code.
@@ -266,6 +267,18 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 LicenseBalanceModal commit: e9a690e24c02dd80960299e2e213b3b879e77c38 at 2026-07-16T17:55:39+05:30, fix(inventory): harden license balance modal
 - Phase 9 completion query: jq inventory|balance NOT_STARTED/REQUIRES_RECHECK over docs/audit/audit-database.json -> zero rows
 - Phase 9 freeze recovery point: 3c18e899a67b024418137ed7f8232694751715b3 at 2026-07-17T10:47:20+05:30, docs(audit): record license balance modal audit
+- Phase 9 allocation helper dependency scan: no live `AllotmentAllocationModal`, `allocationCalculator`, `allocationCalculatorDefault`, `validateAllocation`, or `formatAllocationSummary` references remained outside the removed files
+- Phase 9 allocation helper dependency scan: remaining `calculateMaxAllocation` references are the active local helper inside `frontend/src/pages/AllotmentAction.tsx`
+- Phase 9 allocation helper TypeScript: npm run typecheck -> passed
+- Phase 9 allocation helper ESLint: npm run lint -- --quiet src/services/calculators/index.js src/pages/AllotmentAction.tsx src/components/TransferLetterModal.tsx -> clean
+- Phase 9 allocation helper React build: npm run build -> passed
+- Phase 9 allocation helper backend balance regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q -> 36 passed
+- Phase 9 allocation helper Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -> clean
+- Phase 9 allocation helper py_compile and compileall scoped balance service/command/test files -> passed
+- Phase 9 allocation helper Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 9 allocation helper makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 9 allocation helper security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 9 allocation helper commit: b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e at 2026-07-17T12:08:27+05:30, cleanup(inventory): remove dead allocation helpers
 - Phase 10 report/export completion query: jq report|export|pdf|excel|csv|ledger NOT_STARTED/REQUIRES_RECHECK over docs/audit/audit-database.json -> zero rows
 - Phase 10 freeze recovery point: 919f53d1f8273eaf59e8e5d70b98593c4b86b6f3 at 2026-07-17T10:49:18+05:30, docs(audit): freeze inventory phase
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed

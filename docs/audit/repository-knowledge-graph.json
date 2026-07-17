@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-17T11:21:21+05:30",
+  "generated_at": "2026-07-17T12:08:27+05:30",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -268,12 +268,12 @@
       "frontend/src/components": {
         "blocked": 0,
         "changed": 0,
-        "completed": 10,
+        "completed": 11,
         "files": 70,
         "in_progress": 0,
-        "lines": 9120,
+        "lines": 9094,
         "not_started": 0,
-        "requires_recheck": 60
+        "requires_recheck": 59
       },
       "frontend/src/constants.js": {
         "blocked": 0,
@@ -368,12 +368,12 @@
       "frontend/src/services": {
         "blocked": 0,
         "changed": 0,
-        "completed": 1,
+        "completed": 3,
         "files": 9,
         "in_progress": 0,
-        "lines": 1115,
+        "lines": 923,
         "not_started": 0,
-        "requires_recheck": 8
+        "requires_recheck": 6
       },
       "frontend/src/styles": {
         "blocked": 0,
@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "45a2223b",
+    "head": "b36a90c3",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1117,11 +1117,19 @@
         "phase": "Phase 11 - Documents",
         "status": "COMPLETED",
         "timestamp": "2026-07-17T11:21:21+05:30"
+      },
+      {
+        "commit_sha": "b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e",
+        "commit_summary": "cleanup(inventory): remove dead allocation helpers",
+        "file": "frontend/src/components/AllotmentAllocationModal.tsx + frontend/src/services/calculators/allocationCalculator.js",
+        "phase": "Phase 9 - Inventory",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T12:08:27+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
     "tracked_audit_files": 916,
-    "tracked_audit_lines": 241459,
+    "tracked_audit_lines": 241241,
     "working_tree": "dirty"
   },
   "schema_version": 1,

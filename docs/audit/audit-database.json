@@ -433,16 +433,20 @@
     "Phase 11 Documents completed frontend/src/pages/Profile.tsx with AuthContext updateUser support and focused frontend/src/pages/Profile.test.tsx regressions in source commit f0bb9e719b23ad4dc17ae53f187366e135bfdb64 (fix(documents): harden profile page updates).",
     "Phase 11 Documents completed nginx-protected-media.conf; reusable internal X-Accel-Redirect media snippet now documents trailing-slash MEDIA_ROOT aliasing and adds private no-store cache headers in source commit 95bc45513b56f735540d92aefc6508c08cba34ae (fix(documents): harden protected media nginx snippet).",
     "Phase 11 Documents completed scripts/diagnostics/sync-media.sh; media sync now targets backend/media, validates options and absolute paths, quotes SSH/rsync calls, supports sync --dry-run, and rejects unsafe two-way --delete in source commit 9bddcf84789ce0825b165f34b1db940a44a2532c (fix(documents): harden media sync diagnostics).",
-    "Phase 11 Documents completed nginx-http-only-tractor.conf; tractor HTTP-only certbot bootstrap now has explicit client/proxy timeouts, proxy_redirect off, and baseline security headers in source commit 45a2223bc7f7ad1ac954e2c87de62c775cd106ac (fix(documents): harden tractor http nginx bootstrap)."
+    "Phase 11 Documents completed nginx-http-only-tractor.conf; tractor HTTP-only certbot bootstrap now has explicit client/proxy timeouts, proxy_redirect off, and baseline security headers in source commit 45a2223bc7f7ad1ac954e2c87de62c775cd106ac (fix(documents): harden tractor http nginx bootstrap).",
+    "Phase 9 Inventory reopened only for dependency-marked REQUIRES_RECHECK allocation helpers and deleted verified-dead frontend/src/components/AllotmentAllocationModal.tsx plus frontend/src/services/calculators/allocationCalculator.js in source commit b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e (cleanup(inventory): remove dead allocation helpers)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
     "Phase 8 BOE empty test stub removed: backend/apps/bill_of_entry/tests.py contained only the generated TestCase import/comment and active BOE coverage remains in backend/tests/test_api_boe.py and backend/tests/test_boe_script_helpers.py.",
     "Phase 9 Inventory removed stale license balance characterization probe; deterministic balance coverage remains in backend/apps/license/tests/test_balance_calculator.py.",
     "Phase 9 Inventory removed stale balance print script; maintained assertions remain in backend/apps/license/tests/test_balance_calculator.py.",
-    "Phase 11 Documents removed backend/templates/profile.html: a 901-line legacy DAdmin profile template reachable only through stale static hrefs in other legacy templates, with no Django render/template-loader/runtime path."
+    "Phase 11 Documents removed backend/templates/profile.html: a 901-line legacy DAdmin profile template reachable only through stale static hrefs in other legacy templates, with no Django render/template-loader/runtime path.",
+    "Phase 9 allocation helper dead-code scan removed unused AllotmentAllocationModal and orphaned allocationCalculator exports; active allocation behavior remains in AllotmentAction and backend allotment services."
   ],
-  "duplicate_logic_findings": [],
+  "duplicate_logic_findings": [
+    "Phase 9 allocation helper recheck removed duplicate frontend allocation calculation helpers that were not consumed by the active allocation page."
+  ],
   "excluded_files": {
     ".DS_Store": {
       "audit_status": "IGNORED",
@@ -21365,33 +21369,33 @@
       "total_lines": 301
     },
     "frontend/src/components/AllotmentAllocationModal.tsx": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "f6ec6c5de683a89b25ae5c1a977f4a7246e2cee0ae16615bbba632ce633290e8",
+      "file_checksum": null,
       "file_fingerprint": {
-        "mtime_ns": 1784118789244538750,
-        "size": 1479,
+        "mtime_ns": null,
+        "size": 0,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "typescript-react",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T12:08:27+05:30",
       "maintainability_score": 100,
       "module": "frontend/src/components",
       "performance_score": 100,
       "previous_index_checksum": null,
       "readability_score": 100,
-      "security_score": 80,
+      "security_score": 100,
       "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 26
+      "total_lines": 0
     },
     "frontend/src/components/AllotmentFormModal.tsx": {
       "audit_status": "REQUIRES_RECHECK",
@@ -26439,33 +26443,33 @@
       "total_lines": 45
     },
     "frontend/src/services/calculators/allocationCalculator.js": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 1,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "9968d9afc89089b3a1899d61101fd1a45d1405f53b30755845c24acb7c35c692",
+      "file_checksum": null,
       "file_fingerprint": {
-        "mtime_ns": 1784118789261150008,
-        "size": 5961,
+        "mtime_ns": null,
+        "size": 0,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "javascript",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T12:08:27+05:30",
       "maintainability_score": 98,
       "module": "frontend/src/services",
       "performance_score": 99,
       "previous_index_checksum": null,
       "readability_score": 98,
-      "security_score": 80,
+      "security_score": 100,
       "technical_debt_score": 2,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 190
+      "total_lines": 0
     },
     "frontend/src/services/calculators/formCalculator.js": {
       "audit_status": "REQUIRES_RECHECK",
@@ -26497,33 +26501,33 @@
       "total_lines": 226
     },
     "frontend/src/services/calculators/index.js": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "dda6f650378642947914dfa783376719fa9910955cfdaf58d093b6f7ee339d9b",
+      "file_checksum": "b94ff50bd9f8c1cd336ec15ae7617d9cc9738efac5ba2b0535c179f998693832",
       "file_fingerprint": {
-        "mtime_ns": 1784118789261338301,
-        "size": 324,
+        "mtime_ns": 1784268489055153748,
+        "size": 181,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "javascript",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T12:08:27+05:30",
       "maintainability_score": 100,
       "module": "frontend/src/services",
       "performance_score": 100,
       "previous_index_checksum": null,
       "readability_score": 100,
-      "security_score": 80,
+      "security_score": 100,
       "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 9
+      "total_lines": 7
     },
     "frontend/src/styles/tailwind.css": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31036,7 +31040,7 @@
       "total_lines": 160
     }
   },
-  "generated_at": "2026-07-17T11:21:21+05:30",
+  "generated_at": "2026-07-17T12:08:27+05:30",
   "impacted_files": [
     "backend/apps/accounts/__init__.py",
     "backend/apps/accounts/apps.py",
@@ -31582,12 +31586,12 @@
     "frontend/src/components": {
       "blocked": 0,
       "changed": 0,
-      "completed": 10,
+      "completed": 11,
       "files": 70,
       "in_progress": 0,
-      "lines": 9120,
+      "lines": 9094,
       "not_started": 0,
-      "requires_recheck": 60
+      "requires_recheck": 59
     },
     "frontend/src/constants.js": {
       "blocked": 0,
@@ -31682,12 +31686,12 @@
     "frontend/src/services": {
       "blocked": 0,
       "changed": 0,
-      "completed": 1,
+      "completed": 3,
       "files": 9,
       "in_progress": 0,
-      "lines": 1115,
+      "lines": 923,
       "not_started": 0,
-      "requires_recheck": 8
+      "requires_recheck": 6
     },
     "frontend/src/styles": {
       "blocked": 0,
@@ -31889,7 +31893,8 @@
     }
   ],
   "performance_findings": [
-    "Phase 11 Documents nginx-http-only-tractor.conf now sets explicit client and proxy timeouts to match long-running bootstrap upload/download behavior."
+    "Phase 11 Documents nginx-http-only-tractor.conf now sets explicit client and proxy timeouts to match long-running bootstrap upload/download behavior.",
+    "Phase 9 allocation helper recheck removed unused modal/calculator bundle surface from the frontend source tree."
   ],
   "regression_coverage": [
     "backend/tests/test_ledger_parser.py",
@@ -31917,7 +31922,7 @@
   },
   "repository_metadata": {
     "branch": "feature/V2",
-    "head": "45a2223b",
+    "head": "b36a90c3",
     "working_tree": "dirty"
   },
   "schema_version": 1,
@@ -31951,18 +31956,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 118071,
+    "audited_lines": 118296,
     "blocked": 0,
     "changed": 50,
-    "completed": 506,
+    "completed": 509,
     "files": 916,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 240728,
+    "lines": 240510,
     "not_started": 12,
-    "remaining_lines": 122657,
-    "requires_recheck": 348,
+    "remaining_lines": 122432,
+    "requires_recheck": 345,
     "todo": 22
   },
   "verification_history": [
@@ -33170,6 +33175,20 @@
     "Phase 11 tractor HTTP nginx Ruff: .venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py blocked by pre-existing unused imports in backend/tests/test_url_routing.py (pytest and django.test.TestCase).",
     "Phase 11 tractor HTTP nginx security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 tractor HTTP nginx diff check: git diff --check and git diff --cached --check for nginx-http-only-tractor.conf -> clean before source commit.",
-    "Phase 11 tractor HTTP nginx source commit: 45a2223bc7f7ad1ac954e2c87de62c775cd106ac at 2026-07-17T11:21:21+05:30, fix(documents): harden tractor http nginx bootstrap."
+    "Phase 11 tractor HTTP nginx source commit: 45a2223bc7f7ad1ac954e2c87de62c775cd106ac at 2026-07-17T11:21:21+05:30, fix(documents): harden tractor http nginx bootstrap.",
+    "Phase 9 allocation helper dependency scan: no live AllotmentAllocationModal, allocationCalculator, allocationCalculatorDefault, validateAllocation, or formatAllocationSummary references remained outside the removed files.",
+    "Phase 9 allocation helper dependency scan: remaining calculateMaxAllocation references are the active local helper inside frontend/src/pages/AllotmentAction.tsx.",
+    "Phase 9 allocation helper TypeScript: npm run typecheck -> passed.",
+    "Phase 9 allocation helper ESLint: npm run lint -- --quiet src/services/calculators/index.js src/pages/AllotmentAction.tsx src/components/TransferLetterModal.tsx -> clean.",
+    "Phase 9 allocation helper React build: npm run build -> passed.",
+    "Phase 9 allocation helper backend balance regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q -> 36 passed.",
+    "Phase 9 allocation helper Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -> clean.",
+    "Phase 9 allocation helper py_compile: .venv/bin/python -m py_compile scoped balance service/command/test files -> passed.",
+    "Phase 9 allocation helper compileall: .venv/bin/python -m compileall -q scoped balance service/command/test files -> passed.",
+    "Phase 9 allocation helper Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 9 allocation helper makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
+    "Phase 9 allocation helper security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 9 allocation helper diff check: git diff --check and git diff --cached --check for source files -> clean before source commit.",
+    "Phase 9 allocation helper source commit: b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e at 2026-07-17T12:08:27+05:30, cleanup(inventory): remove dead allocation helpers."
   ]
 }

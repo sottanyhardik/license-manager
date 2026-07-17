@@ -430,7 +430,8 @@
     "Phase 11 Documents deleted verified-dead backend/templates/profile.html legacy Django template after dependency analysis found no live runtime path; source commit 08269148be7f2eea870d8c61158372764e388572 (cleanup(documents): remove dead profile template).",
     "Phase 11 Documents completed docs/media-security-cutover.md; runbook now reflects authenticated frontend media helpers, restricted query-token fallback state, and current nginx cutover verification in source commit 96f0da8f0903b8a18c7ddc1460146572b8994689 (docs(documents): update media security cutover).",
     "Phase 11 Documents completed frontend/src/hooks/useFileUpload.js and frontend/src/test/useFileUpload.test.ts; upload endpoint, file object, MIME, size, progress, malformed response, and error handling are hardened in source commit 70602d69d878a865aa7b71bd064f194cd927ad5b (fix(documents): harden file upload hook).",
-    "Phase 11 Documents completed frontend/src/pages/Profile.tsx with AuthContext updateUser support and focused frontend/src/pages/Profile.test.tsx regressions in source commit f0bb9e719b23ad4dc17ae53f187366e135bfdb64 (fix(documents): harden profile page updates)."
+    "Phase 11 Documents completed frontend/src/pages/Profile.tsx with AuthContext updateUser support and focused frontend/src/pages/Profile.test.tsx regressions in source commit f0bb9e719b23ad4dc17ae53f187366e135bfdb64 (fix(documents): harden profile page updates).",
+    "Phase 11 Documents completed nginx-protected-media.conf; reusable internal X-Accel-Redirect media snippet now documents trailing-slash MEDIA_ROOT aliasing and adds private no-store cache headers in source commit 95bc45513b56f735540d92aefc6508c08cba34ae (fix(documents): harden protected media nginx snippet)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -29842,27 +29843,27 @@
       "total_lines": 88
     },
     "nginx-protected-media.conf": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "06edb729b24224e43ac3688158146899fe64453eba0959825872791aa7b3d436",
+      "file_checksum": "fdb014f408bb865a8883febcb21d46207d72fef5a24711fa6a9b2d1c310925d6",
       "file_fingerprint": {
-        "mtime_ns": 1783947717746034537,
-        "size": 1058,
+        "mtime_ns": 1784266996658661330,
+        "size": 1052,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
-      "language": "other",
-      "last_audit_timestamp": null,
+      "language": "nginx",
+      "last_audit_timestamp": "2026-07-17T11:14:12+05:30",
       "maintainability_score": 100,
       "module": "nginx-protected-media.conf",
       "performance_score": 100,
       "previous_index_checksum": null,
       "readability_score": 100,
-      "security_score": 80,
+      "security_score": 96,
       "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
@@ -31912,14 +31913,15 @@
   },
   "repository_metadata": {
     "branch": "feature/V2",
-    "head": "f0bb9e71",
+    "head": "95bc4551",
     "working_tree": "dirty"
   },
   "schema_version": 1,
   "security_findings": [
     "Phase 11 Documents media cutover runbook now records that frontend public media/token links have been migrated to authenticated blob helpers while public nginx /media/ remains the operational cutover risk until Step 3 ships.",
     "Phase 11 Documents useFileUpload now rejects absolute/protocol-relative upload endpoints and unsafe path characters before Axios posts multipart data.",
-    "Phase 11 Documents Profile page no longer refreshes user state by rewriting access/refresh tokens from localStorage after /auth/me/ PATCH."
+    "Phase 11 Documents Profile page no longer refreshes user state by rewriting access/refresh tokens from localStorage after /auth/me/ PATCH.",
+    "Phase 11 Documents nginx protected-media snippet adds Cache-Control private, no-store for authenticated customs/PII document responses served through internal X-Accel-Redirect."
   ],
   "source_index": {
     "generated_file_count": 1251,
@@ -31946,7 +31948,7 @@
     "audited_lines": 118041,
     "blocked": 0,
     "changed": 50,
-    "completed": 503,
+    "completed": 504,
     "files": 916,
     "fixme": 2,
     "ignored": 595,
@@ -31954,7 +31956,7 @@
     "lines": 240717,
     "not_started": 12,
     "remaining_lines": 122676,
-    "requires_recheck": 351,
+    "requires_recheck": 350,
     "todo": 22
   },
   "verification_history": [
@@ -33119,6 +33121,19 @@
     "Phase 11 Profile scoped Ruff: .venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py blocked by pre-existing unused imports in backend/tests/test_url_routing.py (pytest and django.test.TestCase).",
     "Phase 11 Profile security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 Profile diff check: git diff --check and git diff --cached --check for source files -> clean before source commit.",
-    "Phase 11 Profile source commit: f0bb9e719b23ad4dc17ae53f187366e135bfdb64 at 2026-07-17T11:08:56+05:30, fix(documents): harden profile page updates."
+    "Phase 11 Profile source commit: f0bb9e719b23ad4dc17ae53f187366e135bfdb64 at 2026-07-17T11:08:56+05:30, fix(documents): harden profile page updates.",
+    "Phase 11 nginx protected-media dependency scan: nginx-protected-media.conf is live via docs/media-security-cutover.md, scripts/deployment/auto-deploy.sh references, and backend/apps/core/views/media.py ProtectedMediaView documentation.",
+    "Phase 11 nginx protected-media duplicate scan: active nginx-license-manager.conf, nginx-labdhi.conf, and nginx-license-tractor.conf already contain concrete /protected-media/ internal blocks; broader nginx config parity remains queued separately.",
+    "Phase 11 nginx protected-media validation hardening: reusable snippet now requires MEDIA_ROOT alias trailing slash and adds Cache-Control private, no-store always for authenticated document responses.",
+    "Phase 11 nginx protected-media nginx validation: nginx -v -> command not found; local nginx syntax validation unavailable.",
+    "Phase 11 nginx protected-media regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 14 passed.",
+    "Phase 11 nginx protected-media py_compile: .venv/bin/python -m py_compile backend/apps/core/views/media.py backend/lmanagement/settings.py backend/lmanagement/urls.py backend/tests/test_url_routing.py -> passed.",
+    "Phase 11 nginx protected-media compileall: .venv/bin/python -m compileall -q backend/apps/core/views/media.py backend/lmanagement backend/tests/test_url_routing.py -> passed.",
+    "Phase 11 nginx protected-media Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 nginx protected-media makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 nginx protected-media Ruff: .venv/bin/ruff check backend/apps/core/views/media.py backend/lmanagement/settings.py backend/lmanagement/urls.py backend/tests/test_url_routing.py blocked by pre-existing unused imports in backend/tests/test_url_routing.py (pytest and django.test.TestCase).",
+    "Phase 11 nginx protected-media security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 nginx protected-media diff check: git diff --check and git diff --cached --check for nginx-protected-media.conf -> clean before source commit.",
+    "Phase 11 nginx protected-media source commit: 95bc45513b56f735540d92aefc6508c08cba34ae at 2026-07-17T11:14:12+05:30, fix(documents): harden protected media nginx snippet."
   ]
 }

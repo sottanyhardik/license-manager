@@ -150,3 +150,42 @@
 - Remaining Technical Debt:
   - Broader AuthContext session-loading behavior remains outside this Documents unit and should stay frozen unless dependency changes mark it `REQUIRES_RECHECK`.
 - Status: COMPLETED
+
+
+## nginx-protected-media.conf
+
+- File Path(s): `nginx-protected-media.conf`
+- Module: Documents / nginx protected media snippet
+- Total LOC: 23
+- Lines Reviewed: 23 plus `docs/media-security-cutover.md`, active nginx media blocks, `scripts/deployment/auto-deploy.sh`, and `backend/apps/core/views/media.py`
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Clarified that the `alias` must match `MEDIA_ROOT` with a trailing slash so X-Accel-Redirect path joins remain correct.
+- Package Replacements: None; nginx built-in `internal`, `alias`, and `add_header` directives retained.
+- Performance Improvements: Preserved nginx byte-serving through the internal X-Accel-Redirect location, avoiding file bytes through gunicorn.
+- Security Improvements: Added `Cache-Control: private, no-store` to the reusable internal media snippet for authenticated customs/PII documents.
+- Dead Code Removed: None; dependency analysis confirmed the snippet is live operational documentation for secure media cutover.
+- Duplicate Logic Removed: None in this unit; active concrete nginx configs already contain related internal blocks and remain queued separately if marked `REQUIRES_RECHECK`.
+- Tests Added: None; config-template change only.
+- Verification Results:
+  - Dependency scan found live references from `docs/media-security-cutover.md`, `scripts/deployment/auto-deploy.sh`, and `backend/apps/core/views/media.py` documentation.
+  - Duplicate/config scan found concrete `/protected-media/` blocks in `nginx-license-manager.conf`, `nginx-labdhi.conf`, and `nginx-license-tractor.conf`; broader config parity remains separate queued work.
+  - `nginx -v` -> command not found; local nginx syntax validation unavailable.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+  - `.venv/bin/python -m py_compile backend/apps/core/views/media.py backend/lmanagement/settings.py backend/lmanagement/urls.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/core/views/media.py backend/lmanagement backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/apps/core/views/media.py backend/lmanagement/settings.py backend/lmanagement/urls.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for `nginx-protected-media.conf` -> clean before source commit.
+- Source Commit SHA: `95bc45513b56f735540d92aefc6508c08cba34ae`
+- Source Commit Timestamp: `2026-07-17T11:14:12+05:30`
+- Source Commit Summary: `fix(documents): harden protected media nginx snippet`
+- Blocked Items:
+  - `nginx` binary is unavailable locally, so full nginx syntax validation could not be run.
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Active concrete nginx configs should be audited separately when their queued `REQUIRES_RECHECK` items are selected, especially for cache-header parity.
+- Status: COMPLETED

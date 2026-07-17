@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "00c07c49",
+    "head": "124b5126",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1269,6 +1269,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T18:13:38+05:30"
+      },
+      {
+        "commit_sha": "124b512635fec3877549e4da98cc664727a0a4f2",
+        "commit_summary": "cleanup(documents): remove dead invoice template",
+        "file": "backend/templates/invoice.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T18:17:33+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1411,6 +1419,14 @@
         "status": "DELETED",
         "source_commit_sha": "00c07c493d8898bfb25a655142f7778b45dd8c57",
         "finding": "SPA catch-all is live, but Django template loader resolves index.html to frontend/dist/index.html before backend/templates; stale DAdmin backend fallback was shadowed."
+      },
+      {
+        "timestamp": "2026-07-17T18:17:33+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/invoice.html",
+        "status": "DELETED",
+        "source_commit_sha": "124b512635fec3877549e4da98cc664727a0a4f2",
+        "finding": "No live render/template-loader/runtime path remained; remaining invoice.html hits are queued stale template links."
       }
     ]
   },

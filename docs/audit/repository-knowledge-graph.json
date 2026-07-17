@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "d5e35698",
+    "head": "80bfa680",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1301,6 +1301,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T18:30:32+05:30"
+      },
+      {
+        "commit_sha": "80bfa6809e0e5374acdb53e1f38d591e90b95b3f",
+        "commit_summary": "cleanup(documents): remove dead maintenance template",
+        "file": "backend/templates/maintenance.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T18:33:05+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1475,6 +1483,14 @@
         "status": "DELETED",
         "source_commit_sha": "d5e35698edcd11f8fe6cdb9dd87cf4b44d9772c4",
         "finding": "No live render/template-loader/runtime path remained; remaining mailbox_inbox.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T18:33:05+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/maintenance.html",
+        "status": "DELETED",
+        "source_commit_sha": "80bfa6809e0e5374acdb53e1f38d591e90b95b3f",
+        "finding": "No live render/template-loader/runtime path remained; remaining maintenance.html hits are queued stale template links."
       }
     ]
   },

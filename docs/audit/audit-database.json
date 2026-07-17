@@ -205,6 +205,12 @@
       "event": "Phase 11 Documents legacy mailbox inbox template removed from active audit inventory.",
       "reason": "Dependency analysis proved mailbox_inbox.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
       "commit_sha": "d5e35698edcd11f8fe6cdb9dd87cf4b44d9772c4"
+    },
+    {
+      "timestamp": "2026-07-17T18:33:05+05:30",
+      "event": "Phase 11 Documents legacy maintenance template removed from active audit inventory.",
+      "reason": "Dependency analysis proved maintenance.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
+      "commit_sha": "80bfa6809e0e5374acdb53e1f38d591e90b95b3f"
     }
   ],
   "blocked_work": [
@@ -582,7 +588,8 @@
     "Phase 11 Documents deleted verified-dead legacy invoice template after dependency analysis found no live runtime path; source commit 124b512635fec3877549e4da98cc664727a0a4f2 (cleanup(documents): remove dead invoice template).",
     "Phase 11 Documents deleted verified-dead legacy lock-screen template after dependency analysis found no live runtime path; source commit 48f8244401f52a2b07f5d2208d27b56d98944f30 (cleanup(documents): remove dead lock screen template).",
     "Phase 11 Documents deleted verified-dead legacy mailbox compose template after dependency analysis found no live runtime path; source commit 8f3116ed501285b3ef042a9d8bf44e605a6a642b (cleanup(documents): remove dead mailbox compose template).",
-    "Phase 11 Documents deleted verified-dead legacy mailbox inbox template after dependency analysis found no live runtime path; source commit d5e35698edcd11f8fe6cdb9dd87cf4b44d9772c4 (cleanup(documents): remove dead mailbox inbox template)."
+    "Phase 11 Documents deleted verified-dead legacy mailbox inbox template after dependency analysis found no live runtime path; source commit d5e35698edcd11f8fe6cdb9dd87cf4b44d9772c4 (cleanup(documents): remove dead mailbox inbox template).",
+    "Phase 11 Documents deleted verified-dead legacy maintenance template after dependency analysis found no live runtime path; source commit 80bfa6809e0e5374acdb53e1f38d591e90b95b3f (cleanup(documents): remove dead maintenance template)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -609,7 +616,8 @@
     "Phase 11 Documents removed backend/templates/invoice.html: 602-line legacy DAdmin invoice demo template with no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/lock-screen.html: 109-line legacy DAdmin lock-screen demo template with no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/mailbox_compose.html: 622-line legacy DAdmin mailbox compose demo template with no live render/template-loader/runtime path.",
-    "Phase 11 Documents removed backend/templates/mailbox_inbox.html: 969-line legacy DAdmin mailbox inbox demo template with no live render/template-loader/runtime path."
+    "Phase 11 Documents removed backend/templates/mailbox_inbox.html: 969-line legacy DAdmin mailbox inbox demo template with no live render/template-loader/runtime path.",
+    "Phase 11 Documents removed backend/templates/maintenance.html: 96-line legacy DAdmin maintenance demo template with no live render/template-loader/runtime path."
   ],
   "duplicate_logic_findings": [
     "Phase 9 allocation helper recheck removed duplicate frontend allocation calculation helpers that were not consumed by the active allocation page."
@@ -17345,7 +17353,7 @@
       "deleted_at": "2026-07-17T18:30:32+05:30"
     },
     "backend/templates/maintenance.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -17359,19 +17367,24 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 99,
+      "last_audit_timestamp": "2026-07-17T18:33:05+05:30",
+      "maintainability_score": 100,
       "module": "backend",
       "performance_score": 100,
       "previous_index_checksum": null,
-      "readability_score": 99,
-      "security_score": 80,
-      "technical_debt_score": 1,
+      "readability_score": 100,
+      "security_score": 100,
+      "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 96
+      "total_lines": 96,
+      "file_commit_sha": "80bfa6809e0e5374acdb53e1f38d591e90b95b3f",
+      "file_commit_summary": "cleanup(documents): remove dead maintenance template",
+      "verification_summary": "Deleted after dependency scan found no live render/template-loader/runtime path; focused backend verification passed.",
+      "deletion_status": "DELETED",
+      "deleted_at": "2026-07-17T18:33:05+05:30"
     },
     "backend/templates/modals.html": {
       "audit_status": "REQUIRES_RECHECK",
@@ -33716,6 +33729,16 @@
     "Phase 11 mailbox inbox template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
     "Phase 11 mailbox inbox template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 mailbox inbox template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
-    "Phase 11 mailbox inbox template source commit: d5e35698edcd11f8fe6cdb9dd87cf4b44d9772c4 at 2026-07-17T18:30:32+05:30, cleanup(documents): remove dead mailbox inbox template."
+    "Phase 11 mailbox inbox template source commit: d5e35698edcd11f8fe6cdb9dd87cf4b44d9772c4 at 2026-07-17T18:30:32+05:30, cleanup(documents): remove dead mailbox inbox template.",
+    "Phase 11 maintenance template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining maintenance.html hits are stale links inside other queued DAdmin templates.",
+    "Phase 11 maintenance template regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 17 passed.",
+    "Phase 11 maintenance template Ruff: .venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841 -> clean.",
+    "Phase 11 maintenance template py_compile: .venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py -> passed.",
+    "Phase 11 maintenance template compileall: .venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement -> passed.",
+    "Phase 11 maintenance template Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 maintenance template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 maintenance template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 maintenance template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
+    "Phase 11 maintenance template source commit: 80bfa6809e0e5374acdb53e1f38d591e90b95b3f at 2026-07-17T18:33:05+05:30, cleanup(documents): remove dead maintenance template."
   ]
 }

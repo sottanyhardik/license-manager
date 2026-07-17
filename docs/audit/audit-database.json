@@ -259,6 +259,12 @@
       "event": "Phase 11 Documents legacy products-edit template removed from active audit inventory.",
       "reason": "Dependency analysis proved products-edit.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
       "commit_sha": "a9112acf849e3e453c41e491d02c858cee88fd80"
+    },
+    {
+      "timestamp": "2026-07-17T22:17:21+05:30",
+      "event": "Phase 11 Documents legacy products template removed from active audit inventory.",
+      "reason": "Dependency analysis proved products.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
+      "commit_sha": "62433533c488e97760870475de53bc771bdf7d9d"
     }
   ],
   "blocked_work": [
@@ -645,7 +651,8 @@
     "Phase 11 Documents deleted verified-dead legacy page-light template after dependency analysis found no live runtime path; source commit 9902a251342eba170b57068f2d75427c799766ed (cleanup(documents): remove dead page light template).",
     "Phase 11 Documents deleted verified-dead legacy pagination template after dependency analysis found no live runtime path; source commit c0e2ce4a61c321297f161c77e434bbc95378e86c (cleanup(documents): remove dead pagination template).",
     "Phase 11 Documents deleted verified-dead legacy pricing-tables template after dependency analysis found no live runtime path; source commit 6a2926338790014f5a62d041fe05f353eb088c88 (cleanup(documents): remove dead pricing tables template).",
-    "Phase 11 Documents deleted verified-dead legacy products-edit template after dependency analysis found no live runtime path; source commit a9112acf849e3e453c41e491d02c858cee88fd80 (cleanup(documents): remove dead products edit template)."
+    "Phase 11 Documents deleted verified-dead legacy products-edit template after dependency analysis found no live runtime path; source commit a9112acf849e3e453c41e491d02c858cee88fd80 (cleanup(documents): remove dead products edit template).",
+    "Phase 11 Documents deleted verified-dead legacy products template after dependency analysis found no live runtime path; source commit 62433533c488e97760870475de53bc771bdf7d9d (cleanup(documents): remove dead products template)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -681,7 +688,8 @@
     "Phase 11 Documents removed backend/templates/page-light.html: 519-line legacy DAdmin page-light layout demo template with no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/pagination.html: 661-line legacy DAdmin pagination demo template with no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/pricing-tables.html: 841-line legacy DAdmin pricing tables demo template with no live render/template-loader/runtime path.",
-    "Phase 11 Documents removed backend/templates/products-edit.html: 669-line legacy DAdmin product edit demo template with no live render/template-loader/runtime path."
+    "Phase 11 Documents removed backend/templates/products-edit.html: 669-line legacy DAdmin product edit demo template with no live render/template-loader/runtime path.",
+    "Phase 11 Documents removed backend/templates/products.html: 991-line legacy DAdmin products table demo template with no live render/template-loader/runtime path."
   ],
   "duplicate_logic_findings": [
     "Phase 9 allocation helper recheck removed duplicate frontend allocation calculation helpers that were not consumed by the active allocation page."
@@ -17723,7 +17731,7 @@
       "deleted_at": "2026-07-17T22:14:10+05:30"
     },
     "backend/templates/products.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 9,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -17737,19 +17745,24 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 88,
+      "last_audit_timestamp": "2026-07-17T22:17:21+05:30",
+      "maintainability_score": 100,
       "module": "backend",
-      "performance_score": 92,
+      "performance_score": 100,
       "previous_index_checksum": null,
-      "readability_score": 88,
-      "security_score": 80,
-      "technical_debt_score": 12,
+      "readability_score": 100,
+      "security_score": 100,
+      "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 991
+      "total_lines": 991,
+      "file_commit_sha": "62433533c488e97760870475de53bc771bdf7d9d",
+      "file_commit_summary": "cleanup(documents): remove dead products template",
+      "verification_summary": "Deleted after dependency scan found no live render/template-loader/runtime path; focused backend verification passed.",
+      "deletion_status": "DELETED",
+      "deleted_at": "2026-07-17T22:17:21+05:30"
     },
     "backend/templates/progress-bars.html": {
       "audit_status": "REQUIRES_RECHECK",
@@ -33923,6 +33936,16 @@
     "Phase 11 products-edit template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected.",
     "Phase 11 products-edit template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 products-edit template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
-    "Phase 11 products-edit template source commit: a9112acf849e3e453c41e491d02c858cee88fd80 at 2026-07-17T22:14:10+05:30, cleanup(documents): remove dead products edit template."
+    "Phase 11 products-edit template source commit: a9112acf849e3e453c41e491d02c858cee88fd80 at 2026-07-17T22:14:10+05:30, cleanup(documents): remove dead products edit template.",
+    "Phase 11 products template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining products.html hits are stale links inside other queued DAdmin templates.",
+    "Phase 11 products template regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 17 passed.",
+    "Phase 11 products template Ruff: .venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841 -> clean.",
+    "Phase 11 products template py_compile: .venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py -> passed.",
+    "Phase 11 products template compileall: .venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement -> passed.",
+    "Phase 11 products template Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 products template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected.",
+    "Phase 11 products template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 products template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
+    "Phase 11 products template source commit: 62433533c488e97760870475de53bc771bdf7d9d at 2026-07-17T22:17:21+05:30, cleanup(documents): remove dead products template."
   ]
 }

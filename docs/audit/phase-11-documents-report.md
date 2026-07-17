@@ -849,3 +849,42 @@
 - Remaining Technical Debt:
   - Other queued legacy DAdmin templates still contain static `form-wizard.html` hrefs; audit them only when selected by the Phase 11 queue.
 - Status: COMPLETED
+
+## backend/templates/index.html
+
+- File Path(s): `backend/templates/index.html`, `backend/tests/test_url_routing.py`
+- Total LOC: 1512 deleted template LOC; 13 test LOC added
+- Lines Reviewed: 1512 template lines plus SPA catch-all route/template-loader dependency path
+- Functions Reviewed: 1 regression test added; no template functions
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added regression coverage proving `get_template("index.html")` resolves to `frontend/dist/index.html`, not a stale backend demo template.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed a shadowed 1512-line DAdmin demo fallback with many unused CSS/JS/static asset references.
+- Security Improvements:
+  - Removed stale external font/demo asset references and demo dashboard markup from the backend template fallback path.
+- Dead Code Removed: Deleted `backend/templates/index.html`.
+- Duplicate Logic Removed: Removed duplicate legacy DAdmin dashboard shell/navigation markup already being removed across the queued legacy template set.
+- Tests Added:
+  - `URLRoutingRegressionTests.test_spa_catchall_resolves_react_entry_template`
+- Verification Results:
+  - Dependency scan found the only live runtime `index.html` request is the SPA catch-all in `backend/lmanagement/urls.py`.
+  - Django template loader proof: `get_template("index.html")` resolves `/Users/drushahardiksottany/PycharmProjects/license-manager/frontend/dist/index.html`.
+  - `frontend/dist/index.html` was retained as the live React SPA entry.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `00c07c493d8898bfb25a655142f7778b45dd8c57`
+- Source Commit Timestamp: `2026-07-17T18:13:38+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead backend index template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `index.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED

@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "d5acf886",
+    "head": "00c07c49",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1261,6 +1261,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T18:10:43+05:30"
+      },
+      {
+        "commit_sha": "00c07c493d8898bfb25a655142f7778b45dd8c57",
+        "commit_summary": "cleanup(documents): remove dead backend index template",
+        "file": "backend/templates/index.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T18:13:38+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1395,6 +1403,14 @@
         "status": "DELETED",
         "source_commit_sha": "0c00797b5d3ed2a225860574acd3c9b9f1da8c42",
         "finding": "No live render/template-loader/runtime path remained; remaining form-wizard.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T18:13:38+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/index.html",
+        "status": "DELETED",
+        "source_commit_sha": "00c07c493d8898bfb25a655142f7778b45dd8c57",
+        "finding": "SPA catch-all is live, but Django template loader resolves index.html to frontend/dist/index.html before backend/templates; stale DAdmin backend fallback was shadowed."
       }
     ]
   },

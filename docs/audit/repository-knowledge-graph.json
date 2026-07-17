@@ -1253,6 +1253,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T18:08:38+05:30"
+      },
+      {
+        "commit_sha": "0c00797b5d3ed2a225860574acd3c9b9f1da8c42",
+        "commit_summary": "cleanup(documents): remove dead form wizard template",
+        "file": "backend/templates/form-wizard.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T18:10:43+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1379,6 +1387,14 @@
         "status": "DELETED",
         "source_commit_sha": "6274c78e293cc8b3613d7698bac7bcece05872f6",
         "finding": "No live render/template-loader/runtime path remained; remaining form-elements.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T18:10:43+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/form-wizard.html",
+        "status": "DELETED",
+        "source_commit_sha": "0c00797b5d3ed2a225860574acd3c9b9f1da8c42",
+        "finding": "No live render/template-loader/runtime path remained; remaining form-wizard.html hits are queued stale template links."
       }
     ]
   },

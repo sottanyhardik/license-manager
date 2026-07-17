@@ -272,3 +272,40 @@
 - Remaining Technical Debt:
   - Other active nginx configs remain separate queued Phase 11 `REQUIRES_RECHECK` items and should be audited only when selected.
 - Status: COMPLETED
+
+
+## Legacy Allotment Django Templates
+
+- File Path(s): `backend/apps/allotment/templates/allotment/add.html`, `backend/apps/allotment/templates/allotment/card.html`, `backend/apps/allotment/templates/allotment/delete.html`, `backend/apps/allotment/templates/allotment/generate.html`, `backend/apps/allotment/templates/allotment/item.html`, `backend/apps/allotment/templates/allotment/list.html`, `backend/apps/allotment/templates/allotment/quantity_input.html`, `backend/apps/allotment/templates/allotment/table.html`, `backend/apps/allotment/templates/allotment/value_input.html`, `backend/apps/allotment/templates/allotment/verify.html`, `backend/apps/allotment/templatetags/__init__.py`, `backend/apps/allotment/templatetags/app_tags.py`
+- Module: Documents / legacy allotment Django template and tag stack
+- Total LOC: 844
+- Lines Reviewed: 844 plus `backend/apps/allotment/views.py`, `backend/apps/allotment/urls.py`, `backend/lmanagement/urls.py`, `backend/apps/core/templates/core/list.html`, route tests, and repository-wide template-loader/reference scans
+- Functions Reviewed: 8 template tag functions
+- Classes Reviewed: 0
+- Validation Improvements: Removed orphaned templates containing stale form, URL tag, inline AJAX, and CSRF surfaces that no active Django route renders.
+- Package Replacements: None; removed dead Django template/tag code instead of replacing it.
+- Performance Improvements: Removed orphaned template tag database lookups and unused template rendering logic from the active codebase.
+- Security Improvements: Removed stale legacy URL actions and inline AJAX paths from an otherwise unreachable template surface.
+- Dead Code Removed: Deleted 10 legacy allotment templates and the private `app_tags` template tag package.
+- Duplicate Logic Removed: Removed duplicate legacy allotment rendering and totaling helpers superseded by active DRF/React allotment flows.
+- Tests Added: None; behavior preserved by deletion of verified-dead code.
+- Verification Results:
+  - Dependency scan found no live `render()`, `render_to_response`, `TemplateResponse`, `template_name`, include/extends, custom tag, URLConf, middleware, signal, management command, test, email/PDF/report/export, dynamic loader, cached path, or third-party runtime path for the deleted allotment templates or `app_tags`.
+  - Remaining pre-deletion hits were self-contained stale template URL/include tags plus one orphaned `backend/apps/core/templates/core/list.html` legacy link; no live render path exists for that core template either.
+  - `.venv/bin/python -m pytest backend/tests/test_api_allotment.py backend/tests/test_url_routing.py -q` -> 25 passed.
+  - `.venv/bin/python -m py_compile backend/apps/allotment/views.py backend/apps/allotment/views_actions.py backend/apps/allotment/views_export.py backend/apps/allotment/urls.py backend/tests/test_api_allotment.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/allotment backend/tests/test_api_allotment.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/apps/allotment backend/tests/test_api_allotment.py backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> blocked by pre-existing unused imports in unchanged allotment modules and `backend/tests/test_url_routing.py`.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletions -> clean before source commit.
+- Source Commit SHA: `99ed3080ed82f0923fe5538108dca80353cdd5a9`
+- Source Commit Timestamp: `2026-07-17T16:04:27+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead allotment templates`
+- Blocked Items:
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in unchanged allotment modules and `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - `backend/apps/core/templates/core/list.html` still contains a stale `allotment-add` URL tag, but dependency analysis found no live render path; leave it for its own queued Phase 11 legacy-template audit item.
+- Status: COMPLETED

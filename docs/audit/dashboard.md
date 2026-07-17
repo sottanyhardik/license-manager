@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `501`
-- Files changed directly: `50`
-- Files requiring dependency recheck: `352`
+- Files audited: `513`
+- Files changed directly: `62`
+- Files requiring dependency recheck: `340`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `416`
-- Total source files tracked: `915`
+- Files remaining: `404`
+- Total source files tracked: `903`
 - Total source LOC tracked: `240717`
-- Audited LOC: `118041`
-- Remaining LOC: `122676`
+- Audited LOC: `118885`
+- Remaining LOC: `121832`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -40,7 +40,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
 | `frontend/src/components` | 70 | 9120 | 10 | 0 | 60 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
-| `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
+| `backend/apps/allotment` | 26 | 4105 | 21 | 17 | 11 | 1 |
 | `backend/apps/bill_of_entry` | 20 | 3439 | 15 | 5 | 0 | 0 |
 | `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
 | `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
@@ -101,6 +101,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents completed `nginx-protected-media.conf`; protected media X-Accel snippet now documents trailing-slash MEDIA_ROOT aliasing and private no-store cache headers.
 - Phase 11 Documents completed `scripts/diagnostics/sync-media.sh`; media sync now targets `backend/media`, validates options/paths, and hardens SSH/rsync execution paths.
 - Phase 11 Documents completed `nginx-http-only-tractor.conf`; the live tractor HTTP-only certbot bootstrap config now has explicit client/proxy timeouts, disabled proxy redirects, and baseline browser security headers.
+- Phase 11 Documents removed the verified-dead legacy allotment Django template/tag stack; 10 templates plus the private `app_tags` package had no live render/template-loader/runtime path after DRF/React routing.
 
 ## Verification History
 
@@ -185,6 +186,13 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 tractor HTTP nginx makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
 - Phase 11 tractor HTTP nginx Ruff: blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
 - Phase 11 tractor HTTP nginx security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 allotment template dependency scan: no live render(), TemplateResponse, template_name, include/extends, custom tag, URLConf, middleware, signal, command, test, email/PDF/report/export, dynamic loader, cached path, or third-party runtime path remained.
+- Phase 11 allotment template regression: `.venv/bin/python -m pytest backend/tests/test_api_allotment.py backend/tests/test_url_routing.py -q` -> 25 passed.
+- Phase 11 allotment template py_compile/compileall: scoped allotment views, URLConf, and route/API tests -> passed.
+- Phase 11 allotment template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 allotment template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 allotment template Ruff: blocked by pre-existing unused imports in unchanged allotment modules and `backend/tests/test_url_routing.py`.
+- Phase 11 allotment template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
 - Phase 8 BOE ICEGATE helper regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed
 - Phase 8 BOE ICEGATE helper Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> clean
 - Phase 8 BOE ICEGATE helper py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed

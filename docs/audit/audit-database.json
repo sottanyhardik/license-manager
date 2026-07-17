@@ -79,6 +79,12 @@
       "event": "Phase 11 Documents file upload hook completed.",
       "reason": "Live upload hook and focused regression tests were audited together; validation, endpoint normalization, malformed response handling, and progress formatting were hardened.",
       "commit_sha": "70602d69d878a865aa7b71bd064f194cd927ad5b"
+    },
+    {
+      "timestamp": "2026-07-17T16:04:27+05:30",
+      "event": "Phase 11 Documents legacy allotment template/tag stack removed from active audit inventory.",
+      "reason": "Repository-wide dependency analysis proved the legacy Django allotment templates and private app_tags library were orphaned after DRF/React routing; remaining references were self-contained stale template links with no live render path.",
+      "commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9"
     }
   ],
   "blocked_work": [
@@ -435,7 +441,8 @@
     "Phase 11 Documents completed scripts/diagnostics/sync-media.sh; media sync now targets backend/media, validates options and absolute paths, quotes SSH/rsync calls, supports sync --dry-run, and rejects unsafe two-way --delete in source commit 9bddcf84789ce0825b165f34b1db940a44a2532c (fix(documents): harden media sync diagnostics).",
     "Phase 11 Documents completed nginx-http-only-tractor.conf; tractor HTTP-only certbot bootstrap now has explicit client/proxy timeouts, proxy_redirect off, and baseline security headers in source commit 45a2223bc7f7ad1ac954e2c87de62c775cd106ac (fix(documents): harden tractor http nginx bootstrap).",
     "Phase 9 Inventory reopened only for dependency-marked REQUIRES_RECHECK allocation helpers and deleted verified-dead frontend/src/components/AllotmentAllocationModal.tsx plus frontend/src/services/calculators/allocationCalculator.js in source commit b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e (cleanup(inventory): remove dead allocation helpers).",
-    "Phase 10 Reports recovery confirmation kept the phase frozen after the latest Phase 9 recheck; active report/export/PDF/Excel/CSV/ledger query returned zero files marked NOT_STARTED or REQUIRES_RECHECK from recovery commit 0d2e7faa16aa49362351de4e7917c14af8e93dff (docs(audit): record allocation helper recheck)."
+    "Phase 10 Reports recovery confirmation kept the phase frozen after the latest Phase 9 recheck; active report/export/PDF/Excel/CSV/ledger query returned zero files marked NOT_STARTED or REQUIRES_RECHECK from recovery commit 0d2e7faa16aa49362351de4e7917c14af8e93dff (docs(audit): record allocation helper recheck).",
+    "Phase 11 Documents deleted verified-dead legacy allotment Django template/tag stack (10 templates plus app_tags package) after dependency analysis found no live runtime path; source commit 99ed3080ed82f0923fe5538108dca80353cdd5a9 (cleanup(documents): remove dead allotment templates)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -443,7 +450,8 @@
     "Phase 9 Inventory removed stale license balance characterization probe; deterministic balance coverage remains in backend/apps/license/tests/test_balance_calculator.py.",
     "Phase 9 Inventory removed stale balance print script; maintained assertions remain in backend/apps/license/tests/test_balance_calculator.py.",
     "Phase 11 Documents removed backend/templates/profile.html: a 901-line legacy DAdmin profile template reachable only through stale static hrefs in other legacy templates, with no Django render/template-loader/runtime path.",
-    "Phase 9 allocation helper dead-code scan removed unused AllotmentAllocationModal and orphaned allocationCalculator exports; active allocation behavior remains in AllotmentAction and backend allotment services."
+    "Phase 9 allocation helper dead-code scan removed unused AllotmentAllocationModal and orphaned allocationCalculator exports; active allocation behavior remains in AllotmentAction and backend allotment services.",
+    "Phase 11 Documents removed legacy allotment Django template/tag stack: 10 orphaned templates plus app_tags.py/__init__.py, 844 tracked LOC, no live render/template-loader/runtime path."
   ],
   "duplicate_logic_findings": [
     "Phase 9 allocation helper recheck removed duplicate frontend allocation calculation helpers that were not consumed by the active allocation page."
@@ -5534,7 +5542,7 @@
       "total_lines": 67
     },
     "backend/apps/allotment/templates/allotment/add.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5548,7 +5556,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 100,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5560,10 +5568,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 68
+      "total_lines": 68,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templates/allotment/card.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 1,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5577,7 +5589,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 99,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5589,10 +5601,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 106
+      "total_lines": 106,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templates/allotment/delete.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5606,7 +5622,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 100,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5618,10 +5634,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 53
+      "total_lines": 53,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templates/allotment/generate.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5635,7 +5655,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 100,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5647,10 +5667,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 57
+      "total_lines": 57,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templates/allotment/item.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 2,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5664,7 +5688,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 98,
       "module": "backend/apps/allotment",
       "performance_score": 99,
@@ -5676,10 +5700,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 212
+      "total_lines": 212,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templates/allotment/list.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 1,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5693,7 +5721,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 99,
       "module": "backend/apps/allotment",
       "performance_score": 99,
@@ -5705,10 +5733,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 155
+      "total_lines": 155,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templates/allotment/quantity_input.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5722,7 +5754,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 100,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5734,10 +5766,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 3
+      "total_lines": 3,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templates/allotment/table.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5751,7 +5787,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 100,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5763,10 +5799,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 10
+      "total_lines": 10,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templates/allotment/value_input.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5780,7 +5820,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 100,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5792,10 +5832,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 3
+      "total_lines": 3,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templates/allotment/verify.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 1,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5809,7 +5853,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 99,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5821,10 +5865,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 112
+      "total_lines": 112,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templatetags/__init__.py": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 0,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5838,7 +5886,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "python",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 100,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5850,10 +5898,14 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 0
+      "total_lines": 0,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/templatetags/app_tags.py": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 16,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -5867,7 +5919,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "python",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:04:27+05:30",
       "maintainability_score": 92,
       "module": "backend/apps/allotment",
       "performance_score": 100,
@@ -5879,7 +5931,11 @@
       "total_classes": 0,
       "total_functions": 8,
       "total_imports": 0,
-      "total_lines": 71
+      "total_lines": 71,
+      "deletion_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+      "deletion_commit_summary": "cleanup(documents): remove dead allotment templates",
+      "deletion_reason": "Verified-dead Phase 11 legacy Django allotment template/tag stack; no live render/template-loader/runtime path after DRF/React migration.",
+      "verification_summary": "Dependency scan clean for live runtime references; focused allotment/API URL tests, py_compile, compileall, Django check, makemigrations dry-run, and diff checks completed."
     },
     "backend/apps/allotment/tests.py": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31923,7 +31979,7 @@
   },
   "repository_metadata": {
     "branch": "feature/V2",
-    "head": "0d2e7faa",
+    "head": "99ed3080",
     "working_tree": "dirty"
   },
   "schema_version": 1,
@@ -31933,7 +31989,8 @@
     "Phase 11 Documents Profile page no longer refreshes user state by rewriting access/refresh tokens from localStorage after /auth/me/ PATCH.",
     "Phase 11 Documents nginx protected-media snippet adds Cache-Control private, no-store for authenticated customs/PII document responses served through internal X-Accel-Redirect.",
     "Phase 11 Documents media sync diagnostics now rejects relative media paths, unsupported remote path shell characters, unknown options, and destructive two-way --delete before SSH/rsync execution.",
-    "Phase 11 Documents nginx-http-only-tractor.conf now disables proxy redirects and adds X-Frame-Options, X-Content-Type-Options, and Referrer-Policy headers for the live HTTP-only cert bootstrap path."
+    "Phase 11 Documents nginx-http-only-tractor.conf now disables proxy redirects and adds X-Frame-Options, X-Content-Type-Options, and Referrer-Policy headers for the live HTTP-only cert bootstrap path.",
+    "Phase 11 Documents removed stale legacy allotment templates containing obsolete URL actions and inline AJAX form paths that were no longer protected by an active routed UI surface."
   ],
   "source_index": {
     "generated_file_count": 1251,
@@ -31957,18 +32014,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 118296,
+    "audited_lines": 119140,
     "blocked": 0,
     "changed": 50,
-    "completed": 509,
+    "completed": 521,
     "files": 916,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
     "lines": 240510,
     "not_started": 12,
-    "remaining_lines": 122432,
-    "requires_recheck": 345,
+    "remaining_lines": 121588,
+    "requires_recheck": 333,
     "todo": 22
   },
   "verification_history": [
@@ -33198,6 +33255,17 @@
     "Phase 10 recovery compileall: scoped representative report/export backend directories -> passed.",
     "Phase 10 recovery Ruff: broad mixed-language report/export verification blocked by pre-existing frozen-module F401 findings and frontend TS/JS paths being parsed as Python.",
     "Phase 10 recovery security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
-    "Phase 10 recovery point before metadata confirmation: 0d2e7faa16aa49362351de4e7917c14af8e93dff at 2026-07-17T12:10:25+05:30, docs(audit): record allocation helper recheck."
+    "Phase 10 recovery point before metadata confirmation: 0d2e7faa16aa49362351de4e7917c14af8e93dff at 2026-07-17T12:10:25+05:30, docs(audit): record allocation helper recheck.",
+    "Phase 11 allotment template dependency scan: no live render(), render_to_response(), TemplateResponse, template_name, include, extends, custom tag, URLConf, middleware, signal, management command, test, email/PDF/report/export, dynamic loader, cached path, or third-party runtime path remained for the deleted allotment templates or app_tags library.",
+    "Phase 11 allotment template dependency scan: remaining allotment template hits before deletion were self-contained stale template URL/include tags plus one orphaned backend/apps/core/templates/core/list.html legacy link; no Django render path exists for that core template either.",
+    "Phase 11 allotment template regression: .venv/bin/python -m pytest backend/tests/test_api_allotment.py backend/tests/test_url_routing.py -q -> 25 passed.",
+    "Phase 11 allotment template py_compile: .venv/bin/python -m py_compile backend/apps/allotment/views.py backend/apps/allotment/views_actions.py backend/apps/allotment/views_export.py backend/apps/allotment/urls.py backend/tests/test_api_allotment.py backend/tests/test_url_routing.py -> passed.",
+    "Phase 11 allotment template compileall: .venv/bin/python -m compileall -q backend/apps/allotment backend/tests/test_api_allotment.py backend/tests/test_url_routing.py -> passed.",
+    "Phase 11 allotment template Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 allotment template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 allotment template Ruff: .venv/bin/ruff check backend/apps/allotment backend/tests/test_api_allotment.py backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841 blocked by pre-existing unused imports in unchanged allotment modules and backend/tests/test_url_routing.py.",
+    "Phase 11 allotment template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 allotment template diff check: git diff --check and git diff --cached --check for source deletions -> clean before source commit.",
+    "Phase 11 allotment template source commit: 99ed3080ed82f0923fe5538108dca80353cdd5a9 at 2026-07-17T16:04:27+05:30, cleanup(documents): remove dead allotment templates."
   ]
 }

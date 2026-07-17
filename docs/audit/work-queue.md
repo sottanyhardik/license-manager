@@ -8,7 +8,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 | `P8-BILLS-OF-ENTRY-AUDIT` | 1 | Bills of Entry | DONE | Phase 8 Bills of Entry completed all queued `NOT_STARTED` and `REQUIRES_RECHECK` files in the active audit database. | Focused backend tests, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and security-tool availability blockers are recorded in the Phase 8 report. |
 | `P9-INVENTORY-AUDIT` | 1 | Inventory | DONE | Phase 9 Inventory is frozen; do not reopen completed Phase 9 files unless the Repository Knowledge Graph marks them `REQUIRES_RECHECK`. | Phase 9 queue query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`; completed unit verification is recorded in `docs/audit/phase-09-inventory-report.md`. |
 | `P10-REPORTS-AUDIT` | 1 | Reports | DONE | Phase 10 Reports is frozen; Phase 7 Reporting & Exports remains frozen and was not reopened. | Active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`. |
-| `P11-DOCUMENTS-AUDIT` | 1 | Documents | IN_PROGRESS | Continue Phase 11 Documents from the existing audit database and process the next document/media/file/PDF/copy/upload item marked `NOT_STARTED` or `REQUIRES_RECHECK`. | `nginx-http-only-tractor.conf` completed in source commit `45a2223bc7f7ad1ac954e2c87de62c775cd106ac`; select the next Phase 11 item from the audit database queue. |
+| `P11-DOCUMENTS-AUDIT` | 1 | Documents | IN_PROGRESS | Continue Phase 11 Documents from the existing audit database and process the next document/media/file/PDF/copy/upload item marked `NOT_STARTED` or `REQUIRES_RECHECK`. | Legacy allotment Django template/tag stack deleted in source commit `99ed3080ed82f0923fe5538108dca80353cdd5a9`; select the next Phase 11 item from the audit database queue. |
 
 ## Work Queue History
 
@@ -41,6 +41,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-17T11:14:12+05:30` - Phase 11 Documents completed `nginx-protected-media.conf` in commit `95bc45513b56f735540d92aefc6508c08cba34ae` (`fix(documents): harden protected media nginx snippet`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-17T11:18:04+05:30` - Phase 11 Documents completed `scripts/diagnostics/sync-media.sh` in commit `9bddcf84789ce0825b165f34b1db940a44a2532c` (`fix(documents): harden media sync diagnostics`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-17T11:21:21+05:30` - Phase 11 Documents completed `nginx-http-only-tractor.conf` in commit `45a2223bc7f7ad1ac954e2c87de62c775cd106ac` (`fix(documents): harden tractor http nginx bootstrap`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-17T16:04:27+05:30` - Phase 11 Documents deleted verified-dead legacy allotment Django templates and `app_tags` in commit `99ed3080ed82f0923fe5538108dca80353cdd5a9` (`cleanup(documents): remove dead allotment templates`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

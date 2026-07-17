@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "0d2e7faa",
+    "head": "99ed3080",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1133,12 +1133,30 @@
         "phase": "Phase 10 - Reports",
         "status": "FROZEN",
         "timestamp": "2026-07-17T12:10:25+05:30"
+      },
+      {
+        "commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+        "commit_summary": "cleanup(documents): remove dead allotment templates",
+        "file": "backend/apps/allotment/templates/allotment/* + backend/apps/allotment/templatetags/app_tags.py",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T16:04:27+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
-    "tracked_audit_files": 916,
-    "tracked_audit_lines": 241241,
-    "working_tree": "dirty"
+    "tracked_audit_files": 904,
+    "tracked_audit_lines": 240397,
+    "working_tree": "dirty",
+    "dependency_notes": [
+      {
+        "timestamp": "2026-07-17T16:04:27+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "legacy allotment Django templates and app_tags",
+        "status": "DELETED",
+        "source_commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9",
+        "finding": "No live Django render/template-loader/runtime path; only stale self-contained legacy template references remained before deletion."
+      }
+    ]
   },
   "schema_version": 1,
   "source_index": {

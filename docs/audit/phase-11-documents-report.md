@@ -108,3 +108,45 @@
 - Remaining Technical Debt:
   - `frontend/src/pages/LedgerUpload.tsx` remains its own audited page/component surface and should stay frozen unless dependency changes mark it `REQUIRES_RECHECK`.
 - Status: COMPLETED
+
+
+## frontend/src/pages/Profile.tsx
+
+- File Path(s): `frontend/src/pages/Profile.tsx`, `frontend/src/context/AuthContext.tsx`, `frontend/src/types/index.ts`, `frontend/src/pages/Profile.test.tsx`, `frontend/src/test/useAuth.test.tsx`, `frontend/src/pages/admin/UserForm.test.tsx`, `frontend/src/pages/admin/UserList.test.tsx`
+- Module: Documents / React profile page
+- Total LOC: 1280 across the audited source/test dependency unit
+- Lines Reviewed: 289 profile page lines plus the AuthContext user-update contract, auth types, and affected regression fixtures
+- Functions Reviewed: 11 profile helper/component/callback functions plus AuthContext `updateUser` and 22 focused test cases
+- Classes Reviewed: 0
+- Validation Improvements: Trimmed profile PATCH fields, normalized blank email to `null`, added model-aligned first/last name input limits, synchronized form state after async user hydration, normalized duplicate/malformed role strings, and extracted DRF field/non-field/native error messages safely.
+- Package Replacements: Reused React built-ins, existing AuthContext, Axios API client, Vitest, and Testing Library; no new dependency introduced.
+- Performance Improvements: Memoized normalized role rendering and avoided unnecessary auth token localStorage rewrites after profile PATCH.
+- Security Improvements: Removed `loginSuccess` misuse that could persist `null` access/refresh tokens from localStorage; profile updates now call `updateUser` and only refresh the serialized user snapshot.
+- Dead Code Removed: None; dependency analysis confirmed the React profile page is live through `/profile` in `frontend/src/routes/AppRoutes.tsx`.
+- Duplicate Logic Removed: Added shared local helpers for profile payload normalization, error extraction, and role normalization inside the page module.
+- Tests Added: Added `frontend/src/pages/Profile.test.tsx` and extended `frontend/src/test/useAuth.test.tsx`; updated typed admin auth fixtures for the new context contract.
+- Verification Results:
+  - Dependency scan found live `/profile` route in `frontend/src/routes/AppRoutes.tsx` behind `ProtectedRoute` and `AdminLayout`; backend dependency is `/auth/me/` served by `backend/apps/accounts/views/auth.py::MeView` with `UserSerializer`.
+  - `npm test -- Profile.test.tsx useAuth.test.tsx UserForm.test.tsx UserList.test.tsx` -> 22 passed.
+  - `npm test` -> 38 files passed, 161 tests passed.
+  - `npm run typecheck` -> passed.
+  - `npm run lint -- --quiet src/pages/Profile.tsx src/pages/Profile.test.tsx src/context/AuthContext.tsx src/types/index.ts src/pages/admin/UserForm.test.tsx src/pages/admin/UserList.test.tsx src/test/useAuth.test.tsx` -> clean.
+  - `npm run lint -- --quiet` -> clean.
+  - `npm run build` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+  - `.venv/bin/python -m py_compile backend/manage.py backend/lmanagement/settings.py backend/lmanagement/urls.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for the source unit -> clean before source commit.
+- Source Commit SHA: `f0bb9e719b23ad4dc17ae53f187366e135bfdb64`
+- Source Commit Timestamp: `2026-07-17T11:08:56+05:30`
+- Source Commit Summary: `fix(documents): harden profile page updates`
+- Blocked Items:
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Broader AuthContext session-loading behavior remains outside this Documents unit and should stay frozen unless dependency changes mark it `REQUIRES_RECHECK`.
+- Status: COMPLETED

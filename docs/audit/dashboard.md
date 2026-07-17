@@ -95,6 +95,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents removed verified-dead legacy Django template `backend/templates/profile.html`; dependency analysis found no live Django render/template-loader/runtime path, and React entry HTML remains preserved.
 - Phase 11 Documents completed `docs/media-security-cutover.md`; retained live runbook and updated stale frontend media/token and restricted query-token guidance to match current code.
 - Phase 11 Documents completed `frontend/src/hooks/useFileUpload.js` with its focused test; upload endpoint, file input, MIME, progress, malformed response, and size formatting paths are hardened.
+- Phase 11 Documents completed `frontend/src/pages/Profile.tsx`; profile form hydration, PATCH payload normalization, field-level errors, role rendering, and AuthContext user refresh are hardened without rewriting tokens.
 
 ## Verification History
 
@@ -142,6 +143,18 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 useFileUpload makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
 - Phase 11 useFileUpload py_compile/compileall: not applicable to JS/TS source; frontend typecheck/build executed instead
 - Phase 11 useFileUpload security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 Profile dependency scan: live `/profile` route in `frontend/src/routes/AppRoutes.tsx`; backend dependency `/auth/me/` served by `MeView`/`UserSerializer`.
+- Phase 11 Profile focused regression: npm test -- Profile.test.tsx useAuth.test.tsx UserForm.test.tsx UserList.test.tsx -> 22 passed
+- Phase 11 Profile full frontend regression: npm test -> 38 files passed, 161 tests passed
+- Phase 11 Profile TypeScript: npm run typecheck -> passed
+- Phase 11 Profile ESLint scoped and full quiet runs -> clean
+- Phase 11 Profile React build: npm run build -> passed
+- Phase 11 Profile backend route regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 14 passed
+- Phase 11 Profile py_compile/compileall: scoped backend URL/settings files -> passed
+- Phase 11 Profile Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 Profile makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 Profile Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
+- Phase 11 Profile security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
 - Phase 8 BOE ICEGATE helper regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed
 - Phase 8 BOE ICEGATE helper Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> clean
 - Phase 8 BOE ICEGATE helper py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed

@@ -8,7 +8,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 | `P8-BILLS-OF-ENTRY-AUDIT` | 1 | Bills of Entry | DONE | Phase 8 Bills of Entry completed all queued `NOT_STARTED` and `REQUIRES_RECHECK` files in the active audit database. | Focused backend tests, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and security-tool availability blockers are recorded in the Phase 8 report. |
 | `P9-INVENTORY-AUDIT` | 1 | Inventory | DONE | Phase 9 Inventory is frozen; do not reopen completed Phase 9 files unless the Repository Knowledge Graph marks them `REQUIRES_RECHECK`. | Phase 9 queue query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`; completed unit verification is recorded in `docs/audit/phase-09-inventory-report.md`. |
 | `P10-REPORTS-AUDIT` | 1 | Reports | DONE | Phase 10 Reports is frozen; Phase 7 Reporting & Exports remains frozen and was not reopened. | Active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`. |
-| `P11-DOCUMENTS-AUDIT` | 1 | Documents | IN_PROGRESS | Continue Phase 11 Documents from the existing audit database and process the next document/media/file/PDF/copy/upload item marked `NOT_STARTED` or `REQUIRES_RECHECK`. | `backend/templates/profile.html` was verified dead and removed in source commit `08269148be7f2eea870d8c61158372764e388572`; metadata is recorded in `docs/audit/phase-11-documents-report.md`. |
+| `P11-DOCUMENTS-AUDIT` | 1 | Documents | IN_PROGRESS | Continue Phase 11 Documents from the existing audit database and process the next document/media/file/PDF/copy/upload item marked `NOT_STARTED` or `REQUIRES_RECHECK`. | `frontend/src/pages/Profile.tsx` completed in source commit `f0bb9e719b23ad4dc17ae53f187366e135bfdb64`; next queued items remain `nginx-protected-media.conf` and `scripts/diagnostics/sync-media.sh`. |
 
 ## Work Queue History
 
@@ -35,6 +35,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-17T10:54:25+05:30` - Phase 11 Documents deleted verified-dead `backend/templates/profile.html` in commit `08269148be7f2eea870d8c61158372764e388572` (`cleanup(documents): remove dead profile template`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-17T10:58:35+05:30` - Phase 11 Documents completed `docs/media-security-cutover.md` in commit `96f0da8f0903b8a18c7ddc1460146572b8994689` (`docs(documents): update media security cutover`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-17T11:02:48+05:30` - Phase 11 Documents completed `frontend/src/hooks/useFileUpload.js` and `frontend/src/test/useFileUpload.test.ts` in commit `70602d69d878a865aa7b71bd064f194cd927ad5b` (`fix(documents): harden file upload hook`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-17T11:08:56+05:30` - Phase 11 Documents completed `frontend/src/pages/Profile.tsx` plus AuthContext user-update contract in commit `f0bb9e719b23ad4dc17ae53f187366e135bfdb64` (`fix(documents): harden profile page updates`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

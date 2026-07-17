@@ -235,6 +235,12 @@
       "event": "Phase 11 Documents legacy orders template removed from active audit inventory.",
       "reason": "Dependency analysis proved orders.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
       "commit_sha": "65a1b886a87bcdc2d296f49d57bd70b66b7dc8f5"
+    },
+    {
+      "timestamp": "2026-07-17T22:02:47+05:30",
+      "event": "Phase 11 Documents legacy page-light template removed from active audit inventory.",
+      "reason": "Dependency analysis proved page-light.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
+      "commit_sha": "9902a251342eba170b57068f2d75427c799766ed"
     }
   ],
   "blocked_work": [
@@ -617,7 +623,8 @@
     "Phase 11 Documents deleted verified-dead legacy modals template after dependency analysis found no live runtime path; source commit 14b3c52373baa290945ca53b96451cda5095dd65 (cleanup(documents): remove dead modals template).",
     "Phase 11 Documents deleted verified-dead legacy notes template after dependency analysis found no live runtime path; source commit 608deb78e29db73d6228b2ec2c60aca8aa589f91 (cleanup(documents): remove dead notes template).",
     "Phase 11 Documents deleted verified-dead legacy order-view template after dependency analysis found no live runtime path; source commit 7900d79df12518cba4cc5259e986314190c46152 (cleanup(documents): remove dead order view template).",
-    "Phase 11 Documents deleted verified-dead legacy orders template after dependency analysis found no live runtime path; source commit 65a1b886a87bcdc2d296f49d57bd70b66b7dc8f5 (cleanup(documents): remove dead orders template)."
+    "Phase 11 Documents deleted verified-dead legacy orders template after dependency analysis found no live runtime path; source commit 65a1b886a87bcdc2d296f49d57bd70b66b7dc8f5 (cleanup(documents): remove dead orders template).",
+    "Phase 11 Documents deleted verified-dead legacy page-light template after dependency analysis found no live runtime path; source commit 9902a251342eba170b57068f2d75427c799766ed (cleanup(documents): remove dead page light template)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -649,7 +656,8 @@
     "Phase 11 Documents removed backend/templates/modals.html: 706-line legacy DAdmin modal demo template with no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/notes.html: 594-line legacy DAdmin notes demo template with no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/order-view.html: 709-line legacy DAdmin order-view demo template with no live render/template-loader/runtime path.",
-    "Phase 11 Documents removed backend/templates/orders.html: 902-line legacy DAdmin orders demo template with no live render/template-loader/runtime path."
+    "Phase 11 Documents removed backend/templates/orders.html: 902-line legacy DAdmin orders demo template with no live render/template-loader/runtime path.",
+    "Phase 11 Documents removed backend/templates/page-light.html: 519-line legacy DAdmin page-light layout demo template with no live render/template-loader/runtime path."
   ],
   "duplicate_logic_findings": [
     "Phase 9 allocation helper recheck removed duplicate frontend allocation calculation helpers that were not consumed by the active allocation page."
@@ -17555,7 +17563,7 @@
       "deleted_at": "2026-07-17T21:53:25+05:30"
     },
     "backend/templates/page-light.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 5,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -17569,19 +17577,24 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 94,
+      "last_audit_timestamp": "2026-07-17T22:02:47+05:30",
+      "maintainability_score": 100,
       "module": "backend",
-      "performance_score": 96,
+      "performance_score": 100,
       "previous_index_checksum": null,
-      "readability_score": 94,
-      "security_score": 80,
-      "technical_debt_score": 6,
+      "readability_score": 100,
+      "security_score": 100,
+      "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 519
+      "total_lines": 519,
+      "file_commit_sha": "9902a251342eba170b57068f2d75427c799766ed",
+      "file_commit_summary": "cleanup(documents): remove dead page light template",
+      "verification_summary": "Deleted after dependency scan found no live render/template-loader/runtime path; focused backend verification passed.",
+      "deletion_status": "DELETED",
+      "deleted_at": "2026-07-17T22:02:47+05:30"
     },
     "backend/templates/pagination.html": {
       "audit_status": "REQUIRES_RECHECK",
@@ -33831,6 +33844,16 @@
     "Phase 11 orders template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected.",
     "Phase 11 orders template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 orders template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
-    "Phase 11 orders template source commit: 65a1b886a87bcdc2d296f49d57bd70b66b7dc8f5 at 2026-07-17T21:53:25+05:30, cleanup(documents): remove dead orders template."
+    "Phase 11 orders template source commit: 65a1b886a87bcdc2d296f49d57bd70b66b7dc8f5 at 2026-07-17T21:53:25+05:30, cleanup(documents): remove dead orders template.",
+    "Phase 11 page-light template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining page-light.html hits are stale links inside other queued DAdmin templates.",
+    "Phase 11 page-light template regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 17 passed.",
+    "Phase 11 page-light template Ruff: .venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841 -> clean.",
+    "Phase 11 page-light template py_compile: .venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py -> passed.",
+    "Phase 11 page-light template compileall: .venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement -> passed.",
+    "Phase 11 page-light template Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 page-light template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected.",
+    "Phase 11 page-light template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 page-light template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
+    "Phase 11 page-light template source commit: 9902a251342eba170b57068f2d75427c799766ed at 2026-07-17T22:02:47+05:30, cleanup(documents): remove dead page light template."
   ]
 }

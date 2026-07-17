@@ -1212,3 +1212,39 @@
 - Remaining Technical Debt:
   - Other queued legacy DAdmin templates still contain static `orders.html` hrefs; audit them only when selected by the Phase 11 queue.
 - Status: COMPLETED
+
+## backend/templates/page-light.html
+
+- File Path(s): `backend/templates/page-light.html`
+- Total LOC: 519
+- Lines Reviewed: 519
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static light page-layout demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated page-layout demo markup, external font references, hash-only controls, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/page-light.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo page-layout markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `page-light.html`.
+  - Remaining `page-light.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `9902a251342eba170b57068f2d75427c799766ed`
+- Source Commit Timestamp: `2026-07-17T22:02:47+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead page light template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `page-light.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED

@@ -1341,6 +1341,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T21:53:25+05:30"
+      },
+      {
+        "commit_sha": "9902a251342eba170b57068f2d75427c799766ed",
+        "commit_summary": "cleanup(documents): remove dead page light template",
+        "file": "backend/templates/page-light.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T22:02:47+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1555,6 +1563,14 @@
         "status": "DELETED",
         "source_commit_sha": "65a1b886a87bcdc2d296f49d57bd70b66b7dc8f5",
         "finding": "No live render/template-loader/runtime path remained; remaining orders.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T22:02:47+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/page-light.html",
+        "status": "DELETED",
+        "source_commit_sha": "9902a251342eba170b57068f2d75427c799766ed",
+        "finding": "No live render/template-loader/runtime path remained; remaining page-light.html hits are queued stale template links."
       }
     ]
   },

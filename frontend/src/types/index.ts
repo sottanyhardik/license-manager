@@ -22,6 +22,7 @@ export interface AuthContextValue {
     user: AuthUser | null;
     loading: boolean;
     loginSuccess: (data: LoginResponse) => void;
+    updateUser: (user: AuthUser) => void;
     logout: (reason?: string) => Promise<void>;
     hasRole: (roleCode: string) => boolean;
     hasAnyRole: (roleCodes: string[]) => boolean;

@@ -33,6 +33,7 @@ const authValue = {
     },
     loading: false,
     loginSuccess: vi.fn(),
+    updateUser: vi.fn(),
     logout: vi.fn(),
     hasRole: vi.fn(() => true),
     hasAnyRole: vi.fn(() => true),

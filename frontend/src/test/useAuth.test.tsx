@@ -136,6 +136,23 @@ describe('AuthProvider / AuthContext', () => {
     expect(JSON.parse(stored!)).toEqual(MOCK_USER)
   })
 
+  it('updateUser() refreshes the stored user without rewriting tokens', async () => {
+    const updatedUser = { ...MOCK_USER, first_name: 'Updated' }
+    const { result } = renderHook(() => useContext(AuthContext), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    localStorage.setItem('access', 'existing-access')
+    localStorage.setItem('refresh', 'existing-refresh')
+
+    act(() => {
+      result.current.updateUser(updatedUser)
+    })
+
+    expect(result.current.user).toEqual(updatedUser)
+    expect(JSON.parse(localStorage.getItem('user')!)).toEqual(updatedUser)
+    expect(localStorage.getItem('access')).toBe('existing-access')
+    expect(localStorage.getItem('refresh')).toBe('existing-refresh')
+  })
+
   // ── Role helpers after login ──────────────────────────────────────────────
 
   it('hasRole() returns true for a role the user holds', async () => {

@@ -8,6 +8,7 @@ export const AuthContext = createContext<AuthContextValue>({
     user: null,
     loading: true,
     loginSuccess: () => {},
+    updateUser: () => {},
     logout: async () => {},
     hasRole: () => false,
     hasAnyRole: () => false,
@@ -171,6 +172,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setLoading(false);
     }, []);
 
+    const updateUser = useCallback((nextUser: AuthUser) => {
+        localStorage.setItem("user", JSON.stringify(nextUser));
+        setUser(nextUser);
+    }, []);
+
     // ── Role helpers ──────────────────────────────────────────────────────────
     // These read from the `roles` array that the /me endpoint now returns.
     // Superusers bypass all role checks — check isSuperAdmin() first when gating.
@@ -202,12 +208,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user,
         loading,
         loginSuccess,
+        updateUser,
         logout,
         hasRole,
         hasAnyRole,
         isSuperAdmin,
         canManageUsers,
-    }), [user, loading, loginSuccess, logout, hasRole, hasAnyRole, isSuperAdmin, canManageUsers]);
+    }), [user, loading, loginSuccess, updateUser, logout, hasRole, hasAnyRole, isSuperAdmin, canManageUsers]);
 
     return (
         <AuthContext.Provider value={contextValue}>

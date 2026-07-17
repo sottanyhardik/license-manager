@@ -1,8 +1,9 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { Pencil, Check, AlertCircle, CheckCircle2, X } from "lucide-react";
 
 import { AuthContext } from "../context/AuthContext";
 import api from "../api/axios";
+import type { AuthUser } from "../types";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,36 +11,133 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+type ProfileFormData = {
+    first_name: string;
+    last_name: string;
+    email: string;
+};
+
+type ProfilePayload = {
+    first_name: string;
+    last_name: string;
+    email: string | null;
+};
+
+const PROFILE_NAME_LIMITS = {
+    first_name: 30,
+    last_name: 150,
+};
+
+function getProfileFormData(user: AuthUser | null): ProfileFormData {
+    return {
+        first_name: user?.first_name ?? "",
+        last_name: user?.last_name ?? "",
+        email: user?.email ?? "",
+    };
+}
+
+export function buildProfilePayload(formData: ProfileFormData): ProfilePayload {
+    const email = formData.email.trim();
+
+    return {
+        first_name: formData.first_name.trim(),
+        last_name: formData.last_name.trim(),
+        email: email || null,
+    };
+}
+
+function getFieldError(data: unknown, field: string): string | null {
+    if (!data || typeof data !== "object" || !(field in data)) {
+        return null;
+    }
+
+    const value = (data as Record<string, unknown>)[field];
+    if (typeof value === "string") {
+        return value.trim() || null;
+    }
+    if (Array.isArray(value)) {
+        return value.find((item): item is string => typeof item === "string" && item.trim().length > 0)?.trim() ?? null;
+    }
+
+    return null;
+}
+
+export function getProfileErrorMessage(error: unknown): string {
+    const data = error && typeof error === "object" && "response" in error
+        ? (error as { response?: { data?: unknown } }).response?.data
+        : null;
+
+    if (data && typeof data === "object") {
+        const detail = getFieldError(data, "detail");
+        if (detail) return detail;
+
+        const fieldError = ["email", "first_name", "last_name", "non_field_errors"]
+            .map((field) => getFieldError(data, field))
+            .find((message): message is string => Boolean(message));
+        if (fieldError) return fieldError;
+    }
+
+    if (error instanceof Error && error.message.trim()) {
+        return error.message.trim();
+    }
+
+    return "Failed to update profile.";
+}
+
+export function normalizeProfileRoles(roles: unknown): string[] {
+    if (!Array.isArray(roles)) {
+        return [];
+    }
+
+    return Array.from(
+        new Set(
+            roles
+                .filter((role): role is string => typeof role === "string")
+                .map((role) => role.trim())
+                .filter(Boolean),
+        ),
+    );
+}
+
 export default function Profile() {
-    const { user, loginSuccess } = useContext(AuthContext);
+    const { user, updateUser } = useContext(AuthContext);
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
-    const [formData, setFormData] = useState({
-        first_name: user?.first_name || "",
-        last_name: user?.last_name || "",
-        email: user?.email || "",
-    });
+    const [formData, setFormData] = useState<ProfileFormData>(() => getProfileFormData(user));
+
+    useEffect(() => {
+        if (!editing) {
+            setFormData(getProfileFormData(user));
+        }
+    }, [editing, user]);
+
+    const roles = useMemo(() => normalizeProfileRoles(user?.roles), [user?.roles]);
 
     const handleEdit = () => { setEditing(true); setError(""); setSuccess(""); };
     const handleCancel = () => {
         setEditing(false);
-        setFormData({ first_name: user?.first_name || "", last_name: user?.last_name || "", email: user?.email || "" });
+        setFormData(getProfileFormData(user));
         setError(""); setSuccess("");
     };
-    const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = event.target;
+        if (!(name in formData)) return;
+        setFormData((current) => ({ ...current, [name]: value }));
+    };
 
     const handleSave = async () => {
         setSaving(true);
         setError(""); setSuccess("");
         try {
-            const { data } = await api.patch("/auth/me/", formData);
-            loginSuccess({ access: localStorage.getItem("access"), refresh: localStorage.getItem("refresh"), user: data });
+            const { data } = await api.patch<AuthUser>("/auth/me/", buildProfilePayload(formData));
+            updateUser(data);
+            setFormData(getProfileFormData(data));
             setSuccess("Profile updated successfully.");
             setEditing(false);
         } catch (err) {
-            setError(err.response?.data?.detail || err.response?.data?.email?.[0] || "Failed to update profile.");
+            setError(getProfileErrorMessage(err));
         } finally {
             setSaving(false);
         }
@@ -56,8 +154,7 @@ export default function Profile() {
         ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
         : user.username;
 
-    // Read-only field display
-    const ReadField = ({ value }) => (
+    const ReadField = ({ value }: { value: string | null | undefined }) => (
         <div className={`flex h-9 items-center rounded-md border border-input bg-muted px-3 text-sm ${value ? "text-foreground" : "text-muted-foreground/60"}`}>
             {value || "Not set"}
         </div>
@@ -135,13 +232,13 @@ export default function Profile() {
                                 <div>
                                     <Label className="mb-1.5" htmlFor="first_name">First Name</Label>
                                     {editing
-                                        ? <Input id="first_name" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First name" />
+                                        ? <Input id="first_name" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First name" maxLength={PROFILE_NAME_LIMITS.first_name} autoComplete="given-name" />
                                         : <ReadField value={user.first_name} />}
                                 </div>
                                 <div>
                                     <Label className="mb-1.5" htmlFor="last_name">Last Name</Label>
                                     {editing
-                                        ? <Input id="last_name" name="last_name" value={formData.last_name} onChange={handleChange} placeholder="Last name" />
+                                        ? <Input id="last_name" name="last_name" value={formData.last_name} onChange={handleChange} placeholder="Last name" maxLength={PROFILE_NAME_LIMITS.last_name} autoComplete="family-name" />
                                         : <ReadField value={user.last_name} />}
                                 </div>
                                 <div className="sm:col-span-2">
@@ -166,14 +263,14 @@ export default function Profile() {
                         </CardContent>
                     </Card>
 
-                    {Array.isArray(user.roles) && user.roles.length > 0 && (
+                    {roles.length > 0 && (
                         <Card>
                             <CardHeader className="border-b">
                                 <CardTitle className="text-sm">Assigned Roles</CardTitle>
                             </CardHeader>
                             <CardContent className="pt-4">
                                 <div className="flex flex-wrap gap-1.5">
-                                    {user.roles.map((role) => (
+                                    {roles.map((role) => (
                                         <span
                                             key={role}
                                             className="rounded-md border border-primary/15 bg-primary/10 px-2 py-1 font-mono text-[11.5px] font-medium text-primary"

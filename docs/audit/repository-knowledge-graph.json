@@ -1189,6 +1189,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T16:34:59+05:30"
+      },
+      {
+        "commit_sha": "bf98069e905b23c8399fe21482bc8cc7ebc5263d",
+        "commit_summary": "cleanup(documents): remove dead coming soon template",
+        "file": "backend/templates/coming-soon.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T16:36:55+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1251,6 +1259,14 @@
         "status": "DELETED",
         "source_commit_sha": "9a28332abd8b450ee150247a39b028797454c723",
         "finding": "No live render/template-loader/runtime path remained; remaining chat.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T16:36:55+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/coming-soon.html",
+        "status": "DELETED",
+        "source_commit_sha": "bf98069e905b23c8399fe21482bc8cc7ebc5263d",
+        "finding": "No live render/template-loader/runtime path remained; remaining coming-soon.html hits are queued stale template links."
       }
     ]
   },

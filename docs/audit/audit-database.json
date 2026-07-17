@@ -121,6 +121,12 @@
       "event": "Phase 11 Documents legacy chat template removed from active audit inventory.",
       "reason": "Dependency analysis proved chat.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
       "commit_sha": "9a28332abd8b450ee150247a39b028797454c723"
+    },
+    {
+      "timestamp": "2026-07-17T16:36:55+05:30",
+      "event": "Phase 11 Documents legacy coming-soon template removed from active audit inventory.",
+      "reason": "Dependency analysis proved coming-soon.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
+      "commit_sha": "bf98069e905b23c8399fe21482bc8cc7ebc5263d"
     }
   ],
   "blocked_work": [
@@ -484,7 +490,8 @@
     "Phase 11 Documents deleted verified-dead legacy base/DFIA template stack after dependency analysis found no live runtime path; source commit 9d56821b2e08bcf5f9c35ccb54a705c208c6a84d (cleanup(documents): remove dead base template stack).",
     "Phase 11 Documents deleted verified-dead legacy buttons template after dependency analysis found no live runtime path; source commit d5acf8867c565340f98d260be80ab6bbe4275c40 (cleanup(documents): remove dead buttons template).",
     "Phase 11 Documents deleted verified-dead legacy calendar template after dependency analysis found no live runtime path; source commit d7bd46dd1d86c235a43d33b30be25dafbc053937 (cleanup(documents): remove dead calendar template).",
-    "Phase 11 Documents deleted verified-dead legacy chat template after dependency analysis found no live runtime path; source commit 9a28332abd8b450ee150247a39b028797454c723 (cleanup(documents): remove dead chat template)."
+    "Phase 11 Documents deleted verified-dead legacy chat template after dependency analysis found no live runtime path; source commit 9a28332abd8b450ee150247a39b028797454c723 (cleanup(documents): remove dead chat template).",
+    "Phase 11 Documents deleted verified-dead legacy coming-soon template after dependency analysis found no live runtime path; source commit bf98069e905b23c8399fe21482bc8cc7ebc5263d (cleanup(documents): remove dead coming soon template)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -497,7 +504,8 @@
     "Phase 11 Documents removed legacy base/DFIA template stack: base/main.html, blank.html, dfia/box.html, and dfia/list.html, 956 tracked LOC, no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/buttons.html: 881-line legacy DAdmin UI demo template with no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/calendar.html: 554-line legacy DAdmin calendar demo template with no live render/template-loader/runtime path.",
-    "Phase 11 Documents removed backend/templates/chat.html: 811-line legacy DAdmin chat demo template with no live render/template-loader/runtime path."
+    "Phase 11 Documents removed backend/templates/chat.html: 811-line legacy DAdmin chat demo template with no live render/template-loader/runtime path.",
+    "Phase 11 Documents removed backend/templates/coming-soon.html: 118-line legacy DAdmin coming-soon demo template with no live render/template-loader/runtime path."
   ],
   "duplicate_logic_findings": [
     "Phase 9 allocation helper recheck removed duplicate frontend allocation calculation helpers that were not consumed by the active allocation page."
@@ -16653,7 +16661,7 @@
       "verification_summary": "Deleted after dependency scan found no live render/template-loader/runtime path; focused backend verification passed."
     },
     "backend/templates/coming-soon.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 1,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -16667,7 +16675,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": "2026-07-17T16:15:04+05:30",
+      "last_audit_timestamp": "2026-07-17T16:36:55+05:30",
       "maintainability_score": 100,
       "module": "backend",
       "performance_score": 100,
@@ -16679,7 +16687,10 @@
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 118
+      "total_lines": 118,
+      "file_commit_sha": "bf98069e905b23c8399fe21482bc8cc7ebc5263d",
+      "file_commit_summary": "cleanup(documents): remove dead coming soon template",
+      "verification_summary": "Deleted after dependency scan found no live render/template-loader/runtime path; focused backend verification passed."
     },
     "backend/templates/contacts.html": {
       "audit_status": "REQUIRES_RECHECK",
@@ -33411,6 +33422,16 @@
     "Phase 11 chat template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
     "Phase 11 chat template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 chat template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
-    "Phase 11 chat template source commit: 9a28332abd8b450ee150247a39b028797454c723 at 2026-07-17T16:34:59+05:30, cleanup(documents): remove dead chat template."
+    "Phase 11 chat template source commit: 9a28332abd8b450ee150247a39b028797454c723 at 2026-07-17T16:34:59+05:30, cleanup(documents): remove dead chat template.",
+    "Phase 11 coming-soon template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining coming-soon.html hits are stale links inside other queued DAdmin templates.",
+    "Phase 11 coming-soon template regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 16 passed.",
+    "Phase 11 coming-soon template Ruff: .venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841 -> clean.",
+    "Phase 11 coming-soon template py_compile: .venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py -> passed.",
+    "Phase 11 coming-soon template compileall: .venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement -> passed.",
+    "Phase 11 coming-soon template Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 coming-soon template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 coming-soon template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 coming-soon template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
+    "Phase 11 coming-soon template source commit: bf98069e905b23c8399fe21482bc8cc7ebc5263d at 2026-07-17T16:36:55+05:30, cleanup(documents): remove dead coming soon template."
   ]
 }

@@ -108,6 +108,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents removed verified-dead `backend/templates/buttons.html`; only stale links from other queued legacy DAdmin templates remained.
 - Phase 11 Documents removed verified-dead `backend/templates/calendar.html`; only stale links from other queued legacy DAdmin templates and theme demo HTML remained.
 - Phase 11 Documents removed verified-dead `backend/templates/chat.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/coming-soon.html`; only stale links from other queued legacy DAdmin templates remained.
 
 ## Verification History
 
@@ -229,6 +230,14 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 chat template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
 - Phase 11 chat template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
 - Phase 11 chat template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 coming-soon template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `coming-soon.html` hits are stale queued template links.
+- Phase 11 coming-soon template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 coming-soon template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 coming-soon template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 coming-soon template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 coming-soon template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 coming-soon template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 coming-soon template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
 - Phase 11 base/DFIA template dependency scan: no live render, TemplateResponse, template_name, template-loader, include, URLConf, command, test, frontend runtime, or third-party runtime path remained; only stale `blank.html` links in queued DAdmin templates remain.
 - Phase 11 base/DFIA template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
 - Phase 11 base/DFIA template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.

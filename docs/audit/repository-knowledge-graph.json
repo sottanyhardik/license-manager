@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "80bfa680",
+    "head": "14b3c523",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1309,6 +1309,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T18:33:05+05:30"
+      },
+      {
+        "commit_sha": "14b3c52373baa290945ca53b96451cda5095dd65",
+        "commit_summary": "cleanup(documents): remove dead modals template",
+        "file": "backend/templates/modals.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T20:39:17+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1491,6 +1499,14 @@
         "status": "DELETED",
         "source_commit_sha": "80bfa6809e0e5374acdb53e1f38d591e90b95b3f",
         "finding": "No live render/template-loader/runtime path remained; remaining maintenance.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T20:39:17+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/modals.html",
+        "status": "DELETED",
+        "source_commit_sha": "14b3c52373baa290945ca53b96451cda5095dd65",
+        "finding": "No live render/template-loader/runtime path remained; remaining modals.html hits are queued stale template links."
       }
     ]
   },

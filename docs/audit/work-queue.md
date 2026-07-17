@@ -8,7 +8,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 | `P8-BILLS-OF-ENTRY-AUDIT` | 1 | Bills of Entry | DONE | Phase 8 Bills of Entry completed all queued `NOT_STARTED` and `REQUIRES_RECHECK` files in the active audit database. | Focused backend tests, Ruff, py_compile, compileall, Django check, makemigrations check, git diff checks, and security-tool availability blockers are recorded in the Phase 8 report. |
 | `P9-INVENTORY-AUDIT` | 1 | Inventory | DONE | Phase 9 Inventory is frozen; do not reopen completed Phase 9 files unless the Repository Knowledge Graph marks them `REQUIRES_RECHECK`. | Phase 9 queue query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`; completed unit verification is recorded in `docs/audit/phase-09-inventory-report.md`. |
 | `P10-REPORTS-AUDIT` | 1 | Reports | DONE | Phase 10 Reports is frozen; Phase 7 Reporting & Exports remains frozen and was not reopened. | Active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`. |
-| `P11-DOCUMENTS-AUDIT` | 1 | Documents | IN_PROGRESS | Continue Phase 11 Documents from the existing audit database and process the next document/media/file/PDF/copy/upload item marked `NOT_STARTED` or `REQUIRES_RECHECK`. | `backend/templates/lock-screen.html` deleted in source commit `48f8244401f52a2b07f5d2208d27b56d98944f30`; select the next Phase 11 item from the audit database queue. |
+| `P11-DOCUMENTS-AUDIT` | 1 | Documents | IN_PROGRESS | Continue Phase 11 Documents from the existing audit database and process the next document/media/file/PDF/copy/upload item marked `NOT_STARTED` or `REQUIRES_RECHECK`. | `backend/templates/mailbox_compose.html` deleted in source commit `8f3116ed501285b3ef042a9d8bf44e605a6a642b`; select the next Phase 11 item from the audit database queue. |
 
 ## Work Queue History
 
@@ -60,6 +60,7 @@ Work is processed in priority order. Completed tasks are removed or marked `DONE
 - `2026-07-17T18:13:38+05:30` - Phase 11 Documents deleted verified-dead `backend/templates/index.html` in commit `00c07c493d8898bfb25a655142f7778b45dd8c57` (`cleanup(documents): remove dead backend index template`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-17T18:17:33+05:30` - Phase 11 Documents deleted verified-dead `backend/templates/invoice.html` in commit `124b512635fec3877549e4da98cc664727a0a4f2` (`cleanup(documents): remove dead invoice template`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - `2026-07-17T18:19:41+05:30` - Phase 11 Documents deleted verified-dead `backend/templates/lock-screen.html` in commit `48f8244401f52a2b07f5d2208d27b56d98944f30` (`cleanup(documents): remove dead lock screen template`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- `2026-07-17T18:28:23+05:30` - Phase 11 Documents deleted verified-dead `backend/templates/mailbox_compose.html` in commit `8f3116ed501285b3ef042a9d8bf44e605a6a642b` (`cleanup(documents): remove dead mailbox compose template`); continue with the next document item marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Module Pipeline
 

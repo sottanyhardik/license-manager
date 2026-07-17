@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "48f82444",
+    "head": "8f3116ed",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1285,6 +1285,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T18:19:41+05:30"
+      },
+      {
+        "commit_sha": "8f3116ed501285b3ef042a9d8bf44e605a6a642b",
+        "commit_summary": "cleanup(documents): remove dead mailbox compose template",
+        "file": "backend/templates/mailbox_compose.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T18:28:23+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1443,6 +1451,14 @@
         "status": "DELETED",
         "source_commit_sha": "48f8244401f52a2b07f5d2208d27b56d98944f30",
         "finding": "No live render/template-loader/runtime path remained; remaining lock-screen.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T18:28:23+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/mailbox_compose.html",
+        "status": "DELETED",
+        "source_commit_sha": "8f3116ed501285b3ef042a9d8bf44e605a6a642b",
+        "finding": "No live render/template-loader/runtime path remained; remaining mailbox_compose.html hits are queued stale template links."
       }
     ]
   },

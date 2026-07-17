@@ -1181,6 +1181,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T16:32:14+05:30"
+      },
+      {
+        "commit_sha": "9a28332abd8b450ee150247a39b028797454c723",
+        "commit_summary": "cleanup(documents): remove dead chat template",
+        "file": "backend/templates/chat.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T16:34:59+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1235,6 +1243,14 @@
         "status": "DELETED",
         "source_commit_sha": "d7bd46dd1d86c235a43d33b30be25dafbc053937",
         "finding": "No live render/template-loader/runtime path remained; remaining calendar.html hits are queued stale template/demo links."
+      },
+      {
+        "timestamp": "2026-07-17T16:34:59+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/chat.html",
+        "status": "DELETED",
+        "source_commit_sha": "9a28332abd8b450ee150247a39b028797454c723",
+        "finding": "No live render/template-loader/runtime path remained; remaining chat.html hits are queued stale template links."
       }
     ]
   },

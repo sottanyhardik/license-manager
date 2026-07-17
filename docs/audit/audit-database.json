@@ -103,6 +103,12 @@
       "event": "Phase 11 Documents legacy base/DFIA template stack removed from active audit inventory.",
       "reason": "Dependency analysis proved base/main.html plus blank and DFIA child templates were orphaned; only stale queued DAdmin hrefs remained.",
       "commit_sha": "9d56821b2e08bcf5f9c35ccb54a705c208c6a84d"
+    },
+    {
+      "timestamp": "2026-07-17T16:18:07+05:30",
+      "event": "Phase 11 Documents legacy buttons template removed from active audit inventory.",
+      "reason": "Dependency analysis proved buttons.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
+      "commit_sha": "d5acf8867c565340f98d260be80ab6bbe4275c40"
     }
   ],
   "blocked_work": [
@@ -463,7 +469,8 @@
     "Phase 11 Documents deleted verified-dead legacy allotment Django template/tag stack (10 templates plus app_tags package) after dependency analysis found no live runtime path; source commit 99ed3080ed82f0923fe5538108dca80353cdd5a9 (cleanup(documents): remove dead allotment templates).",
     "Phase 11 Documents completed backend/templates/404.html with a self-contained production error page and route-template regression in backend/tests/test_url_routing.py; source commit d7e55f2ef8b03c4fe95cab4f751641f16fd36892 (fix(documents): harden production 404 template).",
     "Phase 11 Documents completed backend/templates/500.html with a self-contained production error page and route-template regression in backend/tests/test_url_routing.py; source commit 6ed96a35cfed4a23c98530b8e232c90d22511876 (fix(documents): harden production 500 template).",
-    "Phase 11 Documents deleted verified-dead legacy base/DFIA template stack after dependency analysis found no live runtime path; source commit 9d56821b2e08bcf5f9c35ccb54a705c208c6a84d (cleanup(documents): remove dead base template stack)."
+    "Phase 11 Documents deleted verified-dead legacy base/DFIA template stack after dependency analysis found no live runtime path; source commit 9d56821b2e08bcf5f9c35ccb54a705c208c6a84d (cleanup(documents): remove dead base template stack).",
+    "Phase 11 Documents deleted verified-dead legacy buttons template after dependency analysis found no live runtime path; source commit d5acf8867c565340f98d260be80ab6bbe4275c40 (cleanup(documents): remove dead buttons template)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -473,7 +480,8 @@
     "Phase 11 Documents removed backend/templates/profile.html: a 901-line legacy DAdmin profile template reachable only through stale static hrefs in other legacy templates, with no Django render/template-loader/runtime path.",
     "Phase 9 allocation helper dead-code scan removed unused AllotmentAllocationModal and orphaned allocationCalculator exports; active allocation behavior remains in AllotmentAction and backend allotment services.",
     "Phase 11 Documents removed legacy allotment Django template/tag stack: 10 orphaned templates plus app_tags.py/__init__.py, 844 tracked LOC, no live render/template-loader/runtime path.",
-    "Phase 11 Documents removed legacy base/DFIA template stack: base/main.html, blank.html, dfia/box.html, and dfia/list.html, 956 tracked LOC, no live render/template-loader/runtime path."
+    "Phase 11 Documents removed legacy base/DFIA template stack: base/main.html, blank.html, dfia/box.html, and dfia/list.html, 956 tracked LOC, no live render/template-loader/runtime path.",
+    "Phase 11 Documents removed backend/templates/buttons.html: 881-line legacy DAdmin UI demo template with no live render/template-loader/runtime path."
   ],
   "duplicate_logic_findings": [
     "Phase 9 allocation helper recheck removed duplicate frontend allocation calculation helpers that were not consumed by the active allocation page."
@@ -16533,7 +16541,7 @@
       "verification_summary": "Deleted with orphaned base template stack; remaining blank.html hits are stale queued template hrefs only."
     },
     "backend/templates/buttons.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 8,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -16547,19 +16555,22 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 89,
+      "last_audit_timestamp": "2026-07-17T16:18:07+05:30",
+      "maintainability_score": 100,
       "module": "backend",
-      "performance_score": 93,
+      "performance_score": 100,
       "previous_index_checksum": null,
-      "readability_score": 89,
-      "security_score": 80,
-      "technical_debt_score": 11,
+      "readability_score": 100,
+      "security_score": 100,
+      "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 881
+      "total_lines": 881,
+      "file_commit_sha": "d5acf8867c565340f98d260be80ab6bbe4275c40",
+      "file_commit_summary": "cleanup(documents): remove dead buttons template",
+      "verification_summary": "Deleted after dependency scan found no live render/template-loader/runtime path; focused backend verification passed."
     },
     "backend/templates/calendar.html": {
       "audit_status": "REQUIRES_RECHECK",
@@ -32024,7 +32035,7 @@
   },
   "repository_metadata": {
     "branch": "feature/V2",
-    "head": "9d56821b",
+    "head": "d5acf886",
     "working_tree": "dirty"
   },
   "schema_version": 1,
@@ -32038,7 +32049,8 @@
     "Phase 11 Documents removed stale legacy allotment templates containing obsolete URL actions and inline AJAX form paths that were no longer protected by an active routed UI surface.",
     "Phase 11 Documents 404 template no longer loads external Google Fonts, stale relative asset bundles, or JavaScript on production error responses.",
     "Phase 11 Documents 500 template no longer loads external Google Fonts, stale relative asset bundles, or JavaScript on production error responses.",
-    "Phase 11 Documents removed orphaned base/DFIA templates containing external Google Fonts, stale static bundles, inline AJAX, and obsolete legacy route links."
+    "Phase 11 Documents removed orphaned base/DFIA templates containing external Google Fonts, stale static bundles, inline AJAX, and obsolete legacy route links.",
+    "Phase 11 Documents removed orphaned buttons.html template containing external Google Fonts, stale static bundles, and obsolete demo navigation."
   ],
   "source_index": {
     "generated_file_count": 1251,
@@ -33347,6 +33359,16 @@
     "Phase 11 base/DFIA template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
     "Phase 11 base/DFIA template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 base/DFIA template diff check: git diff --check and git diff --cached --check for source deletions -> clean before source commit.",
-    "Phase 11 base/DFIA template source commit: 9d56821b2e08bcf5f9c35ccb54a705c208c6a84d at 2026-07-17T16:15:04+05:30, cleanup(documents): remove dead base template stack."
+    "Phase 11 base/DFIA template source commit: 9d56821b2e08bcf5f9c35ccb54a705c208c6a84d at 2026-07-17T16:15:04+05:30, cleanup(documents): remove dead base template stack.",
+    "Phase 11 buttons template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining buttons.html hits are stale links inside other queued DAdmin templates.",
+    "Phase 11 buttons template regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 16 passed.",
+    "Phase 11 buttons template Ruff: .venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841 -> clean.",
+    "Phase 11 buttons template py_compile: .venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py -> passed.",
+    "Phase 11 buttons template compileall: .venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement -> passed.",
+    "Phase 11 buttons template Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 buttons template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 buttons template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 buttons template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
+    "Phase 11 buttons template source commit: d5acf8867c565340f98d260be80ab6bbe4275c40 at 2026-07-17T16:18:07+05:30, cleanup(documents): remove dead buttons template."
   ]
 }

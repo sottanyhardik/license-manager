@@ -3,7 +3,7 @@
 # Media Sync Tool
 # Sync media files between remote server and local machine
 
-set -e
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -16,10 +16,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Configuration
-REMOTE_SERVER="django@143.110.252.201"
-REMOTE_MEDIA_PATH="/home/django/license-manager/media"
-LOCAL_MEDIA_PATH="$PROJECT_ROOT/media"
+# Configuration (override from the environment when needed)
+REMOTE_SERVER="${REMOTE_SERVER:-django@143.110.252.201}"
+REMOTE_MEDIA_PATH="${REMOTE_MEDIA_PATH:-/home/django/license-manager/backend/media}"
+LOCAL_MEDIA_PATH="${LOCAL_MEDIA_PATH:-$PROJECT_ROOT/backend/media}"
+RSYNC_BIN="${RSYNC_BIN:-rsync}"
+SSH_BIN="${SSH_BIN:-ssh}"
 
 print_header() {
     echo -e "\n${BLUE}================================================${NC}"
@@ -67,7 +69,7 @@ show_usage() {
 }
 
 check_rsync() {
-    if ! command -v rsync &> /dev/null; then
+    if ! command -v "$RSYNC_BIN" &> /dev/null; then
         print_error "rsync is not installed"
         echo ""
         echo "Please install rsync:"
@@ -78,9 +80,49 @@ check_rsync() {
     fi
 }
 
+validate_config() {
+    if [[ -z "$REMOTE_SERVER" || -z "$REMOTE_MEDIA_PATH" || -z "$LOCAL_MEDIA_PATH" ]]; then
+        print_error "Remote server and media paths must be configured"
+        exit 1
+    fi
+
+    if [[ "$REMOTE_MEDIA_PATH" != /* || "$LOCAL_MEDIA_PATH" != /* ]]; then
+        print_error "Remote and local media paths must be absolute"
+        exit 1
+    fi
+
+    if [[ "$REMOTE_MEDIA_PATH" == *"'"* || "$REMOTE_MEDIA_PATH" == *$'\n'* || "$REMOTE_MEDIA_PATH" == *$'\r'* ]]; then
+        print_error "Remote media path contains unsupported shell characters"
+        exit 1
+    fi
+}
+
+parse_transfer_options() {
+    DRY_RUN_FLAG=""
+    DELETE_FLAG=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                DRY_RUN_FLAG="--dry-run"
+                ;;
+            --delete)
+                DELETE_FLAG="--delete"
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                show_usage
+                exit 1
+                ;;
+        esac
+        shift
+    done
+}
+
 check_ssh_connection() {
+    validate_config
     print_info "Testing SSH connection to $REMOTE_SERVER..."
-    if ssh -o ConnectTimeout=5 -o BatchMode=yes $REMOTE_SERVER "echo 'Connection successful'" &> /dev/null; then
+    if "$SSH_BIN" -o ConnectTimeout=5 -o BatchMode=yes "$REMOTE_SERVER" "echo 'Connection successful'" &> /dev/null; then
         print_success "SSH connection successful"
         return 0
     else
@@ -95,7 +137,8 @@ check_ssh_connection() {
 }
 
 get_remote_size() {
-    ssh $REMOTE_SERVER "du -sh $REMOTE_MEDIA_PATH 2>/dev/null | cut -f1" 2>/dev/null || echo "N/A"
+    validate_config
+    "$SSH_BIN" "$REMOTE_SERVER" "du -sh '$REMOTE_MEDIA_PATH' 2>/dev/null | cut -f1" 2>/dev/null || echo "N/A"
 }
 
 get_local_size() {
@@ -107,25 +150,8 @@ get_local_size() {
 }
 
 download_media() {
-    local DRY_RUN=""
-    local DELETE_FLAG=""
-
-    # Parse options
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --dry-run)
-                DRY_RUN="--dry-run"
-                shift
-                ;;
-            --delete)
-                DELETE_FLAG="--delete"
-                shift
-                ;;
-            *)
-                shift
-                ;;
-        esac
-    done
+    local DRY_RUN_FLAG DELETE_FLAG
+    parse_transfer_options "$@"
 
     print_header "📥 Downloading Media from Remote Server"
 
@@ -136,7 +162,7 @@ download_media() {
     print_info "Remote path: $REMOTE_MEDIA_PATH"
     print_info "Local path: $LOCAL_MEDIA_PATH"
 
-    if [ -n "$DRY_RUN" ]; then
+    if [ -n "$DRY_RUN_FLAG" ]; then
         print_warning "DRY RUN MODE - No files will be transferred"
     fi
 
@@ -151,42 +177,22 @@ download_media() {
     # Create local media directory if it doesn't exist
     mkdir -p "$LOCAL_MEDIA_PATH"
 
-    # Rsync command
-    rsync -avz --progress $DRY_RUN $DELETE_FLAG \
-        $REMOTE_SERVER:$REMOTE_MEDIA_PATH/ $LOCAL_MEDIA_PATH/
-
-    if [ $? -eq 0 ]; then
-        echo ""
-        print_success "Media download completed successfully!"
-        echo ""
-        print_info "Local media size: $(get_local_size)"
-    else
+    if ! "$RSYNC_BIN" -avz --progress ${DRY_RUN_FLAG:+"$DRY_RUN_FLAG"} ${DELETE_FLAG:+"$DELETE_FLAG"} \
+        "$REMOTE_SERVER:$REMOTE_MEDIA_PATH/" "$LOCAL_MEDIA_PATH/"; then
         echo ""
         print_error "Media download failed"
         exit 1
     fi
+
+    echo ""
+    print_success "Media download completed successfully!"
+    echo ""
+    print_info "Local media size: $(get_local_size)"
 }
 
 upload_media() {
-    local DRY_RUN=""
-    local DELETE_FLAG=""
-
-    # Parse options
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --dry-run)
-                DRY_RUN="--dry-run"
-                shift
-                ;;
-            --delete)
-                DELETE_FLAG="--delete"
-                shift
-                ;;
-            *)
-                shift
-                ;;
-        esac
-    done
+    local DRY_RUN_FLAG DELETE_FLAG
+    parse_transfer_options "$@"
 
     print_header "📤 Uploading Media to Remote Server"
 
@@ -203,7 +209,7 @@ upload_media() {
     print_info "Remote server: $REMOTE_SERVER"
     print_info "Remote path: $REMOTE_MEDIA_PATH"
 
-    if [ -n "$DRY_RUN" ]; then
+    if [ -n "$DRY_RUN_FLAG" ]; then
         print_warning "DRY RUN MODE - No files will be transferred"
     fi
 
@@ -213,7 +219,7 @@ upload_media() {
 
     echo ""
     print_warning "This will upload local media to the remote server!"
-    read -p "Continue? (yes/no): " confirm
+    read -r -p "Continue? (yes/no): " confirm
     if [ "$confirm" != "yes" ]; then
         print_info "Operation cancelled"
         exit 0
@@ -223,32 +229,57 @@ upload_media() {
     print_info "Starting upload..."
     echo ""
 
-    # Rsync command
-    rsync -avz --progress $DRY_RUN $DELETE_FLAG \
-        $LOCAL_MEDIA_PATH/ $REMOTE_SERVER:$REMOTE_MEDIA_PATH/
-
-    if [ $? -eq 0 ]; then
-        echo ""
-        print_success "Media upload completed successfully!"
-        echo ""
-        print_info "Remote media size: $(get_remote_size)"
-    else
+    if ! "$RSYNC_BIN" -avz --progress ${DRY_RUN_FLAG:+"$DRY_RUN_FLAG"} ${DELETE_FLAG:+"$DELETE_FLAG"} \
+        "$LOCAL_MEDIA_PATH/" "$REMOTE_SERVER:$REMOTE_MEDIA_PATH/"; then
         echo ""
         print_error "Media upload failed"
         exit 1
     fi
+
+    echo ""
+    print_success "Media upload completed successfully!"
+    echo ""
+    print_info "Remote media size: $(get_remote_size)"
 }
 
 sync_media() {
+    local DRY_RUN_FLAG=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                DRY_RUN_FLAG="--dry-run"
+                ;;
+            --delete)
+                print_error "--delete is not supported for two-way sync"
+                exit 1
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                show_usage
+                exit 1
+                ;;
+        esac
+        shift
+    done
+
     print_header "🔄 Two-Way Media Sync"
 
     check_rsync
     check_ssh_connection
 
+    if [ ! -d "$LOCAL_MEDIA_PATH" ]; then
+        print_error "Local media directory does not exist: $LOCAL_MEDIA_PATH"
+        exit 1
+    fi
+
     print_warning "This will perform a two-way sync between local and remote"
     print_warning "Newer files will overwrite older files in both directions"
+    if [ -n "$DRY_RUN_FLAG" ]; then
+        print_warning "DRY RUN MODE - No files will be transferred"
+    fi
     echo ""
-    read -p "Continue? (yes/no): " confirm
+    read -r -p "Continue? (yes/no): " confirm
     if [ "$confirm" != "yes" ]; then
         print_info "Operation cancelled"
         exit 0
@@ -256,22 +287,22 @@ sync_media() {
 
     echo ""
     print_info "Syncing local → remote..."
-    rsync -avz --progress --update \
-        $LOCAL_MEDIA_PATH/ $REMOTE_SERVER:$REMOTE_MEDIA_PATH/
+    if ! "$RSYNC_BIN" -avz --progress --update ${DRY_RUN_FLAG:+"$DRY_RUN_FLAG"} \
+        "$LOCAL_MEDIA_PATH/" "$REMOTE_SERVER:$REMOTE_MEDIA_PATH/"; then
+        print_error "Sync failed while uploading local media"
+        exit 1
+    fi
 
     echo ""
     print_info "Syncing remote → local..."
-    rsync -avz --progress --update \
-        $REMOTE_SERVER:$REMOTE_MEDIA_PATH/ $LOCAL_MEDIA_PATH/
-
-    if [ $? -eq 0 ]; then
-        echo ""
-        print_success "Two-way sync completed!"
-    else
-        echo ""
-        print_error "Sync failed"
+    if ! "$RSYNC_BIN" -avz --progress --update ${DRY_RUN_FLAG:+"$DRY_RUN_FLAG"} \
+        "$REMOTE_SERVER:$REMOTE_MEDIA_PATH/" "$LOCAL_MEDIA_PATH/"; then
+        print_error "Sync failed while downloading remote media"
         exit 1
     fi
+
+    echo ""
+    print_success "Two-way sync completed!"
 }
 
 show_status() {
@@ -282,8 +313,12 @@ show_status() {
     print_info "Checking media directory sizes..."
     echo ""
 
-    local remote_size=$(get_remote_size)
-    local local_size=$(get_local_size)
+    local remote_size
+    local local_size
+    local remote_count
+    local local_count
+    remote_size=$(get_remote_size)
+    local_size=$(get_local_size)
 
     echo "Remote Server:"
     echo "  Path: $REMOTE_MEDIA_PATH"
@@ -300,7 +335,7 @@ show_status() {
         echo "Local files: $local_count"
     fi
 
-    remote_count=$(ssh $REMOTE_SERVER "find $REMOTE_MEDIA_PATH -type f 2>/dev/null | wc -l" | tr -d ' ')
+    remote_count=$("$SSH_BIN" "$REMOTE_SERVER" "find '$REMOTE_MEDIA_PATH' -type f 2>/dev/null | wc -l" | tr -d ' ')
     echo "Remote files: $remote_count"
     echo ""
 }
@@ -311,7 +346,7 @@ if [ $# -eq 0 ]; then
     exit 0
 fi
 
-COMMAND=$1
+COMMAND="$1"
 shift  # Remove command from arguments
 
 case $COMMAND in
@@ -322,7 +357,7 @@ case $COMMAND in
         upload_media "$@"
         ;;
     sync)
-        sync_media
+        sync_media "$@"
         ;;
     status)
         show_status

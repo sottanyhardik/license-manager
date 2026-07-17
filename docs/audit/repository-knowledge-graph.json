@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "8f3116ed",
+    "head": "d5e35698",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1293,6 +1293,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T18:28:23+05:30"
+      },
+      {
+        "commit_sha": "d5e35698edcd11f8fe6cdb9dd87cf4b44d9772c4",
+        "commit_summary": "cleanup(documents): remove dead mailbox inbox template",
+        "file": "backend/templates/mailbox_inbox.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T18:30:32+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1459,6 +1467,14 @@
         "status": "DELETED",
         "source_commit_sha": "8f3116ed501285b3ef042a9d8bf44e605a6a642b",
         "finding": "No live render/template-loader/runtime path remained; remaining mailbox_compose.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T18:30:32+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/mailbox_inbox.html",
+        "status": "DELETED",
+        "source_commit_sha": "d5e35698edcd11f8fe6cdb9dd87cf4b44d9772c4",
+        "finding": "No live render/template-loader/runtime path remained; remaining mailbox_inbox.html hits are queued stale template links."
       }
     ]
   },

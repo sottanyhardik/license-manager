@@ -1197,6 +1197,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T16:36:55+05:30"
+      },
+      {
+        "commit_sha": "15feeab987c3f075a9d89fc94296aeb34397a07e",
+        "commit_summary": "cleanup(documents): remove dead contacts template",
+        "file": "backend/templates/contacts.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T16:38:58+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1267,6 +1275,14 @@
         "status": "DELETED",
         "source_commit_sha": "bf98069e905b23c8399fe21482bc8cc7ebc5263d",
         "finding": "No live render/template-loader/runtime path remained; remaining coming-soon.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T16:38:58+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/contacts.html",
+        "status": "DELETED",
+        "source_commit_sha": "15feeab987c3f075a9d89fc94296aeb34397a07e",
+        "finding": "No live render/template-loader/runtime path remained; remaining contacts.html hits are queued stale template links."
       }
     ]
   },

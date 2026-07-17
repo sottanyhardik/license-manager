@@ -133,6 +133,12 @@
       "event": "Phase 11 Documents legacy contacts template removed from active audit inventory.",
       "reason": "Dependency analysis proved contacts.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
       "commit_sha": "15feeab987c3f075a9d89fc94296aeb34397a07e"
+    },
+    {
+      "timestamp": "2026-07-17T17:04:51+05:30",
+      "event": "Phase 11 Documents legacy dropzone template removed from active audit inventory.",
+      "reason": "Dependency analysis proved dropzone.html had no live render/template-loader/runtime path; only stale queued DAdmin links remained.",
+      "commit_sha": "cab26558c5a2a7d9bd24c3e48872cf725a5dfc88"
     }
   ],
   "blocked_work": [
@@ -498,7 +504,8 @@
     "Phase 11 Documents deleted verified-dead legacy calendar template after dependency analysis found no live runtime path; source commit d7bd46dd1d86c235a43d33b30be25dafbc053937 (cleanup(documents): remove dead calendar template).",
     "Phase 11 Documents deleted verified-dead legacy chat template after dependency analysis found no live runtime path; source commit 9a28332abd8b450ee150247a39b028797454c723 (cleanup(documents): remove dead chat template).",
     "Phase 11 Documents deleted verified-dead legacy coming-soon template after dependency analysis found no live runtime path; source commit bf98069e905b23c8399fe21482bc8cc7ebc5263d (cleanup(documents): remove dead coming soon template).",
-    "Phase 11 Documents deleted verified-dead legacy contacts template after dependency analysis found no live runtime path; source commit 15feeab987c3f075a9d89fc94296aeb34397a07e (cleanup(documents): remove dead contacts template)."
+    "Phase 11 Documents deleted verified-dead legacy contacts template after dependency analysis found no live runtime path; source commit 15feeab987c3f075a9d89fc94296aeb34397a07e (cleanup(documents): remove dead contacts template).",
+    "Phase 11 Documents deleted verified-dead legacy dropzone template after dependency analysis found no live runtime path; source commit cab26558c5a2a7d9bd24c3e48872cf725a5dfc88 (cleanup(documents): remove dead dropzone template)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -513,7 +520,8 @@
     "Phase 11 Documents removed backend/templates/calendar.html: 554-line legacy DAdmin calendar demo template with no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/chat.html: 811-line legacy DAdmin chat demo template with no live render/template-loader/runtime path.",
     "Phase 11 Documents removed backend/templates/coming-soon.html: 118-line legacy DAdmin coming-soon demo template with no live render/template-loader/runtime path.",
-    "Phase 11 Documents removed backend/templates/contacts.html: 788-line legacy DAdmin contacts demo template with no live render/template-loader/runtime path."
+    "Phase 11 Documents removed backend/templates/contacts.html: 788-line legacy DAdmin contacts demo template with no live render/template-loader/runtime path.",
+    "Phase 11 Documents removed backend/templates/dropzone.html: 512-line legacy DAdmin upload demo template with no live render/template-loader/runtime path."
   ],
   "duplicate_logic_findings": [
     "Phase 9 allocation helper recheck removed duplicate frontend allocation calculation helpers that were not consumed by the active allocation page."
@@ -16797,7 +16805,7 @@
       "verification_summary": "Deleted after dependency scan found no live render/template-loader/runtime path; inline AJAX and stale legacy route surface removed."
     },
     "backend/templates/dropzone.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "DELETED",
       "complexity": 5,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -16811,19 +16819,22 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 94,
+      "last_audit_timestamp": "2026-07-17T17:04:51+05:30",
+      "maintainability_score": 100,
       "module": "backend",
-      "performance_score": 96,
+      "performance_score": 100,
       "previous_index_checksum": null,
-      "readability_score": 94,
-      "security_score": 80,
-      "technical_debt_score": 6,
+      "readability_score": 100,
+      "security_score": 100,
+      "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 512
+      "total_lines": 512,
+      "file_commit_sha": "cab26558c5a2a7d9bd24c3e48872cf725a5dfc88",
+      "file_commit_summary": "cleanup(documents): remove dead dropzone template",
+      "verification_summary": "Deleted after dependency scan found no live render/template-loader/runtime path; focused backend verification passed."
     },
     "backend/templates/ecommerce.html": {
       "audit_status": "REQUIRES_RECHECK",
@@ -33453,6 +33464,16 @@
     "Phase 11 contacts template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
     "Phase 11 contacts template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 contacts template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
-    "Phase 11 contacts template source commit: 15feeab987c3f075a9d89fc94296aeb34397a07e at 2026-07-17T16:38:58+05:30, cleanup(documents): remove dead contacts template."
+    "Phase 11 contacts template source commit: 15feeab987c3f075a9d89fc94296aeb34397a07e at 2026-07-17T16:38:58+05:30, cleanup(documents): remove dead contacts template.",
+    "Phase 11 dropzone template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining dropzone.html hits are stale links inside other queued DAdmin templates.",
+    "Phase 11 dropzone template regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 16 passed.",
+    "Phase 11 dropzone template Ruff: .venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841 -> clean.",
+    "Phase 11 dropzone template py_compile: .venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py -> passed.",
+    "Phase 11 dropzone template compileall: .venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement -> passed.",
+    "Phase 11 dropzone template Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 dropzone template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 dropzone template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 dropzone template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
+    "Phase 11 dropzone template source commit: cab26558c5a2a7d9bd24c3e48872cf725a5dfc88 at 2026-07-17T17:04:51+05:30, cleanup(documents): remove dead dropzone template."
   ]
 }

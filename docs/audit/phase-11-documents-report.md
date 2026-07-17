@@ -597,3 +597,39 @@
 - Remaining Technical Debt:
   - Other queued legacy DAdmin templates still contain static `contacts.html` hrefs; audit them only when selected by the Phase 11 queue.
 - Status: COMPLETED
+
+
+## Legacy Dropzone Template
+
+- File Path(s): `backend/templates/dropzone.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 512
+- Lines Reviewed: 512 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin upload demo page that no active Django route renders and whose multipart form posted to `#`.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, and unused Dropzone demo script loading from the active source tree.
+- Security Improvements: Removed an unreachable file-upload form with no CSRF/backend validation path plus stale external/static asset loading from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/dropzone.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `dropzone.html`.
+  - Remaining `dropzone.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies; unrelated Dropzone asset includes remain for their own queued audits.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `cab26558c5a2a7d9bd24c3e48872cf725a5dfc88`
+- Source Commit Timestamp: `2026-07-17T17:04:51+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead dropzone template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `dropzone.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED

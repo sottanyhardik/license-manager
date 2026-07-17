@@ -90,6 +90,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 Inventory removed stale `backend/scripts/test_balance_calc.py`; deterministic balance assertions remain in `backend/apps/license/tests/test_balance_calculator.py`.
 - Phase 9 Inventory completed `docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md`; stale deployment-era balance guidance now reflects current service, materialized balance, command, and regression-test contracts.
 - Phase 9 Inventory completed `frontend/src/components/LicenseBalanceModal.tsx`; license balance modal validation, finite numeric rendering, authenticated PDF/export requests, and malformed API response handling are covered by focused helper regressions.
+- Phase 9 Inventory frozen after the active audit database query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 
 ## Verification History
 
@@ -194,6 +195,8 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 LicenseBalanceModal makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
 - Phase 9 LicenseBalanceModal security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
 - Phase 9 LicenseBalanceModal commit: e9a690e24c02dd80960299e2e213b3b879e77c38 at 2026-07-16T17:55:39+05:30, fix(inventory): harden license balance modal
+- Phase 9 completion query: jq inventory|balance NOT_STARTED/REQUIRES_RECHECK over docs/audit/audit-database.json -> zero rows
+- Phase 9 freeze recovery point: 3c18e899a67b024418137ed7f8232694751715b3 at 2026-07-17T10:47:20+05:30, docs(audit): record license balance modal audit
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

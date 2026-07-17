@@ -434,7 +434,8 @@
     "Phase 11 Documents completed nginx-protected-media.conf; reusable internal X-Accel-Redirect media snippet now documents trailing-slash MEDIA_ROOT aliasing and adds private no-store cache headers in source commit 95bc45513b56f735540d92aefc6508c08cba34ae (fix(documents): harden protected media nginx snippet).",
     "Phase 11 Documents completed scripts/diagnostics/sync-media.sh; media sync now targets backend/media, validates options and absolute paths, quotes SSH/rsync calls, supports sync --dry-run, and rejects unsafe two-way --delete in source commit 9bddcf84789ce0825b165f34b1db940a44a2532c (fix(documents): harden media sync diagnostics).",
     "Phase 11 Documents completed nginx-http-only-tractor.conf; tractor HTTP-only certbot bootstrap now has explicit client/proxy timeouts, proxy_redirect off, and baseline security headers in source commit 45a2223bc7f7ad1ac954e2c87de62c775cd106ac (fix(documents): harden tractor http nginx bootstrap).",
-    "Phase 9 Inventory reopened only for dependency-marked REQUIRES_RECHECK allocation helpers and deleted verified-dead frontend/src/components/AllotmentAllocationModal.tsx plus frontend/src/services/calculators/allocationCalculator.js in source commit b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e (cleanup(inventory): remove dead allocation helpers)."
+    "Phase 9 Inventory reopened only for dependency-marked REQUIRES_RECHECK allocation helpers and deleted verified-dead frontend/src/components/AllotmentAllocationModal.tsx plus frontend/src/services/calculators/allocationCalculator.js in source commit b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e (cleanup(inventory): remove dead allocation helpers).",
+    "Phase 10 Reports recovery confirmation kept the phase frozen after the latest Phase 9 recheck; active report/export/PDF/Excel/CSV/ledger query returned zero files marked NOT_STARTED or REQUIRES_RECHECK from recovery commit 0d2e7faa16aa49362351de4e7917c14af8e93dff (docs(audit): record allocation helper recheck)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -31040,7 +31041,7 @@
       "total_lines": 160
     }
   },
-  "generated_at": "2026-07-17T12:08:27+05:30",
+  "generated_at": "2026-07-17T12:10:25+05:30",
   "impacted_files": [
     "backend/apps/accounts/__init__.py",
     "backend/apps/accounts/apps.py",
@@ -31922,7 +31923,7 @@
   },
   "repository_metadata": {
     "branch": "feature/V2",
-    "head": "b36a90c3",
+    "head": "0d2e7faa",
     "working_tree": "dirty"
   },
   "schema_version": 1,
@@ -33189,6 +33190,14 @@
     "Phase 9 allocation helper makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
     "Phase 9 allocation helper security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 9 allocation helper diff check: git diff --check and git diff --cached --check for source files -> clean before source commit.",
-    "Phase 9 allocation helper source commit: b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e at 2026-07-17T12:08:27+05:30, cleanup(inventory): remove dead allocation helpers."
+    "Phase 9 allocation helper source commit: b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e at 2026-07-17T12:08:27+05:30, cleanup(inventory): remove dead allocation helpers.",
+    "Phase 10 recovery query: report/export/PDF/Excel/CSV/ledger NOT_STARTED or REQUIRES_RECHECK over docs/audit/audit-database.json -> zero rows.",
+    "Phase 10 recovery Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 10 recovery makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
+    "Phase 10 recovery py_compile: scoped representative report/export backend files -> passed.",
+    "Phase 10 recovery compileall: scoped representative report/export backend directories -> passed.",
+    "Phase 10 recovery Ruff: broad mixed-language report/export verification blocked by pre-existing frozen-module F401 findings and frontend TS/JS paths being parsed as Python.",
+    "Phase 10 recovery security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 10 recovery point before metadata confirmation: 0d2e7faa16aa49362351de4e7917c14af8e93dff at 2026-07-17T12:10:25+05:30, docs(audit): record allocation helper recheck."
   ]
 }

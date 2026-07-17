@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-17T12:08:27+05:30",
+  "generated_at": "2026-07-17T12:10:25+05:30",
   "graphs": {
     "api_endpoint_graph": "Django urls.py and DRF routers indexed as route symbols.",
     "background_task_graph": "Celery task files indexed under backend/apps/*/tasks.py, backend/apps/reports/tasks.py, and mds-client task modules.",
@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "b36a90c3",
+    "head": "0d2e7faa",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1125,6 +1125,14 @@
         "phase": "Phase 9 - Inventory",
         "status": "DELETED",
         "timestamp": "2026-07-17T12:08:27+05:30"
+      },
+      {
+        "commit_sha": "0d2e7faa16aa49362351de4e7917c14af8e93dff",
+        "commit_summary": "docs(audit): record allocation helper recheck",
+        "file": "Phase 10 - Reports queue",
+        "phase": "Phase 10 - Reports",
+        "status": "FROZEN",
+        "timestamp": "2026-07-17T12:10:25+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",

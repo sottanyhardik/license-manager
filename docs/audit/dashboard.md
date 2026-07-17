@@ -93,6 +93,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 Inventory frozen after the active audit database query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - Phase 9 Inventory reopened only for dependency-marked `REQUIRES_RECHECK` allocation helpers; verified-dead `frontend/src/components/AllotmentAllocationModal.tsx` and `frontend/src/services/calculators/allocationCalculator.js` were removed, and the calculator barrel no longer exports the orphaned helper.
 - Phase 10 Reports frozen without reopening Phase 7; active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Phase 10 Reports recovery confirmation kept the phase frozen after the latest Phase 9 recheck; the active report/export/PDF/Excel/CSV/ledger queue still has zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
 - Phase 11 Documents removed verified-dead legacy Django template `backend/templates/profile.html`; dependency analysis found no live Django render/template-loader/runtime path, and React entry HTML remains preserved.
 - Phase 11 Documents completed `docs/media-security-cutover.md`; retained live runbook and updated stale frontend media/token and restricted query-token guidance to match current code.
 - Phase 11 Documents completed `frontend/src/hooks/useFileUpload.js` with its focused test; upload endpoint, file input, MIME, progress, malformed response, and size formatting paths are hardened.
@@ -281,6 +282,13 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 allocation helper commit: b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e at 2026-07-17T12:08:27+05:30, cleanup(inventory): remove dead allocation helpers
 - Phase 10 report/export completion query: jq report|export|pdf|excel|csv|ledger NOT_STARTED/REQUIRES_RECHECK over docs/audit/audit-database.json -> zero rows
 - Phase 10 freeze recovery point: 919f53d1f8273eaf59e8e5d70b98593c4b86b6f3 at 2026-07-17T10:49:18+05:30, docs(audit): freeze inventory phase
+- Phase 10 recovery query: report/export/PDF/Excel/CSV/ledger NOT_STARTED or REQUIRES_RECHECK over docs/audit/audit-database.json -> zero rows
+- Phase 10 recovery Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 10 recovery makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 10 recovery py_compile/compileall: scoped representative report/export backend files and directories -> passed
+- Phase 10 recovery Ruff: broad mixed-language report/export verification blocked by pre-existing frozen-module F401 findings and frontend TS/JS paths being parsed as Python
+- Phase 10 recovery security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 10 recovery point before metadata confirmation: 0d2e7faa16aa49362351de4e7917c14af8e93dff at 2026-07-17T12:10:25+05:30, docs(audit): record allocation helper recheck
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

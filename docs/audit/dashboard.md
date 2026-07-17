@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `496`
+- Files audited: `498`
 - Files changed directly: `50`
-- Files requiring dependency recheck: `357`
+- Files requiring dependency recheck: `356`
 - Files not started: `12`
 - Files ignored/excluded: `595`
 - Files remaining: `420`
-- Total source files tracked: `915`
-- Total source LOC tracked: `241320`
-- Audited LOC: `115772`
-- Remaining LOC: `125548`
+- Total source files tracked: `916`
+- Total source LOC tracked: `241448`
+- Audited LOC: `117017`
+- Remaining LOC: `124431`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -38,7 +38,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 | `docs` | 53 | 24368 | 20 | 3 | 30 | 0 |
 | `frontend/src/pages` | 77 | 19217 | 66 | 0 | 11 | 0 |
 | `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
-| `frontend/src/components` | 69 | 8992 | 8 | 0 | 61 | 0 |
+| `frontend/src/components` | 70 | 9120 | 10 | 0 | 60 | 0 |
 | `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
 | `backend/apps/allotment` | 38 | 4949 | 9 | 5 | 23 | 1 |
 | `backend/apps/bill_of_entry` | 20 | 3439 | 15 | 5 | 0 | 0 |
@@ -89,6 +89,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 Inventory started and removed stale `backend/scripts/char_license_list_balance.py`; active license balance regression coverage remains in maintained test modules.
 - Phase 9 Inventory removed stale `backend/scripts/test_balance_calc.py`; deterministic balance assertions remain in `backend/apps/license/tests/test_balance_calculator.py`.
 - Phase 9 Inventory completed `docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md`; stale deployment-era balance guidance now reflects current service, materialized balance, command, and regression-test contracts.
+- Phase 9 Inventory completed `frontend/src/components/LicenseBalanceModal.tsx`; license balance modal validation, finite numeric rendering, authenticated PDF/export requests, and malformed API response handling are covered by focused helper regressions.
 
 ## Verification History
 
@@ -181,6 +182,18 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 9 balance architecture Django check: .venv/bin/python backend/manage.py check -> no issues
 - Phase 9 balance architecture makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
 - Phase 9 balance architecture commit: a6246911dab2fcf96053f3e5b87dc6f92a93e74d at 2026-07-16T17:50:32+05:30, docs(inventory): update balance architecture guide
+- Phase 9 LicenseBalanceModal dependency scan: live imports found in frontend/src/pages/masters/MasterList.tsx and frontend/src/pages/masters/MasterForm.tsx; retained and hardened rather than deleted
+- Phase 9 LicenseBalanceModal regression: npm test -- LicenseBalanceModal.test.tsx -> 6 passed
+- Phase 9 LicenseBalanceModal TypeScript: npm run typecheck -> passed
+- Phase 9 LicenseBalanceModal ESLint: npm run lint -- --quiet src/components/LicenseBalanceModal.tsx src/components/LicenseBalanceModal.test.tsx -> clean
+- Phase 9 LicenseBalanceModal React build: npm run build -> passed
+- Phase 9 LicenseBalanceModal backend balance regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q -> 36 passed
+- Phase 9 LicenseBalanceModal Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -> clean
+- Phase 9 LicenseBalanceModal py_compile and compileall scoped balance service/command/test files -> passed
+- Phase 9 LicenseBalanceModal Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 9 LicenseBalanceModal makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 9 LicenseBalanceModal security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 9 LicenseBalanceModal commit: e9a690e24c02dd80960299e2e213b3b879e77c38 at 2026-07-16T17:55:39+05:30, fix(inventory): harden license balance modal
 - Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
 - Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
 - Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed

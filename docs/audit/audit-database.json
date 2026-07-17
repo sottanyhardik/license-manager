@@ -43,6 +43,12 @@
       "event": "Phase 9 Inventory balance architecture guide completed.",
       "reason": "Stale deployment checklist was replaced with current LicenseBalanceCalculator, LicenseBalance subrow, validation, and test contracts.",
       "commit_sha": "a6246911dab2fcf96053f3e5b87dc6f92a93e74d"
+    },
+    {
+      "timestamp": "2026-07-16T17:55:39+05:30",
+      "event": "Phase 9 Inventory license balance modal completed.",
+      "reason": "Modal balance API paths, malformed response handling, finite numeric rendering, and authenticated document/export downloads were hardened with focused regression tests.",
+      "commit_sha": "e9a690e24c02dd80960299e2e213b3b879e77c38"
     }
   ],
   "blocked_work": [
@@ -387,7 +393,8 @@
     "Phase 8 Bills of Entry completed: active audit database has zero backend/apps/bill_of_entry files marked NOT_STARTED or REQUIRES_RECHECK; Phase 9 Inventory queued next.",
     "Phase 9 Inventory deleted stale backend/scripts/char_license_list_balance.py characterization probe after dependency analysis found no live callers; source commit 1d7fb0713b09b25b7375f749c076a43b4734a9f0 (cleanup(inventory): remove stale balance probe).",
     "Phase 9 Inventory deleted stale backend/scripts/test_balance_calc.py dev DB print script after dependency analysis found no live callers; source commit 8058036a1a16d037cdd27c99ba2a26e81d7ba395 (cleanup(inventory): remove stale balance test script).",
-    "Phase 9 Inventory completed docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md; stale deployment-era balance guide replaced with current LicenseBalanceCalculator architecture in source commit a6246911dab2fcf96053f3e5b87dc6f92a93e74d (docs(inventory): update balance architecture guide)."
+    "Phase 9 Inventory completed docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md; stale deployment-era balance guide replaced with current LicenseBalanceCalculator architecture in source commit a6246911dab2fcf96053f3e5b87dc6f92a93e74d (docs(inventory): update balance architecture guide).",
+    "Phase 9 Inventory completed frontend/src/components/LicenseBalanceModal.tsx; balance modal now validates license path segments, normalizes malformed API arrays, renders finite numeric cells, removes manual localStorage Authorization header construction, and is covered by frontend/src/components/LicenseBalanceModal.test.tsx in source commit e9a690e24c02dd80960299e2e213b3b879e77c38 (fix(inventory): harden license balance modal)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -21927,33 +21934,73 @@
       "total_lines": 94
     },
     "frontend/src/components/LicenseBalanceModal.tsx": {
-      "audit_status": "REQUIRES_RECHECK",
-      "complexity": 13,
+      "audit_status": "COMPLETED",
+      "complexity": 10,
       "duplicate_score": 0,
-      "exported_symbols": [],
-      "file_checksum": "2ee68fa67e0f675a1877f618226b66e3217cb32ab2bcf44a0a9e2c997634fd6e",
+      "exported_symbols": [
+        "toSafeLicensePathSegment",
+        "buildLicenseEndpoint",
+        "formatFiniteDecimal",
+        "normalizeItemOptions",
+        "normalizeUsageData",
+        "normalizeLicenseBalanceData",
+        "LicenseBalanceModal"
+      ],
+      "file_checksum": "71a605c378a6780e7338942e9181b3671b97c92893d8c314f85c2501ec5d4a6c",
       "file_fingerprint": {
-        "mtime_ns": 1784118789246864935,
-        "size": 82199,
+        "mtime_ns": 1784204675338309459,
+        "size": 83609,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "typescript-react",
-      "last_audit_timestamp": null,
-      "maintainability_score": 86,
+      "last_audit_timestamp": "2026-07-16T17:55:39+05:30",
+      "maintainability_score": 94,
       "module": "frontend/src/components",
-      "performance_score": 91,
+      "performance_score": 94,
       "previous_index_checksum": null,
-      "readability_score": 86,
-      "security_score": 80,
-      "technical_debt_score": 14,
+      "readability_score": 92,
+      "security_score": 96,
+      "technical_debt_score": 4,
       "todo_count": 0,
       "total_classes": 0,
-      "total_functions": 1,
-      "total_imports": 0,
-      "total_lines": 1117
+      "total_functions": 9,
+      "total_imports": 11,
+      "total_lines": 1169
+    },
+    "frontend/src/components/LicenseBalanceModal.test.tsx": {
+      "audit_status": "COMPLETED",
+      "complexity": 2,
+      "duplicate_score": 0,
+      "exported_symbols": [],
+      "file_checksum": "e2b6564d332c4604d69a45b037a3be3580fd027c112ed99b89f594f761003387",
+      "file_fingerprint": {
+        "mtime_ns": 1784204653648171945,
+        "size": 2800,
+        "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "fixme_count": 0,
+      "imported_modules": [
+        "vitest",
+        "./LicenseBalanceModal"
+      ],
+      "index_checksum_mismatch": false,
+      "language": "typescript-react",
+      "last_audit_timestamp": "2026-07-16T17:55:39+05:30",
+      "maintainability_score": 99,
+      "module": "frontend/src/components",
+      "performance_score": 100,
+      "previous_index_checksum": null,
+      "readability_score": 99,
+      "security_score": 100,
+      "technical_debt_score": 1,
+      "todo_count": 0,
+      "total_classes": 0,
+      "total_functions": 6,
+      "total_imports": 2,
+      "total_lines": 76
     },
     "frontend/src/components/LoadingFallback.tsx": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31495,12 +31542,12 @@
     "frontend/src/components": {
       "blocked": 0,
       "changed": 0,
-      "completed": 8,
-      "files": 69,
+      "completed": 10,
+      "files": 70,
       "in_progress": 0,
-      "lines": 8992,
+      "lines": 9120,
       "not_started": 0,
-      "requires_recheck": 61
+      "requires_recheck": 60
     },
     "frontend/src/constants.js": {
       "blocked": 0,
@@ -31846,18 +31893,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 115772,
+    "audited_lines": 117017,
     "blocked": 0,
     "changed": 50,
-    "completed": 496,
-    "files": 915,
+    "completed": 498,
+    "files": 916,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 241320,
+    "lines": 241448,
     "not_started": 12,
-    "remaining_lines": 125548,
-    "requires_recheck": 357,
+    "remaining_lines": 124431,
+    "requires_recheck": 356,
     "todo": 22
   },
   "verification_history": [
@@ -32951,6 +32998,22 @@
     "Phase 9 balance architecture Django check: .venv/bin/python backend/manage.py check -> no issues.",
     "Phase 9 balance architecture makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
     "Phase 9 balance architecture diff check: git diff --check -- docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md -> clean before source commit.",
-    "Phase 9 balance architecture commit: a6246911dab2fcf96053f3e5b87dc6f92a93e74d at 2026-07-16T17:50:32+05:30, docs(inventory): update balance architecture guide."
+    "Phase 9 balance architecture commit: a6246911dab2fcf96053f3e5b87dc6f92a93e74d at 2026-07-16T17:50:32+05:30, docs(inventory): update balance architecture guide.",
+    "Phase 9 LicenseBalanceModal dependency scan: live imports found in frontend/src/pages/masters/MasterList.tsx and frontend/src/pages/masters/MasterForm.tsx; retained and hardened rather than deleted.",
+    "Phase 9 LicenseBalanceModal validation hardening: added safe license path segment construction, malformed API array normalization, finite numeric rendering, and async item-option filtering.",
+    "Phase 9 LicenseBalanceModal security hardening: removed direct localStorage Authorization header construction from balance PDF and merged-document PDF requests; shared axios auth path remains responsible for credentials.",
+    "Phase 9 LicenseBalanceModal regression: npm test -- LicenseBalanceModal.test.tsx -> 6 passed.",
+    "Phase 9 LicenseBalanceModal TypeScript: npm run typecheck -> passed.",
+    "Phase 9 LicenseBalanceModal ESLint: npm run lint -- --quiet src/components/LicenseBalanceModal.tsx src/components/LicenseBalanceModal.test.tsx -> clean.",
+    "Phase 9 LicenseBalanceModal React build: npm run build -> passed.",
+    "Phase 9 LicenseBalanceModal backend balance regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q -> 36 passed.",
+    "Phase 9 LicenseBalanceModal Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -> clean.",
+    "Phase 9 LicenseBalanceModal py_compile: .venv/bin/python -m py_compile scoped balance service/command/test files -> passed.",
+    "Phase 9 LicenseBalanceModal compileall: .venv/bin/python -m compileall -q scoped balance service/command/test files -> passed.",
+    "Phase 9 LicenseBalanceModal Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 9 LicenseBalanceModal makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning.",
+    "Phase 9 LicenseBalanceModal security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 9 LicenseBalanceModal diff check: git diff --check -- frontend/src/components/LicenseBalanceModal.tsx frontend/src/components/LicenseBalanceModal.test.tsx -> clean before source commit.",
+    "Phase 9 LicenseBalanceModal commit: e9a690e24c02dd80960299e2e213b3b879e77c38 at 2026-07-16T17:55:39+05:30, fix(inventory): harden license balance modal."
   ]
 }

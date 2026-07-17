@@ -102,3 +102,41 @@ Append-only audit log for Phase 9 Inventory work.
 - Remaining Technical Debt:
   - Adjacent queued inventory/balance item remains: `frontend/src/components/LicenseBalanceModal.tsx`.
 - Status: COMPLETED
+
+## frontend/src/components/LicenseBalanceModal.tsx
+
+- File Path(s): `frontend/src/components/LicenseBalanceModal.tsx`, `frontend/src/components/LicenseBalanceModal.test.tsx`
+- Module: Inventory / License balance React modal
+- Total LOC: 1245
+- Lines Reviewed: 1169 component lines plus 76 regression-test lines and live imports from MasterList/MasterForm
+- Functions Reviewed: 9 component/helper functions plus 6 test cases
+- Classes Reviewed: 0
+- Validation Improvements: Added safe license path segment validation, malformed license/usage array normalization, async item-option response filtering, and finite numeric rendering for all balance/quantity/CIF cells.
+- Package Replacements: Reused existing shared axios, `openAuthedFile`, and `openPdfPreview`; no new dependency introduced.
+- Performance Improvements: Avoided exception-prone `.map()` paths on malformed API payloads and kept optimistic local row updates scoped to normalized import rows.
+- Security Improvements: Removed manual `localStorage` Authorization header construction from balance PDF and merged-document PDF requests; export/PDF paths now use validated relative license endpoints.
+- Dead Code Removed: None; dependency analysis confirmed the modal is live through license MasterList and MasterForm flows.
+- Duplicate Logic Removed: Consolidated repeated unsafe path construction and numeric formatting into shared local helpers covered by tests.
+- Tests Added: `frontend/src/components/LicenseBalanceModal.test.tsx`
+- Verification Results:
+  - Dependency scan found live imports in `frontend/src/pages/masters/MasterList.tsx` and `frontend/src/pages/masters/MasterForm.tsx`; retained and hardened rather than deleted.
+  - `npm test -- LicenseBalanceModal.test.tsx` -> 6 passed.
+  - `npm run typecheck` -> passed.
+  - `npm run lint -- --quiet src/components/LicenseBalanceModal.tsx src/components/LicenseBalanceModal.test.tsx` -> clean.
+  - `npm run build` -> passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q` -> 36 passed.
+  - `.venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py` -> clean.
+  - `.venv/bin/python -m py_compile` scoped balance service/command/test files -> passed.
+  - `.venv/bin/python -m compileall -q` scoped balance service/command/test files -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check -- frontend/src/components/LicenseBalanceModal.tsx frontend/src/components/LicenseBalanceModal.test.tsx` -> clean before source commit.
+- Commit SHA: `e9a690e24c02dd80960299e2e213b3b879e77c38`
+- Commit Timestamp: `2026-07-16T17:55:39+05:30`
+- Commit Summary: `fix(inventory): harden license balance modal`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+- Remaining Technical Debt:
+  - The modal remains large and should be split into smaller presentational sections in a future decomposition phase.
+- Status: COMPLETED

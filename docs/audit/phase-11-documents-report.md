@@ -345,3 +345,39 @@
 - Remaining Technical Debt:
   - Queued legacy DAdmin templates still link to `404.html`; audit them only when selected by the Phase 11 queue.
 - Status: COMPLETED
+
+
+## Production 500 Template
+
+- File Path(s): `backend/templates/500.html`, `backend/tests/test_url_routing.py`
+- Module: Documents / Django production error template
+- Total LOC: 452 (`500.html`: 86; focused route test module: 366)
+- Lines Reviewed: 90 original template lines, 86 replacement template lines, route URLConf, Django template settings, and 366 test lines
+- Functions Reviewed: 1 added regression test method
+- Classes Reviewed: 1 existing `URLRoutingRegressionTests` class touched for coverage
+- Validation Improvements: Added a regression proving `500.html` renders through Django's template loader without runtime context.
+- Package Replacements: Removed stale DAdmin/static asset dependency from the template; no new package introduced.
+- Performance Improvements: Removed external font fetch, stale CSS bundles, stale JavaScript bundles, and obsolete dashboard wrapper from production 500 responses.
+- Security Improvements: Added `noindex,nofollow`, removed external Google Font loading, removed JavaScript execution, and replaced the stale dashboard-relative link with `/`.
+- Dead Code Removed: Removed DAdmin wrapper, broken asset references, and unused script/style dependencies from the active 500 template.
+- Duplicate Logic Removed: None; retained Django's conventional `500.html` contract.
+- Tests Added: `URLRoutingRegressionTests.test_html_500_template_renders_without_external_assets`
+- Verification Results:
+  - Dependency scan retained `backend/templates/500.html` because `backend/templates` is in `TEMPLATES["DIRS"]` and Django can load `500.html` by convention for production 500 handling.
+  - Remaining `500.html` references are stale links from other queued legacy DAdmin templates, not render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source files -> clean before source commit.
+- Source Commit SHA: `6ed96a35cfed4a23c98530b8e232c90d22511876`
+- Source Commit Timestamp: `2026-07-17T16:11:22+05:30`
+- Source Commit Summary: `fix(documents): harden production 500 template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Queued legacy DAdmin templates still link to `500.html`; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED

@@ -103,6 +103,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents completed `nginx-http-only-tractor.conf`; the live tractor HTTP-only certbot bootstrap config now has explicit client/proxy timeouts, disabled proxy redirects, and baseline browser security headers.
 - Phase 11 Documents removed the verified-dead legacy allotment Django template/tag stack; 10 templates plus the private `app_tags` package had no live render/template-loader/runtime path after DRF/React routing.
 - Phase 11 Documents completed `backend/templates/404.html`; the conventional Django production 404 template is now self-contained, noindex, and covered by a render regression.
+- Phase 11 Documents completed `backend/templates/500.html`; the conventional Django production 500 template is now self-contained, noindex, and covered by a render regression.
 
 ## Verification History
 
@@ -201,6 +202,13 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 404 template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
 - Phase 11 404 template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
 - Phase 11 404 template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 500 template dependency scan: retained as Django conventional production 500 template because `backend/templates` is in `TEMPLATES["DIRS"]`; remaining `500.html` hrefs are queued legacy DAdmin links.
+- Phase 11 500 template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 500 template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 500 template py_compile/compileall: scoped route/settings/test files -> passed.
+- Phase 11 500 template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 500 template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 500 template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
 - Phase 8 BOE ICEGATE helper regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed
 - Phase 8 BOE ICEGATE helper Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> clean
 - Phase 8 BOE ICEGATE helper py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed

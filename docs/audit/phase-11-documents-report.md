@@ -705,3 +705,39 @@
 - Remaining Technical Debt:
   - Other queued legacy DAdmin templates still contain static `footer-dark.html` hrefs; audit them only when selected by the Phase 11 queue.
 - Status: COMPLETED
+
+
+## Legacy Footer Light Template
+
+- File Path(s): `backend/templates/footer-light.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 519
+- Lines Reviewed: 519 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, form/action, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin footer layout demo page that no active Django route renders and whose search/dropdown/panel controls had no backend validation path.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static footer demo content, and unused plugin script loading from the active template tree.
+- Security Improvements: Removed stale external/static asset loading, unreachable form/action surfaces, dummy user data, and unauthenticated static layout controls from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/footer-light.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `footer-light.html`.
+  - Remaining `footer-light.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `d5a38159aa65c90ae1f08aa638a2c230ce5d0ccc`
+- Source Commit Timestamp: `2026-07-17T18:03:20+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead footer light template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `footer-light.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED

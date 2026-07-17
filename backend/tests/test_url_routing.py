@@ -194,6 +194,20 @@ class URLRoutingRegressionTests(APITestCase):
         self.assertNotIn("assets/js/", rendered)
         self.assertNotIn("assets/css/", rendered)
 
+    def test_html_500_template_renders_without_external_assets(self):
+        """
+        The production Django 500 template must render standalone without
+        context, external fonts, or JavaScript.
+        """
+        rendered = get_template("500.html").render({})
+
+        self.assertIn("Something went wrong", rendered)
+        self.assertIn('href="/"', rendered)
+        self.assertIn('name="robots"', rendered)
+        self.assertNotIn("fonts.googleapis.com", rendered)
+        self.assertNotIn("assets/js/", rendered)
+        self.assertNotIn("assets/css/", rendered)
+
     def test_api_catchall_pattern_exists_in_urlpatterns(self):
         """
         A ^api/ regex pattern with callback _api_404 must be present in

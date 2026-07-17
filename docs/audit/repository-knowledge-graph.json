@@ -894,7 +894,7 @@
     "active_phase": "Phase 11 - Documents",
     "branch": "feature/V2",
     "excluded_files": 595,
-    "head": "14b3c523",
+    "head": "608deb78",
     "phase_freezes": [
       {
         "phase": "Phase 7 - Reporting & Exports",
@@ -1317,6 +1317,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T20:39:17+05:30"
+      },
+      {
+        "commit_sha": "608deb78e29db73d6228b2ec2c60aca8aa589f91",
+        "commit_summary": "cleanup(documents): remove dead notes template",
+        "file": "backend/templates/notes.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T21:44:18+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1507,6 +1515,14 @@
         "status": "DELETED",
         "source_commit_sha": "14b3c52373baa290945ca53b96451cda5095dd65",
         "finding": "No live render/template-loader/runtime path remained; remaining modals.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T21:44:18+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/notes.html",
+        "status": "DELETED",
+        "source_commit_sha": "608deb78e29db73d6228b2ec2c60aca8aa589f91",
+        "finding": "No live render/template-loader/runtime path remained; remaining notes.html hits are queued stale template links."
       }
     ]
   },

@@ -10,7 +10,9 @@ Three concerns pinned:
      when DEBUG=False; and anonymous access is rejected in non-DEBUG mode.
 """
 import inspect
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.template.loader import get_template
 from rest_framework import status
@@ -235,6 +237,17 @@ class URLRoutingRegressionTests(APITestCase):
             spa_idx,
             "_api_404 must be positioned before the SPA catch-all in urlpatterns",
         )
+
+    def test_spa_catchall_resolves_react_entry_template(self):
+        """
+        The SPA catch-all must resolve to the built React entry, not a
+        stale backend demo template named index.html.
+        """
+        template = get_template("index.html")
+        origin_name = Path(template.origin.name).resolve()
+        expected = (settings.BASE_DIR.parent / "frontend" / "dist" / "index.html").resolve()
+
+        self.assertEqual(origin_name, expected)
 
     def test_api_unknown_path_post_returns_json_404(self):
         """

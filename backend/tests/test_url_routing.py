@@ -11,9 +11,8 @@ Three concerns pinned:
 """
 import inspect
 
-import pytest
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.template.loader import get_template
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
@@ -180,6 +179,20 @@ class URLRoutingRegressionTests(APITestCase):
             content_type,
             f"Expected application/json content-type, got {content_type!r}",
         )
+
+    def test_html_404_template_renders_without_external_assets(self):
+        """
+        The production Django 404 template must render standalone without
+        relying on stale DAdmin assets, external fonts, or JavaScript.
+        """
+        rendered = get_template("404.html").render({})
+
+        self.assertIn("Page not found", rendered)
+        self.assertIn('href="/"', rendered)
+        self.assertIn('name="robots"', rendered)
+        self.assertNotIn("fonts.googleapis.com", rendered)
+        self.assertNotIn("assets/js/", rendered)
+        self.assertNotIn("assets/css/", rendered)
 
     def test_api_catchall_pattern_exists_in_urlpatterns(self):
         """

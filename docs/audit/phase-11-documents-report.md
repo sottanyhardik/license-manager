@@ -309,3 +309,39 @@
 - Remaining Technical Debt:
   - `backend/apps/core/templates/core/list.html` still contains a stale `allotment-add` URL tag, but dependency analysis found no live render path; leave it for its own queued Phase 11 legacy-template audit item.
 - Status: COMPLETED
+
+
+## Production 404 Template
+
+- File Path(s): `backend/templates/404.html`, `backend/tests/test_url_routing.py`
+- Module: Documents / Django production error template
+- Total LOC: 438 (`404.html`: 86; focused route test module: 352)
+- Lines Reviewed: 100 original template lines, 86 replacement template lines, route URLConf, Django template settings, and 352 test lines
+- Functions Reviewed: 1 added regression test method
+- Classes Reviewed: 1 existing `URLRoutingRegressionTests` class touched for coverage
+- Validation Improvements: Added a regression proving `404.html` renders through Django's template loader without runtime context.
+- Package Replacements: Removed stale DAdmin/static asset dependency from the template; no new package introduced.
+- Performance Improvements: Removed external font fetch, stale CSS bundles, stale JavaScript bundles, and obsolete search form from production 404 responses.
+- Security Improvements: Added `noindex,nofollow`, removed external Google Font loading, removed JavaScript execution, and replaced the stale dashboard-relative link with `/`.
+- Dead Code Removed: Removed DAdmin wrapper, broken asset references, and unused search form from the active 404 template.
+- Duplicate Logic Removed: None; retained Django's conventional `404.html` contract.
+- Tests Added: `URLRoutingRegressionTests.test_html_404_template_renders_without_external_assets`
+- Verification Results:
+  - Dependency scan retained `backend/templates/404.html` because `backend/templates` is in `TEMPLATES["DIRS"]` and Django can load `404.html` by convention for production 404 handling.
+  - Remaining `404.html` references are stale links from other queued legacy DAdmin templates, not render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 15 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source files -> clean before source commit.
+- Source Commit SHA: `d7e55f2ef8b03c4fe95cab4f751641f16fd36892`
+- Source Commit Timestamp: `2026-07-17T16:08:27+05:30`
+- Source Commit Summary: `fix(documents): harden production 404 template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Queued legacy DAdmin templates still link to `404.html`; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED

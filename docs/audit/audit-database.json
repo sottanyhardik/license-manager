@@ -85,6 +85,12 @@
       "event": "Phase 11 Documents legacy allotment template/tag stack removed from active audit inventory.",
       "reason": "Repository-wide dependency analysis proved the legacy Django allotment templates and private app_tags library were orphaned after DRF/React routing; remaining references were self-contained stale template links with no live render path.",
       "commit_sha": "99ed3080ed82f0923fe5538108dca80353cdd5a9"
+    },
+    {
+      "timestamp": "2026-07-17T16:08:27+05:30",
+      "event": "Phase 11 Documents production 404 template completed.",
+      "reason": "Django can load backend/templates/404.html by convention from TEMPLATES DIRS; stale DAdmin external assets and scripts were replaced with a self-contained noindex error template and focused render regression.",
+      "commit_sha": "d7e55f2ef8b03c4fe95cab4f751641f16fd36892"
     }
   ],
   "blocked_work": [
@@ -442,7 +448,8 @@
     "Phase 11 Documents completed nginx-http-only-tractor.conf; tractor HTTP-only certbot bootstrap now has explicit client/proxy timeouts, proxy_redirect off, and baseline security headers in source commit 45a2223bc7f7ad1ac954e2c87de62c775cd106ac (fix(documents): harden tractor http nginx bootstrap).",
     "Phase 9 Inventory reopened only for dependency-marked REQUIRES_RECHECK allocation helpers and deleted verified-dead frontend/src/components/AllotmentAllocationModal.tsx plus frontend/src/services/calculators/allocationCalculator.js in source commit b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e (cleanup(inventory): remove dead allocation helpers).",
     "Phase 10 Reports recovery confirmation kept the phase frozen after the latest Phase 9 recheck; active report/export/PDF/Excel/CSV/ledger query returned zero files marked NOT_STARTED or REQUIRES_RECHECK from recovery commit 0d2e7faa16aa49362351de4e7917c14af8e93dff (docs(audit): record allocation helper recheck).",
-    "Phase 11 Documents deleted verified-dead legacy allotment Django template/tag stack (10 templates plus app_tags package) after dependency analysis found no live runtime path; source commit 99ed3080ed82f0923fe5538108dca80353cdd5a9 (cleanup(documents): remove dead allotment templates)."
+    "Phase 11 Documents deleted verified-dead legacy allotment Django template/tag stack (10 templates plus app_tags package) after dependency analysis found no live runtime path; source commit 99ed3080ed82f0923fe5538108dca80353cdd5a9 (cleanup(documents): remove dead allotment templates).",
+    "Phase 11 Documents completed backend/templates/404.html with a self-contained production error page and route-template regression in backend/tests/test_url_routing.py; source commit d7e55f2ef8b03c4fe95cab4f751641f16fd36892 (fix(documents): harden production 404 template)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -16354,7 +16361,7 @@
       "total_lines": 9
     },
     "backend/templates/404.html": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 1,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -16368,19 +16375,22 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "html",
-      "last_audit_timestamp": null,
-      "maintainability_score": 99,
+      "last_audit_timestamp": "2026-07-17T16:08:27+05:30",
+      "maintainability_score": 100,
       "module": "backend",
       "performance_score": 100,
       "previous_index_checksum": null,
-      "readability_score": 99,
-      "security_score": 80,
-      "technical_debt_score": 1,
+      "readability_score": 100,
+      "security_score": 100,
+      "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 100
+      "total_lines": 86,
+      "file_commit_sha": "d7e55f2ef8b03c4fe95cab4f751641f16fd36892",
+      "file_commit_summary": "fix(documents): harden production 404 template",
+      "verification_summary": "Retained as Django conventional 404 template; focused render regression, Ruff, py_compile, compileall, Django check, makemigrations dry-run, and diff checks passed."
     },
     "backend/templates/500.html": {
       "audit_status": "REQUIRES_RECHECK",
@@ -18201,7 +18211,7 @@
       "total_lines": 66
     },
     "backend/tests/test_url_routing.py": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 38,
       "duplicate_score": 0,
       "exported_symbols": [],
@@ -18215,7 +18225,7 @@
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "python",
-      "last_audit_timestamp": null,
+      "last_audit_timestamp": "2026-07-17T16:08:27+05:30",
       "maintainability_score": 78,
       "module": "backend",
       "performance_score": 98,
@@ -18227,7 +18237,10 @@
       "total_classes": 1,
       "total_functions": 16,
       "total_imports": 0,
-      "total_lines": 339
+      "total_lines": 352,
+      "file_commit_sha": "d7e55f2ef8b03c4fe95cab4f751641f16fd36892",
+      "file_commit_summary": "fix(documents): harden production 404 template",
+      "verification_summary": "Added 404 template render regression and removed unused imports; focused route test suite and Ruff passed."
     },
     "backend/theme/README.md": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31970,7 +31983,8 @@
     "backend/tests/test_export_masters_mds.py",
     "frontend/src/pages/masters/MasterList.smoke.test.tsx",
     "frontend/src/pages/TradeForm.smoke.test.tsx",
-    "frontend/src/pages/tradeFormHelpers.test.ts"
+    "frontend/src/pages/tradeFormHelpers.test.ts",
+    "backend/tests/test_url_routing.py::URLRoutingRegressionTests::test_html_404_template_renders_without_external_assets"
   ],
   "repository_inventory": {
     "excluded_files": 595,
@@ -31979,7 +31993,7 @@
   },
   "repository_metadata": {
     "branch": "feature/V2",
-    "head": "99ed3080",
+    "head": "d7e55f2e",
     "working_tree": "dirty"
   },
   "schema_version": 1,
@@ -31990,7 +32004,8 @@
     "Phase 11 Documents nginx protected-media snippet adds Cache-Control private, no-store for authenticated customs/PII document responses served through internal X-Accel-Redirect.",
     "Phase 11 Documents media sync diagnostics now rejects relative media paths, unsupported remote path shell characters, unknown options, and destructive two-way --delete before SSH/rsync execution.",
     "Phase 11 Documents nginx-http-only-tractor.conf now disables proxy redirects and adds X-Frame-Options, X-Content-Type-Options, and Referrer-Policy headers for the live HTTP-only cert bootstrap path.",
-    "Phase 11 Documents removed stale legacy allotment templates containing obsolete URL actions and inline AJAX form paths that were no longer protected by an active routed UI surface."
+    "Phase 11 Documents removed stale legacy allotment templates containing obsolete URL actions and inline AJAX form paths that were no longer protected by an active routed UI surface.",
+    "Phase 11 Documents 404 template no longer loads external Google Fonts, stale relative asset bundles, or JavaScript on production error responses."
   ],
   "source_index": {
     "generated_file_count": 1251,
@@ -32014,18 +32029,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 119140,
+    "audited_lines": 119226,
     "blocked": 0,
     "changed": 50,
-    "completed": 521,
+    "completed": 522,
     "files": 916,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
-    "lines": 240510,
+    "lines": 240513,
     "not_started": 12,
-    "remaining_lines": 121588,
-    "requires_recheck": 333,
+    "remaining_lines": 121488,
+    "requires_recheck": 332,
     "todo": 22
   },
   "verification_history": [
@@ -33266,6 +33281,17 @@
     "Phase 11 allotment template Ruff: .venv/bin/ruff check backend/apps/allotment backend/tests/test_api_allotment.py backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841 blocked by pre-existing unused imports in unchanged allotment modules and backend/tests/test_url_routing.py.",
     "Phase 11 allotment template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 allotment template diff check: git diff --check and git diff --cached --check for source deletions -> clean before source commit.",
-    "Phase 11 allotment template source commit: 99ed3080ed82f0923fe5538108dca80353cdd5a9 at 2026-07-17T16:04:27+05:30, cleanup(documents): remove dead allotment templates."
+    "Phase 11 allotment template source commit: 99ed3080ed82f0923fe5538108dca80353cdd5a9 at 2026-07-17T16:04:27+05:30, cleanup(documents): remove dead allotment templates.",
+    "Phase 11 404 template dependency scan: backend/templates/404.html is retained as Django conventional production 404 template because backend/templates is in TEMPLATES DIRS; remaining 404.html hrefs are queued legacy DAdmin template links.",
+    "Phase 11 404 template hardening: replaced stale DAdmin page with self-contained noindex HTML/CSS, removed external Google Fonts, broken assets/css/js dependencies, obsolete search form, and dashboard-relative link.",
+    "Phase 11 404 template regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 15 passed.",
+    "Phase 11 404 template Ruff: .venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841 -> clean.",
+    "Phase 11 404 template py_compile: .venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py -> passed.",
+    "Phase 11 404 template compileall: .venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement -> passed.",
+    "Phase 11 404 template Django check: .venv/bin/python backend/manage.py check -> no issues.",
+    "Phase 11 404 template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only.",
+    "Phase 11 404 template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
+    "Phase 11 404 template diff check: git diff --check and git diff --cached --check for source files -> clean before source commit.",
+    "Phase 11 404 template source commit: d7e55f2ef8b03c4fe95cab4f751641f16fd36892 at 2026-07-17T16:08:27+05:30, fix(documents): harden production 404 template."
   ]
 }

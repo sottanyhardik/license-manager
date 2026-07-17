@@ -1381,6 +1381,14 @@
         "phase": "Phase 11 - Documents",
         "status": "DELETED",
         "timestamp": "2026-07-17T22:17:21+05:30"
+      },
+      {
+        "commit_sha": "7c2383c933653b70b65814feec01bcf7b6196296",
+        "commit_summary": "cleanup(documents): remove dead progress bars template",
+        "file": "backend/templates/progress-bars.html",
+        "phase": "Phase 11 - Documents",
+        "status": "DELETED",
+        "timestamp": "2026-07-17T22:19:22+05:30"
       }
     ],
     "root": "/Users/drushahardiksottany/PycharmProjects/license-manager",
@@ -1635,6 +1643,14 @@
         "status": "DELETED",
         "source_commit_sha": "62433533c488e97760870475de53bc771bdf7d9d",
         "finding": "No live render/template-loader/runtime path remained; remaining products.html hits are queued stale template links."
+      },
+      {
+        "timestamp": "2026-07-17T22:19:22+05:30",
+        "phase": "Phase 11 - Documents",
+        "component": "backend/templates/progress-bars.html",
+        "status": "DELETED",
+        "source_commit_sha": "7c2383c933653b70b65814feec01bcf7b6196296",
+        "finding": "No live render/template-loader/runtime path remained; remaining progress-bars.html hits are queued stale template links."
       }
     ]
   },

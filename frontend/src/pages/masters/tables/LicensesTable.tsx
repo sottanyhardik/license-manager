@@ -14,6 +14,7 @@ import {
     memo,
     useCallback,
     useEffect,
+    useMemo,
     useState,
 } from "react";
 import {
@@ -45,6 +46,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { openPdfPreview } from "../../../utils/pdfPreview";
 import { openDocument } from "../../../utils/documentDownload";
 import { saveFilterState } from "../../../utils/filterPersistence";
+import LedgerTab from "./LedgerTab";
+import PlanTab from "./PlanTab";
+import BalanceTab from "./BalanceTab";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -858,15 +862,14 @@ function EmptyTabState({
 // Single license accordion row
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TabId = "overview" | "allocation" | "transactions" | "documents" | "history";
-
-const TABS: { id: TabId; label: string }[] = [
-    { id: "overview", label: "Overview" },
-    { id: "allocation", label: "Allocation" },
-    { id: "transactions", label: "Transactions" },
-    { id: "documents", label: "Documents" },
-    { id: "history", label: "History" },
-];
+type TabId =
+    | "overview"
+    | "ledger"
+    | "balance"
+    | "plan"
+    | "transactions"
+    | "documents"
+    | "history";
 
 interface LicenseRowProps {
     item: LicenseListItem;
@@ -912,6 +915,32 @@ const LicenseRow = memo(function LicenseRow({
     const [ownershipData, setOwnershipData] = useState<OwnershipData | null>(null);
     const [ownershipLoading, setOwnershipLoading] = useState(false);
 
+    // Dynamic tabs — computed once detail and ledger are known
+    const visibleTabs = useMemo<{ id: TabId; label: string }[]>(() => {
+        const tabs: { id: TabId; label: string }[] = [];
+        tabs.push({ id: "overview", label: "Overview" });
+        // Ledger replaces "Allocation" — only shown when import items exist
+        if (detail?.import_license && detail.import_license.length > 0) {
+            tabs.push({ id: "ledger", label: "Ledger" });
+        }
+        // Balance — always present (every license has a balance)
+        tabs.push({ id: "balance", label: "Balance" });
+        // Plan — only for users who can write
+        if (canWrite) {
+            tabs.push({ id: "plan", label: "Plan" });
+        }
+        // Transactions — only if ledger data actually has rows
+        if (ledger?.transactions && ledger.transactions.length > 0) {
+            tabs.push({ id: "transactions", label: "Transactions" });
+        }
+        // Documents — only when documents exist
+        if (detail?.license_documents && detail.license_documents.length > 0) {
+            tabs.push({ id: "documents", label: "Documents" });
+        }
+        tabs.push({ id: "history", label: "History" });
+        return tabs;
+    }, [detail, ledger, canWrite]);
+
     const isExpired = !!(
         item.license_expiry_date && parseIndianDate(item.license_expiry_date)! < new Date()
     );
@@ -956,6 +985,13 @@ const LicenseRow = memo(function LicenseRow({
                 .finally(() => setOwnershipLoading(false));
         }
     }, [item.id, ledger, ledgerLoading, ownershipData, ownershipLoading]);
+
+    // Keep activeTab in sync when visibleTabs change (e.g. detail loads, removing a tab)
+    useEffect(() => {
+        if (!visibleTabs.find((t) => t.id === activeTab)) {
+            setActiveTab(visibleTabs[0]?.id ?? "overview");
+        }
+    }, [visibleTabs, activeTab]);
 
     const handleOpenMergedPdf = useCallback(async (e: React.MouseEvent) => {
         e.stopPropagation(); // prevent accordion toggle
@@ -1138,14 +1174,14 @@ const LicenseRow = memo(function LicenseRow({
                         {/* Left: Tabs (75%) */}
                         <div className="min-w-0 flex-1 px-5 pb-5">
                             <div>
-                                {/* Custom underline-style tab list */}
+                                {/* Dynamic underline-style tab list */}
                                 <div className="mb-4 border-b border-border/50">
                                     <div
                                         role="tablist"
                                         aria-label={`License ${item.license_number} sections`}
                                         className="-mb-px flex gap-0 overflow-x-auto"
                                     >
-                                        {TABS.map((tab) => (
+                                        {visibleTabs.map((tab) => (
                                             <button
                                                 key={tab.id}
                                                 role="tab"
@@ -1167,8 +1203,8 @@ const LicenseRow = memo(function LicenseRow({
                                     </div>
                                 </div>
 
-                                {/* Tab panels */}
-                                {TABS.map((tab) => (
+                                {/* Tab panels — only render when visible tab */}
+                                {visibleTabs.map((tab) => (
                                     <div
                                         key={tab.id}
                                         id={`tabpanel-${item.id}-${tab.id}`}
@@ -1182,8 +1218,30 @@ const LicenseRow = memo(function LicenseRow({
                                                 {tab.id === "overview" && (
                                                     <OverviewTab item={item} detail={detail} />
                                                 )}
-                                                {tab.id === "allocation" && (
-                                                    <AllocationTab item={item} detail={detail} loading={detailLoading} />
+                                                {tab.id === "ledger" && (
+                                                    <LedgerTab
+                                                        item={item as unknown as Parameters<typeof LedgerTab>[0]["item"]}
+                                                        detail={detail as unknown as Parameters<typeof LedgerTab>[0]["detail"]}
+                                                        loading={detailLoading}
+                                                    />
+                                                )}
+                                                {tab.id === "balance" && (
+                                                    <BalanceTab
+                                                        licenseId={item.id}
+                                                        detail={detail as unknown as Parameters<typeof BalanceTab>[0]["detail"]}
+                                                        detailLoading={detailLoading}
+                                                        onDetailUpdate={(patch) => setDetail((prev) => prev ? ({ ...prev, ...patch } as LicenseDetail) : prev)}
+                                                        onDownloadPdf={handleDownloadPdf}
+                                                        onDownloadExcel={handleDownloadExcel}
+                                                    />
+                                                )}
+                                                {tab.id === "plan" && (
+                                                    <PlanTab
+                                                        licenseId={item.id}
+                                                        licenseNumber={item.license_number}
+                                                        balanceCif={Number(item.get_balance_cif || 0)}
+                                                        canWrite={canWrite}
+                                                    />
                                                 )}
                                                 {tab.id === "transactions" && (
                                                     <TransactionsTab item={item} ledger={ledger} loading={ledgerLoading} />

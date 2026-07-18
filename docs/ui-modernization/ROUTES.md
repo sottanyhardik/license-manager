@@ -81,13 +81,13 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/reports/parle/sion-e1` | `pages/reports/SionE1.tsx` | TODO | — | — | Wraps SionNormReport |
-| `/reports/parle/sion-e5` | `pages/reports/SionE5.tsx` | TODO | — | — | Wraps SionNormReport |
-| `/reports/parle/sion-e126` | `pages/reports/SionE126.tsx` | TODO | — | — | Wraps SionNormReport |
-| `/reports/parle/sion-e132` | `pages/reports/SionE132.tsx` | TODO | — | — | Wraps SionNormReport |
-| `/reports/expiring-licenses` | `pages/reports/ExpiringLicenses.tsx` | TODO | — | — | Wraps LicenseExportPanel |
-| `/reports/active-licenses` | `pages/reports/ActiveLicenses.tsx` | TODO | — | — | Wraps LicenseExportPanel |
-| `/reports/download-license` | `pages/reports/DownloadLicense.tsx` | TODO | — | — | — |
+| `/reports/parle/sion-e1` | `pages/reports/SionE1.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure SionNormReport delegate — already modern |
+| `/reports/parle/sion-e5` | `pages/reports/SionE5.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure SionNormReport delegate — already modern |
+| `/reports/parle/sion-e126` | `pages/reports/SionE126.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure SionNormReport delegate — already modern |
+| `/reports/parle/sion-e132` | `pages/reports/SionE132.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure SionNormReport delegate — already modern |
+| `/reports/expiring-licenses` | `pages/reports/ExpiringLicenses.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure LicenseExportPanel delegate — already modern |
+| `/reports/active-licenses` | `pages/reports/ActiveLicenses.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure LicenseExportPanel delegate — already modern |
+| `/reports/download-license` | `pages/reports/DownloadLicense.tsx` | FROZEN | Session-3 | 2026-07-18 | Already modern — shadcn, typed, aria-pressed toggles, useId |
 | `/reports/item-pivot` | `pages/reports/ItemPivotReport.tsx` | TODO | — | — | — |
 | `/reports/item-report` | `pages/reports/ItemReport.tsx` | TODO | — | — | — |
 
@@ -112,7 +112,7 @@
 | `/admin/users` | `pages/admin/UserList.tsx` | TODO | — | — | — |
 | `/admin/users/create` | `pages/admin/UserForm.tsx` | TODO | — | — | — |
 | `/admin/users/:id/edit` | `pages/admin/UserForm.tsx` | TODO | — | — | — |
-| `/admin/activity-log` | `pages/admin/ActivityLog.tsx` | TODO | — | — | — |
+| `/admin/activity-log` | `pages/admin/ActivityLog.tsx` | FROZEN | Session-3 | 2026-07-18 | ACTION_META CSS vars → Tailwind chipClass; types added; th scope; avatar inline style → Tailwind; EmptyState; cn() for conditionals |
 
 ---
 

@@ -60,6 +60,36 @@ No modifications needed. Frozen directly.
 
 **Build results:** ✅ 0 TypeScript errors · 0 lint errors · 375ms build
 
+### Routes: `/reports/parle/sion-*`, `/reports/expiring-licenses`, `/reports/active-licenses`, `/reports/download-license` — No changes — FROZEN
+
+All 7 report routes reviewed and found production-ready:
+- `SionE1/E5/E126/E132` — pure `SionNormReport` delegates (already modern)
+- `ExpiringLicenses`, `ActiveLicenses` — pure `LicenseExportPanel` delegates (already modern)
+- `DownloadLicense` — shadcn Card/Button/Input/Textarea/Badge, typed, aria-pressed toggles, `useId` accessibility
+
+### Route: `/admin/activity-log` — ActivityLog.tsx
+
+- `ACTION_META`: all CSS var `bg`/`color` string references → Tailwind `chipClass` strings
+  (`bg-success/10 text-success`, `bg-destructive/10 text-destructive`, etc.)
+- `fmtDate`: typed `(ts: string | null | undefined): string`
+- State types: `ActivityLogEntry` interface; `FilterState` type; `useState<ActivityLogEntry[]>([])`;
+  `useRef<AbortController | null>(null)` replacing untyped refs
+- `handleFilter`: typed `(key: keyof FilterState, value: string)`
+- `catch (err: unknown)` + typed cast for AbortError check
+- Action summary chips: `aria-pressed`, `ring-2 ring-current ring-offset-1` for active state visual,
+  `type="button"`, `cn()` class composition; removed inline `style={{ background, color }}`
+- Clear filters: `type="button"`, `focus-visible:underline`
+- User avatar: `style={{ background: "linear-gradient()" }}` → `bg-gradient-to-br from-primary to-primary/70`
+- Error row highlight: `style={isError ? { background: ... } : {}}` → `cn("...", isError && "bg-destructive/5")`
+- Action badge: inline styles → `cn(m.chipClass, ...)`
+- Status code badge: template literal string → `cn()` conditional
+- `th scope="col"` added to all 7 table headers (WCAG 1.3.1 — B004 further addressed)
+- Empty state: custom div → `EmptyState` component with icon, title, description
+- Refresh `cn()`: `size-4 ${loading ? "animate-spin" : ""}` → `cn("size-4", loading && "animate-spin")`
+- Label for Action select: added `htmlFor="f-action"` + `id="f-action"` on `SelectTrigger`
+
+**Build results:** ✅ 0 TypeScript errors · 0 lint errors · 412ms build
+
 ---
 
 ## Session 2 — 2026-07-18

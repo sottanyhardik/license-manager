@@ -22,6 +22,7 @@ import BoeMergeModal from "./BoeMergeModal";
 import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
 import AllotmentsTable from "./tables/AllotmentsTable";
 import GenericMasterCards from "./tables/GenericMasterCards";
+import LicensesTable from "./tables/LicensesTable";
 import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
@@ -86,7 +87,7 @@ export default function MasterList() {
     const [selectedLicenseId, setSelectedLicenseId] = useState(null);
 
     // Tracks license IDs currently fetching ownership from DGFT
-    const [fetchingOwnershipIds, setFetchingOwnershipIds] = useState(() => new Set());
+    const [fetchingOwnershipIds, setFetchingOwnershipIds] = useState<Set<number>>(() => new Set());
 
     // Ownership details modal state
     const [showOwnershipModal, setShowOwnershipModal] = useState(false);
@@ -406,6 +407,21 @@ export default function MasterList() {
     const invalidateList = useCallback(() => {
         qc.invalidateQueries({ queryKey: ['entity-list', entityName] });
     }, [qc, entityName]);
+
+    // Fetch DGFT ownership for a single license — extracted from inline card
+    const handleFetchOwnership = useCallback(async (item: { id: number; license_number?: string }) => {
+        setFetchingOwnershipIds(prev => { const n = new Set(prev); n.add(item.id); return n; });
+        try {
+            const r = await api.post(`license-actions/${item.id}/fetch-ownership/`);
+            const owner = r.data?.current_owner?.name || '—';
+            toast.success(`Ownership updated: ${owner} (${r.data?.transfers_count ?? 0} transfers)`);
+            invalidateList();
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || err?.message || 'Failed to fetch ownership');
+        } finally {
+            setFetchingOwnershipIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
+        }
+    }, [invalidateList]);
 
     useEffect(() => {
         if (!linkModalTrade) return;
@@ -921,203 +937,25 @@ export default function MasterList() {
                         />
                     )}
 
-                    {/* Licenses Card Layout */}
+                    {/* Licenses — extracted to dedicated component */}
                     {entityName === 'licenses' && (
-                        loading ? (
-                            <div className="text-center py-5">
-                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted-foreground">Loading Licenses...</div>
-                            </div>
-                        ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted-foreground">
-                                <Inbox className="size-4" aria-hidden="true" />
-                                <div className="mt-2">No licenses found</div>
-                            </div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
-                                    const parseIndianDate = (s) => { if (!s) return null; const p = s.split('-'); return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null; };
-                                    const isExpired = item.license_expiry_date && parseIndianDate(item.license_expiry_date) < new Date();
-                                    const statusColor = item.purchase_status_code === 'E1' ? { bg: 'var(--tb-brand-100)', text: 'var(--tb-brand-hover)' }
-                                        : item.purchase_status_code === 'E5' ? { bg: 'var(--tb-success-soft)', text: 'var(--tb-success-text)' }
-                                        : { bg: 'var(--tb-gray-100)', text: 'var(--tb-text-secondary)' };
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            className={cn(
-                                                'mb-2.5 overflow-hidden rounded-[--tb-r-md] shadow-sm',
-                                                // Green left rail marks a manually-planned license (expired still shows red).
-                                                item.is_manually_planned ? 'bg-success/5' : 'bg-[--tb-card-bg]',
-                                                isExpired
-                                                    ? 'border border-l-4 border-destructive/40 border-l-destructive'
-                                                    : item.is_manually_planned
-                                                        ? 'border border-l-4 border-[#16a34a] border-l-[#16a34a]'
-                                                        : 'border border-l-4 border-[--tb-border-soft] border-l-primary'
-                                            )}
-                                        >
-                                            {/* Row 1: Identity */}
-                                            <div className="flex flex-wrap items-center gap-2 border-b border-[--tb-border] bg-[--tb-sunken] px-3.5 py-2.5">
-                                                <span className="mr-1 text-base font-bold text-primary">
-                                                    {item.license_number || '-'}
-                                                </span>
-                                                {item.is_manually_planned && (
-                                                    <span className="chip border border-[#16a34a] bg-success/10 font-bold text-[#166534]">
-                                                        <Target className="size-3" aria-hidden="true" />Planned
-                                                    </span>
-                                                )}
-                                                {item.license_date && (
-                                                    <span className="chip chip-neutral">
-                                                        <Calendar className="size-3" aria-hidden="true" />{item.license_date}
-                                                    </span>
-                                                )}
-                                                {item.license_expiry_date && (
-                                                    <span className={cn('chip', isExpired ? 'chip-danger' : 'chip-neutral')}>
-                                                        <CalendarX className="size-3" aria-hidden="true" />Exp: {item.license_expiry_date}
-                                                    </span>
-                                                )}
-                                                {item.ledger_date && (
-                                                    <span className="chip chip-success">
-                                                        <BookCheck className="size-3" aria-hidden="true" />Ledger: {item.ledger_date}
-                                                    </span>
-                                                )}
-                                                {item.port_name && (
-                                                    <span className="chip chip-info">
-                                                        <MapPin className="size-3" aria-hidden="true" />{item.port_name}
-                                                    </span>
-                                                )}
-                                                {item.purchase_status_label && (
-                                                    <span
-                                                        className="rounded-[--tb-r-sm] px-2 py-0.5 text-xs font-semibold"
-                                                        style={{ color: statusColor.text, background: statusColor.bg }}
-                                                    >
-                                                        {item.purchase_status_label}
-                                                    </span>
-                                                )}
-                                                {(item.has_tl || item.has_copy) && (
-                                                    <button onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        try {
-                                                            const r = await api.get(`licenses/${item.id}/merged-documents/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            openPdfPreview(r.data, `${item.license_number || item.id}-copy.pdf`);
-                                                        } catch (err) {
-                                                            if (err.response?.status === 404) {
-                                                                toast.warning('Document files are not available on this server. The files may not have been uploaded yet.');
-                                                            } else {
-                                                                toast.error(err.response?.data ? String(err.response.data).slice(0, 200) : 'Failed to load documents');
-                                                            }
-                                                        }
-                                                    }} className="chip chip-success cursor-pointer border-0 hover:opacity-80 transition-opacity">
-                                                        Copy
-                                                    </button>
-                                                )}
-                                                {item.has_condition_sheet && (
-                                                    <span title="Condition sheet parsed from license copy" className="chip chip-primary cursor-pointer">
-                                                        <FileText className="size-4" aria-hidden="true" />Cond. Sheet
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Row 2: Norm class (25%) + details fill (75%) */}
-                                            <div className="flex items-stretch gap-4 border-b border-[--tb-border] bg-[--tb-card-bg] px-3.5 py-2.5">
-                                                {/* Left 25% — Norm Class */}
-                                                <div className="w-1/4 min-w-0 shrink-0 border-r border-[--tb-border] pr-4">
-                                                    <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.5px] text-muted-foreground">Norm Class</div>
-                                                    <div className="truncate text-sm font-medium text-foreground">{item.get_norm_class || '-'}</div>
-                                                </div>
-                                                {/* Right 75% — Exporter / IEC / Transfer status, each clamped to one line */}
-                                                <div className="grid min-w-0 flex-1 gap-4" style={{ gridTemplateColumns: '1.4fr 1fr 1.6fr' }}>
-                                                    {[
-                                                        { label: 'Exporter', value: item.exporter_name },
-                                                        { label: 'IEC', value: item.exporter_iec },
-                                                        { label: 'Transfer Status', value: item.latest_transfer },
-                                                    ].map((f) => (
-                                                        <div key={f.label} className="min-w-0">
-                                                            <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.5px] text-muted-foreground">{f.label}</div>
-                                                            <div title={f.value || ''} className="truncate text-sm font-medium text-foreground">{f.value || '-'}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Row 3: Stats + Actions */}
-                                            <div className="flex flex-wrap items-center gap-2 bg-[--tb-sunken] px-3.5 py-2">
-                                                <div className="flex flex-1 flex-wrap gap-5">
-                                                    <div>
-                                                        <div className="text-[0.67rem] font-semibold uppercase text-muted-foreground">Balance CIF</div>
-                                                        <div className="text-sm font-bold text-foreground">{fmtInr(item.get_balance_cif)}</div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex shrink-0 gap-1.5">
-                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#93c5fd] bg-primary/10 px-2.5 py-1 text-xs text-primary hover:opacity-80">
-                                                        <Pencil className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                    <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#38bdf8] bg-info/10 px-2.5 py-1 text-xs text-info hover:opacity-80">
-                                                        <Eye className="size-4" aria-hidden="true" />
-                                                    </button>
-                                                    {canWrite && <button
-                                                        onClick={() => { setPlanLicense({ id: item.id, number: item.license_number, balance: Number(item.get_balance_cif || 0) }); setShowPlanModal(true); }}
-                                                        title="Plan utilization"
-                                                        className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#a5b4fc] bg-primary/10 px-2.5 py-1 text-xs text-primary hover:opacity-80">
-                                                        <Target className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                    <button
-                                                        onClick={() => { setOwnershipLicense({ id: item.id, number: item.license_number }); setShowOwnershipModal(true); }}
-                                                        title="View ownership & transfers"
-                                                        className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#a5b4fc] bg-primary/10 px-2.5 py-1 text-xs text-primary hover:opacity-80">
-                                                        <Network className="size-4" aria-hidden="true" />
-                                                    </button>
-                                                    {canWrite && <button
-                                                        disabled={fetchingOwnershipIds.has(item.id)}
-                                                        onClick={async () => {
-                                                            setFetchingOwnershipIds(prev => { const n = new Set(prev); n.add(item.id); return n; });
-                                                            try {
-                                                                const r = await api.post(`license-actions/${item.id}/fetch-ownership/`);
-                                                                const owner = r.data?.current_owner?.name || '—';
-                                                                toast.success(`Ownership updated: ${owner} (${r.data?.transfers_count ?? 0} transfers)`);
-                                                                invalidateList();
-                                                            } catch (err) {
-                                                                toast.error(err?.response?.data?.error || err?.message || 'Failed to fetch ownership');
-                                                            } finally {
-                                                                setFetchingOwnershipIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
-                                                            }
-                                                        }}
-                                                        title="Fetch ownership from DGFT"
-                                                        className={cn(
-                                                            'flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#c4b5fd] bg-[--tb-sunken] px-2.5 py-1 text-xs text-accent hover:opacity-80',
-                                                            fetchingOwnershipIds.has(item.id) && 'cursor-wait opacity-60'
-                                                        )}>
-                                                        <span className={fetchingOwnershipIds.has(item.id) ? 'inline-block animate-spin' : ''}>{fetchingOwnershipIds.has(item.id) ? <RefreshCw className="size-4" /> : <CloudDownload className="size-4" />}</span>
-                                                    </button>}
-                                                    <button onClick={async () => {
-                                                        try {
-                                                            const r = await api.get(`licenses/${item.id}/balance-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            openPdfPreview(r.data, `${item.license_number || item.id}-balance.pdf`);
-                                                        } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate PDF'); }
-                                                    }} title="Download PDF" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[--tb-warning-border] bg-warning/10 px-2.5 py-1 text-xs text-warning hover:opacity-80">
-                                                        <FileText className="size-4" aria-hidden="true" />
-                                                    </button>
-                                                    <button onClick={async () => {
-                                                        try {
-                                                            const r = await api.get(`licenses/${item.id}/balance-excel/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            const blob = new Blob([r.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                                                            const url = window.URL.createObjectURL(blob);
-                                                            const a = document.createElement('a'); a.href = url; a.download = `${item.license_number || item.id}-balance.xlsx`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
-                                                        } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate Excel'); }
-                                                    }} title="Download Excel" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#86efac] bg-success/10 px-2.5 py-1 text-xs text-success hover:opacity-80">
-                                                        <FileSpreadsheet className="size-4" aria-hidden="true" />
-                                                    </button>
-                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#fca5a5] bg-destructive/10 px-2.5 py-1 text-xs text-destructive hover:opacity-80">
-                                                        <Trash2 className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )
+                        <LicensesTable
+                            loading={loading}
+                            data={data}
+                            canWrite={canWrite}
+                            entityName={entityName}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                            onViewBalance={(id) => { setSelectedLicenseId(id); setShowBalanceModal(true); }}
+                            onPlanLicense={(lic) => { setPlanLicense(lic); setShowPlanModal(true); }}
+                            onViewOwnership={(lic) => { setOwnershipLicense(lic); setShowOwnershipModal(true); }}
+                            fetchingOwnershipIds={fetchingOwnershipIds}
+                            onFetchOwnership={handleFetchOwnership}
+                            invalidateList={invalidateList}
+                        />
                     )}
 
                     {/* Trades Card Layout */}

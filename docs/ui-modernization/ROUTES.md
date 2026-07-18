@@ -40,7 +40,7 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/licenses` | `pages/masters/MasterList.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
+| `/licenses` | `pages/masters/MasterList.tsx` | FROZEN | Session-4 | 2026-07-18 | UX redesign: 8-button card → Edit + ⋯ DropdownMenu; LicensesTable extracted; purchase-status → Tailwind; CSS vars → semantic; aria-label on cards |
 | `/licenses/create` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | cn(); template literals → cn(); text-muted → text-muted-foreground; container-fluid → min-h-screen; alerts; BOE copy modernized; form-label; text-danger → text-destructive; section boxes; tab panel |
 | `/licenses/:id/edit` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component as create |
 | `/incentive-licenses` | `pages/masters/MasterList.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |

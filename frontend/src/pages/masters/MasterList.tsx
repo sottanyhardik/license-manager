@@ -12,7 +12,8 @@ import AccordionTable from "../../components/AccordionTable";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import OwnershipDetailsModal from "../../components/OwnershipDetailsModal";
 import TransferLetterModal from "../../components/TransferLetterModal";
-import { EntityCard, DetailTable } from "../../components/ui";
+import EntityCard from "../../components/primitives/EntityCard";
+import DetailTable from "../../components/primitives/DetailTable";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
 import {openPdfPreview} from "../../utils/pdfPreview";
 import {clickable} from "../../utils/clickable";
@@ -25,6 +26,7 @@ import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { ArrowRight, BookCheck, Building2, Calendar, CalendarX, ChevronDown, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Link as LinkIcon, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Target, Trash2, TriangleAlert, X } from "lucide-react";
 
 /**
@@ -622,19 +624,19 @@ export default function MasterList() {
         .join(" ");
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
+        <div className="min-h-screen bg-[--tb-body-bg]">
             {/* Tabler-style page header */}
             <div className="page-header">
-                <div style={{ minWidth: 0 }}>
+                <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
                             href="/"
                             onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                            style={{ color: 'inherit', textDecoration: 'none' }}
+                            className="text-inherit no-underline"
                         >
                             Home
                         </a>
-                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        <span className="mx-1.5 opacity-50">/</span>
                         {entityTitle}
                     </div>
                     <h1>{entityTitle}</h1>
@@ -732,7 +734,7 @@ export default function MasterList() {
 
             {/* Table */}
             <div className="surface-card mt-4">
-                <div style={{ padding: '14px 16px' }}>
+                <div className="p-3.5">
                     {/* BOE Card Layout */}
                     {entityName === 'bill-of-entries' && (
                         loading ? (
@@ -757,19 +759,19 @@ export default function MasterList() {
                                     const invoiceChip = canEditInvoice
                                         ? (editingInvoiceId === item.id
                                             ? (
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                <span className="inline-flex items-center gap-1">
                                                     <input
                                                         autoFocus
                                                         value={invoiceDraft}
                                                         onChange={e => setInvoiceDraft(e.target.value)}
                                                         onKeyDown={e => { if (e.key === 'Enter') saveInvoiceEdit(item.id); if (e.key === 'Escape') cancelInvoiceEdit(); }}
                                                         placeholder="Invoice number"
-                                                        style={{ fontSize: '0.82rem', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--success-color)', width: 160, outline: 'none' }}
+                                                        className="w-40 rounded-md border border-success px-2 py-0.5 text-[0.82rem] outline-none"
                                                     />
-                                                    <button type="button" onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, background: 'var(--success-color)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                                                    <button type="button" onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} className="cursor-pointer rounded-md bg-success px-2 py-0.5 text-xs text-white disabled:opacity-50">
                                                         {invoiceSaving ? '…' : 'Save'}
                                                     </button>
-                                                    <button type="button" onClick={cancelInvoiceEdit} style={{ fontSize: 12, padding: '3px 7px', borderRadius: 6, background: 'var(--surface-sunken)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', cursor: 'pointer' }}>✕</button>
+                                                    <button type="button" onClick={cancelInvoiceEdit} className="cursor-pointer rounded-md border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">✕</button>
                                                 </span>
                                             )
                                             : (
@@ -777,7 +779,7 @@ export default function MasterList() {
                                                     type="button"
                                                     onClick={() => startInvoiceEdit(item)}
                                                     title="Click to edit invoice number"
-                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.82rem', color: 'var(--success-text)', background: 'var(--success-bg)', border: '1px solid var(--success-border)', padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}
+                                                    className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-success bg-success/10 px-2 py-0.5 text-[0.82rem] font-medium text-success"
                                                 >
                                                     {item.invoice_no
                                                         ? (<><Receipt className="size-4" aria-hidden="true" /> {item.invoice_no}</>)
@@ -814,7 +816,8 @@ export default function MasterList() {
                                                 hasDispute && {
                                                     icon: 'check2-circle', title: 'Resolve Dispute', tone: 'danger',
                                                     onClick: async () => {
-                                                        if (!window.confirm(`Resolve ${disputeRows.length} dispute row(s) on BOE ${item.bill_of_entry_number}? This clears the dispute flag on all flagged rows.`)) return;
+                                                        const confirmed = await confirmDangerousAction('Resolve Dispute', `Resolve ${disputeRows.length} dispute row(s) on BOE ${item.bill_of_entry_number}? This clears the dispute flag on all flagged rows.`);
+                                                        if (!confirmed) return;
                                                         try {
                                                             const response = await api.post(`bill-of-entries/${item.id}/resolve-dispute/`);
                                                             toast.success(response.data.message || 'Dispute resolved');
@@ -831,7 +834,8 @@ export default function MasterList() {
                                                 (!item.product_name || item.product_name.trim() === '') && {
                                                     icon: 'arrow-repeat', title: 'Update Product Name', tone: 'info',
                                                     onClick: async () => {
-                                                        if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) return;
+                                                        const confirmed = await confirmDangerousAction('Update Product Name', `Update product name for BOE ${item.bill_of_entry_number}?`);
+                                                        if (!confirmed) return;
                                                         try {
                                                             const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                                             toast.success(response.data.message || 'Product name updated');
@@ -853,11 +857,11 @@ export default function MasterList() {
                                                     columns={[
                                                         { key: 'is_dispute', label: '', nowrap: true, width: 28,
                                                             render: (v, row) => row.is_dispute
-                                                                ? <span title="Not found in latest ledger upload — dispute" style={{ color: 'var(--tb-danger)', fontSize: 14.5 }}><TriangleAlert className="size-4" aria-hidden="true" /></span>
+                                                                ? <span title="Not found in latest ledger upload — dispute" className="text-destructive text-sm"><TriangleAlert className="size-4" aria-hidden="true" /></span>
                                                                 : null },
                                                         { key: 'license_number',   label: 'License',   bold: true, nowrap: true,
                                                             render: (v, row) => v
-                                                                ? <span style={{ color: row.is_dispute ? 'var(--tb-danger-text)' : 'var(--primary-color)' }}>{v}</span>
+                                                                ? <span className={cn(row.is_dispute ? 'text-destructive' : 'text-primary')}>{v}</span>
                                                                 : '—' },
                                                         { key: 'item_description', label: 'Item',      muted: true },
                                                         { key: 'hs_code',          label: 'HS Code',   nowrap: true,
@@ -874,21 +878,21 @@ export default function MasterList() {
                                                 />
                                             )}
                                         >
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-                                                <div style={{ flex: 1, minWidth: 200 }}>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Product</div>
-                                                    <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>
-                                                        {item.product_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No product name</span>}
+                                            <div className="flex flex-wrap items-start gap-6">
+                                                <div className="min-w-[200px] flex-1">
+                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Product</div>
+                                                    <div className="text-[14.5px] font-medium text-foreground">
+                                                        {item.product_name || <span className="italic text-muted-foreground">No product name</span>}
                                                     </div>
                                                 </div>
                                                 {item.licenses && (
-                                                    <div style={{ flex: 1, minWidth: 140 }}>
-                                                        <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
-                                                        <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.licenses}</div>
+                                                    <div className="min-w-[140px] flex-1">
+                                                        <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Licenses</div>
+                                                        <div className="text-[13.5px] font-medium text-primary">{item.licenses}</div>
                                                     </div>
                                                 )}
                                                 {invoiceChip && (
-                                                    <div style={{ alignSelf: 'center' }}>
+                                                    <div className="self-center">
                                                         {invoiceChip}
                                                     </div>
                                                 )}
@@ -939,49 +943,54 @@ export default function MasterList() {
                                         : item.purchase_status_code === 'E5' ? { bg: 'var(--tb-success-soft)', text: 'var(--tb-success-text)' }
                                         : { bg: 'var(--tb-gray-100)', text: 'var(--tb-text-secondary)' };
                                     return (
-                                        <div key={item.id} style={{
-                                            display: 'block',
-                                            background: item.is_manually_planned ? 'rgba(22,163,74,0.05)' : 'var(--tb-card-bg)',
-                                            border: `1px solid ${isExpired ? 'var(--tb-danger-border)' : (item.is_manually_planned ? '#16a34a' : 'var(--tb-border-soft)')}`,
-                                            // Green left rail marks a manually-planned license (expired still shows red).
-                                            borderLeft: `4px solid ${isExpired ? 'var(--tb-danger)' : (item.is_manually_planned ? '#16a34a' : 'var(--tb-brand)')}`,
-                                            borderRadius: 'var(--tb-r-md)',
-                                            marginBottom: '10px',
-                                            overflow: 'hidden',
-                                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-                                        }}>
+                                        <div
+                                            key={item.id}
+                                            className={cn(
+                                                'mb-2.5 overflow-hidden rounded-[--tb-r-md] shadow-sm',
+                                                // Green left rail marks a manually-planned license (expired still shows red).
+                                                item.is_manually_planned ? 'bg-success/5' : 'bg-[--tb-card-bg]',
+                                                isExpired
+                                                    ? 'border border-l-4 border-destructive/40 border-l-destructive'
+                                                    : item.is_manually_planned
+                                                        ? 'border border-l-4 border-[#16a34a] border-l-[#16a34a]'
+                                                        : 'border border-l-4 border-[--tb-border-soft] border-l-primary'
+                                            )}
+                                        >
                                             {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid var(--tb-border)', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: '700', fontSize: 16, color: 'var(--tb-brand-active)', marginRight: '4px' }}>
+                                            <div className="flex flex-wrap items-center gap-2 border-b border-[--tb-border] bg-[--tb-sunken] px-3.5 py-2.5">
+                                                <span className="mr-1 text-base font-bold text-primary">
                                                     {item.license_number || '-'}
                                                 </span>
                                                 {item.is_manually_planned && (
-                                                    <span className="chip" style={{ color: '#166534', background: 'rgba(22,163,74,0.12)', border: '1px solid #16a34a', fontWeight: 700 }}>
+                                                    <span className="chip border border-[#16a34a] bg-success/10 font-bold text-[#166534]">
                                                         <Target className="size-3" aria-hidden="true" />Planned
                                                     </span>
                                                 )}
                                                 {item.license_date && (
-                                                    <span className="chip chip-neutral" style={{}}>
+                                                    <span className="chip chip-neutral">
                                                         <Calendar className="size-3" aria-hidden="true" />{item.license_date}
                                                     </span>
                                                 )}
                                                 {item.license_expiry_date && (
-                                                    <span className={`chip ${isExpired ? 'chip-danger' : 'chip-neutral'}`} style={{}}>
+                                                    <span className={cn('chip', isExpired ? 'chip-danger' : 'chip-neutral')}>
                                                         <CalendarX className="size-3" aria-hidden="true" />Exp: {item.license_expiry_date}
                                                     </span>
                                                 )}
                                                 {item.ledger_date && (
-                                                    <span className="chip chip-success" style={{}}>
+                                                    <span className="chip chip-success">
                                                         <BookCheck className="size-3" aria-hidden="true" />Ledger: {item.ledger_date}
                                                     </span>
                                                 )}
                                                 {item.port_name && (
-                                                    <span className="chip chip-info" style={{}}>
+                                                    <span className="chip chip-info">
                                                         <MapPin className="size-3" aria-hidden="true" />{item.port_name}
                                                     </span>
                                                 )}
                                                 {item.purchase_status_label && (
-                                                    <span style={{ fontSize: 12, color: statusColor.text, background: statusColor.bg, padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
+                                                    <span
+                                                        className="rounded-[--tb-r-sm] px-2 py-0.5 text-xs font-semibold"
+                                                        style={{ color: statusColor.text, background: statusColor.bg }}
+                                                    >
                                                         {item.purchase_status_label}
                                                     </span>
                                                 )}
@@ -998,64 +1007,64 @@ export default function MasterList() {
                                                                 toast.error(err.response?.data ? String(err.response.data).slice(0, 200) : 'Failed to load documents');
                                                             }
                                                         }
-                                                    }} className="chip chip-success cursor-pointer border-0 hover:opacity-80 transition-opacity" style={{}}>
+                                                    }} className="chip chip-success cursor-pointer border-0 hover:opacity-80 transition-opacity">
                                                         Copy
                                                     </button>
                                                 )}
                                                 {item.has_condition_sheet && (
-                                                    <span title="Condition sheet parsed from license copy" className="chip chip-primary cursor-pointer" style={{}}>
+                                                    <span title="Condition sheet parsed from license copy" className="chip chip-primary cursor-pointer">
                                                         <FileText className="size-4" aria-hidden="true" />Cond. Sheet
                                                     </span>
                                                 )}
                                             </div>
 
                                             {/* Row 2: Norm class (25%) + details fill (75%) */}
-                                            <div style={{ display: 'flex', alignItems: 'stretch', gap: '16px', padding: '10px 14px', background: 'var(--tb-card-bg)', borderBottom: '1px solid var(--tb-border)' }}>
+                                            <div className="flex items-stretch gap-4 border-b border-[--tb-border] bg-[--tb-card-bg] px-3.5 py-2.5">
                                                 {/* Left 25% — Norm Class */}
-                                                <div style={{ flex: '0 0 25%', maxWidth: '25%', minWidth: 0, borderRight: '1px solid var(--tb-border)', paddingRight: '16px' }}>
-                                                    <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Norm Class</div>
-                                                    <div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.get_norm_class || '-'}</div>
+                                                <div className="w-1/4 min-w-0 shrink-0 border-r border-[--tb-border] pr-4">
+                                                    <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.5px] text-muted-foreground">Norm Class</div>
+                                                    <div className="truncate text-sm font-medium text-foreground">{item.get_norm_class || '-'}</div>
                                                 </div>
                                                 {/* Right 75% — Exporter / IEC / Transfer status, each clamped to one line */}
-                                                <div style={{ flex: '1 1 75%', minWidth: 0, display: 'grid', gridTemplateColumns: '1.4fr 1fr 1.6fr', gap: '16px' }}>
+                                                <div className="grid min-w-0 flex-1 gap-4" style={{ gridTemplateColumns: '1.4fr 1fr 1.6fr' }}>
                                                     {[
                                                         { label: 'Exporter', value: item.exporter_name },
                                                         { label: 'IEC', value: item.exporter_iec },
                                                         { label: 'Transfer Status', value: item.latest_transfer },
                                                     ].map((f) => (
-                                                        <div key={f.label} style={{ minWidth: 0 }}>
-                                                            <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>{f.label}</div>
-                                                            <div title={f.value || ''} style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.value || '-'}</div>
+                                                        <div key={f.label} className="min-w-0">
+                                                            <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.5px] text-muted-foreground">{f.label}</div>
+                                                            <div title={f.value || ''} className="truncate text-sm font-medium text-foreground">{f.value || '-'}</div>
                                                         </div>
                                                     ))}
                                                 </div>
                                             </div>
 
                                             {/* Row 3: Stats + Actions */}
-                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: 'var(--tb-sunken)', gap: '8px', flexWrap: 'wrap' }}>
-                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
+                                            <div className="flex flex-wrap items-center gap-2 bg-[--tb-sunken] px-3.5 py-2">
+                                                <div className="flex flex-1 flex-wrap gap-5">
                                                     <div>
-                                                        <div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Balance CIF</div>
-                                                        <div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '700' }}>{fmtInr(item.get_balance_cif)}</div>
+                                                        <div className="text-[0.67rem] font-semibold uppercase text-muted-foreground">Balance CIF</div>
+                                                        <div className="text-sm font-bold text-foreground">{fmtInr(item.get_balance_cif)}</div>
                                                     </div>
                                                 </div>
-                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                <div className="flex shrink-0 gap-1.5">
+                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#93c5fd] bg-primary/10 px-2.5 py-1 text-xs text-primary hover:opacity-80">
                                                         <Pencil className="size-4" aria-hidden="true" />
                                                     </button>}
-                                                    <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#38bdf8] bg-info/10 px-2.5 py-1 text-xs text-info hover:opacity-80">
                                                         <Eye className="size-4" aria-hidden="true" />
                                                     </button>
                                                     {canWrite && <button
                                                         onClick={() => { setPlanLicense({ id: item.id, number: item.license_number, balance: Number(item.get_balance_cif || 0) }); setShowPlanModal(true); }}
                                                         title="Plan utilization"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-50)', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#a5b4fc] bg-primary/10 px-2.5 py-1 text-xs text-primary hover:opacity-80">
                                                         <Target className="size-4" aria-hidden="true" />
                                                     </button>}
                                                     <button
                                                         onClick={() => { setOwnershipLicense({ id: item.id, number: item.license_number }); setShowOwnershipModal(true); }}
                                                         title="View ownership & transfers"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-50)', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#a5b4fc] bg-primary/10 px-2.5 py-1 text-xs text-primary hover:opacity-80">
                                                         <Network className="size-4" aria-hidden="true" />
                                                     </button>
                                                     {canWrite && <button
@@ -1074,7 +1083,10 @@ export default function MasterList() {
                                                             }
                                                         }}
                                                         title="Fetch ownership from DGFT"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--accent-color)', background: 'var(--tb-sunken)', border: '1px solid #c4b5fd', borderRadius: '5px', padding: '4px 9px', cursor: fetchingOwnershipIds.has(item.id) ? 'wait' : 'pointer', opacity: fetchingOwnershipIds.has(item.id) ? 0.6 : 1 }}>
+                                                        className={cn(
+                                                            'flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#c4b5fd] bg-[--tb-sunken] px-2.5 py-1 text-xs text-accent hover:opacity-80',
+                                                            fetchingOwnershipIds.has(item.id) && 'cursor-wait opacity-60'
+                                                        )}>
                                                         <span className={fetchingOwnershipIds.has(item.id) ? 'inline-block animate-spin' : ''}>{fetchingOwnershipIds.has(item.id) ? <RefreshCw className="size-4" /> : <CloudDownload className="size-4" />}</span>
                                                     </button>}
                                                     <button onClick={async () => {
@@ -1082,7 +1094,7 @@ export default function MasterList() {
                                                             const r = await api.get(`licenses/${item.id}/balance-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
                                                             openPdfPreview(r.data, `${item.license_number || item.id}-balance.pdf`);
                                                         } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate PDF'); }
-                                                    }} title="Download PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', border: '1px solid var(--tb-warning-border)', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    }} title="Download PDF" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[--tb-warning-border] bg-warning/10 px-2.5 py-1 text-xs text-warning hover:opacity-80">
                                                         <FileText className="size-4" aria-hidden="true" />
                                                     </button>
                                                     <button onClick={async () => {
@@ -1093,10 +1105,10 @@ export default function MasterList() {
                                                             const a = document.createElement('a'); a.href = url; a.download = `${item.license_number || item.id}-balance.xlsx`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
                                                             setTimeout(() => window.URL.revokeObjectURL(url), 10000);
                                                         } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate Excel'); }
-                                                    }} title="Download Excel" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    }} title="Download Excel" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#86efac] bg-success/10 px-2.5 py-1 text-xs text-success hover:opacity-80">
                                                         <FileSpreadsheet className="size-4" aria-hidden="true" />
                                                     </button>
-                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" className="flex cursor-pointer items-center gap-1 rounded-[5px] border border-[#fca5a5] bg-destructive/10 px-2.5 py-1 text-xs text-destructive hover:opacity-80">
                                                         <Trash2 className="size-4" aria-hidden="true" />
                                                     </button>}
                                                 </div>
@@ -1134,7 +1146,7 @@ export default function MasterList() {
                                     <EntityCard
                                         key={item.id}
                                         accent={accent}
-                                        title={item.invoice_number || <span style={{ fontStyle: 'italic', color: 'var(--text-tertiary)', fontWeight: 400 }}>No Invoice</span>}
+                                        title={item.invoice_number || <span className="italic font-normal text-muted-foreground">No Invoice</span>}
                                         headerChips={[
                                             { tone: directionTone, label: item.direction_label || item.direction },
                                             item.license_type_label && { label: item.license_type_label },
@@ -1172,7 +1184,8 @@ export default function MasterList() {
                                             canWrite && item.direction === 'PURCHASE' && !isLinked && {
                                                 icon: 'arrow-left-right', title: 'Copy to Sale', tone: 'info',
                                                 onClick: async () => {
-                                                    if (!window.confirm('Create a SALE trade from this PURCHASE trade?')) return;
+                                                    const confirmed = await confirmDangerousAction('Copy to Sale', 'Create a SALE trade from this PURCHASE trade?');
+                                                    if (!confirmed) return;
                                                     try {
                                                         const resp = await api.get(`trades/${item.id}/`);
                                                         const p = resp.data;
@@ -1215,28 +1228,28 @@ export default function MasterList() {
                                             />
                                         )}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 220 }}>
+                                        <div className="flex flex-wrap items-center gap-4">
+                                            <div className="flex min-w-[220px] flex-1 items-center gap-3">
                                                 <div>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>From</div>
-                                                    <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>{item.from_company_label || '—'}</div>
+                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">From</div>
+                                                    <div className="text-[14.5px] font-medium text-foreground">{item.from_company_label || '—'}</div>
                                                 </div>
                                                 <ArrowRight className="size-4" aria-hidden="true" />
                                                 <div>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>To</div>
-                                                    <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>{item.to_company_label || '—'}</div>
+                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">To</div>
+                                                    <div className="text-[14.5px] font-medium text-foreground">{item.to_company_label || '—'}</div>
                                                 </div>
                                             </div>
                                             {item.boe_label && (
-                                                <div style={{ minWidth: 100 }}>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>BOE</div>
-                                                    <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.boe_label}</div>
+                                                <div className="min-w-[100px]">
+                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">BOE</div>
+                                                    <div className="text-[13.5px] font-medium text-primary">{item.boe_label}</div>
                                                 </div>
                                             )}
                                             {item.incentive_license && (
-                                                <div style={{ minWidth: 100 }}>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Incentive Lic</div>
-                                                    <div style={{ fontSize: 13.5, color: 'var(--success-text)', fontWeight: 500 }}>{item.incentive_license}</div>
+                                                <div className="min-w-[100px]">
+                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Incentive Lic</div>
+                                                    <div className="text-[13.5px] font-medium text-success">{item.incentive_license}</div>
                                                 </div>
                                             )}
                                         </div>
@@ -1275,25 +1288,25 @@ export default function MasterList() {
                                         const isExpanded = expandedPairs.has(pairKey);
                                         const companies = `${sale.from_company_label || '-'} ↔ ${sale.to_company_label || '-'}`;
                                         return (
-                                            <div key={pairKey} style={{ border: '1px solid #a5b4fc', borderLeft: '4px solid #6366f1', borderRadius: 'var(--tb-r-md)', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                                            <div key={pairKey} className="mb-2.5 overflow-hidden rounded-[--tb-r-md] border border-[#a5b4fc] border-l-4 border-l-[#6366f1] shadow-sm">
                                                 <div
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-brand-50)', cursor: 'pointer', flexWrap: 'wrap' }}
+                                                    className="flex cursor-pointer flex-wrap items-center gap-2 bg-primary/5 px-3.5 py-2.5"
                                                     {...clickable(() => togglePair(pairKey))}
                                                 >
-                                                    <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Sale</span>
+                                                    <span className="rounded-[--tb-r-sm] bg-success/10 px-2 py-0.5 text-xs font-bold text-success">Sale</span>
                                                     <LinkIcon className="size-4" aria-hidden="true" />
-                                                    <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Purchase</span>
-                                                    <span style={{ fontSize: '0.82rem', color: 'var(--tb-brand)', fontWeight: '600', flex: 1 }}>{companies}</span>
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
+                                                    <span className="rounded-[--tb-r-sm] bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">Purchase</span>
+                                                    <span className="flex-1 text-[0.82rem] font-semibold text-primary">{companies}</span>
+                                                    <span className="text-[12.5px] text-muted-foreground">
                                                         {sale.invoice_date || ''}
                                                     </span>
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
+                                                    <span className="text-[12.5px] text-muted-foreground">
                                                         Sale: {fmtInr(sale.total_amount)} · Purchase: {fmtInr(purchase.total_amount)}
                                                     </span>
-                                                    <ChevronDown className="size-4 transition-transform" style={{ color: 'var(--tb-brand)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                                                    <ChevronDown className={cn('size-4 text-primary transition-transform', isExpanded && 'rotate-180')} />
                                                 </div>
                                                 {isExpanded && (
-                                                    <div style={{ padding: '8px', background: 'var(--tb-sunken)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    <div className="flex flex-col gap-2 bg-[--tb-sunken] p-2">
                                                         {renderTradeCard(sale)}
                                                         {renderTradeCard(purchase)}
                                                     </div>
@@ -1416,9 +1429,8 @@ export default function MasterList() {
                                     icon: 'ArrowLeftRight',
                                     className: 'btn btn-outline-primary',
                                     onClick: async (item) => {
-                                        if (!window.confirm(`Create a SALE trade from this PURCHASE trade?`)) {
-                                            return;
-                                        }
+                                        const confirmed = await confirmDangerousAction('Copy to Sale', 'Create a SALE trade from this PURCHASE trade?');
+                                        if (!confirmed) { return; }
                                         try {
                                             // Fetch full trade data
                                             const response = await api.get(`trades/${item.id}/`);
@@ -1545,9 +1557,8 @@ export default function MasterList() {
                                     icon: 'Copy',
                                     className: 'btn btn-outline-info',
                                     onClick: async (item) => {
-                                        if (!window.confirm(`Create a copy of allotment ${item.invoice_number || 'this allotment'}?`)) {
-                                            return;
-                                        }
+                                        const confirmed = await confirmDangerousAction('Copy Allotment', `Create a copy of allotment ${item.invoice_number || 'this allotment'}?`);
+                                        if (!confirmed) { return; }
                                         try {
                                             const response = await api.post(`allotments/${item.id}/copy/`);
                                             const newAllotmentId = response.data.id;
@@ -1629,12 +1640,11 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Update Product Name',
-                                    icon: 'bi bi-arrow-repeat',
+                                    icon: 'RefreshCw',
                                     className: 'btn btn-outline-info',
                                     onClick: async (item) => {
-                                        if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) {
-                                            return;
-                                        }
+                                        const confirmed = await confirmDangerousAction('Update Product Name', `Update product name for BOE ${item.bill_of_entry_number}?`);
+                                        if (!confirmed) { return; }
                                         try {
                                             const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                             toast.success(response.data.message || 'Product name updated successfully');

@@ -11,6 +11,9 @@ import {useBackButton} from "../hooks/useBackButton";
 import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
 import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import EmptyState from "@/components/EmptyState";
 
 interface AvailableItem {
     id: number;
@@ -68,6 +71,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // Confirm dialogs (replaces window.confirm)
+    const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; allotmentItemId: number | null }>({ show: false, allotmentItemId: null });
+    const [copyConfirm, setCopyConfirm] = useState(false);
 
     // Enable browser back button support with filter preservation
     useBackButton('allotments', !isModal);
@@ -445,64 +452,63 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     const handleDeleteAllotment = (allotmentItemId) => {
-        if (!window.confirm("Are you sure you want to remove this allocation?")) {
-            return;
-        }
+        setDeleteConfirm({ show: true, allotmentItemId });
+    };
+
+    const confirmDelete = () => {
+        if (deleteConfirm.allotmentItemId == null) return;
         setError("");
         setSuccess("");
-        deleteAllocationMutation.mutate(allotmentItemId);
+        deleteAllocationMutation.mutate(deleteConfirm.allotmentItemId);
+        setDeleteConfirm({ show: false, allotmentItemId: null });
     };
 
     if (initialLoading) return (
-        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
-            <div className="flex justify-between items-center mb-4 placeholder-glow">
+        <div className="min-h-screen bg-[var(--tb-body-bg)]">
+            <div className="flex justify-between items-center mb-4 animate-pulse">
                 <div>
-                    <div className="placeholder col-5" style={{ height: 28, borderRadius: 6, display: 'block' }}></div>
-                    <div className="placeholder col-3 mt-1" style={{ height: 14, borderRadius: 4, display: 'block' }}></div>
+                    <div className="h-7 w-48 rounded-md bg-muted block"></div>
+                    <div className="h-3.5 w-32 rounded bg-muted mt-1 block"></div>
                 </div>
                 <div className="flex gap-2">
                     {[80, 90, 110, 90, 100].map((w, i) => (
-                        <div key={i} className="placeholder" style={{ width: w, height: 32, borderRadius: 6 }}></div>
+                        <div key={i} className="h-8 rounded-md bg-muted" style={{ width: w }}></div>
                     ))}
                 </div>
             </div>
-            <div className="card mb-3" style={{ borderRadius: 12 }}>
-                <div className="card-header py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                    <div className="placeholder col-3" style={{ height: 18, borderRadius: 4 }}></div>
+            <div className="mb-3 overflow-hidden rounded-xl border border-border bg-card">
+                <div className="border-b border-border/60 px-5 py-3">
+                    <div className="h-4 w-1/3 rounded bg-muted"></div>
                 </div>
                 <div className="flex gap-3 p-5">
-                    {[1,2,3,4].map(i => <div key={i} className="placeholder flex-fill" style={{ borderRadius: 8, height: 72 }}></div>)}
+                    {[1,2,3,4].map(i => <div key={i} className="flex-1 h-[72px] rounded-lg bg-muted"></div>)}
                 </div>
             </div>
-            <div className="card" style={{ borderRadius: 12 }}>
-                <div className="card-header py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                    <div className="placeholder col-4" style={{ height: 18, borderRadius: 4 }}></div>
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
+                <div className="border-b border-border/60 px-5 py-3">
+                    <div className="h-4 w-1/4 rounded bg-muted"></div>
                 </div>
-                <div className="p-5">
-                    {[1,2,3].map(i => <div key={i} className="placeholder w-full mb-2" style={{ height: 90, borderRadius: 8 }}></div>)}
+                <div className="p-5 space-y-2">
+                    {[1,2,3].map(i => <div key={i} className="h-[90px] rounded-lg bg-muted"></div>)}
                 </div>
             </div>
         </div>
     );
 
     return (
-        <div style={{
-            height: isModal ? '100%' : 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: isModal ? 'transparent' : 'var(--tb-sunken)',
-            padding: isModal ? '0' : '24px',
-            minHeight: isModal ? 'auto' : '100vh'
-        }}>
+        <div className={cn(
+            "flex flex-col",
+            isModal ? "h-full" : "min-h-screen p-6 bg-[var(--tb-sunken)]"
+        )}>
             {!isModal && (
                 <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
                     <div>
-                        <h4 className="mb-0 font-bold" style={{ color: 'var(--tb-text)' }}>
+                        <h4 className="font-bold text-foreground flex items-center gap-1.5">
                             <Network className="size-4" aria-hidden="true" />
                             Allocate License Items
                         </h4>
                         {allotment && (
-                            <small className="text-muted">
+                            <small className="text-muted-foreground">
                                 {allotment.item_name}
                                 {allotment.invoice && <span className="ml-2">— Invoice #{allotment.invoice}</span>}
                             </small>
@@ -522,16 +528,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </button>
                         <button
                             className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
-                            onClick={async () => {
-                                if (!window.confirm('Are you sure you want to create a copy of this allotment?')) return;
-                                try {
-                                    const response = await api.post(`allotments/${id}/copy/`);
-                                    toast.success('Allotment copied successfully!');
-                                    navigate(`/allotments/${response.data.id}/edit`);
-                                } catch (err) {
-                                    toast.error(err.response?.data?.error || 'Failed to copy allotment');
-                                }
-                            }}
+                            onClick={() => setCopyConfirm(true)}
                             title="Create a copy of this allotment"
                         >
                             <Files className="size-4" aria-hidden="true" />Copy
@@ -554,7 +551,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 }
                             }}
                             title="Download Allotment PDF"
-                            style={{ background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))', border: 'none' }}
                         >
                             <FileText className="size-4" aria-hidden="true" />Download PDF
                         </button>
@@ -581,7 +577,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             )}
 
             {/* Scrollable content area */}
-            <div style={{flex: 1, overflowY: 'auto', paddingRight: '8px'}}>
+            <div className="flex-1 overflow-y-auto pr-2">
 
             {allotment && (() => {
                 const unitPrice = parseFloat(allotment.unit_value_per_unit || 0);
@@ -593,15 +589,21 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 const balanceValue = requiredValue - allotedValue;
                 const progressPct = requiredQty > 0 ? Math.min(100, Math.round((allotedQty / requiredQty) * 100)) : 0;
                 const isComplete = progressPct >= 100;
-                const progressColor = isComplete ? 'var(--tb-success)' : progressPct >= 60 ? 'var(--tb-brand)' : 'var(--tb-warning)';
+                const progressBarCls = isComplete ? 'bg-success' : progressPct >= 60 ? 'bg-primary' : 'bg-warning';
+                const progressTextCls = isComplete ? 'text-success' : progressPct >= 60 ? 'text-primary' : 'text-warning';
+                const statusBadgeCls = isComplete
+                    ? 'bg-success/10 text-success'
+                    : progressPct >= 60
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-warning/10 text-warning';
 
                 return (
                     <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                         {/* Header */}
                         <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
                             <div className="flex items-center gap-3">
-                                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg" style={{ background: 'var(--tb-brand-50)', border: '1px solid var(--tb-brand-100)' }}>
-                                    <ListChecks className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
+                                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
+                                    <ListChecks className="size-4 text-primary" aria-hidden="true" />
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Allotment Details</p>
@@ -611,14 +613,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
                                     <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-                                        <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${progressPct}%`, background: progressColor }} />
+                                        <div className={cn("h-full rounded-full transition-[width] duration-500", progressBarCls)} style={{ width: `${progressPct}%` }} />
                                     </div>
-                                    <span className="text-xs font-bold tabular-nums" style={{ color: progressColor }}>{progressPct}%</span>
+                                    <span className={cn("text-xs font-bold tabular-nums", progressTextCls)}>{progressPct}%</span>
                                 </div>
-                                <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none" style={{
-                                    background: isComplete ? 'var(--tb-success-soft)' : progressPct >= 60 ? 'var(--tb-brand-50)' : 'var(--tb-warning-soft)',
-                                    color: isComplete ? 'var(--tb-success-text)' : progressPct >= 60 ? 'var(--tb-brand)' : 'var(--tb-warning-text)',
-                                }}>
+                                <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none", statusBadgeCls)}>
                                     {isComplete ? '✓ Complete' : 'In Progress'}
                                 </span>
                             </div>
@@ -629,10 +628,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             {/* Unit Price */}
                             <div className="flex flex-col px-5 py-4">
                                 <div className="mb-2 flex items-center gap-1.5">
-                                    <span className="size-2 shrink-0 rounded-full" style={{ background: 'var(--tb-info)' }} />
+                                    <span className="size-2 shrink-0 rounded-full bg-info" />
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Unit Price</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums" style={{ color: 'var(--tb-info)' }}>
+                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums text-info">
                                     {unitPrice.toFixed(3)}
                                 </span>
                                 <span className="mt-1.5 text-[11px] text-muted-foreground">USD per unit</span>
@@ -653,29 +652,29 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </div>
 
                             {/* Allotted */}
-                            <div className="flex flex-col px-5 py-4" style={{ background: 'rgba(16,185,129,0.04)' }}>
+                            <div className="flex flex-col px-5 py-4 bg-success/[0.04]">
                                 <div className="mb-2 flex items-center gap-1.5">
-                                    <span className="size-2 shrink-0 rounded-full" style={{ background: 'var(--tb-success)' }} />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--tb-success-text)' }}>Allotted</span>
+                                    <span className="size-2 shrink-0 rounded-full bg-success" />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-success">Allotted</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums" style={{ color: 'var(--tb-success)' }}>
+                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums text-success">
                                     {allotedQty.toLocaleString()}
                                 </span>
-                                <span className="mt-1.5 text-[11px] font-semibold" style={{ color: 'var(--tb-success-text)' }}>
+                                <span className="mt-1.5 text-[11px] font-semibold text-success">
                                     ${allotedValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                             </div>
 
                             {/* Balance */}
-                            <div className="flex flex-col px-5 py-4" style={{ background: balanceQty <= 0 ? 'rgba(16,185,129,0.06)' : 'var(--tb-brand-50)' }}>
+                            <div className={cn("flex flex-col px-5 py-4", balanceQty <= 0 ? "bg-success/[0.06]" : "bg-primary/10")}>
                                 <div className="mb-2 flex items-center gap-1.5">
-                                    <span className="size-2 shrink-0 rounded-full" style={{ background: balanceQty <= 0 ? 'var(--tb-success)' : 'var(--tb-brand)' }} />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: balanceQty <= 0 ? 'var(--tb-success-text)' : 'var(--tb-brand)' }}>Balance</span>
+                                    <span className={cn("size-2 shrink-0 rounded-full", balanceQty <= 0 ? "bg-success" : "bg-primary")} />
+                                    <span className={cn("text-[10px] font-bold uppercase tracking-widest", balanceQty <= 0 ? "text-success" : "text-primary")}>Balance</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums" style={{ color: balanceQty <= 0 ? 'var(--tb-success)' : 'var(--tb-brand-active)' }}>
+                                <span className={cn("text-[1.65rem] font-extrabold leading-none tabular-nums", balanceQty <= 0 ? "text-success" : "text-primary")}>
                                     {balanceQty.toLocaleString()}
                                 </span>
-                                <span className="mt-1.5 text-[11px] font-semibold" style={{ color: balanceQty <= 0 ? 'var(--tb-success-text)' : 'var(--tb-brand)' }}>
+                                <span className={cn("mt-1.5 text-[11px] font-semibold", balanceQty <= 0 ? "text-success" : "text-primary")}>
                                     ${balanceValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     <span className="ml-1 font-normal opacity-50">+$20 buf</span>
                                 </span>
@@ -687,12 +686,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
             {/* Allotted Items Table */}
             {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
-                <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                    <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                        <h6 className="mb-0 font-semibold">
+                <div className="mb-3 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                    <div className="flex justify-between items-center border-b border-border/60 px-5 py-3">
+                        <h6 className="font-semibold text-foreground flex items-center gap-1.5">
                             <CheckSquare className="size-4" aria-hidden="true" />
                             Allotted Items
-                            <span className="chip chip-success">{allotment.allotment_details.length}</span>
+                            <span className="ml-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-bold text-success">{allotment.allotment_details.length}</span>
                         </h6>
                         <button
                             className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
@@ -726,54 +725,54 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </button>
                     </div>
                     <div>
-                        <div style={{overflowX: 'auto'}}>
-                            <table className="w-full text-sm" style={{width: '100%'}}>
-                                <thead style={{ backgroundColor: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-[var(--tb-sunken)] border-b-2 border-border">
                                 <tr>
-                                    <th style={{minWidth: '120px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>License</th>
-                                    <th style={{minWidth: '70px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>Serial</th>
-                                    <th style={{minWidth: '240px', fontWeight: '600', fontSize: 12, padding: '8px'}}>Description</th>
-                                    <th style={{minWidth: '80px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>HSN Code</th>
-                                    <th style={{minWidth: '160px', fontWeight: '600', fontSize: 12, padding: '8px'}}>Exporter</th>
-                                    <th style={{minWidth: '140px', fontWeight: '600', fontSize: 12, padding: '8px'}}>Transfer<br/>Status</th>
-                                    <th style={{minWidth: '100px', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>License<br/>Date</th>
-                                    <th style={{minWidth: '100px', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Expiry<br/>Date</th>
-                                    <th style={{minWidth: '80px', textAlign: 'right', fontWeight: '600', fontSize: 12, padding: '8px'}}>Allotted<br/>Qty</th>
-                                    <th style={{minWidth: '90px', textAlign: 'right', fontWeight: '600', fontSize: 12, padding: '8px'}}>Allotted<br/>Value</th>
-                                    <th style={{minWidth: '64px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>Action</th>
+                                    <th scope="col" className="min-w-[120px] whitespace-nowrap font-semibold text-[12px] p-2">License</th>
+                                    <th scope="col" className="min-w-[70px] whitespace-nowrap font-semibold text-[12px] p-2">Serial</th>
+                                    <th scope="col" className="min-w-[240px] font-semibold text-[12px] p-2">Description</th>
+                                    <th scope="col" className="min-w-[80px] whitespace-nowrap font-semibold text-[12px] p-2">HSN Code</th>
+                                    <th scope="col" className="min-w-[160px] font-semibold text-[12px] p-2">Exporter</th>
+                                    <th scope="col" className="min-w-[140px] font-semibold text-[12px] p-2">Transfer<br/>Status</th>
+                                    <th scope="col" className="min-w-[100px] font-semibold text-[13.5px] px-2 py-3">License<br/>Date</th>
+                                    <th scope="col" className="min-w-[100px] font-semibold text-[13.5px] px-2 py-3">Expiry<br/>Date</th>
+                                    <th scope="col" className="min-w-[80px] text-right font-semibold text-[12px] p-2">Allotted<br/>Qty</th>
+                                    <th scope="col" className="min-w-[90px] text-right font-semibold text-[12px] p-2">Allotted<br/>Value</th>
+                                    <th scope="col" className="min-w-[64px] whitespace-nowrap font-semibold text-[12px] p-2">Action</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 {allotment.allotment_details.map((detail) => (
                                     <tr key={detail.id} className="border-b border-border/40 transition-colors hover:bg-muted/30">
-                                        <td className='px-3 py-1.5 font-mono text-[12.5px] font-semibold text-foreground' style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{detail.license_number}</td>
-                                        <td className='px-3 py-1.5 text-[12.5px]' style={{whiteSpace: 'nowrap'}}><span className='font-medium'>{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" /></td>
-                                        <td className='px-3 py-1.5 text-[12.5px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
-                                        <td className='px-3 py-1.5 font-mono text-[11.5px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.hs_code || '-'}</td>
-                                        <td className='px-3 py-1.5 text-[12.5px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
-                                        <td style={{wordWrap: 'break-word', whiteSpace: 'normal', fontSize: '0.80rem', lineHeight: '1.3'}}>
+                                        <td className="px-3 py-1.5 font-mono text-[12.5px] font-semibold text-foreground whitespace-nowrap overflow-hidden text-ellipsis">{detail.license_number}</td>
+                                        <td className="px-3 py-1.5 text-[12.5px] whitespace-nowrap"><span className="font-medium">{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" /></td>
+                                        <td className="px-3 py-1.5 text-[12.5px] break-words whitespace-normal">{detail.product_description}</td>
+                                        <td className="px-3 py-1.5 font-mono text-[11.5px] text-muted-foreground whitespace-nowrap">{detail.hs_code || '-'}</td>
+                                        <td className="px-3 py-1.5 text-[12.5px] break-words whitespace-normal">{detail.exporter}</td>
+                                        <td className="px-3 py-1.5 text-[0.80rem] leading-[1.3] break-words whitespace-normal">
                                             {detail.current_owner && detail.file_transfer_status ? (
                                                 <div>
-                                                    <div className="mb-1" style={{fontWeight: '600'}}>
+                                                    <div className="mb-1 font-semibold">
                                                         {detail.current_owner}
                                                     </div>
-                                                    <div className="text-muted" style={{fontSize: 12}}>
+                                                    <div className="text-muted-foreground text-[12px]">
                                                         {detail.file_transfer_status}
                                                     </div>
                                                 </div>
                                             ) : detail.current_owner ? (
-                                                <div style={{fontWeight: '600'}}>{detail.current_owner}</div>
+                                                <div className="font-semibold">{detail.current_owner}</div>
                                             ) : detail.file_transfer_status ? (
-                                                <div className="text-muted">{detail.file_transfer_status}</div>
+                                                <div className="text-muted-foreground">{detail.file_transfer_status}</div>
                                             ) : (
-                                                <span className="text-muted">-</span>
+                                                <span className="text-muted-foreground">-</span>
                                             )}
                                         </td>
-                                        <td className='px-3 py-1.5 text-[12px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_date}</td>
-                                        <td className='px-3 py-1.5 text-[12px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_expiry}</td>
-                                        <td className='px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px]' style={{whiteSpace: 'nowrap'}}>{parseInt(detail.qty || 0).toLocaleString()}</td>
-                                        <td className='px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px]' style={{whiteSpace: 'nowrap'}}>{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
-                                        <td className="px-2 py-1.5 text-center" style={{whiteSpace: 'nowrap'}}>
+                                        <td className="px-3 py-1.5 text-[12px] text-muted-foreground whitespace-nowrap">{detail.license_date}</td>
+                                        <td className="px-3 py-1.5 text-[12px] text-muted-foreground whitespace-nowrap">{detail.license_expiry}</td>
+                                        <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px] whitespace-nowrap">{parseInt(detail.qty || 0).toLocaleString()}</td>
+                                        <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px] whitespace-nowrap">{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
+                                        <td className="px-2 py-1.5 text-center whitespace-nowrap">
                                             <button
                                                 className="flex size-7 items-center justify-center rounded border border-destructive/30 text-destructive/70 hover:bg-destructive/10 hover:border-destructive cursor-pointer transition-colors"
                                                 onClick={() => handleDeleteAllotment(detail.id)}
@@ -791,7 +790,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 ))}
                                 </tbody>
                                 <tfoot>
-                                <tr style={{ background: 'var(--tb-sunken)', borderTop: '2px solid var(--tb-border)' }}>
+                                <tr className="bg-[var(--tb-sunken)] border-t-2 border-border">
                                     <th colSpan={8} className="px-3 py-1.5 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
                                     <th className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
                                     <th className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
@@ -825,10 +824,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                 <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
                     <div className="flex items-center gap-2">
-                        <ListChecks className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
+                        <ListChecks className="size-4 text-primary" aria-hidden="true" />
                         <span className="text-sm font-bold tracking-tight text-foreground">Available License Items</span>
                         {totalItems > 0 && (
-                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand)' }}>{totalItems} items</span>
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">{totalItems} items</span>
                         )}
                     </div>
                 </div>
@@ -843,7 +842,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </div>
                     )}
                     {success && (
-                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px]" style={{ color: 'var(--tb-success-text)' }} role="alert">
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px] text-success" role="alert">
                             <CheckCircle2 className="size-4" aria-hidden="true" />
                             <div className="flex-1">{success}</div>
                             <button type="button" className="ml-auto shrink-0 cursor-pointer opacity-60 hover:opacity-100" onClick={() => setSuccess("")}><X className="size-3.5" /></button>
@@ -857,7 +856,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         notificationOptions={notificationOptions}
                     />
 
-                    <div style={{ maxHeight: '650px', overflowY: 'auto', paddingRight: '2px' }}>
+                    <div className="max-h-[650px] overflow-y-auto pr-px">
                         {availableItems.map((item) => {
                             const maxAllocation = calculateMaxAllocation(item);
                             const currentAllocation = allocationData[item.id];
@@ -867,26 +866,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
 
                             return (
-                                <div key={item.id} style={{
-                                    display: 'block',
-                                    background: 'var(--tb-card-bg)',
-                                    border: `1px solid ${isReady ? 'var(--primary-color)' : 'var(--tb-border-soft)'}`,
-                                    borderLeft: `4px solid ${isReady ? 'var(--primary-color)' : 'var(--tb-border-strong)'}`,
-                                    borderRadius: 'var(--tb-r-md)',
-                                    marginBottom: '10px',
-                                    overflow: 'hidden',
-                                    boxShadow: isReady ? '0 2px 12px rgba(79,70,229,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
-                                }}>
+                                <div key={item.id} className={cn(
+                                    "mb-2.5 overflow-hidden rounded-[var(--tb-r-md)] bg-[var(--tb-card-bg)]",
+                                    isReady
+                                        ? "border border-primary border-l-[4px] shadow-[0_2px_12px_rgba(79,70,229,0.12)]"
+                                        : "border border-border/60 border-l-[4px] border-l-border shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+                                )}>
                                     {/* ── Row 1: Identity bar ── */}
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        flexWrap: 'wrap',
-                                        gap: '6px',
-                                        padding: '6px 12px',
-                                        background: 'var(--tb-sunken)',
-                                        borderBottom: '1px solid var(--tb-border)',
-                                    }}>
+                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-1.5 bg-[var(--tb-sunken)] border-b border-border">
                                         <button
                                             onClick={async () => {
                                                 try {
@@ -898,38 +885,23 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 }
                                             }}
                                             title="View license document"
-                                            style={{
-                                                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                                                fontWeight: '700', fontSize: 14, color: 'var(--primary-color)',
-                                                marginRight: '4px', display: 'inline-flex', alignItems: 'center',
-                                                textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationStyle: 'dotted'
-                                            }}
+                                            className="mr-1 inline-flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer font-bold text-[14px] text-primary underline decoration-dotted underline-offset-[3px]"
                                         >
                                             <FileText className="size-4" aria-hidden="true" />
                                             {item.license_number}
                                         </button>
-                                        <span style={{
-                                            background: 'var(--tb-border)', color: 'var(--text-secondary)',
-                                            borderRadius: 'var(--tb-r-sm)', padding: '1px 7px', fontSize: 12, fontWeight: '600'
-                                        }}>#{item.serial_number}</span>
+                                        <span className="rounded-[var(--tb-r-sm)] bg-border px-[7px] py-px text-[12px] font-semibold text-muted-foreground">#{item.serial_number}</span>
                                         <ConditionBadge type={item.condition_type} size="xs" />
 
                                         {item.hs_code_label && (
-                                            <span style={{
-                                                background: 'var(--indigo-50)', color: 'var(--primary-dark)',
-                                                border: '1px solid var(--indigo-200)',
-                                                borderRadius: 'var(--tb-r-sm)', padding: '1px 7px', fontSize: 12,
-                                            }}>HS: {item.hs_code_label}</span>
+                                            <span className="rounded-[var(--tb-r-sm)] border border-primary/20 bg-primary/5 px-[7px] py-px text-[12px] text-primary">HS: {item.hs_code_label}</span>
                                         )}
                                         {item.notification_number && (
-                                            <span style={{fontSize: 12, color: 'var(--text-secondary)'}}>
+                                            <span className="text-[12px] text-muted-foreground">
                                                 Notif: {item.notification_number}
                                             </span>
                                         )}
-                                        <span style={{
-                                            marginLeft: 'auto', fontSize: 12, color: 'var(--text-secondary)',
-                                            display: 'flex', alignItems: 'center', gap: '4px'
-                                        }}>
+                                        <span className="ml-auto flex items-center gap-1 text-[12px] text-muted-foreground">
                                             <Calendar className="size-4" aria-hidden="true" />
                                             Exp: {item.license_expiry_date || '—'}
                                         </span>
@@ -938,109 +910,90 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         {item.condition_type
                                             ? <ConditionBadge type={item.condition_type} size="xs" />
                                             : (
-                                                <span className="badge" style={{background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid var(--success-border)', fontSize: 11}}>
-                                                    <Unlock className="size-4" aria-hidden="true" />Open
+                                                <span className="inline-flex items-center gap-1 rounded border border-success/30 bg-success/10 px-[7px] py-px text-[11px] text-success">
+                                                    <Unlock className="size-3" aria-hidden="true" />Open
                                                 </span>
                                             )}
                                     </div>
 
                                     {/* ── Row 2: Compact description + exporter + chips ── */}
-                                    <div style={{padding: '5px 12px 5px', borderBottom: '1px solid var(--tb-border-soft)', background: 'var(--tb-card-bg)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', minHeight: 0}}>
-                                        <span style={{fontWeight: '700', fontSize: 13, color: 'var(--tb-text)'}}>
+                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-[5px] bg-[var(--tb-card-bg)] border-b border-border/60">
+                                        <span className="font-bold text-[13px] text-foreground">
                                             {item.description}
                                         </span>
-                                        <span style={{width: 1, height: 12, background: 'var(--tb-border)', flexShrink: 0, display: 'inline-block'}} />
-                                        <span style={{fontSize: 11.5, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3}}>
+                                        <span className="inline-block w-px h-3 bg-border shrink-0" />
+                                        <span className="inline-flex items-center gap-[3px] text-[11.5px] text-muted-foreground">
                                             <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
                                         </span>
                                         {item.items_detail && item.items_detail.length > 0 && item.items_detail.map((i, idx) => (
-                                            <span key={idx} style={{
-                                                background: 'var(--tb-brand-50)', color: 'var(--tb-brand)',
-                                                border: '1px solid var(--tb-brand-100)',
-                                                borderRadius: 4, padding: '0px 6px',
-                                                fontSize: '0.7rem', fontWeight: '600', lineHeight: '1.6',
-                                            }}>{i.name}</span>
+                                            <span key={idx} className="rounded border border-primary/20 bg-primary/10 px-1.5 text-[0.7rem] font-semibold leading-[1.6] text-primary">{i.name}</span>
                                         ))}
                                     </div>
 
                                     {/* ── Row 3: Stats + Inputs + Action (compact bottom bar) ── */}
-                                    <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0', background: 'var(--tb-sunken)'}}>
+                                    <div className="flex items-center flex-wrap bg-[var(--tb-sunken)]">
 
                                         {/* Availability stats */}
-                                        <div style={{display: 'flex', gap: '12px', padding: '7px 12px', flexShrink: 0}}>
+                                        <div className="flex gap-3 px-3 py-[7px] shrink-0">
                                             {[
                                                 {label: 'Avail Qty', value: qty.toFixed(3)},
                                                 {label: 'CIF FC', value: cifFc.toFixed(2)},
                                                 {label: 'Avg', value: average},
                                             ].map(({label, value}) => (
                                                 <div key={label}>
-                                                    <div style={{fontSize: '0.62rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px'}}>{label}</div>
-                                                    <div style={{fontWeight: '700', fontSize: 13, color: 'var(--tb-text)', lineHeight: '1.2'}}>{value}</div>
+                                                    <div className="text-[0.62rem] text-muted-foreground uppercase tracking-[0.4px]">{label}</div>
+                                                    <div className="font-bold text-[13px] text-foreground leading-[1.2]">{value}</div>
                                                 </div>
                                             ))}
                                         </div>
 
-                                        <div style={{width: '1px', height: '36px', background: 'var(--tb-border-soft)', flexShrink: 0}} />
+                                        <div className="w-px h-9 bg-border/60 shrink-0" />
 
                                         {/* Allocation inputs */}
-                                        <div style={{display: 'flex', gap: '8px', padding: '7px 12px', flexWrap: 'wrap', flex: 1, minWidth: '260px'}}>
-                                            <div style={{flex: '1', minWidth: '130px'}}>
-                                                <label style={{fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', display: 'block', marginBottom: '3px'}}>
-                                                    Qty <span style={{fontWeight: '400', textTransform: 'none'}}>/ max {maxAllocation.qty}</span>
+                                        <div className="flex gap-2 px-3 py-[7px] flex-wrap flex-1 min-w-[260px]">
+                                            <div className="flex-1 min-w-[130px]">
+                                                <label className="block mb-[3px] text-[0.62rem] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
+                                                    Qty <span className="font-normal normal-case">/ max {maxAllocation.qty}</span>
                                                 </label>
                                                 <div className="relative flex">
-                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                                         value={currentAllocation?.qty || ""}
                                                         onChange={(e) => handleQuantityChange(item.id, e.target.value)}
                                                         placeholder="Qty"
                                                         step="1" min="0" max={maxAllocation.qty}
-                                                        style={{fontSize: '0.82rem'}}
                                                     />
-                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" type="button"
-                                                        onClick={() => handleMaxQuantity(item)}
-                                                        style={{fontSize: 12, fontWeight: '600'}}>Max</button>
+                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-[12px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted" type="button"
+                                                        onClick={() => handleMaxQuantity(item)}>Max</button>
                                                 </div>
                                             </div>
-                                            <div style={{flex: '1', minWidth: '130px'}}>
-                                                <label style={{fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', display: 'block', marginBottom: '3px'}}>
-                                                    Value <span style={{fontWeight: '400', textTransform: 'none'}}>/ max {maxAllocation.value.toFixed(2)}</span>
+                                            <div className="flex-1 min-w-[130px]">
+                                                <label className="block mb-[3px] text-[0.62rem] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
+                                                    Value <span className="font-normal normal-case">/ max {maxAllocation.value.toFixed(2)}</span>
                                                 </label>
                                                 <div className="relative flex">
-                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                                         value={currentAllocation?.cif_fc || ""}
                                                         onChange={(e) => handleValueChange(item.id, e.target.value)}
                                                         placeholder="Value"
                                                         step="0.01" min="0"
-                                                        style={{fontSize: '0.82rem'}}
                                                     />
-                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" type="button"
-                                                        onClick={() => handleMaxValue(item)}
-                                                        style={{fontSize: 12, fontWeight: '600'}}>Max</button>
+                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-[12px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted" type="button"
+                                                        onClick={() => handleMaxValue(item)}>Max</button>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div style={{width: '1px', height: '36px', background: 'var(--tb-border-soft)', flexShrink: 0}} />
+                                        <div className="w-px h-9 bg-border/60 shrink-0" />
 
                                         {/* Confirm action */}
-                                        <div style={{
-                                            flexShrink: 0, padding: '7px 12px',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        }}>
+                                        <div className="shrink-0 px-3 py-[7px] flex items-center justify-center">
                                             <button
-                                                className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
-                                                style={{
-                                                    background: isReady ? 'var(--primary-gradient)' : 'var(--tb-gray-100)',
-                                                    border: 'none',
-                                                    color: isReady ? 'white' : 'var(--text-secondary)',
-                                                    fontWeight: '600',
-                                                    fontSize: '0.82rem',
-                                                    padding: '10px 16px',
-                                                    borderRadius: 'var(--tb-r-md)',
-                                                    whiteSpace: 'nowrap',
-                                                    transition: 'all 200ms',
-                                                    cursor: isReady ? 'pointer' : 'not-allowed',
-                                                }}
+                                                className={cn(
+                                                    "flex items-center gap-1.5 rounded-[var(--tb-r-md)] px-4 py-2.5 text-[0.82rem] font-semibold whitespace-nowrap transition-all duration-200",
+                                                    isReady
+                                                        ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground cursor-pointer hover:opacity-90"
+                                                        : "bg-muted text-muted-foreground cursor-not-allowed"
+                                                )}
                                                 onClick={() => handleConfirmAllot(item)}
                                                 disabled={!isReady || (allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id)}
                                             >
@@ -1071,28 +1024,26 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     )}
 
                     {!tableLoading && availableItems.length === 0 && (
-                        <div className="text-center py-5" style={{ border: '2px dashed var(--tb-border)', borderRadius: 'var(--tb-r-md)', background: 'var(--tb-card-bg)' }}>
-                            <Inbox className="size-4" aria-hidden="true" />
-                            <div className="font-semibold text-muted-foreground mb-1">No available license items found</div>
-                            <small className="text-muted">Try adjusting the filters above</small>
+                        <div className="rounded-[var(--tb-r-md)] border-2 border-dashed border-border bg-[var(--tb-card-bg)]">
+                            <EmptyState
+                                icon={Inbox}
+                                title="No available license items found"
+                                description="Try adjusting the filters above"
+                            />
                         </div>
                     )}
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                        <div className="flex justify-between items-center mt-3 pt-3" style={{ borderTop: '1px solid var(--tb-border)' }}>
-                            <div className="text-muted" style={{ fontSize: 14.5 }}>
+                        <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
+                            <div className="text-muted-foreground text-[14.5px]">
                                 Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} items
                             </div>
-                            <nav>
-                                <ul className="pagination mb-0">
-                                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                            <nav aria-label="Pagination">
+                                <ul className="flex items-center gap-1">
+                                    <li>
                                         <button
-                                            className="page-link"
-                                            style={{
-                                                borderRadius: '6px 0 0 6px',
-                                                fontWeight: '500'
-                                            }}
+                                            className="inline-flex h-8 items-center rounded-l-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
                                             onClick={() => setCurrentPage(prev => prev - 1)}
                                             disabled={currentPage === 1}
                                         >
@@ -1108,15 +1059,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             (pageNum >= currentPage - 2 && pageNum <= currentPage + 2)
                                         ) {
                                             return (
-                                                <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
+                                                <li key={pageNum}>
                                                     <button
-                                                        className="page-link"
-                                                        style={{
-                                                            background: currentPage === pageNum ? 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))' : 'white',
-                                                            border: currentPage === pageNum ? 'none' : '1px solid var(--tb-border)',
-                                                            color: currentPage === pageNum ? 'white' : 'var(--primary-color)',
-                                                            fontWeight: '500'
-                                                        }}
+                                                        className={cn(
+                                                            "inline-flex h-8 min-w-[32px] items-center justify-center rounded border px-2 text-sm font-medium transition-colors",
+                                                            currentPage === pageNum
+                                                                ? "bg-gradient-to-br from-primary to-primary/70 border-transparent text-primary-foreground"
+                                                                : "border-border bg-card text-foreground hover:bg-muted"
+                                                        )}
                                                         onClick={() => setCurrentPage(pageNum)}
                                                     >
                                                         {pageNum}
@@ -1127,17 +1077,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             pageNum === currentPage - 3 ||
                                             pageNum === currentPage + 3
                                         ) {
-                                            return <li key={pageNum} className="page-item disabled"><span className="page-link">...</span></li>;
+                                            return <li key={pageNum}><span className="inline-flex h-8 items-center px-1 text-sm text-muted-foreground">…</span></li>;
                                         }
                                         return null;
                                     })}
-                                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                                    <li>
                                         <button
-                                            className="page-link"
-                                            style={{
-                                                borderRadius: '0 6px 6px 0',
-                                                fontWeight: '500'
-                                            }}
+                                            className="inline-flex h-8 items-center rounded-r-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
                                             onClick={() => setCurrentPage(prev => prev + 1)}
                                             disabled={currentPage === totalPages}
                                         >
@@ -1167,6 +1113,37 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     setPlanModal(null);
                     if (item) handleConfirmAllot(item);
                 }}
+            />
+
+            {/* Delete allocation confirm dialog */}
+            <ConfirmDialog
+                show={deleteConfirm.show}
+                title="Remove Allocation"
+                message="Are you sure you want to remove this allocation?"
+                severity="danger"
+                confirmText="Remove"
+                onConfirm={confirmDelete}
+                onCancel={() => setDeleteConfirm({ show: false, allotmentItemId: null })}
+            />
+
+            {/* Copy allotment confirm dialog */}
+            <ConfirmDialog
+                show={copyConfirm}
+                title="Copy Allotment"
+                message="Are you sure you want to create a copy of this allotment?"
+                severity="info"
+                confirmText="Copy"
+                onConfirm={async () => {
+                    setCopyConfirm(false);
+                    try {
+                        const response = await api.post(`allotments/${id}/copy/`);
+                        toast.success('Allotment copied successfully!');
+                        navigate(`/allotments/${response.data.id}/edit`);
+                    } catch (err: unknown) {
+                        toast.error((err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Failed to copy allotment');
+                    }
+                }}
+                onCancel={() => setCopyConfirm(false)}
             />
 
         </div>

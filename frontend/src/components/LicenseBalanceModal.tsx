@@ -165,7 +165,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                         e.currentTarget.style.backgroundColor = textValue ? 'var(--row-yellow-bg)' : 'var(--tb-sunken)';
                     }}
                 >
-                    {textValue || <span className="italic" style={{ color: 'var(--tb-text-secondary)' }}>Click to add {label.toLowerCase()}...</span>}
+                    {textValue || <span className="italic text-muted-foreground">Click to add {label.toLowerCase()}...</span>}
                 </div>
             )}
         </div>
@@ -470,18 +470,17 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                         {loading || !licenseData ? (
                             <div className="flex flex-col items-center gap-2 py-10 text-center">
                                 <Loader2 className="size-8 animate-spin text-primary" />
-                                <p className="mt-2" style={{ color: 'var(--tb-text-secondary)' }}>Loading...</p>
+                                <p className="mt-2 text-muted-foreground">Loading...</p>
                             </div>
                         ) : (
                             <>
                                 {/* License Header Details */}
                                 <div
-                                    className="mb-6 rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                                    style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                    className="mb-6 rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                 >
                                     <div className="table-responsive">
                                         <table className="table table-sm mb-0 border-none">
-                                            <thead style={{ backgroundColor: 'var(--primary-color)', color: '#fff' }}>
+                                            <thead className="bg-primary text-white">
                                                 <tr>
                                                     <th scope="col" className="p-3 text-sm border-none">License Number</th>
                                                     <th scope="col" className="p-3 text-sm border-none">License Date</th>
@@ -491,10 +490,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr style={{ backgroundColor: 'var(--tb-sunken)' }}>
-                                                    <td className="p-3 text-sm border-none font-medium" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                <tr className="bg-muted/40">
+                                                    <td className="p-3 text-sm border-b border-border/50 font-medium">
                                                         <div className="flex items-center gap-2 flex-nowrap">
-                                                            <span className="font-semibold" style={{ color: 'var(--tb-text)' }}>
+                                                            <span className="font-semibold text-foreground">
                                                                 {licenseData.license_number || '-'}
                                                             </span>
                                                             {(licenseData.has_tl || licenseData.has_copy) && (
@@ -532,23 +531,23 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-b border-border/50">
                                                         {licenseData.license_date ? formatDate(licenseData.license_date) : '-'}
                                                     </td>
-                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-b border-border/50">
                                                         {licenseData.license_expiry_date ? formatDate(licenseData.license_expiry_date) : '-'}
                                                     </td>
-                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-b border-border/50">
                                                         {licenseData.exporter_name || '-'}
                                                     </td>
-                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-b border-border/50">
                                                         {licenseData.port_name || '-'}
                                                     </td>
                                                 </tr>
                                             </tbody>
                                         </table>
                                         <table className="table table-sm mb-0 border-none mt-2">
-                                            <thead style={{ backgroundColor: 'var(--primary-color)', color: '#fff' }}>
+                                            <thead className="bg-primary text-white">
                                                 <tr>
                                                     <th scope="col" className="p-3 text-sm border-none">Purchase Status</th>
                                                     <th scope="col" className="p-3 text-sm border-none">Balance CIF</th>
@@ -557,17 +556,17 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr style={{ backgroundColor: 'var(--tb-sunken)' }}>
-                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                <tr className="bg-muted/40">
+                                                    <td className="p-3 text-sm border-b border-border/50">
                                                         {licenseData.purchase_status || '-'}
                                                     </td>
-                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-b border-border/50">
                                                         {formatFiniteDecimal(licenseData.balance_cif)}
                                                     </td>
-                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-b border-border/50">
                                                         {licenseData.get_norm_class || '-'}
                                                     </td>
-                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-b border-border/50">
                                                         {licenseData.latest_transfer || '-'}
                                                     </td>
                                                 </tr>
@@ -578,16 +577,11 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
                                 {/* Condition Sheet Section */}
                                 <div
-                                    className="mb-4 rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                                    style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                    className="mb-4 rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                 >
                                     <div className="flex justify-between items-center mb-3">
                                         <h5
-                                            className="font-semibold flex-1 pb-2 mb-0 border-b-2"
-                                            style={{
-                                                color: 'var(--tb-text)',
-                                                borderColor: 'var(--tb-brand)',
-                                            }}
+                                            className="font-semibold flex-1 pb-2 mb-0 border-b-2 text-foreground border-b-primary"
                                         >
                                             <FileText className="size-4 mr-2" />
                                             Condition Sheet
@@ -606,16 +600,11 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
                                 {/* Notes Section */}
                                 <div
-                                    className="mb-4 rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                                    style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                    className="mb-4 rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                 >
                                     <div className="flex justify-between items-center mb-3">
                                         <h5
-                                            className="font-semibold flex-1 pb-2 mb-0 border-b-2"
-                                            style={{
-                                                color: 'var(--tb-text)',
-                                                borderColor: 'var(--tb-brand)',
-                                            }}
+                                            className="font-semibold flex-1 pb-2 mb-0 border-b-2 text-foreground border-b-primary"
                                         >
                                             <PenSquare className="size-4 mr-2" />
                                             Notes
@@ -635,24 +624,16 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 {/* Export Items */}
                                 {licenseData.export_license && licenseData.export_license.length > 0 && (
                                     <div
-                                        className="mb-4 rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                                        style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                        className="mb-4 rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                     >
                                         <h5
-                                            className="mb-3 font-semibold pb-2 border-b-2"
-                                            style={{
-                                                color: 'var(--tb-text)',
-                                                borderColor: 'var(--tb-brand)',
-                                            }}
+                                            className="mb-3 font-semibold pb-2 border-b-2 text-foreground border-b-primary"
                                         >
                                             <Package className="size-4 mr-2" />
                                             Export Items
                                         </h5>
                                         <table className="table mb-0 border-none">
-                                            <thead style={{
-                                                backgroundColor: 'var(--primary-color)',
-                                                color: '#fff'
-                                            }}>
+                                            <thead className="bg-primary text-white">
                                                 <tr>
                                                     <th scope="col" className="p-3 border-none">Item</th>
                                                     <th scope="col" className="p-3 border-none">Total CIF</th>
@@ -681,13 +662,13 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                 }
                                                             }}
                                                         >
-                                                            <td className="p-3 border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                            <td className="p-3 border-b border-border/50">
                                                                 {item.description || item.norm_class_label || 'None'}
                                                             </td>
-                                                            <td className="p-3 border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                            <td className="p-3 border-b border-border/50">
                                                                 {formatFiniteDecimal(item.cif_fc ?? item.fob_fc)}
                                                             </td>
-                                                            <td className="p-3 border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                            <td className="p-3 border-b border-border/50">
                                                                 {formatFiniteDecimal(licenseData.balance_cif)}
                                                             </td>
                                                         </tr>
@@ -772,25 +753,17 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 {/* Import Items */}
                                 {licenseData.import_license && licenseData.import_license.length > 0 && (
                                     <div
-                                        className="rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                                        style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                        className="rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                     >
                                         <h5
-                                            className="mb-3 font-semibold pb-2 border-b-2"
-                                            style={{
-                                                color: 'var(--tb-text)',
-                                                borderColor: 'var(--tb-brand)',
-                                            }}
+                                            className="mb-3 font-semibold pb-2 border-b-2 text-foreground border-b-primary"
                                         >
                                             <Inbox className="size-4 mr-2" />
                                             Import Items
                                         </h5>
                                         <div className="table-responsive">
                                             <table className="table table-sm mb-0 border-none">
-                                                <thead style={{
-                                                    backgroundColor: 'var(--primary-dark)',
-                                                    color: '#fff'
-                                                }}>
+                                                <thead className="bg-primary/90 text-white">
                                                     <tr>
                                                         <th scope="col" className="min-w-[50px] p-3 text-sm border-none">Sr No</th>
                                                         <th scope="col" className="min-w-[100px] p-3 text-sm border-none">HS Code</th>
@@ -827,17 +800,17 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                     }
                                                                 }}
                                                             >
-                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {item.serial_number || index + 1}
                                                                     <ConditionBadge type={item.condition_type} size="xs" />
                                                                 </td>
-                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {item.hs_code_label || item.hs_code || '-'}
                                                                 </td>
-                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {item.description || '-'}
                                                                 </td>
-                                                                <td onClick={(e) => e.stopPropagation()} className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td onClick={(e) => e.stopPropagation()} className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {editingItemId === item.id ? (
                                                                         <div className="flex items-center gap-1">
                                                                             <AsyncSelect
@@ -965,22 +938,21 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         </div>
                                                                     )}
                                                                 </td>
-                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {formatFiniteDecimal(item.quantity)}
                                                                 </td>
-                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {formatFiniteDecimal(item.allotted_quantity)}
                                                                 </td>
-                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {formatFiniteDecimal(item.debited_quantity)}
                                                                 </td>
-                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {formatFiniteDecimal(item.available_quantity)}
                                                                 </td>
                                                                 <td
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    className="px-[0.6rem] py-[0.6rem] text-sm border-none text-center"
-                                                                    style={{ borderBottom: '1px solid var(--tb-border-soft)' }}
+                                                                    className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50 text-center"
                                                                 >
                                                                     {/* Editable license marking — writes to backend `condition_type`. */}
                                                                     <Select
@@ -1016,10 +988,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         }}
                                                                     />
                                                                 </td>
-                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {formatFiniteDecimal(item.cif_fc)}
                                                                 </td>
-                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-b border-border/50">
                                                                     {formatFiniteDecimal(item.balance_cif_fc)}
                                                                 </td>
                                                             </tr>

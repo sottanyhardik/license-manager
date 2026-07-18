@@ -1,5 +1,6 @@
 import { Layers, MapPin, X } from "lucide-react";
 import { formatTruthyInr } from "./masterDisplayFormatters";
+import { cn } from "@/lib/utils";
 
 interface BoeMergeModalProps {
     mergeBoeTarget: any;
@@ -15,80 +16,82 @@ interface BoeMergeModalProps {
 /** BOE merge modal — extracted verbatim from MasterList. */
 export default function BoeMergeModal({ mergeBoeTarget, closeMergeModal, mergeCandidatesLoading, mergeCandidates, mergeBoeSource, setMergeBoeSource, mergeBoeLoading, doMerge }: BoeMergeModalProps) {
     return (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1060, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeMergeModal}>
-                    <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '24px', width: '560px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                            <h6 style={{ margin: 0, fontWeight: '700', color: 'var(--tb-brand-active)' }}>
+                <div className="fixed inset-0 z-[1060] flex items-center justify-center bg-black/45" onClick={closeMergeModal}>
+                    <div className="w-[560px] max-w-[95vw] rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_8px_32px_rgba(0,0,0,0.18)]" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h6 className="m-0 font-bold text-primary flex items-center gap-1.5">
                                 <Layers className="size-4" aria-hidden="true" />
-                                Merge BOE: <span style={{ color: 'var(--accent-color)' }}>{mergeBoeTarget.bill_of_entry_number}</span>
+                                Merge BOE: <span className="text-violet-600">{mergeBoeTarget.bill_of_entry_number}</span>
                             </h6>
-                            <button onClick={closeMergeModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--tb-text-tertiary)' }}>
+                            <button onClick={closeMergeModal} className="flex items-center justify-center bg-transparent border-none text-[1.2rem] cursor-pointer text-muted-foreground/70 hover:text-foreground">
                                 <X className="size-4" aria-hidden="true" />
                             </button>
                         </div>
 
                         {/* Target BOE info */}
-                        <div style={{ background: 'var(--tb-success-soft)', border: '1px solid #86efac', borderRadius: 'var(--tb-r-md)', padding: '10px 14px', marginBottom: '16px', fontSize: 13.5 }}>
-                            <div style={{ fontWeight: '600', color: 'var(--tb-success-text)', marginBottom: '4px' }}>Target BOE (will be kept &amp; updated)</div>
-                            <div><MapPin className="size-4" aria-hidden="true" />{mergeBoeTarget.port_name}</div>
-                            <div style={{ color: 'var(--tb-text-secondary)', fontSize: 12 }}>
+                        <div className="rounded-[var(--tb-r-md)] border border-[#86efac] bg-emerald-50 px-3.5 py-2.5 mb-4 text-[13.5px]">
+                            <div className="font-semibold text-emerald-700 mb-1">Target BOE (will be kept &amp; updated)</div>
+                            <div className="flex items-center gap-1"><MapPin className="size-4" aria-hidden="true" />{mergeBoeTarget.port_name}</div>
+                            <div className="text-muted-foreground text-xs">
                                 {mergeBoeTarget.item_details?.length || 0} item(s) · {mergeBoeTarget.licenses || 'No licenses'}
                             </div>
                         </div>
 
-                        <div style={{ fontWeight: '600', fontSize: 12, color: 'var(--tb-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                        <div className="font-semibold text-xs text-muted-foreground uppercase tracking-[0.5px] mb-2">
                             Select source BOE to merge from (port replaces target, items moved, source deleted):
                         </div>
 
                         {mergeCandidatesLoading && (
-                            <div style={{ textAlign: 'center', padding: '20px', color: 'var(--tb-text-tertiary)' }}>
+                            <div className="text-center py-5 text-muted-foreground/70">
                                 <span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" aria-hidden="true" />Loading candidates...
                             </div>
                         )}
 
                         {!mergeCandidatesLoading && mergeCandidates.length === 0 && (
-                            <div style={{ textAlign: 'center', padding: '20px', color: 'var(--tb-text-tertiary)', fontSize: 14 }}>
+                            <div className="text-center py-5 text-muted-foreground/70 text-sm">
                                 No other BOEs found with number {mergeBoeTarget.bill_of_entry_number}
                             </div>
                         )}
 
-                        {mergeCandidates.map(candidate => (
-                            <div
-                                key={candidate.id}
-                                onClick={() => setMergeBoeSource(prev => prev?.id === candidate.id ? null : candidate)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    padding: '10px 14px', border: `2px solid ${mergeBoeSource?.id === candidate.id ? 'var(--accent-color)' : 'var(--tb-border-soft)'}`,
-                                    borderRadius: 'var(--tb-r-md)', marginBottom: '8px', cursor: 'pointer',
-                                    background: mergeBoeSource?.id === candidate.id ? 'var(--tb-sunken)' : 'var(--tb-card-bg)',
-                                    transition: 'all 0.15s'
-                                }}
-                            >
-                                <div>
-                                    <div style={{ fontWeight: '600', fontSize: 14, color: 'var(--tb-text)' }}>
-                                        <MapPin className="size-4" aria-hidden="true" />{candidate.port_name}
-                                    </div>
-                                    <div style={{ fontSize: 12, color: 'var(--tb-text-secondary)' }}>
-                                        {candidate.item_details?.length || 0} item(s) · {candidate.licenses || 'No licenses'}
-                                    </div>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    {candidate.total_inr && (
-                                        <div style={{ fontWeight: '700', fontSize: 14, color: 'var(--tb-text)' }}>
-                                            {formatTruthyInr(candidate.total_inr)}
+                        {mergeCandidates.map(candidate => {
+                            const isSelected = mergeBoeSource?.id === candidate.id;
+                            return (
+                                <div
+                                    key={candidate.id}
+                                    onClick={() => setMergeBoeSource((prev: any) => prev?.id === candidate.id ? null : candidate)}
+                                    className={cn(
+                                        "flex items-center justify-between px-3.5 py-2.5 rounded-[var(--tb-r-md)] mb-2 cursor-pointer border-2 transition-all duration-150",
+                                        isSelected
+                                            ? "border-violet-500 bg-muted/60"
+                                            : "border-border bg-card"
+                                    )}
+                                >
+                                    <div>
+                                        <div className="font-semibold text-sm text-foreground flex items-center gap-1">
+                                            <MapPin className="size-4" aria-hidden="true" />{candidate.port_name}
                                         </div>
-                                    )}
-                                    {mergeBoeSource?.id === candidate.id && (
-                                        <span style={{ fontSize: 11, color: 'var(--accent-color)', fontWeight: '700' }}>✓ Selected</span>
-                                    )}
+                                        <div className="text-xs text-muted-foreground">
+                                            {candidate.item_details?.length || 0} item(s) · {candidate.licenses || 'No licenses'}
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        {candidate.total_inr && (
+                                            <div className="font-bold text-sm text-foreground">
+                                                {formatTruthyInr(candidate.total_inr)}
+                                            </div>
+                                        )}
+                                        {isSelected && (
+                                            <span className="text-[11px] text-violet-600 font-bold">✓ Selected</span>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         {mergeBoeSource && (
-                            <div style={{ background: 'var(--tb-sunken)', border: '1px solid #c4b5fd', borderRadius: 'var(--tb-r-md)', padding: '10px 14px', margin: '12px 0', fontSize: '0.82rem', color: 'var(--accent-color)' }}>
+                            <div className="rounded-[var(--tb-r-md)] border border-violet-300 bg-muted/60 px-3.5 py-2.5 my-3 text-[0.82rem] text-violet-600">
                                 <strong>What will happen:</strong>
-                                <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
+                                <ul className="mt-1.5 mb-0 pl-5">
                                     <li>Target port will change to <strong>{mergeBoeSource.port_name}</strong></li>
                                     <li>Items from source will be moved to target (duplicates skipped)</li>
                                     <li>Source BOE ({mergeBoeSource.port_name}) will be permanently deleted</li>
@@ -96,17 +99,25 @@ export default function BoeMergeModal({ mergeBoeTarget, closeMergeModal, mergeCa
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
-                            <button onClick={closeMergeModal} style={{ padding: '6px 16px', borderRadius: 'var(--tb-r-sm)', border: '1px solid var(--tb-border)', background: 'var(--tb-sunken)', cursor: 'pointer', fontSize: 14 }}>
+                        <div className="flex justify-end gap-2 mt-4">
+                            <button
+                                onClick={closeMergeModal}
+                                className="px-4 py-1.5 rounded-[var(--tb-r-sm)] border border-border bg-muted/60 cursor-pointer text-sm hover:bg-muted"
+                            >
                                 Cancel
                             </button>
                             <button
                                 onClick={doMerge}
                                 disabled={!mergeBoeSource || mergeBoeLoading}
-                                style={{ padding: '6px 16px', borderRadius: 'var(--tb-r-sm)', border: 'none', background: mergeBoeSource && !mergeBoeLoading ? 'var(--accent-color)' : 'var(--accent-light)', color: '#fff', cursor: mergeBoeSource && !mergeBoeLoading ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                className={cn(
+                                    "flex items-center gap-1.5 px-4 py-1.5 rounded-[var(--tb-r-sm)] border-none text-white text-sm font-semibold",
+                                    mergeBoeSource && !mergeBoeLoading
+                                        ? "bg-violet-600 cursor-pointer hover:bg-violet-700"
+                                        : "bg-violet-300 cursor-not-allowed"
+                                )}
                             >
                                 {mergeBoeLoading
-                                    ? <><div className="" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>Merging...</>
+                                    ? <><span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true"></span>Merging...</>
                                     : <><Layers className="size-4" aria-hidden="true" />Confirm Merge</>
                                 }
                             </button>

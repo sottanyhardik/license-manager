@@ -1,4 +1,5 @@
-import { Link as LinkIcon, X } from "lucide-react";
+import { Link as LinkIcon, Loader2, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { clickable } from "../../utils/clickable";
 import { formatTruthyInr } from "./masterDisplayFormatters";
 
@@ -15,52 +16,78 @@ interface LinkTradeModalProps {
 /** "Link Trade" search modal — extracted verbatim from MasterList. */
 export default function LinkTradeModal({ linkModalTrade, closeLinkModal, linkSearch, setLinkSearch, linkSearching, linkResults, confirmLink }: LinkTradeModalProps) {
     return (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1060, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeLinkModal}>
-                    <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '24px', width: '480px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                            <h6 style={{ margin: 0, fontWeight: '700', color: 'var(--tb-brand-active)' }}>
-                                <LinkIcon className="size-4" aria-hidden="true" />
-                                Link Trade: <span style={{ color: 'var(--tb-brand)' }}>{linkModalTrade.invoice_number || 'No Invoice'}</span>
-                            </h6>
-                            <button onClick={closeLinkModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--tb-text-tertiary)' }}>
-                                <X className="size-4" aria-hidden="true" />
-                            </button>
-                        </div>
-                        <input
-                            autoFocus
-                            type="text"
-                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
-                            placeholder="Search by invoice number..."
-                            value={linkSearch}
-                            onChange={e => setLinkSearch(e.target.value)}
-                            style={{ marginBottom: '12px' }}
-                        />
-                        {linkSearching && <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px' }}><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" aria-hidden="true" />Searching...</div>}
-                        {!linkSearching && linkSearch && linkResults.length === 0 && (
-                            <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px', fontSize: 14 }}>No unlinked trades found for "{linkSearch}"</div>
-                        )}
-                        {linkResults.map(t => (
-                            <div key={t.id} {...clickable(() => confirmLink(t))} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--tb-border)', borderRadius: 'var(--tb-r-md)', marginBottom: '8px', cursor: 'pointer', transition: 'background 0.15s' }}
-                                onMouseEnter={e => e.currentTarget.style.background = 'var(--tb-info-soft)'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                <div>
-                                    <div style={{ fontWeight: '600', fontSize: 14.5, color: 'var(--tb-text)' }}>{t.invoice_number || 'No Invoice'}</div>
-                                    <div style={{ fontSize: 12, color: 'var(--tb-text-secondary)' }}>{t.from_company_label} → {t.to_company_label}</div>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    <span style={{ fontSize: 12, fontWeight: '700', color: t.direction.includes('SALE') ? 'var(--tb-success-text)' : 'var(--tb-brand-hover)', background: t.direction.includes('SALE') ? 'var(--tb-success-soft)' : 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                        {t.direction_label || t.direction}
-                                    </span>
-                                    <div style={{ fontSize: 12, color: 'var(--tb-text-secondary)', marginTop: '4px' }}>
-                                        {formatTruthyInr(t.total_amount, "-")}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                        {!linkSearch && (
-                            <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', fontSize: 14, padding: '8px' }}>Type an invoice number to search</div>
-                        )}
-                    </div>
+        <div className="fixed inset-0 z-[1060] flex items-center justify-center bg-black/45" onClick={closeLinkModal}>
+            <div
+                className="w-[480px] max-w-[95vw] rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="mb-4 flex items-center justify-between">
+                    <h6 className="m-0 flex items-center gap-1.5 font-bold text-primary">
+                        <LinkIcon className="size-4" aria-hidden="true" />
+                        Link Trade: <span className="text-primary">{linkModalTrade.invoice_number || 'No Invoice'}</span>
+                    </h6>
+                    <button
+                        type="button"
+                        onClick={closeLinkModal}
+                        className="inline-flex size-7 cursor-pointer items-center justify-center rounded border-0 bg-transparent text-muted-foreground/70 hover:text-foreground"
+                        aria-label="Close"
+                    >
+                        <X className="size-4" aria-hidden="true" />
+                    </button>
                 </div>
+
+                <input
+                    autoFocus
+                    type="text"
+                    className="mb-3 flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
+                    placeholder="Search by invoice number..."
+                    value={linkSearch}
+                    onChange={e => setLinkSearch(e.target.value)}
+                />
+
+                {linkSearching && (
+                    <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground/70">
+                        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                        Searching...
+                    </div>
+                )}
+
+                {!linkSearching && linkSearch && linkResults.length === 0 && (
+                    <div className="py-3 text-center text-sm text-muted-foreground/70">
+                        No unlinked trades found for &ldquo;{linkSearch}&rdquo;
+                    </div>
+                )}
+
+                {linkResults.map(t => (
+                    <div
+                        key={t.id}
+                        {...clickable(() => confirmLink(t))}
+                        className="mb-2 flex cursor-pointer items-center justify-between rounded-[var(--tb-r-md)] border border-border px-3 py-2.5 transition-colors hover:bg-muted/40"
+                    >
+                        <div>
+                            <div className="text-[14.5px] font-semibold text-foreground">{t.invoice_number || 'No Invoice'}</div>
+                            <div className="text-xs text-muted-foreground">{t.from_company_label} → {t.to_company_label}</div>
+                        </div>
+                        <div className="text-right">
+                            <span className={cn(
+                                "rounded-[var(--tb-r-sm)] px-2 py-0.5 text-xs font-bold",
+                                t.direction.includes('SALE') ? "bg-emerald-50 text-emerald-700" : "bg-primary/5 text-primary"
+                            )}>
+                                {t.direction_label || t.direction}
+                            </span>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                                {formatTruthyInr(t.total_amount, "-")}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+
+                {!linkSearch && (
+                    <div className="py-2 text-center text-sm text-muted-foreground/70">
+                        Type an invoice number to search
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }

@@ -20,33 +20,27 @@ export default function LicenseParsePanel({
     handleParseLicensePdf, handleReparseExistingCopy,
 }: LicenseParsePanelProps) {
     return (
-                        <section className="surface-card mb-4" style={{ padding: 20 }}>
-                            <div className="flex items-start" style={{ gap: 16, flexWrap: 'wrap' }}>
-                                <div
+                        <section className="rounded-lg border border-border bg-card mb-4 p-5">
+                            <div className="flex items-start gap-4 flex-wrap">
+                                <span
                                     aria-hidden="true"
-                                    style={{
-                                        width: 44, height: 44, borderRadius: 12,
-                                        background: 'var(--indigo-50)', color: 'var(--primary-color)',
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                        flexShrink: 0,
-                                    }}
+                                    className="inline-flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-primary/5 text-primary"
                                 >
                                     <FileText className="size-4" aria-hidden="true" />
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-[15px] font-semibold text-foreground tracking-tight">
                                         Import from Licence Copy
                                     </div>
-                                    <div className="mt-1" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                                    <div className="mt-1 text-[0.8125rem] text-muted-foreground">
                                         Upload the DFIA licence PDF and click <strong>Fetch</strong> to prefill the form. Digital PDFs parse instantly; scanned copies with a DGFT QR code are downloaded fresh from DGFT (~10–15s).
                                     </div>
-                                    <div className="flex items-center mt-3" style={{ gap: 10, flexWrap: 'wrap' }}>
+                                    <div className="flex items-center mt-3 gap-2.5 flex-wrap">
                                         <input
                                             type="file"
                                             accept=".pdf,application/pdf"
                                             id="licence-pdf-input"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
-                                            style={{ maxWidth: 340 }}
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring max-w-[340px]"
                                             onChange={(e) => {
                                                 setLicensePdfFile(e.target.files?.[0] || null);
                                                 setLicenseParseSummary(null);
@@ -67,34 +61,22 @@ export default function LicenseParsePanel({
                                     </div>
 
                                     {existingLicenseCopy && (
-                                        <div
-                                            className="flex items-center mt-2"
-                                            style={{
-                                                gap: 10,
-                                                flexWrap: 'wrap',
-                                                background: 'var(--surface-sunken)',
-                                                border: '1px solid var(--border-subtle)',
-                                                borderRadius: 'var(--radius-md)',
-                                                padding: '8px 12px',
-                                                fontSize: '0.8125rem',
-                                            }}
-                                        >
+                                        <div className="flex items-center mt-2 gap-2.5 flex-wrap rounded-md border border-border bg-muted/40 px-3 py-2 text-[0.8125rem]">
                                             <Paperclip className="size-4" aria-hidden="true" />
-                                            <span style={{ color: 'var(--text-primary)', minWidth: 0 }}>
+                                            <span className="text-foreground min-w-0">
                                                 Saved Licence Copy:&nbsp;
                                                 <a
                                                     onClick={() => openDocument(existingLicenseCopy.file, existingLicenseCopyName)}
-                                                    style={{ fontWeight: 600, wordBreak: 'break-all', cursor: 'pointer' }}
+                                                    className="font-semibold break-all cursor-pointer"
                                                 >
                                                     {existingLicenseCopyName}
                                                 </a>
                                             </span>
                                             <button
                                                 type="button"
-                                                className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10"
+                                                className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10 ml-auto"
                                                 onClick={handleReparseExistingCopy}
                                                 disabled={licenseParsing}
-                                                style={{ marginLeft: 'auto' }}
                                                 title="Re-fetch & parse the saved Licence Copy"
                                             >
                                                 {licenseParsing ? (
@@ -108,65 +90,56 @@ export default function LicenseParsePanel({
                                 </div>
                             </div>
                             {licenseParseSummary && (
-                                <div
-                                    className="mt-3"
-                                    style={{
-                                        background: 'var(--surface-sunken)',
-                                        border: '1px solid var(--border-subtle)',
-                                        borderRadius: 'var(--radius-md)',
-                                        padding: '12px 14px',
-                                        fontSize: '0.8125rem',
-                                    }}
-                                >
-                                    <div style={{ color: 'var(--text-primary)' }}>
+                                <div className="mt-3 rounded-lg border bg-muted/40 px-4 py-3 text-[0.8125rem]">
+                                    <div className="text-foreground">
                                         <strong>{licenseParseSummary.license_number}</strong>
-                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>{licenseParseSummary.license_date} → {licenseParseSummary.license_expiry_date}
-                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>port <code>{licenseParseSummary.port_code}</code>
-                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>notification {licenseParseSummary.notification_number}
-                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>file <code>{licenseParseSummary.file_number}</code>
+                                        <span className="text-muted-foreground/70"> · </span>{licenseParseSummary.license_date} → {licenseParseSummary.license_expiry_date}
+                                        <span className="text-muted-foreground/70"> · </span>port <code>{licenseParseSummary.port_code}</code>
+                                        <span className="text-muted-foreground/70"> · </span>notification {licenseParseSummary.notification_number}
+                                        <span className="text-muted-foreground/70"> · </span>file <code>{licenseParseSummary.file_number}</code>
                                     </div>
                                     {licenseParseSummary.source_kind === 'dgft_qr' && (
-                                        <div className="mt-1" style={{ color: 'var(--tb-success-text)' }}>
+                                        <div className="mt-1 text-emerald-700">
                                             <QrCode className="size-4" aria-hidden="true" />
                                             Fetched fresh digital copy from DGFT via QR code on uploaded scan.
                                         </div>
                                     )}
                                     {licenseParseSummary.source_kind === 'ocr' && (
-                                        <div className="mt-1" style={{ color: 'var(--tb-warning-text)' }}>
+                                        <div className="mt-1 text-amber-700">
                                             <TriangleAlert className="size-4" aria-hidden="true" />
                                             Scanned PDF — header fields recovered via OCR. Items table is unreliable; please review/add manually.
                                         </div>
                                     )}
                                     {licenseParseSummary.company_created && (
-                                        <div className="mt-1" style={{ color: 'var(--tb-success-text)' }}>
+                                        <div className="mt-1 text-emerald-700">
                                             <CheckCircle2 className="size-4" aria-hidden="true" />
                                             New company created ({licenseParseSummary.company_name}).
                                         </div>
                                     )}
                                     {!licenseParseSummary.company_created && licenseParseSummary.matched_company_id && (
-                                        <div className="mt-1" style={{ color: 'var(--text-secondary)' }}>
+                                        <div className="mt-1 text-muted-foreground">
                                             <Check className="size-4" aria-hidden="true" />
                                             Matched existing company ({licenseParseSummary.company_name}).
                                         </div>
                                     )}
                                     {!licenseParseSummary.matched_port_id && licenseParseSummary.port_code && (
-                                        <div className="mt-1" style={{ color: 'var(--tb-warning-text)' }}>
+                                        <div className="mt-1 text-amber-700">
                                             <TriangleAlert className="size-4" aria-hidden="true" />
                                             Port code <code>{licenseParseSummary.port_code}</code> not found in master — please add and re-select.
                                         </div>
                                     )}
                                     {licenseParseSummary.items?.length > 0 && (
                                         <details className="mt-2">
-                                            <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                                            <summary className="cursor-pointer text-muted-foreground">
                                                 {licenseParseSummary.items.length} import item(s) — {licenseParseSummary.unmatchedHsn} HSN(s) not in master
                                             </summary>
-                                            <ul className="mb-0 mt-2" style={{ paddingLeft: '1.1rem', color: 'var(--text-secondary)' }}>
+                                            <ul className="mb-0 mt-2 pl-[1.1rem] text-muted-foreground">
                                                 {licenseParseSummary.items.map((it, i) => (
                                                     <li key={i} style={{ padding: '2px 0' }}>
                                                         sl#{it.serial_number} · HSN <code>{it.hsn}</code> · qty {it.quantity} {it.uom} · CIF ₹{it.cif_inr} / ${it.cif_fc}
                                                         {it.matched_hs_code_id
-                                                            ? <span style={{ color: 'var(--tb-success-text)', marginLeft: 6 }}>✓ HSN matched</span>
-                                                            : <span style={{ color: 'var(--tb-warning-text)', marginLeft: 6 }}>⚠ HSN not in master</span>}
+                                                            ? <span className="text-emerald-700 ml-1.5">✓ HSN matched</span>
+                                                            : <span className="text-amber-700 ml-1.5">⚠ HSN not in master</span>}
                                                     </li>
                                                 ))}
                                             </ul>

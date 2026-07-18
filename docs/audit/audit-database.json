@@ -277,6 +277,12 @@
       "event": "Phase 11 Documents legacy register template removed from active audit inventory.",
       "reason": "Dependency and convention analysis proved top-level register.html had no live render/template-loader/auth-runtime path; only stale queued DAdmin/theme links remained.",
       "commit_sha": "ca6fa5d28bcac0c7a57f42c4263ec492ecdef8f2"
+    },
+    {
+      "timestamp": "2026-07-18T05:35:13+05:30",
+      "event": "Phase 11 Documents specialist agents README retained and corrected.",
+      "reason": "Dependency scan found live reference from CLAUDE.md; source audit found stale backend test-runner guidance pointing to missing root ./run-tests.sh.",
+      "commit_sha": "3c3b7ee8ee25eef07493aea2a975eed3c0931ce6"
     }
   ],
   "blocked_work": [
@@ -573,7 +579,8 @@
     "scripts/testing/run-tests.sh",
     "tests/e2e/conftest.py",
     "tests/e2e/test_api_smoke.py",
-    "tests/e2e/test_pages_selenium.py"
+    "tests/e2e/test_pages_selenium.py",
+    ".claude/agents/README.md"
   ],
   "completed_work": [
     "Authentication Phase pass: backend login/logout view cleaned, MDS service-token lookup hardened, and AuthContext localStorage boot made resilient.",
@@ -666,7 +673,8 @@
     "Phase 11 Documents deleted verified-dead legacy products-edit template after dependency analysis found no live runtime path; source commit a9112acf849e3e453c41e491d02c858cee88fd80 (cleanup(documents): remove dead products edit template).",
     "Phase 11 Documents deleted verified-dead legacy products template after dependency analysis found no live runtime path; source commit 62433533c488e97760870475de53bc771bdf7d9d (cleanup(documents): remove dead products template).",
     "Phase 11 Documents deleted verified-dead legacy progress-bars template after dependency analysis found no live runtime path; source commit 7c2383c933653b70b65814feec01bcf7b6196296 (cleanup(documents): remove dead progress bars template).",
-    "Phase 11 Documents deleted verified-dead legacy register template after dependency and convention analysis found no live runtime path; source commit ca6fa5d28bcac0c7a57f42c4263ec492ecdef8f2 (cleanup(documents): remove dead register template)."
+    "Phase 11 Documents deleted verified-dead legacy register template after dependency and convention analysis found no live runtime path; source commit ca6fa5d28bcac0c7a57f42c4263ec492ecdef8f2 (cleanup(documents): remove dead register template).",
+    "Phase 11 Documents completed .claude/agents/README.md; retained live specialist-agent documentation and corrected backend verification guidance in source commit 3c3b7ee8ee25eef07493aea2a975eed3c0931ce6 (docs(agents): correct backend verification guidance)."
   ],
   "dead_code_findings": [
     "Phase 8 BOE legacy templates/views/utils removed: 11 orphaned files and 1117 LOC deleted; scripts/utils.py reclassified from completed-live to deleted after recursive dependency analysis removed fetch_views.py.",
@@ -3094,33 +3102,37 @@
   },
   "files": {
     ".claude/agents/README.md": {
-      "audit_status": "REQUIRES_RECHECK",
+      "audit_status": "COMPLETED",
       "complexity": 1,
       "duplicate_score": 0,
       "exported_symbols": [],
-      "file_checksum": "1632d8adf3d2b8bc13e4e1e7f23527c6a88a357d34fb4651cb74d051114f0cca",
+      "file_checksum": "219999c1ab7bf56e368c0778a19769e365acae56e75fa080a8c40e8170ce8578",
       "file_fingerprint": {
-        "mtime_ns": 1783057214889327031,
-        "size": 5350,
+        "mtime_ns": 1784333066000000000,
+        "size": 5409,
         "symbol_checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "fixme_count": 0,
       "imported_modules": [],
       "index_checksum_mismatch": false,
       "language": "markdown",
-      "last_audit_timestamp": null,
-      "maintainability_score": 99,
+      "last_audit_timestamp": "2026-07-18T05:35:13+05:30",
+      "maintainability_score": 100,
       "module": ".claude",
       "performance_score": 100,
       "previous_index_checksum": null,
-      "readability_score": 99,
-      "security_score": 80,
-      "technical_debt_score": 1,
+      "readability_score": 100,
+      "security_score": 100,
+      "technical_debt_score": 0,
       "todo_count": 0,
       "total_classes": 0,
       "total_functions": 0,
       "total_imports": 0,
-      "total_lines": 102
+      "total_lines": 103,
+      "file_commit_sha": "3c3b7ee8ee25eef07493aea2a975eed3c0931ce6",
+      "file_commit_summary": "docs(agents): correct backend verification guidance",
+      "verification_summary": "Retained as live specialist-agent documentation referenced by CLAUDE.md; corrected backend verification guidance to use targeted pytest or scripts/testing/run-tests.sh because root ./run-tests.sh does not exist.",
+      "retention_status": "RETAINED"
     },
     ".claude/agents/backend-engineer.md": {
       "audit_status": "REQUIRES_RECHECK",
@@ -31849,12 +31861,12 @@
     ".claude": {
       "blocked": 0,
       "changed": 0,
-      "completed": 0,
+      "completed": 1,
       "files": 34,
       "in_progress": 0,
       "lines": 1951,
       "not_started": 3,
-      "requires_recheck": 31
+      "requires_recheck": 30
     },
     ".github": {
       "blocked": 0,
@@ -32416,18 +32428,18 @@
     "todo_count": 22
   },
   "totals": {
-    "audited_lines": 119226,
+    "audited_lines": 119328,
     "blocked": 0,
     "changed": 50,
-    "completed": 522,
+    "completed": 523,
     "files": 916,
     "fixme": 2,
     "ignored": 595,
     "in_progress": 0,
     "lines": 240513,
     "not_started": 12,
-    "remaining_lines": 121488,
-    "requires_recheck": 332,
+    "remaining_lines": 121386,
+    "requires_recheck": 331,
     "todo": 22
   },
   "verification_history": [
@@ -33993,6 +34005,12 @@
     "Phase 11 register template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected.",
     "Phase 11 register template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked.",
     "Phase 11 register template diff check: git diff --check and git diff --cached --check for source deletion -> clean before source commit.",
-    "Phase 11 register template source commit: ca6fa5d28bcac0c7a57f42c4263ec492ecdef8f2 at 2026-07-17T22:21:10+05:30, cleanup(documents): remove dead register template."
+    "Phase 11 register template source commit: ca6fa5d28bcac0c7a57f42c4263ec492ecdef8f2 at 2026-07-17T22:21:10+05:30, cleanup(documents): remove dead register template.",
+    "Phase 11 agents README dependency scan: CLAUDE.md references .claude/agents/README.md; retained as live repository guidance.",
+    "Phase 11 agents README script check: scripts/testing/run-tests.sh exists and is executable; root ./run-tests.sh is not the current documented runner.",
+    "Phase 11 agents README diff check: git diff --check and git diff --cached --check for source documentation update -> clean before source commit.",
+    "Phase 11 agents README runtime verification: backend pytest/Ruff/py_compile/compileall/Django check/makemigrations and frontend ESLint/TypeScript/build not applicable to markdown-only guidance change; no runtime source changed.",
+    "Phase 11 agents README security tooling check: not applicable to markdown-only guidance change; existing Phase 11 security-tool availability blocker remains recorded.",
+    "Phase 11 agents README source commit: 3c3b7ee8ee25eef07493aea2a975eed3c0931ce6 at 2026-07-18T05:35:13+05:30, docs(agents): correct backend verification guidance."
   ]
 }

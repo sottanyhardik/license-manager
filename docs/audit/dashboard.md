@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `514`
+- Files audited: `523`
 - Files changed directly: `64`
-- Files requiring dependency recheck: `339`
+- Files requiring dependency recheck: `331`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `403`
+- Files remaining: `331`
 - Total source files tracked: `903`
 - Total source LOC tracked: `240720`
-- Audited LOC: `118971`
-- Remaining LOC: `121732`
+- Audited LOC: `119328`
+- Remaining LOC: `121386`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -125,6 +125,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents removed verified-dead `backend/templates/maintenance.html`; only stale links from other queued legacy DAdmin templates remained.
 - Phase 11 Documents removed verified-dead `backend/templates/modals.html`; only stale links from other queued legacy DAdmin templates remained.
 - Phase 11 Documents removed verified-dead `backend/templates/notes.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents completed `.claude/agents/README.md`; retained live specialist-agent guidance referenced by `CLAUDE.md` and corrected backend verification guidance to use targeted `pytest` or `scripts/testing/run-tests.sh`.
 
 ## Verification History
 
@@ -1550,6 +1551,9 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 register template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
 - Phase 11 register template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
 - Phase 11 register template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+
+- Phase 11 agents README dependency scan: `CLAUDE.md` references `.claude/agents/README.md`; retained as live repository guidance.
+- Phase 11 agents README verification: script path check passed; `git diff --check` and `git diff --cached --check` clean; runtime backend/frontend gates not applicable to markdown-only source change.
 
 ## Blocked Work
 

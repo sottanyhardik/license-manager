@@ -915,25 +915,33 @@ const LicenseRow = memo(function LicenseRow({
     const [ownershipData, setOwnershipData] = useState<OwnershipData | null>(null);
     const [ownershipLoading, setOwnershipLoading] = useState(false);
 
-    // Dynamic tabs — computed once detail and ledger are known
+    // Dynamic tabs — computed once detail and ledger are known.
+    // Rules:
+    //   Ledger   — always shown once expanded (shows empty state if no import items)
+    //   Balance  — always shown
+    //   Plan     — only for canWrite users
+    //   Transactions — only when ledger is loaded AND has transactions
+    //               (ledger is fetched eagerly on expand so this resolves quickly)
+    //   Documents — only when documents exist
+    //   History  — always shown
     const visibleTabs = useMemo<{ id: TabId; label: string }[]>(() => {
         const tabs: { id: TabId; label: string }[] = [];
         tabs.push({ id: "overview", label: "Overview" });
-        // Ledger replaces "Allocation" — only shown when import items exist
-        if (detail?.import_license && detail.import_license.length > 0) {
-            tabs.push({ id: "ledger", label: "Ledger" });
-        }
-        // Balance — always present (every license has a balance)
+        // Ledger always present — shows empty state inside if no import items
+        tabs.push({ id: "ledger", label: "Ledger" });
+        // Balance — every license has one
         tabs.push({ id: "balance", label: "Balance" });
-        // Plan — only for users who can write
+        // Plan — write permission required
         if (canWrite) {
             tabs.push({ id: "plan", label: "Plan" });
         }
-        // Transactions — only if ledger data actually has rows
+        // Transactions — only when ledger fetch has completed and has rows.
+        // Root-cause fix: ledger is now fetched eagerly on expand (not lazily
+        // on tab click), so this gate resolves in ~1 s, not never.
         if (ledger?.transactions && ledger.transactions.length > 0) {
             tabs.push({ id: "transactions", label: "Transactions" });
         }
-        // Documents — only when documents exist
+        // Documents — only when documents actually exist
         if (detail?.license_documents && detail.license_documents.length > 0) {
             tabs.push({ id: "documents", label: "Documents" });
         }
@@ -946,36 +954,44 @@ const LicenseRow = memo(function LicenseRow({
     );
     const status = deriveStatus(item);
 
-    // Fetch detail when first expanded
+    // Fetch detail AND ledger eagerly when first expanded.
+    // Fetching both in the same effect ensures:
+    //   1. The Ledger tab content renders as soon as the accordion opens.
+    //   2. The Transactions tab gate (ledger.transactions.length > 0) resolves
+    //      quickly (~1 s) so the tab appears without any user interaction needed.
+    //   Previously the ledger was only fetched when the user clicked "Transactions",
+    //   which created a chicken-and-egg: the tab never appeared because the gate
+    //   required data that was never fetched.
     useEffect(() => {
-        if (!expanded || detail !== null || detailLoading) return;
+        if (!expanded) return;
         let cancelled = false;
-        setDetailLoading(true);
-        api.get(`licenses/${item.id}/`)
-            .then(({ data }) => {
-                if (!cancelled) setDetail(data);
-            })
-            .catch(() => {
-                if (!cancelled) toast.error("Failed to load license details");
-            })
-            .finally(() => {
-                if (!cancelled) setDetailLoading(false);
-            });
+
+        // Detail fetch
+        if (detail === null && !detailLoading) {
+            setDetailLoading(true);
+            api.get(`licenses/${item.id}/`)
+                .then(({ data }) => { if (!cancelled) setDetail(data); })
+                .catch(() => { if (!cancelled) toast.error("Failed to load license details"); })
+                .finally(() => { if (!cancelled) setDetailLoading(false); });
+        }
+
+        // Ledger fetch — eager so the Transactions tab can appear
+        if (ledger === null && !ledgerLoading) {
+            setLedgerLoading(true);
+            api.get(`license-ledger/${item.id}/ledger_detail/`)
+                .then(({ data }) => { if (!cancelled) setLedger(data); })
+                .catch(() => { /* Non-fatal: transactions tab stays hidden if no data */ })
+                .finally(() => { if (!cancelled) setLedgerLoading(false); });
+        }
+
         return () => { cancelled = true; };
-    }, [expanded, item.id, detail, detailLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [expanded, item.id]);
 
     const handleTabChange = useCallback((tab: string) => {
         const t = tab as TabId;
         setActiveTab(t);
         setVisited((prev) => new Set([...prev, t]));
-        // Lazy-fetch ledger on first visit to transactions tab
-        if (t === "transactions" && !ledger && !ledgerLoading) {
-            setLedgerLoading(true);
-            api.get(`license-ledger/${item.id}/ledger_detail/`)
-                .then(({ data }) => setLedger(data))
-                .catch(() => toast.error("Failed to load ledger"))
-                .finally(() => setLedgerLoading(false));
-        }
         // Lazy-fetch ownership on first visit to history tab
         if (t === "history" && !ownershipData && !ownershipLoading) {
             setOwnershipLoading(true);
@@ -984,7 +1000,7 @@ const LicenseRow = memo(function LicenseRow({
                 .catch(() => toast.error("Failed to load ownership data"))
                 .finally(() => setOwnershipLoading(false));
         }
-    }, [item.id, ledger, ledgerLoading, ownershipData, ownershipLoading]);
+    }, [item.id, ownershipData, ownershipLoading]);
 
     // Keep activeTab in sync when visibleTabs change (e.g. detail loads, removing a tab)
     useEffect(() => {

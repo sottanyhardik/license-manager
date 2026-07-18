@@ -1,22 +1,22 @@
 /**
  * LedgerTab (displayed as "Balance" tab) — comprehensive financial &
- * utilization summary for a single license, with legacy Balance-modal
- * features: item-name tag editing + license marking.
+ * utilization summary for a single license.
  *
- * Sections:
- *   1. License Summary card
- *   2. Import Items table  — expandable rows showing BOE & Allotment usage;
- *                             inline Item-Name tags and Marking edits
- *   3. Balance Summary card
+ * Business logic, APIs and validations are UNCHANGED.
+ * This revision is a pure UX modernisation:
  *
- * Business rule — Common vs Individual CIF balance:
- *   COMMON  : first item has non-zero cif_fc; ALL remaining items are null /
- *             blank / 0.  In this case the per-row "Balance ($)" column is
- *             hidden because it is meaningless; only the license-level balance
- *             (get_balance_cif) is relevant.
- *   INDIVIDUAL: every item carries its own cif_fc → show per-row balance.
+ *   Collapsed row  — # | Description | HS Code | Qty | CIF | BOE Used |
+ *                    Allotted | [Balance] | ▶
+ *   (Item Names and Marking moved into the expanded detail panel.)
  *
- * APIs (identical to LicenseBalanceModal — no new endpoints):
+ *   Expanded panel — four logical sections:
+ *     1. Item Summary   — key metrics at a glance
+ *     2. Usage          — BOE cards (≤10) or compact table (>10) +
+ *                         Allotment cards / table, with running balance
+ *     3. Item Management — Item Names + Marking in 2-col responsive grid
+ *     4. Balance Calc   — visual waterfall (Opening → BOE → Allotted → Remaining)
+ *
+ * APIs (identical to LicenseBalanceModal):
  *   GET  licenses/{id}/item-usage/?item_id=X&type=import
  *   PATCH license-items/{id}/   { items: [...ids] }        ← item-name tags
  *   PATCH license-items/{id}/   { condition_type: "AU"|… } ← marking
@@ -26,25 +26,29 @@ import { useState, useCallback } from "react";
 import AsyncSelect from "react-select/async";
 import Select from "react-select";
 import {
+    ChevronDown,
     ChevronRight,
+    ClipboardCopy,
     FileText,
     Loader2,
     Package,
+    Pencil,
+    Plus,
     Receipt,
+    Tag,
     TrendingDown,
     TrendingUp,
     X,
-    Plus,
-    Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConditionBadge from "../../../components/ConditionBadge";
 import api from "../../../api/axios";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Types
+// Types (unchanged from previous version)
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ItemDetail { id: number; name: string; }
@@ -89,10 +93,7 @@ interface AllotmentEntry {
     cif_inr: number;
 }
 
-interface ItemUsage {
-    boes: BoeEntry[];
-    allotments: AllotmentEntry[];
-}
+interface ItemUsage { boes: BoeEntry[]; allotments: AllotmentEntry[]; }
 
 interface LicenseDetail {
     import_license?: ImportItem[];
@@ -114,15 +115,9 @@ interface LedgerTabProps {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Business logic helpers
+// Business logic (UNCHANGED)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Returns true when the license uses a single shared CIF FC balance
- * (first item non-zero, all remaining items are null / blank / 0).
- * In this mode the per-row "Balance ($)" column is meaningless and must
- * be hidden.  Mirrors the legacy Balance-modal business rule.
- */
 function isCommonCifBalance(items: ImportItem[]): boolean {
     if (items.length < 2) return false;
     const firstCif = Number(items[0]?.cif_fc ?? 0);
@@ -158,10 +153,6 @@ function fmtQty(v: number | undefined | null, dp = 3): string {
     return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: dp });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Marking options (same set as LicenseBalanceModal)
-// ─────────────────────────────────────────────────────────────────────────────
-
 const MARKING_OPTIONS = [
     { value: "", label: "None" },
     { value: "AU", label: "AU" },
@@ -176,109 +167,282 @@ const MARKING_OPTIONS = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SummaryMetric({
-    label, value, sub,
-    variant = "default",
+    label, value, sub, variant = "default", size = "sm",
 }: {
     label: string; value: string; sub?: string;
     variant?: "default" | "primary" | "success" | "danger" | "muted";
+    size?: "sm" | "lg";
 }) {
-    const cls = {
-        default: "text-foreground", primary: "text-primary",
-        success: "text-emerald-700", danger: "text-destructive",
-        muted: "text-muted-foreground",
-    }[variant];
+    const cls = { default: "text-foreground", primary: "text-primary", success: "text-emerald-700", danger: "text-destructive", muted: "text-muted-foreground" }[variant];
     return (
         <div>
             <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-            <div className={cn("mt-0.5 text-base font-bold tabular-nums", cls)}>{value}</div>
+            <div className={cn("mt-0.5 tabular-nums font-bold", cls, size === "lg" ? "text-2xl" : "text-sm")}>{value}</div>
             {sub && <div className="text-[10.5px] text-muted-foreground">{sub}</div>}
         </div>
     );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UsageDetail (expandable BOE + Allotment sub-tables)
+// Copy-to-clipboard
 // ─────────────────────────────────────────────────────────────────────────────
 
-function UsageDetail({ usage, loading }: { usage: ItemUsage | undefined; loading: boolean | undefined }) {
-    if (loading) return (
-        <div className="space-y-2 p-3">
-            <Skeleton className="h-3 w-1/2" /><Skeleton className="h-3 w-3/4" />
+async function copyToClipboard(text: string) {
+    try { await navigator.clipboard.writeText(text); toast.success("Copied"); }
+    catch { toast.error("Failed to copy"); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section 2 — Usage (BOE + Allotment)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CARD_THRESHOLD = 10; // cards when ≤ this count, table otherwise
+
+function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number }) {
+    if (boes.length === 0) return null;
+
+    // Sort by date for running-balance calculation
+    const sorted = [...boes].sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return String(a.date).localeCompare(String(b.date));
+    });
+
+    let running = openingCif;
+    const withBalance = sorted.map((b) => {
+        running -= Number(b.cif_fc || 0);
+        return { ...b, running_balance: Math.max(0, running) };
+    });
+
+    const totalCif = boes.reduce((s, b) => s + (Number(b.cif_fc) || 0), 0);
+    const totalQty = boes.reduce((s, b) => s + (Number(b.quantity) || 0), 0);
+
+    return (
+        <div>
+            <div className="mb-3 flex items-center gap-2">
+                <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-amber-100">
+                    <Receipt className="size-3.5 text-amber-700" aria-hidden="true" />
+                </div>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">BOE Utilization</span>
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                    {boes.length} {boes.length === 1 ? "entry" : "entries"}
+                </span>
+            </div>
+
+            {boes.length <= CARD_THRESHOLD ? (
+                /* Cards layout */
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                    {withBalance.map((b) => {
+                        const rate = b.quantity > 0 ? Number(b.cif_fc) / b.quantity : 0;
+                        return (
+                            <div key={b.id} className="group rounded-xl border border-border/60 bg-card p-3 transition-shadow hover:shadow-sm">
+                                {/* Reference + copy */}
+                                <div className="mb-2 flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="font-mono text-sm font-semibold text-foreground">
+                                            {b.bill_of_entry_number || "—"}
+                                        </span>
+                                        {b.bill_of_entry_number && (
+                                            <button type="button" onClick={() => copyToClipboard(b.bill_of_entry_number)}
+                                                className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer opacity-0 transition-opacity group-hover:opacity-100"
+                                                title="Copy BOE number" aria-label="Copy BOE number">
+                                                <ClipboardCopy className="size-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/60">
+                                        BOE
+                                    </span>
+                                </div>
+                                {/* Company */}
+                                <div className="mb-1.5 truncate text-xs text-muted-foreground" title={b.company || ""}>{b.company || "—"}</div>
+                                {/* Date + port */}
+                                {(b.date || b.port) && (
+                                    <div className="mb-2 text-[10.5px] text-muted-foreground/70">
+                                        {b.date && String(b.date)}
+                                        {b.date && b.port && " · "}
+                                        {b.port}
+                                    </div>
+                                )}
+                                {/* Metrics */}
+                                <div className="grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
+                                    <div>
+                                        <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Qty</div>
+                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{fmtQty(b.quantity)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Rate</div>
+                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{rate > 0 ? fmtUsd(rate) : "—"}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">CIF</div>
+                                        <div className="tabular-nums text-[11.5px] font-semibold text-amber-700">{fmtUsd(b.cif_fc)}</div>
+                                    </div>
+                                </div>
+                                {/* Running balance */}
+                                <div className="mt-2 flex items-center justify-between rounded-lg bg-muted/40 px-2 py-1">
+                                    <span className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Balance after</span>
+                                    <span className="tabular-nums text-[11.5px] font-bold text-emerald-700">{fmtUsd(b.running_balance)}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                /* Compact table for >10 rows */
+                <div className="overflow-x-auto rounded-xl border border-border/50">
+                    <table className="w-full text-xs">
+                        <thead className="bg-muted/50">
+                            <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                <th scope="col" className="px-3 py-2">BOE No.</th>
+                                <th scope="col" className="px-3 py-2">Company</th>
+                                <th scope="col" className="px-3 py-2">Date</th>
+                                <th scope="col" className="px-3 py-2 text-right">Qty</th>
+                                <th scope="col" className="px-3 py-2 text-right">CIF ($)</th>
+                                <th scope="col" className="px-3 py-2 text-right">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                            {withBalance.map((b) => (
+                                <tr key={b.id} className="hover:bg-muted/20">
+                                    <td className="px-3 py-1.5">
+                                        <div className="flex items-center gap-1">
+                                            <span className="font-mono text-[10.5px]">{b.bill_of_entry_number || "—"}</span>
+                                            {b.bill_of_entry_number && (
+                                                <button type="button" onClick={() => copyToClipboard(b.bill_of_entry_number)}
+                                                    className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer" title="Copy">
+                                                    <ClipboardCopy className="size-3" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-1.5 text-[10.5px]">{b.company || "—"}</td>
+                                    <td className="px-3 py-1.5 text-[10.5px] text-muted-foreground">{b.date ? String(b.date) : "—"}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(b.quantity)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums text-amber-700">{fmtUsd(b.cif_fc)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums text-emerald-700">{fmtUsd(b.running_balance)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {/* Section total */}
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50/60 px-4 py-2.5 ring-1 ring-amber-200/60">
+                <span className="text-[10.5px] font-bold uppercase tracking-widest text-amber-700">Total BOE Utilized</span>
+                <div className="flex items-center gap-4">
+                    <span className="text-[11px] text-amber-700">Qty: <b>{fmtQty(totalQty)}</b></span>
+                    <span className="text-base font-bold tabular-nums text-amber-700">{fmtUsd(totalCif)}</span>
+                </div>
+            </div>
         </div>
     );
-    const boes = usage?.boes ?? [];
-    const allotments = usage?.allotments ?? [];
-    if (boes.length === 0 && allotments.length === 0) {
-        return <div className="px-4 py-3 text-sm text-muted-foreground">No BOE or allotment usage recorded for this item.</div>;
-    }
+}
+
+function AllotmentSection({ allotments }: { allotments: AllotmentEntry[] }) {
+    if (allotments.length === 0) return null;
+
+    const totalCif = allotments.reduce((s, a) => s + (Number(a.cif_fc) || 0), 0);
+    const totalQty = allotments.reduce((s, a) => s + (Number(a.quantity) || 0), 0);
+
     return (
-        <div className="grid gap-4 px-4 py-3 lg:grid-cols-2">
-            {boes.length > 0 && (
-                <div>
-                    <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        <Receipt className="size-3.5" />BOE Utilization
-                    </div>
-                    <table className="w-full text-xs">
-                        <thead>
-                            <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                <th scope="col" className="pb-1 pr-3">BOE No.</th>
-                                <th scope="col" className="pb-1 pr-3">Company</th>
-                                <th scope="col" className="pb-1 pr-3 text-right">Qty</th>
-                                <th scope="col" className="pb-1 text-right">CIF ($)</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/30">
-                            {boes.map(b => (
-                                <tr key={b.id} className="hover:bg-muted/20">
-                                    <td className="py-1 pr-3 font-mono text-[10.5px]">{b.bill_of_entry_number || "—"}{b.date && <div className="text-muted-foreground">{String(b.date)}</div>}</td>
-                                    <td className="py-1 pr-3 text-[10.5px]">{b.company || "—"}</td>
-                                    <td className="py-1 pr-3 text-right tabular-nums">{fmtQty(b.quantity)}</td>
-                                    <td className="py-1 text-right tabular-nums text-amber-700">{fmtUsd(b.cif_fc)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                        <tfoot>
-                            <tr className="border-t border-border font-semibold">
-                                <td colSpan={3} className="pr-3 pt-1 text-right text-[10.5px] text-muted-foreground">Total BOE</td>
-                                <td className="pt-1 text-right tabular-nums text-[10.5px] text-amber-700">{fmtUsd(boes.reduce((s, b) => s + (Number(b.cif_fc) || 0), 0))}</td>
-                            </tr>
-                        </tfoot>
-                    </table>
+        <div>
+            <div className="mb-3 flex items-center gap-2">
+                <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-violet-100">
+                    <Package className="size-3.5 text-violet-700" aria-hidden="true" />
                 </div>
-            )}
-            {allotments.length > 0 && (
-                <div>
-                    <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        <Package className="size-3.5" />Allotment Usage
-                    </div>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Allotment Usage</span>
+                <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10.5px] font-semibold text-violet-700 ring-1 ring-violet-200">
+                    {allotments.length} {allotments.length === 1 ? "entry" : "entries"}
+                </span>
+            </div>
+
+            {allotments.length <= CARD_THRESHOLD ? (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {allotments.map((a) => {
+                        const rate = a.quantity > 0 ? Number(a.cif_fc) / a.quantity : 0;
+                        return (
+                            <div key={a.id} className="group rounded-xl border border-border/60 bg-card p-3 transition-shadow hover:shadow-sm">
+                                <div className="mb-2 flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="font-mono text-sm font-semibold text-foreground">
+                                            {a.allotment_number || "—"}
+                                        </span>
+                                        {a.allotment_number && (
+                                            <button type="button" onClick={() => copyToClipboard(a.allotment_number)}
+                                                className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer opacity-0 transition-opacity group-hover:opacity-100"
+                                                title="Copy allotment number">
+                                                <ClipboardCopy className="size-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200/60">
+                                        Allotment
+                                    </span>
+                                </div>
+                                <div className="mb-2 truncate text-xs text-muted-foreground">{a.company || "—"}</div>
+                                <div className="grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
+                                    <div>
+                                        <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Qty</div>
+                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{fmtQty(a.quantity)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Rate</div>
+                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{rate > 0 ? fmtUsd(rate) : "—"}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">CIF</div>
+                                        <div className="tabular-nums text-[11.5px] font-semibold text-violet-700">{fmtUsd(a.cif_fc)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="overflow-x-auto rounded-xl border border-border/50">
                     <table className="w-full text-xs">
-                        <thead>
+                        <thead className="bg-muted/50">
                             <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                <th scope="col" className="pb-1 pr-3">Allotment</th>
-                                <th scope="col" className="pb-1 pr-3">Company</th>
-                                <th scope="col" className="pb-1 pr-3 text-right">Qty</th>
-                                <th scope="col" className="pb-1 text-right">CIF ($)</th>
+                                <th scope="col" className="px-3 py-2">Allotment</th>
+                                <th scope="col" className="px-3 py-2">Company</th>
+                                <th scope="col" className="px-3 py-2 text-right">Qty</th>
+                                <th scope="col" className="px-3 py-2 text-right">CIF ($)</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border/30">
-                            {allotments.map(a => (
+                            {allotments.map((a) => (
                                 <tr key={a.id} className="hover:bg-muted/20">
-                                    <td className="py-1 pr-3 font-mono text-[10.5px]">{a.allotment_number || "—"}</td>
-                                    <td className="py-1 pr-3 text-[10.5px]">{a.company || "—"}</td>
-                                    <td className="py-1 pr-3 text-right tabular-nums">{fmtQty(a.quantity)}</td>
-                                    <td className="py-1 text-right tabular-nums text-violet-700">{fmtUsd(a.cif_fc)}</td>
+                                    <td className="px-3 py-1.5">
+                                        <div className="flex items-center gap-1">
+                                            <span className="font-mono text-[10.5px]">{a.allotment_number || "—"}</span>
+                                            {a.allotment_number && (
+                                                <button type="button" onClick={() => copyToClipboard(a.allotment_number)}
+                                                    className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer" title="Copy">
+                                                    <ClipboardCopy className="size-3" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-1.5 text-[10.5px]">{a.company || "—"}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(a.quantity)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums text-violet-700">{fmtUsd(a.cif_fc)}</td>
                                 </tr>
                             ))}
                         </tbody>
-                        <tfoot>
-                            <tr className="border-t border-border font-semibold">
-                                <td colSpan={3} className="pr-3 pt-1 text-right text-[10.5px] text-muted-foreground">Total Allotted</td>
-                                <td className="pt-1 text-right tabular-nums text-[10.5px] text-violet-700">{fmtUsd(allotments.reduce((s, a) => s + (Number(a.cif_fc) || 0), 0))}</td>
-                            </tr>
-                        </tfoot>
                     </table>
                 </div>
             )}
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-violet-50/60 px-4 py-2.5 ring-1 ring-violet-200/60">
+                <span className="text-[10.5px] font-bold uppercase tracking-widest text-violet-700">Total Allotted</span>
+                <div className="flex items-center gap-4">
+                    <span className="text-[11px] text-violet-700">Qty: <b>{fmtQty(totalQty)}</b></span>
+                    <span className="text-base font-bold tabular-nums text-violet-700">{fmtUsd(totalCif)}</span>
+                </div>
+            </div>
         </div>
     );
 }
@@ -288,12 +452,11 @@ function UsageDetail({ usage, loading }: { usage: ItemUsage | undefined; loading
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
-    // ── Expand / usage state ───────────────────────────────────────────────
     const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
     const [itemUsage, setItemUsage] = useState<Record<number, ItemUsage>>({});
     const [itemUsageLoading, setItemUsageLoading] = useState<Record<number, boolean>>({});
 
-    // ── Item-tag state (same as LicenseBalanceModal) ───────────────────────
+    // ── Item-tag state (business logic UNCHANGED) ──────────────────────────
     const [localItems, setLocalItems] = useState<ImportItem[]>([]);
     const [addingItemId, setAddingItemId] = useState<number | null>(null);
     const [tagSaving, setTagSaving] = useState<Record<number, boolean>>({});
@@ -303,28 +466,25 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
 
     // ── Marking state ──────────────────────────────────────────────────────
     const [markingOverrides, setMarkingOverrides] = useState<Record<number, string>>({});
+    /** Which row's marking is in edit mode (dropdown visible). */
+    const [markingEditingId, setMarkingEditingId] = useState<number | null>(null);
 
-    // Initialise localItems from detail (keeps local edits alive across re-renders)
     const detailItems = (detail?.import_license ?? []) as ImportItem[];
-    // Merge server data with local mutations so item_detail/condition_type stay fresh
     const importItems: ImportItem[] = detailItems.map((r) => ({
         ...r,
         items_detail: localItems.find((l) => l.id === r.id)?.items_detail ?? r.items_detail ?? [],
         condition_type: markingOverrides[r.id] !== undefined ? markingOverrides[r.id] : (r.condition_type ?? ""),
     }));
 
-    // ── Common CIF detection ───────────────────────────────────────────────
     const commonBalance = isCommonCifBalance(importItems);
 
-    // ── Aggregate totals ───────────────────────────────────────────────────
     const totalCifFc = importItems.reduce((s, r) => s + (Number(r.cif_fc) || 0), 0);
     const totalAllotted = importItems.reduce((s, r) => s + (Number(r.allotted_value) || 0), 0);
     const totalDebited = importItems.reduce((s, r) => s + (Number(r.debited_value) || 0), 0);
     const totalBalance = importItems.reduce((s, r) => s + (Number(r.balance_cif_fc) || 0), 0);
-    // For common-balance licenses use the authoritative license-level balance
     const displayBalance = commonBalance ? Number(item.get_balance_cif ?? 0) : totalBalance;
 
-    // ── BOE / Allotment usage fetch ────────────────────────────────────────
+    // ── Usage fetch (UNCHANGED) ────────────────────────────────────────────
     const handleRowClick = useCallback(async (importItem: ImportItem) => {
         const id = importItem.id;
         setExpandedItemId((prev) => (prev === id ? null : id));
@@ -335,71 +495,52 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                     params: { item_id: id, type: "import" },
                 });
                 setItemUsage((prev) => ({ ...prev, [id]: data as ItemUsage }));
-            } catch {
-                toast.error("Failed to load item usage details");
-            } finally {
-                setItemUsageLoading((prev) => ({ ...prev, [id]: false }));
-            }
+            } catch { toast.error("Failed to load item usage details"); }
+            finally { setItemUsageLoading((prev) => ({ ...prev, [id]: false })); }
         }
     }, [item.id, itemUsage, itemUsageLoading]);
 
-    // ── Item-name tag helpers (same logic as LicenseBalanceModal) ──────────
+    // ── Item-tag helpers (UNCHANGED) ───────────────────────────────────────
     const loadItemOptions = useCallback(async (input: string) => {
         if (input.length < 2) return [];
         try {
             const { data } = await api.get("masters/item-names/", { params: { search: input } });
             const results = Array.isArray(data.results) ? data.results : [];
             return results.map((i: { id: number; name: string }) => ({ value: i.id, label: i.name }));
-        } catch {
-            return [];
-        }
+        } catch { return []; }
     }, []);
 
     const patchItemTags = useCallback(async (rowId: number, newDetails: ItemDetail[]) => {
         const itemIds = newDetails.map((d) => d.id);
-        // Optimistic update
         setLocalItems((prev) => {
             const existing = prev.find((p) => p.id === rowId);
-            if (existing) {
-                return prev.map((p) => p.id === rowId ? { ...p, items_detail: newDetails } : p);
-            }
+            if (existing) return prev.map((p) => p.id === rowId ? { ...p, items_detail: newDetails } : p);
             return [...prev, { ...detailItems.find((r) => r.id === rowId)!, items_detail: newDetails }];
         });
         setTagSaving((s) => ({ ...s, [rowId]: true }));
         try {
             await api.patch(`license-items/${rowId}/`, { items: itemIds });
         } catch (err: unknown) {
-            // Revert on failure
             const d = (err as { response?: { data?: { detail?: string; error?: string } } })?.response?.data;
             toast.error(d?.detail || d?.error || "Failed to update items");
-            setLocalItems((prev) => prev.filter((p) => p.id !== rowId)); // drop local override → revert to server state
-        } finally {
-            setTagSaving((s) => ({ ...s, [rowId]: false }));
-        }
+            setLocalItems((prev) => prev.filter((p) => p.id !== rowId));
+        } finally { setTagSaving((s) => ({ ...s, [rowId]: false })); }
     }, [detailItems]);
 
     const handleAddItemTag = useCallback((rowId: number, option: { value: number; label: string } | null) => {
         setAddingItemId(null);
         if (!option) return;
         const current = importItems.find((r) => r.id === rowId)?.items_detail ?? [];
-        if (current.some((d) => d.id === option.value)) return; // already present
+        if (current.some((d) => d.id === option.value)) return;
         patchItemTags(rowId, [...current, { id: option.value, name: option.label }]);
     }, [importItems, patchItemTags]);
 
-    const handleRemoveItemTag = useCallback((e: React.MouseEvent, rowId: number, tagId: number) => {
-        e.stopPropagation();
+    const handleRemoveItemTag = useCallback((rowId: number, tagId: number) => {
         const current = importItems.find((r) => r.id === rowId)?.items_detail ?? [];
         patchItemTags(rowId, current.filter((d) => d.id !== tagId));
     }, [importItems, patchItemTags]);
 
-    const handleEditClick = useCallback((e: React.MouseEvent, row: ImportItem) => {
-        e.stopPropagation();
-        setEditingItemId(row.id);
-        setEditingTags((row.items_detail ?? []).map((d) => ({ value: d.id, label: d.name })));
-    }, []);
-
-    const handleSaveEditTags = useCallback(async (e: React.MouseEvent, rowId: number) => {
-        e.stopPropagation();
+    const handleSaveEditTags = useCallback(async (rowId: number) => {
         setEditSaving(true);
         try {
             const itemIds = editingTags.map((t) => t.value);
@@ -410,37 +551,35 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                 if (existing) return prev.map((p) => p.id === rowId ? { ...p, items_detail: newDetails } : p);
                 return [...prev, { ...detailItems.find((r) => r.id === rowId)!, items_detail: newDetails }];
             });
-            toast.success("Items updated successfully");
+            toast.success("Items updated");
             setEditingItemId(null);
         } catch (err: unknown) {
             const d = (err as { response?: { data?: { detail?: string; error?: string } } })?.response?.data;
             toast.error(d?.detail || d?.error || "Failed to update items");
-        } finally {
-            setEditSaving(false);
-        }
+        } finally { setEditSaving(false); }
     }, [editingTags, detailItems]);
 
-    // ── Marking handler (same logic as LicenseBalanceModal) ───────────────
+    // ── Marking handler (UNCHANGED) ────────────────────────────────────────
     const handleConditionTypeChange = useCallback(async (rowId: number, newValue: string) => {
         const previous = markingOverrides[rowId] !== undefined
             ? markingOverrides[rowId]
             : (detailItems.find((r) => r.id === rowId)?.condition_type ?? "");
         if (previous === newValue) return;
-        setMarkingOverrides((prev) => ({ ...prev, [rowId]: newValue })); // optimistic
+        setMarkingOverrides((prev) => ({ ...prev, [rowId]: newValue }));
+        setMarkingEditingId(null);
         try {
             await api.patch(`license-items/${rowId}/`, { condition_type: newValue || null });
             toast.success("License marking updated");
         } catch (err: unknown) {
-            setMarkingOverrides((prev) => ({ ...prev, [rowId]: previous })); // revert
+            setMarkingOverrides((prev) => ({ ...prev, [rowId]: previous }));
             const d = (err as { response?: { data?: { detail?: string; condition_type?: string[] } } })?.response?.data;
             toast.error(d?.detail || d?.condition_type?.[0] || "Failed to update marking");
         }
     }, [markingOverrides, detailItems]);
 
-    // ── Total column count (varies on whether Balance ($) column is shown) ─
-    const colCount = commonBalance ? 8 : 9; // # + Desc + HS + Qty + CIF + BOE + Allotted + [Balance] + Item + Marking + ▶ = 11 or 10
-    // Actually: # Desc HS Qty CIF BOE Allotted [Balance?] ItemNames Marking ▶
-    const totalCols = commonBalance ? 10 : 11;
+    // ── Column counts ──────────────────────────────────────────────────────
+    // Collapsed: # | Desc | HS | Qty | CIF | BOE | Allotted | [Balance] | ▶
+    const collapsedColCount = commonBalance ? 8 : 9;
 
     // ── Render ─────────────────────────────────────────────────────────────
 
@@ -458,7 +597,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
         return (
             <div className="flex flex-col items-center py-10 text-center">
                 <div className="mb-3 flex size-10 items-center justify-center rounded-full bg-muted">
-                    <FileText className="size-5 text-muted-foreground/60" aria-hidden="true" />
+                    <FileText className="size-5 text-muted-foreground/60" />
                 </div>
                 <div className="text-sm font-medium text-muted-foreground">No import items</div>
                 <div className="mt-1 text-xs text-muted-foreground/70">No import line items are linked to this license.</div>
@@ -470,7 +609,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
 
     return (
         <div className="space-y-4 py-3">
-            {/* ── 1. License Summary ──────────────────────────────────── */}
+            {/* ── License Summary ──────────────────────────────────── */}
             <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
                 <div className="border-b border-border/50 px-4 py-2.5">
                     <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -498,40 +637,33 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                             <span>{(100 - balancePct).toFixed(1)}% used · {balancePct.toFixed(1)}% remaining</span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                            <div
-                                className="h-full rounded-full bg-primary transition-[width] duration-500"
-                                style={{ width: `${Math.min(100 - balancePct, 100)}%` }}
-                            />
+                            <div className="h-full rounded-full bg-primary transition-[width] duration-500"
+                                style={{ width: `${Math.min(100 - balancePct, 100)}%` }} />
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* ── 2. Import Items Table ───────────────────────────────── */}
+            {/* ── Import Items table ────────────────────────────────── */}
             <div className="overflow-hidden rounded-xl border border-border/60">
                 <div className="border-b border-border/50 bg-muted/30 px-4 py-2.5">
                     <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Import Items — click row to expand BOE &amp; Allotment details
+                        Import Items — click a row to expand full details
                     </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
                             <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                <th scope="col" className="px-3 py-2.5 w-8">#</th>
+                                <th scope="col" className="w-8 px-3 py-2.5">#</th>
                                 <th scope="col" className="px-3 py-2.5">Description</th>
-                                <th scope="col" className="px-3 py-2.5 hidden sm:table-cell">HS Code</th>
+                                <th scope="col" className="hidden px-3 py-2.5 sm:table-cell">HS Code</th>
                                 <th scope="col" className="px-3 py-2.5 text-right">Qty</th>
                                 <th scope="col" className="px-3 py-2.5 text-right">CIF ($)</th>
                                 <th scope="col" className="px-3 py-2.5 text-right">BOE Used</th>
                                 <th scope="col" className="px-3 py-2.5 text-right">Allotted</th>
-                                {/* Balance column only for individual-CIF licenses */}
-                                {!commonBalance && (
-                                    <th scope="col" className="px-3 py-2.5 text-right">Balance ($)</th>
-                                )}
-                                <th scope="col" className="px-3 py-2.5 min-w-[160px]">Item Names</th>
-                                <th scope="col" className="px-3 py-2.5 min-w-[120px]">Marking</th>
-                                <th scope="col" className="px-3 py-2.5 w-6" aria-label="Expand" />
+                                {!commonBalance && <th scope="col" className="px-3 py-2.5 text-right">Balance ($)</th>}
+                                <th scope="col" className="w-7 px-3 py-2.5" aria-label="Expand" />
                             </tr>
                         </thead>
                         <tbody>
@@ -542,12 +674,13 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                 const balPct = origCif > 0 ? (balCif / origCif) * 100 : 0;
                                 const currentMarking = r.condition_type ?? "";
                                 const tags = r.items_detail ?? [];
-                                const isEditingTags = editingItemId === r.id;
+                                const usage = itemUsage[r.id];
+                                const usageLoading = itemUsageLoading[r.id];
 
                                 return (
                                     <>
-                                        <tr
-                                            key={r.id}
+                                        {/* ── Collapsed row ─────────────────────────────────── */}
+                                        <tr key={r.id}
                                             onClick={() => handleRowClick(r)}
                                             className={cn(
                                                 "cursor-pointer border-b border-border/40 transition-colors",
@@ -555,173 +688,312 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                             )}
                                             aria-expanded={isExpanded}
                                         >
-                                            {/* Sl# */}
-                                            <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{r.serial_number}</td>
-                                            {/* Description */}
-                                            <td className="px-3 py-2">
-                                                <div className="max-w-[160px] truncate text-sm font-medium" title={r.description}>{r.description || "—"}</div>
+                                            <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{r.serial_number}</td>
+                                            <td className="px-3 py-2.5">
+                                                <div className="max-w-[200px] truncate text-sm font-medium" title={r.description}>{r.description || "—"}</div>
                                                 <div className="mt-0.5 text-[10px] text-muted-foreground">{r.unit}</div>
                                             </td>
-                                            {/* HS Code */}
-                                            <td className="hidden px-3 py-2 font-mono text-xs text-muted-foreground sm:table-cell">{r.hs_code_label || "—"}</td>
-                                            {/* Qty */}
-                                            <td className="px-3 py-2 text-right tabular-nums text-xs">{fmtQty(r.quantity)}</td>
-                                            {/* CIF ($) */}
-                                            <td className="px-3 py-2 text-right tabular-nums text-xs">{fmtUsd(r.cif_fc)}</td>
-                                            {/* BOE Used */}
-                                            <td className="px-3 py-2 text-right tabular-nums text-xs">
+                                            <td className="hidden px-3 py-2.5 font-mono text-xs text-muted-foreground sm:table-cell">{r.hs_code_label || "—"}</td>
+                                            <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmtQty(r.quantity)}</td>
+                                            <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmtUsd(r.cif_fc)}</td>
+                                            <td className="px-3 py-2.5 text-right tabular-nums text-xs">
                                                 {r.debited_value != null && Number(r.debited_value) > 0
                                                     ? <span className="text-amber-700">{fmtUsd(r.debited_value)}</span>
                                                     : <span className="text-muted-foreground/40">—</span>}
                                             </td>
-                                            {/* Allotted */}
-                                            <td className="px-3 py-2 text-right tabular-nums text-xs">
+                                            <td className="px-3 py-2.5 text-right tabular-nums text-xs">
                                                 {r.allotted_value != null && Number(r.allotted_value) > 0
                                                     ? <span className="text-violet-700">{fmtUsd(r.allotted_value)}</span>
                                                     : <span className="text-muted-foreground/40">—</span>}
                                             </td>
-                                            {/* Balance ($) — only for individual-CIF licenses */}
                                             {!commonBalance && (
-                                                <td className="px-3 py-2 text-right tabular-nums text-xs">
+                                                <td className="px-3 py-2.5 text-right tabular-nums text-xs">
                                                     <span className={cn("font-semibold",
                                                         balPct > 50 ? "text-emerald-700" : balPct > 20 ? "text-amber-700" : "text-destructive"
-                                                    )}>
-                                                        {fmtUsd(balCif)}
-                                                    </span>
+                                                    )}>{fmtUsd(balCif)}</span>
                                                 </td>
                                             )}
-
-                                            {/* ── Item Names ───────────────────────────────────── */}
-                                            <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                                                {isEditingTags ? (
-                                                    <div className="flex flex-wrap items-center gap-1 min-w-[200px]" onClick={(e) => e.stopPropagation()}>
-                                                        <AsyncSelect
-                                                            isMulti
-                                                            cacheOptions
-                                                            loadOptions={loadItemOptions}
-                                                            value={editingTags}
-                                                            onChange={(v) => setEditingTags(v as typeof editingTags)}
-                                                            placeholder="Search items…"
-                                                            menuPortalTarget={document.body}
-                                                            menuPosition="fixed"
-                                                            styles={{
-                                                                control: (b) => ({ ...b, minHeight: 32, fontSize: 12.5, minWidth: 180 }),
-                                                                menuPortal: (b) => ({ ...b, zIndex: 9999 }),
-                                                                menu: (b) => ({ ...b, minWidth: 220, width: "max-content" }),
-                                                                option: (b) => ({ ...b, whiteSpace: "nowrap" }),
-                                                            }}
-                                                        />
-                                                        <button type="button"
-                                                            onClick={(e) => handleSaveEditTags(e, r.id)}
-                                                            disabled={editSaving}
-                                                            className="rounded bg-primary px-2 py-1 text-[10.5px] font-medium text-white hover:bg-primary/90 disabled:opacity-50 cursor-pointer">
-                                                            {editSaving ? <Loader2 className="size-3.5 animate-spin" /> : "Save"}
-                                                        </button>
-                                                        <button type="button"
-                                                            onClick={(e) => { e.stopPropagation(); setEditingItemId(null); }}
-                                                            className="text-xs text-muted-foreground hover:text-foreground cursor-pointer">
-                                                            Cancel
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex flex-wrap items-center gap-1 min-w-[140px]">
-                                                        {tags.map((d) => (
-                                                            <span key={d.id} className="chip chip-neutral inline-flex items-center gap-1 pr-1">
-                                                                {d.name}
-                                                                <button type="button"
-                                                                    onClick={(e) => handleRemoveItemTag(e, r.id, d.id)}
-                                                                    disabled={tagSaving[r.id]}
-                                                                    className="hover:text-destructive cursor-pointer"
-                                                                    title={`Remove ${d.name}`}>
-                                                                    <X className="size-3" />
-                                                                </button>
-                                                            </span>
-                                                        ))}
-                                                        {tags.length === 0 && addingItemId !== r.id && (
-                                                            <span className="text-[10.5px] text-muted-foreground/60">—</span>
-                                                        )}
-                                                        {addingItemId === r.id ? (
-                                                            <div className="min-w-[200px]" onClick={(e) => e.stopPropagation()}>
-                                                                <AsyncSelect
-                                                                    autoFocus
-                                                                    cacheOptions
-                                                                    defaultOptions
-                                                                    loadOptions={loadItemOptions}
-                                                                    onChange={(opt) => handleAddItemTag(r.id, opt as { value: number; label: string } | null)}
-                                                                    onBlur={() => setAddingItemId(null)}
-                                                                    placeholder="Add item…"
-                                                                    menuPortalTarget={document.body}
-                                                                    menuPosition="fixed"
-                                                                    styles={{
-                                                                        control: (b) => ({ ...b, minHeight: 32, fontSize: 12.5, minWidth: 200 }),
-                                                                        menuPortal: (b) => ({ ...b, zIndex: 9999 }),
-                                                                        menu: (b) => ({ ...b, minWidth: 240, width: "max-content" }),
-                                                                        option: (b) => ({ ...b, whiteSpace: "nowrap" }),
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex items-center gap-0.5">
-                                                                <button type="button"
-                                                                    onClick={(e) => { e.stopPropagation(); setAddingItemId(r.id); }}
-                                                                    disabled={tagSaving[r.id]}
-                                                                    className="chip chip-primary inline-flex items-center gap-1 cursor-pointer border-0"
-                                                                    title="Add item">
-                                                                    <Plus className="size-3" />Add
-                                                                </button>
-                                                                {tags.length > 0 && (
-                                                                    <button type="button"
-                                                                        onClick={(e) => handleEditClick(e, r)}
-                                                                        className="ml-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
-                                                                        title="Edit all item tags">
-                                                                        <Pencil className="size-3.5" />
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {tagSaving[r.id] && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
-                                                    </div>
-                                                )}
-                                            </td>
-
-                                            {/* ── Marking ──────────────────────────────────────── */}
-                                            <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                                                <Select
-                                                    options={MARKING_OPTIONS}
-                                                    value={MARKING_OPTIONS.find((o) => o.value === currentMarking) ?? MARKING_OPTIONS[0]}
-                                                    onChange={(sel) => handleConditionTypeChange(r.id, sel?.value ?? "")}
-                                                    isSearchable={false}
-                                                    menuPortalTarget={document.body}
-                                                    menuPosition="fixed"
-                                                    styles={{
-                                                        control: (b) => ({ ...b, minHeight: 32, fontSize: 12.5, minWidth: 100 }),
-                                                        valueContainer: (b) => ({ ...b, padding: "0 6px" }),
-                                                        indicatorsContainer: (b) => ({ ...b, height: 30 }),
-                                                        menuPortal: (b) => ({ ...b, zIndex: 9999 }),
-                                                        menu: (b) => ({ ...b, fontSize: 12.5 }),
-                                                    }}
-                                                />
-                                                {currentMarking && (
-                                                    <div className="mt-0.5">
-                                                        <ConditionBadge type={currentMarking} size="xs" />
-                                                    </div>
-                                                )}
-                                            </td>
-
-                                            {/* Expand chevron */}
-                                            <td className="px-3 py-2 text-center">
+                                            <td className="px-3 py-2.5 text-center">
                                                 <ChevronRight className={cn(
-                                                    "size-3.5 text-muted-foreground/50 transition-transform",
+                                                    "size-3.5 text-muted-foreground/50 transition-transform duration-200",
                                                     isExpanded && "rotate-90"
                                                 )} aria-hidden="true" />
                                             </td>
                                         </tr>
 
-                                        {/* Expanded BOE / Allotment sub-rows */}
+                                        {/* ── Expanded detail panel ─────────────────────────── */}
                                         {isExpanded && (
-                                            <tr key={`${r.id}-usage`} className="border-b border-border/40 bg-muted/10">
-                                                <td colSpan={totalCols} className="px-0 py-0">
-                                                    <UsageDetail usage={itemUsage[r.id]} loading={itemUsageLoading[r.id]} />
+                                            <tr key={`${r.id}-detail`} className="border-b border-border/40">
+                                                <td colSpan={collapsedColCount} className="px-0 py-0">
+                                                    <div className="bg-muted/10 px-4 pb-5 pt-4">
+                                                        {usageLoading ? (
+                                                            <div className="space-y-3">
+                                                                <Skeleton className="h-24 w-full rounded-xl" />
+                                                                <Skeleton className="h-32 w-full rounded-xl" />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-4">
+                                                                {/* ══ Section 1: Item Summary ════════════════════════ */}
+                                                                <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
+                                                                    <div className="border-b border-border/50 bg-muted/20 px-4 py-2">
+                                                                        <div className="text-[10.5px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                                            Item Summary
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 sm:grid-cols-3 lg:grid-cols-4">
+                                                                        <div className="lg:col-span-1">
+                                                                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Item</div>
+                                                                            <div className="mt-0.5 text-sm font-semibold text-foreground">{r.description || "—"}</div>
+                                                                            {r.hs_code_label && <div className="text-[10.5px] font-mono text-muted-foreground">{r.hs_code_label}</div>}
+                                                                        </div>
+                                                                        <SummaryMetric label="Available Qty" value={fmtQty(r.available_quantity)} />
+                                                                        <SummaryMetric label="Opening CIF" value={fmtUsd(r.cif_fc)} />
+                                                                        <SummaryMetric label="Current Balance CIF" value={fmtUsd(r.balance_cif_fc)} variant={balPct > 50 ? "success" : balPct > 20 ? "default" : "danger"} />
+                                                                        <SummaryMetric label="BOE Used" value={fmtUsd(r.debited_value)} variant="danger"
+                                                                            sub={r.debited_quantity != null ? `${fmtQty(r.debited_quantity)} ${r.unit}` : undefined} />
+                                                                        <SummaryMetric label="Allotted" value={fmtUsd(r.allotted_value)} variant="muted"
+                                                                            sub={r.allotted_quantity != null ? `${fmtQty(r.allotted_quantity)} ${r.unit}` : undefined} />
+                                                                        <div>
+                                                                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Remaining Balance</div>
+                                                                            <div className={cn("mt-0.5 text-xl font-bold tabular-nums",
+                                                                                balCif > 0 ? "text-emerald-700" : "text-muted-foreground")}>
+                                                                                {fmtUsd(balCif)}
+                                                                            </div>
+                                                                            <div className="text-[10.5px] text-muted-foreground">{fmtInr(r.balance_cif_fc)}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* ══ Section 2: Usage ════════════════════════════════ */}
+                                                                {(usage?.boes?.length || usage?.allotments?.length) ? (
+                                                                    <div className="rounded-xl border border-border/60 bg-card p-4 space-y-5">
+                                                                        <div className="text-[10.5px] font-bold uppercase tracking-widest text-muted-foreground">Usage</div>
+                                                                        <BoeSection boes={usage?.boes ?? []} openingCif={Number(r.cif_fc || 0)} />
+                                                                        {(usage?.boes?.length > 0 && usage?.allotments?.length > 0) && (
+                                                                            <div className="border-t border-border/40" />
+                                                                        )}
+                                                                        <AllotmentSection allotments={usage?.allotments ?? []} />
+                                                                    </div>
+                                                                ) : usage && (
+                                                                    <div className="rounded-xl border border-border/60 bg-card px-4 py-5 text-center text-sm text-muted-foreground">
+                                                                        No BOE or allotment usage recorded for this item.
+                                                                    </div>
+                                                                )}
+
+                                                                {/* ══ Section 3: Item Management ══════════════════════ */}
+                                                                <div className="grid gap-3 lg:grid-cols-2">
+                                                                    {/* Item Names card */}
+                                                                    <div className="rounded-xl border border-border/60 bg-card p-4">
+                                                                        <div className="mb-3 flex items-center gap-2">
+                                                                            <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10">
+                                                                                <Tag className="size-3.5 text-primary" />
+                                                                            </div>
+                                                                            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Item Names</span>
+                                                                            {tags.length > 0 && (
+                                                                                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                                                                    {tags.length}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {editingItemId === r.id ? (
+                                                                            <div className="space-y-2">
+                                                                                <AsyncSelect isMulti cacheOptions
+                                                                                    loadOptions={loadItemOptions}
+                                                                                    value={editingTags}
+                                                                                    onChange={(v) => setEditingTags(v as typeof editingTags)}
+                                                                                    placeholder="Search item names…"
+                                                                                    menuPortalTarget={document.body}
+                                                                                    menuPosition="fixed"
+                                                                                    styles={{
+                                                                                        control: (b) => ({ ...b, minHeight: 36, fontSize: 13, borderRadius: 8 }),
+                                                                                        menuPortal: (b) => ({ ...b, zIndex: 9999 }),
+                                                                                        menu: (b) => ({ ...b, minWidth: 240 }),
+                                                                                    }}
+                                                                                />
+                                                                                <div className="flex gap-2">
+                                                                                    <Button size="sm" onClick={() => handleSaveEditTags(r.id)}
+                                                                                        disabled={editSaving} className="h-7 text-xs gap-1.5">
+                                                                                        {editSaving ? <Loader2 className="size-3.5 animate-spin" /> : null}Save
+                                                                                    </Button>
+                                                                                    <Button variant="outline" size="sm" onClick={() => setEditingItemId(null)}
+                                                                                        disabled={editSaving} className="h-7 text-xs">Cancel</Button>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div>
+                                                                                {/* Tag chips */}
+                                                                                <div className="flex flex-wrap gap-1.5">
+                                                                                    {tags.map((d) => (
+                                                                                        <span key={d.id} className="inline-flex items-center gap-1 rounded-full bg-primary/5 px-2.5 py-1 text-[11.5px] font-medium text-foreground ring-1 ring-primary/20">
+                                                                                            {d.name}
+                                                                                            <button type="button"
+                                                                                                onClick={() => handleRemoveItemTag(r.id, d.id)}
+                                                                                                disabled={tagSaving[r.id]}
+                                                                                                className="ml-0.5 text-muted-foreground/50 hover:text-destructive cursor-pointer"
+                                                                                                aria-label={`Remove ${d.name}`}>
+                                                                                                <X className="size-3" />
+                                                                                            </button>
+                                                                                        </span>
+                                                                                    ))}
+                                                                                    {tags.length === 0 && addingItemId !== r.id && (
+                                                                                        <span className="text-sm text-muted-foreground/60 italic">No item names assigned</span>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                {/* Add / Edit controls */}
+                                                                                <div className="mt-3 flex items-center gap-2">
+                                                                                    {addingItemId === r.id ? (
+                                                                                        <div className="w-full min-w-[200px]">
+                                                                                            <AsyncSelect autoFocus cacheOptions defaultOptions
+                                                                                                loadOptions={loadItemOptions}
+                                                                                                onChange={(opt) => handleAddItemTag(r.id, opt as { value: number; label: string } | null)}
+                                                                                                onBlur={() => setAddingItemId(null)}
+                                                                                                placeholder="Search to add item…"
+                                                                                                menuPortalTarget={document.body}
+                                                                                                menuPosition="fixed"
+                                                                                                styles={{
+                                                                                                    control: (b) => ({ ...b, minHeight: 34, fontSize: 13, borderRadius: 8 }),
+                                                                                                    menuPortal: (b) => ({ ...b, zIndex: 9999 }),
+                                                                                                    menu: (b) => ({ ...b, minWidth: 240 }),
+                                                                                                }}
+                                                                                            />
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <>
+                                                                                            <Button variant="outline" size="sm"
+                                                                                                onClick={() => setAddingItemId(r.id)}
+                                                                                                disabled={tagSaving[r.id]}
+                                                                                                className="h-7 gap-1.5 text-xs">
+                                                                                                <Plus className="size-3.5" />Add Item Name
+                                                                                            </Button>
+                                                                                            {tags.length > 0 && (
+                                                                                                <Button variant="ghost" size="sm"
+                                                                                                    onClick={() => {
+                                                                                                        setEditingItemId(r.id);
+                                                                                                        setEditingTags(tags.map((d) => ({ value: d.id, label: d.name })));
+                                                                                                    }}
+                                                                                                    className="h-7 gap-1.5 text-xs text-muted-foreground">
+                                                                                                    <Pencil className="size-3.5" />Edit All
+                                                                                                </Button>
+                                                                                            )}
+                                                                                            {tagSaving[r.id] && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+                                                                                        </>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Marking card */}
+                                                                    <div className="rounded-xl border border-border/60 bg-card p-4">
+                                                                        <div className="mb-3 flex items-center gap-2">
+                                                                            <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted">
+                                                                                <FileText className="size-3.5 text-muted-foreground" />
+                                                                            </div>
+                                                                            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Marking</span>
+                                                                        </div>
+
+                                                                        {markingEditingId === r.id ? (
+                                                                            <div className="space-y-2">
+                                                                                <Select
+                                                                                    options={MARKING_OPTIONS}
+                                                                                    value={MARKING_OPTIONS.find((o) => o.value === currentMarking) ?? MARKING_OPTIONS[0]}
+                                                                                    onChange={(sel) => handleConditionTypeChange(r.id, sel?.value ?? "")}
+                                                                                    isSearchable={false}
+                                                                                    menuPortalTarget={document.body}
+                                                                                    menuPosition="fixed"
+                                                                                    styles={{
+                                                                                        control: (b) => ({ ...b, minHeight: 36, fontSize: 13.5, borderRadius: 8 }),
+                                                                                        menuPortal: (b) => ({ ...b, zIndex: 9999 }),
+                                                                                    }}
+                                                                                />
+                                                                                <Button variant="outline" size="sm" onClick={() => setMarkingEditingId(null)}
+                                                                                    className="h-7 text-xs gap-1.5">
+                                                                                    <X className="size-3.5" />Cancel
+                                                                                </Button>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div>
+                                                                                {/* Current marking display */}
+                                                                                {currentMarking ? (
+                                                                                    <div className="mb-3">
+                                                                                        <div className="text-[10.5px] text-muted-foreground mb-1">Current Marking</div>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <ConditionBadge type={currentMarking} size="sm" />
+                                                                                            <span className="text-xl font-bold text-foreground">{currentMarking}</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="mb-3 text-sm text-muted-foreground italic">No marking assigned</div>
+                                                                                )}
+                                                                                <Button variant="outline" size="sm"
+                                                                                    onClick={() => setMarkingEditingId(r.id)}
+                                                                                    className="h-7 gap-1.5 text-xs">
+                                                                                    <Pencil className="size-3.5" />Edit Marking
+                                                                                </Button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* ══ Section 4: Balance Calculation ══════════════════ */}
+                                                                <div className="overflow-hidden rounded-xl border border-primary/20 bg-primary/5">
+                                                                    <div className="border-b border-primary/20 px-4 py-2">
+                                                                        <div className="text-[10.5px] font-bold uppercase tracking-widest text-primary">Balance Calculation</div>
+                                                                    </div>
+                                                                    <div className="px-6 py-4">
+                                                                        {/* Waterfall */}
+                                                                        <div className="flex flex-col gap-0">
+                                                                            {/* Opening */}
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-sm text-muted-foreground">Opening Balance</span>
+                                                                                <span className="font-mono text-sm font-semibold text-foreground">{fmtUsd(r.cif_fc)}</span>
+                                                                            </div>
+                                                                            {/* BOE */}
+                                                                            <div className="my-1.5 flex items-center gap-2 text-muted-foreground/40">
+                                                                                <div className="flex-1 border-t border-dashed border-border/50" />
+                                                                                <ChevronDown className="size-3.5" />
+                                                                                <div className="flex-1 border-t border-dashed border-border/50" />
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="flex items-center gap-1.5 text-sm text-amber-700">
+                                                                                    <span className="text-muted-foreground">−</span> BOE Utilized
+                                                                                </span>
+                                                                                <span className="font-mono text-sm font-semibold text-amber-700">{fmtUsd(r.debited_value)}</span>
+                                                                            </div>
+                                                                            {/* Allotted */}
+                                                                            <div className="my-1.5 flex items-center gap-2 text-muted-foreground/40">
+                                                                                <div className="flex-1 border-t border-dashed border-border/50" />
+                                                                                <ChevronDown className="size-3.5" />
+                                                                                <div className="flex-1 border-t border-dashed border-border/50" />
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="flex items-center gap-1.5 text-sm text-violet-700">
+                                                                                    <span className="text-muted-foreground">−</span> Allotted
+                                                                                </span>
+                                                                                <span className="font-mono text-sm font-semibold text-violet-700">{fmtUsd(r.allotted_value)}</span>
+                                                                            </div>
+                                                                            {/* Remaining */}
+                                                                            <div className="mt-3 flex items-center justify-between rounded-xl bg-card px-4 py-3">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <TrendingUp className={cn("size-5", balCif > 0 ? "text-emerald-700" : "text-muted-foreground")} />
+                                                                                    <div>
+                                                                                        <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Remaining Balance</div>
+                                                                                        <div className="text-[10.5px] text-muted-foreground">{fmtInr(r.balance_cif_fc)}</div>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className={cn("text-2xl font-extrabold tabular-nums",
+                                                                                    balCif > 0 ? "text-emerald-700" : "text-muted-foreground")}>
+                                                                                    {fmtUsd(balCif)}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )}
@@ -730,25 +1002,22 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                             })}
                         </tbody>
 
-                        {/* Totals row */}
+                        {/* Totals footer */}
                         <tfoot className="border-t-2 border-border bg-muted/40 text-sm font-semibold">
                             <tr>
-                                <td colSpan={4} className="px-3 py-2.5 text-right text-xs text-muted-foreground uppercase tracking-wider">Totals</td>
+                                <td colSpan={4} className="px-3 py-2.5 text-right text-xs uppercase tracking-wider text-muted-foreground">Totals</td>
                                 <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmtUsd(totalCifFc)}</td>
                                 <td className="px-3 py-2.5 text-right tabular-nums text-xs text-amber-700">{fmtUsd(totalDebited)}</td>
                                 <td className="px-3 py-2.5 text-right tabular-nums text-xs text-violet-700">{fmtUsd(totalAllotted)}</td>
-                                {!commonBalance && (
-                                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-primary">{fmtUsd(totalBalance)}</td>
-                                )}
-                                {/* Item Names + Marking + expand — no totals */}
-                                <td /><td /><td />
+                                {!commonBalance && <td className="px-3 py-2.5 text-right tabular-nums text-xs text-primary">{fmtUsd(totalBalance)}</td>}
+                                <td />
                             </tr>
                         </tfoot>
                     </table>
                 </div>
             </div>
 
-            {/* ── 3. Balance Summary ──────────────────────────────────── */}
+            {/* ── Balance Summary ────────────────────────────────────── */}
             <div className="overflow-hidden rounded-xl border border-primary/20 bg-primary/5">
                 <div className="border-b border-primary/20 px-4 py-2.5">
                     <div className="text-[10.5px] font-semibold uppercase tracking-wider text-primary">Balance Summary</div>

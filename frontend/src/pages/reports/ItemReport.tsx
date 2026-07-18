@@ -1,6 +1,7 @@
 import React, {useEffect, useState, useMemo, useCallback, useId} from "react";
 import {useNavigate} from "react-router-dom";
 import AsyncSelectField from "../../components/AsyncSelectField";
+import { Card, CardContent } from "@/components/ui/card";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import { openAuthedFile } from "../../utils/documentDownload";
@@ -447,10 +448,10 @@ export default function ItemReport() {
     const itemNameOptions = availableItems;
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
+        <div className="min-h-screen bg-background">
             {/* Tabler-style page header */}
             <div className="page-header">
-                <div style={{ minWidth: 0 }}>
+                <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
                             href="/"
@@ -459,18 +460,18 @@ export default function ItemReport() {
                         >
                             Home
                         </a>
-                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        <span className="mx-1.5 opacity-50">/</span>
                         Reports
-                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        <span className="mx-1.5 opacity-50">/</span>
                         Item Report
                     </div>
                     <h1>Item Report</h1>
                     {reportData && (
-                        <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
-                            <CalendarDays className="size-4" aria-hidden="true" />
+                        <div className="mt-1 flex items-center gap-1 text-[12.5px] text-muted-foreground">
+                            <CalendarDays className="size-3.5" aria-hidden="true" />
                             {reportData.report_date}
-                            <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
-                            <Package className="size-4" aria-hidden="true" />
+                            <span className="mx-2 opacity-50">•</span>
+                            <Package className="size-3.5" aria-hidden="true" />
                             {reportData.total_items} items
                         </div>
                     )}
@@ -795,16 +796,12 @@ export default function ItemReport() {
             {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
                 <div className="row mb-3">
                     <div className="col-span-full">
-                        <div className="card" style={{
-                            position: 'sticky',
-                            top: '70px',
-                            zIndex: 1020
-                        }}>
-                            <div className="card-body py-2">
+                        <Card style={{ position: 'sticky', top: '70px', zIndex: 1020 }}>
+                            <CardContent className="py-2">
                                 <div className="flex justify-end items-center gap-4">
                                     <div className="font-bold">Total:</div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-muted small">Avail Qty:</span>
+                                        <span className="text-muted-foreground text-sm">Avail Qty:</span>
                                         <span className="font-bold">
                                             {reportData.items.reduce((sum, item) => sum + (item.available_quantity || 0), 0).toLocaleString('en-IN', {
                                                 minimumFractionDigits: 3,
@@ -813,7 +810,7 @@ export default function ItemReport() {
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-muted small">Avail Bal:</span>
+                                        <span className="text-muted-foreground text-sm">Avail Bal:</span>
                                         <span className="font-bold text-success">
                                             {(() => {
                                                 const uniqueLicenses: Record<string, number> = {};
@@ -830,7 +827,7 @@ export default function ItemReport() {
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-muted small">Balance CIF:</span>
+                                        <span className="text-muted-foreground text-sm">Balance CIF:</span>
                                         <span className="font-bold text-primary">
                                             {(() => {
                                                 const uniqueLicenses: Record<string, number> = {};
@@ -847,8 +844,8 @@ export default function ItemReport() {
                                         </span>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             )}
@@ -857,52 +854,52 @@ export default function ItemReport() {
             <div className="row">
                 <div className="col-span-full">
                     {loading && (
-                        <div className="card">
-                            <div className="card-body flex flex-col items-center py-12 text-center">
+                        <Card>
+                            <CardContent className="flex flex-col items-center py-12 text-center">
                                 <Loader2 className="mb-3 size-10 animate-spin text-primary" />
-                                <h5 className="text-muted">Loading Item Report…</h5>
-                                <p className="text-muted small">Please wait while we fetch the data</p>
-                            </div>
-                        </div>
+                                <h5 className="text-muted-foreground">Loading Item Report…</h5>
+                                <p className="text-muted-foreground text-sm">Please wait while we fetch the data</p>
+                            </CardContent>
+                        </Card>
                     )}
 
                     {!loading && selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch && (
-                        <div className="card">
-                            <div className="card-body text-center py-5">
+                        <Card>
+                            <CardContent className="py-5 text-center">
                                 <Tag className="size-4" aria-hidden="true" />
                                 <h5 className="mt-3 text-primary">Select Filters to View Report</h5>
-                                <p className="text-muted">Please select item names, search by product description, or search by HSN code to load the report data</p>
-                            </div>
-                        </div>
+                                <p className="text-muted-foreground">Please select item names, search by product description, or search by HSN code to load the report data</p>
+                            </CardContent>
+                        </Card>
                     )}
 
                     {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length === 0 && (
-                        <div className="card">
-                            <div className="card-body text-center py-5">
+                        <Card>
+                            <CardContent className="py-5 text-center">
                                 <Inbox className="size-4" aria-hidden="true" />
                                 <h5 className="mt-3 text-muted-foreground">No items found</h5>
-                                <p className="text-muted">Try adjusting your filters to see more results.</p>
-                                <div className="mt-3 text-start" style={{maxWidth: '600px', margin: '0 auto'}}>
-                                    <p className="small text-muted-foreground mb-2"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
-                                    <ul className="small text-muted-foreground">
+                                <p className="text-muted-foreground">Try adjusting your filters to see more results.</p>
+                                <div className="mt-3 text-left" style={{maxWidth: '600px', margin: '0 auto'}}>
+                                    <p className="text-sm text-muted-foreground mb-2"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
+                                    <ul className="text-sm text-muted-foreground">
                                         <li>Setting License Status to "All"</li>
                                         <li>Lowering the Min Balance (CIF) to 100</li>
                                         <li>Checking if your search term matches exactly (case-insensitive partial match)</li>
                                     </ul>
                                 </div>
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
                     )}
 
                     {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
-                        <div className="card">
-                            <div className="card-body" style={{padding:0}}>
-                                <div className="table-responsive" style={{overflowX: 'auto'}}>
+                        <Card>
+                            <CardContent className="p-0">
+                                <div className="overflow-x-auto">
                                     <table className="table table-hover table-sm mb-0"
                                            style={{tableLayout: 'auto', minWidth: '1400px'}}>
                                         <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                                         <tr className="table-light">
-                                            <th className="text-center" style={{
+                                            <th scope="col" className="text-center" style={{
                                                 position: 'sticky',
                                                 left: 0,
                                                 zIndex: 11,
@@ -910,7 +907,7 @@ export default function ItemReport() {
                                                 minWidth: '60px'
                                             }}>Sr No
                                             </th>
-                                            <th style={{
+                                            <th scope="col" style={{
                                                 position: 'sticky',
                                                 left: '60px',
                                                 zIndex: 11,
@@ -918,7 +915,7 @@ export default function ItemReport() {
                                                 minWidth: '150px'
                                             }}>License No
                                             </th>
-                                            <th style={{
+                                            <th scope="col" style={{
                                                 position: 'sticky',
                                                 left: '210px',
                                                 zIndex: 11,
@@ -926,7 +923,7 @@ export default function ItemReport() {
                                                 minWidth: '120px'
                                             }}>License Date
                                             </th>
-                                            <th style={{
+                                            <th scope="col" style={{
                                                 position: 'sticky',
                                                 left: '330px',
                                                 zIndex: 11,
@@ -936,20 +933,20 @@ export default function ItemReport() {
                                                 borderRight: '2px solid var(--tb-border)'
                                             }}>Expiry Date
                                             </th>
-                                            <th style={{minWidth: '200px'}}>Exporter Name</th>
-                                            <th style={{minWidth: '100px'}}>Serial No</th>
-                                            <th style={{minWidth: '100px'}}>HSN Code</th>
-                                            <th style={{minWidth: '250px'}}>Product Description</th>
-                                            <th style={{minWidth: '200px'}}>Item Name</th>
-                                            <th className="text-end" style={{minWidth: '140px'}}>Avail Qty</th>
-                                            <th className="text-end" style={{minWidth: '120px'}}>Plan Qty</th>
-                                            <th className="text-end" style={{minWidth: '120px'}}>Plan CIF</th>
-                                            <th className="text-end" style={{minWidth: '140px'}}>Avail Bal</th>
-                                            <th className="text-end" style={{minWidth: '140px'}}>Balance CIF</th>
-                                            <th className="text-center" style={{minWidth: '120px'}}>Is Restricted</th>
-                                            <th style={{minWidth: '200px'}}>Notes</th>
-                                            <th style={{minWidth: '200px'}}>Condition Sheet</th>
-                                            <th style={{minWidth: '250px'}}>Transfer Status</th>
+                                            <th scope="col" style={{minWidth: '200px'}}>Exporter Name</th>
+                                            <th scope="col" style={{minWidth: '100px'}}>Serial No</th>
+                                            <th scope="col" style={{minWidth: '100px'}}>HSN Code</th>
+                                            <th scope="col" style={{minWidth: '250px'}}>Product Description</th>
+                                            <th scope="col" style={{minWidth: '200px'}}>Item Name</th>
+                                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Avail Qty</th>
+                                            <th scope="col" className="text-right" style={{minWidth: '120px'}}>Plan Qty</th>
+                                            <th scope="col" className="text-right" style={{minWidth: '120px'}}>Plan CIF</th>
+                                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Avail Bal</th>
+                                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Balance CIF</th>
+                                            <th scope="col" className="text-center" style={{minWidth: '120px'}}>Is Restricted</th>
+                                            <th scope="col" style={{minWidth: '200px'}}>Notes</th>
+                                            <th scope="col" style={{minWidth: '200px'}}>Condition Sheet</th>
+                                            <th scope="col" style={{minWidth: '250px'}}>Transfer Status</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -1064,21 +1061,21 @@ export default function ItemReport() {
                                                                     }}
                                                                 />
                                                             </td>
-                                                            <td className="text-end">{Number(item.available_quantity || 0).toFixed(3)}</td>
-                                                            <td className="text-end" title={(item.planned_splits || []).map(s => `${s.item_name || '—'}: ${Number(s.planned_quantity).toFixed(3)} @ ${Number(s.unit_price).toFixed(2)} = ${Number(s.planned_cif_fc).toFixed(2)}`).join('\n')}>
+                                                            <td className="text-right">{Number(item.available_quantity || 0).toFixed(3)}</td>
+                                                            <td className="text-right" title={(item.planned_splits || []).map(s => `${s.item_name || '—'}: ${Number(s.planned_quantity).toFixed(3)} @ ${Number(s.unit_price).toFixed(2)} = ${Number(s.planned_cif_fc).toFixed(2)}`).join('\n')}>
                                                                 {Number(item.planned_quantity || 0) > 0 ? Number(item.planned_quantity).toFixed(3) : '-'}
                                                             </td>
-                                                            <td className="text-end">
+                                                            <td className="text-right">
                                                                 {Number(item.planned_cif || 0) > 0 ? Number(item.planned_cif).toFixed(2) : '-'}
                                                             </td>
                                                             {isFirstRow && (
                                                                 <>
-                                                                    <td className="text-end text-success font-semibold"
+                                                                    <td className="text-right text-success font-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
                                                                         backgroundColor: 'var(--tb-sunken)'
                                                                     }}>{Number(firstItem.available_balance || 0).toFixed(2)}</td>
-                                                                    <td className="text-end text-primary font-semibold"
+                                                                    <td className="text-right text-primary font-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
                                                                         backgroundColor: 'var(--tb-sunken)'
@@ -1179,7 +1176,7 @@ export default function ItemReport() {
                                                                         {firstItem.latest_transfer ? (
                                                                             <div>{firstItem.latest_transfer}</div>
                                                                         ) : (
-                                                                            <span className="text-muted">-</span>
+                                                                            <span className="text-muted-foreground">-</span>
                                                                         )}
                                                                     </td>
                                                                 </>
@@ -1192,7 +1189,7 @@ export default function ItemReport() {
                                         </tbody>
                                         <tfoot style={{position: 'sticky', bottom: 0, zIndex: 10}}>
                                         <tr className="table-secondary font-bold">
-                                            <td colSpan={10} className="text-end" style={{
+                                            <td colSpan={10} className="text-right" style={{
                                                 position: 'sticky',
                                                 left: 0,
                                                 zIndex: 11,
@@ -1201,10 +1198,10 @@ export default function ItemReport() {
                                             }}>
                                                 Total:
                                             </td>
-                                            <td className="text-end" style={{fontWeight: '600'}}>
+                                            <td className="text-right" style={{fontWeight: '600'}}>
                                                 {reportData.items.reduce((sum, item) => sum + (item.available_quantity || 0), 0).toFixed(3)}
                                             </td>
-                                            <td className="text-end text-success" style={{fontWeight: '600'}}>
+                                            <td className="text-right text-success" style={{fontWeight: '600'}}>
                                                 {(() => {
                                                     // Calculate unique license balance total (don't double count licenses with multiple items)
                                                     const uniqueLicenses: Record<string, number> = {};
@@ -1221,8 +1218,8 @@ export default function ItemReport() {
                                         </tfoot>
                                     </table>
                                 </div>
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
                     )}
                 </div>
             </div>

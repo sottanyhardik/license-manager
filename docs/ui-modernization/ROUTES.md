@@ -88,8 +88,8 @@
 | `/reports/expiring-licenses` | `pages/reports/ExpiringLicenses.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure LicenseExportPanel delegate — already modern |
 | `/reports/active-licenses` | `pages/reports/ActiveLicenses.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure LicenseExportPanel delegate — already modern |
 | `/reports/download-license` | `pages/reports/DownloadLicense.tsx` | FROZEN | Session-3 | 2026-07-18 | Already modern — shadcn, typed, aria-pressed toggles, useId |
-| `/reports/item-pivot` | `pages/reports/ItemPivotReport.tsx` | TODO | — | — | — |
-| `/reports/item-report` | `pages/reports/ItemReport.tsx` | TODO | — | — | — |
+| `/reports/item-pivot` | `pages/reports/ItemPivotReport.tsx` | FROZEN | Session-3 | 2026-07-18 | Bootstrap card/table-responsive → shadcn Card/overflow-x-auto; text-end/text-muted → Tailwind; cn() for conditionals; 28 th scope="col"; itemBgColor dynamic styles preserved |
+| `/reports/item-report` | `pages/reports/ItemReport.tsx` | FROZEN | Session-3 | 2026-07-18 | Bootstrap card → shadcn Card; text-end/text-muted/text-start/small → Tailwind; 18 th scope="col"; sticky column styles preserved |
 
 ---
 

@@ -7,6 +7,8 @@ import {formatIndianNumber} from "../../utils/numberFormatter";
 import {toast} from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
@@ -479,10 +481,10 @@ export default function ItemPivotReport() {
 
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
+        <div className="min-h-screen bg-background">
             {/* Tabler-style page header */}
             <div className="page-header">
-                <div style={{ minWidth: 0 }}>
+                <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
                             href="/"
@@ -491,9 +493,9 @@ export default function ItemPivotReport() {
                         >
                             Home
                         </a>
-                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        <span className="mx-1.5 opacity-50">/</span>
                         Reports
-                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        <span className="mx-1.5 opacity-50">/</span>
                         Item Pivot Report
                     </div>
                     <h1>Item Pivot Report</h1>
@@ -575,8 +577,8 @@ export default function ItemPivotReport() {
                     {/* Empty state: norms exist but none selected */}
                     {!activeNormTab && !loading && availableNorms.length > 0 && (
                         <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border py-16 text-center">
-                            <div className="flex size-16 items-center justify-center rounded-2xl" style={{ background: 'var(--tb-brand-50)' }}>
-                                <Tag className="size-8" style={{ color: 'var(--tb-brand)' }} />
+                            <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10">
+                                <Tag className="size-8 text-primary" />
                             </div>
                             <div>
                                 <p className="text-base font-bold text-foreground">Select a Norm to View Report</p>
@@ -601,8 +603,8 @@ export default function ItemPivotReport() {
                     {/* Loading state */}
                     {loading && activeNormTab && (
                         <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-14 text-center shadow-sm">
-                            <div className="flex size-14 items-center justify-center rounded-full" style={{ background: 'var(--tb-brand-50)' }}>
-                                <Loader2 className="size-7 animate-spin" style={{ color: 'var(--tb-brand)' }} />
+                            <div className="flex size-14 items-center justify-center rounded-full bg-primary/10">
+                                <Loader2 className="size-7 animate-spin text-primary" />
                             </div>
                             <div>
                                 <p className="font-semibold text-foreground">Loading {activeNormTab} Report…</p>
@@ -616,7 +618,7 @@ export default function ItemPivotReport() {
                         <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-12 text-center shadow-sm">
                             <Inbox className="size-10 opacity-20" aria-hidden="true" />
                             <div>
-                                <p className="font-semibold text-foreground">No licenses found for <span style={{ color: 'var(--tb-brand)' }}>{activeNormTab}</span></p>
+                                <p className="font-semibold text-foreground">No licenses found for <span className="text-primary">{activeNormTab}</span></p>
                                 <p className="mt-0.5 text-[12.5px] text-muted-foreground">Try adjusting your filters — e.g. increase minimum balance or change purchase status.</p>
                             </div>
                             {hasActiveFilters && (
@@ -641,12 +643,12 @@ export default function ItemPivotReport() {
                                 const notification = emIdx >= 0 ? groupKey.slice(emIdx + 3) : groupKey;
                                 return (
                                 <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
-                                    <div className="card">
-                                        <div
-                                            className="card-header bg-gradient text-primary flex justify-between items-center"
+                                    <Card>
+                                        <CardHeader
+                                            className="flex-row items-center justify-between gap-4 text-primary-foreground"
                                             style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
                                             <div>
-                                                <h5 className="mb-0">
+                                                <h5 className="mb-0 flex items-center gap-2 font-semibold">
                                                     <Bell className="size-4" aria-hidden="true" />
                                                     Notification Number: {notification}
                                                     {notification === 'Unknown' && (
@@ -667,14 +669,14 @@ export default function ItemPivotReport() {
                                                 </small>
                                             </div>
                                             <span className="chip chip-neutral">{licenses.length}</span>
-                                        </div>
-                                        <div className="card-body" style={{padding:0}}>
-                                            <div className="table-responsive" style={{overflowX: 'auto'}}>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <div className="overflow-x-auto">
                                                 <table className="table table-hover table-sm table-bordered mb-0"
                                                        style={{tableLayout: 'auto', minWidth: '860px'}}>
                                                     <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                                                     <tr className="table-light">
-                                                        <th className="text-center" style={{
+                                                        <th scope="col" className="text-center" style={{
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 11,
@@ -682,7 +684,7 @@ export default function ItemPivotReport() {
                                                             minWidth: '60px'
                                                         }}>Sr No
                                                         </th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '60px',
                                                             zIndex: 11,
@@ -690,7 +692,7 @@ export default function ItemPivotReport() {
                                                             minWidth: '120px'
                                                         }}>DFIA No
                                                         </th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '180px',
                                                             zIndex: 11,
@@ -698,7 +700,7 @@ export default function ItemPivotReport() {
                                                             minWidth: '100px'
                                                         }}>Expiry Dt
                                                         </th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '280px',
                                                             zIndex: 11,
@@ -706,7 +708,7 @@ export default function ItemPivotReport() {
                                                             minWidth: '150px'
                                                         }}>Exporter
                                                         </th>
-                                                        <th className="text-end" style={{
+                                                        <th scope="col" className="text-right" style={{
                                                             position: 'sticky',
                                                             left: '430px',
                                                             zIndex: 11,
@@ -714,7 +716,7 @@ export default function ItemPivotReport() {
                                                             minWidth: '100px'
                                                         }}>Total CIF
                                                         </th>
-                                                        <th className="text-end" style={{
+                                                        <th scope="col" className="text-right" style={{
                                                             position: 'sticky',
                                                             left: '530px',
                                                             zIndex: 11,
@@ -722,7 +724,7 @@ export default function ItemPivotReport() {
                                                             minWidth: '100px'
                                                         }}>Debited CIF
                                                         </th>
-                                                        <th className="text-end" style={{
+                                                        <th scope="col" className="text-right" style={{
                                                             position: 'sticky',
                                                             left: '630px',
                                                             zIndex: 11,
@@ -730,7 +732,7 @@ export default function ItemPivotReport() {
                                                             minWidth: '100px'
                                                         }}>Alloted CIF
                                                         </th>
-                                                        <th className="text-end" style={{
+                                                        <th scope="col" className="text-right" style={{
                                                             position: 'sticky',
                                                             left: '730px',
                                                             zIndex: 11,
@@ -754,7 +756,7 @@ export default function ItemPivotReport() {
                                                                 + (item.has_restriction ? 2 : 0)
                                                                 + (isRutile ? 1 : 0);
                                                             return (
-                                                                <th key={`${item.id}-qty`} colSpan={colSpan}
+                                                                <th scope="col" key={`${item.id}-qty`} colSpan={colSpan}
                                                                     className="text-center"
                                                                     style={{minWidth: '200px', backgroundColor: itemBgColor(itemIdx)}}>
                                                                     <Package className="size-4" aria-hidden="true" />
@@ -764,49 +766,49 @@ export default function ItemPivotReport() {
                                                         })}
                                                     </tr>
                                                     <tr className="table-secondary">
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '60px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '180px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '280px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '430px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '530px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '630px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '730px',
                                                             zIndex: 11,
@@ -817,42 +819,42 @@ export default function ItemPivotReport() {
                                                         {/* DFIA Dt / Notif No spacers temporarily hidden */}
                                                         {reportData.items.filter(item => item.name).map(item => (
                                                             <React.Fragment key={`${item.id}-headers`}>
-                                                                <th style={{minWidth: '90px', fontSize: 13.5}}>HSN
+                                                                <th scope="col" style={{minWidth: '90px', fontSize: 13.5}}>HSN
                                                                     Code
                                                                 </th>
-                                                                <th style={{
+                                                                <th scope="col" style={{
                                                                     minWidth: '150px',
                                                                     fontSize: 13.5
                                                                 }}>Description
                                                                 </th>
-                                                                <th className="text-end" style={{
+                                                                <th scope="col" className="text-right" style={{
                                                                     minWidth: '90px',
                                                                     fontSize: 13.5
                                                                 }}>Total QTY
                                                                 </th>
-                                                                <th className="text-end" style={{
+                                                                <th scope="col" className="text-right" style={{
                                                                     minWidth: '100px',
                                                                     fontSize: 13.5
                                                                 }}>Allotted QTY
                                                                 </th>
-                                                                <th className="text-end" style={{
+                                                                <th scope="col" className="text-right" style={{
                                                                     minWidth: '100px',
                                                                     fontSize: 13.5
                                                                 }}>Debited QTY
                                                                 </th>
-                                                                <th className="text-end" style={{
+                                                                <th scope="col" className="text-right" style={{
                                                                     minWidth: '110px',
                                                                     fontSize: 13.5
                                                                 }}>Balance QTY
                                                                 </th>
                                                                 {item.has_restriction && (
                                                                     <>
-                                                                        <th className="text-center" style={{
+                                                                        <th scope="col" className="text-center" style={{
                                                                             minWidth: '90px',
                                                                             fontSize: 13.5
                                                                         }}>Restriction %
                                                                         </th>
-                                                                        <th className="text-end" style={{
+                                                                        <th scope="col" className="text-right" style={{
                                                                             minWidth: '120px',
                                                                             fontSize: 13.5
                                                                         }}>Restriction Val
@@ -860,10 +862,10 @@ export default function ItemPivotReport() {
                                                                     </>
                                                                 )}
                                                                 {/* Manual plan when present, else norm unit price / planned CIF */}
-                                                                <th className="text-end" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty / Unit Price</th>
-                                                                <th className="text-end" style={{ minWidth: '110px', fontSize: 13.5 }}>Planned CIF</th>
+                                                                <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty / Unit Price</th>
+                                                                <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Planned CIF</th>
                                                                 {item.name === 'RUTILE - A3627' && (
-                                                                    <th className="text-end" style={{
+                                                                    <th scope="col" className="text-right" style={{
                                                                         minWidth: '100px',
                                                                         fontSize: 13.5
                                                                     }}>Unit Price (RUTILE)
@@ -982,25 +984,25 @@ export default function ItemPivotReport() {
                                                             }} title={license.exporter}>
                                                                 {license.exporter}
                                                             </td>
-                                                            <td className="text-end font-semibold" style={{
+                                                            <td className="text-right font-semibold" style={{
                                                                 position: 'sticky',
                                                                 left: '430px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{license.total_cif.toFixed(2)}</td>
-                                                            <td className="text-end font-semibold text-warning" style={{
+                                                            <td className="text-right font-semibold text-warning" style={{
                                                                 position: 'sticky',
                                                                 left: '530px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{(license.debited_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-end font-semibold text-info" style={{
+                                                            <td className="text-right font-semibold text-info" style={{
                                                                 position: 'sticky',
                                                                 left: '630px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{(license.alloted_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-end font-semibold text-success" style={{
+                                                            <td className="text-right font-semibold text-success" style={{
                                                                 position: 'sticky',
                                                                 left: '730px',
                                                                 zIndex: 1,
@@ -1036,16 +1038,16 @@ export default function ItemPivotReport() {
                                                                             title={itemData.description || ''}>
                                                                             {itemData.description || '-'}
                                                                         </td>
-                                                                        <td className="text-end" style={{backgroundColor: itemBg}}>
+                                                                        <td className="text-right" style={{backgroundColor: itemBg}}>
                                                                             {itemData.quantity ? itemData.quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'font-semibold text-primary' : ''}`} style={{backgroundColor: itemBg}}>
+                                                                        <td className={cn('text-right', hasData && 'font-semibold text-primary')} style={{backgroundColor: itemBg}}>
                                                                             {itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className="text-end" style={{backgroundColor: itemBg, ...(hasData ? {color: 'var(--warning-color)'} : {})}}>
+                                                                        <td className="text-right" style={{backgroundColor: itemBg, ...(hasData ? {color: 'var(--warning-color)'} : {})}}>
                                                                             {itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'text-success font-semibold' : ''}`} style={{backgroundColor: itemBg}}>
+                                                                        <td className={cn('text-right', hasData && 'text-success font-semibold')} style={{backgroundColor: itemBg}}>
                                                                             {itemData.available_quantity ? itemData.available_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         {item.has_restriction && (
@@ -1056,24 +1058,24 @@ export default function ItemPivotReport() {
                                                                                             className="chip chip-info">{itemData.restriction}%</span>
                                                                                     ) : '-'}
                                                                                 </td>
-                                                                                <td className={`text-end ${hasData ? 'font-semibold' : ''}`} style={{backgroundColor: itemBg}}>
+                                                                                <td className={cn('text-right', hasData && 'font-semibold')} style={{backgroundColor: itemBg}}>
                                                                                     {itemData.restriction_value ? itemData.restriction_value.toFixed(2) : '-'}
                                                                                 </td>
                                                                             </>
                                                                         )}
                                                                         {/* Manual plan if present, else norm unit price / planned CIF */}
-                                                                        <td className="text-end" style={{backgroundColor: itemBg}}>
+                                                                        <td className="text-right" style={{backgroundColor: itemBg}}>
                                                                             {hasManualPlan
                                                                                 ? Number(itemData.plan_quantity || 0).toFixed(3)
                                                                                 : (itemData.unit_price ? Number(itemData.unit_price).toFixed(2) : '-')}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'font-semibold' : ''}`} style={{backgroundColor: itemBg}}>
+                                                                        <td className={cn('text-right', hasData && 'font-semibold')} style={{backgroundColor: itemBg}}>
                                                                             {hasManualPlan
                                                                                 ? Number(itemData.plan_cif || 0).toFixed(2)
                                                                                 : (itemData.planned_cif ? Number(itemData.planned_cif).toFixed(2) : '-')}
                                                                         </td>
                                                                         {item.name === 'RUTILE - A3627' && (
-                                                                            <td className={`text-end ${hasData ? 'font-semibold text-warning' : ''}`} style={{backgroundColor: itemBg}}>
+                                                                            <td className={cn('text-right', hasData && 'font-semibold text-warning')} style={{backgroundColor: itemBg}}>
                                                                                 {itemData.unit_price ? itemData.unit_price.toFixed(4) : '-'}
                                                                             </td>
                                                                         )}
@@ -1099,7 +1101,7 @@ export default function ItemPivotReport() {
                                                             <Calculator className="size-4" aria-hidden="true" />
                                                             TOTAL
                                                         </td>
-                                                        <td className="text-end text-primary" style={{
+                                                        <td className="text-right text-primary" style={{
                                                             position: 'sticky',
                                                             left: '430px',
                                                             zIndex: 1,
@@ -1107,7 +1109,7 @@ export default function ItemPivotReport() {
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + lic.total_cif, 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-end text-warning" style={{
+                                                        <td className="text-right text-warning" style={{
                                                             position: 'sticky',
                                                             left: '530px',
                                                             zIndex: 1,
@@ -1115,7 +1117,7 @@ export default function ItemPivotReport() {
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + (lic.debited_cif || 0), 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-end text-info" style={{
+                                                        <td className="text-right text-info" style={{
                                                             position: 'sticky',
                                                             left: '630px',
                                                             zIndex: 1,
@@ -1123,7 +1125,7 @@ export default function ItemPivotReport() {
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + (lic.alloted_cif || 0), 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-end text-success" style={{
+                                                        <td className="text-right text-success" style={{
                                                             position: 'sticky',
                                                             left: '730px',
                                                             zIndex: 1,
@@ -1169,37 +1171,37 @@ export default function ItemPivotReport() {
                                                             const effectiveUnit = totalPlannedQty > 0 ? totalPlanned / totalPlannedQty : 0;
                                                             return (
                                                                 <React.Fragment key={`total-${item.id}`}>
-                                                                    <td className="text-muted">-</td>
-                                                                    <td className="text-muted">-</td>
-                                                                    <td className="text-end">
+                                                                    <td className="text-muted-foreground">-</td>
+                                                                    <td className="text-muted-foreground">-</td>
+                                                                    <td className="text-right">
                                                                         {totalQty > 0 ? totalQty.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-end text-primary">
+                                                                    <td className="text-right text-primary">
                                                                         {totalAllotted > 0 ? totalAllotted.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-end" style={{color: 'var(--warning-color)'}}>
+                                                                    <td className="text-right" style={{color: 'var(--warning-color)'}}>
                                                                         {totalDebited > 0 ? totalDebited.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-end text-success">
+                                                                    <td className="text-right text-success">
                                                                         {totalAvail > 0 ? totalAvail.toFixed(3) : '-'}
                                                                     </td>
                                                                     {item.has_restriction && (
                                                                         <>
-                                                                            <td className="text-muted">-</td>
-                                                                            <td className="text-end font-bold">
+                                                                            <td className="text-muted-foreground">-</td>
+                                                                            <td className="text-right font-bold">
                                                                                 {totalRestrictionVal > 0 ? totalRestrictionVal.toFixed(2) : '-'}
                                                                             </td>
                                                                         </>
                                                                     )}
                                                                     {/* Unit Price (effective rate) + Planned CIF total. */}
-                                                                    <td className="text-end">
+                                                                    <td className="text-right">
                                                                         {effectiveUnit > 0 ? effectiveUnit.toFixed(2) : '-'}
                                                                     </td>
-                                                                    <td className="text-end font-bold">
+                                                                    <td className="text-right font-bold">
                                                                         {totalPlanned > 0 ? totalPlanned.toFixed(2) : '-'}
                                                                     </td>
                                                                     {item.name === 'RUTILE - A3627' && (
-                                                                        <td className="text-muted">-</td>
+                                                                        <td className="text-muted-foreground">-</td>
                                                                     )}
                                                                 </React.Fragment>
                                                             );
@@ -1222,22 +1224,22 @@ export default function ItemPivotReport() {
                                                             <table className="table table-bordered table-sm" style={{tableLayout: 'fixed', width: '1400px'}}>
                                                                 <thead className="table-light">
                                                                 <tr>
-                                                                    <th style={{width: '80px'}}>Sr No</th>
-                                                                    <th style={{width: '620px'}}>Item Name</th>
-                                                                    <th className="text-end" style={{width: '230px'}}>Available Balance QTY</th>
-                                                                    <th className="text-end" style={{width: '170px'}}>Unit Price</th>
-                                                                    <th className="text-end" style={{width: '300px'}}>Total Planned CIF ($)</th>
+                                                                    <th scope="col" style={{width: '80px'}}>Sr No</th>
+                                                                    <th scope="col" style={{width: '620px'}}>Item Name</th>
+                                                                    <th scope="col" className="text-right" style={{width: '230px'}}>Available Balance QTY</th>
+                                                                    <th scope="col" className="text-right" style={{width: '170px'}}>Unit Price</th>
+                                                                    <th scope="col" className="text-right" style={{width: '300px'}}>Total Planned CIF ($)</th>
                                                                 </tr>
                                                                 </thead>
                                                                 <tbody>
                                                                 {/* Opening Balance */}
                                                                 <tr className="table-info">
                                                                     <td colSpan={2} className="text-center font-bold">OPENING BALANCE</td>
-                                                                    <td className="text-end font-bold">
+                                                                    <td className="text-right font-bold">
                                                                         {formatIndianNumber(summary.openingBalance, 2)}
                                                                     </td>
-                                                                    <td className="text-end font-bold">-</td>
-                                                                    <td className="text-end font-bold">-</td>
+                                                                    <td className="text-right font-bold">-</td>
+                                                                    <td className="text-right font-bold">-</td>
                                                                 </tr>
 
                                                                 {/* Regular Items */}
@@ -1245,13 +1247,13 @@ export default function ItemPivotReport() {
                                                                     <tr key={itemName}>
                                                                         <td className="text-center">{idx + 1}</td>
                                                                         <td className="font-bold">{itemName}</td>
-                                                                        <td className="text-end">
+                                                                        <td className="text-right">
                                                                             {formatIndianNumber(itemData.available, 2)}
                                                                         </td>
-                                                                        <td className="text-end">
+                                                                        <td className="text-right">
                                                                             {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
                                                                         </td>
-                                                                        <td className="text-end font-semibold">
+                                                                        <td className="text-right font-semibold">
                                                                             {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
                                                                         </td>
                                                                     </tr>
@@ -1280,13 +1282,13 @@ export default function ItemPivotReport() {
                                                                                             <tr key={itemName} className="table-light">
                                                                                                 <td className="text-center">{startIdx + idx + 1}</td>
                                                                                                 <td className="font-bold">{itemName}</td>
-                                                                                                <td className="text-end">
+                                                                                                <td className="text-right">
                                                                                                     {formatIndianNumber(itemData.available, 2)}
                                                                                                 </td>
-                                                                                                <td className="text-end">
+                                                                                                <td className="text-right">
                                                                                                     {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
                                                                                                 </td>
-                                                                                                <td className="text-end font-semibold">
+                                                                                                <td className="text-right font-semibold">
                                                                                                     {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
                                                                                                 </td>
                                                                                             </tr>
@@ -1294,11 +1296,11 @@ export default function ItemPivotReport() {
                                                                                         {/* Balance for this restriction percentage (shared across all items) */}
                                                                                         <tr className="table-warning">
                                                                                             <td colSpan={2} className="text-center font-bold">Balance {percentage}%</td>
-                                                                                            <td className="text-end font-bold">
+                                                                                            <td className="text-right font-bold">
                                                                                                 {formatIndianNumber((groupData as any).sharedRestrictionValue, 2)}
                                                                                             </td>
-                                                                                            <td className="text-end font-bold">-</td>
-                                                                                            <td className="text-end font-bold">-</td>
+                                                                                            <td className="text-right font-bold">-</td>
+                                                                                            <td className="text-right font-bold">-</td>
                                                                                         </tr>
                                                                                     </React.Fragment>
                                                                                 );
@@ -1308,15 +1310,15 @@ export default function ItemPivotReport() {
                                                                 {/* Grand-total row for the Summary table. */}
                                                                 <tr className="table-success">
                                                                     <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
-                                                                    <td className="text-end font-bold">
+                                                                    <td className="text-right font-bold">
                                                                         {formatIndianNumber(summary.totalAvailable || 0, 2)}
                                                                     </td>
-                                                                    <td className="text-end font-bold">
+                                                                    <td className="text-right font-bold">
                                                                         {summary.totalPlannedQty > 0
                                                                             ? (summary.totalPlanned / summary.totalPlannedQty).toFixed(2)
                                                                             : '-'}
                                                                     </td>
-                                                                    <td className="text-end font-bold">
+                                                                    <td className="text-right font-bold">
                                                                         {formatIndianNumber(summary.totalPlanned || 0, 2)}
                                                                     </td>
                                                                 </tr>
@@ -1326,8 +1328,8 @@ export default function ItemPivotReport() {
                                                     </div>
                                                 );
                                             })()}
-                                        </div>
-                                    </div>
+                                        </CardContent>
+                                    </Card>
                                 </div>
                                 );
                             })}
@@ -1336,19 +1338,19 @@ export default function ItemPivotReport() {
                             {activeNormTab && reportData?.norm_notes_conditions?.[activeNormTab] && (
                                 reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 || reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0
                             ) && (
-                                <div className="card mb-4">
-                                    <div className="card-header bg-light">
-                                        <h5 className="mb-0">
+                                <Card className="mb-4">
+                                    <CardHeader>
+                                        <h5 className="flex items-center gap-2 font-semibold">
                                             <Info className="size-4" aria-hidden="true" />
                                             SION Norm {activeNormTab} - Notes & Conditions
                                         </h5>
-                                    </div>
-                                    <div className="card-body">
-                                        <div className="row">
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-4">
                                             {/* Notes Section */}
                                             {reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 && (
                                                 <div>
-                                                    <h6 className="text-primary mb-3">
+                                                    <h6 className="mb-3 flex items-center gap-2 text-primary">
                                                         <StickyNote className="size-4" aria-hidden="true" />
                                                         Notes
                                                     </h6>
@@ -1372,7 +1374,7 @@ export default function ItemPivotReport() {
                                             {/* Conditions Section */}
                                             {reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0 && (
                                                 <div>
-                                                    <h6 className="text-warning mb-3">
+                                                    <h6 className="mb-3 flex items-center gap-2 text-warning">
                                                         <TriangleAlert className="size-4" aria-hidden="true" />
                                                         Conditions
                                                     </h6>
@@ -1393,8 +1395,8 @@ export default function ItemPivotReport() {
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
-                                </div>
+                                    </CardContent>
+                                </Card>
                             )}
                         </div>
                     )}

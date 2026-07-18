@@ -464,7 +464,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     if (initialLoading) return (
-        <div className="min-h-screen bg-[var(--tb-body-bg)]">
+        <div className="min-h-screen bg-background">
             <div className="flex justify-between items-center mb-4 animate-pulse">
                 <div>
                     <div className="h-7 w-48 rounded-md bg-muted block"></div>
@@ -498,7 +498,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     return (
         <div className={cn(
             "flex flex-col",
-            isModal ? "h-full" : "min-h-screen p-6 bg-[var(--tb-sunken)]"
+            isModal ? "h-full" : "min-h-screen p-6 bg-muted/40"
         )}>
             {!isModal && (
                 <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
@@ -727,7 +727,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     <div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                                <thead className="bg-[var(--tb-sunken)] border-b-2 border-border">
+                                <thead className="bg-muted/40 border-b-2 border-border">
                                 <tr>
                                     <th scope="col" className="min-w-[120px] whitespace-nowrap font-semibold text-[12px] p-2">License</th>
                                     <th scope="col" className="min-w-[70px] whitespace-nowrap font-semibold text-[12px] p-2">Serial</th>
@@ -790,7 +790,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 ))}
                                 </tbody>
                                 <tfoot>
-                                <tr className="bg-[var(--tb-sunken)] border-t-2 border-border">
+                                <tr className="bg-muted/40 border-t-2 border-border">
                                     <th scope="row" colSpan={8} className="px-3 py-1.5 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
                                     <td className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</td>
                                     <td className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</td>
@@ -867,13 +867,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                             return (
                                 <div key={item.id} className={cn(
-                                    "mb-2.5 overflow-hidden rounded-[var(--tb-r-md)] bg-[var(--tb-card-bg)]",
+                                    "mb-2.5 overflow-hidden rounded-xl bg-card",
                                     isReady
                                         ? "border border-primary border-l-[4px] shadow-[0_2px_12px_rgba(79,70,229,0.12)]"
                                         : "border border-border/60 border-l-[4px] border-l-border shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
                                 )}>
                                     {/* ── Row 1: Identity bar ── */}
-                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-1.5 bg-[var(--tb-sunken)] border-b border-border">
+                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-1.5 bg-muted/40 border-b border-border">
                                         <button
                                             onClick={async () => {
                                                 try {
@@ -890,11 +890,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <FileText className="size-4" aria-hidden="true" />
                                             {item.license_number}
                                         </button>
-                                        <span className="rounded-[var(--tb-r-sm)] bg-border px-[7px] py-px text-[12px] font-semibold text-muted-foreground">#{item.serial_number}</span>
+                                        <span className="rounded-md bg-border px-[7px] py-px text-[12px] font-semibold text-muted-foreground">#{item.serial_number}</span>
                                         <ConditionBadge type={item.condition_type} size="xs" />
 
                                         {item.hs_code_label && (
-                                            <span className="rounded-[var(--tb-r-sm)] border border-primary/20 bg-primary/5 px-[7px] py-px text-[12px] text-primary">HS: {item.hs_code_label}</span>
+                                            <span className="rounded-md border border-primary/20 bg-primary/5 px-[7px] py-px text-[12px] text-primary">HS: {item.hs_code_label}</span>
                                         )}
                                         {item.notification_number && (
                                             <span className="text-[12px] text-muted-foreground">
@@ -917,7 +917,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     </div>
 
                                     {/* ── Row 2: Compact description + exporter + chips ── */}
-                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-[5px] bg-[var(--tb-card-bg)] border-b border-border/60">
+                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-[5px] bg-card border-b border-border/60">
                                         <span className="font-bold text-[13px] text-foreground">
                                             {item.description}
                                         </span>
@@ -931,7 +931,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     </div>
 
                                     {/* ── Row 3: Stats + Inputs + Action (compact bottom bar) ── */}
-                                    <div className="flex items-center flex-wrap bg-[var(--tb-sunken)]">
+                                    <div className="flex items-center flex-wrap bg-muted/40">
 
                                         {/* Availability stats */}
                                         <div className="flex gap-3 px-3 py-[7px] shrink-0">
@@ -989,7 +989,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         <div className="shrink-0 px-3 py-[7px] flex items-center justify-center">
                                             <button
                                                 className={cn(
-                                                    "flex items-center gap-1.5 rounded-[var(--tb-r-md)] px-4 py-2.5 text-[0.82rem] font-semibold whitespace-nowrap transition-all duration-200",
+                                                    "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[0.82rem] font-semibold whitespace-nowrap transition-all duration-200",
                                                     isReady
                                                         ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground cursor-pointer hover:opacity-90"
                                                         : "bg-muted text-muted-foreground cursor-not-allowed"
@@ -1024,7 +1024,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     )}
 
                     {!tableLoading && availableItems.length === 0 && (
-                        <div className="rounded-[var(--tb-r-md)] border-2 border-dashed border-border bg-[var(--tb-card-bg)]">
+                        <div className="rounded-xl border-2 border-dashed border-border bg-card">
                             <EmptyState
                                 icon={Inbox}
                                 title="No available license items found"

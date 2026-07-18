@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `523`
+- Files audited: `524`
 - Files changed directly: `64`
-- Files requiring dependency recheck: `331`
+- Files requiring dependency recheck: `330`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `331`
+- Files remaining: `330`
 - Total source files tracked: `903`
 - Total source LOC tracked: `240720`
-- Audited LOC: `119328`
-- Remaining LOC: `121386`
+- Audited LOC: `119382`
+- Remaining LOC: `121332`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -126,6 +126,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents removed verified-dead `backend/templates/modals.html`; only stale links from other queued legacy DAdmin templates remained.
 - Phase 11 Documents removed verified-dead `backend/templates/notes.html`; only stale links from other queued legacy DAdmin templates remained.
 - Phase 11 Documents completed `.claude/agents/README.md`; retained live specialist-agent guidance referenced by `CLAUDE.md` and corrected backend verification guidance to use targeted `pytest` or `scripts/testing/run-tests.sh`.
+- Phase 11 Documents completed `.claude/agents/backend-engineer.md`; retained live backend specialist-agent guidance and corrected backend verification guidance to use targeted Django/pytest paths or `scripts/testing/run-tests.sh`.
 
 ## Verification History
 
@@ -1554,6 +1555,9 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 - Phase 11 agents README dependency scan: `CLAUDE.md` references `.claude/agents/README.md`; retained as live repository guidance.
 - Phase 11 agents README verification: script path check passed; `git diff --check` and `git diff --cached --check` clean; runtime backend/frontend gates not applicable to markdown-only source change.
+
+- Phase 11 backend-engineer agent dependency scan: `CLAUDE.md` and `.claude/agents/README.md` reference `.claude/agents/backend-engineer.md`; retained as live repository guidance.
+- Phase 11 backend-engineer agent verification: script path check passed; `git diff --check` and `git diff --cached --check` clean; runtime backend/frontend gates not applicable to markdown-only source change.
 
 ## Blocked Work
 

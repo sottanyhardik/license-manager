@@ -1500,3 +1500,37 @@
 - Remaining Technical Debt:
   - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
 - Status: COMPLETED
+
+
+## .claude/agents/backend-engineer.md
+
+- File Path(s): `.claude/agents/backend-engineer.md`
+- Module: Documents / Specialist backend agent guidance
+- Total LOC: 55
+- Lines Reviewed: 55 plus `CLAUDE.md`, `.claude/agents/README.md`, related agent references, and repository test-runner documentation
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Corrected backend quality-gate guidance from missing root `./run-tests.sh` to targeted Django/pytest paths or `scripts/testing/run-tests.sh` for broader runs.
+- Package Replacements: None; documentation-only correction reused existing repository test tooling.
+- Performance Improvements: None; documentation-only unit.
+- Security Improvements: Reduced stale backend verification guidance that could lead the backend agent to skip validation when the missing root script fails.
+- Dead Code Removed: None; dependency analysis proved the backend agent document is live guidance.
+- Duplicate Logic Removed: None; other agent documents remain separate queued Phase 11 units.
+- Tests Added: None; markdown-only source update.
+- Verification Results:
+  - Dependency scan found live references from `CLAUDE.md`, `.claude/agents/README.md`, `.claude/agents/tech-lead.md`, and `.claude/agents/code-reviewer.md`.
+  - Reviewed every line of the backend agent guide and confirmed it defines backend scope, index-first workflow, engineering standards, quality gates, and output contract.
+  - Test-runner scan confirmed `scripts/testing/run-tests.sh` exists and is executable; root `./run-tests.sh` is not present.
+  - `git diff --check` -> clean before source commit.
+  - `git diff --cached --check` -> clean before source commit.
+  - Backend `pytest`, Ruff, `py_compile`, `compileall`, Django check, and makemigrations check were not run because this unit changed only markdown guidance and no backend runtime source, templates, migrations, or tests.
+  - Frontend ESLint, TypeScript, and production build were not run because this unit changed only markdown guidance and no frontend runtime source.
+  - Security scanners were not run for this markdown-only guidance change; the existing Phase 11 local security-tool availability blocker remains recorded.
+- Source Commit SHA: `4fcec92fb0cca52e7122640a1112ece89e35a47b`
+- Source Commit Timestamp: `2026-07-18T05:37:58+05:30`
+- Source Commit Summary: `docs(agents): correct backend engineer test runner`
+- Blocked Items:
+  - None for this markdown-only unit.
+- Remaining Technical Debt:
+  - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
+- Status: COMPLETED

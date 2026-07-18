@@ -29,17 +29,18 @@ const STATUS_LABEL = {
     [TASK_STATUS.REJECTED]: "Rejected",
 };
 
-const STATUS_BADGE = {
-    [TASK_STATUS.PENDING]: "bg-warning text-dark",
-    [TASK_STATUS.IN_PROGRESS]: "bg-info text-dark",
-    [TASK_STATUS.COMPLETED]: "bg-success",
-    [TASK_STATUS.REJECTED]: "bg-secondary",
+// Tailwind semantic classes — no Bootstrap dependency
+const STATUS_BADGE: Record<string, string> = {
+    [TASK_STATUS.PENDING]:     "bg-warning/15 text-warning border border-warning/25",
+    [TASK_STATUS.IN_PROGRESS]: "bg-info/15 text-info border border-info/25",
+    [TASK_STATUS.COMPLETED]:   "bg-success/15 text-success border border-success/25",
+    [TASK_STATUS.REJECTED]:    "bg-muted text-muted-foreground border border-border",
 };
 
-const PRIORITY_BADGE = {
-    [TASK_PRIORITY.LOW]: "bg-light text-dark border",
-    [TASK_PRIORITY.NORMAL]: "bg-light text-dark border",
-    [TASK_PRIORITY.HIGH]: "bg-danger",
+const PRIORITY_BADGE: Record<string, string> = {
+    [TASK_PRIORITY.LOW]:    "bg-muted text-muted-foreground border border-border",
+    [TASK_PRIORITY.NORMAL]: "bg-primary/10 text-primary border border-primary/20",
+    [TASK_PRIORITY.HIGH]:   "bg-destructive/15 text-destructive border border-destructive/25",
 };
 
 const STATUS_FILTERS = [
@@ -422,36 +423,21 @@ export default function TaskDrawer({ show, onClose }) {
                 }}
             >
                 {/* Header */}
-                <div
-                    className="flex items-center justify-between"
-                    style={{
-                        padding: "18px 20px",
-                        borderBottom: "1px solid var(--border-subtle)",
-                    }}
-                >
-                    <div className="flex items-center" style={{ gap: 10 }}>
+                <div className="flex items-center justify-between border-b border-border px-5 py-[18px]">
+                    <div className="flex items-center gap-2.5">
                         <span
                             aria-hidden="true"
-                            style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                width: 28,
-                                height: 28,
-                                borderRadius: 8,
-                                background: "var(--indigo-50)",
-                                color: "var(--primary-color)",
-                            }}
+                            className="inline-flex size-7 items-center justify-center rounded-lg bg-indigo-50 text-primary"
                         >
                             <CheckSquare className="size-4" />
                         </span>
-                        <span style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.01em" }}>Tasks</span>
+                        <span className="text-base font-semibold tracking-tight">Tasks</span>
                     </div>
                     <button
-                        className="flex items-center gap-1.5 rounded border border-border bg-muted px-2.5 py-1.5 text-xs font-medium cursor-pointer hover:bg-muted/80"
+                        className="inline-flex size-8 cursor-pointer items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/80"
                         onClick={onClose}
                         aria-label="Close"
-                        style={{ width: 32, height: 32, padding: 0, borderRadius: 8 }}
+                        type="button"
                     >
                         <X className="size-4" />
                     </button>
@@ -460,11 +446,7 @@ export default function TaskDrawer({ show, onClose }) {
                 {/* Quick create + voice */}
                 <form
                     onSubmit={handleSubmit}
-                    style={{
-                        padding: "16px 20px",
-                        background: "var(--surface-sunken)",
-                        borderBottom: "1px solid var(--border-subtle)",
-                    }}
+                    className="border-b border-border bg-muted/40 px-5 py-4"
                 >
                     <div className="flex gap-2 mb-2">
                         <input
@@ -477,7 +459,7 @@ export default function TaskDrawer({ show, onClose }) {
                         <button
                             type="button"
                             onClick={toggleSpeech}
-                            className={`btn btn-sm ${speech.listening ? "btn-danger" : "btn-outline-primary"}`}
+                            className={`inline-flex size-8 shrink-0 items-center justify-center rounded-md border text-sm transition-colors ${speech.listening ? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20" : "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"}`}
                             title={speech.isSupported ? "Voice input" : "Voice not supported in this browser"}
                             disabled={!speech.isSupported}
                         >
@@ -486,35 +468,18 @@ export default function TaskDrawer({ show, onClose }) {
                     </div>
 
                     {speech.listening && (
-                        <div
-                            className="small mb-2"
-                            style={{
-                                minHeight: 18,
-                                color: "var(--tb-text-secondary)",
-                                background: "var(--tb-card-bg)",
-                                border: "1px solid var(--tb-border)",
-                                borderRadius: 8,
-                                padding: "8px 10px",
-                                marginTop: 4,
-                            }}
-                        >
-                            <span style={{ color: "var(--tb-danger)", fontWeight: 500 }}>
+                        <div className="mb-2 mt-1 min-h-[18px] rounded-lg border border-border bg-card px-2.5 py-2 text-sm text-muted-foreground">
+                            <span className="font-medium text-destructive">
                                 <span
                                     aria-hidden="true"
-                                    style={{
-                                        display: "inline-block",
-                                        width: 8, height: 8, borderRadius: 999,
-                                        background: "var(--tb-danger)",
-                                        marginRight: 6,
-                                        verticalAlign: "middle",
-                                        animation: "tb-skel 1.2s ease-in-out infinite",
-                                    }}
+                                    className="mr-1.5 inline-block size-2 rounded-full bg-destructive align-middle"
+                                    style={{ animation: "tb-skel 1.2s ease-in-out infinite" }}
                                 />
                                 Listening
                             </span>{" "}— say <code>next</code> to split, <code>assign to NAME</code>, or include <code>urgent</code> for high priority.
                             {speech.interim
-                                ? <em className="d-block mt-1" style={{ color: "var(--tb-text-tertiary)" }}>"{speech.interim}"</em>
-                                : <span className="d-block mt-1" style={{ color: "var(--tb-text-tertiary)", fontStyle: "italic" }}>
+                                ? <em className="mt-1 block" style={{ color: "var(--tb-text-tertiary)" }}>"{speech.interim}"</em>
+                                : <span className="mt-1 block italic" style={{ color: "var(--tb-text-tertiary)" }}>
                                       Waiting for audio…
                                   </span>
                             }
@@ -523,32 +488,24 @@ export default function TaskDrawer({ show, onClose }) {
 
                     {!speech.listening && speech.error && (
                         <div
-                            className="small mb-2 flex items-start"
+                            className="mb-2 mt-1 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-sm text-destructive"
                             role="alert"
-                            style={{
-                                gap: 8,
-                                color: "var(--tb-danger-text)",
-                                background: "var(--tb-danger-soft)",
-                                border: "1px solid var(--tb-danger-border)",
-                                borderRadius: 8,
-                                padding: "8px 10px",
-                                marginTop: 4,
-                            }}
                         >
                             <AlertCircle className="size-4" aria-hidden="true" />
-                            <div style={{ flex: 1 }}>{speech.error.message}</div>
+                            <div className="flex-1">{speech.error.message}</div>
                             <button
                                 type="button"
-                                className="btn-close btn-sm"
+                                className="mt-0.5 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded text-current opacity-60 hover:opacity-100"
                                 aria-label="Dismiss"
                                 onClick={speech.clearError}
-                                style={{ fontSize: "0.6rem", marginTop: 2 }}
-                            />
+                            >
+                                <X className="size-3" />
+                            </button>
                         </div>
                     )}
 
                     <div className="flex flex-wrap gap-2">
-                        <div className="col-6">
+                        <div className="flex-1 min-w-0">
                             <select
                                 className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                 value={draft.priority}
@@ -559,10 +516,10 @@ export default function TaskDrawer({ show, onClose }) {
                                 <option value={TASK_PRIORITY.HIGH}>High</option>
                             </select>
                         </div>
-                        <div className="col-6">
+                        <div className="flex-1 min-w-0">
                             <input
                                 type="date"
-                                className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
+                                className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                 value={draft.due_date}
                                 onChange={(e) => setDraft(d => ({ ...d, due_date: e.target.value }))}
                             />
@@ -599,15 +556,7 @@ export default function TaskDrawer({ show, onClose }) {
                 </form>
 
                 {/* Filters */}
-                <div
-                    className="flex items-center"
-                    style={{
-                        padding: "12px 20px",
-                        gap: 8,
-                        background: "var(--surface-raised)",
-                        borderBottom: "1px solid var(--border-subtle)",
-                    }}
-                >
+                <div className="flex items-center gap-2 border-b border-border bg-card px-5 py-3">
                     <input
                         className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
                         placeholder="Search…"
@@ -615,8 +564,7 @@ export default function TaskDrawer({ show, onClose }) {
                         onChange={(e) => setSearch(e.target.value)}
                     />
                     <select
-                        className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
-                        style={{ width: 130 }}
+                        className="flex h-8 w-[130px] shrink-0 rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
                     >
@@ -627,11 +575,11 @@ export default function TaskDrawer({ show, onClose }) {
                 </div>
 
                 {/* List */}
-                <div className="flex-grow-1" style={{ overflowY: "auto" }}>
+                <div className="flex-grow overflow-y-auto">
                     {isLoading && (
-                        <div style={{ padding: "16px 20px" }}>
-                            <div className="skeleton" style={{ height: 14, width: "70%", marginBottom: 10 }} />
-                            <div className="skeleton" style={{ height: 12, width: "45%" }} />
+                        <div className="px-5 py-4">
+                            <div className="skeleton mb-2.5 h-[14px] w-[70%]" />
+                            <div className="skeleton h-3 w-[45%]" />
                         </div>
                     )}
                     {!isLoading && tasks.length === 0 && (
@@ -653,43 +601,36 @@ export default function TaskDrawer({ show, onClose }) {
                         return (
                             <div
                                 key={task.id}
-                                className="task-drawer-row"
-                                style={{
-                                    padding: "12px 20px",
-                                    borderBottom: "1px solid var(--border-subtle)",
-                                }}
+                                className="border-b border-border px-5 py-3"
                             >
                                 <div className="flex items-start gap-2">
                                     <input
                                         type="checkbox"
-                                        className="form-check-input mt-1"
+                                        className="mt-1 size-4 shrink-0 cursor-pointer rounded accent-primary"
                                         checked={task.status === TASK_STATUS.COMPLETED}
                                         onChange={() => handleComplete(task)}
                                         title={task.status === TASK_STATUS.COMPLETED ? "Reopen" : "Mark complete"}
                                     />
-                                    <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                                    <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <span style={{
-                                                textDecoration: task.status === TASK_STATUS.COMPLETED ? "line-through" : "none",
-                                                fontWeight: 500,
-                                            }}>
+                                            <span className={`font-medium ${task.status === TASK_STATUS.COMPLETED ? "line-through" : ""}`}>
                                                 {task.title}
                                             </span>
-                                            <span className={`badge ${STATUS_BADGE[task.status] || "bg-secondary"}`} style={{ fontSize: "0.65rem" }}>
+                                            <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_BADGE[task.status] || "bg-muted text-muted-foreground border border-border"}`}>
                                                 {STATUS_LABEL[task.status] || task.status}
                                             </span>
                                             {bouncedBack && (
-                                                <span className="chip chip-warning" style={{ fontSize: "0.65rem" }}>
+                                                <span className="inline-flex items-center rounded-full border border-warning/25 bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
                                                     Bounced back
                                                 </span>
                                             )}
                                             {task.priority === TASK_PRIORITY.HIGH && (
-                                                <span className={`badge ${PRIORITY_BADGE[task.priority]}`} style={{ fontSize: "0.65rem" }}>
+                                                <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${PRIORITY_BADGE[task.priority]}`}>
                                                     High
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="small text-muted">
+                                        <div className="text-sm text-muted-foreground">
                                             → <strong>{assigneeIsSelf ? `${assigneeLabel} (you)` : assigneeLabel}</strong>
                                             {task.assigned_on && <span> · assigned {formatDate(task.assigned_on)}</span>}
                                             {!mine && task.created_by_username && (
@@ -698,10 +639,7 @@ export default function TaskDrawer({ show, onClose }) {
                                             {task.due_date && <span> · due {task.due_date}</span>}
                                         </div>
                                         {bouncedBack && (
-                                            <div
-                                                className="small mt-1 p-2 rounded"
-                                                style={{ background: "#fff3cd", border: "1px solid #ffeeba" }}
-                                            >
+                                            <div className="mt-1 rounded bg-amber-50 border border-amber-200 p-2 text-sm">
                                                 <strong>Rejected by {task.rejected_by_username || "assignee"}</strong>
                                                 {task.rejection_reason && <span>: {task.rejection_reason}</span>}
                                                 {!task.rejection_reason && <span> (no reason given)</span>}
@@ -715,13 +653,13 @@ export default function TaskDrawer({ show, onClose }) {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="btn-group btn-group-sm">
+                                    <div className="flex items-center gap-1">
                                         <button
                                             className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                             onClick={() => setExpanded(open ? null : task.id)}
                                             title="Details"
                                         >
-                                            <span className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}><ChevronDown className="size-4" /></span>
+                                            <ChevronDown className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} />
                                         </button>
                                         {!closed && (
                                             <button
@@ -758,8 +696,8 @@ export default function TaskDrawer({ show, onClose }) {
                                                 }
                                             }}
                                         />
-                                        <div className="flex flex-wrap gap-2 mb-2">
-                                            <div className="col-6">
+                                        <div className="mb-2 flex flex-wrap gap-2">
+                                            <div className="flex-1 min-w-0">
                                                 <select
                                                     className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                                     value={task.priority}
@@ -770,10 +708,10 @@ export default function TaskDrawer({ show, onClose }) {
                                                     <option value={TASK_PRIORITY.HIGH}>High</option>
                                                 </select>
                                             </div>
-                                            <div className="col-6">
+                                            <div className="flex-1 min-w-0">
                                                 <input
                                                     type="date"
-                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
+                                                    className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
                                                     value={task.due_date || ""}
                                                     onChange={(e) => handleInlineUpdate(task, { due_date: e.target.value || null })}
                                                 />
@@ -793,8 +731,8 @@ export default function TaskDrawer({ show, onClose }) {
                                         </div>
 
                                         {/* Remarks */}
-                                        <div className="border rounded p-2" style={{ background: "var(--tb-sunken)" }}>
-                                            <div className="small font-semibold mb-1">Remarks</div>
+                                        <div className="rounded border border-border bg-muted/40 p-2">
+                                            <div className="mb-1 text-xs font-semibold">Remarks</div>
                                             <div className="flex gap-2 mb-2">
                                                 <input
                                                     className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring "
@@ -812,12 +750,12 @@ export default function TaskDrawer({ show, onClose }) {
                                                 </button>
                                             </div>
                                             {(task.remarks || []).length === 0 && (
-                                                <div className="small text-muted">No remarks yet.</div>
+                                                <div className="text-xs text-muted-foreground">No remarks yet.</div>
                                             )}
                                             {(task.remarks || []).map(r => (
-                                                <div key={r.id} className="small mb-1">
+                                                <div key={r.id} className="mb-1 text-xs">
                                                     <strong>{r.created_by_username}</strong>{" "}
-                                                    <span className="text-muted">· {formatDate(r.created_on)}</span>
+                                                    <span className="text-muted-foreground">· {formatDate(r.created_on)}</span>
                                                     <div>{r.text}</div>
                                                 </div>
                                             ))}

@@ -6,6 +6,10 @@ import {
     Hourglass, Network, ReceiptText, FileSpreadsheet, BarChart3,
     Receipt, Clock, Inbox, ArrowRight,
 } from "lucide-react";
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+    ResponsiveContainer, Cell,
+} from "recharts";
 
 import api from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
@@ -19,11 +23,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function SkeletonStat() {
     return (
-        <div className="flex items-start gap-3.5 rounded-xl border border-border bg-card p-4 shadow-sm">
-            <Skeleton className="size-10 rounded-lg" />
-            <div className="flex-1 space-y-2">
-                <Skeleton className="h-3 w-3/5" />
-                <Skeleton className="h-6 w-2/5" />
+        <div className="flex items-center gap-3.5 rounded-xl border border-border/70 bg-card px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+            <Skeleton className="size-10 shrink-0 rounded-lg" />
+            <div className="flex-1 space-y-2.5">
+                <Skeleton className="h-2.5 w-3/5 rounded-full" />
+                <Skeleton className="h-6 w-2/5 rounded-md" />
             </div>
         </div>
     );
@@ -45,23 +49,6 @@ function SectionTitle({ icon: Icon, tone = "primary", title, subtitle, action }:
                 {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
             </div>
             {action}
-        </div>
-    );
-}
-
-function BarRow({ label, value, pct }) {
-    return (
-        <div>
-            <div className="mb-1 flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">{label}</span>
-                <span className="text-xs font-semibold tabular-nums text-foreground">{value}</span>
-            </div>
-            <div className="h-[7px] overflow-hidden rounded-full border border-border/60 bg-muted">
-                <div
-                    className="h-full rounded-full transition-[width] duration-700"
-                    style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--tb-brand), var(--tb-brand-hover))" }}
-                />
-            </div>
         </div>
     );
 }
@@ -123,7 +110,11 @@ export default function Dashboard() {
     const daysUntil = (d: string) => Math.ceil((new Date(d).getTime() - new Date().getTime()) / 86400000);
     const today = new Date();
     const dateLabel = today.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-    const maxBoe = boeMonthlyData.length ? Math.max(...boeMonthlyData.map((d) => d.count ?? d.value ?? 0), 1) : 1;
+    // Normalize BOE monthly data keys for recharts
+    const boeChartData = boeMonthlyData.map((d, i) => ({
+        month: d.month || d.label || `M${i + 1}`,
+        count: Number(d.count ?? d.value ?? 0),
+    }));
 
     const goExpiringSoon = () => {
         const t = new Date().toISOString().split("T")[0];
@@ -204,10 +195,10 @@ export default function Dashboard() {
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="border-b border-border bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                            <th className="px-4 py-2">License No.</th>
-                                            <th className="px-4 py-2">Expiry</th>
-                                            <th className="px-4 py-2 text-right">Balance (CIF)</th>
-                                            <th className="px-4 py-2 text-center">Days</th>
+                                            <th scope="col" className="px-4 py-2">License No.</th>
+                                            <th scope="col" className="px-4 py-2">Expiry</th>
+                                            <th scope="col" className="px-4 py-2 text-right">Balance (CIF)</th>
+                                            <th scope="col" className="px-4 py-2 text-center">Days</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -234,17 +225,63 @@ export default function Dashboard() {
 
                 {canSeeBOE && (
                     <Card className="xl:col-span-3">
-                        <CardHeader className="border-b"><SectionTitle icon={BarChart3} title="BOE Monthly Trend" /></CardHeader>
-                        <CardContent className="max-h-80 overflow-y-auto pt-4">
-                            {boeMonthlyData.length > 0 ? (
-                                <div className="flex flex-col gap-2.5">
-                                    {boeMonthlyData.map((row, i) => {
-                                        const v = row.count ?? row.value ?? 0;
-                                        return <BarRow key={i} label={row.month || row.label || `Month ${i + 1}`} value={v} pct={maxBoe > 0 ? (v / maxBoe) * 100 : 0} />;
-                                    })}
-                                </div>
+                        <CardHeader className="border-b">
+                            <SectionTitle icon={BarChart3} title="BOE Monthly Trend" />
+                        </CardHeader>
+                        <CardContent className="pt-4 pb-2">
+                            {boeChartData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={220}>
+                                    <BarChart
+                                        data={boeChartData}
+                                        margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
+                                        barCategoryGap="30%"
+                                    >
+                                        <CartesianGrid
+                                            strokeDasharray="3 3"
+                                            stroke="var(--tb-border-soft)"
+                                            vertical={false}
+                                        />
+                                        <XAxis
+                                            dataKey="month"
+                                            tick={{ fontSize: 10, fill: "var(--tb-text-tertiary)", fontFamily: "var(--tb-font)" }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                        />
+                                        <YAxis
+                                            allowDecimals={false}
+                                            tick={{ fontSize: 10, fill: "var(--tb-text-tertiary)", fontFamily: "var(--tb-font)" }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            width={28}
+                                        />
+                                        <Tooltip
+                                            cursor={{ fill: "var(--tb-brand-50)" }}
+                                            contentStyle={{
+                                                background: "var(--tb-card-bg)",
+                                                border: "1px solid var(--tb-border)",
+                                                borderRadius: "var(--tb-r-md)",
+                                                fontSize: 12,
+                                                fontFamily: "var(--tb-font)",
+                                                boxShadow: "var(--tb-shadow-2)",
+                                                padding: "6px 10px",
+                                            }}
+                                            labelStyle={{ color: "var(--tb-text)", fontWeight: 600, marginBottom: 2 }}
+                                            itemStyle={{ color: "var(--tb-text-secondary)" }}
+                                            formatter={(value: number) => [value, "BOEs"]}
+                                        />
+                                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                                            {boeChartData.map((_, idx) => (
+                                                <Cell
+                                                    key={idx}
+                                                    fill="var(--tb-brand)"
+                                                    fillOpacity={0.85}
+                                                />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
                             ) : (
-                                <EmptyState icon={BarChart3} title="No data yet" />
+                                <EmptyState icon={BarChart3} title="No data yet" description="BOE entries will appear here once created" />
                             )}
                         </CardContent>
                     </Card>
@@ -260,9 +297,9 @@ export default function Dashboard() {
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="border-b border-border bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                            <th className="px-4 py-2">BOE No.</th>
-                                            <th className="px-4 py-2">Date</th>
-                                            <th className="px-4 py-2">Importer</th>
+                                            <th scope="col" className="px-4 py-2">BOE No.</th>
+                                            <th scope="col" className="px-4 py-2">Date</th>
+                                            <th scope="col" className="px-4 py-2">Importer</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -294,10 +331,10 @@ export default function Dashboard() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-border bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                        <th className="px-4 py-2">Date</th>
-                                        <th className="px-4 py-2">Item Name</th>
-                                        <th className="px-4 py-2 text-right">Quantity</th>
-                                        <th className="px-4 py-2 text-right">CIF FC</th>
+                                        <th scope="col" className="px-4 py-2">Date</th>
+                                        <th scope="col" className="px-4 py-2">Item Name</th>
+                                        <th scope="col" className="px-4 py-2 text-right">Quantity</th>
+                                        <th scope="col" className="px-4 py-2 text-right">CIF FC</th>
                                     </tr>
                                 </thead>
                                 <tbody>

@@ -26,7 +26,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Check, CheckCircle, CheckCircle2, ExternalLink, Eye, FileText, Info, Loader2, MoreHorizontal, PackagePlus, Paperclip, QrCode, Receipt, RefreshCw, Table, TriangleAlert, Wand2, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Check, CheckCircle, ExternalLink, Eye, FileText, Info, Loader2, MoreHorizontal, PackagePlus, Receipt, Table, TriangleAlert, Wand2, X } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 /**
  * Generic Master Form for Create/Edit
@@ -36,6 +37,36 @@ import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Check, CheckCircle, Chec
  * - Edit: /masters/:entity/:id/edit OR /licenses/:id/edit
  */
 
+/** Shared field name map used for both frontend validation messages and backend error formatting. */
+const FIELD_NAME_MAP: Record<string, string> = {
+    'license_number': 'License Number',
+    'license_date': 'License Date',
+    'license_expiry_date': 'License Expiry Date',
+    'exporter': 'Exporter',
+    'port': 'Port',
+    'export_license': 'Export Items',
+    'import_license': 'Import Items',
+    'license_documents': 'Documents',
+    'hs_code': 'HS Code',
+    'description': 'Description',
+    'quantity': 'Quantity',
+    'serial_number': 'Serial Number',
+    'type': 'Type',
+    'file': 'File',
+    'net_quantity': 'Net Quantity',
+    'norm_class': 'Norm Class',
+    'unit': 'Unit',
+    'cif_fc': 'CIF (FC)',
+    'cif_inr': 'CIF (INR)',
+};
+
+interface MasterFormProps {
+    entityName?: string;
+    recordId?: string | number;
+    isModal?: boolean;
+    onClose?: () => void;
+    onSuccess?: (id: number | string) => void;
+}
 
 export default function MasterForm({
     entityName: propEntityName,
@@ -43,7 +74,7 @@ export default function MasterForm({
     isModal = false,
     onClose,
     onSuccess
-}) {
+}: MasterFormProps) {
     const {entity, id} = useParams();
     const location = useLocation();
     const navigate = useNavigate();
@@ -685,12 +716,12 @@ export default function MasterForm({
     const handleFetchImports = async (exportIndex, exportItem) => {
         // Validate required fields
         if (!exportItem.norm_class) {
-            alert("Please select a Norm Class first");
+            toast.error("Please select a Norm Class first");
             return;
         }
 
         if (!exportItem.start_serial_number) {
-            alert("Please enter Start Serial Number first");
+            toast.error("Please enter Start Serial Number first");
             return;
         }
 
@@ -699,7 +730,7 @@ export default function MasterForm({
             const {data: sionData} = await api.get(`masters/sion-classes/${exportItem.norm_class}/`);
 
             if (!sionData.import_norm || sionData.import_norm.length === 0) {
-                alert("No import items found for this SION norm class");
+                toast.error("No import items found for this SION norm class");
                 return;
             }
 
@@ -949,28 +980,9 @@ export default function MasterForm({
 
             // Build user-friendly error messages
             const errorMessages = [];
-            const fieldNameMap = {
-                'license_number': 'License Number',
-                'license_date': 'License Date',
-                'license_expiry_date': 'License Expiry Date',
-                'exporter': 'Exporter',
-                'port': 'Port',
-                'export_license': 'Export Items',
-                'import_license': 'Import Items',
-                'license_documents': 'Documents',
-                'hs_code': 'HS Code',
-                'description': 'Description',
-                'quantity': 'Quantity',
-                'serial_number': 'Serial Number',
-                'type': 'Type',
-                'file': 'File',
-                'net_quantity': 'Net Quantity',
-                'norm_class': 'Norm Class',
-                'unit': 'Unit'
-            };
 
             Object.entries(validationErrors).forEach(([field, fieldErrors]) => {
-                const friendlyName = fieldNameMap[field] || field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const friendlyName = FIELD_NAME_MAP[field] || field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
                 if (Array.isArray(fieldErrors)) {
                     // Check if it's an array of error objects (nested items)
@@ -978,7 +990,7 @@ export default function MasterForm({
                         fieldErrors.forEach((itemErrors, index) => {
                             if (itemErrors && typeof itemErrors === 'object') {
                                 Object.entries(itemErrors).forEach(([subField, subErrors]) => {
-                                    const subName = fieldNameMap[subField] || subField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                    const subName = FIELD_NAME_MAP[subField] || subField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                                     const message = Array.isArray(subErrors) ? subErrors.join(', ') : subErrors;
                                     errorMessages.push(`${friendlyName} #${index + 1} - ${subName}: ${message}`);
                                 });
@@ -1221,27 +1233,6 @@ export default function MasterForm({
 
                 // Create a user-friendly error message with better field names
                 const errorMessages = [];
-                const fieldNameMap = {
-                    'license_number': 'License Number',
-                    'license_date': 'License Date',
-                    'license_expiry_date': 'License Expiry Date',
-                    'exporter': 'Exporter',
-                    'port': 'Port',
-                    'export_license': 'Export Items',
-                    'import_license': 'Import Items',
-                    'license_documents': 'Documents',
-                    'hs_code': 'HS Code',
-                    'description': 'Description',
-                    'quantity': 'Quantity',
-                    'serial_number': 'Serial Number',
-                    'type': 'Type',
-                    'file': 'File',
-                    'net_quantity': 'Net Quantity',
-                    'norm_class': 'Norm Class',
-                    'unit': 'Unit',
-                    'cif_fc': 'CIF (FC)',
-                    'cif_inr': 'CIF (INR)'
-                };
 
                 // Helper function to get friendly field name
                 const getFriendlyFieldName = (fieldPath) => {
@@ -1249,17 +1240,17 @@ export default function MasterForm({
                     const match = fieldPath.match(/^(\w+)(?:\[(\d+)\])?\.?(\w+)?/);
                     if (match) {
                         const [, mainField, index, subField] = match;
-                        const mainName = fieldNameMap[mainField] || mainField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        const mainName = FIELD_NAME_MAP[mainField] || mainField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
                         if (index !== undefined && subField) {
-                            const subName = fieldNameMap[subField] || subField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                            const subName = FIELD_NAME_MAP[subField] || subField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                             return `${mainName} #${parseInt(index) + 1} - ${subName}`;
                         } else if (index !== undefined) {
                             return `${mainName} #${parseInt(index) + 1}`;
                         }
                         return mainName;
                     }
-                    return fieldNameMap[fieldPath] || fieldPath.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    return FIELD_NAME_MAP[fieldPath] || fieldPath.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 };
 
                 // Helper function to process errors recursively
@@ -1352,7 +1343,7 @@ export default function MasterForm({
         }
     };
 
-    const renderField = (fieldName) => {
+    const renderField = (fieldName: string, fieldId?: string) => {
         const fieldMeta = metadata.field_meta?.[fieldName] || {};
 
         // For m2m fields, default to empty array instead of empty string
@@ -1372,11 +1363,12 @@ export default function MasterForm({
                 <div className="w-full">
                     {/* @ts-expect-error DatePicker onChange type mismatch */}
                     <DatePicker
+                        id={fieldId}
                         selected={parseDate(value)}
                         onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
                         className={cn("flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring aria-invalid:border-destructive", errorClass)}
-                        wrapperClassName="w-100 d-block"
+                        wrapperClassName="w-full block"
                         placeholderText="Select date"
                         isClearable
                         showYearDropdown
@@ -1473,6 +1465,7 @@ export default function MasterForm({
         if (fieldName.includes("address") || fieldName.includes("description") || fieldName.includes("note")) {
             return (
                 <Textarea
+                    id={fieldId}
                     className={errorClass}
                     aria-invalid={hasError || undefined}
                     rows={3}
@@ -1486,6 +1479,7 @@ export default function MasterForm({
         if (fieldMeta.type === "number" || fieldName.includes("price") || fieldName.includes("rate") || fieldName.includes("quantity") || fieldName.includes("duty")) {
             return (
                 <Input
+                    id={fieldId}
                     type="number"
                     step={fieldMeta.step || "0.01"}
                     className={errorClass}
@@ -1499,6 +1493,7 @@ export default function MasterForm({
         // Default text input
         return (
             <Input
+                id={fieldId}
                 type="text"
                 className={errorClass}
                 aria-invalid={hasError || undefined}
@@ -1560,7 +1555,7 @@ export default function MasterForm({
     }
 
     return (
-        <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
+        <div className="min-h-screen bg-background">
             {/* Compact Header */}
             <div className="flex justify-between items-center mb-4">
                 <div>
@@ -1618,20 +1613,20 @@ export default function MasterForm({
                 </div>
                 <div className="p-6">
                     {error && (
-                        <div className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
-                            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                            <div>
+                        <Alert variant="destructive" className="mb-4">
+                            <TriangleAlert className="size-4" />
+                            <AlertDescription>
                                 <strong>Validation Error</strong>
                                 <div className="mt-1 whitespace-pre-wrap text-sm">{error}</div>
-                            </div>
-                        </div>
+                            </AlertDescription>
+                        </Alert>
                     )}
 
                     {fetchingAllotment && (
-                        <div className="mb-4 flex items-center gap-2 rounded-lg border border-info/30 bg-info/10 px-3.5 py-2.5 text-[13px] text-info">
-                            <span className="inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true"></span>
-                            Fetching allotment details…
-                        </div>
+                        <Alert className="mb-4">
+                            <Loader2 className="size-4 animate-spin" />
+                            <AlertDescription>Fetching allotment details…</AlertDescription>
+                        </Alert>
                     )}
 
                     {/* Edit mode: show saved BOE copy link + allow re-upload */}
@@ -1739,14 +1734,15 @@ export default function MasterForm({
                                 const helpText = fieldMeta.help_text;
                                 const fieldError = fieldErrors[field];
                                 const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
+                                const fieldId = `field-${field}`;
                                 return (
                                     <div key={field} className={col}>
-                                        <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">
-                                            {label}{fieldMeta.required && <span className="text-destructive ml-1">*</span>}
+                                        <label htmlFor={fieldId} className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                                            {label}{fieldMeta.required && <span className="ml-1 text-destructive">*</span>}
                                         </label>
-                                        {renderField(field)}
+                                        {renderField(field, fieldId)}
                                         {hasError && (
-                                            <div className="mt-1 text-[11.5px] text-destructive block">
+                                            <div className="mt-1 flex items-center gap-1 text-xs text-destructive">
                                                 <AlertCircle className="size-4" aria-hidden="true" />
                                                 {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
                                             </div>
@@ -1838,21 +1834,31 @@ export default function MasterForm({
                                                     const hasErrors = (fieldErrors[nestedKey] || []).some(Boolean);
                                                     const label = tabLabels[nestedKey] || nestedKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                                                     return (
-                                                        <li key={nestedKey} className="nav-item">
+                                                        <li key={nestedKey} role="presentation">
                                                             <button
+                                                                role="tab"
+                                                                aria-selected={isActive}
                                                                 type="button"
-                                                                className={cn("flex cursor-pointer items-center gap-2 rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors", isActive ? 'border-border bg-card text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                                                                className={cn(
+                                                                    "flex cursor-pointer items-center gap-2 rounded-t-md border border-b-0 px-4 py-2 text-[0.83rem] font-medium transition-colors",
+                                                                    isActive
+                                                                        ? 'border-border bg-card'
+                                                                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                                                                )}
+                                                                style={isActive ? { color: entityColor, borderColor: `${entityColor} ${entityColor} white` } : undefined}
                                                                 onClick={() => setActiveNestedTab(nestedKey)}
-                                                                style={{ fontSize: '0.83rem', fontWeight: isActive ? '600' : '500', padding: '8px 16px', color: isActive ? entityColor : 'var(--tb-text-secondary)', borderColor: isActive ? `${entityColor} ${entityColor} white` : 'transparent', borderRadius: '8px 8px 0 0' }}
                                                             >
                                                                 <Table className="size-3.5" />
                                                                 {label}
                                                                 {count > 0 && (
-                                                                    <span className="badge rounded-pill" style={{ backgroundColor: isActive ? entityColor : 'var(--tb-border-soft)', color: isActive ? 'white' : 'var(--tb-text-secondary)', fontSize: 11, padding: '2px 7px' }}>
+                                                                    <span
+                                                                        className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium", isActive ? 'text-white' : 'bg-muted text-muted-foreground')}
+                                                                        style={isActive ? { backgroundColor: entityColor } : undefined}
+                                                                    >
                                                                         {count}
                                                                     </span>
                                                                 )}
-                                                                {hasErrors && <AlertCircle className="size-4" aria-hidden="true" />}
+                                                                {hasErrors && <AlertCircle className="size-4 text-destructive" aria-hidden="true" />}
                                                             </button>
                                                         </li>
                                                     );

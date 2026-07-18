@@ -1361,7 +1361,7 @@ export default function ItemPivotReport() {
                                                                 <div key={index} className="list-group-item border-start border-primary border-3">
                                                                     <div className="flex w-full justify-between items-start">
                                                                         <span className="chip chip-primary mr-2">{index + 1}</span>
-                                                                        <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
+                                                                        <p className="mb-0 flex-grow whitespace-pre-wrap">
                                                                             {note.note_text}
                                                                         </p>
                                                                     </div>
@@ -1385,7 +1385,7 @@ export default function ItemPivotReport() {
                                                                 <div key={index} className="list-group-item border-start border-warning border-3">
                                                                     <div className="flex w-full justify-between items-start">
                                                                         <span className="chip chip-warning mr-2">{index + 1}</span>
-                                                                        <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
+                                                                        <p className="mb-0 flex-grow whitespace-pre-wrap">
                                                                             {condition.condition_text}
                                                                         </p>
                                                                     </div>

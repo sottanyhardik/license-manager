@@ -1,62 +1,34 @@
 /**
  * Premium loading fallbacks — skeleton-first, no spinners for page loads.
+ * All inline styles converted to Tailwind utilities.
  */
 import { ShieldCheck } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function PageLoader() {
     return (
-        <div
-            style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                minHeight: 360,
-                flexDirection: "column",
-                gap: 12,
-            }}
-        >
+        <div className="flex min-h-[360px] flex-col items-center justify-center gap-3">
             <span
-                className="inline-block size-7 animate-spin rounded-full border-2 border-primary border-t-transparent"
+                className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent"
                 role="status"
                 aria-label="Loading"
             />
-            <span style={{ fontSize: 13, color: "var(--tb-text-tertiary)" }}>Loading…</span>
+            <span className="text-[13px] text-muted-foreground">Loading…</span>
         </div>
     );
 }
 
 export function FullPageLoader() {
     return (
-        <div
-            style={{
-                position: "fixed",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "var(--tb-body-bg)",
-                zIndex: 9999,
-                flexDirection: "column",
-                gap: 14,
-            }}
-        >
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-3.5 bg-background">
+            {/* Animated brand mark */}
             <div
-                style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    background: "linear-gradient(135deg, var(--tb-brand) 0%, var(--tb-brand-hover) 100%)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    fontSize: 20,
-                    boxShadow: "0 4px 12px rgba(37,99,235,0.35)",
-                }}
+                className="flex size-10 items-center justify-center rounded-xl text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]"
+                style={{ background: "linear-gradient(135deg, var(--tb-brand) 0%, var(--tb-brand-hover) 100%)" }}
             >
-                <ShieldCheck className="size-4" aria-hidden="true" />
+                <ShieldCheck className="size-5 animate-pulse" aria-hidden="true" />
             </div>
-            <span style={{ fontSize: 13, color: "var(--tb-text-tertiary)" }}>Loading…</span>
+            <span className="text-[13px] text-muted-foreground">Loading…</span>
         </div>
     );
 }
@@ -68,8 +40,8 @@ export function TableSkeletonLoader({ rows = 6, columns = 5 }) {
                 <thead>
                     <tr>
                         {Array.from({ length: columns }).map((_, i) => (
-                            <th key={i}>
-                                <div className="skeleton" style={{ height: 10, width: "60%", borderRadius: 4 }} />
+                            <th key={i} scope="col">
+                                <Skeleton className="h-2.5 w-3/5" />
                             </th>
                         ))}
                     </tr>
@@ -79,7 +51,10 @@ export function TableSkeletonLoader({ rows = 6, columns = 5 }) {
                         <tr key={ri}>
                             {Array.from({ length: columns }).map((_, ci) => (
                                 <td key={ci}>
-                                    <div className="skeleton" style={{ height: 13, width: `${45 + ci * 10}%`, borderRadius: 4 }} />
+                                    <Skeleton
+                                        className="h-3"
+                                        style={{ width: `${45 + ci * 10}%` }}
+                                    />
                                 </td>
                             ))}
                         </tr>
@@ -94,16 +69,16 @@ export function FormSkeletonLoader({ fields = 6 }) {
     return (
         <div className="card">
             <div className="card-body">
-                <div className="skeleton" style={{ height: 22, width: "30%", borderRadius: 6, marginBottom: 20 }} />
+                <Skeleton className="mb-5 h-5 w-[30%]" />
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {Array.from({ length: fields }).map((_, i) => (
-                        <div key={i}>
-                            <div className="skeleton" style={{ height: 10, width: "40%", borderRadius: 4, marginBottom: 6 }} />
-                            <div className="skeleton" style={{ height: 36, width: "100%", borderRadius: 6 }} />
+                        <div key={i} className="space-y-1.5">
+                            <Skeleton className="h-2.5 w-[40%]" />
+                            <Skeleton className="h-9 w-full" />
                         </div>
                     ))}
                 </div>
-                <div className="skeleton" style={{ height: 36, width: 100, borderRadius: 6, marginTop: 20 }} />
+                <Skeleton className="mt-5 h-9 w-24" />
             </div>
         </div>
     );
@@ -111,12 +86,11 @@ export function FormSkeletonLoader({ fields = 6 }) {
 
 export function InlineLoader({ text = "Loading…" }) {
     return (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--tb-text-secondary)", fontSize: 13 }}>
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
             <span
-                className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
                 role="status"
                 aria-hidden="true"
-                style={{ width: 13, height: 13 }}
             />
             {text}
         </span>

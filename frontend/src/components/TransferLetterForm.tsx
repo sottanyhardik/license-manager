@@ -202,7 +202,7 @@ export default function TransferLetterForm({
                     </p>
                 </div>
                 {validParties.length > 0 && selectedCount > 0 && (
-                    <div className="ml-auto flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: 'var(--tb-success-soft)', color: 'var(--tb-success-text)' }}>
+                    <div className="ml-auto flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                         <CheckCircle className="size-3.5" />{validParties.length} party · {selectedCount} license
                     </div>
                 )}
@@ -216,7 +216,7 @@ export default function TransferLetterForm({
                             <Users className="size-3.5 text-muted-foreground" />
                             <span className="text-[12px] font-bold uppercase tracking-wider text-muted-foreground">Recipients</span>
                             {parties.length > 1 && (
-                                <span className="flex size-4.5 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: 'var(--tb-brand)', color: '#fff', width: 18, height: 18, lineHeight: 1 }}>{parties.length}</span>
+                                <span className="inline-flex size-[18px] items-center justify-center rounded-full bg-primary text-[10px] font-bold leading-none text-white">{parties.length}</span>
                             )}
                         </div>
                         <button
@@ -233,7 +233,7 @@ export default function TransferLetterForm({
                         {parties.map((party, idx) => (
                             <div key={party.id} className="group flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-background px-3 py-2.5 transition-shadow hover:shadow-sm">
                                 {parties.length > 1 && (
-                                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white" style={{ background: 'var(--tb-brand)', minWidth: 20 }}>
+                                    <span className="inline-flex size-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white">
                                         {idx + 1}
                                     </span>
                                 )}
@@ -301,10 +301,7 @@ export default function TransferLetterForm({
                             <span className="text-[12px] font-bold uppercase tracking-wider text-muted-foreground">
                                 Items for Transfer Letter
                             </span>
-                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{
-                                background: selectedCount > 0 ? 'var(--tb-brand-50)' : 'var(--tb-sunken)',
-                                color: selectedCount > 0 ? 'var(--tb-brand)' : 'var(--tb-text-secondary)',
-                            }}>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${selectedCount > 0 ? 'bg-primary/5 text-primary' : 'bg-muted text-muted-foreground'}`}>
                                 {selectedCount} of {groupedItems.length} selected
                             </span>
                             {items && items.length > groupedItems.length && (
@@ -315,11 +312,11 @@ export default function TransferLetterForm({
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-border bg-muted/40 text-left text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
-                                        <th className="w-10 px-3 py-2.5">#</th>
-                                        <th className="px-3 py-2.5">License Number</th>
-                                        <th className="w-28 px-3 py-2.5">Purchase Status</th>
-                                        <th className="w-44 px-3 py-2.5">Total CIF FC <span className="font-normal normal-case opacity-60">(editable)</span></th>
-                                        <th className="w-16 px-3 py-2.5 text-center">Select</th>
+                                        <th scope="col" className="w-10 px-3 py-2.5">#</th>
+                                        <th scope="col" className="px-3 py-2.5">License Number</th>
+                                        <th scope="col" className="w-28 px-3 py-2.5">Purchase Status</th>
+                                        <th scope="col" className="w-44 px-3 py-2.5">Total CIF FC <span className="font-normal normal-case opacity-60">(editable)</span></th>
+                                        <th scope="col" className="w-16 px-3 py-2.5 text-center">Select</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/40">
@@ -336,7 +333,7 @@ export default function TransferLetterForm({
                                                 <td className="px-3 py-2">
                                                     <span className="font-mono text-[13px] font-semibold text-foreground">{group.license_number}</span>
                                                     {group.item_ids.length > 1 && (
-                                                        <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand)' }}>
+                                                        <span className="ml-2 rounded bg-primary/5 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                                                             {group.item_ids.length} rows
                                                         </span>
                                                     )}
@@ -372,7 +369,7 @@ export default function TransferLetterForm({
                 )}
 
                 {groupedItems.length === 0 && (
-                    <div className="mb-5 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-[13px]" style={{ color: 'var(--tb-warning-text)' }}>
+                    <div className="mb-5 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-[13px] text-amber-700">
                         <Info className="size-4 shrink-0" />
                         No items found. Please add items first.
                     </div>
@@ -385,7 +382,7 @@ export default function TransferLetterForm({
                             <span className="flex items-center gap-1"><Info className="size-3.5" />Add at least one recipient with a template to generate</span>
                         )}
                         {!genDisabled && (
-                            <span className="flex items-center gap-1 font-medium" style={{ color: 'var(--tb-success-text)' }}>
+                            <span className="flex items-center gap-1 font-medium text-emerald-700">
                                 <CheckCircle className="size-3.5" />Ready to generate for {validParties.length} recipient{validParties.length > 1 ? 's' : ''}
                             </span>
                         )}

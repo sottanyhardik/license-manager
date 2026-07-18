@@ -1,5 +1,6 @@
 import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
+import { cn } from "@/lib/utils";
 import Select from "react-select";
 import AsyncCreatableSelect from "react-select/async-creatable";
 import DatePicker from "react-datepicker";
@@ -163,8 +164,7 @@ export default function NestedFieldArray({
         if (isFrozen && ['cif_inr', 'cif_fc', 'qty'].includes(field.name)) {
             const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
             return (
-                <div className="flex h-8 items-center justify-between rounded-md border border-input bg-card px-2 py-1 text-sm"
-                    style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand-hover)', fontWeight: '600', borderColor: 'var(--tb-brand-200)', cursor: 'default' }}>
+                <div className="flex h-8 items-center justify-between rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-sm font-semibold text-primary cursor-default">
                     <span>{displayVal}</span>
                     <Lock className="size-4" aria-hidden="true" />
                 </div>
@@ -303,8 +303,7 @@ export default function NestedFieldArray({
         if (field.readonly || field.read_only) {
             const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
             return (
-                <div className="flex h-8 items-center justify-between rounded-md border border-input bg-card px-2 py-1 text-sm"
-                    style={{ background: 'var(--tb-success-soft)', color: 'var(--tb-success-text)', fontWeight: '600', borderColor: 'var(--tb-success-border)', cursor: 'default' }}>
+                <div className="flex h-8 items-center justify-between rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300 cursor-default">
                     <span>{displayVal}</span>
                     <Calculator className="size-4" aria-hidden="true" />
                 </div>
@@ -321,7 +320,7 @@ export default function NestedFieldArray({
                         onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
-                        wrapperClassName="w-100 d-block"
+                        wrapperClassName="w-full block"
                         placeholderText="Select date"
                         isClearable
                         showYearDropdown
@@ -628,8 +627,8 @@ export default function NestedFieldArray({
                     {value.map((item, index) => {
                         const isFrozen = fieldKey === 'item_details' && item.is_frozen;
                         return (
-                        <div key={index} className="card" style={{ opacity: isFrozen ? 0.92 : 1 }}>
-                            <div className="flex items-center justify-between border-b border-border px-3 py-2" style={{ background: isFrozen ? 'var(--tb-brand-50)' : 'var(--tb-card-bg)' }}>
+                        <div key={index} className={cn("card", isFrozen ? "opacity-[0.92]" : "")}>
+                            <div className={cn("flex items-center justify-between border-b border-border px-3 py-2", isFrozen ? "bg-primary/5" : "bg-card")}>
                                 <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-primary">
                                     <Hash className="size-4" aria-hidden="true" />
                                     <span className="shrink-0">Item {index + 1}</span>
@@ -642,7 +641,7 @@ export default function NestedFieldArray({
                                         <ConditionBadge type={item.condition_type || itemConditionsBySerial?.[item.serial_number]} />
                                     )}
                                     {getItemTitle(item) && (
-                                        <span className="truncate text-xs font-normal text-muted-foreground" style={{ maxWidth: 300 }}>
+                                        <span className="max-w-[300px] truncate text-xs font-normal text-muted-foreground">
                                             — {getItemTitle(item)}
                                         </span>
                                     )}
@@ -697,7 +696,7 @@ export default function NestedFieldArray({
                                                 || (isTextarea ? "col-12" : "col-md-4");
                                             const colClass = colToSpan(bsCol);
                                             return (
-                                                <div key={field.name} className={colClass} style={{ pointerEvents: isFrozen ? 'none' : undefined, opacity: isFrozen ? 0.7 : undefined }}>
+                                                <div key={field.name} className={cn(colClass, isFrozen ? "pointer-events-none opacity-70" : "")}>
                                                     <label className="mb-1 block text-[12px] font-semibold text-muted-foreground">
                                                         {field.label || field.name.replace(/_/g, ' ')}
                                                         {field.required && <span className="ml-0.5 text-destructive">*</span>}

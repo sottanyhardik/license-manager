@@ -122,19 +122,17 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                         onChange={(e) => setTextValue(e.target.value)}
                         placeholder={`Enter ${label.toLowerCase()} here...`}
                         style={{
-                            fontSize: 14,
                             borderColor: 'var(--primary-color)',
                             backgroundColor: 'var(--row-yellow-bg)'
                         }}
                     />
                     <div className="flex gap-2">
                         <button
-                            className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
+                            className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90 border-none"
                             onClick={handleSave}
                             disabled={saving}
                             style={{
                                 background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))',
-                                border: 'none'
                             }}
                         >
                             <CheckCircle className="size-4 mr-1" />
@@ -152,16 +150,11 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
             ) : (
                 <div
                     onClick={() => setIsEditing(true)}
+                    className="min-h-[80px] p-3 text-sm cursor-pointer whitespace-pre-wrap transition-all"
                     style={{
-                        minHeight: '80px',
-                        padding: '0.75rem',
                         backgroundColor: textValue ? 'var(--row-yellow-bg)' : 'var(--tb-sunken)',
                         border: '1px solid var(--tb-border)',
                         borderRadius: 'var(--tb-r-sm)',
-                        cursor: 'pointer',
-                        fontSize: 14,
-                        whiteSpace: 'pre-wrap',
-                        transition: 'all 0.2s'
                     }}
                     onMouseOver={(e) => {
                         e.currentTarget.style.borderColor = 'var(--primary-color)';
@@ -172,7 +165,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                         e.currentTarget.style.backgroundColor = textValue ? 'var(--row-yellow-bg)' : 'var(--tb-sunken)';
                     }}
                 >
-                    {textValue || <span style={{ color: 'var(--tb-text-secondary)', fontStyle: 'italic' }}>Click to add {label.toLowerCase()}...</span>}
+                    {textValue || <span className="italic" style={{ color: 'var(--tb-text-secondary)' }}>Click to add {label.toLowerCase()}...</span>}
                 </div>
             )}
         </div>
@@ -473,7 +466,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                         </button>
                     </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto bg-muted/40" style={{ padding: '1.5rem' }}>
+                <div className="min-h-0 flex-1 overflow-y-auto bg-muted/40 p-6">
                         {loading || !licenseData ? (
                             <div className="flex flex-col items-center gap-2 py-10 text-center">
                                 <Loader2 className="size-8 animate-spin text-primary" />
@@ -482,29 +475,26 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                         ) : (
                             <>
                                 {/* License Header Details */}
-                                <div style={{
-                                    backgroundColor: 'var(--tb-card-bg)',
-                                    borderRadius: 'var(--tb-r-md)',
-                                    padding: '1.5rem',
-                                    marginBottom: '1.5rem',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                                }}>
+                                <div
+                                    className="mb-6 rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                    style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                >
                                     <div className="table-responsive">
-                                        <table className="table table-sm" style={{ marginBottom: '0', border: 'none' }}>
+                                        <table className="table table-sm mb-0 border-none">
                                             <thead style={{ backgroundColor: 'var(--primary-color)', color: '#fff' }}>
                                                 <tr>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>License Number</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>License Date</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>License Expiry Date</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Exporter Name</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Port Name</th>
+                                                    <th scope="col" className="p-3 text-sm border-none">License Number</th>
+                                                    <th scope="col" className="p-3 text-sm border-none">License Date</th>
+                                                    <th scope="col" className="p-3 text-sm border-none">License Expiry Date</th>
+                                                    <th scope="col" className="p-3 text-sm border-none">Exporter Name</th>
+                                                    <th scope="col" className="p-3 text-sm border-none">Port Name</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr style={{ backgroundColor: 'var(--tb-sunken)' }}>
-                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)', fontWeight: '500' }}>
-                                                        <div className="flex items-center gap-2" style={{ flexWrap: 'nowrap' }}>
-                                                            <span style={{ fontWeight: '600', color: 'var(--tb-text)' }}>
+                                                    <td className="p-3 text-sm border-none font-medium" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                        <div className="flex items-center gap-2 flex-nowrap">
+                                                            <span className="font-semibold" style={{ color: 'var(--tb-text)' }}>
                                                                 {licenseData.license_number || '-'}
                                                             </span>
                                                             {(licenseData.has_tl || licenseData.has_copy) && (
@@ -523,16 +513,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                             toast.error('Failed to load merged documents');
                                                                         }
                                                                     }}
+                                                                    className="text-xs font-medium whitespace-nowrap no-underline rounded-sm px-1.5 py-0.5 transition-all"
                                                                     style={{
-                                                                        fontSize: 12,
                                                                         color: 'var(--success-color)',
-                                                                        textDecoration: 'none',
-                                                                        padding: '2px 6px',
                                                                         backgroundColor: 'var(--success-bg)',
-                                                                        borderRadius: '3px',
-                                                                        fontWeight: '500',
-                                                                        transition: 'all 0.2s',
-                                                                        whiteSpace: 'nowrap'
                                                                     }}
                                                                     onMouseOver={(e) => {
                                                                         (e.target as HTMLElement).style.backgroundColor = 'var(--success-border)';
@@ -548,42 +532,42 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.license_date ? formatDate(licenseData.license_date) : '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.license_expiry_date ? formatDate(licenseData.license_expiry_date) : '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.exporter_name || '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.port_name || '-'}
                                                     </td>
                                                 </tr>
                                             </tbody>
                                         </table>
-                                        <table className="table table-sm" style={{ marginBottom: '0', border: 'none', marginTop: '0.5rem' }}>
+                                        <table className="table table-sm mb-0 border-none mt-2">
                                             <thead style={{ backgroundColor: 'var(--primary-color)', color: '#fff' }}>
                                                 <tr>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Purchase Status</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Balance CIF</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14 }}>Get Norm Class</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: 14, minWidth: '300px' }}>Latest Transfer</th>
+                                                    <th scope="col" className="p-3 text-sm border-none">Purchase Status</th>
+                                                    <th scope="col" className="p-3 text-sm border-none">Balance CIF</th>
+                                                    <th scope="col" className="p-3 text-sm border-none">Get Norm Class</th>
+                                                    <th scope="col" className="p-3 text-sm border-none min-w-[300px]">Latest Transfer</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr style={{ backgroundColor: 'var(--tb-sunken)' }}>
-                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.purchase_status || '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {formatFiniteDecimal(licenseData.balance_cif)}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.get_norm_class || '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                    <td className="p-3 text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                         {licenseData.latest_transfer || '-'}
                                                     </td>
                                                 </tr>
@@ -593,21 +577,18 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 </div>
 
                                 {/* Condition Sheet Section */}
-                                <div className="mb-4" style={{
-                                    backgroundColor: 'var(--tb-card-bg)',
-                                    borderRadius: 'var(--tb-r-md)',
-                                    padding: '1.5rem',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                                }}>
+                                <div
+                                    className="mb-4 rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                    style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                >
                                     <div className="flex justify-between items-center mb-3">
-                                        <h5 style={{
-                                            color: 'var(--tb-text)',
-                                            fontWeight: '600',
-                                            borderBottom: '2px solid var(--tb-brand)',
-                                            paddingBottom: '0.5rem',
-                                            marginBottom: '0',
-                                            flex: 1
-                                        }}>
+                                        <h5
+                                            className="font-semibold flex-1 pb-2 mb-0 border-b-2"
+                                            style={{
+                                                color: 'var(--tb-text)',
+                                                borderColor: 'var(--tb-brand)',
+                                            }}
+                                        >
                                             <FileText className="size-4 mr-2" />
                                             Condition Sheet
                                         </h5>
@@ -624,21 +605,18 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 </div>
 
                                 {/* Notes Section */}
-                                <div className="mb-4" style={{
-                                    backgroundColor: 'var(--tb-card-bg)',
-                                    borderRadius: 'var(--tb-r-md)',
-                                    padding: '1.5rem',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                                }}>
+                                <div
+                                    className="mb-4 rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                    style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                >
                                     <div className="flex justify-between items-center mb-3">
-                                        <h5 style={{
-                                            color: 'var(--tb-text)',
-                                            fontWeight: '600',
-                                            borderBottom: '2px solid var(--tb-brand)',
-                                            paddingBottom: '0.5rem',
-                                            marginBottom: '0',
-                                            flex: 1
-                                        }}>
+                                        <h5
+                                            className="font-semibold flex-1 pb-2 mb-0 border-b-2"
+                                            style={{
+                                                color: 'var(--tb-text)',
+                                                borderColor: 'var(--tb-brand)',
+                                            }}
+                                        >
                                             <PenSquare className="size-4 mr-2" />
                                             Notes
                                         </h5>
@@ -656,33 +634,29 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
                                 {/* Export Items */}
                                 {licenseData.export_license && licenseData.export_license.length > 0 && (
-                                    <div className="mb-4" style={{
-                                        backgroundColor: 'var(--tb-card-bg)',
-                                        borderRadius: 'var(--tb-r-md)',
-                                        padding: '1.5rem',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                                    }}>
-                                        <h5 className="mb-3" style={{
-                                            color: 'var(--tb-text)',
-                                            fontWeight: '600',
-                                            borderBottom: '2px solid var(--tb-brand)',
-                                            paddingBottom: '0.5rem'
-                                        }}>
+                                    <div
+                                        className="mb-4 rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                        style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                    >
+                                        <h5
+                                            className="mb-3 font-semibold pb-2 border-b-2"
+                                            style={{
+                                                color: 'var(--tb-text)',
+                                                borderColor: 'var(--tb-brand)',
+                                            }}
+                                        >
                                             <Package className="size-4 mr-2" />
                                             Export Items
                                         </h5>
-                                        <table className="table" style={{
-                                            marginBottom: '0',
-                                            border: 'none'
-                                        }}>
+                                        <table className="table mb-0 border-none">
                                             <thead style={{
                                                 backgroundColor: 'var(--primary-color)',
                                                 color: '#fff'
                                             }}>
                                                 <tr>
-                                                    <th style={{ border: 'none', padding: '0.75rem' }}>Item</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem' }}>Total CIF</th>
-                                                    <th style={{ border: 'none', padding: '0.75rem' }}>Balance CIF</th>
+                                                    <th scope="col" className="p-3 border-none">Item</th>
+                                                    <th scope="col" className="p-3 border-none">Total CIF</th>
+                                                    <th scope="col" className="p-3 border-none">Balance CIF</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -707,13 +681,13 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                 }
                                                             }}
                                                         >
-                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                            <td className="p-3 border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                 {item.description || item.norm_class_label || 'None'}
                                                             </td>
-                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                            <td className="p-3 border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                 {formatFiniteDecimal(item.cif_fc ?? item.fob_fc)}
                                                             </td>
-                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                            <td className="p-3 border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                 {formatFiniteDecimal(licenseData.balance_cif)}
                                                             </td>
                                                         </tr>
@@ -730,13 +704,13 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 <table className="table table-sm">
                                                                                     <thead>
                                                                                         <tr>
-                                                                                            <th>BOE Number</th>
-                                                                                            <th>Date</th>
-                                                                                            <th>Port</th>
-                                                                                            <th>Company</th>
-                                                                                            <th>Qty</th>
-                                                                                            <th>CIF $</th>
-                                                                                            <th>CIF INR</th>
+                                                                                            <th scope="col">BOE Number</th>
+                                                                                            <th scope="col">Date</th>
+                                                                                            <th scope="col">Port</th>
+                                                                                            <th scope="col">Company</th>
+                                                                                            <th scope="col">Qty</th>
+                                                                                            <th scope="col">CIF $</th>
+                                                                                            <th scope="col">CIF INR</th>
                                                                                         </tr>
                                                                                     </thead>
                                                                                     <tbody>
@@ -765,10 +739,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 <table className="table table-sm">
                                                                                     <thead>
                                                                                         <tr>
-                                                                                            <th>Company</th>
-                                                                                            <th>Qty</th>
-                                                                                            <th>CIF $</th>
-                                                                                            <th>CIF INR</th>
+                                                                                            <th scope="col">Company</th>
+                                                                                            <th scope="col">Qty</th>
+                                                                                            <th scope="col">CIF $</th>
+                                                                                            <th scope="col">CIF INR</th>
                                                                                         </tr>
                                                                                     </thead>
                                                                                     <tbody>
@@ -797,42 +771,38 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
                                 {/* Import Items */}
                                 {licenseData.import_license && licenseData.import_license.length > 0 && (
-                                    <div style={{
-                                        backgroundColor: 'var(--tb-card-bg)',
-                                        borderRadius: 'var(--tb-r-md)',
-                                        padding: '1.5rem',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                                    }}>
-                                        <h5 className="mb-3" style={{
-                                            color: 'var(--tb-text)',
-                                            fontWeight: '600',
-                                            borderBottom: '2px solid var(--tb-brand)',
-                                            paddingBottom: '0.5rem'
-                                        }}>
+                                    <div
+                                        className="rounded-[var(--tb-r-md)] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                        style={{ backgroundColor: 'var(--tb-card-bg)' }}
+                                    >
+                                        <h5
+                                            className="mb-3 font-semibold pb-2 border-b-2"
+                                            style={{
+                                                color: 'var(--tb-text)',
+                                                borderColor: 'var(--tb-brand)',
+                                            }}
+                                        >
                                             <Inbox className="size-4 mr-2" />
                                             Import Items
                                         </h5>
                                         <div className="table-responsive">
-                                            <table className="table table-sm" style={{
-                                                marginBottom: '0',
-                                                border: 'none'
-                                            }}>
+                                            <table className="table table-sm mb-0 border-none">
                                                 <thead style={{
                                                     backgroundColor: 'var(--primary-dark)',
                                                     color: '#fff'
                                                 }}>
                                                     <tr>
-                                                        <th style={{ minWidth: '50px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Sr No</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>HS Code</th>
-                                                        <th style={{ minWidth: '200px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Description</th>
-                                                        <th style={{ minWidth: '250px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Item</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Total Quantity</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Allotted Qty</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Debited Qty</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Available Qty</th>
-                                                        <th style={{ minWidth: '120px', border: 'none', padding: '0.75rem', fontSize: 14 }}>License Marking</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>CIF FC</th>
-                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: 14 }}>Balance CIF FC</th>
+                                                        <th scope="col" className="min-w-[50px] p-3 text-sm border-none">Sr No</th>
+                                                        <th scope="col" className="min-w-[100px] p-3 text-sm border-none">HS Code</th>
+                                                        <th scope="col" className="min-w-[200px] p-3 text-sm border-none">Description</th>
+                                                        <th scope="col" className="min-w-[250px] p-3 text-sm border-none">Item</th>
+                                                        <th scope="col" className="min-w-[100px] p-3 text-sm border-none">Total Quantity</th>
+                                                        <th scope="col" className="min-w-[100px] p-3 text-sm border-none">Allotted Qty</th>
+                                                        <th scope="col" className="min-w-[100px] p-3 text-sm border-none">Debited Qty</th>
+                                                        <th scope="col" className="min-w-[100px] p-3 text-sm border-none">Available Qty</th>
+                                                        <th scope="col" className="min-w-[120px] p-3 text-sm border-none">License Marking</th>
+                                                        <th scope="col" className="min-w-[100px] p-3 text-sm border-none">CIF FC</th>
+                                                        <th scope="col" className="min-w-[100px] p-3 text-sm border-none">Balance CIF FC</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -857,17 +827,17 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                     }
                                                                 }}
                                                             >
-                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {item.serial_number || index + 1}
                                                                     <ConditionBadge type={item.condition_type} size="xs" />
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {item.hs_code_label || item.hs_code || '-'}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {item.description || '-'}
                                                                 </td>
-                                                                <td onClick={(e) => e.stopPropagation()} style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td onClick={(e) => e.stopPropagation()} className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {editingItemId === item.id ? (
                                                                         <div className="flex items-center gap-1">
                                                                             <AsyncSelect
@@ -878,7 +848,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 loadOptions={loadItemOptions}
                                                                                 onChange={(v) => setEditingItems(v as any[])}
                                                                                 placeholder="Select items..."
-                                                                                className="flex-grow-1"
+                                                                                className="flex-grow"
                                                                                 menuPortalTarget={document.body}
                                                                                 menuPosition="fixed"
                                                                                 styles={{
@@ -935,9 +905,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                             </button>
                                                                         </div>
                                                                     ) : (
-                                                                        <div className="flex flex-wrap items-center gap-1" style={{ minWidth: 220 }}>
+                                                                        <div className="flex flex-wrap items-center gap-1 min-w-[220px]">
                                                                             {(item.items_detail || []).map((d) => (
-                                                                                <span key={d.id} className="chip chip-neutral inline-flex items-center gap-1" style={{ paddingRight: 4 }}>
+                                                                                <span key={d.id} className="chip chip-neutral inline-flex items-center gap-1 pr-1">
                                                                                     {d.name}
                                                                                     <button
                                                                                         onClick={(e) => handleRemoveItemTag(e, item, d.id)}
@@ -953,7 +923,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 <span className="text-muted-foreground">-</span>
                                                                             )}
                                                                             {addingItemId === item.id ? (
-                                                                                <div onClick={(e) => e.stopPropagation()} style={{ minWidth: 220 }}>
+                                                                                <div onClick={(e) => e.stopPropagation()} className="min-w-[220px]">
                                                                                     <AsyncSelect
                                                                                         autoFocus
                                                                                         cacheOptions
@@ -995,21 +965,22 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         </div>
                                                                     )}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {formatFiniteDecimal(item.quantity)}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {formatFiniteDecimal(item.allotted_quantity)}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {formatFiniteDecimal(item.debited_quantity)}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {formatFiniteDecimal(item.available_quantity)}
                                                                 </td>
                                                                 <td
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)', textAlign: 'center' }}
+                                                                    className="px-[0.6rem] py-[0.6rem] text-sm border-none text-center"
+                                                                    style={{ borderBottom: '1px solid var(--tb-border-soft)' }}
                                                                 >
                                                                     {/* Editable license marking — writes to backend `condition_type`. */}
                                                                     <Select
@@ -1045,10 +1016,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         }}
                                                                     />
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {formatFiniteDecimal(item.cif_fc)}
                                                                 </td>
-                                                                <td style={{ padding: '0.6rem', fontSize: 14, border: 'none', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                                                                <td className="px-[0.6rem] py-[0.6rem] text-sm border-none" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
                                                                     {formatFiniteDecimal(item.balance_cif_fc)}
                                                                 </td>
                                                             </tr>
@@ -1065,13 +1036,13 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                     <table className="table table-sm">
                                                                                         <thead>
                                                                                             <tr>
-                                                                                                <th>BOE Number</th>
-                                                                                                <th>Date</th>
-                                                                                                <th>Port</th>
-                                                                                                <th>Company</th>
-                                                                                                <th>Qty</th>
-                                                                                                <th>CIF $</th>
-                                                                                                <th>CIF INR</th>
+                                                                                                <th scope="col">BOE Number</th>
+                                                                                                <th scope="col">Date</th>
+                                                                                                <th scope="col">Port</th>
+                                                                                                <th scope="col">Company</th>
+                                                                                                <th scope="col">Qty</th>
+                                                                                                <th scope="col">CIF $</th>
+                                                                                                <th scope="col">CIF INR</th>
                                                                                             </tr>
                                                                                         </thead>
                                                                                         <tbody>
@@ -1100,10 +1071,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                     <table className="table table-sm">
                                                                                         <thead>
                                                                                             <tr>
-                                                                                                <th>Company</th>
-                                                                                                <th>Qty</th>
-                                                                                                <th>CIF $</th>
-                                                                                                <th>CIF INR</th>
+                                                                                                <th scope="col">Company</th>
+                                                                                                <th scope="col">Qty</th>
+                                                                                                <th scope="col">CIF $</th>
+                                                                                                <th scope="col">CIF INR</th>
                                                                                             </tr>
                                                                                         </thead>
                                                                                         <tbody>

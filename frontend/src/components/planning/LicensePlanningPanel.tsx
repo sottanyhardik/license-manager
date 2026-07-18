@@ -320,11 +320,11 @@ export default function LicensePlanningPanel({
                                     <table className="w-full text-sm">
                                         <thead>
                                             <tr className="text-left text-xs text-muted-foreground">
-                                                <th className="pb-1 pr-2 font-medium">Item name</th>
-                                                <th className="pb-1 pr-2 font-medium text-right">Qty</th>
-                                                <th className="pb-1 pr-2 font-medium text-right">Unit price</th>
-                                                <th className="pb-1 pr-2 font-medium text-right">CIF ($)</th>
-                                                <th className="pb-1 w-8"></th>
+                                                <th scope="col" className="pb-1 pr-2 font-medium">Item name</th>
+                                                <th scope="col" className="pb-1 pr-2 font-medium text-right">Qty</th>
+                                                <th scope="col" className="pb-1 pr-2 font-medium text-right">Unit price</th>
+                                                <th scope="col" className="pb-1 pr-2 font-medium text-right">CIF ($)</th>
+                                                <th scope="col" className="pb-1 w-8"></th>
                                             </tr>
                                         </thead>
                                         <tbody>

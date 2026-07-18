@@ -272,8 +272,9 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
 
                                 return (
                                     <th
+                                        scope="col"
                                         key={field.name}
-                                        style={isNumericColumn(field.name) ? {textAlign: 'right'} : {}}
+                                        className={isNumericColumn(field.name) ? "text-right" : ""}
                                     >
                                         {field.label || field.name.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
                                     </th>
@@ -361,16 +362,17 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
             <table className="table">
                 <thead>
                 <tr>
-                    <th style={{width: "40px"}}></th>
+                    <th scope="col" className="w-10"></th>
                     {columns.map((col) => (
                         <th
+                            scope="col"
                             key={col}
-                            style={isNumericColumn(col) ? {textAlign: 'right'} : {}}
+                            className={isNumericColumn(col) ? "text-right" : ""}
                         >
                             {col.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
                         </th>
                     ))}
-                    <th style={{width: "120px"}}>Actions</th>
+                    <th scope="col" className="w-[120px]">Actions</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -387,7 +389,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                         onClick={() => toggleRow(item.id, item)}
                                         title={isExpanded ? "Collapse" : "Expand"}
                                     >
-                                        <span className="inline-block transition-transform" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}><ChevronRight className="size-4" /></span>
+                                        <span className={`inline-block transition-transform ${isExpanded ? 'rotate-90' : 'rotate-0'}`}><ChevronRight className="size-4" /></span>
                                     </button>
                                 </td>
                                 {columns.map((col) => {
@@ -415,19 +417,30 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
 
                                         return (
                                             <td key={col}>
-                                                <div className="form-check form-switch">
+                                                {/* Accessible toggle — no Bootstrap dependency */}
+                                                <label className="inline-flex cursor-pointer items-center gap-1.5">
                                                     <input
                                                         type="checkbox"
-                                                        className="form-check-input"
                                                         role="switch"
                                                         id={`switch-${item.id}-${col}`}
                                                         checked={boolValue}
                                                         onChange={() => handleToggleBoolean(item, col, boolValue)}
                                                         disabled={isToggling}
-                                                        style={{cursor: isToggling ? 'wait' : 'pointer'}}
+                                                        className="sr-only peer"
+                                                        aria-label={`Toggle ${col}`}
                                                     />
-                                                    {isToggling && <Loader2 className="ml-1.5 inline size-3.5 animate-spin text-primary" />}
-                                                </div>
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={[
+                                                            "relative inline-block h-5 w-9 rounded-full border transition-colors duration-200",
+                                                            boolValue ? "border-primary/30 bg-primary" : "border-border bg-muted",
+                                                            isToggling ? "cursor-wait opacity-60" : "cursor-pointer",
+                                                        ].join(" ")}
+                                                    >
+                                                        <span className={["absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform duration-200", boolValue ? "translate-x-4" : "translate-x-0.5"].join(" ")} />
+                                                    </span>
+                                                    {isToggling && <Loader2 className="size-3.5 animate-spin text-primary" />}
+                                                </label>
                                             </td>
                                         );
                                     }
@@ -439,10 +452,10 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                         <td
                                             key={col}
                                             onClick={() => !isCurrentlyEditing && handleCellClick(item, col)}
-                                            style={{
-                                                ...(isEditableField ? {cursor: 'pointer'} : {}),
-                                                ...(isNumericColumn(col) ? {textAlign: 'right'} : {})
-                                            }}
+                                            className={[
+                                                isEditableField ? "cursor-pointer" : "",
+                                                isNumericColumn(col) ? "text-right" : "",
+                                            ].filter(Boolean).join(" ") || undefined}
                                             title={isEditableField ? 'Click to edit' : ''}
                                         >
                                             {isCurrentlyEditing ? (
@@ -474,8 +487,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                 item.license_documents && item.license_documents.length > 0 ? (
                                                     <a
                                                         onClick={() => openAuthedFile(`licenses/${item.id}/merged-documents/`)}
-                                                        className="text-primary text-decoration-none"
-                                                        style={{ cursor: 'pointer' }}
+                                                        className="cursor-pointer text-primary text-decoration-none"
                                                         title="View merged license documents"
                                                     >
                                                         {value || "-"}
@@ -495,7 +507,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                     );
                                 })}
                                 <td>
-                                    <div className="btn-group btn-group-sm">
+                                    <div className="flex items-center gap-1">
                                         {customActions.map((action, idx) => {
                                             if (action.showIf && !action.showIf(item)) {
                                                 return null;
@@ -503,7 +515,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                             return (
                                                 <button
                                                     key={idx}
-                                                    className={action.className || "btn btn-outline-info"}
+                                                    className={action.className || "inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"}
                                                     onClick={() => action.onClick(item)}
                                                     title={action.label}
                                                 >

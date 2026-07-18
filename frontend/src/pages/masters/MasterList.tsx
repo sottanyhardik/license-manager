@@ -277,17 +277,12 @@ export default function MasterList() {
             }
         });
 
-        // Parse URL query parameters
+        // Parse URL query parameters — keep in API format (__gte/__lte) so filterParams
+        // is always in API format. uiFilterParams derives the UI format for display.
         const urlParams = new URLSearchParams(location.search);
         const urlFilters: Record<string, string> = {};
         for (const [key, value] of urlParams.entries()) {
-            if (key.endsWith('__gte')) {
-                urlFilters[`${key.replace('__gte', '')}_from`] = value;
-            } else if (key.endsWith('__lte')) {
-                urlFilters[`${key.replace('__lte', '')}_to`] = value;
-            } else {
-                urlFilters[key] = value;
-            }
+            urlFilters[key] = value;
         }
 
         const hasUrlFilters = Object.keys(urlFilters).length > 0;
@@ -343,6 +338,23 @@ export default function MasterList() {
         page_size: pageSize,
         ...filterParams,
     }), [currentPage, pageSize, filterParams]);
+
+    /** Convert API-format filterParams (license_date__gte) to UI format (license_date_from)
+     *  for correct display in AdvancedFilter inputs. */
+    const uiFilterParams = useMemo<Record<string, string>>(() => {
+        const ui: Record<string, string> = {};
+        for (const [key, value] of Object.entries(filterParams)) {
+            const v = String(value ?? "");
+            if (key.endsWith("__gte")) {
+                ui[`${key.slice(0, -5)}_from`] = v;
+            } else if (key.endsWith("__lte")) {
+                ui[`${key.slice(0, -5)}_to`] = v;
+            } else {
+                ui[key] = v;
+            }
+        }
+        return ui;
+    }, [filterParams]);
 
     const {
         data: listResponse,
@@ -430,20 +442,11 @@ export default function MasterList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [linkSearch, linkModalTrade]);
 
-    const handleFilterChange = useCallback((filters) => {
-        // Convert Django-style date filters back to UI format for state persistence
-        const convertedFilters: Record<string, string> = {};
-        Object.entries(filters).forEach(([key, value]) => {
-            if (key.endsWith('__gte')) {
-                convertedFilters[`${key.replace('__gte', '')}_from`] = value as string;
-            } else if (key.endsWith('__lte')) {
-                convertedFilters[`${key.replace('__lte', '')}_to`] = value as string;
-            } else {
-                convertedFilters[key] = value as string;
-            }
-        });
-        // Store the UI-format filters; useQuery will re-run with the raw filters via queryParams
-        setFilterParams(filters); // Use raw API format — queryParams derives from filterParams directly
+    const handleFilterChange = useCallback((filters: Record<string, unknown>) => {
+        // filters arrives in API format (license_date__gte etc.) from AdvancedFilter.
+        // Keep in API format — queryParams spreads filterParams directly into the API call.
+        // uiFilterParams (derived via useMemo) converts back to UI format for display.
+        setFilterParams(filters as Record<string, string>);
         setCurrentPage(1);
     }, []);
 
@@ -744,7 +747,7 @@ export default function MasterList() {
                 filterConfig={metadata.filter_config || {}}
                 searchFields={metadata.search_fields || []}
                 onFilterChange={handleFilterChange}
-                initialFilters={filterParams}
+                initialFilters={uiFilterParams}
                 defaultFilters={metadata.default_filters || {}}
             />
 

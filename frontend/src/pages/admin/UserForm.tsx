@@ -8,6 +8,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { getErrorMessage } from "../../utils/errorUtils";
 import { extractFormErrors, getFieldError } from "../../utils/formErrors";
 import { ROLE_LABELS } from "../../utils/roleConstants";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,19 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const emptyForm = {
+type UserFormData = {
+    username: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    password: string;
+    is_active: boolean;
+    is_staff: boolean;
+    is_superuser: boolean;
+    roles: string[];
+};
+
+const emptyForm: UserFormData = {
     username: "", email: "", first_name: "", last_name: "", password: "",
     is_active: true, is_staff: false, is_superuser: false, roles: [],
 };
@@ -26,8 +39,8 @@ export default function UserForm() {
     const { user: currentUser } = useContext(AuthContext);
     const isEdit = Boolean(id);
 
-    const [form, setForm] = useState(emptyForm);
-    const [availableRoles, setAvailableRoles] = useState([]);
+    const [form, setForm] = useState<UserFormData>(emptyForm);
+    const [availableRoles, setAvailableRoles] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [resettingPw, setResettingPw] = useState(false);
@@ -56,8 +69,8 @@ export default function UserForm() {
                         roles: user.roles ?? [],
                     });
                 }
-            } catch (err) {
-                toast.error(getErrorMessage(err));
+            } catch (err: unknown) {
+                toast.error(getErrorMessage(err as Error));
             } finally {
                 setLoading(false);
             }
@@ -65,22 +78,22 @@ export default function UserForm() {
         init();
     }, [id, isEdit]);
 
-    const handleChange = (e) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setForm(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
         setFieldErrors(prev => ({ ...prev, [name]: undefined }));
     };
 
-    const setFlag = (name, checked) => setForm(prev => ({ ...prev, [name]: checked }));
+    const setFlag = (name: keyof UserFormData, checked: boolean) => setForm(prev => ({ ...prev, [name]: checked }));
 
-    const toggleRole = (code) => {
+    const toggleRole = (code: string) => {
         setForm(prev => ({
             ...prev,
             roles: prev.roles.includes(code) ? prev.roles.filter(r => r !== code) : [...prev.roles, code],
         }));
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
         setFieldErrors({});
@@ -95,10 +108,10 @@ export default function UserForm() {
                 toast.success("User created");
             }
             navigate("/admin/users");
-        } catch (err) {
+        } catch (err: unknown) {
             const { fieldErrors: errors } = extractFormErrors(err);
             setFieldErrors(errors);
-            toast.error(getErrorMessage(err));
+            toast.error(getErrorMessage(err as Error));
         } finally {
             setSaving(false);
         }
@@ -113,10 +126,10 @@ export default function UserForm() {
             toast.success("Password reset successfully");
             setShowPwReset(false);
             setNewPassword("");
-        } catch (err) {
+        } catch (err: unknown) {
             const { fieldErrors: errors } = extractFormErrors(err);
             setPasswordResetErrors(errors);
-            toast.error(getErrorMessage(err));
+            toast.error(getErrorMessage(err as Error));
         } finally {
             setResettingPw(false);
         }
@@ -124,7 +137,7 @@ export default function UserForm() {
 
     if (loading) return <div className="p-8 text-center text-sm text-muted-foreground">Loading…</div>;
 
-    const FieldError = ({ name }) => {
+    const FieldError = ({ name }: { name: string }) => {
         const error = getFieldError(fieldErrors, name);
         return error ? <p className="mt-1 text-[11.5px] text-destructive">{error}</p> : null;
     };
@@ -207,9 +220,10 @@ export default function UserForm() {
                             return (
                                 <label
                                     key={code}
-                                    className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-[13px] transition-colors ${
-                                        checked ? "border-primary/40 bg-primary/5 text-foreground" : "border-border text-muted-foreground hover:bg-accent/50"
-                                    }`}
+                                    className={cn(
+                                        "flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-[13px] transition-colors",
+                                        checked ? "border-primary/50 bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-accent/50"
+                                    )}
                                 >
                                     <Checkbox checked={checked} onCheckedChange={() => toggleRole(code)} />
                                     {ROLE_LABELS[code] ?? code}

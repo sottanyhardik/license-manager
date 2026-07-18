@@ -109,9 +109,9 @@
 |-------|-----------|--------|-------|---------|-------|
 | `/settings` | `pages/Settings.tsx` | FROZEN | Session-3 | 2026-07-18 | Bootstrap card/badge/modal → shadcn; window.confirm → ConfirmDialog; types added; scope="col" |
 | `/profile` | `pages/Profile.tsx` | FROZEN | Session-3 | 2026-07-18 | Inline gradient → Tailwind; roles show human-readable labels; alert banners: role/type attrs, dismiss on success; flex-row CardHeader fixed |
-| `/admin/users` | `pages/admin/UserList.tsx` | TODO | — | — | — |
-| `/admin/users/create` | `pages/admin/UserForm.tsx` | TODO | — | — | — |
-| `/admin/users/:id/edit` | `pages/admin/UserForm.tsx` | TODO | — | — | — |
+| `/admin/users` | `pages/admin/UserList.tsx` | FROZEN | Session-3 | 2026-07-18 | UserRecord type; BOOTSTRAP_TO_BADGE map; getRoleBadgeProps → shadcn Badge; skeleton loading; EmptyState; th scope; typed catches |
+| `/admin/users/create` | `pages/admin/UserForm.tsx` | FROZEN | Session-3 | 2026-07-18 | UserFormData type; typed params (handleChange/setFlag/toggleRole/handleSubmit); cn() role picker; typed catches |
+| `/admin/users/:id/edit` | `pages/admin/UserForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same as create |
 | `/admin/activity-log` | `pages/admin/ActivityLog.tsx` | FROZEN | Session-3 | 2026-07-18 | ACTION_META CSS vars → Tailwind chipClass; types added; th scope; avatar inline style → Tailwind; EmptyState; cn() for conditionals |
 
 ---

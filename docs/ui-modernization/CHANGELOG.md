@@ -90,6 +90,35 @@ All 7 report routes reviewed and found production-ready:
 
 **Build results:** ✅ 0 TypeScript errors · 0 lint errors · 412ms build
 
+### Routes: `/admin/users`, `/admin/users/create`, `/admin/users/:id/edit`
+
+**UserList.tsx:**
+- `UserRecord` interface added (all API fields typed)
+- `BOOTSTRAP_TO_BADGE` map added: Bootstrap color names → shadcn Badge variants
+- `useState` typed: `UserRecord[]`, `UserRecord | null`
+- `handleDelete` param typed: `(userId: number)`
+- `catch (err: unknown)` in both catch blocks
+- `getRoleBadgeProps` usage removed; role badges now use `ROLE_BADGE_STYLE`/`ROLE_BADGE_COLOR` with shadcn `<Badge>` or custom `<span>` for special roles
+- Loading state: bare text div → 5-row skeleton table with matching columns
+- Empty state: bare icon div → `EmptyState` component with Add User CTA
+- `scope="col"` on all 5 `<th>` elements (WCAG 1.3.1)
+- `EmptyState` and `Skeleton` imports added
+
+**UserForm.tsx:**
+- `UserFormData` type added covering all form fields
+- `emptyForm` annotated as `const emptyForm: UserFormData`
+- `availableRoles` state: `useState([])` → `useState<string[]>([])`
+- `handleChange` typed: `React.ChangeEvent<HTMLInputElement>`
+- `setFlag` typed: `(name: keyof UserFormData, checked: boolean)`
+- `toggleRole` typed: `(code: string)`
+- `handleSubmit` typed: `async (e: React.FormEvent)`
+- `FieldError` typed: `({ name }: { name: string })`
+- All 3 catch blocks: `catch (err: unknown)` with typed cast
+- Role picker: template literal className → `cn()` with `border-primary/50 bg-primary/10` checked state
+- `cn` import added from `@/lib/utils`
+
+**Build results:** ✅ 0 TypeScript errors · 0 lint errors · 425ms build
+
 ---
 
 ## Session 2 — 2026-07-18

@@ -6,12 +6,14 @@ import { Plus, Pencil, Trash2, Search, Users } from "lucide-react";
 import { deleteUser, listUsers } from "../../api/users";
 import { AuthContext } from "../../context/AuthContext";
 import { getErrorMessage } from "../../utils/errorUtils";
-import { ROLE_LABELS, getRoleBadgeProps } from "../../utils/roleConstants";
+import { ROLE_LABELS, ROLE_BADGE_COLOR, ROLE_BADGE_STYLE } from "../../utils/roleConstants";
+import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -19,16 +21,34 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 
+interface UserRecord {
+    id: number;
+    username: string;
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+    is_active: boolean;
+    is_superuser?: boolean;
+    is_staff?: boolean;
+    roles?: string[];
+    date_joined?: string;
+}
+
+const BOOTSTRAP_TO_BADGE: Record<string, "default" | "secondary" | "destructive" | "success" | "warning" | "info"> = {
+    primary: "default", success: "success", danger: "destructive",
+    warning: "warning", info: "info", secondary: "secondary", dark: "secondary",
+};
+
 export default function UserList() {
     const navigate = useNavigate();
     const { user: currentUser } = useContext(AuthContext);
 
-    const [users, setUsers] = useState([]);
+    const [users, setUsers] = useState<UserRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [roleFilter, setRoleFilter] = useState("");
     const [activeFilter, setActiveFilter] = useState("");
-    const [confirmDelete, setConfirmDelete] = useState(null);
+    const [confirmDelete, setConfirmDelete] = useState<UserRecord | null>(null);
 
     const fetchUsers = useCallback(async () => {
         setLoading(true);
@@ -39,8 +59,8 @@ export default function UserList() {
             if (activeFilter !== "") params.is_active = activeFilter;
             const { data } = await listUsers(params);
             setUsers(Array.isArray(data) ? data : data.results ?? []);
-        } catch (err) {
-            toast.error(getErrorMessage(err));
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err as Error));
         } finally {
             setLoading(false);
         }
@@ -48,14 +68,14 @@ export default function UserList() {
 
     useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-    const handleDelete = async (userId) => {
+    const handleDelete = async (userId: number) => {
         try {
             await deleteUser(userId);
             toast.success("User deleted");
             setConfirmDelete(null);
             fetchUsers();
-        } catch (err) {
-            toast.error(getErrorMessage(err));
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err as Error));
         }
     };
 
@@ -112,22 +132,47 @@ export default function UserList() {
             <Card>
                 <CardContent className="p-0">
                     {loading ? (
-                        <div className="p-8 text-center text-sm text-muted-foreground">Loading users…</div>
-                    ) : users.length === 0 ? (
-                        <div className="flex flex-col items-center gap-2 p-10 text-center text-muted-foreground">
-                            <Users className="size-8 opacity-50" />
-                            <span className="text-sm">No users found.</span>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-border bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <th scope="col" className="px-4 py-2.5">User</th>
+                                        <th scope="col" className="px-4 py-2.5">Email</th>
+                                        <th scope="col" className="px-4 py-2.5">Roles</th>
+                                        <th scope="col" className="px-4 py-2.5">Status</th>
+                                        <th scope="col" className="px-4 py-2.5 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[...Array(5)].map((_, i) => (
+                                        <tr key={i} className="border-b border-border/60">
+                                            <td className="px-4 py-2.5"><Skeleton className="h-4 w-28" /></td>
+                                            <td className="px-4 py-2.5"><Skeleton className="h-3 w-36" /></td>
+                                            <td className="px-4 py-2.5"><Skeleton className="h-4 w-20 rounded-full" /></td>
+                                            <td className="px-4 py-2.5"><Skeleton className="h-4 w-14 rounded-full" /></td>
+                                            <td className="px-4 py-2.5"><div className="flex justify-end gap-1.5"><Skeleton className="h-7 w-16 rounded-md" /><Skeleton className="size-7 rounded-md" /></div></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
+                    ) : users.length === 0 ? (
+                        <EmptyState
+                            icon={Users}
+                            title="No users found"
+                            description="Try adjusting the filters or add a new user"
+                            action={<Button size="sm" onClick={() => navigate("/admin/users/create")}><Plus className="size-4" />Add User</Button>}
+                        />
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-border bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                        <th className="px-4 py-2.5">User</th>
-                                        <th className="px-4 py-2.5">Email</th>
-                                        <th className="px-4 py-2.5">Roles</th>
-                                        <th className="px-4 py-2.5">Status</th>
-                                        <th className="px-4 py-2.5 text-right">Actions</th>
+                                        <th scope="col" className="px-4 py-2.5">User</th>
+                                        <th scope="col" className="px-4 py-2.5">Email</th>
+                                        <th scope="col" className="px-4 py-2.5">Roles</th>
+                                        <th scope="col" className="px-4 py-2.5">Status</th>
+                                        <th scope="col" className="px-4 py-2.5 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -149,12 +194,18 @@ export default function UserList() {
                                                 ) : (
                                                     <div className="flex flex-wrap gap-1">
                                                         {(u.roles ?? []).map((r) => {
-                                                            const bp = getRoleBadgeProps(r);
-                                                            return (
-                                                                <span key={r} className={bp.className} style={{ fontSize: 11, ...bp.style }}>
-                                                                    {ROLE_LABELS[r] ?? r}
-                                                                </span>
-                                                            );
+                                                            const customStyle = ROLE_BADGE_STYLE?.[r as keyof typeof ROLE_BADGE_STYLE];
+                                                            const bootstrapColor = ROLE_BADGE_COLOR?.[r as keyof typeof ROLE_BADGE_COLOR];
+                                                            const label = ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r;
+                                                            if (customStyle) {
+                                                                return (
+                                                                    <span key={r} className="inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium" style={customStyle}>
+                                                                        {label}
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            const variant = BOOTSTRAP_TO_BADGE[bootstrapColor ?? "secondary"] ?? "secondary";
+                                                            return <Badge key={r} variant={variant} className="text-[10px]">{label}</Badge>;
                                                         })}
                                                     </div>
                                                 )}

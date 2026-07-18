@@ -21,6 +21,7 @@ import { buildLicensePatch, buildLicenseSummary, getMasterFormApiBase } from "./
 import LicenseParsePanel from "./LicenseParsePanel";
 import TradeMetaBadges from "./TradeMetaBadges";
 import BoeParsePanel from "./BoeParsePanel";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1374,7 +1375,7 @@ export default function MasterForm({
                         selected={parseDate(value)}
                         onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
-                        className={`flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring  aria-invalid:border-destructive ${errorClass}`}
+                        className={cn("flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring aria-invalid:border-destructive", errorClass)}
                         wrapperClassName="w-100 d-block"
                         placeholderText="Select date"
                         isClearable
@@ -1411,13 +1412,13 @@ export default function MasterForm({
                 <div>
                     <input
                         type="file"
-                        className={`flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring  aria-invalid:border-destructive ${errorClass}`}
+                        className={cn("flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring aria-invalid:border-destructive", errorClass)}
                         onChange={(e) => handleChange(fieldName, e.target.files[0])}
                         accept="image/*"
                     />
                     {existingFileUrl && !hasNewFile && (
                         <div className="mt-2">
-                            <small className="text-muted">Current file:</small>
+                            <small className="text-muted-foreground">Current file:</small>
                             <div className="flex items-center gap-2 mt-1">
                                 <a
                                     onClick={() => openDocument(existingFileUrl)}
@@ -1535,7 +1536,7 @@ export default function MasterForm({
 
     if (loading) {
         return (
-            <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
+            <div className="min-h-screen bg-background">
                 <div className="flex justify-between items-center mb-4">
                     <div>
                         <div className="mb-1 h-6 w-1/3 animate-pulse rounded-md bg-muted"></div>
@@ -1563,7 +1564,7 @@ export default function MasterForm({
             {/* Compact Header */}
             <div className="flex justify-between items-center mb-4">
                 <div>
-                    <h4 className="mb-0 font-bold" style={{ color: 'var(--tb-text)' }}>
+                    <h4 className="mb-0 font-bold text-foreground">
                         <EntityIcon className="size-5 mr-2" style={{ color: entityColor }} />
                         {isEdit ? 'Edit' : 'New'} {entityTitle}
                         {/* Clickable BOE number → opens saved BOE copy PDF */}
@@ -1574,22 +1575,21 @@ export default function MasterForm({
                             return pdfUrl ? (
                                 <a
                                     onClick={() => openDocument(pdfUrl)}
-                                    className="ms-2"
+                                    className="ml-2 inline-flex items-center gap-1 text-[13.5px] font-semibold text-primary no-underline cursor-pointer hover:underline"
                                     title="View BOE copy PDF"
-                                    style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--primary-color)', textDecoration: 'none', cursor: 'pointer' }}
                                 >
                                     <FileText className="size-4" aria-hidden="true" />
                                     {formData.bill_of_entry_number}
                                     <ExternalLink className="size-4" aria-hidden="true" />
                                 </a>
                             ) : (
-                                <span className="ms-2" style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                                <span className="ml-2 text-[13.5px] font-medium text-muted-foreground">
                                     {formData.bill_of_entry_number}
                                 </span>
                             );
                         })()}
                     </h4>
-                    <small className="text-muted">{isEdit ? 'Update existing record' : 'Create a new record'}</small>
+                    <small className="text-muted-foreground">{isEdit ? 'Update existing record' : 'Create a new record'}</small>
                 </div>
                 <Button
                     type="button"
@@ -1618,19 +1618,19 @@ export default function MasterForm({
                 </div>
                 <div className="p-6">
                     {error && (
-                        <div className="alert alert-danger flex items-start gap-2 mb-4">
-                            <TriangleAlert className="size-4" aria-hidden="true" />
+                        <div className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
+                            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                             <div>
                                 <strong>Validation Error</strong>
-                                <div className="mt-1" style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{error}</div>
+                                <div className="mt-1 whitespace-pre-wrap text-sm">{error}</div>
                             </div>
                         </div>
                     )}
 
                     {fetchingAllotment && (
-                        <div className="alert alert-info flex items-center gap-2 mb-4">
-                            <span className="inline-block size-4 flex-shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
-                            Fetching allotment details...
+                        <div className="mb-4 flex items-center gap-2 rounded-lg border border-info/30 bg-info/10 px-3.5 py-2.5 text-[13px] text-info">
+                            <span className="inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true"></span>
+                            Fetching allotment details…
                         </div>
                     )}
 
@@ -1640,43 +1640,40 @@ export default function MasterForm({
                             ? ((formData.boe_pdf_copy.startsWith('http') ? '' : (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')) + formData.boe_pdf_copy)
                             : null;
                         return (
-                            <section className="surface-card mb-4" style={{ padding: 16 }}>
-                                <div className="flex items-center justify-between flex-wrap" style={{ gap: 12 }}>
-                                    <div className="flex items-center" style={{ gap: 10 }}>
+                            <section className="mb-4 rounded-md border border-border bg-card p-4 shadow-sm">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2.5">
                                         <span
                                             aria-hidden="true"
-                                            style={{
-                                                width: 36, height: 36, borderRadius: 8,
-                                                background: pdfUrl ? 'var(--danger-bg)' : 'var(--surface-sunken)',
-                                                color: pdfUrl ? 'var(--danger-color)' : 'var(--text-tertiary)',
-                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                                            }}
+                                            className={cn(
+                                                "inline-flex size-9 shrink-0 items-center justify-center rounded-lg",
+                                                pdfUrl ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground",
+                                            )}
                                         >
                                             <FileText className="size-4" aria-hidden="true" />
                                         </span>
                                         <div>
-                                            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>BOE Copy</div>
+                                            <div className="text-sm font-semibold text-foreground">BOE Copy</div>
                                             {pdfUrl ? (
                                                 <a
                                                     onClick={() => openDocument(pdfUrl)}
-                                                    style={{ fontSize: 12.5, color: 'var(--primary-color)', cursor: 'pointer' }}
+                                                    className="inline-flex cursor-pointer items-center gap-1 text-[12.5px] text-primary hover:underline"
                                                 >
                                                     <ExternalLink className="size-4" aria-hidden="true" />
                                                     View saved BOE PDF
                                                 </a>
                                             ) : (
-                                                <span style={{ fontSize: 12.5, color: 'var(--text-tertiary)' }}>No PDF saved yet</span>
+                                                <span className="text-[12.5px] text-muted-foreground/60">No PDF saved yet</span>
                                             )}
                                         </div>
                                     </div>
                                     {/* Allow replacing the copy */}
-                                    <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <input
                                             type="file"
                                             accept=".pdf,application/pdf"
                                             id="boe-pdf-input"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
-                                            style={{ maxWidth: 260 }}
+                                            className="flex h-8 w-full max-w-[260px] rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             onChange={(e) => {
                                                 setBoePdfFile(e.target.files?.[0] || null);
                                                 setBoeParseSummary(null);
@@ -1744,18 +1741,18 @@ export default function MasterForm({
                                 const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
                                 return (
                                     <div key={field} className={col}>
-                                        <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>
-                                            {label}{fieldMeta.required && <span className="text-danger ml-1">*</span>}
+                                        <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">
+                                            {label}{fieldMeta.required && <span className="text-destructive ml-1">*</span>}
                                         </label>
                                         {renderField(field)}
                                         {hasError && (
-                                            <div className="mt-0.5 text-[11.5px] text-destructive block" style={{ fontSize: 12, marginTop: 4 }}>
+                                            <div className="mt-1 text-[11.5px] text-destructive block">
                                                 <AlertCircle className="size-4" aria-hidden="true" />
                                                 {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
                                             </div>
                                         )}
                                         {helpText && !hasError && (
-                                            <small className="form-text block mt-1" style={{ color: 'var(--text-secondary)', fontSize: '0.73rem' }}>
+                                            <small className="mt-1 block text-[0.73rem] text-muted-foreground">
                                                 <Info className="size-4" aria-hidden="true" />{helpText}
                                             </small>
                                         )}
@@ -1774,9 +1771,9 @@ export default function MasterForm({
                                             const visibleFields = section.fields.filter(f => activeFields.includes(f));
                                             if (visibleFields.length === 0) return null;
                                             return (
-                                                <div key={section.title} style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: `3px solid ${section.color}` }}>
-                                                    <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: section.color, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><FileText className="size-3.5" style={{opacity:0.7}}/>{section.title}</span>
+                                                <div key={section.title} className="rounded-md bg-muted/60 px-5 py-4" style={{ borderLeft: `3px solid ${section.color}` }}>
+                                                    <div className="mb-3.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em]" style={{ color: section.color }}>
+                                                        <span className="inline-flex items-center gap-1.5"><FileText className="size-3.5 opacity-70" aria-hidden="true" />{section.title}</span>
                                                     </div>
                                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                                                         {visibleFields.map(f => renderOneField(f, section.cols?.[f]))}
@@ -1785,8 +1782,8 @@ export default function MasterForm({
                                             );
                                         })}
                                         {remainingFields.length > 0 && (
-                                            <div style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-border-strong)' }}>
-                                                <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-text-secondary)', marginBottom: '14px' }}>
+                                            <div className="rounded-md border-l-[3px] border-l-border bg-muted/60 px-5 py-4">
+                                                <div className="mb-3.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
                                                     <MoreHorizontal className="size-4" aria-hidden="true" /> Other Fields
                                                 </div>
                                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
@@ -1834,7 +1831,7 @@ export default function MasterForm({
                                     };
                                     return (
                                         <>
-                                            <ul className="flex gap-1 border-b border-border" style={{ marginBottom: 0 }}>
+                                            <ul className="mb-0 flex gap-1 border-b border-border">
                                                 {nestedEntries.map(([nestedKey]) => {
                                                     const count = (formData[nestedKey] || []).length;
                                                     const isActive = activeTab === nestedKey;
@@ -1844,7 +1841,7 @@ export default function MasterForm({
                                                         <li key={nestedKey} className="nav-item">
                                                             <button
                                                                 type="button"
-                                                                className={`flex cursor-pointer items-center gap-2 rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-border bg-card text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                                                                className={cn("flex cursor-pointer items-center gap-2 rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors", isActive ? 'border-border bg-card text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}
                                                                 onClick={() => setActiveNestedTab(nestedKey)}
                                                                 style={{ fontSize: '0.83rem', fontWeight: isActive ? '600' : '500', padding: '8px 16px', color: isActive ? entityColor : 'var(--tb-text-secondary)', borderColor: isActive ? `${entityColor} ${entityColor} white` : 'transparent', borderRadius: '8px 8px 0 0' }}
                                                             >
@@ -1861,7 +1858,7 @@ export default function MasterForm({
                                                     );
                                                 })}
                                             </ul>
-                                            <div style={{ border: '1px solid var(--tb-border-soft)', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '20px 16px', background: 'var(--tb-card-bg)' }}>
+                                            <div className="rounded-b-xl border border-t-0 border-border/60 bg-card p-4">
                                                 {nestedEntries.map(([nestedKey, nestedDef]) => activeTab === nestedKey ? (
                                                     <NestedFieldArray
                                                         key={nestedKey}

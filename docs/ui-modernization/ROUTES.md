@@ -40,12 +40,12 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/licenses` | `pages/masters/MasterList.tsx` | TODO | — | — | Shared with allotments/BOE/trades — complex |
-| `/licenses/create` | `pages/masters/MasterForm.tsx` | TODO | — | — | 1954 lines, highest complexity |
-| `/licenses/:id/edit` | `pages/masters/MasterForm.tsx` | TODO | — | — | Same as create |
-| `/incentive-licenses` | `pages/masters/MasterList.tsx` | TODO | — | — | Shared component |
-| `/incentive-licenses/create` | `pages/masters/MasterForm.tsx` | TODO | — | — | — |
-| `/incentive-licenses/:id/edit` | `pages/masters/MasterForm.tsx` | TODO | — | — | — |
+| `/licenses` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
+| `/licenses/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | cn(); template literals → cn(); text-muted → text-muted-foreground; container-fluid → min-h-screen; alerts; BOE copy modernized; form-label; text-danger → text-destructive; section boxes; tab panel |
+| `/licenses/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component as create |
+| `/incentive-licenses` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
+| `/incentive-licenses/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
+| `/incentive-licenses/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
 
 ---
 
@@ -53,17 +53,17 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/allotments` | `pages/masters/MasterList.tsx` | TODO | — | — | Uses EntityCard/DetailTable/AccordionTable |
-| `/allotments/create` | `pages/masters/MasterForm.tsx` | TODO | — | — | — |
-| `/allotments/:id/edit` | `pages/masters/MasterForm.tsx` | TODO | — | — | — |
-| `/allotments/:id/allocate` | `pages/AllotmentAction.tsx` | TODO | — | — | Complex form with filters |
-| `/bill-of-entries` | `pages/masters/MasterList.tsx` | TODO | — | — | EntityCard layout |
-| `/bill-of-entries/create` | `pages/masters/MasterForm.tsx` | TODO | — | — | — |
-| `/bill-of-entries/:id/edit` | `pages/masters/MasterForm.tsx` | TODO | — | — | — |
-| `/bill-of-entries/:id/generate-transfer-letter` | `pages/BOETransferLetter.tsx` | TODO | — | — | — |
-| `/trades` | `pages/masters/MasterList.tsx` | TODO | — | — | — |
-| `/trades/create` | `pages/TradeForm.tsx` + `TradeConfigCard.tsx` | TODO | — | — | Complex multi-section form |
-| `/trades/:id/edit` | `pages/TradeForm.tsx` | TODO | — | — | — |
+| `/allotments` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
+| `/allotments/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
+| `/allotments/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
+| `/allotments/:id/allocate` | `pages/AllotmentAction.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
+| `/bill-of-entries` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
+| `/bill-of-entries/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
+| `/bill-of-entries/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
+| `/bill-of-entries/:id/generate-transfer-letter` | `pages/BOETransferLetter.tsx` | FROZEN | Session-3 | 2026-07-18 | Detail typed; boe state typed |
+| `/trades` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
+| `/trades/create` | `pages/TradeForm.tsx` + `TradeConfigCard.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
+| `/trades/:id/edit` | `pages/TradeForm.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
 
 ---
 
@@ -97,9 +97,9 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/masters/:entity` | `pages/masters/MasterList.tsx` | TODO | — | — | Companies, ports, HS codes, etc. |
-| `/masters/:entity/create` | `pages/masters/MasterForm.tsx` | TODO | — | — | — |
-| `/masters/:entity/:id/edit` | `pages/masters/MasterForm.tsx` | TODO | — | — | — |
+| `/masters/:entity` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
+| `/masters/:entity/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
+| `/masters/:entity/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
 
 ---
 

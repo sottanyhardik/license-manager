@@ -110,6 +110,59 @@ interface LicenseDoc {
     [key: string]: unknown;
 }
 
+interface LedgerTransaction {
+    date: string | null;
+    type: string;
+    particular: string;
+    invoice_number: string;
+    cif_usd: number;
+    debit_cif: number;
+    credit_cif: number;
+    rate: number;
+    amount: number;
+    debit_amount: number;
+    credit_amount: number;
+    balance: number;
+    profit_loss: number;
+    company_name?: string;
+    trade_id?: number;
+    items?: string;
+    sion_norms?: string;
+    qty?: number;
+}
+
+interface LedgerData {
+    license_id: number;
+    license_type: string;
+    license_number: string;
+    license_date: string | null;
+    expiry_date: string | null;
+    exporter: string;
+    port: string;
+    total_value: number;
+    available_balance: number;
+    db_balance: number;
+    transactions: LedgerTransaction[];
+}
+
+interface Transfer {
+    transfer_initiation_date: string | null;
+    transfer_acceptance_date: string | null;
+    from_iec: string | null;
+    from_name: string | null;
+    to_iec: string | null;
+    to_name: string | null;
+    transfer_status: string | null;
+}
+
+interface OwnershipData {
+    license_number: string;
+    last_ownership_fetch: string | null;
+    file_transfer_status: string | null;
+    current_owner: { iec: string; name: string; address: string | null } | null;
+    transfers: Transfer[];
+}
+
 export interface LicensesTableProps {
     loading: boolean;
     data: LicenseListItem[];
@@ -139,12 +192,6 @@ function fmtInr(val: unknown): string {
     return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
-function fmtCifFc(val: unknown): string {
-    if (val === null || val === undefined || val === "") return "—";
-    const n = Number(val);
-    if (isNaN(n)) return "—";
-    return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-}
 
 function parseIndianDate(s: string | null | undefined): Date | null {
     if (!s) return null;
@@ -447,50 +494,143 @@ function AllocationTab({ item: _item, detail, loading }: { item: LicenseListItem
     );
 }
 
-function TransactionsTab({ item: _item, detail, loading }: { item: LicenseListItem; detail: LicenseDetail | null; loading: boolean }) {
+function TransactionsTab({
+    item: _item,
+    ledger,
+    loading,
+}: {
+    item: LicenseListItem;
+    ledger: LedgerData | null;
+    loading: boolean;
+}) {
     if (loading) return <TabSkeleton />;
-    // Export lines are available from detail; BOE transactions would need a separate endpoint
-    const rows = detail?.export_license ?? [];
+    if (!ledger) return <TabSkeleton />;
 
-    if (rows.length === 0) {
+    const txns = ledger.transactions ?? [];
+
+    if (txns.length === 0) {
         return (
             <EmptyTabState
-                icon={FileText}
-                title="No export items"
-                description="No export transactions are linked to this license."
+                icon={ScrollText}
+                title="No transactions"
+                description="No ledger entries found for this license."
             />
         );
     }
 
+    function typeBadge(type: string) {
+        const t = (type || "").toUpperCase();
+        if (t === "OPENING") return "bg-blue-50 text-blue-700 ring-1 ring-blue-200";
+        if (t.includes("PURCHASE") || t.includes("COMMISSION")) return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
+        if (t === "SALE") return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+        return "bg-muted text-muted-foreground ring-1 ring-border";
+    }
+
+    const fmtNum = (v: number | undefined | null, dp = 2) => {
+        if (!v && v !== 0) return "—";
+        return Number(v).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    };
+
     return (
-        <div className="overflow-x-auto py-4">
-            <table className="w-full text-sm">
-                <thead>
-                    <tr className="border-b border-border/60 text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        <th scope="col" className="pb-2 pr-4">Description</th>
-                        <th scope="col" className="pb-2 pr-4">Norm Class</th>
-                        <th scope="col" className="pb-2 pr-4 text-right">CIF FC</th>
-                        <th scope="col" className="pb-2 text-right">FOB INR</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40">
-                    {rows.map((r) => (
-                        <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="py-2 pr-4 text-xs">{r.description || "—"}</td>
-                            <td className="py-2 pr-4 text-xs text-muted-foreground">{r.norm_class_label || "—"}</td>
-                            <td className="py-2 pr-4 text-right tabular-nums text-xs">{fmtCifFc(r.cif_fc)}</td>
-                            <td className="py-2 text-right tabular-nums text-xs">{fmtInr(r.fob_inr)}</td>
+        <div className="py-3">
+            {/* Summary bar */}
+            <div className="mb-3 flex flex-wrap gap-4 rounded-lg bg-muted/30 px-4 py-2.5 text-sm">
+                <div>
+                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Total Value</span>
+                    <div className="font-semibold tabular-nums">${fmtNum(ledger.total_value)}</div>
+                </div>
+                <div>
+                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Available Balance</span>
+                    <div className="font-semibold tabular-nums text-primary">${fmtNum(ledger.available_balance)}</div>
+                </div>
+                <div>
+                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Transactions</span>
+                    <div className="font-semibold tabular-nums">{txns.length}</div>
+                </div>
+            </div>
+
+            {/* Ledger table */}
+            <div className="overflow-x-auto rounded-lg border border-border/50">
+                <table className="w-full text-sm">
+                    <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
+                        <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            <th scope="col" className="px-3 py-2.5">Date</th>
+                            <th scope="col" className="px-3 py-2.5">Type</th>
+                            <th scope="col" className="px-3 py-2.5">Particular</th>
+                            <th scope="col" className="px-3 py-2.5">Reference</th>
+                            <th scope="col" className="px-3 py-2.5 text-right">Debit (CIF $)</th>
+                            <th scope="col" className="px-3 py-2.5 text-right">Credit (CIF $)</th>
+                            <th scope="col" className="px-3 py-2.5 text-right">Balance (CIF $)</th>
+                            <th scope="col" className="hidden px-3 py-2.5 text-right lg:table-cell">P/L (&#8377;)</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                        {txns.map((txn, idx) => {
+                            const isDebit = txn.debit_cif > 0;
+                            const isCredit = txn.credit_cif > 0;
+                            return (
+                                <tr key={`${txn.trade_id ?? idx}`} className="transition-colors hover:bg-muted/20">
+                                    <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
+                                        {txn.date ? String(txn.date) : "—"}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <span className={cn("rounded-full px-2 py-0.5 text-[10.5px] font-semibold", typeBadge(txn.type))}>
+                                            {txn.type}
+                                        </span>
+                                    </td>
+                                    <td className="max-w-[200px] px-3 py-2">
+                                        <div className="truncate text-xs" title={txn.particular}>{txn.particular || "—"}</div>
+                                        {txn.items && <div className="truncate text-[10.5px] text-muted-foreground" title={txn.items}>{txn.items}</div>}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">
+                                        {txn.invoice_number || "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-xs">
+                                        {isDebit ? <span className="font-medium text-amber-700">{fmtNum(txn.debit_cif)}</span> : <span className="text-muted-foreground/40">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-xs">
+                                        {isCredit ? <span className="font-medium text-emerald-700">{fmtNum(txn.credit_cif)}</span> : <span className="text-muted-foreground/40">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold text-foreground">
+                                        {fmtNum(txn.balance)}
+                                    </td>
+                                    <td className="hidden px-3 py-2 text-right tabular-nums text-xs lg:table-cell">
+                                        {txn.profit_loss !== 0 ? (
+                                            <span className={txn.profit_loss > 0 ? "text-emerald-700" : "text-destructive"}>
+                                                {txn.profit_loss > 0 ? "+" : ""}{fmtNum(txn.profit_loss, 0)}
+                                            </span>
+                                        ) : <span className="text-muted-foreground/40">—</span>}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
 
 function DocumentsTab({ item: _item, detail, loading }: { item: LicenseListItem; detail: LicenseDetail | null; loading: boolean }) {
     if (loading) return <TabSkeleton />;
+
     const docs = detail?.license_documents ?? [];
+
+    const typeBadgeCls = (type: string) => {
+        const t = (type || "").toUpperCase();
+        if (t === "LICENSE COPY") return "bg-blue-50 text-blue-700 ring-1 ring-blue-200";
+        if (t === "TRANSFER LETTER") return "bg-violet-50 text-violet-700 ring-1 ring-violet-200";
+        return "bg-muted text-muted-foreground ring-1 ring-border";
+    };
+
+    const getFileName = (file: string | undefined) => {
+        if (!file) return "document";
+        try {
+            return decodeURIComponent(String(file).split("?")[0].split("/").pop() || "document");
+        } catch {
+            return "document";
+        }
+    };
 
     if (docs.length === 0) {
         return (
@@ -503,53 +643,174 @@ function DocumentsTab({ item: _item, detail, loading }: { item: LicenseListItem;
     }
 
     return (
-        <div className="space-y-2 py-4">
-            {docs.map((doc) => {
-                const fileName = doc.file
-                    ? String(doc.file).split("?")[0].split("/").pop() || "document"
-                    : "document";
-                return (
-                    <div
-                        key={doc.id}
-                        className="flex items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5"
-                    >
-                        <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium">{doc.type || "Document"}</div>
-                            <div className="truncate text-xs text-muted-foreground">{decodeURIComponent(fileName)}</div>
-                        </div>
-                        {doc.file && (
-                            <button
-                                type="button"
-                                onClick={() => openDocument(doc.file as string)}
-                                className="text-xs text-primary hover:underline"
-                            >
-                                View
-                            </button>
-                        )}
-                    </div>
-                );
-            })}
+        <div className="py-3">
+            <div className="overflow-hidden rounded-lg border border-border/50">
+                <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                        <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            <th scope="col" className="px-4 py-2.5">Type</th>
+                            <th scope="col" className="px-4 py-2.5">File Name</th>
+                            <th scope="col" className="px-4 py-2.5 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                        {docs.map((doc) => {
+                            const fileName = getFileName(doc.file as string | undefined);
+                            return (
+                                <tr key={doc.id} className="transition-colors hover:bg-muted/20">
+                                    <td className="px-4 py-3">
+                                        <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", typeBadgeCls(doc.type as string))}>
+                                            {doc.type as string || "OTHER"}
+                                        </span>
+                                    </td>
+                                    <td className="max-w-[300px] px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                            <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                            <span className="truncate text-xs text-foreground" title={fileName}>{fileName}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        {doc.file && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openDocument(doc.file as string)}
+                                                className="text-xs font-medium text-primary hover:underline focus-visible:underline focus-visible:outline-none"
+                                            >
+                                                View
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
 
-function HistoryTab({ item }: { item: LicenseListItem }) {
+function HistoryTab({
+    item: _item,
+    ownershipData,
+    loading,
+}: {
+    item: LicenseListItem;
+    ownershipData: OwnershipData | null;
+    loading: boolean;
+}) {
+    if (loading) return <TabSkeleton />;
+
+    if (!ownershipData) {
+        return (
+            <EmptyTabState
+                icon={Network}
+                title="No ownership data"
+                description="Click 'Fetch from DGFT' in the action panel to load ownership history."
+            />
+        );
+    }
+
+    const transfers = ownershipData.transfers ?? [];
+
+    function statusConfig(status: string | null) {
+        const s = (status || "").toUpperCase();
+        if (s.includes("COMPLETE") || s.includes("TRANSFER")) return { dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700" };
+        if (s.includes("PENDING") || s.includes("PROCESSING") || s.includes("INITIAT")) return { dot: "bg-amber-400", badge: "bg-amber-50 text-amber-700" };
+        if (s.includes("REJECT") || s.includes("CANCEL")) return { dot: "bg-destructive", badge: "bg-destructive/10 text-destructive" };
+        return { dot: "bg-muted-foreground/40", badge: "bg-muted text-muted-foreground" };
+    }
+
     return (
-        <div className="py-4">
-            {item.latest_transfer ? (
-                <div className="rounded-lg border border-border/60 bg-card px-4 py-3">
-                    <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Current Transfer Status
-                    </div>
-                    <div className="mt-1 text-sm font-medium text-foreground">{item.latest_transfer}</div>
+        <div className="py-3">
+            {/* Current owner card */}
+            {ownershipData.current_owner && (
+                <div className="mb-4 rounded-lg border border-border/50 bg-card px-4 py-3">
+                    <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Current Owner</div>
+                    <div className="mt-1 font-semibold text-foreground">{ownershipData.current_owner.name}</div>
+                    <div className="text-xs text-muted-foreground">IEC: {ownershipData.current_owner.iec}</div>
+                    {ownershipData.current_owner.address && (
+                        <div className="mt-0.5 text-xs text-muted-foreground">{ownershipData.current_owner.address}</div>
+                    )}
+                    {ownershipData.last_ownership_fetch && (
+                        <div className="mt-2 text-[10.5px] text-muted-foreground">
+                            Last synced: {new Date(ownershipData.last_ownership_fetch).toLocaleString("en-IN")}
+                        </div>
+                    )}
                 </div>
-            ) : (
+            )}
+
+            {/* File transfer status */}
+            {ownershipData.file_transfer_status && (
+                <div className="mb-4 rounded-lg border border-border/50 bg-muted/30 px-4 py-2.5">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">File Transfer Status: </span>
+                    <span className="text-sm font-medium text-foreground">{ownershipData.file_transfer_status}</span>
+                </div>
+            )}
+
+            {/* Vertical timeline of transfers */}
+            {transfers.length === 0 ? (
                 <EmptyTabState
                     icon={Network}
                     title="No transfer history"
-                    description="No ownership transfers have been recorded for this license."
+                    description="No ownership transfers recorded for this license."
                 />
+            ) : (
+                <div className="relative pl-6">
+                    {/* Vertical line */}
+                    <div className="absolute bottom-0 left-2 top-0 w-px bg-border" aria-hidden="true" />
+
+                    {transfers.map((t, idx) => {
+                        const sc = statusConfig(t.transfer_status);
+                        const date = t.transfer_acceptance_date || t.transfer_initiation_date;
+                        const formattedDate = date
+                            ? new Date(date).toLocaleDateString("en-IN", {
+                                day: "numeric", month: "short", year: "numeric",
+                            })
+                            : null;
+
+                        return (
+                            <div key={idx} className="relative mb-5 last:mb-0">
+                                {/* Dot */}
+                                <div className={cn("absolute -left-[22px] top-1.5 size-3 rounded-full ring-2 ring-background", sc.dot)} aria-hidden="true" />
+
+                                <div className="rounded-lg border border-border/50 bg-card px-4 py-3">
+                                    {/* Header */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", sc.badge)}>
+                                            {t.transfer_status || "Unknown"}
+                                        </span>
+                                        {formattedDate && (
+                                            <span className="text-xs text-muted-foreground">{formattedDate}</span>
+                                        )}
+                                    </div>
+
+                                    {/* From ↔ To */}
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                                        <div>
+                                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">From</div>
+                                            <div className="font-medium text-foreground">{t.from_name || "—"}</div>
+                                            {t.from_iec && <div className="text-xs text-muted-foreground">IEC: {t.from_iec}</div>}
+                                        </div>
+                                        <Network className="mx-2 size-4 shrink-0 text-muted-foreground/50" aria-hidden="true" />
+                                        <div>
+                                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">To</div>
+                                            <div className="font-medium text-foreground">{t.to_name || "—"}</div>
+                                            {t.to_iec && <div className="text-xs text-muted-foreground">IEC: {t.to_iec}</div>}
+                                        </div>
+                                    </div>
+
+                                    {/* Dates */}
+                                    {t.transfer_initiation_date && (
+                                        <div className="mt-1.5 text-[10.5px] text-muted-foreground">
+                                            Initiated: {new Date(t.transfer_initiation_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             )}
         </div>
     );
@@ -646,6 +907,10 @@ const LicenseRow = memo(function LicenseRow({
     const [visited, setVisited] = useState<Set<TabId>>(new Set(["overview"]));
     const [detail, setDetail] = useState<LicenseDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    const [ledger, setLedger] = useState<LedgerData | null>(null);
+    const [ledgerLoading, setLedgerLoading] = useState(false);
+    const [ownershipData, setOwnershipData] = useState<OwnershipData | null>(null);
+    const [ownershipLoading, setOwnershipLoading] = useState(false);
 
     const isExpired = !!(
         item.license_expiry_date && parseIndianDate(item.license_expiry_date)! < new Date()
@@ -674,7 +939,42 @@ const LicenseRow = memo(function LicenseRow({
         const t = tab as TabId;
         setActiveTab(t);
         setVisited((prev) => new Set([...prev, t]));
-    }, []);
+        // Lazy-fetch ledger on first visit to transactions tab
+        if (t === "transactions" && !ledger && !ledgerLoading) {
+            setLedgerLoading(true);
+            api.get(`license-ledger/${item.id}/ledger_detail/`)
+                .then(({ data }) => setLedger(data))
+                .catch(() => toast.error("Failed to load ledger"))
+                .finally(() => setLedgerLoading(false));
+        }
+        // Lazy-fetch ownership on first visit to history tab
+        if (t === "history" && !ownershipData && !ownershipLoading) {
+            setOwnershipLoading(true);
+            api.get(`license-actions/${item.id}/ownership-data/`)
+                .then(({ data }) => setOwnershipData(data))
+                .catch(() => toast.error("Failed to load ownership data"))
+                .finally(() => setOwnershipLoading(false));
+        }
+    }, [item.id, ledger, ledgerLoading, ownershipData, ownershipLoading]);
+
+    const handleOpenMergedPdf = useCallback(async (e: React.MouseEvent) => {
+        e.stopPropagation(); // prevent accordion toggle
+        if (!item.has_tl && !item.has_copy) return;
+        try {
+            const r = await api.get(`licenses/${item.id}/merged-documents/`, {
+                responseType: "blob",
+                headers: { Authorization: `Bearer ${localStorage.getItem("access")}` },
+            });
+            openPdfPreview(r.data as Blob, `${item.license_number || item.id}-documents.pdf`);
+        } catch (err: unknown) {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            if (status === 404) {
+                toast.warning("Document files are not available on this server.");
+            } else {
+                toast.error("Failed to load license documents");
+            }
+        }
+    }, [item.id, item.license_number, item.has_tl, item.has_copy]);
 
     const navigateToEdit = useCallback(() => {
         saveFilterState(entityName, {
@@ -737,10 +1037,22 @@ const LicenseRow = memo(function LicenseRow({
                 className="group w-full cursor-pointer text-left"
             >
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3.5">
-                    {/* License number — primary visual anchor */}
-                    <span className="font-mono text-[17px] font-bold tracking-tight text-foreground">
+                    {/* License number — primary visual anchor; click opens merged PDF */}
+                    <button
+                        type="button"
+                        onClick={handleOpenMergedPdf}
+                        onKeyDown={(e) => e.key === "Enter" && handleOpenMergedPdf(e as unknown as React.MouseEvent)}
+                        aria-label={`View documents for license ${item.license_number}`}
+                        className={cn(
+                            "font-mono text-[17px] font-bold tracking-tight",
+                            "underline-offset-2 focus-visible:outline-none focus-visible:ring-0",
+                            (item.has_tl || item.has_copy)
+                                ? "cursor-pointer text-primary hover:underline focus-visible:underline"
+                                : "cursor-default text-foreground"
+                        )}
+                    >
                         {item.license_number || "—"}
-                    </span>
+                    </button>
 
                     {/* Dates row */}
                     <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -874,13 +1186,13 @@ const LicenseRow = memo(function LicenseRow({
                                                     <AllocationTab item={item} detail={detail} loading={detailLoading} />
                                                 )}
                                                 {tab.id === "transactions" && (
-                                                    <TransactionsTab item={item} detail={detail} loading={detailLoading} />
+                                                    <TransactionsTab item={item} ledger={ledger} loading={ledgerLoading} />
                                                 )}
                                                 {tab.id === "documents" && (
                                                     <DocumentsTab item={item} detail={detail} loading={detailLoading} />
                                                 )}
                                                 {tab.id === "history" && (
-                                                    <HistoryTab item={item} />
+                                                    <HistoryTab item={item} ownershipData={ownershipData} loading={ownershipLoading} />
                                                 )}
                                             </>
                                         )}

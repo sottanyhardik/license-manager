@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, CloudOff, DatabaseZap, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { fetchMdsStatus, type MdsStatus } from "../../services/api/mdsApi";
 
 /** A mirror is considered "stale" if it has never synced. */
@@ -74,106 +77,65 @@ export default function MdsStatusCard() {
     const badge = status ? healthBadge(status) : null;
 
     return (
-        <div className="card" style={{ marginTop: 16 }}>
-            <div
-                className="card-header"
-                style={{ display: "flex", alignItems: "center", gap: 8 }}
-            >
-                <DatabaseZap className="size-4" aria-hidden="true" />
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>Master Data Service</span>
+        <Card className="mt-4">
+            {/* ── Card header ───────────────────────────────────── */}
+            <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+                <DatabaseZap className="size-4 text-muted-foreground" aria-hidden="true" />
+                <span className="text-[13.5px] font-semibold text-foreground">Master Data Service</span>
                 {badge && (
                     <Badge variant={badge.variant} className="ml-1">
-                        <badge.Icon aria-hidden="true" />
+                        <badge.Icon className="size-3" aria-hidden="true" />
                         {badge.label}
                     </Badge>
                 )}
-                <button
+                <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={load}
                     disabled={loading}
                     aria-label="Refresh Master Data Service status"
                     title="Refresh"
-                    style={{
-                        marginLeft: "auto",
-                        background: "transparent",
-                        border: "none",
-                        cursor: loading ? "default" : "pointer",
-                        color: "var(--tb-text-tertiary)",
-                        padding: 4,
-                        borderRadius: "var(--tb-r-sm)",
-                        opacity: loading ? 0.5 : 1,
-                        display: "inline-flex",
-                    }}
+                    className="ml-auto size-7"
                 >
                     <RefreshCw
-                        className={`size-4${loading ? " animate-spin" : ""}`}
+                        className={cn("size-4", loading && "animate-spin")}
                         aria-hidden="true"
                     />
-                </button>
+                </Button>
             </div>
 
-            <div className="card-body">
+            {/* ── Card body ──────────────────────────────────────── */}
+            <CardContent className="p-0">
+
                 {/* Loading */}
                 {loading && (
-                    <div
-                        style={{
-                            padding: "24px 8px",
-                            textAlign: "center",
-                            color: "var(--tb-text-tertiary)",
-                            fontSize: 12.5,
-                        }}
-                    >
+                    <p className="px-5 py-6 text-center text-[12.5px] text-muted-foreground">
                         Loading sync status…
-                    </div>
+                    </p>
                 )}
 
                 {/* Error */}
                 {!loading && error && (
-                    <div
-                        style={{
-                            padding: "24px 8px",
-                            textAlign: "center",
-                            color: "var(--tb-text-secondary)",
-                            fontSize: 12.5,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 10,
-                        }}
-                    >
-                        <AlertTriangle className="size-5" aria-hidden="true" style={{ color: "var(--tb-warning-text)" }} />
-                        Could not load Master-Data Service status.
-                        <button
+                    <div className="flex flex-col items-center gap-2.5 px-5 py-8 text-center text-[12.5px] text-muted-foreground">
+                        <AlertTriangle className="size-5 text-warning" aria-hidden="true" />
+                        <span>Could not load Master-Data Service status.</span>
+                        <Button
                             type="button"
+                            variant="outline"
+                            size="sm"
                             onClick={load}
-                            className="inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-medium"
-                            style={{
-                                fontSize: 12,
-                                background: "var(--tb-brand-50)",
-                                color: "var(--tb-brand-active)",
-                                border: "1px solid var(--tb-brand-100)",
-                            }}
+                            className="gap-1.5"
                         >
                             <RefreshCw className="size-3.5" aria-hidden="true" />
                             Retry
-                        </button>
+                        </Button>
                     </div>
                 )}
 
                 {/* Disabled */}
                 {!loading && !error && status && !status.enabled && (
-                    <div
-                        style={{
-                            padding: "24px 8px",
-                            textAlign: "center",
-                            color: "var(--tb-text-tertiary)",
-                            fontSize: 12.5,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 8,
-                        }}
-                    >
+                    <div className="flex flex-col items-center gap-2 px-5 py-8 text-center text-[12.5px] text-muted-foreground">
                         <CloudOff className="size-5" aria-hidden="true" />
                         Master Data Service not enabled
                     </div>
@@ -181,41 +143,23 @@ export default function MdsStatusCard() {
 
                 {/* Enabled */}
                 {!loading && !error && status && status.enabled && (
-                    <>
-                        <div
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                flexWrap: "wrap",
-                                fontSize: 12,
-                                color: "var(--tb-text-secondary)",
-                                marginBottom: 14,
-                            }}
-                        >
-                            <span style={{ fontWeight: 500, color: "var(--tb-text-tertiary)" }}>Base URL</span>
-                            <code
-                                style={{
-                                    fontSize: 11.5,
-                                    background: "var(--tb-sunken)",
-                                    border: "1px solid var(--tb-border-soft)",
-                                    borderRadius: "var(--tb-r-sm)",
-                                    padding: "1px 6px",
-                                    color: "var(--tb-text-primary)",
-                                    wordBreak: "break-all",
-                                }}
-                            >
+                    <div className="p-5">
+                        {/* Base URL row */}
+                        <div className="mb-3.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+                            <span className="font-medium">Base URL</span>
+                            <code className="rounded-md border border-border/60 bg-muted px-1.5 py-px text-[11.5px] text-foreground break-all">
                                 {status.base_url || "—"}
                             </code>
                         </div>
 
-                        <div className="table-responsive">
+                        {/* Models table */}
+                        <div className="overflow-x-auto">
                             <table className="table table-hover mb-0">
                                 <thead>
                                     <tr>
-                                        <th style={{ paddingLeft: 16 }}>Model</th>
-                                        <th className="text-end">Rows</th>
-                                        <th>Last Synced</th>
+                                        <th scope="col" className="pl-0">Model</th>
+                                        <th scope="col" className="text-end">Rows</th>
+                                        <th scope="col">Last Synced</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -223,23 +167,20 @@ export default function MdsStatusCard() {
                                         const stale = isModelStale(m.last_synced_at);
                                         return (
                                             <tr key={m.model_label}>
-                                                <td style={{ paddingLeft: 16, fontSize: 12.5, fontWeight: 500 }}>
+                                                <td className="pl-0 text-[12.5px] font-medium">
                                                     {m.model_label}
                                                 </td>
-                                                <td
-                                                    className="text-end"
-                                                    style={{ fontSize: 12.5, color: "var(--tb-text-secondary)", fontVariantNumeric: "tabular-nums" }}
-                                                >
+                                                <td className="text-end text-[12.5px] tabular-nums text-muted-foreground">
                                                     {m.count.toLocaleString()}
                                                 </td>
                                                 <td
-                                                    style={{ fontSize: 12, whiteSpace: "nowrap" }}
+                                                    className="whitespace-nowrap text-[12px]"
                                                     title={absoluteTime(m.last_synced_at)}
                                                 >
                                                     {stale ? (
                                                         <Badge variant="warning">never synced</Badge>
                                                     ) : (
-                                                        <span style={{ color: "var(--tb-text-secondary)" }}>
+                                                        <span className="text-muted-foreground">
                                                             {relativeTime(m.last_synced_at)}
                                                         </span>
                                                     )}
@@ -251,7 +192,7 @@ export default function MdsStatusCard() {
                                         <tr>
                                             <td
                                                 colSpan={3}
-                                                style={{ textAlign: "center", padding: "32px 24px", color: "var(--tb-text-tertiary)", fontSize: 12.5 }}
+                                                className="py-8 text-center text-[12.5px] text-muted-foreground"
                                             >
                                                 No mirrored models reported.
                                             </td>
@@ -260,9 +201,9 @@ export default function MdsStatusCard() {
                                 </tbody>
                             </table>
                         </div>
-                    </>
+                    </div>
                 )}
-            </div>
-        </div>
+            </CardContent>
+        </Card>
     );
 }

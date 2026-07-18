@@ -4,6 +4,7 @@ import { Pencil, Check, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { AuthContext } from "../context/AuthContext";
 import api from "../api/axios";
 import type { AuthUser } from "../types";
+import { ROLE_LABELS } from "../utils/roleConstants";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,8 +104,8 @@ export default function Profile() {
     const { user, updateUser } = useContext(AuthContext);
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [error, setError] = useState("");
-    const [success, setSuccess] = useState("");
+    const [error, setError] = useState<string>("");
+    const [success, setSuccess] = useState<string>("");
     const [formData, setFormData] = useState<ProfileFormData>(() => getProfileFormData(user));
 
     useEffect(() => {
@@ -177,18 +178,31 @@ export default function Profile() {
             />
 
             {error && (
-                <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive">
-                    <AlertCircle className="size-4 shrink-0" />
+                <div role="alert" className="mb-4 flex items-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive">
+                    <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                     <span className="flex-1">{error}</span>
-                    <button onClick={() => setError("")} aria-label="Dismiss" className="cursor-pointer opacity-70 hover:opacity-100">
-                        <X className="size-4" />
+                    <button
+                        type="button"
+                        onClick={() => setError("")}
+                        aria-label="Dismiss error"
+                        className="cursor-pointer rounded opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
+                    >
+                        <X className="size-4" aria-hidden="true" />
                     </button>
                 </div>
             )}
             {success && (
-                <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px] text-success">
-                    <CheckCircle2 className="size-4 shrink-0" />
-                    <span>{success}</span>
+                <div role="status" className="mb-4 flex items-center gap-2.5 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px] text-success">
+                    <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="flex-1">{success}</span>
+                    <button
+                        type="button"
+                        onClick={() => setSuccess("")}
+                        aria-label="Dismiss"
+                        className="cursor-pointer rounded opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success/50"
+                    >
+                        <X className="size-4" aria-hidden="true" />
+                    </button>
                 </div>
             )}
 
@@ -197,8 +211,7 @@ export default function Profile() {
                 <Card>
                     <CardContent className="flex flex-col items-center pt-6 text-center">
                         <div
-                            className="mb-3.5 flex size-18 items-center justify-center rounded-full text-2xl font-bold tracking-tight text-white shadow-lg"
-                            style={{ background: "linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))" }}
+                            className="mb-3.5 flex size-18 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-2xl font-bold tracking-tight text-white shadow-lg"
                             aria-hidden="true"
                         >
                             {initials}
@@ -217,9 +230,11 @@ export default function Profile() {
                 {/* Details */}
                 <div className="flex flex-col gap-4">
                     <Card>
-                        <CardHeader className="flex-row items-center justify-between border-b">
-                            <CardTitle className="text-sm">Account Details</CardTitle>
-                            {editing && <Badge>Editing</Badge>}
+                        <CardHeader className="border-b">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm">Account Details</CardTitle>
+                                {editing && <Badge variant="default">Editing</Badge>}
+                            </div>
                         </CardHeader>
                         <CardContent className="pt-5">
                             <div className="mb-5">
@@ -271,12 +286,13 @@ export default function Profile() {
                             <CardContent className="pt-4">
                                 <div className="flex flex-wrap gap-1.5">
                                     {roles.map((role) => (
-                                        <span
+                                        <Badge
                                             key={role}
-                                            className="rounded-md border border-primary/15 bg-primary/10 px-2 py-1 font-mono text-[11.5px] font-medium text-primary"
+                                            variant="default"
+                                            title={role}
                                         >
-                                            {role}
-                                        </span>
+                                            {ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}
+                                        </Badge>
                                     ))}
                                 </div>
                             </CardContent>

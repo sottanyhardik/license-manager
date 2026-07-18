@@ -34,6 +34,32 @@ Append only. Most recent session at top.
 
 **Build results:** ✅ 0 TypeScript errors · 0 lint errors · 416ms build
 
+### Routes: `/401`, `/403`, `*` (404) — No changes — FROZEN
+
+All three are pure wrappers of `ErrorScreen` (already MODERN in Session-1):
+- `pages/errors/Unauthorized.tsx` — 15 lines, clean, typed, Lucide icons
+- `pages/Forbidden.tsx` — 15 lines, clean, typed, Lucide icons
+- `pages/errors/NotFound.tsx` — 15 lines, clean, typed, Lucide icons
+
+No modifications needed. Frozen directly.
+
+### Route: `/profile` — Profile.tsx
+
+- Avatar gradient: `style={{ background: "linear-gradient(...)" }}` → `bg-gradient-to-br from-primary to-primary/70` Tailwind
+- Roles display: raw codes (e.g. `LICENSE_MANAGER`) → `ROLE_LABELS` human-readable names via `<Badge>` with `title={code}` tooltip; removed `font-mono` styling
+- Error banner: added `role="alert"`, `type="button"` on dismiss, `aria-hidden` on icons, focus ring on dismiss button
+- Success banner: added `role="status"`, dismiss button (parity with error banner), `type="button"`
+- Account Details CardHeader: `flex-row items-center justify-between` override → inner div with explicit flex layout (avoids Tailwind v4 flex-col/flex-row cascade ambiguity)
+- Assigned Roles CardHeader: removed stale indentation inconsistency
+
+### Route: `/pdf-viewer` — PDFViewer.tsx
+
+- `useState(null)` → `useState<string | null>(null)` for `pdfUrl` and `error` (TypeScript correctness)
+- `catch (err)` → `catch (err: unknown)` with typed `axiosErr` cast; proper conditional for `err.message`
+- Floating refresh FAB: raw `<button>` → shadcn `<Button>` (inherits focus ring, keyboard operability)
+
+**Build results:** ✅ 0 TypeScript errors · 0 lint errors · 375ms build
+
 ---
 
 ## Session 2 — 2026-07-18

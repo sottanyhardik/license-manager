@@ -22,9 +22,9 @@
 |-------|-----------|--------|-------|---------|-------|
 | `/login` | `pages/Login.tsx` | READY_FOR_REVIEW | Session-1 | 2026-07-17 | Left panel, card form, bg-body-bg — see CHANGELOG |
 | `/forgot-password` | `pages/auth/PasswordReset.tsx` | READY_FOR_REVIEW | Session-1 | 2026-07-17 | Gradient → Tailwind, inline styles removed |
-| `/401` | `pages/errors/Unauthorized.tsx` | TODO | — | — | Delegates to ErrorScreen |
-| `/403` | `pages/Forbidden.tsx` | TODO | — | — | — |
-| `*` (404) | `pages/errors/NotFound.tsx` | TODO | — | — | Delegates to ErrorScreen |
+| `/401` | `pages/errors/Unauthorized.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure ErrorScreen delegate — already modern, no changes needed |
+| `/403` | `pages/Forbidden.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure ErrorScreen delegate — already modern, no changes needed |
+| `*` (404) | `pages/errors/NotFound.tsx` | FROZEN | Session-3 | 2026-07-18 | Pure ErrorScreen delegate — already modern, no changes needed |
 
 ---
 
@@ -107,8 +107,8 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/settings` | `pages/Settings.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Bootstrap card/badge/modal → shadcn; window.confirm → ConfirmDialog; types added; scope="col" |
-| `/profile` | `pages/Profile.tsx` | TODO | — | — | Well-structured already |
+| `/settings` | `pages/Settings.tsx` | FROZEN | Session-3 | 2026-07-18 | Bootstrap card/badge/modal → shadcn; window.confirm → ConfirmDialog; types added; scope="col" |
+| `/profile` | `pages/Profile.tsx` | FROZEN | Session-3 | 2026-07-18 | Inline gradient → Tailwind; roles show human-readable labels; alert banners: role/type attrs, dismiss on success; flex-row CardHeader fixed |
 | `/admin/users` | `pages/admin/UserList.tsx` | TODO | — | — | — |
 | `/admin/users/create` | `pages/admin/UserForm.tsx` | TODO | — | — | — |
 | `/admin/users/:id/edit` | `pages/admin/UserForm.tsx` | TODO | — | — | — |
@@ -120,7 +120,7 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/pdf-viewer` | `pages/PDFViewer.tsx` | TODO | — | — | Minimal wrapper |
+| `/pdf-viewer` | `pages/PDFViewer.tsx` | FROZEN | Session-3 | 2026-07-18 | State typed string|null; catch typed; FAB → shadcn Button |
 
 ---
 

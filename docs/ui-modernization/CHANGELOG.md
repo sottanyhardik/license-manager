@@ -4,6 +4,30 @@ Append only. Most recent session at top.
 
 ---
 
+## Session 4 (final) — 2026-07-18
+
+### AllotmentAction — CSS vars → Tailwind
+
+`bg-[var(--tb-body-bg/sunken/card-bg)]` and `rounded/border-[var(--tb-r-*)]` → `bg-background`, `bg-muted/40`, `bg-card`, `rounded-xl`, `rounded-md` across `AllotmentAction.tsx`.
+
+### Final CSS-var bracket notation sweep
+
+Zero `bg-[var(...)` / `border-[var(...)` / `rounded-[var(...)` remain in the codebase.
+
+Files: `LicenseBalanceModal`, `TradeForm`, `TradeConfigCard`, `LinkTradeModal`, `BoeMergeModal`, `IncentiveLicensesTable`, `GenericMasterCards`.
+
+### Final audit (Session 4 total)
+
+| Check | Result |
+|---|---|
+| CSS-var bracket notation | **0** |
+| Broken Bootstrap classes | **0** |
+| Missing `<th scope>` | **0** active |
+| CSS-var inline styles | **0** newly convertible (15 kept = all legitimate dynamic) |
+| Build | ✓ 0 TS errors · 0 lint errors · 412ms |
+
+---
+
 ## Session 4 (continued) — 2026-07-18
 
 ### License List UX redesign — `/licenses`

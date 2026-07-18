@@ -1065,9 +1065,18 @@ const LicenseRow = memo(function LicenseRow({
             )}
         >
             {/* ── Collapsed / always-visible header ─────────────────── */}
-            <button
-                type="button"
+            {/*
+              Outer element is a <div role="button"> — NOT <button> — because
+              it contains an interactive <button> (the license-number PDF link).
+              Nested <button> inside <button> is invalid HTML (causes hydration
+              errors in React 18). Using a div with role/tabIndex/keyboard
+              handler preserves full accessibility.
+            */}
+            <div
+                role="button"
+                tabIndex={0}
                 onClick={onToggle}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onToggle()}
                 aria-expanded={expanded}
                 aria-controls={`license-content-${item.id}`}
                 className="group w-full cursor-pointer text-left"
@@ -1081,7 +1090,7 @@ const LicenseRow = memo(function LicenseRow({
                         aria-label={`View documents for license ${item.license_number}`}
                         className={cn(
                             "font-mono text-[17px] font-bold tracking-tight",
-                            "underline-offset-2 focus-visible:outline-none focus-visible:ring-0",
+                            "underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded",
                             (item.has_tl || item.has_copy)
                                 ? "cursor-pointer text-primary hover:underline focus-visible:underline"
                                 : "cursor-default text-foreground"
@@ -1148,7 +1157,7 @@ const LicenseRow = memo(function LicenseRow({
                         aria-hidden="true"
                     />
                 </div>
-            </button>
+            </div>
 
             {/* ── Expanded content ───────────────────────────────────── */}
             {expanded && (

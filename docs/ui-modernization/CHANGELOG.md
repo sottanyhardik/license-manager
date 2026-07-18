@@ -150,6 +150,38 @@ Already clean; minor type improvements:
 
 **Build results:** ✅ 0 TypeScript errors · 0 lint errors · 437ms build
 
+### Routes: All MasterList routes — MasterList.tsx (75 inline styles)
+
+- `cn()` import added
+- Root wrapper: inline `minHeight`/`background` → `min-h-screen bg-[--tb-body-bg]`
+- Breadcrumb: inline styles → `text-inherit no-underline`; separator `mx-1.5 opacity-50`
+- Surface card padding: `style={{ padding: '14px 16px' }}` → `p-3.5`
+- 6 empty `style={{}}` on chip spans removed; template literals → `cn()`
+- BOE inline-edit chip: input/save/cancel inline styles → Tailwind
+- BOE detail table: color inline styles → `text-destructive` + `cn()`
+- License card outer: multi-property `style={{ display, background, border, borderLeft, ... }}` → `cn()` with Tailwind for expired/planned/default states
+- License card rows 1/2/3: all inline flex/grid divs → Tailwind (1.4fr grid kept inline — no Tailwind utility)
+- License card action buttons (8): all inline styles → Tailwind + `cn()`
+- Trade card: italic span + 9 detail divs → Tailwind
+- Trade pair container: border/radius/shadow/header/badges → Tailwind + `cn()`
+- 6 `window.confirm` → `confirmDangerousAction()` via existing `useConfirmDialog` hook
+- Bootstrap `bi-arrow-repeat` icon → `RefreshCw` Lucide (already imported)
+
+### Route: `/allotments/:id/allocate` — AllotmentAction.tsx (106 inline styles)
+
+- `cn()`, `ConfirmDialog`, `EmptyState` imports added
+- Bootstrap `card`/`card-header`/`card-body` → Tailwind `border border-border bg-card` pattern
+- Bootstrap `pagination`/`page-item`/`page-link` → Tailwind `inline-flex h-8` buttons
+- Bootstrap `placeholder`/`placeholder-glow` skeleton → `animate-pulse bg-muted` Tailwind
+- ~100 of 106 inline styles removed via `cn()` + Tailwind: progress bar colors, stat grid, item card rows, serial/HS/condition badges, labels, confirm button gradient, outer wrapper, table cell whitespace, tfoot, pagination, success alert
+- 2 inline styles intentionally kept: runtime pixel width and dynamic `%` progress
+- `window.confirm` ×2 → `ConfirmDialog` with `deleteConfirm`/`copyConfirm` state
+- `EmptyState` component for "No available license items found"
+- `scope="col"` on all `<th>` elements (WCAG 1.3.1)
+- All template literal classNames → `cn()`
+
+**Build results:** ✅ 0 TypeScript errors · 0 lint errors · 513ms build
+
 ---
 
 ## Session 2 — 2026-07-18

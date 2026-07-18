@@ -40,12 +40,12 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/licenses` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
-| `/licenses/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | cn(); template literals → cn(); text-muted → text-muted-foreground; container-fluid → min-h-screen; alerts; BOE copy modernized; form-label; text-danger → text-destructive; section boxes; tab panel |
-| `/licenses/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component as create |
-| `/incentive-licenses` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
-| `/incentive-licenses/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
-| `/incentive-licenses/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
+| `/licenses` | `pages/masters/MasterList.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
+| `/licenses/create` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | cn(); template literals → cn(); text-muted → text-muted-foreground; container-fluid → min-h-screen; alerts; BOE copy modernized; form-label; text-danger → text-destructive; section boxes; tab panel |
+| `/licenses/:id/edit` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component as create |
+| `/incentive-licenses` | `pages/masters/MasterList.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
+| `/incentive-licenses/create` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component |
+| `/incentive-licenses/:id/edit` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component |
 
 ---
 
@@ -53,17 +53,17 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/allotments` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
-| `/allotments/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
-| `/allotments/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
-| `/allotments/:id/allocate` | `pages/AllotmentAction.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
-| `/bill-of-entries` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
-| `/bill-of-entries/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
-| `/bill-of-entries/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
+| `/allotments` | `pages/masters/MasterList.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
+| `/allotments/create` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component |
+| `/allotments/:id/edit` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component |
+| `/allotments/:id/allocate` | `pages/AllotmentAction.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
+| `/bill-of-entries` | `pages/masters/MasterList.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
+| `/bill-of-entries/create` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component |
+| `/bill-of-entries/:id/edit` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component |
 | `/bill-of-entries/:id/generate-transfer-letter` | `pages/BOETransferLetter.tsx` | FROZEN | Session-3 | 2026-07-18 | Detail typed; boe state typed |
-| `/trades` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
-| `/trades/create` | `pages/TradeForm.tsx` + `TradeConfigCard.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
-| `/trades/:id/edit` | `pages/TradeForm.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
+| `/trades` | `pages/masters/MasterList.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
+| `/trades/create` | `pages/TradeForm.tsx` + `TradeConfigCard.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
+| `/trades/:id/edit` | `pages/TradeForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
 
 ---
 
@@ -97,9 +97,9 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/masters/:entity` | `pages/masters/MasterList.tsx` | IN_PROGRESS | Session-3 | 2026-07-18 | Agent running |
-| `/masters/:entity/create` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
-| `/masters/:entity/:id/edit` | `pages/masters/MasterForm.tsx` | READY_FOR_REVIEW | Session-3 | 2026-07-18 | Same component |
+| `/masters/:entity` | `pages/masters/MasterList.tsx` | FROZEN | Session-3 | 2026-07-18 | Modernized this session |
+| `/masters/:entity/create` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component |
+| `/masters/:entity/:id/edit` | `pages/masters/MasterForm.tsx` | FROZEN | Session-3 | 2026-07-18 | Same component |
 
 ---
 

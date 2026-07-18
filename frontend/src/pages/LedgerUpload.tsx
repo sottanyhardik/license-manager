@@ -6,6 +6,8 @@ import {
 
 import { useFileUpload } from "../hooks";
 import api from "../api/axios";
+import PageHeader from "@/components/PageHeader";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -369,22 +371,20 @@ const LedgerUpload = () => {
     return (
         <div>
             {/* Header */}
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
-                        <FileSpreadsheet className="size-6 text-primary" />
-                        Ledger Upload
-                    </h1>
-                    <p className="mt-0.5 text-sm text-muted-foreground">Upload DFIA license ledger files in CSV or HTM/HTML format</p>
-                </div>
-                <label className="flex cursor-pointer items-center gap-2.5 text-sm" htmlFor="asyncModeSwitch">
-                    <Switch id="asyncModeSwitch" checked={useAsyncMode} onCheckedChange={setUseAsyncMode} />
-                    <span className="flex items-center gap-1 font-medium text-muted-foreground">
-                        <Zap className="size-3.5 text-warning" />
-                        Async {useAsyncMode ? "(Parallel)" : "(Sync)"}
-                    </span>
-                </label>
-            </div>
+            <PageHeader
+                pretitle="Ledger"
+                title="Ledger Upload"
+                description="Upload DFIA license ledger files in CSV or HTM/HTML format"
+                actions={
+                    <label className="flex cursor-pointer items-center gap-2.5 text-sm" htmlFor="asyncModeSwitch">
+                        <Switch id="asyncModeSwitch" checked={useAsyncMode} onCheckedChange={setUseAsyncMode} />
+                        <span className="flex items-center gap-1 font-medium text-muted-foreground">
+                            <Zap className="size-3.5 text-warning" aria-hidden="true" />
+                            Async {useAsyncMode ? "(Parallel)" : "(Sync)"}
+                        </span>
+                    </label>
+                }
+            />
 
             <TaskStatusModal fileTasks={asyncFileTasks} show={showTaskModal} onHide={() => setShowTaskModal(false)} />
 
@@ -405,14 +405,15 @@ const LedgerUpload = () => {
                                 onDragLeave={handleDrag}
                                 onDragOver={handleDrag}
                                 onDrop={handleDrop}
-                                className={`mb-4 flex min-h-[170px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-9 text-center transition-colors ${
-                                    dragActive ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/60"
-                                }`}
+                                className={cn(
+                                    "mb-4 flex min-h-[170px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-9 text-center transition-colors",
+                                    dragActive ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/60",
+                                )}
                             >
                                 <CloudUpload className={`mb-2 size-10 ${dragActive ? "text-primary" : "text-muted-foreground/60"}`} />
                                 <p className="mb-1 font-semibold text-foreground">{dragActive ? "Drop files here" : "Drag & drop your ledger files"}</p>
                                 <small className="mb-3 text-muted-foreground">or click to browse</small>
-                                <span className="pointer-events-none inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-primary-foreground" style={{ background: "linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))" }}>
+                                <span className="pointer-events-none inline-flex items-center gap-1.5 rounded-md bg-gradient-to-br from-primary to-primary/80 px-3 py-1.5 text-sm font-semibold text-primary-foreground">
                                     <FolderOpen className="size-3.5" />Browse Files
                                 </span>
                                 <small className="mt-3 block text-muted-foreground">CSV or HTM/HTML files · Max 50MB per file</small>
@@ -477,7 +478,7 @@ const LedgerUpload = () => {
                                         return (
                                             <div key={index} className="mb-3">
                                                 <div className="mb-1 flex items-center justify-between">
-                                                    <small className="flex items-center gap-1 truncate text-muted-foreground" style={{ maxWidth: "70%" }} title={fileData.name}>
+                                                    <small className="flex max-w-[70%] items-center gap-1 truncate text-muted-foreground" title={fileData.name}>
                                                         {fileData.status === "completed" ? <CheckCircle2 className="size-3.5 text-success" />
                                                             : fileData.status === "failed" ? <XCircle className="size-3.5 text-destructive" />
                                                             : <Hourglass className="size-3.5 text-primary" />}
@@ -532,7 +533,10 @@ const LedgerUpload = () => {
                             </CardHeader>
                             <CardContent className="max-h-[500px] overflow-y-auto pt-4">
                                 {results.map((result, index) => (
-                                    <div key={`${result.fileName}-${index}`} className={`mb-2 rounded-lg border px-3.5 py-2.5 text-[13px] ${result.success ? "border-success/30 bg-success/10" : "border-destructive/30 bg-destructive/10"}`}>
+                                    <div key={`${result.fileName}-${index}`} className={cn(
+                                        "mb-2 rounded-lg border px-3.5 py-2.5 text-[13px]",
+                                        result.success ? "border-success/30 bg-success/10" : "border-destructive/30 bg-destructive/10",
+                                    )}>
                                         <div className="flex items-start gap-3">
                                             {result.success ? <CheckCircle2 className="size-5 shrink-0 text-success" /> : <XCircle className="size-5 shrink-0 text-destructive" />}
                                             <div className="flex-1">

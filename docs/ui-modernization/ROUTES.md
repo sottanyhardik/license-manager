@@ -71,9 +71,9 @@
 
 | Route | Component | Status | Owner | Claimed | Notes |
 |-------|-----------|--------|-------|---------|-------|
-| `/ledger-upload` | `pages/LedgerUpload.tsx` | TODO | — | — | — |
-| `/license-ledger` | `pages/LicenseLedger.tsx` | TODO | — | — | 50+ inline styles, export refactored in Session-1 |
-| `/license-ledger/:id/:companyId?` | `pages/LicenseLedgerDetail.tsx` | TODO | — | — | — |
+| `/ledger-upload` | `pages/LedgerUpload.tsx` | FROZEN | Session-3 | 2026-07-18 | PageHeader; gradient inline style → Tailwind; template literals → cn(); inline maxWidth → Tailwind |
+| `/license-ledger` | `pages/LicenseLedger.tsx` | FROZEN | Session-3 | 2026-07-18 | B007 done: LicenseWiseLedger 50+ inline styles → Tailwind; Bootstrap cards → shadcn Card; header → PageHeader; P/L inline → cn(); EmptyState; SummaryItem component; scope="col" |
+| `/license-ledger/:id/:companyId?` | `pages/LicenseLedgerDetail.tsx` | FROZEN | Session-3 | 2026-07-18 | 80+ inline styles → Tailwind; container-fluid → div; toolbar → bg-foreground; scope="col" on all th; cn() for P/L colors; typed params |
 
 ---
 

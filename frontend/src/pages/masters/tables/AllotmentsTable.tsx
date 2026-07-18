@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { Inbox } from "lucide-react";
-import { EntityCard, DetailTable } from "../../../components/ui";
+import EntityCard from "../../../components/primitives/EntityCard";
+import DetailTable from "../../../components/primitives/DetailTable";
 import api from "../../../api/axios";
 import { saveFilterState } from "../../../utils/filterPersistence";
 import { openPdfPreview } from "../../../utils/pdfPreview";
@@ -50,7 +51,7 @@ export default function AllotmentsTable({
                                         <EntityCard
                                             key={item.id}
                                             accent={item.is_boe ? 'success' : 'primary'}
-                                            title={item.invoice || <span style={{ fontStyle: 'italic', color: 'var(--text-tertiary)', fontWeight: 400 }}>No Invoice</span>}
+                                            title={item.invoice || <span className="italic font-normal text-muted-foreground/70">No Invoice</span>}
                                             headerChips={[
                                                 item.estimated_arrival_date && { icon: 'calendar3', label: item.estimated_arrival_date },
                                                 item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
@@ -108,7 +109,7 @@ export default function AllotmentsTable({
                                                 <DetailTable
                                                     columns={[
                                                         { key: 'license_number',     label: 'License',     bold: true, nowrap: true,
-                                                            render: v => v ? <span style={{ color: 'var(--primary-color)' }}>{v}</span> : '—' },
+                                                            render: v => v ? <span className="text-primary">{v}</span> : '—' },
                                                         { key: 'serial_number',      label: 'Sl#',         align: 'right', nowrap: true },
                                                         { key: 'product_description', label: 'Item',       muted: true },
                                                         { key: 'qty',                 label: 'Qty',        align: 'right', nowrap: true,
@@ -124,17 +125,17 @@ export default function AllotmentsTable({
                                             )}
                                         >
                                             {(item.item_name || item.dfia_list) && (
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-                                                    <div style={{ flex: 1, minWidth: 200 }}>
-                                                        <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Item</div>
-                                                        <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>
-                                                            {item.item_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No item name</span>}
+                                                <div className="flex flex-wrap items-start gap-6">
+                                                    <div className="min-w-[200px] flex-1">
+                                                        <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">Item</div>
+                                                        <div className="text-[14.5px] font-medium text-foreground">
+                                                            {item.item_name || <span className="italic text-muted-foreground/70">No item name</span>}
                                                         </div>
                                                     </div>
                                                     {item.dfia_list && (
-                                                        <div style={{ flex: 1, minWidth: 140 }}>
-                                                            <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
-                                                            <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.dfia_list}</div>
+                                                        <div className="min-w-[140px] flex-1">
+                                                            <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">Licenses</div>
+                                                            <div className="text-[13.5px] font-medium text-primary">{item.dfia_list}</div>
                                                         </div>
                                                     )}
                                                 </div>

@@ -12,14 +12,13 @@ interface AllotmentFiltersProps {
 /** Allotment-action filter card — extracted verbatim from AllotmentAction. */
 export default function AllotmentFilters({ filters, setFilters, availableItemNames, notificationOptions }: AllotmentFiltersProps) {
     return (
-                    <div className="mb-3 overflow-hidden rounded-lg border border-border/60" style={{ background: 'var(--tb-sunken)' }}>
-                        <div className="flex justify-between items-center py-2 px-3" style={{ borderBottom: '1px solid var(--tb-border-soft)' }}>
-                            <span style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div className="mb-3 overflow-hidden rounded-lg border border-border/60 bg-muted/40">
+                        <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
+                            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
                                 <Filter className="size-4" aria-hidden="true" /> Filters
                             </span>
                             <button
-                                className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline bg-transparent border-0 p-0"
-                                style={{ fontSize: 12, textDecoration: 'none' }}
+                                className="cursor-pointer border-0 bg-transparent p-0 text-xs text-muted-foreground no-underline underline-offset-2 hover:underline"
                                 onClick={() => setFilters({
                                     description: "",
                                     exporter: "",
@@ -44,7 +43,7 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                 <XCircle className="size-4" aria-hidden="true" />Clear All
                             </button>
                         </div>
-                        <div style={{ padding: '16px' }}>
+                        <div className="p-4">
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                 <div className="col-span-full sm:col-span-2 lg:col-span-4">
                                     <label className="form-label">Filter By Item Name</label>

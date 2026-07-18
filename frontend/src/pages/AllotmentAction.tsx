@@ -791,10 +791,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </tbody>
                                 <tfoot>
                                 <tr className="bg-[var(--tb-sunken)] border-t-2 border-border">
-                                    <th colSpan={8} className="px-3 py-1.5 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
-                                    <th className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
-                                    <th className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
-                                    <th></th>
+                                    <th scope="row" colSpan={8} className="px-3 py-1.5 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
+                                    <td className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</td>
+                                    <td className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</td>
+                                    <td></td>
                                 </tr>
                                 </tfoot>
                             </table>

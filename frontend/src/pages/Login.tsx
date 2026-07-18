@@ -72,64 +72,99 @@ export default function Login() {
         <div className="flex min-h-screen bg-background">
             {/* Brand panel — hidden below lg */}
             <aside
-                className="relative hidden w-[440px] shrink-0 flex-col justify-between overflow-hidden p-12 text-white lg:flex"
+                className="relative hidden w-[420px] shrink-0 flex-col overflow-hidden lg:flex"
                 style={{
                     background:
-                        "linear-gradient(145deg, #1E3A5F 0%, var(--tb-brand-active) 55%, var(--tb-brand) 100%)",
+                        "linear-gradient(160deg, #0F2545 0%, #1E3A6E 40%, #1D4ED8 80%, #2563EB 100%)",
                 }}
                 aria-hidden="true"
             >
-                {/* Decorative blobs */}
-                <div className="pointer-events-none absolute -right-28 -top-28 size-96 rounded-full bg-white/[0.06]" />
-                <div className="pointer-events-none absolute -bottom-20 -left-20 size-72 rounded-full bg-white/[0.04]" />
+                {/* Decorative geometric grid overlay */}
+                <div
+                    className="pointer-events-none absolute inset-0 opacity-[0.06]"
+                    style={{
+                        backgroundImage:
+                            "linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)",
+                        backgroundSize: "32px 32px",
+                    }}
+                />
+                {/* Top-right radial glow */}
+                <div className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-blue-400/20 blur-3xl" />
+                {/* Bottom-left glow */}
+                <div className="pointer-events-none absolute -bottom-32 -left-16 size-96 rounded-full bg-indigo-900/50 blur-3xl" />
 
-                <div className="relative z-10 flex items-center gap-3 text-lg font-semibold tracking-tight">
-                    <span className="flex size-10 items-center justify-center rounded-xl border border-white/20 bg-white/15 backdrop-blur-sm">
-                        <ShieldCheck className="size-5" />
-                    </span>
-                    License Manager
+                {/* Brand mark — top */}
+                <div className="relative z-10 flex-shrink-0 p-10 pb-0">
+                    <div className="flex items-center gap-3">
+                        <span className="flex size-9 items-center justify-center rounded-xl border border-white/25 bg-white/20 backdrop-blur-sm">
+                            <ShieldCheck className="size-4.5 text-white" />
+                        </span>
+                        <span className="text-[15px] font-semibold tracking-tight text-white">
+                            License Manager
+                        </span>
+                    </div>
                 </div>
 
-                <div className="relative z-10">
-                    <h2 className="mb-3 text-3xl font-bold leading-tight tracking-tight text-white">
-                        Trade compliance,<br />simplified.
+                {/* Center content */}
+                <div className="relative z-10 flex flex-1 flex-col justify-center px-10">
+                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-medium uppercase tracking-widest text-white/70">
+                        <span className="size-1.5 rounded-full bg-emerald-400" />
+                        Trade Operations Platform
+                    </div>
+                    <h2 className="mt-4 text-[2rem] font-bold leading-[1.2] tracking-tight text-white">
+                        Trade compliance,<br />
+                        <span className="text-blue-200">simplified.</span>
                     </h2>
-                    <p className="max-w-sm text-[15px] leading-relaxed text-white/70">
+                    <p className="mt-4 max-w-[280px] text-[14px] leading-relaxed text-white/65">
                         Manage EPCG, advance licenses, BOE entries, allotments,
                         and SION norms in one unified platform.
                     </p>
+
+                    {/* Feature list */}
+                    <ul className="mt-8 flex flex-col gap-3">
+                        {FEATURES.map((f) => (
+                            <li key={f} className="flex items-center gap-3 text-[13px] text-white/80">
+                                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-white/15">
+                                    <svg className="size-2.5 text-white" viewBox="0 0 10 8" fill="none">
+                                        <path d="M1 4l2.5 2.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </span>
+                                {f}
+                            </li>
+                        ))}
+                    </ul>
                 </div>
 
-                <ul className="relative z-10 flex flex-col gap-2.5">
-                    {FEATURES.map((f) => (
-                        <li key={f} className="flex items-center gap-2.5 text-[13px] text-white/85">
-                            <span className="size-1.5 shrink-0 rounded-full bg-white/60" />
-                            {f}
-                        </li>
-                    ))}
-                </ul>
+                {/* Bottom bar */}
+                <div className="relative z-10 flex-shrink-0 border-t border-white/10 px-10 py-5">
+                    <p className="text-[11px] text-white/40">
+                        © 2025 License Manager · All rights reserved
+                    </p>
+                </div>
             </aside>
 
-            {/* Form panel */}
-            <div className="flex flex-1 items-center justify-center px-6 py-8">
+            {/* Form panel — uses background color to contrast with body */}
+            <div className="flex flex-1 flex-col items-center justify-center bg-background px-6 py-10">
                 <motion.div
-                    className="w-full max-w-sm"
-                    initial={reduce ? false : { opacity: 0, y: 10 }}
+                    className="w-full max-w-[400px]"
+                    initial={reduce ? false : { opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 >
-                    {/* Header */}
-                    <div className="mb-8 text-center">
-                        <div className="mx-auto mb-4 flex size-13 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
-                            <ShieldCheck className="size-6" />
+                    {/* Form card — lifted card gives visual grounding */}
+                    <div className="rounded-2xl border border-border/70 bg-card p-8 shadow-[0_2px_16px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.04)]">
+                        {/* Header */}
+                        <div className="mb-7">
+                            <div className="mb-4 flex size-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                                <ShieldCheck className="size-5" />
+                            </div>
+                            <h1 className="text-[1.5rem] font-bold leading-tight tracking-tight text-foreground">
+                                Welcome back
+                            </h1>
+                            <p className="mt-1.5 text-sm text-muted-foreground">
+                                Sign in to continue to License Manager
+                            </p>
                         </div>
-                        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                            Welcome back
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Sign in to your account
-                        </p>
-                    </div>
 
                     {/* Session alert */}
                     {sessionMessage && (
@@ -207,9 +242,10 @@ export default function Login() {
                             )}
                         </Button>
                     </form>
+                    </div>{/* end form card */}
 
-                    <p className="mt-7 text-center text-[11.5px] text-muted-foreground/70">
-                        License Manager · Built by Hardik Sottany
+                    <p className="mt-5 text-center text-[11px] text-muted-foreground/50">
+                        License Manager · Secure sign-in
                     </p>
                 </motion.div>
             </div>

@@ -65,10 +65,10 @@ export default function NormCardGrid({ availableNorms, activeNormTab, setActiveN
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
                     <div className="flex items-center gap-2">
-                        <Tag className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
+                        <Tag className="size-4 text-primary" aria-hidden="true" />
                         <span className="text-sm font-bold tracking-tight text-foreground">Available Norms</span>
                         {normCards.length > 0 && (
-                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand)' }}>
+                            <span className="rounded-full bg-primary/5 px-2 py-0.5 text-[10px] font-bold text-primary">
                                 {normCards.length}
                             </span>
                         )}

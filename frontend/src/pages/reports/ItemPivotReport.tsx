@@ -906,12 +906,12 @@ export default function ItemPivotReport() {
                                                                                         toast.error('Failed to open DFIA documents');
                                                                                     }
                                                                                 }}
-                                                                                style={{ fontWeight: 600, color: 'var(--tb-brand)', textDecoration: 'underline', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                                                className="cursor-pointer whitespace-nowrap font-semibold text-primary underline"
                                                                             >
                                                                                 {license.license_number}
                                                                             </a>
                                                                         ) : (
-                                                                            <span style={{ fontWeight: 600 }}>{license.license_number}</span>
+                                                                            <span className="font-semibold">{license.license_number}</span>
                                                                         )}
                                                                         <div className="mt-1">
                                                                             <PurchaseStatusBadge
@@ -1179,7 +1179,7 @@ export default function ItemPivotReport() {
                                                                     <td className="text-right text-primary">
                                                                         {totalAllotted > 0 ? totalAllotted.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-right" style={{color: 'var(--warning-color)'}}>
+                                                                    <td className="text-right text-warning">
                                                                         {totalDebited > 0 ? totalDebited.toFixed(3) : '-'}
                                                                     </td>
                                                                     <td className="text-right text-success">
@@ -1413,7 +1413,7 @@ export default function ItemPivotReport() {
                             </DialogTitle>
                         </DialogHeader>
                         <div className="max-h-[65vh] overflow-y-auto">
-                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 14.5, margin: 0, color: 'var(--tb-text)' }}>
+                            <pre className="m-0 whitespace-pre-wrap break-words font-[inherit] text-[14.5px] text-foreground">
                                 {conditionModal.content}
                             </pre>
                         </div>
@@ -1434,7 +1434,7 @@ export default function ItemPivotReport() {
                             </DialogTitle>
                         </DialogHeader>
                         <div className="max-h-[65vh] overflow-y-auto">
-                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 14.5, margin: 0, color: 'var(--tb-text)' }}>
+                            <pre className="m-0 whitespace-pre-wrap break-words font-[inherit] text-[14.5px] text-foreground">
                                 {transferModal.content}
                             </pre>
                         </div>
@@ -1455,7 +1455,7 @@ export default function ItemPivotReport() {
                             </DialogTitle>
                         </DialogHeader>
                         <div className="max-h-[65vh] overflow-y-auto">
-                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 14.5, margin: 0, color: 'var(--tb-text)' }}>
+                            <pre className="m-0 whitespace-pre-wrap break-words font-[inherit] text-[14.5px] text-foreground">
                                 {noteModal.content}
                             </pre>
                         </div>

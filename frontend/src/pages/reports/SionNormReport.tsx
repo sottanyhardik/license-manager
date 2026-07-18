@@ -120,59 +120,59 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
     const renderTableHeaders = () => (
         <thead className="sticky top-0 z-10 bg-primary/10 text-[10px] text-foreground [&_th]:border [&_th]:border-border [&_th]:px-1.5 [&_th]:py-1 [&_th]:font-semibold">
             <tr>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '40px'}}>Sr</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '120px'}}>DFIA No</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '90px'}}>DFIA Dt</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '90px'}}>Expiry Dt</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '200px'}}>Exporter</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '100px'}}>Total CIF</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '100px'}}>Balance CIF</th>
-                <th colSpan={9} className="text-center">Vegetable Oil</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '80px'}}>10% Bal</th>
-                <th colSpan={4} className="text-center">Juice</th>
-                <th colSpan={4} className="text-center">Food Flavour</th>
-                <th colSpan={2} className="text-center">Fruit</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '60px'}}>Lvng Agt</th>
-                <th colSpan={2} className="text-center">Starch 1108</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '60px'}}>Strch 3505</th>
-                <th colSpan={8} className="text-center">Milk & Milk</th>
-                <th colSpan={3} className="text-center">PP</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '60px'}}>Al Foil</th>
-                <th rowSpan={2} style={{verticalAlign: 'middle', minWidth: '80px'}}>Wastage</th>
+                <th scope="col" rowSpan={2} className="min-w-[40px] align-middle">Sr</th>
+                <th scope="col" rowSpan={2} className="min-w-[120px] align-middle">DFIA No</th>
+                <th scope="col" rowSpan={2} className="min-w-[90px] align-middle">DFIA Dt</th>
+                <th scope="col" rowSpan={2} className="min-w-[90px] align-middle">Expiry Dt</th>
+                <th scope="col" rowSpan={2} className="min-w-[200px] align-middle">Exporter</th>
+                <th scope="col" rowSpan={2} className="min-w-[100px] align-middle">Total CIF</th>
+                <th scope="col" rowSpan={2} className="min-w-[100px] align-middle">Balance CIF</th>
+                <th scope="colgroup" colSpan={9} className="text-center">Vegetable Oil</th>
+                <th scope="col" rowSpan={2} className="min-w-[80px] align-middle">10% Bal</th>
+                <th scope="colgroup" colSpan={4} className="text-center">Juice</th>
+                <th scope="colgroup" colSpan={4} className="text-center">Food Flavour</th>
+                <th scope="colgroup" colSpan={2} className="text-center">Fruit</th>
+                <th scope="col" rowSpan={2} className="min-w-[60px] align-middle">Lvng Agt</th>
+                <th scope="colgroup" colSpan={2} className="text-center">Starch 1108</th>
+                <th scope="col" rowSpan={2} className="min-w-[60px] align-middle">Strch 3505</th>
+                <th scope="colgroup" colSpan={8} className="text-center">Milk &amp; Milk</th>
+                <th scope="colgroup" colSpan={3} className="text-center">PP</th>
+                <th scope="col" rowSpan={2} className="min-w-[60px] align-middle">Al Foil</th>
+                <th scope="col" rowSpan={2} className="min-w-[80px] align-middle">Wastage</th>
             </tr>
             <tr>
-                <th style={{minWidth: '80px'}}>HSN</th>
-                <th style={{minWidth: '120px'}}>PD</th>
-                <th style={{minWidth: '70px'}}>Tot Qty</th>
-                <th style={{minWidth: '70px'}}>RBD Qty</th>
-                <th style={{minWidth: '80px'}}>RBD CIF</th>
-                <th style={{minWidth: '70px'}}>PKO Qty</th>
-                <th style={{minWidth: '80px'}}>PKO CIF</th>
-                <th style={{minWidth: '70px'}}>Olv Qty</th>
-                <th style={{minWidth: '80px'}}>Olv CIF</th>
-                <th style={{minWidth: '80px'}}>HSN</th>
-                <th style={{minWidth: '100px'}}>PD</th>
-                <th style={{minWidth: '70px'}}>Qty</th>
-                <th style={{minWidth: '80px'}}>CIF</th>
-                <th style={{minWidth: '80px'}}>HSN</th>
-                <th style={{minWidth: '100px'}}>PD</th>
-                <th style={{minWidth: '60px'}}>FF Qty</th>
-                <th style={{minWidth: '60px'}}>DF Qty</th>
-                <th style={{minWidth: '60px'}}>Qty</th>
-                <th style={{minWidth: '80px'}}>CIF</th>
-                <th style={{minWidth: '60px'}}>Qty</th>
-                <th style={{minWidth: '80px'}}>CIF</th>
-                <th style={{minWidth: '120px'}}>PD</th>
-                <th style={{minWidth: '70px'}}>Tot Qty</th>
-                <th style={{minWidth: '60px'}}>Chz Qty</th>
-                <th style={{minWidth: '80px'}}>Chz CIF</th>
-                <th style={{minWidth: '60px'}}>SWP Qty</th>
-                <th style={{minWidth: '80px'}}>SWP CIF</th>
-                <th style={{minWidth: '60px'}}>WPC Qty</th>
-                <th style={{minWidth: '80px'}}>WPC CIF</th>
-                <th style={{minWidth: '80px'}}>HSN</th>
-                <th style={{minWidth: '100px'}}>PD</th>
-                <th style={{minWidth: '60px'}}>Qty</th>
+                <th scope="col" className="min-w-[80px]">HSN</th>
+                <th scope="col" className="min-w-[120px]">PD</th>
+                <th scope="col" className="min-w-[70px]">Tot Qty</th>
+                <th scope="col" className="min-w-[70px]">RBD Qty</th>
+                <th scope="col" className="min-w-[80px]">RBD CIF</th>
+                <th scope="col" className="min-w-[70px]">PKO Qty</th>
+                <th scope="col" className="min-w-[80px]">PKO CIF</th>
+                <th scope="col" className="min-w-[70px]">Olv Qty</th>
+                <th scope="col" className="min-w-[80px]">Olv CIF</th>
+                <th scope="col" className="min-w-[80px]">HSN</th>
+                <th scope="col" className="min-w-[100px]">PD</th>
+                <th scope="col" className="min-w-[70px]">Qty</th>
+                <th scope="col" className="min-w-[80px]">CIF</th>
+                <th scope="col" className="min-w-[80px]">HSN</th>
+                <th scope="col" className="min-w-[100px]">PD</th>
+                <th scope="col" className="min-w-[60px]">FF Qty</th>
+                <th scope="col" className="min-w-[60px]">DF Qty</th>
+                <th scope="col" className="min-w-[60px]">Qty</th>
+                <th scope="col" className="min-w-[80px]">CIF</th>
+                <th scope="col" className="min-w-[60px]">Qty</th>
+                <th scope="col" className="min-w-[80px]">CIF</th>
+                <th scope="col" className="min-w-[120px]">PD</th>
+                <th scope="col" className="min-w-[70px]">Tot Qty</th>
+                <th scope="col" className="min-w-[60px]">Chz Qty</th>
+                <th scope="col" className="min-w-[80px]">Chz CIF</th>
+                <th scope="col" className="min-w-[60px]">SWP Qty</th>
+                <th scope="col" className="min-w-[80px]">SWP CIF</th>
+                <th scope="col" className="min-w-[60px]">WPC Qty</th>
+                <th scope="col" className="min-w-[80px]">WPC CIF</th>
+                <th scope="col" className="min-w-[80px]">HSN</th>
+                <th scope="col" className="min-w-[100px]">PD</th>
+                <th scope="col" className="min-w-[60px]">Qty</th>
             </tr>
         </thead>
     );

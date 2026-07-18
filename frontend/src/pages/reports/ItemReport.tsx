@@ -493,13 +493,12 @@ export default function ItemReport() {
             <div className="row mb-3">
                 <div className="col-span-full">
                     <div className="surface-card">
-                        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}
-                             className="flex justify-between items-center">
-                            <h5 className="mb-0" style={{ fontWeight: 600, fontSize: 15 }}>
+                        <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+                            <h5 className="mb-0 flex items-center gap-1.5 text-[15px] font-semibold">
                                 <SlidersHorizontal className="size-4" aria-hidden="true" />
                                 Filters
                                 {isPending && (
-                                    <span className="ms-2" style={{ fontSize: 13.5, color: 'var(--tb-text-secondary)' }}>
+                                    <span className="ml-2 flex items-center gap-1 text-[13.5px] text-muted-foreground">
                                         <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                         Updating...
                                     </span>

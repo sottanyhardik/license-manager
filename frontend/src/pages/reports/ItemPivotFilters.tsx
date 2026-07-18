@@ -62,12 +62,9 @@ export default function ItemPivotFilters({
     const activeFiltersVisible = Boolean(hasActiveFilters);
 
     return (
-        <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm" style={{ maxWidth: "1400px" }}>
-            <div
-                style={{ padding: "14px 16px", borderBottom: "1px solid var(--tb-border)" }}
-                className="flex items-center justify-between"
-            >
-                <h5 className="mb-0 flex items-center gap-2" style={{ fontWeight: 600, fontSize: 15 }}>
+        <div className="mb-4 max-w-[1400px] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+                <h5 className="mb-0 flex items-center gap-2 text-[15px] font-semibold">
                     <SlidersHorizontal className="size-4" aria-hidden="true" />
                     Filters
                 </h5>

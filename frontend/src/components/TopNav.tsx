@@ -70,11 +70,16 @@ function NavMenu({ icon, label, items, isActive, end = false }) {
             >
                 <Icon name={icon} className="size-4" />
                 {label}
-                <ChevronDown className="size-4" aria-hidden="true" />
+                <ChevronDown
+                    className="size-3.5 transition-transform duration-200"
+                    style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", opacity: 0.6 }}
+                    aria-hidden="true"
+                />
             </button>
 
             {open && (
                 <ul role="menu" className={`tb-nav-menu${end ? " is-end" : ""}`}>
+                    {/* Invisible bridge prevents gap between trigger and menu closing on mouse movement */}
                     <li aria-hidden="true" style={{ position: "absolute", top: -8, left: 0, right: 0, height: 8 }} />
                     {items}
                 </ul>
@@ -210,32 +215,18 @@ export default function TopNav() {
                 </div>
 
                 {/* Right-side controls */}
-                <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 8, flexShrink: 0 }}>
-                    {/* Command palette search trigger */}
+                <div className="flex items-center gap-1 ml-2 shrink-0">
+                    {/* Command palette search trigger — pill style on wider viewports */}
                     <button
                         type="button"
-                        className="tb-nav-theme-toggle"
+                        className="tb-nav-theme-toggle w-auto gap-1.5 px-2.5 text-xs text-muted-foreground/70"
                         onClick={openCmd}
                         aria-label="Search (⌘K)"
-                        title="Search  ⌘K"
-                        style={{ width: "auto", paddingInline: 10, gap: 6, fontSize: 12, color: "var(--tb-text-tertiary)" }}
+                        title="Search ⌘K"
                     >
-                        <Search className="size-4" aria-hidden="true" />
-                        <span style={{ display: "none" }} className="d-sm-inline">
-                            Search
-                        </span>
-                        <kbd
-                            style={{
-                                fontSize: 10,
-                                background: "var(--tb-sunken)",
-                                border: "1px solid var(--tb-border)",
-                                borderRadius: 4,
-                                padding: "1px 5px",
-                                fontFamily: "var(--tb-font-mono)",
-                                display: "none",
-                            }}
-                            className="d-lg-inline"
-                        >
+                        <Search className="size-3.5" aria-hidden="true" />
+                        <span className="hidden sm:inline text-[12px]">Search</span>
+                        <kbd className="hidden rounded bg-muted/40 px-[5px] py-[1px] font-mono text-[10px] tracking-normal border border-border lg:inline-block">
                             ⌘K
                         </kbd>
                     </button>

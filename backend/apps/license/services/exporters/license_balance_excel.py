@@ -513,12 +513,152 @@ def build_balance_excel(license_obj):
     r += 1  # blank row
 
     # ══════════════════════════════════════════════════════════════════════
-    # Section 3: Utilization Planning (E1) / Summary (Balance Quantity)
+    # Section 3: Utilization Planning
     # ══════════════════════════════════════════════════════════════════════
-    _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
-    _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
-    _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
-    _is_e132 = any(n and str(n).strip() == 'E132' for n in _norm_vals)
+    # Prefer user-authored plans (LicenseItemPlan entered via the Plan tab)
+    # over the norm-calculated algorithms (E1 / E5 / E132).  Only fall back
+    # to the norm path when no user plans have been saved for this license.
+    from apps.license.services.plan_reporting import plan_map_for_license as _plan_map_fn
+
+    _user_plan_map = _plan_map_fn(license_obj.id)  # {import_item_id: {total_planned_quantity, total_planned_cif, splits}}
+    _has_user_plan = bool(_user_plan_map) and any(
+        float(v.get('total_planned_cif') or 0) > 0 or float(v.get('total_planned_quantity') or 0) > 0
+        for v in _user_plan_map.values()
+    )
+
+    if _has_user_plan:
+        # ── User-plan rendering ────────────────────────────────────────────
+        # Build a quick lookup: import_item_id → (available_qty, description, hs_code)
+        _id_to_info = {}
+        for _imp in license_obj.import_license.all():
+            _id_to_info[_imp.id] = {
+                'avail': float(_imp.available_quantity or 0),
+                'desc': _imp.description or '-',
+                'hs': str(_imp.hs_code.hs_code if _imp.hs_code else '-'),
+            }
+
+        # Flatten to one row per split, preserving order by import-item serial.
+        _plan_row_list = []  # [{item_name, avail_qty, planned_qty, unit_price, planned_cif, desc, hs}]
+        for _imp2 in sorted(license_obj.import_license.all(), key=lambda i: i.serial_number or 0):
+            _pdata = _user_plan_map.get(_imp2.id)
+            if not _pdata:
+                continue
+            _info2 = _id_to_info.get(_imp2.id, {})
+            _avail2 = _info2.get('avail', 0.0)
+            _desc2 = _info2.get('desc', '-')
+            _hs2 = _info2.get('hs', '-')
+            _splits2 = _pdata.get('splits', [])
+            if not _splits2:
+                continue
+            for _sp2 in _splits2:
+                _sq2  = float(_sp2.get('planned_quantity') or 0)
+                _sc2  = float(_sp2.get('planned_cif_fc') or 0)
+                _spu2 = float(_sp2.get('unit_price') or 0)
+                _sn2  = _sp2.get('item_name') or _desc2 or '-'
+                if _sq2 <= 0 and _sc2 <= 0:
+                    continue
+                _plan_row_list.append({
+                    'item_name': _sn2,
+                    'avail_qty': _avail2,
+                    'planned_qty': _sq2,
+                    'unit_price': _spu2,
+                    'planned_cif': _sc2,
+                    'desc': _desc2,
+                    'hs': _hs2,
+                })
+
+        # Section header (7 cols)
+        ws.merge_cells(f'A{r}:G{r}')
+        _ubh = ws[f'A{r}']
+        _ubh.value = 'Utilization Planning'
+        _ubh.fill = HDR_FILL; _ubh.font = Font(bold=True, color="FFFFFF", size=10)
+        _ubh.alignment = Alignment(horizontal='center', vertical='center')
+        r += 1
+
+        # BALANCE CIF $ label + value
+        ws.merge_cells(f'A{r}:D{r}')
+        _ubc = ws[f'A{r}']
+        _ubc.value = 'BALANCE CIF $'
+        _ubc.fill = HDR_FILL; _ubc.font = Font(bold=True, color="FFFFFF", size=9)
+        _ubc.alignment = Alignment(horizontal='center', vertical='center')
+        _ubc.border = THIN_BORDER
+        _uyc = ws.cell(row=r, column=5, value=_license_balance)
+        _uyc.fill = YEL_FILL; _uyc.font = Font(bold=True, size=9)
+        _uyc.border = THIN_BORDER
+        _uyc.alignment = Alignment(horizontal='right', vertical='center')
+        _uyc.number_format = '#,##0.00'
+        r += 1
+
+        # Column headers
+        for col, h in enumerate(['Item Category', 'Bal Qty', 'Planned Qty', 'Remaining Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description'], 1):
+            _hdr(ws, r, col, h)
+        r += 1
+
+        # Data rows
+        _total_planned_cif = 0.0
+        _running_bal = _license_balance
+        for _idx2, _pr in enumerate(_plan_row_list):
+            _rf = None if _idx2 % 2 == 0 else ALT_FILL
+            _pq = _pr['planned_qty']
+            _pc = _pr['planned_cif']
+            _rem_qty = _pr['avail_qty'] - _pq
+            _total_planned_cif += _pc
+            _running_bal -= _pc
+            _cell(ws, r, 1, _pr['item_name'],       fill=_rf)
+            _cell(ws, r, 2, _pr['avail_qty'],        fill=_rf, align='right', num_fmt='#,##0.000')
+            _cell(ws, r, 3, _pq,                     fill=_rf, align='right', num_fmt='#,##0.000')
+            _cell(ws, r, 4, _rem_qty,                fill=_rf, align='right', num_fmt='#,##0.000')
+            _cell(ws, r, 5, _pr['unit_price'],       fill=_rf, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 6, _pc,                     fill=_rf, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 7, _pr['desc'],             fill=_rf)
+            r += 1
+
+        if not _plan_row_list:
+            ws.merge_cells(f'A{r}:G{r}')
+            _emp = ws[f'A{r}']
+            _emp.value = 'No utilization planning entries found for this license.'
+            _emp.font = Font(italic=True, size=9)
+            _emp.alignment = Alignment(horizontal='center', vertical='center')
+            r += 1
+
+        # Totals + remaining balance
+        r += 1
+        for _ci in range(1, 6):
+            _cell(ws, r, _ci, '', fill=TOTAL_FILL)
+        _cell(ws, r, 5, 'TOTAL PLANNED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+        _cell(ws, r, 6, _total_planned_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _cell(ws, r, 7, '', fill=TOTAL_FILL)
+        r += 1
+
+        _rem_final = _license_balance - _total_planned_cif
+        _REMF = PatternFill(
+            start_color="C00000" if _rem_final < 0 else "1F4E79",
+            end_color="C00000" if _rem_final < 0 else "1F4E79",
+            fill_type="solid"
+        )
+        for _ci in range(1, 7):
+            _cx = ws.cell(row=r, column=_ci)
+            _cx.fill = _REMF; _cx.border = THIN_BORDER
+        _rclbl = ws.cell(row=r, column=5, value='REMAINING BALANCE CIF $')
+        _rclbl.fill = _REMF; _rclbl.font = Font(bold=True, color="FFFFFF", size=9)
+        _rclbl.border = THIN_BORDER
+        _rclbl.alignment = Alignment(horizontal='right', vertical='center')
+        _rcval = ws.cell(row=r, column=6, value=_rem_final)
+        _rcval.fill = _REMF; _rcval.font = Font(bold=True, color="FFFFFF", size=9)
+        _rcval.border = THIN_BORDER
+        _rcval.alignment = Alignment(horizontal='right', vertical='center')
+        _rcval.number_format = '#,##0.00'
+        _cell(ws, r, 7, '', fill=_REMF)
+        r += 1
+        # Suppress the norm-based section below — user plans are already rendered.
+        _is_e1 = _is_e5 = _is_e132 = False
+
+    else:
+        # ── Norm-based fallback (existing E1 / E5 / E132 / generic logic) ──
+        _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
+        _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
+        _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
+        _is_e132 = any(n and str(n).strip() == 'E132' for n in _norm_vals)
     if _is_e1:
         from apps.license.services.e1_plan import (
             E1_CATS as _E1_CATS_BE,

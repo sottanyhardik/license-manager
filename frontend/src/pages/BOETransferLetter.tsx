@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
@@ -8,7 +8,7 @@ import TransferLetterForm from "../components/TransferLetterForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-function Detail({ label, value }) {
+function Detail({ label, value }: { label: string; value: ReactNode }) {
     return (
         <div>
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
@@ -22,9 +22,10 @@ export default function BOETransferLetter({ boeId: propId, isModal = false, onCl
     const navigate = useNavigate();
     const id = propId || paramId;
 
-    const [boe, setBoe] = useState(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [boe, setBoe] = useState<Record<string, any> | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const [error, setError] = useState<string>("");
 
     useEffect(() => {
         const fetchBOE = async () => {

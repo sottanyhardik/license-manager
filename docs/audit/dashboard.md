@@ -4,16 +4,16 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 ## Repository Statistics
 
-- Files audited: `525`
+- Files audited: `526`
 - Files changed directly: `64`
-- Files requiring dependency recheck: `329`
+- Files requiring dependency recheck: `328`
 - Files not started: `12`
 - Files ignored/excluded: `595`
-- Files remaining: `329`
+- Files remaining: `328`
 - Total source files tracked: `903`
 - Total source LOC tracked: `240720`
-- Audited LOC: `119429`
-- Remaining LOC: `121285`
+- Audited LOC: `119482`
+- Remaining LOC: `121232`
 - Modules completed: `0`
 - Pending modules: `46`
 - Duplicate logic removed: `tracked per work item`
@@ -128,6 +128,7 @@ Generated: `2026-07-16T10:31:21+00:00`
 - Phase 11 Documents completed `.claude/agents/README.md`; retained live specialist-agent guidance referenced by `CLAUDE.md` and corrected backend verification guidance to use targeted `pytest` or `scripts/testing/run-tests.sh`.
 - Phase 11 Documents completed `.claude/agents/backend-engineer.md`; retained live backend specialist-agent guidance and corrected backend verification guidance to use targeted Django/pytest paths or `scripts/testing/run-tests.sh`.
 - Phase 11 Documents completed `.claude/agents/code-reviewer.md`; retained live read-only code-review guidance and standardized staged-diff review on `git diff --cached`.
+- Phase 11 Documents completed `.claude/agents/data-engineer.md`; retained live data-engineer guidance and updated script references to current repository paths.
 
 ## Verification History
 
@@ -1562,6 +1563,9 @@ Generated: `2026-07-16T10:31:21+00:00`
 
 - Phase 11 code-reviewer agent dependency scan: `CLAUDE.md` and `.claude/agents/README.md` reference `.claude/agents/code-reviewer.md`; retained as live repository guidance.
 - Phase 11 code-reviewer agent verification: staged-diff command now uses `git diff --cached`; `git diff --check` and `git diff --cached --check` clean; runtime backend/frontend gates not applicable to markdown-only source change.
+
+- Phase 11 data-engineer agent dependency scan: `CLAUDE.md` and `.claude/agents/README.md` reference `.claude/agents/data-engineer.md`; retained as live repository guidance.
+- Phase 11 data-engineer agent verification: referenced script paths exist; `git diff --check` and `git diff --cached --check` clean; runtime backend/frontend gates not applicable to markdown-only source change.
 
 ## Blocked Work
 

@@ -1568,3 +1568,37 @@
 - Remaining Technical Debt:
   - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
 - Status: COMPLETED
+
+
+## .claude/agents/data-engineer.md
+
+- File Path(s): `.claude/agents/data-engineer.md`
+- Module: Documents / Specialist data-engineering guidance
+- Total LOC: 57
+- Lines Reviewed: 57 plus `CLAUDE.md`, `.claude/agents/README.md`, related agent references, and referenced pipeline/script paths
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Updated bare script names to current repository paths for DGFT/SION/rates imports, master sync, index deployment, and DB integrity audit scripts.
+- Package Replacements: None; documentation-only correction reused existing repository scripts.
+- Performance Improvements: None; documentation-only unit.
+- Security Improvements: Preserved destructive database operation warnings and made referenced operational scripts unambiguous.
+- Dead Code Removed: None; dependency analysis proved the data-engineer document is live guidance.
+- Duplicate Logic Removed: None; other agent documents remain separate queued Phase 11 units.
+- Tests Added: None; markdown-only source update.
+- Verification Results:
+  - Dependency scan found live references from `CLAUDE.md`, `.claude/agents/README.md`, `.claude/agents/devops-sre.md`, and MDS architecture/operations docs.
+  - Reviewed every line of the data-engineer guide and confirmed it defines ETL/database scope, non-destructive DB rules, pipeline standards, quality gates, and output contract.
+  - Script path scan confirmed the referenced scripts exist under `scripts/imports/`, `scripts/maintenance/`, `scripts/deployment/`, and `scripts/database/`.
+  - `git diff --check` -> clean before source commit.
+  - `git diff --cached --check` -> clean before source commit.
+  - Backend `pytest`, Ruff, `py_compile`, `compileall`, Django check, and makemigrations check were not run because this unit changed only markdown guidance and no backend runtime source, templates, migrations, or tests.
+  - Frontend ESLint, TypeScript, and production build were not run because this unit changed only markdown guidance and no frontend runtime source.
+  - Security scanners were not run for this markdown-only guidance change; the existing Phase 11 local security-tool availability blocker remains recorded.
+- Source Commit SHA: `c2f9552ea7423492e97b92db7bccaa080d9faf96`
+- Source Commit Timestamp: `2026-07-18T05:41:05+05:30`
+- Source Commit Summary: `docs(agents): update data engineer script paths`
+- Blocked Items:
+  - None for this markdown-only unit.
+- Remaining Technical Debt:
+  - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
+- Status: COMPLETED

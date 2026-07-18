@@ -275,9 +275,10 @@ export default function AdvancedFilter({
             {Object.keys(filterConfig).length > 0 && (
                 <Card>
                     <CardContent className="pt-4">
-                        <h6 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                            <Filter className="size-4" />Filters
-                        </h6>
+                        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                            <Filter className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                            <span>Filters</span>
+                        </div>
 
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                             {Object.entries(filterConfig).map(([fieldName, config]) =>

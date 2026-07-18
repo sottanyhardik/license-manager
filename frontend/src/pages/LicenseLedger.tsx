@@ -192,7 +192,7 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
 
 // ─── LicenseWiseLedger sub-component ─────────────────────────────────────────
 
-function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate: ReturnType<typeof useNavigate> }) {
+function LicenseWiseLedger({ data, navigate, companyId }: { data: LicenseWiseData; navigate: ReturnType<typeof useNavigate>; companyId?: string }) {
     const { licenses } = normalizeLicenseWiseData(data);
     const fmt = (v: number) => `₹${formatIndianNumber(v, 2)}`;
 
@@ -214,11 +214,11 @@ function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate
                     <div className="flex flex-wrap items-center gap-5 bg-primary px-4 py-2.5">
                         <span className="flex items-center gap-1.5 text-[15px] font-bold text-primary-foreground">
                             <FileText className="size-4 shrink-0" aria-hidden="true" />
-                            {lic.license_number}
+                            <span className="ml-1">{lic.license_number}</span>
                         </span>
                         <span className="flex items-center gap-1.5 text-[12.5px] text-primary-foreground/70">
                             <Calendar className="size-4 shrink-0" aria-hidden="true" />
-                            {lic.license_date}
+                            <span className="ml-1">{lic.license_date}</span>
                         </span>
                         <span className={cn(
                             "rounded-md px-2 py-0.5 text-[11px] font-bold text-white",
@@ -228,7 +228,8 @@ function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate
                         </span>
                         <button
                             type="button"
-                            onClick={() => navigate(`/license-ledger/${lic.license_id}`)}
+                            onClick={() => navigate(companyId ? `/license-ledger/${lic.license_id}/${companyId}` : `/license-ledger/${lic.license_id}`)}
+                            aria-label={`View ledger for ${lic.license_number}`}
                             className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25"
                         >
                             <BookOpen className="size-4" aria-hidden="true" />View Ledger
@@ -257,7 +258,7 @@ function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate
                                         <td colSpan={5} className="px-3 py-[5px] text-[0.82rem] font-bold text-foreground">
                                             <span className="flex items-center gap-1.5">
                                                 <Building2 className="size-4 shrink-0" aria-hidden="true" />
-                                                {company.company_name}
+                                                <span className="ml-1">{company.company_name}</span>
                                             </span>
                                         </td>
                                     </tr>
@@ -267,7 +268,7 @@ function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate
                                         <tr key={`p-${row.trade_id}`} className="border-b border-success/20 bg-success/[0.06]">
                                             <td className="px-3 py-[4px] pl-6">
                                                 <span className="flex items-center gap-1.5 text-foreground">
-                                                    <ArrowDownCircle className="size-4 shrink-0" aria-hidden="true" />Purchase
+                                                    <ArrowDownCircle className="size-4 shrink-0" aria-hidden="true" /><span className="ml-1">Purchase</span>
                                                 </span>
                                             </td>
                                             <td className="px-3 py-[4px] text-muted-foreground">{lic.license_type}</td>
@@ -282,7 +283,7 @@ function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate
                                         <tr key={`s-${row.trade_id}`} className="border-b border-destructive/20 bg-destructive/[0.06]">
                                             <td className="px-3 py-[4px] pl-6">
                                                 <span className="flex items-center gap-1.5 text-foreground">
-                                                    <ArrowUpCircle className="size-4 shrink-0" aria-hidden="true" />Sale
+                                                    <ArrowUpCircle className="size-4 shrink-0" aria-hidden="true" /><span className="ml-1">Sale</span>
                                                 </span>
                                             </td>
                                             <td className="px-3 py-[4px] text-muted-foreground">{lic.license_type}</td>
@@ -341,12 +342,11 @@ function SummaryItem({ label, value, tone }: { label: string; value: string; ton
 
 export default function LicenseLedger() {
     const navigate = useNavigate();
-    const [, setLicenses] = useState([]);
     const [summary, setSummary] = useState<Record<string, Record<string, number>> | null>(null);
-    const [, setLoading] = useState(true);
     const [companyWiseData, setCompanyWiseData] = useState<LicenseWiseData | null>(null);
     const [companyWiseLoading, setCompanyWiseLoading] = useState(false);
-    const [bulkExporting, setBulkExporting] = useState(false);
+    const [pdfExporting, setPdfExporting] = useState(false);
+    const [excelExporting, setExcelExporting] = useState(false);
 
     const { fyStart: currentFYStart, fyEnd: currentFYEnd } = getFinancialYearRange();
 
@@ -361,42 +361,25 @@ export default function LicenseLedger() {
     }, [filters]);
 
     useEffect(() => {
+        fetchCompanyWise();
         if (filters.company) {
-            fetchLedgerData();
             fetchSummary();
         } else {
-            setLicenses([]);
             setSummary(null);
-            setLoading(false);
-            fetchCompanyWise();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
-        filters.license_type, filters.min_balance, filters.search, filters.company,
-        filters.active_only, filters.ordering, filters.purchase_date_from, filters.purchase_date_to,
+        filters.license_type,
+        filters.min_balance,
+        filters.search,
+        filters.company,
+        filters.active_only,
+        filters.ordering,
+        filters.purchase_date_from,
+        filters.purchase_date_to,
     ]);
 
-    const fetchLedgerData = async () => {
-        if (!filters.company) { setLicenses([]); setLoading(false); return; }
-        setLoading(true);
-        try {
-            const params = buildFilterParams();
-            const response = await api.get(`license-ledger/?${params.toString()}`);
-            const data = response.data;
-            if (Array.isArray(data)) setLicenses(data);
-            else if (data && Array.isArray(data.results)) setLicenses(data.results);
-            else if (data && Array.isArray(data.licenses)) setLicenses(data.licenses);
-            else setLicenses([]);
-        } catch (error) {
-            toast.error(getApiErrorMessage(error, 'Failed to load ledger data.'));
-            setLicenses([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const fetchSummary = async () => {
-        if (!filters.company) { setSummary(null); return; }
         try {
             const params = buildFilterParams();
             const response = await api.get(`license-ledger/summary/?${params.toString()}`);
@@ -410,7 +393,6 @@ export default function LicenseLedger() {
         setCompanyWiseLoading(true);
         try {
             const params = buildFilterParams();
-            params.delete('company');
             const response = await api.get(`license-ledger/license-wise/?${params.toString()}`);
             setCompanyWiseData(normalizeLicenseWiseData(response.data));
         } catch (error) {
@@ -435,49 +417,88 @@ export default function LicenseLedger() {
     const clearDateFilter = () =>
         setFilters(prev => ({ ...prev, purchase_date_from: '', purchase_date_to: '' }));
 
+    const clearAllFilters = () => {
+        const { fyStart, fyEnd } = getFinancialYearRange();
+        setFilters({
+            license_type: 'ALL',
+            min_balance: '',
+            search: '',
+            company: null,
+            active_only: true,
+            ordering: '-license_date',
+            purchase_date_from: fyStart,
+            purchase_date_to: fyEnd,
+        });
+    };
+
     const fetchFullLedgerDetails = async () => {
         const licenses = normalizeLicenseWiseData(companyWiseData).licenses;
         if (!licenses.length) return { results: [], failures: 0 };
-        const results: unknown[] = [];
+
+        // When a company filter is active, pass it so the backend returns only that
+        // company's transactions (build_dfia/incentive_ledger_detail already supports this).
+        const companyValue = getCompanyFilterValue(filters.company);
+
+        // Fetch all licenses in parallel — eliminates the N×latency serial bottleneck.
+        // Pass license_type so the backend searches the correct table (DFIA vs Incentive)
+        // and avoids false matches when both tables share the same integer PK.
+        const settled = await Promise.allSettled(
+            licenses.map(lic => {
+                const params = new URLSearchParams({ license_type: lic.license_type });
+                if (companyValue) params.set('company', companyValue);
+                return api.get(`license-ledger/${lic.license_id}/ledger_detail/?${params}`)
+                          .then(r => ({ data: r.data, license_id: lic.license_id }));
+            })
+        );
+
         let failures = 0;
-        for (const lic of licenses) {
-            try {
-                const { data } = await api.get(`license-ledger/${lic.license_id}/ledger_detail/`);
-                const detail = normalizeLedgerExportDetails(data);
-                if (detail) results.push(detail);
-                else failures += 1;
-            } catch {
-                failures += 1;
-            }
+        const results: unknown[] = [];
+        for (const r of settled) {
+            if (r.status === 'rejected') { failures++; continue; }
+            // Defensively merge license_id in case the backend omits it
+            const detail = normalizeLedgerExportDetails(
+                { ...r.value.data, license_id: r.value.data.license_id ?? r.value.license_id }
+            );
+            if (detail) results.push(detail);
+            else failures++;
         }
         return { results, failures };
     };
 
-    const handleBulkExport = async (format: "pdf" | "xlsx") => {
+    const handleBulkExport = async (
+        format: "pdf" | "xlsx",
+        setExporting: (v: boolean) => void,
+    ) => {
         if (!normalizeLicenseWiseData(companyWiseData).licenses.length) {
             toast.error("No data to export"); return;
         }
         const toastId = `bulk-${format}`;
-        setBulkExporting(true);
+        setExporting(true);
         try {
             toast.info("Fetching ledger details…", { duration: Infinity, id: toastId });
             const { results: allLedgers, failures } = await fetchFullLedgerDetails();
             toast.dismiss(toastId);
             if (!allLedgers.length) { toast.error("No ledger data available"); return; }
             const stamp = getTodayStamp();
-            if (format === "pdf") generatePDF(allLedgers, `License_Ledger_Bulk_${stamp}.pdf`);
-            else await generateExcel(allLedgers, `License_Ledger_Bulk_${stamp}.xlsx`);
+            // Include the active company name in the filename when the filter is set.
+            const companySegment = companyLabel
+                ? `_${companyLabel.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_').substring(0, 40)}`
+                : '';
+            const fileBase = `License_Ledger_Bulk${companySegment}_${stamp}`;
+            if (format === "pdf") generatePDF(allLedgers, `${fileBase}.pdf`);
+            else await generateExcel(allLedgers, `${fileBase}.xlsx`);
             toast.success(`Exported ${allLedgers.length} license(s) to ${format.toUpperCase()}${failures ? `; ${failures} failed` : ""}`);
         } catch {
             toast.dismiss(toastId);
             toast.error(`Failed to generate ${format.toUpperCase()}`);
         } finally {
-            setBulkExporting(false);
+            setExporting(false);
         }
     };
 
-    const handleBulkExportPDF   = () => handleBulkExport("pdf");
-    const handleBulkExportExcel = () => handleBulkExport("xlsx");
+    const anyExporting = pdfExporting || excelExporting;
+    const handleBulkExportPDF   = () => handleBulkExport("pdf",  setPdfExporting);
+    const handleBulkExportExcel = () => handleBulkExport("xlsx", setExcelExporting);
 
     const exportableLicenses = normalizeLicenseWiseData(companyWiseData).licenses;
     const companyLabel = normalizeText(
@@ -494,18 +515,28 @@ export default function LicenseLedger() {
                 title="License Ledger"
                 description="Track available balance for DFIA and Incentive licenses"
                 actions={
-                    exportableLicenses.length > 0 ? (
-                        <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={handleBulkExportPDF} disabled={bulkExporting} aria-label="Export license ledger as PDF">
-                                {bulkExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
-                                Export PDF
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={handleBulkExportExcel} disabled={bulkExporting} aria-label="Export license ledger as Excel">
-                                {bulkExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
-                                Export Excel
-                            </Button>
-                        </div>
-                    ) : null
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline" size="sm"
+                            onClick={handleBulkExportPDF}
+                            disabled={anyExporting || exportableLicenses.length === 0}
+                            aria-label="Export license ledger as PDF"
+                            title={exportableLicenses.length === 0 ? 'No data to export' : undefined}
+                        >
+                            {pdfExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                            Export PDF
+                        </Button>
+                        <Button
+                            variant="outline" size="sm"
+                            onClick={handleBulkExportExcel}
+                            disabled={anyExporting || exportableLicenses.length === 0}
+                            aria-label="Export license ledger as Excel"
+                            title={exportableLicenses.length === 0 ? 'No data to export' : undefined}
+                        >
+                            {excelExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
+                            Export Excel
+                        </Button>
+                    </div>
                 }
             />
 
@@ -578,11 +609,16 @@ export default function LicenseLedger() {
                                 </Badge>
                             )}
                         </div>
-                        {filters.company && (
-                            <Button size="sm" variant="outline" onClick={() => handleFilterChange('company', null)}>
-                                <XCircle className="size-4" aria-hidden="true" />Clear Company
+                        <div className="flex gap-2">
+                            {filters.company && (
+                                <Button size="sm" variant="outline" onClick={() => handleFilterChange('company', null)}>
+                                    <XCircle className="size-3.5" aria-hidden="true" />Clear Company
+                                </Button>
+                            )}
+                            <Button size="sm" variant="outline" onClick={clearAllFilters}>
+                                <XCircle className="size-3.5" aria-hidden="true" />Clear All
                             </Button>
-                        )}
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent className="p-3">
@@ -702,14 +738,28 @@ export default function LicenseLedger() {
 
             {/* ── Company-wise ledger card ────────────────────────── */}
             <Card>
+                <CardHeader className="border-b py-2 px-3">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground">
+                            {exportableLicenses.length} license{exportableLicenses.length !== 1 ? 's' : ''}
+                        </span>
+                        {companyWiseLoading && (
+                            <span className="text-xs text-muted-foreground">Loading…</span>
+                        )}
+                    </div>
+                </CardHeader>
                 <CardContent className="p-0">
                     {companyWiseLoading ? (
-                        <div className="flex flex-col items-center gap-2 py-10 text-center">
+                        <div role="status" aria-live="polite" className="flex flex-col items-center gap-2 py-10 text-center">
                             <span className="inline-block size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
                             <p className="text-sm text-muted-foreground">Loading license-wise ledger…</p>
                         </div>
                     ) : companyWiseData ? (
-                        <LicenseWiseLedger data={companyWiseData} navigate={navigate} />
+                        <LicenseWiseLedger
+                            data={companyWiseData}
+                            navigate={navigate}
+                            companyId={getCompanyFilterValue(filters.company) || undefined}
+                        />
                     ) : (
                         <EmptyState
                             icon={Building2}

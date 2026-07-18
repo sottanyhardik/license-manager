@@ -194,13 +194,25 @@ export default function LicenseLedgerDetail() {
     const isNegativeBalance = currentBalance < 0;
     const showPurchaseWarning = !hasPurchases || isNegativeBalance;
 
+    // When the ledger was opened with a company filter (companyId in the URL),
+    // include the company name in the filename so downloads are clearly scoped.
+    const exportCompanyPart = companyId
+        ? sanitizeLedgerFilenamePart(ledger.transactions[0]?.company_name ?? String(companyId))
+        : null;
+
+    const buildExportFilename = (ext: 'pdf' | 'xlsx') =>
+        [
+            'License_Ledger',
+            sanitizeLedgerFilenamePart(ledger.license_number),
+            exportCompanyPart,
+            getTodayStamp(),
+        ].filter(Boolean).join('_') + `.${ext}`;
+
     const handleDownloadPDF = () => {
-        const filename = `License_Ledger_${sanitizeLedgerFilenamePart(ledger.license_number)}_${getTodayStamp()}.pdf`;
-        generatePDF([ledger], filename);
+        generatePDF([ledger], buildExportFilename('pdf'));
     };
     const handleDownloadExcel = async () => {
-        const filename = `License_Ledger_${sanitizeLedgerFilenamePart(ledger.license_number)}_${getTodayStamp()}.xlsx`;
-        await generateExcel([ledger], filename);
+        await generateExcel([ledger], buildExportFilename('xlsx'));
     };
 
     return (

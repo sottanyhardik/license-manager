@@ -1,140 +1,203 @@
-import React from 'react';
-import { getFieldError } from '../utils/formErrors';
+/**
+ * Reusable form field primitives.
+ *
+ * Uses shadcn Input/Textarea + Label components instead of the old TW_INPUT
+ * hardcoded string, ensuring all updates to shadcn components propagate here
+ * automatically and eliminating the duplicate class string.
+ *
+ * All fields:
+ *  - Link <label> to <input> via htmlFor/id (WCAG 1.3.1)
+ *  - Use aria-required and aria-invalid for screen readers
+ *  - Show inline error messages tied to the field via aria-describedby
+ */
+import React, { useId } from "react";
 import { TriangleAlert } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { getFieldError } from "../utils/formErrors";
 
-const TW_INPUT = "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive";
+// ── Shared types ──────────────────────────────────────────────────────────────
 
-/**
- * Reusable form field component with error handling
- */
+interface BaseFieldProps {
+    label: string;
+    name: string;
+    fieldErrors?: Record<string, unknown>;
+    required?: boolean;
+    className?: string;
+}
+
+// ── FormField (text input) ────────────────────────────────────────────────────
+
+interface FormFieldProps
+    extends BaseFieldProps,
+        Omit<React.InputHTMLAttributes<HTMLInputElement>, "name" | "required" | "className"> {
+    type?: string;
+}
+
 export const FormField = ({
-  label,
-  name,
-  type = 'text',
-  value,
-  onChange,
-  fieldErrors = {},
-  required = false,
-  placeholder = '',
-  className = '',
-  ...props
-}) => {
-  const error = getFieldError(fieldErrors, name);
+    label,
+    name,
+    type = "text",
+    fieldErrors = {},
+    required = false,
+    className = "",
+    id: idProp,
+    ...props
+}: FormFieldProps) => {
+    const generatedId = useId();
+    const id = idProp ?? generatedId;
+    const errorId = `${id}-error`;
+    const error = getFieldError(fieldErrors, name);
 
-  return (
-    <div className={className}>
-      <label className="form-label font-bold">
-        {label} {required && '*'}
-      </label>
-      <input
-        type={type}
-        name={name}
-        className={TW_INPUT}
-        aria-invalid={!!error}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        {...props}
-      />
-      {error && <div className="mt-0.5 text-[11.5px] text-destructive">{error}</div>}
-    </div>
-  );
+    return (
+        <div className={className}>
+            <Label htmlFor={id} className={cn("mb-1.5", required && "required")}>
+                {label}
+            </Label>
+            <Input
+                id={id}
+                type={type}
+                name={name}
+                aria-invalid={!!error}
+                aria-required={required}
+                aria-describedby={error ? errorId : undefined}
+                {...props}
+            />
+            {error && (
+                <p id={errorId} className="mt-0.5 text-[11.5px] text-destructive" role="alert">
+                    {error}
+                </p>
+            )}
+        </div>
+    );
 };
 
-/**
- * Form textarea field with error handling
- */
+// ── FormTextArea ──────────────────────────────────────────────────────────────
+
+interface FormTextAreaProps
+    extends BaseFieldProps,
+        Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "name" | "required" | "className"> {
+    rows?: number;
+}
+
 export const FormTextArea = ({
-  label,
-  name,
-  value,
-  onChange,
-  fieldErrors = {},
-  required = false,
-  placeholder = '',
-  rows = 3,
-  className = '',
-  ...props
-}) => {
-  const error = getFieldError(fieldErrors, name);
+    label,
+    name,
+    fieldErrors = {},
+    required = false,
+    rows = 3,
+    className = "",
+    id: idProp,
+    ...props
+}: FormTextAreaProps) => {
+    const generatedId = useId();
+    const id = idProp ?? generatedId;
+    const errorId = `${id}-error`;
+    const error = getFieldError(fieldErrors, name);
 
-  return (
-    <div className={className}>
-      <label className="form-label font-bold">
-        {label} {required && '*'}
-      </label>
-      <textarea
-        name={name}
-        className={TW_INPUT}
-        aria-invalid={!!error}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        rows={rows}
-        {...props}
-      />
-      {error && <div className="mt-0.5 text-[11.5px] text-destructive">{error}</div>}
-    </div>
-  );
+    return (
+        <div className={className}>
+            <Label htmlFor={id} className={cn("mb-1.5", required && "required")}>
+                {label}
+            </Label>
+            <Textarea
+                id={id}
+                name={name}
+                rows={rows}
+                aria-invalid={!!error}
+                aria-required={required}
+                aria-describedby={error ? errorId : undefined}
+                {...props}
+            />
+            {error && (
+                <p id={errorId} className="mt-0.5 text-[11.5px] text-destructive" role="alert">
+                    {error}
+                </p>
+            )}
+        </div>
+    );
 };
 
-/**
- * Form select field with error handling
- */
+// ── FormSelect ────────────────────────────────────────────────────────────────
+
+interface SelectOption { value: string | number; label: string }
+
+interface FormSelectProps
+    extends BaseFieldProps,
+        Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "name" | "required" | "className"> {
+    options?: SelectOption[];
+}
+
 export const FormSelect = ({
-  label,
-  name,
-  value,
-  onChange,
-  options = [],
-  fieldErrors = {},
-  required = false,
-  className = '',
-  ...props
-}) => {
-  const error = getFieldError(fieldErrors, name);
+    label,
+    name,
+    options = [],
+    fieldErrors = {},
+    required = false,
+    className = "",
+    id: idProp,
+    ...props
+}: FormSelectProps) => {
+    const generatedId = useId();
+    const id = idProp ?? generatedId;
+    const errorId = `${id}-error`;
+    const error = getFieldError(fieldErrors, name);
 
-  return (
-    <div className={className}>
-      <label className="form-label font-bold">
-        {label} {required && '*'}
-      </label>
-      <select
-        name={name}
-        className={`${TW_INPUT} cursor-pointer`}
-        aria-invalid={!!error}
-        value={value}
-        onChange={onChange}
-        {...props}
-      >
-        {options.map((option, idx) => (
-          <option key={idx} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      {error && <div className="mt-0.5 text-[11.5px] text-destructive">{error}</div>}
-    </div>
-  );
+    return (
+        <div className={className}>
+            <Label htmlFor={id} className={cn("mb-1.5", required && "required")}>
+                {label}
+            </Label>
+            <select
+                id={id}
+                name={name}
+                aria-invalid={!!error}
+                aria-required={required}
+                aria-describedby={error ? errorId : undefined}
+                className="flex h-9 w-full cursor-pointer rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-50"
+                {...props}
+            >
+                {options.map((opt, idx) => (
+                    <option key={idx} value={opt.value}>
+                        {opt.label}
+                    </option>
+                ))}
+            </select>
+            {error && (
+                <p id={errorId} className="mt-0.5 text-[11.5px] text-destructive" role="alert">
+                    {error}
+                </p>
+            )}
+        </div>
+    );
 };
 
-/**
- * Non-field errors alert component
- */
-export const NonFieldErrors = ({ errors = [], formatFunction }) => {
-  if (!errors || errors.length === 0) return null;
+// ── NonFieldErrors ────────────────────────────────────────────────────────────
 
-  const formattedErrors = formatFunction ? formatFunction(errors) : errors.join(' | ');
+export const NonFieldErrors = ({
+    errors = [],
+    formatFunction,
+}: {
+    errors?: string[];
+    formatFunction?: (errors: string[]) => string;
+}) => {
+    if (!errors || errors.length === 0) return null;
+    const formattedErrors = formatFunction ? formatFunction(errors) : errors.join(" | ");
 
-  return (
-    <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
-      <TriangleAlert className="size-4 mt-0.5 shrink-0" aria-hidden="true" />
-      <div>
-        <strong className="font-semibold">ERROR:</strong>
-        <div className="mt-0.5 font-semibold uppercase">{formattedErrors}</div>
-      </div>
-    </div>
-  );
+    return (
+        <div
+            className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive"
+            role="alert"
+        >
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <div>
+                <strong className="font-semibold">Error: </strong>
+                <span className="font-medium">{formattedErrors}</span>
+            </div>
+        </div>
+    );
 };
 
 export default FormField;

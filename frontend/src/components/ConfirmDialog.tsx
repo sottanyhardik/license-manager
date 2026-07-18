@@ -1,12 +1,49 @@
 import { useEffect, useRef } from "react";
-import Icon from "@/components/Icon";
+import { AlertTriangle, CheckCircle, Info, XOctagon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const SEVERITY = {
-    danger:  { icon: "exclamation-triangle-fill", tone: "danger",  confirmVariant: "btn-danger" },
-    warning: { icon: "exclamation-triangle",       tone: "warning", confirmVariant: "btn-warning" },
-    info:    { icon: "info-circle",                tone: "info",    confirmVariant: "btn-primary" },
-    success: { icon: "check-circle",               tone: "success", confirmVariant: "btn-success" },
-};
+// Severity → icon, icon container classes, confirm button classes
+const SEVERITY_CONFIG = {
+    danger: {
+        Icon: XOctagon,
+        iconCls: "bg-destructive/10 text-destructive",
+        confirmCls: "bg-destructive text-white hover:bg-destructive/90",
+    },
+    warning: {
+        Icon: AlertTriangle,
+        iconCls: "bg-warning/10 text-warning",
+        confirmCls: "bg-warning text-white hover:bg-warning/90",
+    },
+    info: {
+        Icon: Info,
+        iconCls: "bg-info/10 text-info",
+        confirmCls: "bg-primary text-white hover:bg-primary/90",
+    },
+    success: {
+        Icon: CheckCircle,
+        iconCls: "bg-success/10 text-success",
+        confirmCls: "bg-success text-white hover:bg-success/90",
+    },
+} as const;
+
+type Severity = keyof typeof SEVERITY_CONFIG;
+
+interface ConfirmDialogProps {
+    show: boolean;
+    title?: string;
+    message?: string;
+    /** One of "danger" | "warning" | "info" | "success"; falls back to "warning" */
+    severity?: Severity | string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+    showCancelButton?: boolean;
+    /** Override CSS classes for the confirm button */
+    confirmButtonClassName?: string;
+    /** Override CSS classes for the cancel button */
+    cancelButtonClassName?: string;
+}
 
 export const ConfirmDialog = ({
     show,
@@ -20,20 +57,23 @@ export const ConfirmDialog = ({
     showCancelButton = true,
     confirmButtonClassName = "",
     cancelButtonClassName = "",
-}) => {
-    const dialogRef = useRef(null);
-    const confirmButtonRef = useRef(null);
-    const previousFocusRef = useRef(null);
-    const cfg = SEVERITY[severity] || SEVERITY.warning;
+}: ConfirmDialogProps) => {
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const confirmButtonRef = useRef<HTMLButtonElement>(null);
+    const previousFocusRef = useRef<Element | null>(null);
+    const cfg = SEVERITY_CONFIG[severity as Severity] ?? SEVERITY_CONFIG.warning;
+    const { Icon } = cfg;
 
+    // Focus management: restore previous focus on close; focus confirm on open
     useEffect(() => {
         if (!show) return;
         previousFocusRef.current = document.activeElement;
         const t = setTimeout(() => confirmButtonRef.current?.focus(), 60);
 
-        const onTab = (e) => {
+        // Tab-trap within dialog
+        const onTab = (e: KeyboardEvent) => {
             if (e.key !== "Tab" || !dialogRef.current) return;
-            const focusable = dialogRef.current.querySelectorAll(
+            const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
                 "button:not([disabled]), [tabindex]:not([tabindex='-1'])"
             );
             if (!focusable.length) return;
@@ -48,13 +88,14 @@ export const ConfirmDialog = ({
         return () => {
             clearTimeout(t);
             document.removeEventListener("keydown", onTab);
-            previousFocusRef.current?.focus();
+            (previousFocusRef.current as HTMLElement | null)?.focus();
         };
     }, [show]);
 
+    // Escape = cancel, Enter = confirm
     useEffect(() => {
         if (!show) return;
-        const handler = (e) => {
+        const handler = (e: KeyboardEvent) => {
             if (e.key === "Escape") onCancel();
             else if (e.key === "Enter") onConfirm();
         };
@@ -62,6 +103,7 @@ export const ConfirmDialog = ({
         return () => document.removeEventListener("keydown", handler);
     }, [show, onConfirm, onCancel]);
 
+    // Prevent body scroll while open
     useEffect(() => {
         document.body.style.overflow = show ? "hidden" : "";
         return () => { document.body.style.overflow = ""; };
@@ -69,92 +111,44 @@ export const ConfirmDialog = ({
 
     if (!show) return null;
 
-    const iconBg = {
-        danger:  "var(--tb-danger-soft)",
-        warning: "var(--tb-warning-soft)",
-        info:    "var(--tb-info-soft)",
-        success: "var(--tb-success-soft)",
-    }[severity] || "var(--tb-sunken)";
-
-    const iconColor = {
-        danger:  "var(--tb-danger-text)",
-        warning: "var(--tb-warning-text)",
-        info:    "var(--tb-info-text)",
-        success: "var(--tb-success-text)",
-    }[severity] || "var(--tb-text-secondary)";
-
     return (
+        /* Backdrop */
         <div
-            style={{
-                position: "fixed",
-                inset: 0,
-                background: "rgba(0,0,0,0.48)",
-                zIndex: 1060,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 16,
-                backdropFilter: "blur(2px)",
-                animation: "tb-fade-in 120ms ease both",
-            }}
+            className="fixed inset-0 z-[1060] flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.48)", backdropFilter: "blur(3px)", animation: "tb-fade-in 120ms ease both" }}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="confirm-dialog-title"
             aria-describedby="confirm-dialog-message"
             onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
         >
+            {/* Panel */}
             <div
                 ref={dialogRef}
-                style={{
-                    background: "var(--tb-card-bg)",
-                    border: "1px solid var(--tb-border)",
-                    borderRadius: "var(--tb-r-xl)",
-                    boxShadow: "var(--tb-shadow-overlay)",
-                    maxWidth: 420,
-                    width: "100%",
-                    animation: "tb-panel-enter 160ms var(--tb-ease) both",
-                    overflow: "hidden",
-                }}
+                className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_24px_56px_rgba(0,0,0,0.18),0_8px_16px_rgba(0,0,0,0.10)]"
+                style={{ animation: "tb-panel-enter 160ms var(--tb-ease) both" }}
             >
                 {/* Body */}
-                <div style={{ padding: "24px 24px 20px", display: "flex", gap: 16, alignItems: "flex-start" }}>
-                    <div
-                        style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: "var(--tb-r-md)",
-                            background: iconBg,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 18,
-                            color: iconColor,
-                            flexShrink: 0,
-                        }}
-                    >
-                        <Icon name={cfg.icon} className="size-4" />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="flex items-start gap-4 px-6 pb-5 pt-6">
+                    {/* Severity icon */}
+                    <span className={cn(
+                        "flex size-10 shrink-0 items-center justify-center rounded-xl",
+                        cfg.iconCls
+                    )}>
+                        <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
+                    </span>
+
+                    {/* Text */}
+                    <div className="min-w-0 flex-1">
                         <h5
                             id="confirm-dialog-title"
-                            style={{
-                                fontSize: 15,
-                                fontWeight: 600,
-                                color: "var(--tb-text)",
-                                margin: "0 0 6px",
-                                letterSpacing: "-0.015em",
-                            }}
+                            className="mb-1.5 text-[15px] font-semibold leading-tight tracking-tight text-foreground"
                         >
                             {title}
                         </h5>
                         <p
                             id="confirm-dialog-message"
-                            style={{
-                                fontSize: 13.5,
-                                color: "var(--tb-text-secondary)",
-                                margin: 0,
-                                lineHeight: 1.6,
-                            }}
+                            className="text-[13.5px] leading-relaxed text-muted-foreground"
                         >
                             {message}
                         </p>
@@ -162,20 +156,15 @@ export const ConfirmDialog = ({
                 </div>
 
                 {/* Footer */}
-                <div
-                    style={{
-                        padding: "12px 24px 20px",
-                        display: "flex",
-                        gap: 8,
-                        justifyContent: "flex-end",
-                    }}
-                >
+                <div className="flex items-center justify-end gap-2 border-t border-border/60 bg-muted/30 px-6 py-4">
                     {showCancelButton && (
                         <button
                             type="button"
-                            className={`btn btn-sm ${cancelButtonClassName || "btn-outline-secondary"}`}
                             onClick={onCancel}
-                            style={{ minWidth: 80, height: 34 }}
+                            className={cn(
+                                "inline-flex h-9 min-w-[88px] items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 cursor-pointer",
+                                cancelButtonClassName
+                            )}
                         >
                             {cancelText}
                         </button>
@@ -183,9 +172,11 @@ export const ConfirmDialog = ({
                     <button
                         ref={confirmButtonRef}
                         type="button"
-                        className={`btn btn-sm ${confirmButtonClassName || cfg.confirmVariant}`}
                         onClick={onConfirm}
-                        style={{ minWidth: 80, height: 34 }}
+                        className={cn(
+                            "inline-flex h-9 min-w-[88px] items-center justify-center rounded-lg px-4 text-sm font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 cursor-pointer",
+                            confirmButtonClassName || cfg.confirmCls
+                        )}
                     >
                         {confirmText}
                     </button>

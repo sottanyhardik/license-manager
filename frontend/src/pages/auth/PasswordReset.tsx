@@ -40,10 +40,7 @@ export default function PasswordReset() {
             >
                 <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
                     {/* Header */}
-                    <div
-                        className="px-8 py-9 text-center text-white"
-                        style={{ background: "linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))" }}
-                    >
+                    <div className="bg-gradient-to-br from-blue-700 to-blue-600 px-8 py-9 text-center text-white">
                         <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl border border-white/20 bg-white/15 backdrop-blur-sm">
                             <KeyRound className="size-7" />
                         </div>

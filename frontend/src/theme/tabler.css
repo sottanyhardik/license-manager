@@ -379,7 +379,8 @@ a:hover { color: var(--tb-brand-hover); }
 /* ─── Layout shell ──────────────────────────────────────── */
 main > .container-fluid {
     padding-top: var(--tb-sp-5) !important;
-    padding-bottom: 96px !important;
+    /* Footer is now sticky (not fixed), so only small bottom breathing room needed */
+    padding-bottom: 32px !important;
     padding-left: clamp(14px, 2vw, 28px) !important;
     padding-right: clamp(14px, 2vw, 28px) !important;
     max-width: 1640px;
@@ -1163,6 +1164,8 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     color: var(--tb-brand);
     background: var(--tb-brand-50);
     font-weight: var(--tb-fw-semibold);
+    /* Subtle bottom indicator line */
+    box-shadow: inset 0 -2px 0 0 var(--tb-brand);
 }
 .tb-nav-trigger > i { font-size: 14px; }
 .tb-nav-trigger > .bi-chevron-down { font-size: 9px; opacity: 0.5; }
@@ -1607,10 +1610,19 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     text-decoration: none;
     color: var(--tb-text);
 }
-.cmd-item:hover, .cmd-item.is-active {
+/* cmdk v1 sets aria-selected="true" on the active item — map to our active style */
+.cmd-item:hover,
+.cmd-item.is-active,
+.cmd-item[aria-selected="true"] {
     background: var(--tb-brand-50);
     color: var(--tb-brand-active);
+    outline: none;
 }
+/* cmdk group heading — rendered as <div data-cmdk-group-heading> */
+[data-cmdk-group-heading] { all: unset; display: block; }
+/* cmdk removes default focus outline — we rely on aria-selected styling instead */
+[data-cmdk-item]:focus { outline: none; }
+
 .cmd-item-icon {
     width: 28px;
     height: 28px;
@@ -1625,7 +1637,8 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     transition: background-color 80ms ease;
 }
 .cmd-item:hover .cmd-item-icon,
-.cmd-item.is-active .cmd-item-icon {
+.cmd-item.is-active .cmd-item-icon,
+.cmd-item[aria-selected="true"] .cmd-item-icon {
     background: var(--tb-brand-100);
     color: var(--tb-brand);
 }

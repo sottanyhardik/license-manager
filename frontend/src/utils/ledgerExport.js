@@ -161,7 +161,11 @@ function buildPdfBody(license, companiesGrouped) {
     const colCount = isDFIA ? 10 : 9;
     const labelColSpan = isDFIA ? 6 : 5;
     const body = [];
-    const balMap = computeBalanceMap(license);
+    // NOTE: computeBalanceMap is intentionally NOT used here.
+    // It keys the balance Map by object reference; buildPdfBody receives normalised
+    // copies of the same transactions (via groupByCompany → normalizeTransaction),
+    // so every Map lookup missed and returned undefined → fmtNum(0) → '–'.
+    // We compute the running balance inline instead.
 
     const chStyle = {
         fillColor: [30, 58, 95], textColor: [255, 255, 255],
@@ -177,7 +181,15 @@ function buildPdfBody(license, companiesGrouped) {
         body.push([{ content: company.company_name, colSpan: colCount, styles: chStyle }]);
 
         const sortedTxns = sortTxns(company.transactions);
+        // Running CIF-$ (DFIA) or license-value (Incentive) balance for this company.
+        let running = 0;
         sortedTxns.forEach(txn => {
+            if (txn.type === 'PURCHASE' || txn.type === 'OPENING') {
+                running += isDFIA ? (txn.debit_cif || 0) : (txn.debit_license_value || 0);
+            } else if (txn.type === 'SALE') {
+                running -= isDFIA ? (txn.credit_cif || 0) : (txn.credit_license_value || 0);
+            }
+
             const row = [
                 fmtDate(txn.date),
                 txn.particular + (txn.invoice_number ? `\n(${txn.invoice_number})` : ''),
@@ -187,30 +199,44 @@ function buildPdfBody(license, companiesGrouped) {
             } else {
                 row.push(fmtNum(txn.debit_license_value), fmtNum(txn.credit_license_value));
             }
+
+            // Per-row P/L: show only on SALE rows; prefix sign so profit vs loss is visible.
+            let rowPL = '-';
+            if (txn.type === 'SALE' && txn.profit_loss != null) {
+                const pl = toFiniteNumber(txn.profit_loss);
+                rowPL = pl < 0 ? `(L) ${fmtNum(Math.abs(pl))}` : pl > 0 ? `(P) ${fmtNum(pl)}` : '-';
+            }
+
             row.push(
                 fmtNum(txn.rate),
                 txn.debit_amount ? fmtNum(txn.debit_amount) : '-',
                 txn.credit_amount ? fmtNum(txn.credit_amount) : '-',
-                fmtNum(balMap.get(txn) ?? 0),
-                txn.type === 'SALE' && txn.profit_loss != null ? fmtNum(Math.abs(txn.profit_loss)) : '-',
+                fmtNum(running),   // ← inline running balance (fixes the '–' bug)
+                rowPL,
             );
             body.push(row);
         });
+        // After forEach, `running` = final balance for this company (= lastBal).
 
         const txns = company.transactions;
-        const totalDebit = txns.reduce((s, t) => s + (t.debit_amount || 0), 0);
+        const totalDebit  = txns.reduce((s, t) => s + (t.debit_amount  || 0), 0);
         const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
-        // Bottom-line P/L = all credits (sales) − all debits (purchases/costs).
+        // Net P/L: credits (sale receipts) minus debits (purchase costs).
+        // Positive = more received than spent (net profit).
+        // Negative = more spent than received so far; remaining balance is an asset, not a loss.
         const companyPL = totalCredit - totalDebit;
-        const sortedTxns2 = sortTxns(txns);
-        const lastBal = sortedTxns2.length > 0 ? (balMap.get(sortedTxns2[sortedTxns2.length - 1]) ?? 0) : 0;
+        const totalPLLabel = companyPL < 0
+            ? `(L) ${fmtNum(Math.abs(companyPL))}`
+            : companyPL > 0
+            ? `(P) ${fmtNum(companyPL)}`
+            : '-';
 
         body.push([
             { content: `Total — ${company.company_name}`, colSpan: labelColSpan, styles: trStyle },
-            { content: fmtNum(totalDebit), styles: trStyle },
+            { content: fmtNum(totalDebit),  styles: trStyle },
             { content: fmtNum(totalCredit), styles: trStyle },
-            { content: fmtNum(lastBal), styles: trStyle },
-            { content: companyPL !== 0 ? fmtNum(Math.abs(companyPL)) : '-', styles: trStyle },
+            { content: fmtNum(running),     styles: trStyle },   // ← correct final balance
+            { content: totalPLLabel,        styles: trStyle },
         ]);
     });
 
@@ -324,7 +350,7 @@ function writeSummaryPageToPdf(doc, licensesData) {
                 `$${formatIndianNumber(license.available_balance ?? 0, 2)}`,
                 fmtNum(totalPurchase),
                 fmtNum(totalSale),
-                pl !== 0 ? fmtNum(Math.abs(pl)) : '-',
+                pl < 0 ? `(L) ${fmtNum(Math.abs(pl))}` : pl > 0 ? `(P) ${fmtNum(pl)}` : '-',
             ]);
             companyPurchase += totalPurchase; companySale += totalSale; companyPL += pl;
         }
@@ -334,7 +360,7 @@ function writeSummaryPageToPdf(doc, licensesData) {
             { content: `Total — ${companyName}`, colSpan: 4, styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
             { content: fmtNum(companyPurchase), styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
             { content: fmtNum(companySale), styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
-            { content: companyPL !== 0 ? fmtNum(Math.abs(companyPL)) : '-', styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+            { content: companyPL < 0 ? `(L) ${fmtNum(Math.abs(companyPL))}` : companyPL > 0 ? `(P) ${fmtNum(companyPL)}` : '-', styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
         ]);
     }
 

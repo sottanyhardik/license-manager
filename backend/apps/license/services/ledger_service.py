@@ -291,7 +291,7 @@ def build_license_queryset(query_params) -> list:
     dfia_qs = LicenseDetailsModel.objects.select_related('exporter', 'port').all()
     incentive_qs = IncentiveLicense.objects.select_related('exporter', 'port_code').all()
 
-    if is_active_only and not company_id:
+    if is_active_only:
         dfia_qs = dfia_qs.filter(flags__is_expired=False)
         incentive_qs = incentive_qs.filter(
             is_active=True, license_expiry_date__gte=timezone.now().date()
@@ -305,7 +305,7 @@ def build_license_queryset(query_params) -> list:
         dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_balance)
         incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
 
-    if (purchase_date_from or purchase_date_to) and not company_id:
+    if purchase_date_from or purchase_date_to:
         dfia_pf: dict = {}
         inc_pf: dict = {}
         for param, key in [(purchase_date_from, 'invoice_date__gte'), (purchase_date_to, 'invoice_date__lte')]:
@@ -671,6 +671,33 @@ def get_license_wise_trades(query_params) -> dict:
     license_type = _get_license_type(query_params)
     purchase_date_from = _parse_iso_date(_get_text_param(query_params, 'purchase_date_from'))
     purchase_date_to = _parse_iso_date(_get_text_param(query_params, 'purchase_date_to'))
+    company_id = _parse_int(_get_text_param(query_params, 'company'))
+    is_active_only = _get_bool_param(query_params, 'active_only', default=True)
+    min_balance = _parse_decimal(_get_text_param(query_params, 'min_balance'))
+    ordering = _get_text_param(query_params, 'ordering', '-license_date')
+
+    # Pre-compute allowed license IDs (license number OR exporter name) to avoid JOIN fan-out
+    allowed_dfia_ids = None
+    allowed_inc_ids = None
+    if terms and len(terms) == 1:
+        t = terms[0]
+        allowed_dfia_ids = set(
+            LicenseDetailsModel.objects.filter(
+                Q(license_number__icontains=t) | Q(exporter__name__icontains=t)
+            ).values_list('id', flat=True)
+        )
+        allowed_inc_ids = set(
+            IncentiveLicense.objects.filter(
+                Q(license_number__icontains=t) | Q(exporter__name__icontains=t)
+            ).values_list('id', flat=True)
+        )
+    elif terms:  # multiple comma-separated exact terms — exact license number match only
+        allowed_dfia_ids = set(
+            LicenseDetailsModel.objects.filter(license_number__in=terms).values_list('id', flat=True)
+        )
+        allowed_inc_ids = set(
+            IncentiveLicense.objects.filter(license_number__in=terms).values_list('id', flat=True)
+        )
 
     qs = LicenseTrade.objects.select_related('from_company', 'to_company').prefetch_related(
         'lines__sr_number__license',
@@ -687,18 +714,24 @@ def get_license_wise_trades(query_params) -> dict:
     if purchase_date_to:
         qs = qs.filter(invoice_date__lte=purchase_date_to)
 
-    if terms:
-        if len(terms) == 1:
-            t = terms[0]
-            qs = qs.filter(
-                Q(lines__sr_number__license__license_number__icontains=t)
-                | Q(incentive_lines__incentive_license__license_number__icontains=t)
-            ).distinct()
-        else:
-            qs = qs.filter(
-                Q(lines__sr_number__license__license_number__in=terms)
-                | Q(incentive_lines__incentive_license__license_number__in=terms)
-            ).distinct()
+    if allowed_dfia_ids is not None or allowed_inc_ids is not None:
+        qs = qs.filter(
+            Q(lines__sr_number__license_id__in=(allowed_dfia_ids or set()))
+            | Q(incentive_lines__incentive_license_id__in=(allowed_inc_ids or set()))
+        ).distinct()
+
+    if company_id:
+        # Restrict to trades where the selected company is in the role that the loop assigns
+        # to the `company` variable:
+        #   PURCHASE → company = trade.to_company  (the buyer)
+        #   SALE     → company = trade.from_company (the seller)
+        # Using the broader  Q(from|to_company_id=company_id)  pulled in trades where the
+        # company was the *counterparty*, causing NEELKANTH IMPEX / LABDHI GLOBAL LLP etc.
+        # to appear even when only LABDHI MERCANTILE LLP was selected.
+        qs = qs.filter(
+            Q(direction='PURCHASE', to_company_id=company_id)
+            | Q(direction='SALE', from_company_id=company_id)
+        )
 
     licenses_dict: dict = {}
 
@@ -718,7 +751,7 @@ def get_license_wise_trades(query_params) -> dict:
                 )
                 for line in trade.lines.all()
                 if line.sr_number and line.sr_number.license
-                and (not terms or any(t.lower() in line.sr_number.license.license_number.lower() for t in terms))
+                and (allowed_dfia_ids is None or line.sr_number.license.id in allowed_dfia_ids)
             })
             for line in trade.lines.all():
                 if line.sr_number and line.sr_number.license:
@@ -734,7 +767,7 @@ def get_license_wise_trades(query_params) -> dict:
                 )
                 for tl in trade.incentive_lines.all()
                 if tl.incentive_license
-                and (not terms or any(t.lower() in tl.incentive_license.license_number.lower() for t in terms))
+                and (allowed_inc_ids is None or tl.incentive_license.id in allowed_inc_ids)
             })
             for tl in trade.incentive_lines.all():
                 if tl.incentive_license:
@@ -775,8 +808,66 @@ def get_license_wise_trades(query_params) -> dict:
                 licenses_dict[lic_id]['companies'][cid]['sales'].append(row)
                 licenses_dict[lic_id]['companies'][cid]['sale_total'] += amount
 
+    # Post-filter: active_only
+    if is_active_only and licenses_dict:
+        active_dfia_ids = set(
+            LicenseDetailsModel.objects.filter(flags__is_expired=False)
+            .values_list('id', flat=True)
+        )
+        active_inc_ids = set(
+            IncentiveLicense.objects.filter(
+                is_active=True, license_expiry_date__gte=timezone.now().date()
+            ).values_list('id', flat=True)
+        )
+        licenses_dict = {
+            lid: ld for lid, ld in licenses_dict.items()
+            if (ld['license_type'] == DFIA_LICENSE_TYPE and lid in active_dfia_ids)
+            or (ld['license_type'] != DFIA_LICENSE_TYPE and lid in active_inc_ids)
+        }
+
+    # Post-filter: min_balance
+    if min_balance is not None and licenses_dict:
+        dfia_ids_above = set(
+            LicenseDetailsModel.objects.filter(balance__balance_cif__gte=min_balance)
+            .values_list('id', flat=True)
+        )
+        inc_ids_above = set(
+            IncentiveLicense.objects.filter(balance_value__gte=min_balance)
+            .values_list('id', flat=True)
+        )
+        licenses_dict = {
+            lid: ld for lid, ld in licenses_dict.items()
+            if (ld['license_type'] == DFIA_LICENSE_TYPE and lid in dfia_ids_above)
+            or (ld['license_type'] != DFIA_LICENSE_TYPE and lid in inc_ids_above)
+        }
+
+    # Ordering
+    reverse = ordering.startswith('-')
+    order_field = ordering.lstrip('-')
+
+    if order_field == 'balance_value' and licenses_dict:
+        dfia_bal = dict(
+            LicenseDetailsModel.objects.filter(id__in=licenses_dict)
+            .values_list('id', 'balance__balance_cif')
+        )
+        inc_bal = dict(
+            IncentiveLicense.objects.filter(id__in=licenses_dict)
+            .values_list('id', 'balance_value')
+        )
+        def _bal_key(ld):
+            lid = ld['license_id']
+            v = dfia_bal.get(lid) or inc_bal.get(lid)
+            return float(v) if v is not None else 0.0
+        sorted_licenses = sorted(licenses_dict.values(), key=_bal_key, reverse=reverse)
+    else:
+        sorted_licenses = sorted(
+            licenses_dict.values(),
+            key=lambda ld: ld.get('license_date') or '',
+            reverse=reverse,
+        )
+
     result = []
-    for lic in sorted(licenses_dict.values(), key=lambda x: x['license_number']):
+    for lic in sorted_licenses:
         companies = []
         for c in sorted(lic['companies'].values(), key=lambda x: x['company_name']):
             pt = c['purchase_total']

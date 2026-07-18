@@ -1247,6 +1247,7 @@ def build_dfia_ledger_detail(license, company_id=None):
                 })
 
     return {
+        'license_id': license.id,
         'license_type': 'DFIA',
         'license_number': license.license_number,
         'license_date': license.license_date,
@@ -1418,6 +1419,7 @@ def build_incentive_ledger_detail(license, company_id=None):
             is_first_transaction = False
 
     return {
+        'license_id': license.id,
         'license_type': license.license_type,
         'license_number': license.license_number,
         'license_date': license.license_date,

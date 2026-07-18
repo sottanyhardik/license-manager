@@ -1534,3 +1534,37 @@
 - Remaining Technical Debt:
   - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
 - Status: COMPLETED
+
+
+## .claude/agents/code-reviewer.md
+
+- File Path(s): `.claude/agents/code-reviewer.md`
+- Module: Documents / Specialist code-review guidance
+- Total LOC: 47
+- Lines Reviewed: 47 plus `CLAUDE.md`, `.claude/agents/README.md`, related agent references, and staged-diff command references
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Standardized the staged-diff review command from `git diff --staged` to repository-standard `git diff --cached`.
+- Package Replacements: None; documentation-only correction reused Git built-ins.
+- Performance Improvements: None; documentation-only unit.
+- Security Improvements: Preserved read-only reviewer constraints and kept security-adjacent findings routed to `security-auditor` for deep dives.
+- Dead Code Removed: None; dependency analysis proved the code-reviewer document is live guidance.
+- Duplicate Logic Removed: None; other agent documents remain separate queued Phase 11 units.
+- Tests Added: None; markdown-only source update.
+- Verification Results:
+  - Dependency scan found live references from `CLAUDE.md`, `.claude/agents/README.md`, and `.claude/agents/tech-lead.md`.
+  - Reviewed every line of the code-reviewer guide and confirmed it defines read-only scope, diff-first workflow, graph checks, review priorities, and output contract.
+  - Staged-diff command scan confirmed the guide now uses `git diff --cached`.
+  - `git diff --check` -> clean before source commit.
+  - `git diff --cached --check` -> clean before source commit.
+  - Backend `pytest`, Ruff, `py_compile`, `compileall`, Django check, and makemigrations check were not run because this unit changed only markdown guidance and no backend runtime source, templates, migrations, or tests.
+  - Frontend ESLint, TypeScript, and production build were not run because this unit changed only markdown guidance and no frontend runtime source.
+  - Security scanners were not run for this markdown-only guidance change; the existing Phase 11 local security-tool availability blocker remains recorded.
+- Source Commit SHA: `f158e89ba7cb0740d37b84f47454435150863733`
+- Source Commit Timestamp: `2026-07-18T05:39:29+05:30`
+- Source Commit Summary: `docs(agents): standardize code reviewer staged diff`
+- Blocked Items:
+  - None for this markdown-only unit.
+- Remaining Technical Debt:
+  - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
+- Status: COMPLETED

@@ -41,7 +41,8 @@ Django REST Framework, running large Postgres-backed systems. You own the
 ## Quality gates (before "done")
 
 - `python -m py_compile` every file you changed.
-- Run the relevant tests: `./run-tests.sh` (or a targeted Django/pytest path).
+- Run the relevant tests: targeted Django/pytest path, or
+  `scripts/testing/run-tests.sh` for a broader pass.
 - If you added/changed models: confirm `makemigrations` produces the expected
   migration and mention it (do not auto-apply to any shared/prod DB).
 - Report gate results honestly; if a test fails, keep going or report — never

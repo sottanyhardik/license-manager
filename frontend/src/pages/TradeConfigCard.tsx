@@ -13,7 +13,7 @@ interface TradeConfigCardProps {
  *  Extracted verbatim from TradeForm (state passed through as props). */
 export default function TradeConfigCard({ formData, setFormData, id, autoCreatePaired, setAutoCreatePaired, directionMeta }: TradeConfigCardProps) {
     return (
-                <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                <div className="rounded-xl border border-border bg-card mb-3">
                     <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
                         <h6 className="font-semibold m-0">
                             <SlidersHorizontal className="size-4" aria-hidden="true" />

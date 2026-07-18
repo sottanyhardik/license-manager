@@ -18,7 +18,7 @@ export default function LinkTradeModal({ linkModalTrade, closeLinkModal, linkSea
     return (
         <div className="fixed inset-0 z-[1060] flex items-center justify-center bg-black/45" onClick={closeLinkModal}>
             <div
-                className="w-[480px] max-w-[95vw] rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
+                className="w-[480px] max-w-[95vw] rounded-xl bg-card p-6 shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="mb-4 flex items-center justify-between">
@@ -62,7 +62,7 @@ export default function LinkTradeModal({ linkModalTrade, closeLinkModal, linkSea
                     <div
                         key={t.id}
                         {...clickable(() => confirmLink(t))}
-                        className="mb-2 flex cursor-pointer items-center justify-between rounded-[var(--tb-r-md)] border border-border px-3 py-2.5 transition-colors hover:bg-muted/40"
+                        className="mb-2 flex cursor-pointer items-center justify-between rounded-xl border border-border px-3 py-2.5 transition-colors hover:bg-muted/40"
                     >
                         <div>
                             <div className="text-[14.5px] font-semibold text-foreground">{t.invoice_number || 'No Invoice'}</div>
@@ -70,7 +70,7 @@ export default function LinkTradeModal({ linkModalTrade, closeLinkModal, linkSea
                         </div>
                         <div className="text-right">
                             <span className={cn(
-                                "rounded-[var(--tb-r-sm)] px-2 py-0.5 text-xs font-bold",
+                                "rounded-md px-2 py-0.5 text-xs font-bold",
                                 t.direction.includes('SALE') ? "bg-emerald-50 text-emerald-700" : "bg-primary/5 text-primary"
                             )}>
                                 {t.direction_label || t.direction}

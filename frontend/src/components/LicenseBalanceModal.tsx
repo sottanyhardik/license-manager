@@ -476,7 +476,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                             <>
                                 {/* License Header Details */}
                                 <div
-                                    className="mb-6 rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                    className="mb-6 rounded-xl bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                 >
                                     <div className="table-responsive">
                                         <table className="table table-sm mb-0 border-none">
@@ -577,7 +577,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
                                 {/* Condition Sheet Section */}
                                 <div
-                                    className="mb-4 rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                    className="mb-4 rounded-xl bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                 >
                                     <div className="flex justify-between items-center mb-3">
                                         <h5
@@ -600,7 +600,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
                                 {/* Notes Section */}
                                 <div
-                                    className="mb-4 rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                    className="mb-4 rounded-xl bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                 >
                                     <div className="flex justify-between items-center mb-3">
                                         <h5
@@ -624,7 +624,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 {/* Export Items */}
                                 {licenseData.export_license && licenseData.export_license.length > 0 && (
                                     <div
-                                        className="mb-4 rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                        className="mb-4 rounded-xl bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                     >
                                         <h5
                                             className="mb-3 font-semibold pb-2 border-b-2 text-foreground border-b-primary"
@@ -753,7 +753,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 {/* Import Items */}
                                 {licenseData.import_license && licenseData.import_license.length > 0 && (
                                     <div
-                                        className="rounded-[var(--tb-r-md)] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                                        className="rounded-xl bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
                                     >
                                         <h5
                                             className="mb-3 font-semibold pb-2 border-b-2 text-foreground border-b-primary"

@@ -783,7 +783,7 @@ export default function TradeForm() {
     };
 
     return (
-        <div className="min-h-screen bg-[var(--tb-body-bg)]">
+        <div className="min-h-screen bg-background">
             {/* Compact Header */}
             <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
                 <div>
@@ -849,7 +849,7 @@ export default function TradeForm() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
                     {/* From Company */}
                     <div>
-                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card h-full">
+                        <div className="rounded-xl border border-border bg-card h-full">
                             <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
                                 <h6 className="font-semibold m-0">
                                     <Building2 className="size-4" aria-hidden="true" />
@@ -922,7 +922,7 @@ export default function TradeForm() {
 
                     {/* To Company */}
                     <div>
-                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card h-full">
+                        <div className="rounded-xl border border-border bg-card h-full">
                             <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
                                 <h6 className="font-semibold m-0">
                                     <Building2 className="size-4" aria-hidden="true" />
@@ -994,7 +994,7 @@ export default function TradeForm() {
                 </div>
 
                 {/* Invoice Details + BOE/Remarks card */}
-                <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                <div className="rounded-xl border border-border bg-card mb-3">
                     <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
                         <h6 className="font-semibold m-0">
                             <FileText className="size-4" aria-hidden="true" />
@@ -1159,7 +1159,7 @@ export default function TradeForm() {
                 {formData.license_type === "DFIA" && (
                     <>
                         {/* Billing Mode card */}
-                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                        <div className="rounded-xl border border-border bg-card mb-3">
                             <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
                                 <h6 className="font-semibold m-0">
                                     <Calculator className="size-4" aria-hidden="true" />
@@ -1197,7 +1197,7 @@ export default function TradeForm() {
                         </div>
 
                         {/* Trade Lines */}
-                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                        <div className="rounded-xl border border-border bg-card mb-3">
                             <div className="flex justify-between items-center border-b border-border px-4 py-3 rounded-t-[12px]">
                                 <h6 className="font-semibold m-0">
                                     <List className="size-4" aria-hidden="true" />
@@ -1208,14 +1208,14 @@ export default function TradeForm() {
                                         </span>
                                     )}
                                 </h6>
-                                <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
+                                <button type="button" className="flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
                                     onClick={handleAddLine}>
                                     <Plus className="size-4" aria-hidden="true" />Add Row
                                 </button>
                             </div>
                             <div className="p-0 overflow-x-auto">
                     <table className="w-full text-[0.83rem]" style={{ borderCollapse: 'collapse' }}>
-                        <thead className="bg-[var(--tb-sunken)] border-b-2 border-[var(--tb-border)]">
+                        <thead className="bg-muted/40 border-b-2 border-border">
                             <tr>
                                 <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "3%" }}>#</th>
                                 <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "22%" }}>License (SR)</th>
@@ -1393,7 +1393,7 @@ export default function TradeForm() {
                 {/* Incentive License Lines */}
                 {formData.license_type === "INCENTIVE" && (
                     <>
-                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                        <div className="rounded-xl border border-border bg-card mb-3">
                             <div className="flex justify-between items-center border-b border-border px-4 py-3 rounded-t-[12px]">
                                 <h6 className="font-semibold m-0">
                                     <Award className="size-4" aria-hidden="true" />
@@ -1404,7 +1404,7 @@ export default function TradeForm() {
                                         </span>
                                     )}
                                 </h6>
-                                <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
+                                <button type="button" className="flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
                                     onClick={handleAddIncentiveLine}>
                                     <Plus className="size-4" aria-hidden="true" />Add Row
                                 </button>
@@ -1412,7 +1412,7 @@ export default function TradeForm() {
                             <div className="p-0 overflow-x-auto">
                         <div>
                             <table className="w-full text-[0.83rem]" style={{ borderCollapse: 'collapse' }}>
-                                <thead className="bg-[var(--tb-sunken)] border-b-2 border-[var(--tb-border)]">
+                                <thead className="bg-muted/40 border-b-2 border-border">
                                     <tr>
                                         <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "5%" }}>#</th>
                                         <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "40%" }}>Incentive License</th>
@@ -1505,34 +1505,34 @@ export default function TradeForm() {
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2 mt-4 pt-3 mb-4 border-t border-border/50">
-                    <button type="submit" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] bg-gradient-to-br from-primary to-primary/70 px-7 py-2.5 text-sm font-semibold text-primary-foreground cursor-pointer hover:opacity-90 disabled:opacity-50" disabled={saving}>
+                    <button type="submit" className="flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-primary to-primary/70 px-7 py-2.5 text-sm font-semibold text-primary-foreground cursor-pointer hover:opacity-90 disabled:opacity-50" disabled={saving}>
                         {saving ? <><span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" aria-hidden="true" />Saving…</> : <><CheckCircle className="size-4" aria-hidden="true" />Save Trade</>}
                     </button>
-                    <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-5 py-2.5 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}>
+                    <button type="button" className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}>
                         <X className="size-4" aria-hidden="true" />Cancel
                     </button>
                     {isEdit && (
                         <>
-                            <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-info/30 bg-info/10 px-4 py-2.5 text-xs font-medium text-info cursor-pointer hover:bg-info/20" onClick={() => setShowTransferLetterModal(true)}>
+                            <button type="button" className="flex items-center gap-1.5 rounded-xl border border-info/30 bg-info/10 px-4 py-2.5 text-xs font-medium text-info cursor-pointer hover:bg-info/20" onClick={() => setShowTransferLetterModal(true)}>
                                 <FileText className="size-4" aria-hidden="true" />Transfer Letter
                             </button>
                             {formData.direction === 'SALE' && (
                                 <div className="flex items-center gap-1">
-                                    <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(true)} title="Download Bill of Supply with signature & stamp">
+                                    <button type="button" className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(true)} title="Download Bill of Supply with signature & stamp">
                                         <FileText className="size-4" aria-hidden="true" />Bill of Supply
                                     </button>
-                                    <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(false)} title="Download without signature & stamp">
+                                    <button type="button" className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(false)} title="Download without signature & stamp">
                                         <XCircle className="size-4" aria-hidden="true" />Unsigned
                                     </button>
                                 </div>
                             )}
                             {formData.direction === 'PURCHASE' && (
                                 <div className="flex items-center gap-1">
-                                    <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPurchaseInvoice(true)} title="Download Purchase Invoice with signature & stamp">
+                                    <button type="button" className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPurchaseInvoice(true)} title="Download Purchase Invoice with signature & stamp">
                                         <FileText className="size-4" aria-hidden="true" />Purchase Invoice
                                     </button>
                                     {formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
-                                        <a className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground no-underline cursor-pointer hover:bg-muted"
+                                        <a className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground no-underline cursor-pointer hover:bg-muted"
                                             href={formData.purchase_invoice_copy} target="_blank" rel="noopener noreferrer" title="Open the original uploaded invoice copy">
                                             <FileText className="size-4" aria-hidden="true" />Original Copy
                                         </a>

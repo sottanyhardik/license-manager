@@ -51,12 +51,12 @@ export default function IncentiveLicensesTable({
                         : { card: 'border-emerald-500/40 border-l-emerald-500', badge: 'bg-emerald-50 text-emerald-700', label: 'Available' };
 
                     return (
-                        <div key={item.id} className={cn('mb-2.5 overflow-hidden rounded-[var(--tb-r-md)] border border-l-4 bg-card shadow-sm', soldCls.card)}>
+                        <div key={item.id} className={cn('mb-2.5 overflow-hidden rounded-xl border border-l-4 bg-card shadow-sm', soldCls.card)}>
                             {/* Row 1: Identity */}
                             <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3.5 py-2.5">
                                 <span className="mr-1 text-[16px] font-bold text-primary">{item.license_number || '-'}</span>
                                 {item.license_type && (
-                                    <span className="rounded-[var(--tb-r-sm)] bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{item.license_type}</span>
+                                    <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{item.license_type}</span>
                                 )}
                                 {item.license_date && (
                                     <span className="chip chip-neutral">
@@ -83,11 +83,11 @@ export default function IncentiveLicensesTable({
                                         <Fingerprint className="size-3" aria-hidden="true" />IEC: {item.exporter_iec}
                                     </span>
                                 )}
-                                <span className={cn('rounded-[var(--tb-r-sm)] px-2 py-0.5 text-xs font-semibold', soldCls.badge)}>
+                                <span className={cn('rounded-md px-2 py-0.5 text-xs font-semibold', soldCls.badge)}>
                                     {soldCls.label}
                                 </span>
                                 {!item.is_active && (
-                                    <span className="rounded-[var(--tb-r-sm)] bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">Inactive</span>
+                                    <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">Inactive</span>
                                 )}
                             </div>
 

@@ -85,7 +85,8 @@ Pick only the agents a task needs — most tasks use two or three, not all sixte
 2. **Preserve business logic** — no behavior/API/auth/data-flow change unless the
    task says so; flag any behavior change.
 3. **Quality gates before "done"** — frontend `npm run lint && npm run typecheck &&
-   npm run build`; backend `py_compile` + `./run-tests.sh`. Report results honestly.
+   npm run build`; backend `py_compile` + targeted `pytest` (or
+   `scripts/testing/run-tests.sh` for a broader pass). Report results honestly.
 4. **Conventions** — follow `.claude/rules.md` (lucide-only icons, sonner over
    react-toastify, design tokens over hex, reuse `ui/*`).
 5. **No unattended outward actions** — agents do not commit/push/merge; the human

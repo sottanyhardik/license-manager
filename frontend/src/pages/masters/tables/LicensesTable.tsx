@@ -48,7 +48,6 @@ import { openDocument } from "../../../utils/documentDownload";
 import { saveFilterState } from "../../../utils/filterPersistence";
 import LedgerTab from "./LedgerTab";
 import PlanTab from "./PlanTab";
-import BalanceTab from "./BalanceTab";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -864,8 +863,7 @@ function EmptyTabState({
 
 type TabId =
     | "overview"
-    | "ledger"
-    | "balance"
+    | "ledger"    // displayed as "Balance" — the merged Ledger+Balance tab
     | "plan"
     | "transactions"
     | "documents"
@@ -927,10 +925,9 @@ const LicenseRow = memo(function LicenseRow({
     const visibleTabs = useMemo<{ id: TabId; label: string }[]>(() => {
         const tabs: { id: TabId; label: string }[] = [];
         tabs.push({ id: "overview", label: "Overview" });
-        // Ledger always present — shows empty state inside if no import items
-        tabs.push({ id: "ledger", label: "Ledger" });
-        // Balance — every license has one
-        tabs.push({ id: "balance", label: "Balance" });
+        // "Balance" tab = the merged Ledger + legacy Balance view.
+        // Always present; shows empty state when no import items exist.
+        tabs.push({ id: "ledger", label: "Balance" });
         // Plan — write permission required
         if (canWrite) {
             tabs.push({ id: "plan", label: "Plan" });
@@ -1244,20 +1241,11 @@ const LicenseRow = memo(function LicenseRow({
                                                     <OverviewTab item={item} detail={detail} />
                                                 )}
                                                 {tab.id === "ledger" && (
+                                                    /* "Balance" tab (merged Ledger + legacy Balance features) */
                                                     <LedgerTab
                                                         item={item as unknown as Parameters<typeof LedgerTab>[0]["item"]}
                                                         detail={detail as unknown as Parameters<typeof LedgerTab>[0]["detail"]}
                                                         loading={detailLoading}
-                                                    />
-                                                )}
-                                                {tab.id === "balance" && (
-                                                    <BalanceTab
-                                                        licenseId={item.id}
-                                                        detail={detail as unknown as Parameters<typeof BalanceTab>[0]["detail"]}
-                                                        detailLoading={detailLoading}
-                                                        onDetailUpdate={(patch) => setDetail((prev) => prev ? ({ ...prev, ...patch } as LicenseDetail) : prev)}
-                                                        onDownloadPdf={handleDownloadPdf}
-                                                        onDownloadExcel={handleDownloadExcel}
                                                     />
                                                 )}
                                                 {tab.id === "plan" && (

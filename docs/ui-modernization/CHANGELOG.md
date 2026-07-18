@@ -4,6 +4,58 @@ Append only. Most recent session at top.
 
 ---
 
+## Session 4 (premium redesign) — 2026-07-18
+
+### `/licenses` — Full accordion redesign (Linear / Stripe / Vercel quality)
+
+**File:** `pages/masters/tables/LicensesTable.tsx` (complete rewrite, 933 lines added)
+
+**Information architecture overhaul:**
+
+Old pattern: 3-row card with 8 action buttons (button overload, no hierarchy).
+
+New pattern: **Accordion rows** — collapsed is a single scannable line; expanded reveals tabs + action panel.
+
+**Collapsed row:**
+```
+[2411004746]  22-07-2025  Exp: 22-07-2026  Ledger: 24-03-2026  MUNDRA SEA  LM Purchase  ● Active  Balance CIF ₹71,277  ▼
+```
+
+**Expanded layout (75% + 25%):**
+
+Left (tabs, lazy-loaded per tab visit):
+- **Overview** — Port, Scheme, Norm Class, Created, Expiry, Ledger, Transfer, Exporter, IEC, Notes (condition_sheet)
+- **Allocation** — import_license[] table (Sl#, HS Code, Description, Qty, Allotted, Balance)
+- **Transactions** — export_license[] table (Description, Norm Class, CIF FC, FOB INR)
+- **Documents** — license_documents[] list with inline View button
+- **History** — latest_transfer status panel
+
+Right (action panel, always visible):
+- Plan Utilization (primary blue button)
+- View Ownership · View Balance (icon rows)
+- Balance PDF · Balance Excel (icon rows)
+- Fetch from DGFT (with spinner state)
+- Delete (red border)
+- Edit · Balance (bottom pair)
+
+**Status badge** — derived from expiry + balance: Active (green) · Planned (green) · Exhausted (gray) · Expired (red)
+
+**Accessibility:**
+- `<article aria-label>` per license
+- `<button aria-expanded>` on toggle
+- `role="tablist"` / `role="tab"` / `aria-selected` / `aria-controls` / `role="tabpanel"`
+- Visible focus rings on all interactive elements
+
+**Performance:**
+- `memo()` on LicenseRow
+- Detail fetch (`licenses/{id}/`) — lazy (once per expand, cached in component state)
+- Tab content — never mounts until tab is first visited (visited `Set`)
+- `useCallback` on all handlers
+
+**Responsive:** 390px → 768px → 1280px → 1536px (stacks on mobile, side-by-side on lg+)
+
+---
+
 ## Session 4 (final) — 2026-07-18
 
 ### AllotmentAction — CSS vars → Tailwind

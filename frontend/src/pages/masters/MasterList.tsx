@@ -949,9 +949,6 @@ export default function MasterList() {
                             pageSize={pageSize}
                             navigate={navigate}
                             onDelete={handleDelete}
-                            onViewBalance={(id) => { setSelectedLicenseId(id); setShowBalanceModal(true); }}
-                            onPlanLicense={(lic) => { setPlanLicense(lic); setShowPlanModal(true); }}
-                            onViewOwnership={(lic) => { setOwnershipLicense(lic); setShowOwnershipModal(true); }}
                             fetchingOwnershipIds={fetchingOwnershipIds}
                             onFetchOwnership={handleFetchOwnership}
                             invalidateList={invalidateList}

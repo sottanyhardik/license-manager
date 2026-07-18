@@ -23,7 +23,6 @@ import {
     CalendarX,
     ChevronDown,
     CloudDownload,
-    Eye,
     FileSpreadsheet,
     FileText,
     Inbox,
@@ -33,7 +32,6 @@ import {
     RefreshCw,
     ScrollText,
     ShieldCheck,
-    Target,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -176,9 +174,6 @@ export interface LicensesTableProps {
     pageSize: number;
     navigate: (path: string) => void;
     onDelete: (item: LicenseListItem) => void;
-    onViewBalance: (licenseId: number) => void;
-    onPlanLicense: (license: { id: number; number: string; balance: number }) => void;
-    onViewOwnership: (license: { id: number; number: string }) => void;
     fetchingOwnershipIds: Set<number>;
     onFetchOwnership: (item: LicenseListItem) => void;
     invalidateList: () => void;
@@ -269,9 +264,6 @@ interface ActionPanelProps {
     canWrite: boolean;
     isFetchingDGFT: boolean;
     onEdit: () => void;
-    onViewBalance: () => void;
-    onPlanLicense: () => void;
-    onViewOwnership: () => void;
     onDownloadPdf: () => void;
     onDownloadExcel: () => void;
     onFetchDGFT: () => void;
@@ -283,9 +275,6 @@ function ActionPanel({
     canWrite,
     isFetchingDGFT,
     onEdit,
-    onViewBalance,
-    onPlanLicense,
-    onViewOwnership,
     onDownloadPdf,
     onDownloadExcel,
     onFetchDGFT,
@@ -296,25 +285,8 @@ function ActionPanel({
             aria-label={`Actions for license ${item.license_number}`}
             className="w-full shrink-0 border-t border-border/50 bg-muted/20 px-4 py-4 lg:w-60 lg:border-l lg:border-t-0"
         >
-            {/* Primary action */}
-            {canWrite && (
-                <Button
-                    onClick={onPlanLicense}
-                    className="mb-3 w-full justify-start gap-2.5"
-                    size="sm"
-                >
-                    <Target className="size-4 shrink-0" aria-hidden="true" />
-                    Plan Utilization
-                </Button>
-            )}
-
-            {/* Secondary actions */}
+            {/* Actions */}
             <div className="flex flex-col gap-0.5">
-                <ActionRow icon={Network} label="View Ownership" onClick={onViewOwnership} />
-                <ActionRow icon={Eye} label="View Balance" onClick={onViewBalance} />
-
-                <Separator className="my-2" />
-
                 <ActionRow icon={FileText} label="Balance PDF" onClick={onDownloadPdf} />
                 <ActionRow icon={FileSpreadsheet} label="Balance Excel" onClick={onDownloadExcel} />
 
@@ -346,19 +318,15 @@ function ActionPanel({
                 )}
             </div>
 
-            {/* Bottom quick actions */}
-            <div className="mt-3 flex gap-2">
-                {canWrite && (
-                    <Button variant="outline" size="sm" onClick={onEdit} className="flex-1 gap-1.5">
+            {/* Edit button */}
+            {canWrite && (
+                <div className="mt-3">
+                    <Button variant="outline" size="sm" onClick={onEdit} className="w-full gap-1.5">
                         <Pencil className="size-3.5" aria-hidden="true" />
                         Edit
                     </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={onViewBalance} className="flex-1 gap-1.5">
-                    <Eye className="size-3.5" aria-hidden="true" />
-                    Balance
-                </Button>
-            </div>
+                </div>
+            )}
         </aside>
     );
 }
@@ -880,9 +848,6 @@ interface LicenseRowProps {
     pageSize: number;
     navigate: (path: string) => void;
     onDelete: (item: LicenseListItem) => void;
-    onViewBalance: (id: number) => void;
-    onPlanLicense: (lic: { id: number; number: string; balance: number }) => void;
-    onViewOwnership: (lic: { id: number; number: string }) => void;
     isFetchingDGFT: boolean;
     onFetchDGFT: (item: LicenseListItem) => void;
 }
@@ -898,9 +863,6 @@ const LicenseRow = memo(function LicenseRow({
     pageSize,
     navigate,
     onDelete,
-    onViewBalance,
-    onPlanLicense,
-    onViewOwnership,
     isFetchingDGFT,
     onFetchDGFT,
 }: LicenseRowProps) {
@@ -1278,17 +1240,6 @@ const LicenseRow = memo(function LicenseRow({
                             canWrite={canWrite}
                             isFetchingDGFT={isFetchingDGFT}
                             onEdit={navigateToEdit}
-                            onViewBalance={() => onViewBalance(item.id)}
-                            onPlanLicense={() =>
-                                onPlanLicense({
-                                    id: item.id,
-                                    number: item.license_number,
-                                    balance: Number(item.get_balance_cif || 0),
-                                })
-                            }
-                            onViewOwnership={() =>
-                                onViewOwnership({ id: item.id, number: item.license_number })
-                            }
                             onDownloadPdf={handleDownloadPdf}
                             onDownloadExcel={handleDownloadExcel}
                             onFetchDGFT={() => onFetchDGFT(item)}
@@ -1370,9 +1321,6 @@ export default function LicensesTable({
     pageSize,
     navigate,
     onDelete,
-    onViewBalance,
-    onPlanLicense,
-    onViewOwnership,
     fetchingOwnershipIds,
     onFetchOwnership,
 }: LicensesTableProps) {
@@ -1414,9 +1362,6 @@ export default function LicensesTable({
                     pageSize={pageSize}
                     navigate={navigate}
                     onDelete={onDelete}
-                    onViewBalance={onViewBalance}
-                    onPlanLicense={onPlanLicense}
-                    onViewOwnership={onViewOwnership}
                     isFetchingDGFT={fetchingOwnershipIds.has(item.id)}
                     onFetchDGFT={onFetchOwnership}
                 />

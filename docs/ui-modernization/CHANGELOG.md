@@ -119,6 +119,37 @@ All 7 report routes reviewed and found production-ready:
 
 **Build results:** ✅ 0 TypeScript errors · 0 lint errors · 425ms build
 
+### Route: `/bill-of-entries/:id/generate-transfer-letter` — BOETransferLetter.tsx
+
+Already clean; minor type improvements:
+- `Detail` component: typed `{ label: string; value: ReactNode }`
+- `boe` state: `null` → `Record<string, any> | null`
+- `error` state: typed `string`
+
+### Route: `/licenses/create` and all MasterForm routes — MasterForm.tsx (32 inline styles)
+
+- `cn` import added
+- Template literals → `cn()` on DatePicker/file-input errorClass and tab button isActive
+- `container-fluid` + `style={{ minHeight: '100vh', ... }}` → `min-h-screen bg-background` (×2)
+- `h4 style={{ color: var(--tb-text) }}` → `className="text-foreground"`
+- `ms-2` → `ml-2` on BOE number links; inline fontSize/fontWeight/color → Tailwind
+- `text-muted` → `text-muted-foreground` (×2)
+- `alert alert-danger` → Tailwind destructive alert with `role="alert"`
+- `alert alert-info` → Tailwind info alert
+- BOE copy section: `surface-card mb-4 style={{padding:16}}` → `rounded-md border bg-card p-4 shadow-sm`; all inner inline styles → Tailwind/cn()
+- `form-label` + inline → `mb-1.5 block text-[12px] font-semibold text-muted-foreground`
+- `text-danger` → `text-destructive` on required asterisk
+- Error div: redundant inline style removed
+- Help text: `form-text` + inline → Tailwind
+- Section boxes: static CSS var properties → Tailwind (dynamic `section.color` border kept inline)
+- "Other Fields" section box: all CSS vars → Tailwind
+- Tab `<ul>`: `style={{ marginBottom: 0 }}` → `mb-0`
+- Tab panel container: all CSS var inline styles → `rounded-b-xl border border-t-0 border-border/60 bg-card p-4`
+- Inner flex spans: `display:inline-flex` inline style → Tailwind
+- Dynamic `entityColor` styles preserved as inline (cannot be Tailwind)
+
+**Build results:** ✅ 0 TypeScript errors · 0 lint errors · 437ms build
+
 ---
 
 ## Session 2 — 2026-07-18

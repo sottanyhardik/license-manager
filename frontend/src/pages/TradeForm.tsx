@@ -16,6 +16,7 @@ import {useBackButton} from "../hooks/useBackButton";
 import TradeConfigCard from "./TradeConfigCard";
 import { buildTradeJsonPayload, cleanIncentiveLine, cleanTradeLine, cleanTradePayment, formatTradeDateForApi, getEntityId } from "./tradeFormHelpers";
 import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Building2, Calculator, CheckCircle, FileText, IndianRupee, Link, List, Package, Percent, Plus, ShoppingCart, SlidersHorizontal, Store, Trash2, TrendingUp, Wand2, Weight, X, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function TradeForm() {
     const { id } = useParams();
@@ -782,21 +783,21 @@ export default function TradeForm() {
     };
 
     return (
-        <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
+        <div className="min-h-screen bg-[var(--tb-body-bg)]">
             {/* Compact Header */}
             <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
                 <div>
-                    <h4 className="mb-0 font-bold" style={{ color: 'var(--tb-text)' }}>
+                    <h4 className="mb-0 font-bold text-foreground flex items-center gap-1.5">
                         <ArrowLeftRight className="size-4" aria-hidden="true" />
                         {isEdit ? 'Edit Trade' : 'New Trade'}
                     </h4>
-                    <small className="text-muted">
+                    <small className="text-muted-foreground flex items-center gap-1.5">
                         {isEdit ? 'Update trade details' : 'Create a new trade transaction'}
                         {formData.direction && (() => {
                             const m = directionMeta[formData.direction];
                             const Icon = m?.icon;
                             return (
-                                <span className="ms-2 badge inline-flex items-center gap-1" style={{ background: m?.soft, color: m?.color, fontSize: 12 }}>
+                                <span className="ml-2 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px]" style={{ background: m?.soft, color: m?.color }}>
                                     {Icon && <Icon className="size-3.5" aria-hidden="true" />}
                                     {m?.label}
                                 </span>
@@ -819,13 +820,17 @@ export default function TradeForm() {
             </div>
 
             {error && (
-                <div className="alert alert-danger alert-dismissible fade show">
-                    <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
+                <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 mb-3">
+                    <AlertCircle className="size-4 mt-0.5 shrink-0 text-destructive" aria-hidden="true" />
+                    <pre className="flex-1 whitespace-pre-wrap m-0 text-sm text-destructive">{error}</pre>
                     <button
                         type="button"
-                        className="btn-close"
+                        className="shrink-0 rounded p-0.5 text-destructive hover:bg-destructive/20"
                         onClick={() => setError("")}
-                    ></button>
+                        aria-label="Dismiss error"
+                    >
+                        <X className="size-4" aria-hidden="true" />
+                    </button>
                 </div>
             )}
 
@@ -841,20 +846,20 @@ export default function TradeForm() {
                 />
 
                 {/* Company Snapshots */}
-                <div className="row mb-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
                     {/* From Company */}
                     <div>
-                        <div className="card h-full" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card h-full">
+                            <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
+                                <h6 className="font-semibold m-0">
                                     <Building2 className="size-4" aria-hidden="true" />
                                     From Company
                                 </h6>
                             </div>
-                            <div className="card-body" style={{ padding: '20px' }}>
+                            <div className="p-5">
 
                                 <div className="mb-3">
-                                    <label className="form-label">From Company <span className="text-danger">*</span></label>
+                                    <label className="mb-1.5 block text-sm font-medium">From Company <span className="text-destructive">*</span></label>
                                     <HybridSelect
                                         fieldMeta={{
                                             endpoint: "/masters/companies/",
@@ -866,46 +871,46 @@ export default function TradeForm() {
                                         placeholder="Search and select company..."
                                     />
                                     {fieldErrors.from_company && (
-                                        <div className="text-danger small">{fieldErrors.from_company}</div>
+                                        <div className="text-destructive text-sm mt-1">{fieldErrors.from_company}</div>
                                     )}
                                 </div>
 
-                                <div className="row">
+                                <div className="grid grid-cols-2 gap-3 mb-3">
                                     <div>
-                                        <label className="form-label small">PAN</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">PAN</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.from_pan || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_pan: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label small">GST</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">GST</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.from_gst || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_gst: e.target.value }))}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="row">
+                                <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="form-label small">Address Line 1</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Address Line 1</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.from_addr_line_1 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_addr_line_1: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label small">Address Line 2</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Address Line 2</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.from_addr_line_2 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_addr_line_2: e.target.value }))}
                                         />
@@ -917,16 +922,16 @@ export default function TradeForm() {
 
                     {/* To Company */}
                     <div>
-                        <div className="card h-full" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card h-full">
+                            <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
+                                <h6 className="font-semibold m-0">
                                     <Building2 className="size-4" aria-hidden="true" />
                                     To Company
                                 </h6>
                             </div>
-                            <div className="card-body" style={{ padding: '20px' }}>
+                            <div className="p-5">
                                 <div className="mb-3">
-                                    <label className="form-label">To Company <span className="text-danger">*</span></label>
+                                    <label className="mb-1.5 block text-sm font-medium">To Company <span className="text-destructive">*</span></label>
                                     <HybridSelect
                                         fieldMeta={{
                                             endpoint: "/masters/companies/",
@@ -938,46 +943,46 @@ export default function TradeForm() {
                                         placeholder="Search and select company..."
                                     />
                                     {fieldErrors.to_company && (
-                                        <div className="text-danger small">{fieldErrors.to_company}</div>
+                                        <div className="text-destructive text-sm mt-1">{fieldErrors.to_company}</div>
                                     )}
                                 </div>
 
-                                <div className="row">
+                                <div className="grid grid-cols-2 gap-3 mb-3">
                                     <div>
-                                        <label className="form-label small">PAN</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">PAN</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.to_pan || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_pan: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label small">GST</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">GST</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.to_gst || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_gst: e.target.value }))}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="row">
+                                <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="form-label small">Address Line 1</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Address Line 1</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.to_addr_line_1 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_addr_line_1: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label small">Address Line 2</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Address Line 2</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.to_addr_line_2 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_addr_line_2: e.target.value }))}
                                         />
@@ -989,18 +994,18 @@ export default function TradeForm() {
                 </div>
 
                 {/* Invoice Details + BOE/Remarks card */}
-                <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                    <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                        <h6 className="mb-0 font-semibold">
+                <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                    <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
+                        <h6 className="font-semibold m-0">
                             <FileText className="size-4" aria-hidden="true" />
                             Invoice & Reference Details
                         </h6>
                     </div>
-                    <div className="card-body">
-                <div className="row mb-3">
+                    <div className="p-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-3">
                     <div>
                         <div className="flex justify-between items-center mb-2">
-                            <label className="form-label mb-0" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>Invoice Number (optional)</label>
+                            <label className="text-xs font-semibold text-muted-foreground">Invoice Number (optional)</label>
                             <button
                                 type="button"
                                 className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10"
@@ -1038,7 +1043,7 @@ export default function TradeForm() {
                         />
                     </div>
                     <div>
-                        <label className="form-label">Invoice Date</label>
+                        <label className="mb-1.5 block text-sm font-medium">Invoice Date</label>
                         {/* @ts-expect-error DatePicker onChange type mismatch */}
                     <DatePicker
                             selected={formData.invoice_date instanceof Date ? formData.invoice_date : parseDate(formData.invoice_date)}
@@ -1053,7 +1058,7 @@ export default function TradeForm() {
                 {formData.direction === "PURCHASE" && (
                     <div className="row mb-3">
                         <div>
-                            <label className="form-label">Purchase Invoice Copy (optional)</label>
+                            <label className="mb-1.5 block text-sm font-medium">Purchase Invoice Copy (optional)</label>
                             <input
                                 type="file"
                                 className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
@@ -1063,7 +1068,7 @@ export default function TradeForm() {
                                     setFormData(prev => ({ ...prev, purchase_invoice_copy: file || null }));
                                 }}
                             />
-                            <small className="text-muted">Accepted formats: PDF, JPG, PNG (Max 10MB)</small>
+                            <span className="text-xs text-muted-foreground mt-1 block">Accepted formats: PDF, JPG, PNG (Max 10MB)</span>
 
                             {/* Show existing file if editing and file exists */}
                             {isEdit && formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
@@ -1091,7 +1096,7 @@ export default function TradeForm() {
                             {/* Show selected file name if new file selected */}
                             {formData.purchase_invoice_copy instanceof File && (
                                 <div className="mt-2">
-                                    <span className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium" style={{ background: 'var(--tb-success-soft)', color: 'var(--tb-success-text)' }}>
+                                    <span className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium bg-success/10 text-success">
                                         <CheckCircle className="size-4" aria-hidden="true" />
                                         {formData.purchase_invoice_copy.name}
                                     </span>
@@ -1103,10 +1108,10 @@ export default function TradeForm() {
 
 
                 {/* BOE and Remarks */}
-                <div className="row mb-0">
+                <div className={cn("grid gap-4", formData.direction !== 'PURCHASE' ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1")}>
                     {formData.direction !== 'PURCHASE' && (
                         <div>
-                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>BOE (optional)</label>
+                            <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">BOE (optional)</label>
                             <HybridSelect
                                 fieldMeta={{
                                     endpoint: (() => {
@@ -1136,8 +1141,8 @@ export default function TradeForm() {
                             />
                         </div>
                     )}
-                    <div className={formData.direction === 'PURCHASE' ? 'col-md-12' : 'col-md-6'}>
-                        <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>Remarks</label>
+                    <div>
+                        <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">Remarks</label>
                         <textarea
                             className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                             rows={2}
@@ -1154,14 +1159,14 @@ export default function TradeForm() {
                 {formData.license_type === "DFIA" && (
                     <>
                         {/* Billing Mode card */}
-                        <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                            <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
+                                <h6 className="font-semibold m-0">
                                     <Calculator className="size-4" aria-hidden="true" />
                                     Billing Mode
                                 </h6>
                             </div>
-                            <div className="card-body">
+                            <div className="p-4">
                                 <div className="flex gap-2 flex-wrap">
                                     {[{ val:'QTY', label:'By Quantity (KG × Rate)', icon: Weight },
                                       { val:'CIF_INR', label:'By CIF INR (%)', icon: IndianRupee },
@@ -1192,49 +1197,48 @@ export default function TradeForm() {
                         </div>
 
                         {/* Trade Lines */}
-                        <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                            <div className="flex justify-between items-center border-b border-border px-4 py-3 rounded-t-[12px]">
+                                <h6 className="font-semibold m-0">
                                     <List className="size-4" aria-hidden="true" />
                                     Trade Lines
                                     {formData.lines.length > 0 && (
-                                        <span className="badge ml-2 rounded-pill" style={{ backgroundColor: 'var(--tb-brand-100)', color: 'var(--tb-brand)', fontSize: 11 }}>
+                                        <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                                             {formData.lines.length}
                                         </span>
                                     )}
                                 </h6>
-                                <button type="button" className="flex items-center gap-1.5 rounded border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
-                                    onClick={handleAddLine} style={{ borderRadius: 'var(--tb-r-md)' }}>
+                                <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
+                                    onClick={handleAddLine}>
                                     <Plus className="size-4" aria-hidden="true" />Add Row
                                 </button>
                             </div>
-                            <div className="card-body" style={{padding:0}}>
-                        <div className="table-responsive">
-                    <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
-                        <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
+                            <div className="p-0 overflow-x-auto">
+                    <table className="w-full text-[0.83rem]" style={{ borderCollapse: 'collapse' }}>
+                        <thead className="bg-[var(--tb-sunken)] border-b-2 border-[var(--tb-border)]">
                             <tr>
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "3%" }}>#</th>
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "22%" }}>License (SR)</th>
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "9%" }}>HSN</th>
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "9%" }}>CIF $</th>
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "3%" }}>#</th>
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "22%" }}>License (SR)</th>
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "9%" }}>HSN</th>
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "9%" }}>CIF $</th>
                                 {billingMode === "CIF_INR" && (
                                     <>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "8%" }}>Exch Rate</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>CIF INR</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "8%" }}>Exch Rate</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>CIF INR</th>
                                     </>
                                 )}
                                 {billingMode === "FOB_INR" && (
-                                    <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>FOB INR</th>
+                                    <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>FOB INR</th>
                                 )}
                                 {billingMode === "QTY" && (
                                     <>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>Qty (KG)</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>Rate (INR/KG)</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>Qty (KG)</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>Rate (INR/KG)</th>
                                     </>
                                 )}
-                                {billingMode !== "QTY" && <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "8%" }}>Billing %</th>}
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "12%" }}>Amount</th>
-                                <th style={{ width: "3%" }}></th>
+                                {billingMode !== "QTY" && <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "8%" }}>Billing %</th>}
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "12%" }}>Amount</th>
+                                <th scope="col" style={{ width: "3%" }}></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1359,17 +1363,17 @@ export default function TradeForm() {
                                         />
                                     </td>
                                     <td className="text-center px-2">
-                                        <button type="button" className="flex items-center gap-1.5 rounded border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-medium text-destructive cursor-pointer hover:bg-destructive/20"
-                                            onClick={() => handleRemoveLine(index)} style={{ borderRadius: 'var(--tb-r-sm)', padding: '2px 8px' }}>
+                                        <button type="button" className="inline-flex items-center justify-center rounded border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive cursor-pointer hover:bg-destructive/20"
+                                            onClick={() => handleRemoveLine(index)}>
                                             <Trash2 className="size-4" aria-hidden="true" />
                                         </button>
                                     </td>
                                 </tr>
                             ))}
                             {formData.lines.length > 0 && (
-                                <tr style={{ background: 'var(--tb-success-soft)', borderTop: '2px solid #a7f3d0' }}>
-                                    <td colSpan={billingMode === "QTY" ? 6 : (billingMode === "CIF_INR" ? 6 : 5)} className="text-end font-semibold px-3 py-2" style={{ color: 'var(--tb-success-text)' }}>Total Amount</td>
-                                    <td className="text-end font-bold px-3 py-2" style={{ color: 'var(--tb-success-text)' }}>₹{calculateTotal().toFixed(2)}</td>
+                                <tr className="bg-success/10 border-t-2 border-success/30">
+                                    <td colSpan={billingMode === "QTY" ? 6 : (billingMode === "CIF_INR" ? 6 : 5)} className="text-right font-semibold px-3 py-2 text-success">Total Amount</td>
+                                    <td className="text-right font-bold px-3 py-2 text-success">₹{calculateTotal().toFixed(2)}</td>
                                     <td></td>
                                 </tr>
                             )}
@@ -1377,10 +1381,9 @@ export default function TradeForm() {
                     </table>
                 </div>
                 </div>
-                </div>
                 {fieldErrors.lines && formData.lines.length === 0 && (
-                    <div className="alert alert-danger py-2 px-3 mt-2 small">
-                        <AlertCircle className="size-4" aria-hidden="true" />
+                    <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 mt-2 text-sm text-destructive">
+                        <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                         {Array.isArray(fieldErrors.lines) ? fieldErrors.lines[0] : fieldErrors.lines}
                     </div>
                 )}
@@ -1390,33 +1393,33 @@ export default function TradeForm() {
                 {/* Incentive License Lines */}
                 {formData.license_type === "INCENTIVE" && (
                     <>
-                        <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                            <div className="flex justify-between items-center border-b border-border px-4 py-3 rounded-t-[12px]">
+                                <h6 className="font-semibold m-0">
                                     <Award className="size-4" aria-hidden="true" />
                                     Incentive Lines
                                     {formData.incentive_lines.length > 0 && (
-                                        <span className="badge ml-2 rounded-pill" style={{ backgroundColor: 'var(--tb-warning-soft)', color: 'var(--tb-warning-text)', fontSize: 11 }}>
+                                        <span className="ml-2 inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">
                                             {formData.incentive_lines.length}
                                         </span>
                                     )}
                                 </h6>
-                                <button type="button" className="flex items-center gap-1.5 rounded border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
-                                    onClick={handleAddIncentiveLine} style={{ borderRadius: 'var(--tb-r-md)' }}>
+                                <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
+                                    onClick={handleAddIncentiveLine}>
                                     <Plus className="size-4" aria-hidden="true" />Add Row
                                 </button>
                             </div>
-                            <div className="card-body" style={{padding:0}}>
-                        <div className="table-responsive">
-                            <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
-                                <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
+                            <div className="p-0 overflow-x-auto">
+                        <div>
+                            <table className="w-full text-[0.83rem]" style={{ borderCollapse: 'collapse' }}>
+                                <thead className="bg-[var(--tb-sunken)] border-b-2 border-[var(--tb-border)]">
                                     <tr>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "5%" }}>#</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "40%" }}>Incentive License</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "20%" }}>License Value (INR)</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "15%" }}>Rate (%)</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "15%" }}>Amount</th>
-                                        <th style={{ width: "5%" }}></th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "5%" }}>#</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "40%" }}>Incentive License</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "20%" }}>License Value (INR)</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "15%" }}>Rate (%)</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "15%" }}>Amount</th>
+                                        <th scope="col" style={{ width: "5%" }}></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1480,9 +1483,9 @@ export default function TradeForm() {
                                         </tr>
                                     ))}
                                     {formData.incentive_lines.length > 0 && (
-                                        <tr style={{ background: 'var(--tb-success-soft)', borderTop: '2px solid #a7f3d0' }}>
-                                            <td colSpan={4} className="text-end font-semibold px-3 py-2" style={{ color: 'var(--tb-success-text)' }}>Total Amount</td>
-                                            <td className="text-end font-bold px-3 py-2" style={{ color: 'var(--tb-success-text)' }}>₹{calculateTotal().toFixed(2)}</td>
+                                        <tr className="bg-success/10 border-t-2 border-success/30">
+                                            <td colSpan={4} className="text-right font-semibold px-3 py-2 text-success">Total Amount</td>
+                                            <td className="text-right font-bold px-3 py-2 text-success">₹{calculateTotal().toFixed(2)}</td>
                                             <td></td>
                                         </tr>
                                     )}
@@ -1492,8 +1495,8 @@ export default function TradeForm() {
                         </div>
                         </div>
                         {fieldErrors.incentive_lines && formData.incentive_lines.length === 0 && (
-                            <div className="alert alert-danger py-2 px-3 mt-2 small">
-                                <AlertCircle className="size-4" aria-hidden="true" />
+                            <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 mt-2 text-sm text-destructive">
+                                <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                                 {Array.isArray(fieldErrors.incentive_lines) ? fieldErrors.incentive_lines[0] : fieldErrors.incentive_lines}
                             </div>
                         )}
@@ -1501,43 +1504,36 @@ export default function TradeForm() {
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex items-center gap-2 mt-4 pt-3 mb-4" style={{ borderTop: '1px solid var(--tb-border-soft)' }}>
-                    <button type="submit" className="flex items-center gap-1.5 rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground cursor-pointer hover:bg-primary/90 disabled:opacity-50" disabled={saving}
-                        style={{ padding: '10px 28px', fontWeight: '600', background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))', border: 'none', borderRadius: 'var(--tb-r-md)' }}>
+                <div className="flex items-center gap-2 mt-4 pt-3 mb-4 border-t border-border/50">
+                    <button type="submit" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] bg-gradient-to-br from-primary to-primary/70 px-7 py-2.5 text-sm font-semibold text-primary-foreground cursor-pointer hover:opacity-90 disabled:opacity-50" disabled={saving}>
                         {saving ? <><span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" aria-hidden="true" />Saving…</> : <><CheckCircle className="size-4" aria-hidden="true" />Save Trade</>}
                     </button>
-                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}
-                        style={{ padding: '10px 20px', fontWeight: '500', borderRadius: 'var(--tb-r-md)' }}>
+                    <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-5 py-2.5 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}>
                         <X className="size-4" aria-hidden="true" />Cancel
                     </button>
                     {isEdit && (
                         <>
-                            <button type="button" className="flex items-center gap-1.5 rounded border border-info/30 bg-info/10 px-2.5 py-1.5 text-xs font-medium text-info cursor-pointer hover:bg-info/20" onClick={() => setShowTransferLetterModal(true)}
-                                style={{ padding: '10px 18px', fontWeight: '500', borderRadius: 'var(--tb-r-md)' }}>
+                            <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-info/30 bg-info/10 px-4 py-2.5 text-xs font-medium text-info cursor-pointer hover:bg-info/20" onClick={() => setShowTransferLetterModal(true)}>
                                 <FileText className="size-4" aria-hidden="true" />Transfer Letter
                             </button>
                             {formData.direction === 'SALE' && (
                                 <div className="flex items-center gap-1">
-                                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(true)}
-                                        style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Download Bill of Supply with signature & stamp">
+                                    <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(true)} title="Download Bill of Supply with signature & stamp">
                                         <FileText className="size-4" aria-hidden="true" />Bill of Supply
                                     </button>
-                                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(false)}
-                                        style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Download without signature & stamp">
+                                    <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(false)} title="Download without signature & stamp">
                                         <XCircle className="size-4" aria-hidden="true" />Unsigned
                                     </button>
                                 </div>
                             )}
                             {formData.direction === 'PURCHASE' && (
                                 <div className="flex items-center gap-1">
-                                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPurchaseInvoice(true)}
-                                        style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Download Purchase Invoice with signature & stamp">
+                                    <button type="button" className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPurchaseInvoice(true)} title="Download Purchase Invoice with signature & stamp">
                                         <FileText className="size-4" aria-hidden="true" />Purchase Invoice
                                     </button>
                                     {formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
-                                        <a className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground no-underline cursor-pointer hover:bg-muted"
-                                            href={formData.purchase_invoice_copy} target="_blank" rel="noopener noreferrer"
-                                            style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Open the original uploaded invoice copy">
+                                        <a className="flex items-center gap-1.5 rounded-[var(--tb-r-md)] border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground no-underline cursor-pointer hover:bg-muted"
+                                            href={formData.purchase_invoice_copy} target="_blank" rel="noopener noreferrer" title="Open the original uploaded invoice copy">
                                             <FileText className="size-4" aria-hidden="true" />Original Copy
                                         </a>
                                     )}

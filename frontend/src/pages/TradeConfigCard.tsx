@@ -13,18 +13,18 @@ interface TradeConfigCardProps {
  *  Extracted verbatim from TradeForm (state passed through as props). */
 export default function TradeConfigCard({ formData, setFormData, id, autoCreatePaired, setAutoCreatePaired, directionMeta }: TradeConfigCardProps) {
     return (
-                <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                    <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                        <h6 className="mb-0 font-semibold">
+                <div className="rounded-[var(--tb-r-md)] border border-border bg-card mb-3">
+                    <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
+                        <h6 className="font-semibold m-0">
                             <SlidersHorizontal className="size-4" aria-hidden="true" />
                             Trade Configuration
                         </h6>
                     </div>
-                    <div className="card-body">
+                    <div className="p-4">
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
-                                <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
-                                    TRANSACTION TYPE <span className="text-danger">*</span>
+                                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    TRANSACTION TYPE <span className="text-destructive">*</span>
                                 </label>
                                 <div className="flex gap-2 flex-wrap">
                                     {Object.entries(directionMeta).map(([val, m]) => {
@@ -49,8 +49,8 @@ export default function TradeConfigCard({ formData, setFormData, id, autoCreateP
                                 </div>
                             </div>
                             <div>
-                                <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
-                                    LICENSE TYPE <span className="text-danger">*</span>
+                                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    LICENSE TYPE <span className="text-destructive">*</span>
                                 </label>
                                 <div className="flex gap-2">
                                     {[{ val:'DFIA', label:'DFIA License', icon: FileText, color:'var(--tb-brand)', soft:'var(--tb-brand-50)' },
@@ -77,15 +77,15 @@ export default function TradeConfigCard({ formData, setFormData, id, autoCreateP
                             </div>
                         </div>
                         {!id && ['PURCHASE', 'SALE'].includes(formData.direction) && (
-                            <div className="flex items-center gap-2 mt-3 p-2 rounded" style={{ background: 'var(--tb-info-soft)', border: '1px solid #bae6fd' }}>
+                            <div className="flex items-center gap-2 mt-3 p-2 rounded bg-info/10 border border-info/30">
                                 <input
                                     type="checkbox"
                                     id="autoCreatePaired"
                                     checked={autoCreatePaired}
                                     onChange={e => setAutoCreatePaired(e.target.checked)}
-                                    style={{ cursor: 'pointer' }}
+                                    className="cursor-pointer"
                                 />
-                                <label htmlFor="autoCreatePaired" style={{ cursor: 'pointer', fontSize: 14, color: 'var(--tb-info-text)', marginBottom: 0 }}>
+                                <label htmlFor="autoCreatePaired" className="cursor-pointer text-sm text-info mb-0 flex items-center gap-1.5">
                                     <Link className="size-4" aria-hidden="true" />
                                     Auto-create linked {formData.direction === 'PURCHASE' ? 'Sale' : 'Purchase'} trade with same lines
                                 </label>

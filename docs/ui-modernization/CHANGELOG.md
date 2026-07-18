@@ -4,6 +4,100 @@ Append only. Most recent session at top.
 
 ---
 
+## Session 4 — 2026-07-18
+
+### MasterForm.tsx — Full refactor (shared by 14 routes)
+
+**Files:** `pages/masters/MasterForm.tsx` · new `components/ui/alert.tsx`
+
+**TypeScript:** Added `MasterFormProps` interface; `renderField` typed.
+
+**Code quality:** Extracted duplicate `FIELD_NAME_MAP` to module-level constant; replaced 3× `alert()` with `toast.error()`.
+
+**Bootstrap/legacy → Tailwind:**
+- `container-fluid` (×2) → `min-h-screen bg-background`
+- `alert alert-danger` / `alert alert-info` → shadcn `<Alert>` (created alert.tsx)
+- `surface-card`, `form-text`, `nav-item`, `badge rounded-pill`, `ms-2`, `w-100 d-block`
+- All section box inline styles → `rounded-lg bg-muted/40 px-5 py-4 border-l-[3px]`
+- Tab UI inline styles → Tailwind with dynamic `entityColor` kept
+- BOE copy section inline styles → Tailwind
+
+**Accessibility (WCAG 1.3.1):** All labels wired to inputs via `htmlFor`/`id`; tab role/aria-selected/tabpanel added.
+
+### AllotmentFormModal + TaskFAB + TransferLetterForm + TaskDrawer
+
+**AllotmentFormModal:** 4 section box styles → Tailwind (`text-primary`, `text-emerald-600`, amber/primary variants).
+
+**TransferLetterForm:** 7 CSS-var styles → Tailwind (`bg-emerald-50`, `text-emerald-700`, `bg-primary`, `bg-primary/5`, `text-amber-700`); `scope="col"` on 5 `<th>`.
+
+**TaskDrawer:** Fixed broken Bootstrap utilities (`flex-grow-1` → `flex-grow`, `col-6` → `flex-1 min-w-0`, `d-block` → `block`, `btn-group` → `flex`, `btn-close` → Lucide X button, `small` → `text-sm/xs`); speech button, error banner, header, form, filter bar, task rows, remarks → Tailwind; hard-coded `#fff3cd` → `bg-amber-50 border-amber-200`.
+
+**DataTable / AccordionTable:** Fallback action button class → Tailwind.
+
+**LicenseBalanceModal:** `flex-grow-1` → `flex-grow`; 32 more inline styles → Tailwind (`border-b border-border/50`, `bg-card`, `bg-primary text-white`, `bg-muted/40`).
+
+**NestedFieldArray:** `wrapperClassName="w-100 d-block"` → `"w-full block"`.
+
+**AccordionTable:** `btn-group btn-group-sm` → `flex items-center gap-1`.
+
+### Parse panels + Modals + Table components
+
+**LicenseParsePanel** (22 styles removed): `surface-card` → Tailwind; icon → `bg-primary/5 text-primary`; all CSS-var colors → Tailwind.
+
+**BoeParsePanel** (18 styles removed): Same pattern.
+
+**BoeMergeModal** (31 styles removed): Overlay/panel → Tailwind; candidate cards → `cn()` conditional Tailwind; action buttons → Tailwind.
+
+**LinkTradeModal** (full rewrite, 0 inline styles): Fixed-position overlay, result cards, direction badge → Tailwind.
+
+**IncentiveLicensesTable** (full rewrite, 0 inline styles): `soldStyle` CSS-var object → `soldCls` Tailwind class sets.
+
+**LicenseBalanceModal** (29 more styles): Section h5, thead, tr background, td borders all → Tailwind.
+
+**GenericMasterCards** (full rewrite): Card wrapper, labels, values, edit/delete buttons → Tailwind.
+
+**AllotmentsTable:** Title span, render function → Tailwind.
+
+**AllotmentFilters:** Filter card bg/header → Tailwind.
+
+### Reports + Layout + Navigation
+
+**ItemPivotReport:** License link → `text-primary underline`; debited total → `text-warning`; 3× `<pre>` → Tailwind.
+
+**NormCardGrid:** Brand icon + count badge → `text-primary` / `bg-primary/5`.
+
+**ItemReport / ItemPivotFilters:** Filter card header → Tailwind.
+
+**SionNormReport:** 33× `<th>` — `scope="col"` on all sub-headers; `minWidth` inline → `min-w-[Npx]`; colSpan → `scope="colgroup"`.
+
+**EntityCard:** Children section border → `border-b border-border/50`.
+
+**TopNav:** Search button + `<kbd>` → Tailwind.
+
+**AdminLayout / Login:** `var(--tb-body-bg)` → `bg-background`.
+
+### Accessibility wins
+
+- 70+ `<th>` elements now have `scope="col"` (WCAG 1.3.1) across DataTable, AccordionTable, LicenseBalanceModal, TransferLetterForm, OwnershipDetailsModal, LoadingFallback, LicensePlanningPanel, DetailTable, Dashboard, SionNormReport, AllotmentAction (tfoot → `scope="row"`)
+- All MasterForm field labels wired to inputs via `htmlFor`
+- Tab UI: `role="tablist"`, `role="tab"`, `aria-selected`, `role="tabpanel"`
+- `alert()` calls → `toast.error()` (screen-reader friendly)
+
+### Final audit results
+
+**Broken Bootstrap utilities:** ✅ 0 remaining  
+**Missing th scope:** ✅ 0 active (2 in commented-out code)  
+**CSS-var inline styles:** 15 remaining — all verified as legitimate dynamic cases:
+- Gradient headers (design pattern): TransferLetterForm, TransferLetterModal, OwnershipDetailsModal, AllotmentFormModal, LoadingFallback
+- TaskDrawer: 2 (fixed-position drawer positioning + `var(--tb-text-tertiary)` with no Tailwind equivalent)
+- ItemPivotReport: 4 (dynamic ternary on norm_class, gradient, ACTION_PILL_BASE spread, dynamic itemBg with conditional warning color)
+- LicenseBalanceModal: 1 (row alternating+selection dynamic hover)
+- ConfirmDialog: 1 (Tabler animation keyframe)
+
+**Build:** ✓ 0 TS errors · 0 lint errors · ~420ms across 3 commits
+
+---
+
 ## Session 3 — 2026-07-18
 
 ### Route: `/settings` — Settings.tsx + MdsStatusCard.tsx

@@ -23,7 +23,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     AlertTriangle,
     BookOpen,
-    Calendar,
     CheckCircle2,
     Circle,
     ClipboardList,
@@ -34,7 +33,6 @@ import {
     Save,
     Target,
     Trash2,
-    User,
     Wand2,
     X,
     XCircle,
@@ -63,11 +61,6 @@ const fmt2 = (x: number) => (x ? String(round2(x)) : "");
 const fmt3 = (x: number) => (x ? String(Math.round((x + Number.EPSILON) * 1000) / 1000) : "");
 const fmtQty = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const fmtUsd = (v: number) => `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtDate = (s: string | null | undefined) => {
-    if (!s) return null;
-    try { return new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
-    catch { return s; }
-};
 
 const emptySplit = (): Split => ({
     key: nextKey(), id: null,
@@ -598,26 +591,16 @@ export default function PlanningEditor({
     // ── Derived totals ─────────────────────────────────────────────────────────
 
     const totals = useMemo(() => {
-        let totalAvail = 0, totalPlanned = 0, totalCif = 0, totalEntries = 0;
-        let lastUpdated: string | null = null, plannedBy: string | null = null;
+        let totalAvail = 0, totalPlanned = 0, totalCif = 0;
         groups.forEach((g) => {
-            totalAvail  += g.available_quantity;
-            const qs = g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
-            const cs = g.splits.reduce((s, sp) => s + num(sp.planned_cif_fc), 0);
-            totalPlanned += qs; totalCif += cs;
-            totalEntries += g.splits.filter((sp) => num(sp.planned_quantity) > 0 || num(sp.planned_cif_fc) > 0).length;
-            g.splits.forEach((sp) => {
-                if (sp.modified_on && (!lastUpdated || sp.modified_on > lastUpdated)) {
-                    lastUpdated = sp.modified_on;
-                    plannedBy   = sp.modified_by_username ?? null;
-                }
-            });
+            totalAvail   += g.available_quantity;
+            totalPlanned += g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
+            totalCif     += g.splits.reduce((s, sp) => s + num(sp.planned_cif_fc), 0);
         });
         return {
             totalAvail, totalPlanned,
             remaining: totalAvail - totalPlanned,
             totalCif, cifRemaining: poolBalance - totalCif,
-            totalEntries, lastUpdated, plannedBy,
         };
     }, [groups, poolBalance]);
 
@@ -641,35 +624,18 @@ export default function PlanningEditor({
     return (
         <div className="py-3 space-y-4">
             {/* ── Header ───────────────────────────────────────────── */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <Target className="size-4 text-primary" aria-hidden="true" />
-                    Plan utilization — {licenseNumber}
-                </div>
-                {(totals.lastUpdated || totals.plannedBy) && (
-                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-                        {totals.lastUpdated && (
-                            <span className="flex items-center gap-1"><Calendar className="size-3.5" />Last saved: {fmtDate(totals.lastUpdated)}</span>
-                        )}
-                        {totals.plannedBy && (
-                            <span className="flex items-center gap-1"><User className="size-3.5" />By: {totals.plannedBy}</span>
-                        )}
-                    </div>
-                )}
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Target className="size-4 text-primary" aria-hidden="true" />
+                Plan utilization
             </div>
 
-            {/* ── Summary cards ─────────────────────────────────────── */}
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                <SummaryCard label="Balance CIF"    value={fmtUsd(poolBalance)} variant="muted" />
-                <SummaryCard label="Planned CIF"    value={fmtUsd(totals.totalCif)} variant={totals.totalCif > 0 ? "primary" : "muted"} />
+            {/* ── Summary cards (CIF only) ──────────────────────────── */}
+            <div className="grid grid-cols-3 gap-2">
+                <SummaryCard label="Balance CIF"   value={fmtUsd(poolBalance)} variant="muted" />
+                <SummaryCard label="Planned CIF"   value={fmtUsd(totals.totalCif)} variant={totals.totalCif > 0 ? "primary" : "muted"} />
                 <SummaryCard label="Remaining CIF"
                     value={fmtUsd(Math.max(0, totals.cifRemaining))}
                     variant={totals.cifRemaining < -1e-6 ? "danger" : totals.totalCif > 0 ? "success" : "muted"} />
-                <SummaryCard label="Available Qty"  value={fmtQty(totals.totalAvail)} />
-                <SummaryCard label="Planned Qty"    value={fmtQty(totals.totalPlanned)} variant={totals.totalPlanned > 0 ? "default" : "muted"} />
-                <SummaryCard label="Remaining Qty"
-                    value={fmtQty(totals.remaining)}
-                    variant={totals.remaining < -1e-6 ? "danger" : totals.remaining < 1e-6 && totals.totalPlanned > 0 ? "success" : "muted"} />
             </div>
 
             {/* ── Planned Items table ──────────────────────────────── */}

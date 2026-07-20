@@ -476,12 +476,23 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
         condition_type: markingOverrides[r.id] !== undefined ? markingOverrides[r.id] : (r.condition_type ?? ""),
     }));
 
-    const commonBalance = isCommonCifBalance(importItems);
+    // "Common balance" = first item non-zero, rest zero  (original rule).
+    // "All-zero CIF"   = every import item has cif_fc = 0.  For these licenses
+    //   the license value lives on the export item and the balance is tracked at
+    //   the license level.  If we sum individual balance_cif_fc values we get
+    //   the license-level balance multiplied by the number of items (e.g.
+    //   11 items × $51,074 = $561,814 for license 0310736639), causing the
+    //   Utilization bar to show −67.8% used / 167.8% remaining.
+    const allItemsZeroCif = importItems.length > 0
+        && importItems.every((r) => !Number(r.cif_fc));
+    const commonBalance = isCommonCifBalance(importItems) || allItemsZeroCif;
 
     const totalCifFc   = importItems.reduce((s, r) => s + (Number(r.cif_fc)         || 0), 0);
     const totalAllotted = importItems.reduce((s, r) => s + (Number(r.allotted_value) || 0), 0);
     const totalDebited  = importItems.reduce((s, r) => s + (Number(r.debited_value)  || 0), 0);
     const totalBalance  = importItems.reduce((s, r) => s + (Number(r.balance_cif_fc) || 0), 0);
+    // When commonBalance (incl. all-zero-CIF licenses) use the authoritative
+    // license-level balance; otherwise sum per-item balance_cif_fc.
     const displayBalance = commonBalance ? Number(item.get_balance_cif ?? 0) : totalBalance;
 
     // "License Value" = sum of import items' cif_fc when items carry individual CIF.

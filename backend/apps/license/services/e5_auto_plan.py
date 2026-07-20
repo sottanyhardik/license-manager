@@ -254,11 +254,20 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
         # Case 2.2: HSN 15119020 (RBD Palmolein) — only if Case 2.1 not applicable
         elif hs_l.startswith('15119') or cat == 'RBD':
             rbd.append(ii)
-        # Case 2.3: Olive oil — not covered under HSN 1513 or 1511
+        # Case 2.3: Olive oil — edible-oil items NOT covered by palm kernel (1513)
+        # or RBD (1511). Use HSN chapter 15 (fats/oils) or explicit phrases;
+        # DO NOT use bare 'oil' substring — 'aluminium foil' contains 'oil' and
+        # would wrongly match packing materials with HSN 39xx.
         elif cat == 'OLIVE OIL' or (
-            'oil' in desc_l
-            and not hs_l.startswith('1513')
-            and not hs_l.startswith('1511')
+            (
+                hs_l.startswith('15')               # HSN chapter 15 = fats & oils
+                and not hs_l.startswith('1513')     # already in palm_kernel
+                and not hs_l.startswith('1511')     # already in rbd
+            ) or (
+                ('vegetable oil' in desc_l or 'edible oil' in desc_l)
+                and not hs_l.startswith('1513')
+                and not hs_l.startswith('1511')
+            )
         ):
             olive_oil.append(ii)
         elif cat == 'WHEAT FLOUR':

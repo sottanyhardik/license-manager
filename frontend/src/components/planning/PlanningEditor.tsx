@@ -662,8 +662,9 @@ export default function PlanningEditor({
                                 <th scope="col" className="px-4 py-2.5">Status</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Available Qty</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Planned Qty</th>
-                                <th scope="col" className="px-4 py-2.5 text-right">Remaining Qty</th>
+                                <th scope="col" className="px-4 py-2.5 text-right">Unit Price</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Planned CIF</th>
+                                <th scope="col" className="px-4 py-2.5 text-right">Remaining Qty</th>
                                 <th scope="col" className="px-4 py-2.5 text-center">Actions</th>
                             </tr>
                         </thead>
@@ -699,16 +700,21 @@ export default function PlanningEditor({
                                             <td className="px-4 py-3 text-right tabular-nums font-semibold">
                                                 {planned > 0 ? fmtQty(planned) : <span className="font-normal text-muted-foreground">—</span>}
                                             </td>
+                                            <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                                                {planned > 0 && plannedCif > 0
+                                                    ? `$${round2(plannedCif / planned).toFixed(2)}`
+                                                    : <span>—</span>}
+                                            </td>
+                                            <td className="px-4 py-3 text-right tabular-nums">
+                                                {plannedCif > 0
+                                                    ? <span className="text-primary font-semibold">{fmtUsd(plannedCif)}</span>
+                                                    : <span className="text-muted-foreground">—</span>}
+                                            </td>
                                             <td className="px-4 py-3 text-right tabular-nums">
                                                 <span className={cn("font-semibold",
                                                     rem < -1e-6 ? "text-destructive" :
                                                     rem < 1e-6 && planned > 0 ? "text-emerald-700" : "text-muted-foreground",
                                                 )}>{fmtQty(rem)}</span>
-                                            </td>
-                                            <td className="px-4 py-3 text-right tabular-nums">
-                                                {plannedCif > 0
-                                                    ? <span className="text-primary">{fmtUsd(plannedCif)}</span>
-                                                    : <span className="text-muted-foreground">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 {isEditing ? (
@@ -729,7 +735,7 @@ export default function PlanningEditor({
 
                                         {isEditing && (
                                             <tr key={`${g.id}-editor`} className="border-b border-primary/20 bg-primary/[0.02]">
-                                                <td colSpan={7} className="p-0">
+                                                <td colSpan={8} className="p-0">
                                                     <InlineEditor
                                                         group={g}
                                                         poolBalance={poolBalance}
@@ -750,17 +756,18 @@ export default function PlanningEditor({
                                 );
                             })}
 
-                            {/* Totals row */}
+                            {/* Totals row — 8 columns: Item, Status, Avail, Planned, UnitPrice, CIF, Remaining, Actions */}
                             {anyPlanExists && (
                                 <tr className="border-t-2 border-border bg-muted/40 font-semibold text-sm">
                                     <td className="px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Totals</td>
                                     <td />
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.totalAvail)}</td>
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.totalPlanned)}</td>
+                                    <td />{/* Unit Price — rate, not summed */}
+                                    <td className="px-4 py-2 text-right tabular-nums text-primary">{fmtUsd(totals.totalCif)}</td>
                                     <td className="px-4 py-2 text-right tabular-nums">
                                         <span className={cn(totals.remaining < -1e-6 ? "text-destructive" : "text-emerald-700")}>{fmtQty(totals.remaining)}</span>
                                     </td>
-                                    <td className="px-4 py-2 text-right tabular-nums text-primary">{fmtUsd(totals.totalCif)}</td>
                                     <td />
                                 </tr>
                             )}

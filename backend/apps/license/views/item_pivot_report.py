@@ -20,7 +20,10 @@ from rest_framework.views import APIView
 
 from apps.core.constants import DEC_0, DEC_000, GE, MI, CO
 from apps.core.models import ItemNameModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
+from apps.license.models import (
+    LicenseDetailsModel, LicenseImportItemsModel,
+    LicenseExportItemModel, LicenseTransferModel,
+)
 
 def _safe_int(value, default):
     try:
@@ -206,6 +209,7 @@ class ItemPivotReportView(APIView):
             'notes',
             'ownership__current_owner',
             'purchase_status',
+            'notification_number',   # Fix #6: was lazy-loaded per licence (~2×N extra queries)
         ).prefetch_related(
             Prefetch('import_license',
                      queryset=import_items_qs.prefetch_related(
@@ -216,7 +220,10 @@ class ItemPivotReportView(APIView):
             Prefetch('export_license',
                      queryset=export_items_qs.only('id', 'license_id', 'norm_class_id', 'cif_fc')),
             'license_documents',
-            'transfers'
+            # Fix #5: ordered Prefetch avoids re-querying with ORDER BY inside _build_license_row
+            Prefetch('transfers',
+                     queryset=LicenseTransferModel.objects.order_by('-transfer_date', '-id'),
+                     to_attr='transfers_ordered'),
         ).order_by('license_expiry_date', 'license_date')
 
         # Collect all unique items across all licenses
@@ -313,6 +320,19 @@ class ItemPivotReportView(APIView):
         from apps.license.services.condition_pool import compute_condition_pools_bulk
         cond_pools_by_license = compute_condition_pools_bulk([_lo.id for _lo in valid_licenses])
 
+        # Fix #2: batch AllotmentItems query — was 1 query PER licence (N+1).
+        # One query returns cif_fc sums keyed by license_id.
+        from apps.allotment.models import AllotmentItems as _AllotmentItems
+        _license_ids = [_lo.id for _lo in valid_licenses]
+        alloted_cif_by_license: dict = defaultdict(lambda: Decimal('0'))
+        for _row in _AllotmentItems.objects.filter(
+            item__license_id__in=_license_ids,
+            allotment__is_allotted=True,
+            allotment__bill_of_entry__isnull=True,
+        ).values('item__license_id', 'cif_fc'):
+            if _row['cif_fc'] is not None:
+                alloted_cif_by_license[_row['item__license_id']] += Decimal(str(_row['cif_fc']))
+
         # Build license data with item columns, grouped by norm first, then notification
         # (defaultdict is imported at module level).
         licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
@@ -323,6 +343,7 @@ class ItemPivotReportView(APIView):
                 item_plan_totals=plan_totals_by_license.get(license_obj.id),
                 document_types=doc_types_by_license.get(license_obj.id, frozenset()),
                 condition_pools=cond_pools_by_license.get(license_obj.id, {}),
+                alloted_cif=alloted_cif_by_license.get(license_obj.id, Decimal('0')),
             )
 
             if license_row:
@@ -331,12 +352,11 @@ class ItemPivotReportView(APIView):
                 if not notification:
                     notification = 'Unknown'
 
-                # Get norm class from license
+                # Fix #4: use prefetch cache — .exists()/.first() bypass it and re-query
                 norm_class = 'Unknown'
-                if license_obj.export_license.exists():
-                    first_export = license_obj.export_license.first()
-                    if first_export and first_export.norm_class:
-                        norm_class = first_export.norm_class.norm_class
+                _exports = list(license_obj.export_license.all())
+                if _exports and _exports[0].norm_class:
+                    norm_class = _exports[0].norm_class.norm_class or 'Unknown'
 
                 # Define conversion norms
                 conversion_norms = ['E1', 'E5', 'E126', 'E132']
@@ -451,7 +471,7 @@ class ItemPivotReportView(APIView):
 
     def _build_license_row(self, license_obj: LicenseDetailsModel, all_items: List[tuple],
                            item_plan_totals=None, document_types=None,
-                           condition_pools=None) -> Dict[str, Any]:
+                           condition_pools=None, alloted_cif=None) -> Dict[str, Any]:
         """
         Build a single license row with item columns.
 
@@ -476,19 +496,20 @@ class ItemPivotReportView(APIView):
             cif_value = Decimal(str(item.cif_fc)) if item.cif_fc is not None else Decimal('0')
             total_cif += cif_value
 
-        # Calculate Alloted CIF from DFIA allotments that don't have BOE
-        from apps.allotment.models import AllotmentItems
-        alloted_cif = Decimal('0')
-        # Get allotment items for this license where allotment is marked as allotted
-        # and is NOT linked to any bill_of_entry (meaning no BOE exists for this allotment)
-        allotment_items = AllotmentItems.objects.filter(
-            item__license=license_obj,
-            allotment__is_allotted=True,
-            allotment__bill_of_entry__isnull=True  # No BOE linked to this allotment
-        ).select_related('allotment')
-
-        for allot_item in allotment_items:
-            alloted_cif += Decimal(str(allot_item.cif_fc)) if allot_item.cif_fc is not None else Decimal('0')
+        # Fix #2: alloted_cif pre-computed by generate_report in a single batch query.
+        # Standalone callers (e.g. Excel export called directly) fall back to the
+        # per-licence query so behaviour is unchanged outside the main report path.
+        if alloted_cif is None:
+            from apps.allotment.models import AllotmentItems as _AI
+            _alloted_cif = Decimal('0')
+            for _ai in _AI.objects.filter(
+                item__license=license_obj,
+                allotment__is_allotted=True,
+                allotment__bill_of_entry__isnull=True,
+            ).values_list('cif_fc', flat=True):
+                if _ai is not None:
+                    _alloted_cif += Decimal(str(_ai))
+            alloted_cif = _alloted_cif
 
         # Debited CIF = CIF already debited (via BOE) across this licence's import
         # items — the same `debited_value` field the restriction pools treat as
@@ -515,9 +536,11 @@ class ItemPivotReportView(APIView):
             'plan_cif': Decimal('0.00'),
         })
 
-        # Per-import-item utilization plan totals for this license (one query).
-        from apps.license.services.plan_reporting import plan_map_for_license
-        _plan_map = plan_map_for_license(license_obj.id)
+        # Fix #1: plan_map_for_license was called per-licence here (N extra queries).
+        # generate_report already batches all LicenseItemPlan rows and passes the
+        # per-licence totals via item_plan_totals, so this extra call is redundant.
+        # Standalone callers that pass item_plan_totals=None get _plan_map=None (same
+        # as before — plan_source falls back to 'norm', which is correct).
 
         # Per condition_type pool — new restriction model. Each "N%" pool is
         # shared by every import item on this licence with that condition_type,
@@ -615,12 +638,14 @@ class ItemPivotReportView(APIView):
         has_tl = 'TRANSFER LETTER' in document_types
         has_copy = 'LICENSE COPY' in document_types
 
-        # Get latest transfer
+        # Fix #5: use pre-ordered to_attr list — avoids re-querying with ORDER BY
         latest_transfer_text = ''
-        transfer_qs = license_obj.transfers.order_by("-transfer_date", "-id")
-        if transfer_qs.exists():
-            transfer = transfer_qs.first()
-            latest_transfer_text = str(transfer)
+        _transfers = getattr(license_obj, 'transfers_ordered', None)
+        if _transfers is None:
+            # Standalone caller (no Prefetch to_attr) — fall back to queryset
+            _transfers = list(license_obj.transfers.order_by('-transfer_date', '-id'))
+        if _transfers:
+            latest_transfer_text = str(_transfers[0])
         elif license_obj.current_owner:
             latest_transfer_text = f"Current Owner is {license_obj.current_owner.name}"
         else:
@@ -655,9 +680,9 @@ class ItemPivotReportView(APIView):
             'has_tl': has_tl,
             'has_copy': has_copy,
             # Per-license plan source: 'manual' if the license has any manual
-            # plan line, else 'norm'. The frontend uses this to show EITHER the
-            # manual plan OR the norm plan for the whole license — never both.
-            'plan_source': 'manual' if _plan_map else 'norm',
+            # plan line, else 'norm'. Uses the already-available item_plan_totals
+            # so no extra query is needed (see Fix #1 above).
+            'plan_source': 'manual' if item_plan_totals else 'norm',
             'items': {}
         }
 
@@ -682,11 +707,11 @@ class ItemPivotReportView(APIView):
         # item we classify it into a category, compute the category's
         # effective rate (planned_cif / util_qty), then allocate this item's
         # share of the category's planned CIF proportionally to its util qty.
+        # Fix #4: use prefetch cache for export_license — .exists()/.first() bypass it
         primary_norm = ''
-        if license_obj.export_license.exists():
-            first_export = license_obj.export_license.first()
-            if first_export and first_export.norm_class:
-                primary_norm = first_export.norm_class.norm_class or ''
+        _exp_list = list(license_obj.export_license.all())
+        if _exp_list and _exp_list[0].norm_class:
+            primary_norm = _exp_list[0].norm_class.norm_class or ''
 
         # `item_plan_data[item_name]` → {'planned_cif': float, 'unit_price': float}
         item_plan_data: Dict[str, Dict[str, float]] = {}
@@ -703,22 +728,19 @@ class ItemPivotReportView(APIView):
                 )
                 _EXCL = None
 
-            # Build a bal_agg-equivalent over each import_item (need per-item
-            # condition_type to honour the Display/Util qty split for E1).
-            # Items inactive in the master are still included so qty isn't lost.
-            import_items = (
-                LicenseImportItemsModel.objects
-                .filter(license=license_obj)
-                .select_related('hs_code')
-                .prefetch_related('items')
-            )
+            # Fix #3: reuse the already-prefetched import items instead of issuing
+            # a second SELECT per E1/E5 licence. Inactive items are included because
+            # the prefetch query (import_items_qs) has no is_active filter.
+            # Note: use ii.items.all() not .values_list() — .values_list() bypasses
+            # the prefetch cache and would re-query; .all() reads from it for free.
+            import_items = license_obj.import_license.all()
             display_qty = {c: 0.0 for c in _CATS}
             util_qty    = {c: 0.0 for c in _CATS}
             # Track per ITEM-NAME so we can attribute the right share back.
             per_item_util: Dict[str, float] = {}
             per_item_category: Dict[str, str] = {}
             for ii in import_items:
-                names = list(ii.items.values_list('name', flat=True))
+                names = [n.name for n in ii.items.all()]
                 key = ', '.join(sorted(names)) if names else (ii.description or '-')
                 hs = ii.hs_code.hs_code if ii.hs_code else ''
                 cat = _classify(key, hs, ii.description)

@@ -213,6 +213,7 @@ class AllotmentItems(AuditModel):
         related_name="allotment_details",
         null=True,
         blank=True,
+        db_index=True,   # Fix #7: enables fast item__license_id__in batch lookup
     )
     allotment = models.ForeignKey(
         "allotment.AllotmentModel",
@@ -220,6 +221,7 @@ class AllotmentItems(AuditModel):
         related_name="allotment_details",
         null=True,
         blank=True,
+        db_index=True,   # Fix #7: enables fast allotment__is_allotted JOIN filter
     )
     cif_inr = models.DecimalField(
         max_digits=15,

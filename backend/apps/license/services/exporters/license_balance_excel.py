@@ -542,6 +542,7 @@ def build_balance_excel(license_obj):
             'avail': _av, 'pqty': _pq, 'pcif': _pc,
             'rem_qty': _av - _pq,
             'planned': _pq > 0 or _pc > 0,
+            'splits': _pd.get('splits', []) if _pd else [],
         })
     _g_rem_qty = _g_avail - _g_planned_qty
     _g_rem_cif = _license_balance - _g_planned_cif
@@ -585,11 +586,16 @@ def build_balance_excel(license_obj):
         _hdr(ws, r, _ci, _ch)
     r += 1
 
-    # ── Per-item rows ─────────────────────────────────────────────────────
+    # ── Per-item rows (+ split sub-rows) ──────────────────────────────────
+    SPLIT_FILL  = PatternFill(start_color="EBF3FF", end_color="EBF3FF", fill_type="solid")
+    SPLIT_FONT  = Font(size=9, color="2B5EA7", italic=True)
+    SPLIT_BADGE = Font(size=8, color="2B5EA7", italic=True)
+
     _running_cif = _license_balance
     for _idx, _pr in enumerate(_plan_data_rows):
         _rf = None if _idx % 2 == 0 else ALT_FILL
         _running_cif -= _pr['pcif']
+        # ── Item row ──────────────────────────────────────────────────────
         _dc = ws.cell(row=r, column=1, value=_pr['desc'])
         _dc.fill = _rf or PatternFill(fill_type=None); _dc.border = THIN_BORDER
         _dc.font = NORM; _dc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
@@ -613,6 +619,35 @@ def build_balance_excel(license_obj):
             _cell(ws, r, 7, '-', fill=_rf, align='center')
             _cell(ws, r, 8, '-', fill=_rf, align='center')
         r += 1
+        # ── Split sub-rows (only for planned items with splits) ────────────
+        if _pr['planned']:
+            _valid_splits = [s for s in _pr['splits']
+                             if float(s.get('planned_quantity') or 0) > 0
+                             or float(s.get('planned_cif_fc') or 0) > 0]
+            for _si, _sp in enumerate(_valid_splits):
+                _sp_qty   = float(_sp.get('planned_quantity') or 0)
+                _sp_cif   = float(_sp.get('planned_cif_fc') or 0)
+                _sp_price = float(_sp.get('unit_price') or 0)
+                _sp_name  = _sp.get('item_name') or f'Split {_si + 1}'
+                # Col A: indented item name
+                _sac = ws.cell(row=r, column=1, value=f'  └ {_sp_name}')
+                _sac.fill = SPLIT_FILL; _sac.border = THIN_BORDER; _sac.font = SPLIT_FONT
+                _sac.alignment = Alignment(horizontal='left', vertical='center')
+                # Col B: unit price
+                _sbc = ws.cell(row=r, column=2, value=f'@ ${_sp_price:,.2f}/unit' if _sp_price else '')
+                _sbc.fill = SPLIT_FILL; _sbc.border = THIN_BORDER; _sbc.font = SPLIT_FONT
+                _sbc.alignment = Alignment(horizontal='left', vertical='center')
+                # Col C: "Split N" badge
+                _scc = ws.cell(row=r, column=3, value=f'Split {_si + 1}')
+                _scc.fill = SPLIT_FILL; _scc.border = THIN_BORDER; _scc.font = SPLIT_BADGE
+                _scc.alignment = Alignment(horizontal='center', vertical='center')
+                # Cols D-H
+                for _sc2 in range(4, 9):
+                    ws.cell(row=r, column=_sc2).fill   = SPLIT_FILL
+                    ws.cell(row=r, column=_sc2).border = THIN_BORDER
+                _cell(ws, r, 5, _sp_qty,   fill=SPLIT_FILL, align='right', num_fmt='#,##0.000')
+                _cell(ws, r, 7, _sp_cif,   fill=SPLIT_FILL, align='right', num_fmt='#,##0.00')
+                r += 1
 
     # ── Totals row ────────────────────────────────────────────────────────
     for _ci in range(1, 9):
@@ -925,6 +960,7 @@ def build_bulk_balance_excel(request):
                 'avail': _av_b, 'pqty': _pq_b, 'pcif': _pc_b,
                 'rem_qty': _av_b - _pq_b,
                 'planned': _pq_b > 0 or _pc_b > 0,
+                'splits': _pd_b.get('splits', []) if _pd_b else [],
             })
         _gb_rem_qty = _gb_avail - _gb_pqty
         _gb_rem_cif = _license_balance - _gb_pcif
@@ -968,11 +1004,16 @@ def build_bulk_balance_excel(request):
             _hdr(ws, r, _bci, _bch)
         r += 1
 
-        # Per-item rows
+        # Per-item rows (+ split sub-rows)
+        BSPLIT_FILL  = PatternFill(start_color="EBF3FF", end_color="EBF3FF", fill_type="solid")
+        BSPLIT_FONT  = Font(size=9, color="2B5EA7", italic=True)
+        BSPLIT_BADGE = Font(size=8, color="2B5EA7", italic=True)
+
         _running_cif_b = _license_balance
         for _bidx, _bpr in enumerate(_prows_b):
             _brf = None if _bidx % 2 == 0 else ALT_FILL
             _running_cif_b -= _bpr['pcif']
+            # Item row
             _bdc = ws.cell(row=r, column=1, value=_bpr['desc'])
             _bdc.fill = _brf or PatternFill(fill_type=None); _bdc.border = THIN_BORDER
             _bdc.font = NORM; _bdc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
@@ -998,6 +1039,31 @@ def build_bulk_balance_excel(request):
                 _cell(ws, r, 7, '-', fill=_brf, align='center')
                 _cell(ws, r, 8, '-', fill=_brf, align='center')
             r += 1
+            # Split sub-rows
+            if _bpr['planned']:
+                _bvalid_splits = [s for s in _bpr['splits']
+                                  if float(s.get('planned_quantity') or 0) > 0
+                                  or float(s.get('planned_cif_fc') or 0) > 0]
+                for _bsi, _bsp in enumerate(_bvalid_splits):
+                    _bsp_qty   = float(_bsp.get('planned_quantity') or 0)
+                    _bsp_cif   = float(_bsp.get('planned_cif_fc') or 0)
+                    _bsp_price = float(_bsp.get('unit_price') or 0)
+                    _bsp_name  = _bsp.get('item_name') or f'Split {_bsi + 1}'
+                    _bsac = ws.cell(row=r, column=1, value=f'  └ {_bsp_name}')
+                    _bsac.fill = BSPLIT_FILL; _bsac.border = THIN_BORDER; _bsac.font = BSPLIT_FONT
+                    _bsac.alignment = Alignment(horizontal='left', vertical='center')
+                    _bsbc = ws.cell(row=r, column=2, value=f'@ ${_bsp_price:,.2f}/unit' if _bsp_price else '')
+                    _bsbc.fill = BSPLIT_FILL; _bsbc.border = THIN_BORDER; _bsbc.font = BSPLIT_FONT
+                    _bsbc.alignment = Alignment(horizontal='left', vertical='center')
+                    _bscc = ws.cell(row=r, column=3, value=f'Split {_bsi + 1}')
+                    _bscc.fill = BSPLIT_FILL; _bscc.border = THIN_BORDER; _bscc.font = BSPLIT_BADGE
+                    _bscc.alignment = Alignment(horizontal='center', vertical='center')
+                    for _bsc2 in range(4, 9):
+                        ws.cell(row=r, column=_bsc2).fill   = BSPLIT_FILL
+                        ws.cell(row=r, column=_bsc2).border = THIN_BORDER
+                    _cell(ws, r, 5, _bsp_qty, fill=BSPLIT_FILL, align='right', num_fmt='#,##0.000')
+                    _cell(ws, r, 7, _bsp_cif, fill=BSPLIT_FILL, align='right', num_fmt='#,##0.00')
+                    r += 1
 
         # Totals row
         for _bci2 in range(1, 9):

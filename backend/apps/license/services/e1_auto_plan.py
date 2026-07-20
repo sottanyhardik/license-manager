@@ -37,23 +37,36 @@ import math
 from typing import Optional
 
 from apps.license.services.auto_plan_shared import (
+    ensure_plan_item_names as _ensure_names,
     group_by_desc as _group_by_desc,
     optimal_milk_split as _optimal_milk_split,
 )
 
 
-# ─── Item-name labels looked up from ItemNameModel ────────────────────────────
+# ─── Item-name labels (fixed per §2 — always get-or-create, never fail) ───────
 
 MILK_ITEM_NAMES: tuple[str, ...] = ('SWP - E1', 'DWP - E1', 'WPC - E1')
 
-_ALL_RULE_NAMES: tuple[str, ...] = MILK_ITEM_NAMES + (
-    'OTHER CONFECTIONERY INGREDIENTS - E1',
-    'FRUIT/COCOA - E1',                    # Rule 1.5 — runs before Milk & Milk
-    'FRUIT JUICE - E1',
-    'ALUMINIUM FOIL - E1',
-    'CITRIC ACID / TARTARIC ACID - E1',
-    'PP - E1',
+# Each entry is (item_name, E1 norm code).  ensure_plan_item_names creates any
+# missing rows so Auto Plan never fails because a name is absent from the DB.
+_RULE_NAMES_E1: tuple[tuple[str, str], ...] = (
+    ('SWP - E1',                              'E1'),
+    ('DWP - E1',                              'E1'),
+    ('WPC - E1',                              'E1'),
+    ('OTHER CONFECTIONERY INGREDIENTS - E1',  'E1'),  # Rule 1
+    ('FRUIT/COCOA - E1',                      'E1'),  # Rule 1.5 — Cocoa
+    ('FRUIT JUICE - E1',                            'E1'),  # Rule 3
+    ('ALUMINIUM FOIL - E1',                   'E1'),  # Rule 4
+    ('CITRIC ACID / TARTARIC ACID - E1',      'E1'),  # Rule 5
+    ('PP - E1',                               'E1'),  # Rule 6
 )
+
+# Public set of every item name the E1 auto-planner can produce.
+# Used by the Item Pivot Report to filter import items that the planner
+# never generates (e.g. ESSENTIAL OIL - E1, SUGAR - E1) so they don't
+# appear as empty columns.  When a new rule is added to _RULE_NAMES_E1 the
+# report automatically picks it up — no separate list to maintain.
+E1_PLANNABLE_NAMES: frozenset[str] = frozenset(name for name, _ in _RULE_NAMES_E1)
 
 # Minimum available quantity required before an import item is planned.
 # Items below this threshold are silently skipped by every rule.
@@ -152,13 +165,10 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
         lines — ready-to-save dicts for LicenseItemPlan.
         remaining_cif — balance CIF not consumed by the plan.
     """
-    from apps.core.models import ItemNameModel
     from apps.license.services.e1_plan import classify_e1_item
 
-    # ── 1. Pre-fetch item-name IDs for all named plan entries ─────────────────
-    name_ids: dict[str, Optional[int]] = {n: None for n in _ALL_RULE_NAMES}
-    for obj in ItemNameModel.objects.filter(name__in=_ALL_RULE_NAMES):
-        name_ids[obj.name] = obj.id
+    # ── 1. Get-or-create all planned item names (§2: never fail on missing) ────
+    name_ids = _ensure_names(list(_RULE_NAMES_E1))
 
     # ── 2. Load import items and bucket by rule ───────────────────────────────
     import_items = (
@@ -236,8 +246,8 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
         if group_avail < MIN_PLAN_QTY:
             continue
         line, remaining_cif = _simple_line(
-            rep, group_avail, remaining_cif, 5.0,
-            name_ids.get('COCOA - E1'),
+            rep, group_avail, remaining_cif, 10.0,
+            name_ids.get('FRUIT/COCOA - E1'),
             'Rule 1.5 – Cocoa',
         )
         if line:

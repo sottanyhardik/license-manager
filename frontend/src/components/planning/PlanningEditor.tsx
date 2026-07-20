@@ -622,15 +622,30 @@ export default function PlanningEditor({
 
     const totals = useMemo(() => {
         let totalAvail = 0, totalPlanned = 0, totalCif = 0;
+        let lastUpdated: string | null = null;
         groups.forEach((g) => {
             totalAvail   += g.available_quantity;
             totalPlanned += g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
             totalCif     += g.splits.reduce((s, sp) => s + num(sp.planned_cif_fc), 0);
+            g.splits.forEach((sp) => {
+                if (sp.modified_on) {
+                    const d = new Date(sp.modified_on);
+                    if (!isNaN(d.getTime()) && (!lastUpdated || sp.modified_on > lastUpdated)) {
+                        lastUpdated = sp.modified_on;
+                    }
+                }
+            });
         });
+        const lastUpdatedLabel = lastUpdated
+            ? new Date(lastUpdated).toLocaleDateString("en-IN", {
+                  day: "numeric", month: "short", year: "numeric",
+              })
+            : null;
         return {
             totalAvail, totalPlanned,
             remaining: totalAvail - totalPlanned,
             totalCif, cifRemaining: poolBalance - totalCif,
+            lastUpdatedLabel,
         };
     }, [groups, poolBalance]);
 
@@ -655,9 +670,16 @@ export default function PlanningEditor({
         <div className="py-3 space-y-4">
             {/* ── Header ───────────────────────────────────────────── */}
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <Target className="size-4 text-primary" aria-hidden="true" />
-                    Plan utilization
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <Target className="size-4 text-primary" aria-hidden="true" />
+                        Plan utilization
+                    </div>
+                    {totals.lastUpdatedLabel && (
+                        <span className="text-[11px] text-muted-foreground">
+                            · Last updated: {totals.lastUpdatedLabel}
+                        </span>
+                    )}
                 </div>
                 <Button
                     variant="outline"

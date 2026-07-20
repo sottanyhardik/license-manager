@@ -235,6 +235,16 @@ export const autoPlan = async (licenseId) => {
     return response.data;
 };
 
+/**
+ * Batch Auto Plan — runs Auto Plan for every eligible DFIA license (E1/E5/E132).
+ * Skips licenses that are already ≥99% planned.  Failures are isolated per-license.
+ * Returns { total, planned, already_planned, skipped_unknown_norm, failed, errors }.
+ */
+export const autoPlanAll = async () => {
+    const response = await api.post('license-item-plans/auto-plan-all/', {});
+    return response.data;
+};
+
 export default {
     fetchLicenseList,
     fetchLicense,

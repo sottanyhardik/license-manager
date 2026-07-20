@@ -29,22 +29,25 @@ import math
 from typing import Optional
 
 from apps.license.services.auto_plan_shared import (
+    ensure_plan_item_names as _ensure_names,
     group_by_desc as _group_by_desc,
     optimal_milk_split as _optimal_milk_split,
 )
 
 MIN_PLAN_QTY: float = 50.0
 
-# E5 item-name labels stored in ItemNameModel
-E5_RULE_NAMES: tuple[str, ...] = (
-    'DIETARY FIBRE - E5',
-    'PALM KERNEL OIL - E5',
-    'RBD PALMOLEIN OIL - E5',
-    'OLIVE OIL - E5',
-    'SWP - E5',
-    'DWP - E5',
-    'WPC - E5',
-    'WHEAT FLOUR - E5',   # final mop-up — absorbs all remaining balance CIF
+# Each entry: (item_name, norm_code).  ensure_plan_item_names creates any
+# missing rows so Auto Plan never fails because a name is absent from the DB.
+_RULE_NAMES_E5: tuple[tuple[str, str], ...] = (
+    ('DIETARY FIBRE - E5',    'E5'),
+    ('PALM KERNEL OIL - E5',  'E5'),
+    ('RBD PALMOLEIN OIL - E5','E5'),
+    ('OLIVE OIL - E5',        'E5'),
+    ('SWP - E5',              'E5'),
+    ('DWP - E5',              'E5'),
+    ('WPC - E5',              'E5'),
+    ('ALUMINIUM FOIL - E5',   'E5'),   # ensured per §2 (no E5 detection rule yet)
+    ('WHEAT FLOUR - E5',      'E5'),   # final mop-up
 )
 
 # Keywords that identify milk/dairy import items (lowercase).
@@ -131,13 +134,10 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
 
     Returns (lines, remaining_cif).
     """
-    from apps.core.models import ItemNameModel
     from apps.license.services.e5_plan import classify_e5_item
 
-    # ── Pre-fetch item-name IDs ───────────────────────────────────────────────
-    name_ids: dict[str, Optional[int]] = {n: None for n in E5_RULE_NAMES}
-    for obj in ItemNameModel.objects.filter(name__in=E5_RULE_NAMES):
-        name_ids[obj.name] = obj.id
+    # ── Get-or-create all planned item names (§2: never fail on missing) ────
+    name_ids = _ensure_names(list(_RULE_NAMES_E5))
 
     # ── Load import items ─────────────────────────────────────────────────────
     import_items = (

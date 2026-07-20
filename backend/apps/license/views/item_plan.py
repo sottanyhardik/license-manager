@@ -353,3 +353,86 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=False, methods=["post"], url_path="auto-plan-all")
+    def auto_plan_all(self, request):
+        """
+        Batch Auto Plan for ALL eligible DFIA licenses (E1 / E5 / E132).
+
+        Eligible: norm in (E1, E5, E132) AND balance_cif > 0.
+        "Already planned": existing plan covers ≥ 99 % of balance CIF.
+        Failures are isolated per-license; the batch always continues.
+
+        Body: {}
+        Returns: { total, planned, already_planned, skipped_unknown_norm,
+                   failed, errors: [{license, error}] }
+        """
+        from django.db import models as _models
+        from apps.license.services.norm_plan import detect_norm
+        from apps.license.services.e1_auto_plan import compute_e1_auto_plan
+        from apps.license.services.e5_auto_plan import compute_e5_auto_plan
+        from apps.license.services.e132_auto_plan import compute_e132_auto_plan
+
+        licenses = (
+            LicenseDetailsModel.objects
+            .filter(balance__balance_cif__gt=0, flags__is_active=True)
+            .prefetch_related(
+                'export_license__norm_class',
+                'import_license__items',
+                'import_license__hs_code',
+            )
+            .select_related('balance')
+            .order_by('id')
+        )
+
+        res = dict(total=0, planned=0, already_planned=0,
+                   skipped_unknown_norm=0, failed=0, errors=[])
+
+        for lic in licenses:
+            norm = detect_norm(lic)
+            if norm not in ('E1', 'E5', 'E132'):
+                res["skipped_unknown_norm"] += 1
+                continue
+
+            res["total"] += 1
+            try:
+                bal = float(lic.balance_cif or 0)
+                existing = float(
+                    LicenseItemPlan.objects
+                    .filter(license=lic)
+                    .aggregate(t=_models.Sum("planned_cif_fc"))["t"] or 0
+                )
+                if bal > 0 and existing >= bal * 0.99:
+                    res["already_planned"] += 1
+                    continue
+
+                if norm == 'E1':
+                    lines, _ = compute_e1_auto_plan(lic)
+                elif norm == 'E5':
+                    lines, _ = compute_e5_auto_plan(lic)
+                else:
+                    lines, _ = compute_e132_auto_plan(lic)
+
+                if not lines:
+                    res["already_planned"] += 1
+                    continue
+
+                with transaction.atomic():
+                    LicenseItemPlan.objects.filter(license=lic).delete()
+                    for ln in lines:
+                        LicenseItemPlan.objects.create(
+                            license=lic,
+                            import_item_id=ln["import_item"],
+                            item_name_id=ln.get("item_name"),
+                            planned_quantity=ln["planned_quantity"],
+                            unit_price=ln["unit_price"],
+                            planned_cif_fc=ln["planned_cif_fc"],
+                            note=ln.get("note", ""),
+                        )
+                res["planned"] += 1
+
+            except Exception as exc:
+                res["failed"] += 1
+                res["errors"].append({"license": lic.license_number, "error": str(exc)})
+
+        return Response(res, status=status.HTTP_200_OK)

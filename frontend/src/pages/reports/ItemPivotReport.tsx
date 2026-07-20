@@ -10,9 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
+import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle, Zap } from "lucide-react";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
+import { autoPlanAll } from "../../services/api/licenseApi";
 import NormCardGrid from "./NormCardGrid";
 import ItemPivotFilters from "./ItemPivotFilters";
 import { openAuthedFile } from "../../utils/documentDownload";
@@ -166,6 +167,12 @@ export default function ItemPivotReport() {
     // Utilization planning panel (same component the licenses page uses).
     const [showPlanModal, setShowPlanModal] = useState(false);
     const [planLicense, setPlanLicense] = useState(null); // { id, number, balance }
+    const [autoPlanning, setAutoPlanning] = useState(false);
+    const [autoPlanSummary, setAutoPlanSummary] = useState<{
+        total: number; planned: number; already_planned: number;
+        skipped_unknown_norm: number; failed: number;
+        errors: { license: string; error: string }[];
+    } | null>(null);
 
     // AbortController ref — cancels the previous in-flight loadReport request
     // when a new one starts, preventing stale responses from overwriting fresh data.
@@ -379,6 +386,25 @@ export default function ItemPivotReport() {
         DEFAULT_PURCHASE_STATUS.every(v => purchaseStatus.includes(v));
     const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active' || expiryDateFrom || expiryDateTo || !isDefaultPurchaseStatus;
 
+    const handleAutoPlanAll = async () => {
+        if (!window.confirm(
+            'Auto Plan All DFIA will run the plan algorithm on every eligible E1/E5/E132 license ' +
+            '(skipping those already ≥ 99 % planned).\n\nThis may take a while. Continue?'
+        )) return;
+        setAutoPlanning(true);
+        setAutoPlanSummary(null);
+        try {
+            const result = await autoPlanAll();
+            setAutoPlanSummary(result);
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+                || 'Auto Plan All failed. Please try again.';
+            toast.error(msg);
+        } finally {
+            setAutoPlanning(false);
+        }
+    };
+
     const getTotalLicenseCount = () => {
         if (!reportData) return 0;
         let total = 0;
@@ -476,9 +502,17 @@ export default function ItemPivotReport() {
                     }
                 });
 
-                if (itemAvailable > 0) {
+                // Include an item in the summary when it has import balance *or*
+                // has planned CIF — the latter handles manually-planned split items
+                // (e.g. "DWP - E1") whose planned item name has no corresponding
+                // import item and therefore available_quantity = 0.
+                if (itemAvailable > 0 || itemPlanned > 0) {
                     const itemSummary = {
-                        available:    itemAvailable,
+                        // For split-planned items (DWP, WPC …) that have no direct
+                        // import counterpart, available_quantity is 0 from the backend.
+                        // Fall back to the planned qty so the column shows the correct
+                        // balance quantity instead of 0.
+                        available:    itemAvailable > 0 ? itemAvailable : itemPlannedQty,
                         planned_cif:  itemPlanned,
                         planned_qty:  itemPlannedQty,
                         // Unit price = Total Planned CIF / Total Planned QTY.
@@ -572,6 +606,17 @@ export default function ItemPivotReport() {
                     <Button variant="outline" size="sm" onClick={handleExport} disabled={downloading}>
                         {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
                         {downloading ? 'Generating…' : 'Excel'}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAutoPlanAll}
+                        disabled={autoPlanning}
+                        className="gap-1.5 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 font-semibold"
+                        title="Run Auto Plan on every eligible DFIA license (E1 / E5 / E132)"
+                    >
+                        {autoPlanning ? <Loader2 className="size-3.5 animate-spin" /> : <Zap className="size-3.5" />}
+                        {autoPlanning ? 'Planning…' : 'Auto Plan All DFIA'}
                     </Button>
                 </div>
             </div>
@@ -670,6 +715,23 @@ export default function ItemPivotReport() {
                                 const emIdx = groupKey.indexOf(' — ');
                                 const psLabel = emIdx >= 0 ? groupKey.slice(0, emIdx) : (licenses[0]?.purchase_status_label || '');
                                 const notification = emIdx >= 0 ? groupKey.slice(emIdx + 3) : groupKey;
+                                // Per-group item filter: only render columns for items that have
+                                // actual data (import qty, balance, or plan) in THIS notification
+                                // group. Using the global reportData.items list would cause every
+                                // possible E1/E5 item to appear as an empty column even when no
+                                // license in this group planned or imported it.
+                                const groupItems = (reportData.items as any[]).filter((item: any) => {
+                                    if (!item.name) return false;
+                                    return (licenses as any[]).some((license: any) => {
+                                        const d = license.items?.[item.name] || {};
+                                        return (
+                                            (d.quantity ?? 0) > 0 ||
+                                            (d.available_quantity ?? 0) > 0 ||
+                                            (d.plan_quantity ?? 0) > 0 ||
+                                            (d.plan_cif ?? 0) > 0
+                                        );
+                                    });
+                                });
                                 return (
                                 <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
                                     <Card>
@@ -775,7 +837,7 @@ export default function ItemPivotReport() {
                                                         <th style={{ minWidth: '100px' }}>DFIA Dt</th>
                                                         <th style={{ minWidth: '120px' }}>Notif No</th>
                                                         */}
-                                                        {reportData.items.filter(item => item.name).map((item, itemIdx) => {
+                                                        {groupItems.map((item, itemIdx) => {
                                                             // Sub-cols per item: HSN, Description, Total, Allotted,
                                                             // Debited, Balance, Plan Qty, Plan CIF
                                                             // + 2 optional restriction cols when applicable
@@ -783,7 +845,8 @@ export default function ItemPivotReport() {
                                                             const isRutile = item.name === 'RUTILE - A3627';
                                                             const colSpan = 8
                                                                 + (item.has_restriction ? 2 : 0)
-                                                                + (isRutile ? 1 : 0);
+                                                                + (isRutile ? 1 : 0)
+                                                                + 2;
                                                             return (
                                                                 <th scope="col" key={`${item.id}-qty`} colSpan={colSpan}
                                                                     className="text-center"
@@ -846,7 +909,7 @@ export default function ItemPivotReport() {
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}></th>
                                                         {/* DFIA Dt / Notif No spacers temporarily hidden */}
-                                                        {reportData.items.filter(item => item.name).map(item => (
+                                                        {groupItems.map(item => (
                                                             <React.Fragment key={`${item.id}-headers`}>
                                                                 <th scope="col" style={{minWidth: '90px', fontSize: 13.5}}>HSN
                                                                     Code
@@ -891,6 +954,8 @@ export default function ItemPivotReport() {
                                                                     </>
                                                                 )}
                                                                 {/* Manual plan when present, else norm unit price / planned CIF */}
+                                                                <th scope="col" style={{minWidth: '140px', fontSize: 13.5}}>Import Item Name</th>
+                                                                <th scope="col" className="text-right" style={{minWidth: '90px', fontSize: 13.5}}>Import Qty</th>
                                                                 <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty / Unit Price</th>
                                                                 <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Planned CIF</th>
                                                                 {item.name === 'RUTILE - A3627' && (
@@ -1043,7 +1108,7 @@ export default function ItemPivotReport() {
                                                             <td className="text-nowrap">{formatDate(license.license_date)}</td>
                                                             <td className="text-nowrap">{license.notification_number}</td>
                                                             */}
-                                                            {reportData.items.filter(item => item.name).map((item, itemIdx) => {
+                                                            {groupItems.map((item, itemIdx) => {
                                                                 const itemData = license.items[item.name] || {};
                                                                 const hasData = itemData.quantity > 0;
                                                                 // Per-product: whether THIS product was manually planned
@@ -1095,6 +1160,12 @@ export default function ItemPivotReport() {
                                                                         {/* Per-product plan: manual plan takes priority when
                                                                             this product was manually planned; fall back to
                                                                             norm-derived values otherwise. */}
+                                                                        <td style={{backgroundColor: itemBg}} className="text-xs text-muted-foreground">
+                                                                            {itemData.import_item_name || '-'}
+                                                                        </td>
+                                                                        <td className="text-right text-xs text-muted-foreground" style={{backgroundColor: itemBg}}>
+                                                                            {itemData.import_quantity ? Number(itemData.import_quantity).toFixed(3) : '-'}
+                                                                        </td>
                                                                         <td className="text-right" style={{backgroundColor: itemBg}}>
                                                                             {(Number(itemData.plan_quantity || 0) > 0 || Number(itemData.plan_cif || 0) > 0)
                                                                                 ? Number(itemData.plan_quantity || 0).toFixed(3)
@@ -1167,7 +1238,7 @@ export default function ItemPivotReport() {
                                                             {licenses.reduce((sum, lic) => sum + lic.balance_cif, 0).toFixed(2)}
                                                         </td>
                                                         {/* DFIA Dt / Notif No totals temporarily hidden */}
-                                                        {reportData.items.filter(item => item.name).map(item => {
+                                                        {groupItems.map(item => {
                                                             const totalQty = licenses.reduce((sum, lic) => {
                                                                 return sum + (lic.items[item.name]?.quantity || 0);
                                                             }, 0);
@@ -1223,6 +1294,8 @@ export default function ItemPivotReport() {
                                                                         </>
                                                                     )}
                                                                     {/* Unit Price (effective rate) + Planned CIF total. */}
+                                                                    <td className="text-muted-foreground">-</td>
+                                                                    <td className="text-right text-muted-foreground">-</td>
                                                                     <td className="text-right">
                                                                         {effectiveUnit > 0 ? effectiveUnit.toFixed(2) : '-'}
                                                                     </td>
@@ -1504,6 +1577,51 @@ export default function ItemPivotReport() {
                 balanceCif={planLicense?.balance || 0}
                 onSaved={() => { if (activeNormTab) loadReport(activeNormTab); }}
             />
+
+            {/* Auto Plan All — summary dialog */}
+            {autoPlanSummary && (
+                <Dialog open={!!autoPlanSummary} onOpenChange={(o) => { if (!o) setAutoPlanSummary(null); }}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <Zap className="size-4 text-amber-600" aria-hidden="true" />
+                                Auto Plan Completed
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-2 py-2 text-sm">
+                            {[
+                                ['Total Licenses Processed', autoPlanSummary.total],
+                                ['Successfully Planned',     autoPlanSummary.planned],
+                                ['Already Planned',          autoPlanSummary.already_planned],
+                                ['Skipped (unknown norm)',   autoPlanSummary.skipped_unknown_norm],
+                                ['Failed',                  autoPlanSummary.failed],
+                            ].map(([label, value]) => (
+                                <div key={String(label)} className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
+                                    <span className="text-muted-foreground">{label}</span>
+                                    <span className="font-bold tabular-nums">{value}</span>
+                                </div>
+                            ))}
+                        </div>
+                        {autoPlanSummary.errors.length > 0 && (
+                            <details className="mt-1">
+                                <summary className="cursor-pointer text-[11px] text-destructive font-medium">
+                                    {autoPlanSummary.errors.length} error(s) — click to expand
+                                </summary>
+                                <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
+                                    {autoPlanSummary.errors.map((e, i) => (
+                                        <div key={i} className="rounded bg-destructive/5 px-2 py-1 text-[11px]">
+                                            <span className="font-semibold">{e.license}:</span> {e.error}
+                                        </div>
+                                    ))}
+                                </div>
+                            </details>
+                        )}
+                        <DialogFooter>
+                            <Button size="sm" onClick={() => setAutoPlanSummary(null)}>Close</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 }

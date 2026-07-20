@@ -231,11 +231,31 @@ class ItemPivotReportView(APIView):
         all_items = {}  # Changed to dict to store item object for sorting
         valid_licenses = list(licenses)  # Licenses already filtered by balance_cif at DB level
 
+        # Norm-specific plannable-item allow-sets: only item names the auto-planner
+        # can generate are shown as columns.  Items outside the set (e.g.
+        # ESSENTIAL OIL - E1, SUGAR - E1) are silently excluded from the column
+        # build here.  The _missing_planned block further below re-admits any item
+        # that a user actually planned even if it is outside the allow-set, so
+        # intentional manual plans are always surfaced.
+        from apps.license.services.e1_auto_plan import E1_PLANNABLE_NAMES as _E1_PLANNABLE
+        _NORM_ALLOW: dict[str, frozenset[str]] = {
+            'E1': _E1_PLANNABLE,
+        }
+
         for license_obj in valid_licenses:
             for import_item in license_obj.import_license.all():
                 for item in import_item.items.all():
                     # Only add items with valid names and that are active (is_active=False hides from pivot)
                     if item and item.name and item.is_active:
+                        # Per-norm plannable filter: skip items whose names the
+                        # auto-planner for their norm never generates.  This is
+                        # keyed off the item's own norm code so it works correctly
+                        # regardless of the ?sion_norm request parameter.
+                        _item_norm = (item.sion_norm_class.norm_class
+                                      if item.sion_norm_class else None)
+                        _allow = _NORM_ALLOW.get(_item_norm)
+                        if _allow is not None and item.name not in _allow:
+                            continue
                         # If filtering by norm, only include items matching that norm
                         if sion_norm:
                             if item.sion_norm_class and item.sion_norm_class.norm_class == sion_norm:
@@ -265,6 +285,18 @@ class ItemPivotReportView(APIView):
                     first_item_of_import[_ii.id] = _it.id
                     break
 
+        # Import-reference helpers (use already-prefetched data — no extra queries).
+        # item_name_str_by_id: ItemNameModel.id → name str
+        # import_qty_by_import_item: LicenseImportItemsModel.id → quantity
+        item_name_str_by_id = {}
+        import_qty_by_import_item = {}
+        for _lo in valid_licenses:
+            for _ii in _lo.import_license.all():
+                import_qty_by_import_item[_ii.id] = _ii.quantity
+                for _it in _ii.items.all():
+                    if _it.id not in item_name_str_by_id:
+                        item_name_str_by_id[_it.id] = _it.name
+
         # license_id -> {item_id: {'q': planned qty, 'cif': planned CIF-FC}}.
         # Attributed to the plan LINE's own item_name (not the import item's
         # first attached name) so e.g. a RUTILE plan line on a BORAX+RUTILE
@@ -286,6 +318,15 @@ class ItemPivotReportView(APIView):
             _cell['q'] += _pl['planned_quantity'] or Decimal('0')
             _cell['cif'] += _pl['planned_cif_fc'] or Decimal('0')
             planned_item_ids_all.add(_iname)
+            # Track import reference once per planned-item cell (first plan line wins).
+            if 'import_item_name' not in _cell:
+                _imp_name_id = first_item_of_import.get(_pl['import_item_id'])
+                _cell['import_item_name'] = (
+                    item_name_str_by_id.get(_imp_name_id, '') if _imp_name_id else ''
+                )
+                _cell['import_quantity'] = float(
+                    import_qty_by_import_item.get(_pl['import_item_id']) or 0
+                )
 
         # A manually-planned item must appear as a column even if it is INACTIVE
         # in the master (is_active=False) — the user explicitly planned it, so it
@@ -815,24 +856,36 @@ class ItemPivotReportView(APIView):
 
         # Add item columns
         planned_item_ids = set(item_plan_totals) if item_plan_totals is not None else None
-        # A planning context is active when this licence has a manual plan OR an
-        # automated E132 classification.  Within a planning context we evaluate
-        # each product independently: show it when ANY planning source has data
-        # for it; hide it only when ALL sources are NULL / empty.
-        _planning_context = planned_item_ids is not None or e132_planned_names is not None
         for item_id, item_name in all_items:
-            # Per-product check (independent of every other product):
+            # Per-product visibility — three-way priority:
+            #
+            # 1. Manual utilization plan (LicenseItemPlan rows) → show ONLY the
+            #    explicitly planned items.  Norm-derived plan (E1/E5 category
+            #    waterfall) must NOT cause un-planned import items (e.g. "Milk
+            #    Powder") to bleed into a manually-planned license's row — that
+            #    is the mixing bug this block fixes.
+            #    Also: planned items may be ItemNameModel entries not linked to
+            #    the import via M2M (e.g. "SWP - E1" planned from a "Milk Powder"
+            #    import item) so the `item_id in item_quantities` guard is
+            #    intentionally dropped; the cell falls back to zero import
+            #    quantities for such items, which is correct.
+            #
+            # 2. E132 auto-classification (no manual plan) → show items that the
+            #    classifier placed into a planning item; require item_quantities
+            #    presence because the classifier works off import data.
+            #
+            # 3. No planning context → show all items that have import data.
             _has_manual = planned_item_ids is not None and item_id in planned_item_ids
-            _has_norm   = bool(item_plan_data.get(item_name))   # E1 / E5 category plan
-            _has_e132   = bool(item_e132_data.get(item_name))   # E132 classification plan
-            _has_any_plan = _has_manual or _has_norm or _has_e132
+            _has_e132   = bool(item_e132_data.get(item_name))
 
-            if _planning_context:
-                # Planning present — surface only products with at least one
-                # planned value from any source.
-                show_item = _has_any_plan and item_id in item_quantities
+            if item_plan_totals is not None:
+                # Priority 1 — manual plan: show only planned items, no quantity guard.
+                show_item = _has_manual
+            elif e132_planned_names is not None:
+                # Priority 2 — E132 auto-classification: show classified items only.
+                show_item = _has_e132 and item_id in item_quantities
             else:
-                # No planning context — surface products with quantities as before.
+                # Priority 3 — no planning context: show items with import data.
                 show_item = item_id in item_quantities
 
             if show_item:
@@ -897,6 +950,16 @@ class ItemPivotReportView(APIView):
                     'previous_balance': _e132.get('previous_balance'),
                     'new_balance': _e132.get('new_balance'),
                     'debit_status': _e132.get('status'),
+                    # Import reference — always from the original import item.
+                    # For planned licences the import_item_name/quantity come from
+                    # the plan cell; for unplanned licences fall back to the
+                    # column name and the import quantity already in item_data.
+                    'import_item_name': _item_plan.get('import_item_name') or item_name,
+                    'import_quantity': (
+                        _item_plan['import_quantity']
+                        if 'import_quantity' in _item_plan
+                        else float(item_data['quantity'])
+                    ),
                 }
             else:
                 row_data['items'][item_name] = {
@@ -919,6 +982,8 @@ class ItemPivotReportView(APIView):
                     'previous_balance': None,
                     'new_balance': None,
                     'debit_status': None,
+                    'import_item_name': '',
+                    'import_quantity': 0,
                 }
 
         return row_data
@@ -1245,12 +1310,18 @@ class ItemPivotReportView(APIView):
             for norm_class in sorted(licenses_by_norm_notif.keys()):
                 notifications_dict = licenses_by_norm_notif[norm_class]
                 for notification, licenses_list in sorted(notifications_dict.items()):
-                    # Filter items to only those with data in THIS norm-notification
+                    # Filter items to only those with actual data in THIS norm-notification.
+                    # Must check plan_quantity / plan_cif in addition to quantity: for
+                    # manually-planned items whose planned name (e.g. "SWP - E1") is not
+                    # a direct import item, quantity = 0 but plan_quantity > 0.
                     items_with_data = []
                     for item in report_data['items']:
                         item_name = item['name']
                         has_data = any(
                             lic['items'].get(item_name, {}).get('quantity', 0) > 0
+                            or lic['items'].get(item_name, {}).get('available_quantity', 0) > 0
+                            or (lic['items'].get(item_name, {}).get('plan_quantity') or 0) > 0
+                            or (lic['items'].get(item_name, {}).get('plan_cif') or 0) > 0
                             for lic in licenses_list
                         )
                         if has_data:
@@ -1281,6 +1352,10 @@ class ItemPivotReportView(APIView):
                             f"{item_name} Debited QTY",
                             f"{item_name} Balance QTY"
                         ]
+                        headers.extend([
+                            f"{item_name} Import Item Name",
+                            f"{item_name} Import Qty",
+                        ])
                         if has_restriction:
                             headers.extend([
                                 f"{item_name} Restriction %",
@@ -1338,6 +1413,10 @@ class ItemPivotReportView(APIView):
                                 item_data.get('debited_quantity', 0),
                                 item_data.get('available_quantity', 0)
                             ])
+                            row_data.extend([
+                                item_data.get('import_item_name', ''),
+                                item_data.get('import_quantity', 0),
+                            ])
                             if has_restriction:
                                 row_data.extend([
                                     item_data.get('restriction'),
@@ -1386,6 +1465,7 @@ class ItemPivotReportView(APIView):
                             cell = WriteOnlyCell(worksheet, value=total)
                             cell.font = Font(bold=True)
                             totals_row.append(cell)
+                        totals_row.extend([None, None])  # Import Item Name, Import Qty
                         if has_restriction:
                             totals_row.append(None)  # Restriction %
                             total_restriction = sum(license_row['items'].get(item_name, {}).get('restriction_value', 0) for license_row in licenses_list)

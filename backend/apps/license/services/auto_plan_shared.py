@@ -10,6 +10,57 @@ import math
 from collections import defaultdict
 
 
+def ensure_plan_item_names(names_with_norm: list[tuple[str, str | None]]) -> dict[str, int]:
+    """
+    Guarantee that every planned item name exists in ``ItemNameModel``,
+    creating any that are missing.  Returns ``{name: ItemNameModel.id}``.
+
+    This is the single point that satisfies requirement §2 — Auto Plan must
+    NEVER fail because a planned item name is absent from the database.  Call
+    this at the top of every compute_*_auto_plan function instead of a plain
+    filter/lookup that returns None for missing rows.
+
+    Args:
+        names_with_norm: list of ``(item_name, norm_class_code_or_None)`` pairs.
+            The norm class is used only when creating a *new* row — existing
+            rows are returned as-is regardless of their current norm assignment.
+
+    Example::
+
+        name_ids = ensure_plan_item_names([
+            ('SWP - E1', 'E1'),
+            ('DWP - E1', 'E1'),
+            ('OTHER CONFECTIONERY - E1 Ingredients', 'E1'),
+        ])
+        # name_ids['SWP - E1'] → integer pk (created if needed)
+    """
+    from apps.core.models import ItemNameModel, SionNormClassModel
+
+    # Load norm objects lazily (at most one query per distinct code).
+    _norm_cache: dict[str, object] = {}
+
+    def _get_norm(code: str | None):
+        if code is None:
+            return None
+        if code not in _norm_cache:
+            _norm_cache[code] = SionNormClassModel.objects.filter(norm_class=code).first()
+        return _norm_cache[code]
+
+    result: dict[str, int] = {}
+    for name, norm_code in names_with_norm:
+        norm_obj = _get_norm(norm_code)
+        obj, _ = ItemNameModel.objects.get_or_create(
+            name=name,
+            defaults={
+                'sion_norm_class': norm_obj,
+                'is_active': True,
+                'display_order': 999,  # end of list; admin can reorder later
+            },
+        )
+        result[name] = obj.id
+    return result
+
+
 def group_by_desc(items):
     """
     Group import items by description so every rule creates one plan line

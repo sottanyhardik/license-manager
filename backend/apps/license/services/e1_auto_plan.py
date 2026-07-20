@@ -36,6 +36,8 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+from apps.license.services.auto_plan_shared import optimal_milk_split as _optimal_milk_split
+
 
 # ─── Item-name labels looked up from ItemNameModel ────────────────────────────
 
@@ -80,53 +82,7 @@ def _is_milk_group(item_name_list: list[str], e1_cat: Optional[str]) -> bool:
     return False
 
 
-# ─── Rule 2 helper ────────────────────────────────────────────────────────────
-
-def _optimal_milk_split(total_qty: int, remaining_cif: float) -> tuple[int, int, int]:
-    """
-    Greedy optimization: maximize CIF utilization by progressively upgrading
-    cheaper milk products to more expensive ones.
-
-    Priority: SWP ($1.50) → DWP ($5.00) → WPC ($20.00)
-
-    1. Allocate ALL qty as SWP (cheapest → max qty utilization).
-    2. Upgrade SWP→DWP ($3.50 extra each) until budget is consumed.
-    3. Upgrade DWP→WPC ($15.00 extra each) until budget is consumed.
-    4. If budget remains after step 3 with no DWP left, upgrade SWP→WPC ($18.50).
-
-    Returns (q_swp, q_dwp, q_wpc) — non-negative integers.
-    """
-    if total_qty <= 0 or remaining_cif <= 0:
-        return 0, 0, 0
-
-    Q = total_qty
-    C = remaining_cif
-
-    if C < Q * 1.50:
-        return math.floor(C / 1.50), 0, 0
-
-    budget = C - Q * 1.50
-
-    # Step 1: SWP → DWP  ($3.50 extra/unit)
-    n_dwp = min(math.floor(budget / 3.50), Q)
-    budget -= n_dwp * 3.50
-
-    # Step 2: DWP → WPC  ($15.00 extra/unit)
-    n_wpc = 0
-    if budget > 0 and n_dwp > 0:
-        n_wpc  = min(math.floor(budget / 15.00), n_dwp)
-        budget -= n_wpc * 15.00
-        n_dwp  -= n_wpc
-
-    # Step 3: SWP → WPC  ($18.50 extra/unit, only when no DWP left)
-    q_swp = Q - n_dwp - n_wpc
-    if budget > 0 and n_dwp == 0 and q_swp > 0:
-        n_swp_wpc = min(math.floor(budget / 18.50), q_swp)
-        n_wpc    += n_swp_wpc
-        q_swp    -= n_swp_wpc
-
-    return q_swp, n_dwp, n_wpc
-
+# _optimal_milk_split is imported from auto_plan_shared — single source of truth.
 
 # ─── Simple rule helper ───────────────────────────────────────────────────────
 
@@ -278,9 +234,7 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
     for _desc, group in milk_by_desc.items():
         if remaining_cif <= 0:
             break
-        group_qty = int(math.floor(
-            sum(float(ii.available_quantity or 0) for ii in group)
-        ))
+        group_qty = sum(float(ii.available_quantity or 0) for ii in group)
         if group_qty < MIN_PLAN_QTY:
             continue
         rep = min(group, key=lambda x: x.serial_number)

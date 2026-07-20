@@ -28,18 +28,20 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+from apps.license.services.auto_plan_shared import optimal_milk_split as _optimal_milk_split
+
 MIN_PLAN_QTY: float = 50.0
 
 # E5 item-name labels stored in ItemNameModel
 E5_RULE_NAMES: tuple[str, ...] = (
-    'Dietary Fibre - E5',
+    'DIETARY FIBRE - E5',
     'PALM KERNEL OIL - E5',
     'RBD PALMOLEIN OIL - E5',
     'OLIVE OIL - E5',
     'SWP - E5',
     'DWP - E5',
     'WPC - E5',
-    'Wheat Flour - E5',   # final mop-up — absorbs all remaining balance CIF
+    'WHEAT FLOUR - E5',   # final mop-up — absorbs all remaining balance CIF
 )
 
 # Keywords that identify milk/dairy import items (lowercase).
@@ -69,63 +71,6 @@ def _is_milk_group(item_name_list: list[str], e5_cat: Optional[str]) -> bool:
             return True
     return False
 
-
-# ─── Milk-split algorithm (E5 variant) ───────────────────────────────────────
-
-def _optimal_milk_split(total_qty: int, remaining_cif: float) -> tuple[int, int, int]:
-    """
-    Greedy optimization: maximize CIF utilization by progressively upgrading
-    cheaper milk products to more expensive ones.
-
-    Priority order: SWP ($1.50) → DWP ($5.00) → WPC ($20.00)
-
-    Strategy
-    --------
-    1. Allocate ALL qty as SWP first (cheapest → maximum qty utilization).
-    2. "Upgrade" SWP→DWP one unit at a time (each unit costs $3.50 more CIF)
-       until the extra budget is consumed or all units are DWP.
-    3. "Upgrade" DWP→WPC one unit at a time (each costs $15.00 more CIF)
-       until the extra budget is consumed or all DWP are WPC.
-    4. If extra budget still remains after step 3 and no DWP left, upgrade
-       SWP→WPC directly ($18.50 more each).
-
-    This always minimises the remaining CIF (≈ 0) while maximising the
-    quantity allocated, regardless of the avg-price band.
-
-    Returns (q_swp, q_dwp, q_wpc) — all non-negative integers.
-    """
-    if total_qty <= 0 or remaining_cif <= 0:
-        return 0, 0, 0
-
-    Q = total_qty
-    C = remaining_cif
-
-    # Not enough CIF for all qty even at the cheapest rate
-    if C < Q * 1.50:
-        return math.floor(C / 1.50), 0, 0
-
-    # Extra budget above the all-SWP baseline
-    budget = C - Q * 1.50
-
-    # Step 1: Upgrade SWP → DWP  ($3.50 extra per unit)
-    n_dwp = min(math.floor(budget / 3.50), Q)
-    budget -= n_dwp * 3.50
-
-    # Step 2: Upgrade DWP → WPC  ($15.00 extra per unit)
-    n_wpc = 0
-    if budget > 0 and n_dwp > 0:
-        n_wpc = min(math.floor(budget / 15.00), n_dwp)
-        budget -= n_wpc * 15.00
-        n_dwp  -= n_wpc
-
-    # Step 3: If no DWP left but budget remains, upgrade SWP → WPC ($18.50/unit)
-    q_swp = Q - n_dwp - n_wpc
-    if budget > 0 and n_dwp == 0 and q_swp > 0:
-        n_swp_wpc = min(math.floor(budget / 18.50), q_swp)
-        n_wpc += n_swp_wpc
-        q_swp -= n_swp_wpc
-
-    return q_swp, n_dwp, n_wpc
 
 
 def _simple_line_e5(
@@ -264,7 +209,7 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
             continue
         line, remaining_cif = _simple_line_e5(
             ii, avail, remaining_cif, 3.00,
-            name_ids.get('Dietary Fibre - E5'),
+            name_ids.get('DIETARY FIBRE - E5'),
             'Rule 1 – Dietary Fibre',
         )
         if line:
@@ -351,9 +296,7 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
         for _desc, group in milk_by_desc.items():
             if remaining_cif <= 0:
                 break
-            group_qty = int(math.floor(
-                sum(float(ii.available_quantity or 0) for ii in group)
-            ))
+            group_qty = sum(float(ii.available_quantity or 0) for ii in group)
             if group_qty < MIN_PLAN_QTY:
                 continue
             # Representative = lowest serial number in the group
@@ -425,7 +368,7 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
                     continue
                 line, remaining_cif = _simple_line_e5(
                     ii, avail, remaining_cif, wf_unit_price,
-                    name_ids.get('Wheat Flour - E5'),
+                    name_ids.get('WHEAT FLOUR - E5'),
                     'Final – Wheat Flour mop-up',
                 )
                 if line:

@@ -631,7 +631,6 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                     </div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 sm:grid-cols-3 lg:grid-cols-6">
-                    <SummaryMetric label="License No." value={item.license_number || "—"} />
                     <SummaryMetric label="License Value" value={fmtUsd(licenseValue)} />
                     <SummaryMetric label="Balance CIF" value={fmtUsd(displayBalance)} variant="primary"
                         sub={commonBalance ? "shared across items" : undefined} />

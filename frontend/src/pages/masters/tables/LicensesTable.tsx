@@ -1165,7 +1165,7 @@ const LicenseRow = memo(function LicenseRow({
                     {/* Balance — collapsed only */}
                     {!expanded && (
                         <span className="text-sm font-bold tabular-nums text-foreground">
-                            Balance CIF <span className="ml-1">{fmtInr(item.get_balance_cif)}</span>
+                            Balance CIF <span className="ml-1">${Number(item.get_balance_cif || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </span>
                     )}
 
@@ -1194,7 +1194,7 @@ const LicenseRow = memo(function LicenseRow({
                                 Balance CIF
                             </div>
                             <div className="mt-0.5 text-[22px] font-bold tabular-nums leading-none text-foreground">
-                                {fmtInr(item.get_balance_cif)}
+                                ${Number(item.get_balance_cif || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                         </div>
                     </div>

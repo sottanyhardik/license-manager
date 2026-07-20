@@ -48,7 +48,7 @@ MILK_ITEM_NAMES: tuple[str, ...] = ('SWP - E1', 'DWP - E1', 'WPC - E1')
 
 _ALL_RULE_NAMES: tuple[str, ...] = MILK_ITEM_NAMES + (
     'OTHER CONFECTIONERY INGREDIENTS - E1',
-    'COCOA - E1',                    # Rule 1.5 — runs before Milk & Milk
+    'FRUIT/COCOA - E1',                    # Rule 1.5 — runs before Milk & Milk
     'FRUIT JUICE - E1',
     'ALUMINIUM FOIL - E1',
     'CITRIC ACID / TARTARIC ACID - E1',

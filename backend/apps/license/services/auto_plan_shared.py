@@ -7,6 +7,43 @@ norms automatically — no duplicated code to drift out of sync.
 from __future__ import annotations
 
 import math
+from collections import defaultdict
+
+
+def group_by_desc(items):
+    """
+    Group import items by description so every rule creates one plan line
+    PER DESCRIPTION GROUP rather than one per raw import-item row.
+
+    This matches the Plan Tab's ``groupKeyOf`` grouping: items with the same
+    description (e.g. "Dietary Fibre S.No 12 and 26") appear as a single
+    group in the UI. The auto plan must save on the SAME representative item
+    (lowest serial number) that the Plan Tab displays as the group anchor —
+    otherwise the Plan Tab shows the group as "Not Planned" even though a
+    plan line exists for another member of the same description group.
+
+    Rules:
+      * Representative = import item with the LOWEST serial_number in the group.
+        (This may have available_quantity = 0 — the bulk_upsert capacity check
+        uses group_ids_of() which sums all members, so the plan still validates.)
+      * group_avail = sum of available_quantity across ALL members. Used as
+        the planned qty input for the rule — items with avail=0 contribute 0.
+
+    Returns:
+        List of (representative_import_item, group_total_avail) tuples,
+        one per distinct description group, in the order first seen.
+    """
+    buckets: dict = defaultdict(list)
+    for ii in items:
+        key = (ii.description or '').strip().upper()
+        buckets[key].append(ii)
+
+    result = []
+    for group in buckets.values():
+        rep = min(group, key=lambda x: x.serial_number)
+        total_avail = sum(float(ii.available_quantity or 0) for ii in group)
+        result.append((rep, total_avail))
+    return result
 
 
 def optimal_milk_split(

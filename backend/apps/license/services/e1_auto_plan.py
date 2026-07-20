@@ -36,7 +36,10 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from apps.license.services.auto_plan_shared import optimal_milk_split as _optimal_milk_split
+from apps.license.services.auto_plan_shared import (
+    group_by_desc as _group_by_desc,
+    optimal_milk_split as _optimal_milk_split,
+)
 
 
 # ─── Item-name labels looked up from ItemNameModel ────────────────────────────
@@ -207,14 +210,13 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
     lines: list[dict] = []
 
     # ── Rule 1: Other Confectionery Ingredients ── $3.00 ─────────────────────
-    for ii in confectionery:
+    for rep, group_avail in _group_by_desc(confectionery):
         if remaining_cif <= 0:
             break
-        avail = float(ii.available_quantity or 0)
-        if avail < MIN_PLAN_QTY:
+        if group_avail < MIN_PLAN_QTY:
             continue
         line, remaining_cif = _simple_line(
-            ii, avail, remaining_cif, 3.0,
+            rep, group_avail, remaining_cif, 3.0,
             name_ids.get('Other Confectionery Ingredients - E1'),
             'Rule 1 – Confectionery',
         )
@@ -261,14 +263,13 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
 
     # ── Rule 3: Juice ── $2.50 (ONLY when no Milk & Milk items on licence) ────
     if not has_milk:
-        for ii in juice:
+        for rep, group_avail in _group_by_desc(juice):
             if remaining_cif <= 0:
                 break
-            avail = float(ii.available_quantity or 0)
-            if avail < MIN_PLAN_QTY:
+            if group_avail < MIN_PLAN_QTY:
                 continue
             line, remaining_cif = _simple_line(
-                ii, avail, remaining_cif, 2.50,
+                rep, group_avail, remaining_cif, 2.50,
                 name_ids.get('Fruit Juice - E1'),
                 'Rule 3 – Juice',
             )
@@ -277,14 +278,13 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
 
     # ── Rule 4: Aluminium Foil ── $4.50 (HSN/desc contains 7607) ─────────────
     aluminium_lines: list[dict] = []
-    for ii in aluminium_foil:
+    for rep, group_avail in _group_by_desc(aluminium_foil):
         if remaining_cif <= 0:
             break
-        avail = float(ii.available_quantity or 0)
-        if avail < MIN_PLAN_QTY:
+        if group_avail < MIN_PLAN_QTY:
             continue
         line, remaining_cif = _simple_line(
-            ii, avail, remaining_cif, 4.50,
+            rep, group_avail, remaining_cif, 4.50,
             name_ids.get('Aluminium Foil'),
             'Rule 4 – Aluminium Foil',
         )
@@ -294,14 +294,13 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
     aluminium_planned = len(aluminium_lines) > 0
 
     # ── Rule 5: Citric / Tartaric Acid ── $1.60 ──────────────────────────────
-    for ii in citric_tartaric:
+    for rep, group_avail in _group_by_desc(citric_tartaric):
         if remaining_cif <= 0:
             break
-        avail = float(ii.available_quantity or 0)
-        if avail < MIN_PLAN_QTY:
+        if group_avail < MIN_PLAN_QTY:
             continue
         line, remaining_cif = _simple_line(
-            ii, avail, remaining_cif, 1.60,
+            rep, group_avail, remaining_cif, 1.60,
             name_ids.get('CITRIC ACID / TARTARIC ACID - E1'),
             'Rule 5 – Citric/Tartaric',
         )
@@ -310,14 +309,13 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
 
     # ── Rule 6: Plastic Packing Material ── $1.00 (ONLY when no Alum. Foil) ──
     if not aluminium_planned:
-        for ii in plastic_packing:
+        for rep, group_avail in _group_by_desc(plastic_packing):
             if remaining_cif <= 0:
                 break
-            avail = float(ii.available_quantity or 0)
-            if avail < MIN_PLAN_QTY:
+            if group_avail < MIN_PLAN_QTY:
                 continue
             line, remaining_cif = _simple_line(
-                ii, avail, remaining_cif, 1.00,
+                rep, group_avail, remaining_cif, 1.00,
                 name_ids.get('Plastic Packing Material'),
                 'Rule 6 – Plastic Packing',
             )

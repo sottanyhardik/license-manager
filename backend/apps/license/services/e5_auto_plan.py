@@ -28,7 +28,10 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from apps.license.services.auto_plan_shared import optimal_milk_split as _optimal_milk_split
+from apps.license.services.auto_plan_shared import (
+    group_by_desc as _group_by_desc,
+    optimal_milk_split as _optimal_milk_split,
+)
 
 MIN_PLAN_QTY: float = 50.0
 
@@ -201,14 +204,15 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
     lines: list[dict] = []
 
     # ── Rule 1: Dietary Fibre @ $3.00 ────────────────────────────────────────
-    for ii in dietary_fibre:
+    # One plan line PER DESCRIPTION GROUP, saved on the group's lowest-serial
+    # representative — matching the Plan Tab anchor so the group shows Planned.
+    for rep, group_avail in _group_by_desc(dietary_fibre):
         if remaining_cif <= 0:
             break
-        avail = float(ii.available_quantity or 0)
-        if avail < MIN_PLAN_QTY:
+        if group_avail < MIN_PLAN_QTY:
             continue
         line, remaining_cif = _simple_line_e5(
-            ii, avail, remaining_cif, 3.00,
+            rep, group_avail, remaining_cif, 3.00,
             name_ids.get('DIETARY FIBRE - E5'),
             'Rule 1 – Dietary Fibre',
         )
@@ -225,18 +229,17 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
     )
 
     def _plan_oils():
-        """Inner helper: execute edible-oil rules against current remaining_cif."""
+        """Inner helper: execute edible-oil rules (group-based) against remaining_cif."""
         nonlocal remaining_cif
 
         # Case 2.1: Palm Kernel Oil @ $2.30
-        for ii in palm_kernel:
+        for rep, group_avail in _group_by_desc(palm_kernel):
             if remaining_cif <= 0:
                 break
-            avail = float(ii.available_quantity or 0)
-            if avail < MIN_PLAN_QTY:
+            if group_avail < MIN_PLAN_QTY:
                 continue
             line, remaining_cif = _simple_line_e5(
-                ii, avail, remaining_cif, 2.30,
+                rep, group_avail, remaining_cif, 2.30,
                 name_ids.get('PALM KERNEL OIL - E5'),
                 'Rule 2.1 – Palm Kernel Oil',
             )
@@ -244,14 +247,13 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
                 lines.append(line)
 
         # Case 2.2: RBD Palmolein Oil @ $1.20
-        for ii in rbd:
+        for rep, group_avail in _group_by_desc(rbd):
             if remaining_cif <= 0:
                 break
-            avail = float(ii.available_quantity or 0)
-            if avail < MIN_PLAN_QTY:
+            if group_avail < MIN_PLAN_QTY:
                 continue
             line, remaining_cif = _simple_line_e5(
-                ii, avail, remaining_cif, 1.20,
+                rep, group_avail, remaining_cif, 1.20,
                 name_ids.get('RBD PALMOLEIN OIL - E5'),
                 'Rule 2.2 – RBD Palmolein',
             )
@@ -259,14 +261,13 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
                 lines.append(line)
 
         # Case 2.3: Olive Oil @ $5.00
-        for ii in olive_oil:
+        for rep, group_avail in _group_by_desc(olive_oil):
             if remaining_cif <= 0:
                 break
-            avail = float(ii.available_quantity or 0)
-            if avail < MIN_PLAN_QTY:
+            if group_avail < MIN_PLAN_QTY:
                 continue
             line, remaining_cif = _simple_line_e5(
-                ii, avail, remaining_cif, 5.00,
+                rep, group_avail, remaining_cif, 5.00,
                 name_ids.get('OLIVE OIL - E5'),
                 'Rule 2.3 – Olive Oil',
             )
@@ -345,29 +346,22 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
         _plan_milk_groups(use_optimal=True)
 
     # ── Final mop-up: Wheat Flour absorbs ALL remaining balance CIF ─────────
-    # Unit price is dynamic: remaining_cif ÷ total plannable wheat-flour qty,
-    # so the entire remaining balance is consumed in one pass.
+    # Group-based: one plan line per description group, on the lowest-serial
+    # representative. Dynamic unit price = remaining_cif ÷ total group qty.
     if remaining_cif > 0 and wheat_flour:
-        wf_plannable_qty = sum(
-            float(ii.available_quantity or 0)
-            for ii in wheat_flour
-            if float(ii.available_quantity or 0) >= MIN_PLAN_QTY
-        )
+        wf_groups = _group_by_desc(wheat_flour)
+        wf_plannable_qty = sum(ga for _, ga in wf_groups if ga >= MIN_PLAN_QTY)
         if wf_plannable_qty > 0:
             wf_unit_price = _r2(remaining_cif / wf_plannable_qty)
             if wf_unit_price <= 0:
-                # remaining CIF too small relative to wheat-flour qty:
-                # computed rate rounds to $0.00 which would cause division-by-zero.
-                # Leave the tiny residual as wastage rather than crash.
-                wf_plannable_qty = 0  # skip the loop below
-            for ii in wheat_flour:
+                wf_plannable_qty = 0  # rate rounds to $0 → skip to avoid division-by-zero
+            for rep, group_avail in wf_groups:
                 if remaining_cif <= 0:
                     break
-                avail = float(ii.available_quantity or 0)
-                if avail < MIN_PLAN_QTY:
+                if group_avail < MIN_PLAN_QTY:
                     continue
                 line, remaining_cif = _simple_line_e5(
-                    ii, avail, remaining_cif, wf_unit_price,
+                    rep, group_avail, remaining_cif, wf_unit_price,
                     name_ids.get('WHEAT FLOUR - E5'),
                     'Final – Wheat Flour mop-up',
                 )

@@ -361,52 +361,98 @@ function ActionRow({
 // Tab content components (all lazy)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function OverviewTab({ item, detail }: { item: LicenseListItem; detail: LicenseDetail | null }) {
-    const fields: { label: string; value: string }[] = [
-        { label: "Port", value: item.port_name || "—" },
-        { label: "Scheme", value: item.purchase_status_label || "—" },
-        { label: "Norm Class", value: item.get_norm_class || "—" },
-        { label: "Created On", value: formatIndianDate(item.license_date) },
-        { label: "Valid Until", value: formatIndianDate(item.license_expiry_date) },
-        { label: "Ledger Date", value: formatIndianDate(item.ledger_date) },
-        { label: "Transfer Status", value: item.latest_transfer || "—" },
-        { label: "Exporter", value: item.exporter_name || "—" },
-        { label: "IEC", value: item.exporter_iec || "—" },
-    ];
+function OverviewField({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+    return (
+        <div className={wide ? "sm:col-span-3" : ""}>
+            <dt className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {label}
+            </dt>
+            <dd className="mt-0.5 text-sm font-medium text-foreground" title={value}>
+                {value}
+            </dd>
+        </div>
+    );
+}
 
+function OverviewTab({ item, detail }: { item: LicenseListItem; detail: LicenseDetail | null }) {
+    const [notesExpanded, setNotesExpanded] = useState(false);
     const notes = detail?.condition_sheet;
+    const NOTES_PREVIEW_LINES = 5;
+
+    // Trim the preview to first N lines
+    const notesLines = notes ? notes.split("\n") : [];
+    const isLong = notesLines.length > NOTES_PREVIEW_LINES;
+    const previewText = isLong && !notesExpanded
+        ? notesLines.slice(0, NOTES_PREVIEW_LINES).join("\n")
+        : notes;
 
     return (
-        <div className="px-1 py-4">
-            {/* Field grid */}
+        <div className="space-y-5 px-1 py-4">
+            {/* ── Row 1: License identity ──────────────────────── */}
             <dl className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3">
-                {fields.map((f) => (
-                    <div key={f.label}>
-                        <dt className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            {f.label}
-                        </dt>
-                        <dd className="mt-0.5 truncate text-sm font-medium text-foreground" title={f.value}>
-                            {f.value}
-                        </dd>
-                    </div>
-                ))}
+                <OverviewField label="Port"       value={item.port_name || "—"} />
+                <OverviewField label="Scheme"     value={item.purchase_status_label || "—"} />
+                <OverviewField label="Norm Class" value={item.get_norm_class || "—"} />
             </dl>
 
-            {/* Notes */}
-            <div className="mt-6">
-                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {/* ── Row 2: Dates ─────────────────────────────────── */}
+            <div className="border-t border-border/40 pt-4">
+                <dl className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3">
+                    <OverviewField label="Created On"   value={formatIndianDate(item.license_date)} />
+                    <OverviewField label="Valid Until"  value={formatIndianDate(item.license_expiry_date)} />
+                    <OverviewField label="Ledger Date"  value={formatIndianDate(item.ledger_date)} />
+                </dl>
+            </div>
+
+            {/* ── Row 3: Party / ownership ─────────────────────── */}
+            <div className="border-t border-border/40 pt-4">
+                <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-3">
+                    <OverviewField label="Exporter" value={item.exporter_name || "—"} />
+                    <OverviewField label="IEC"      value={item.exporter_iec || "—"} />
+                    {/* Transfer status spans full width — can be very long */}
+                    <OverviewField
+                        label="Transfer Status"
+                        value={item.latest_transfer || "—"}
+                        wide
+                    />
+                </dl>
+            </div>
+
+            {/* ── Condition Sheet / Notes ───────────────────────── */}
+            <div className="border-t border-border/40 pt-4">
+                <div className="mb-2.5 flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <ScrollText className="size-3.5" aria-hidden="true" />
-                    Notes
+                    Condition Sheet / Notes
                 </div>
+
                 {detail === null ? (
                     <div className="space-y-1.5">
                         <Skeleton className="h-3 w-3/4" />
                         <Skeleton className="h-3 w-1/2" />
+                        <Skeleton className="h-3 w-2/3" />
                     </div>
                 ) : notes ? (
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">{notes}</p>
+                    <div className="overflow-hidden rounded-lg border border-border/50 bg-muted/30">
+                        <pre className="whitespace-pre-wrap px-4 py-3 font-sans text-[12.5px] leading-relaxed text-foreground/80">
+                            {previewText}
+                            {isLong && !notesExpanded && (
+                                <span className="text-muted-foreground">…</span>
+                            )}
+                        </pre>
+                        {isLong && (
+                            <button
+                                type="button"
+                                onClick={() => setNotesExpanded((v) => !v)}
+                                className="w-full border-t border-border/50 bg-muted/50 px-4 py-1.5 text-left text-[11px] font-medium text-primary hover:bg-muted transition-colors cursor-pointer"
+                            >
+                                {notesExpanded
+                                    ? "Show less ↑"
+                                    : `Show all ${notesLines.length} lines ↓`}
+                            </button>
+                        )}
+                    </div>
                 ) : (
-                    <p className="text-sm text-muted-foreground">No notes available.</p>
+                    <p className="text-sm text-muted-foreground italic">No condition sheet recorded.</p>
                 )}
             </div>
         </div>

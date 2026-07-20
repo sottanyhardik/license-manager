@@ -1078,7 +1078,6 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                             <div className={cn("text-lg font-bold tabular-nums", displayBalance > 0 ? "text-emerald-700" : "text-muted-foreground")}>
                                 {fmtUsd(displayBalance)}
                             </div>
-                            <div className="text-[10px] text-muted-foreground">also {fmtInr(item.get_balance_cif)}</div>
                         </div>
                     </div>
                 </div>

@@ -36,6 +36,7 @@ import {
     Wand2,
     X,
     XCircle,
+    Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+    autoPlan,
     bulkUpsertItemPlans,
     fetchItemPlans,
     fetchLicense,
@@ -365,8 +367,9 @@ function InlineEditor({
 export default function PlanningEditor({
     licenseId, licenseNumber, balanceCif = 0, canWrite, onSaved,
 }: PlanningEditorProps) {
-    const [loading, setLoading]       = useState(false);
-    const [prefilling, setPrefilling] = useState(false);
+    const [loading, setLoading]           = useState(false);
+    const [prefilling, setPrefilling]     = useState(false);
+    const [autoPlanning, setAutoPlanning] = useState(false);
 
     const [groups, setGroups]             = useState<Group[]>([]);
     const [savedGroups, setSavedGroups]   = useState<Group[]>([]);
@@ -588,6 +591,33 @@ export default function PlanningEditor({
         finally { setPrefilling(false); }
     }, [licenseId, editingGroupId]);
 
+    // ── Auto Plan (E1) ────────────────────────────────────────────────────────
+
+    const handleAutoPlan = useCallback(async () => {
+        const hasPlan = groups.some((g) => g.splits.some((s) => s.id !== null));
+        if (hasPlan) {
+            const ok = window.confirm(
+                "Auto Plan will replace your current plan with E1-calculated splits.\n\nContinue?"
+            );
+            if (!ok) return;
+        }
+        setAutoPlanning(true);
+        try {
+            const result = await autoPlan(licenseId);
+            toast.success(
+                `Auto Plan applied — ${result.planned} line(s) saved. ` +
+                `Remaining CIF: $${Number(result.remaining_cif).toFixed(2)}`
+            );
+            await load();
+            onSaved?.();
+        } catch (err: unknown) {
+            const data = (err as { response?: { data?: { error?: string } } })?.response?.data;
+            toast.error(data?.error || "Auto Plan failed. Please try again.");
+        } finally {
+            setAutoPlanning(false);
+        }
+    }, [groups, licenseId, load, onSaved]);
+
     // ── Derived totals ─────────────────────────────────────────────────────────
 
     const totals = useMemo(() => {
@@ -624,9 +654,24 @@ export default function PlanningEditor({
     return (
         <div className="py-3 space-y-4">
             {/* ── Header ───────────────────────────────────────────── */}
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Target className="size-4 text-primary" aria-hidden="true" />
-                Plan utilization
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Target className="size-4 text-primary" aria-hidden="true" />
+                    Plan utilization
+                </div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAutoPlan}
+                    disabled={loading || autoPlanning}
+                    className="h-7 gap-1.5 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 text-xs font-semibold"
+                    title="Auto-compute and save plan using E1 classification rules (Rule 1: Confectionery @ $3, Rule 2: Milk SWP/DWP/WPC splits)"
+                >
+                    {autoPlanning
+                        ? <Loader2 className="size-3.5 animate-spin" />
+                        : <Zap className="size-3.5" />}
+                    Auto Plan
+                </Button>
             </div>
 
             {/* ── Summary cards (CIF only) ──────────────────────────── */}

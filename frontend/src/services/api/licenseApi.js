@@ -212,6 +212,29 @@ export const fetchNormPrefill = async (licenseId) => {
     return response.data;
 };
 
+/**
+ * Compute AND save an E1 auto-plan for a license (Rule 1 + Rule 2 waterfall).
+ * Only valid for E1 licenses — returns an error for other norms.
+ * Full-replace semantics: any existing manual plan is overwritten.
+ * Returns { norm, planned, remaining_cif, lines }.
+ * @deprecated Use autoPlan() — the unified endpoint handles both E1 and E5.
+ */
+export const e1AutoPlan = async (licenseId) => {
+    const response = await api.post('license-item-plans/e1-auto-plan/', {license: licenseId});
+    return response.data;
+};
+
+/**
+ * Unified Auto Plan — detects the licence norm (E1 or E5) on the server and
+ * runs the appropriate waterfall, then saves the result in one transaction.
+ * Full-replace semantics: any existing manual plan is overwritten.
+ * Returns { norm, planned, remaining_cif, lines }.
+ */
+export const autoPlan = async (licenseId) => {
+    const response = await api.post('license-item-plans/auto-plan/', {license: licenseId});
+    return response.data;
+};
+
 export default {
     fetchLicenseList,
     fetchLicense,

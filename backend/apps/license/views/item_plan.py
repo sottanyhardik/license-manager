@@ -176,3 +176,176 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
                 results.append(serializer.data)
 
         return Response({"saved": len(results), "lines": results}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"], url_path="e1-auto-plan")
+    def e1_auto_plan(self, request):
+        """
+        Compute and immediately save an E1 auto-plan for a licence.
+
+        Applies two rules in waterfall order (Rule 1 → Rule 2):
+          Rule 1 — OTHER CONFECTIONERY INGREDIENTS: unit_price = 3.0
+          Rule 2 — MILK & MILK (SWP / DWP / WPC): avg-price split
+
+        Full-replace semantics: any existing manual plan is overwritten.
+
+        Body:  {"license": <id>}
+        Returns: {"norm": "E1", "planned": N, "remaining_cif": X,
+                  "lines": [{import_item, item_name_label, planned_quantity,
+                              unit_price, planned_cif_fc}]}
+        """
+        from apps.license.services.e1_auto_plan import compute_e1_auto_plan
+        from apps.license.services.norm_plan import detect_norm
+
+        license_id = request.data.get("license")
+        if not license_id:
+            return Response({"error": "license is required"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            license_obj = LicenseDetailsModel.objects.prefetch_related(
+                'export_license__norm_class',
+                'import_license__items',
+                'import_license__hs_code',
+            ).get(pk=license_id)
+        except LicenseDetailsModel.DoesNotExist:
+            return Response({"error": "License not found"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        norm = detect_norm(license_obj)
+        if norm != 'E1':
+            return Response(
+                {"error": (
+                    f"Auto Plan is available only for E1 licenses. "
+                    f"This license uses norm '{norm or 'unknown'}'."
+                )},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        lines, remaining_cif = compute_e1_auto_plan(license_obj)
+
+        if not lines:
+            return Response(
+                {"error": (
+                    "No items could be auto-planned. "
+                    "Check that this license has import items classified as "
+                    "Other Confectionery Ingredients or Milk & Milk products."
+                )},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Full-replace: delete existing plan and save computed lines.
+        with transaction.atomic():
+            LicenseItemPlan.objects.filter(license_id=license_id).delete()
+            for ln in lines:
+                LicenseItemPlan.objects.create(
+                    license=license_obj,
+                    import_item_id=ln["import_item"],
+                    item_name_id=ln.get("item_name"),
+                    planned_quantity=ln["planned_quantity"],
+                    unit_price=ln["unit_price"],
+                    planned_cif_fc=ln["planned_cif_fc"],
+                    note=ln.get("note", ""),
+                )
+
+        return Response(
+            {
+                "norm": "E1",
+                "planned": len(lines),
+                "remaining_cif": remaining_cif,
+                "lines": [
+                    {
+                        "import_item":     ln["import_item"],
+                        "item_name_label": (ln.get("note", "").split("— ")[-1].rstrip(")") or ""),
+                        "planned_quantity": ln["planned_quantity"],
+                        "unit_price":      ln["unit_price"],
+                        "planned_cif_fc":  ln["planned_cif_fc"],
+                    }
+                    for ln in lines
+                ],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["post"], url_path="auto-plan")
+    def auto_plan(self, request):
+        """
+        Unified Auto Plan endpoint — detects the licence norm (E1 or E5)
+        and dispatches to the appropriate waterfall service.
+
+        Body:  {"license": <id>}
+        Returns: {"norm": "E1"|"E5", "planned": N, "remaining_cif": X, "lines": [...]}
+        """
+        from apps.license.services.norm_plan import detect_norm
+
+        license_id = request.data.get("license")
+        if not license_id:
+            return Response({"error": "license is required"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            license_obj = LicenseDetailsModel.objects.prefetch_related(
+                'export_license__norm_class',
+                'import_license__items',
+                'import_license__hs_code',
+            ).get(pk=license_id)
+        except LicenseDetailsModel.DoesNotExist:
+            return Response({"error": "License not found"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        norm = detect_norm(license_obj)
+        if norm == 'E1':
+            from apps.license.services.e1_auto_plan import compute_e1_auto_plan
+            lines, remaining_cif = compute_e1_auto_plan(license_obj)
+        elif norm == 'E5':
+            from apps.license.services.e5_auto_plan import compute_e5_auto_plan
+            lines, remaining_cif = compute_e5_auto_plan(license_obj)
+        else:
+            return Response(
+                {"error": (
+                    f"Auto Plan supports E1 and E5 licenses only. "
+                    f"This license uses norm '{norm or 'unknown'}'."
+                )},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not lines:
+            return Response(
+                {"error": (
+                    "No items could be auto-planned. "
+                    "Check that this license has import items matching the "
+                    f"{norm} classification rules."
+                )},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            LicenseItemPlan.objects.filter(license_id=license_id).delete()
+            for ln in lines:
+                LicenseItemPlan.objects.create(
+                    license=license_obj,
+                    import_item_id=ln["import_item"],
+                    item_name_id=ln.get("item_name"),
+                    planned_quantity=ln["planned_quantity"],
+                    unit_price=ln["unit_price"],
+                    planned_cif_fc=ln["planned_cif_fc"],
+                    note=ln.get("note", ""),
+                )
+
+        return Response(
+            {
+                "norm": norm,
+                "planned": len(lines),
+                "remaining_cif": remaining_cif,
+                "lines": [
+                    {
+                        "import_item":      ln["import_item"],
+                        "item_name_label":  (ln.get("note", "").split("— ")[-1].rstrip(")") or ""),
+                        "planned_quantity":  ln["planned_quantity"],
+                        "unit_price":        ln["unit_price"],
+                        "planned_cif_fc":    ln["planned_cif_fc"],
+                    }
+                    for ln in lines
+                ],
+            },
+            status=status.HTTP_200_OK,
+        )

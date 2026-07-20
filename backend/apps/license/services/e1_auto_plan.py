@@ -48,6 +48,7 @@ MILK_ITEM_NAMES: tuple[str, ...] = ('SWP - E1', 'DWP - E1', 'WPC - E1')
 
 _ALL_RULE_NAMES: tuple[str, ...] = MILK_ITEM_NAMES + (
     'OTHER CONFECTIONERY INGREDIENTS - E1',
+    'COCOA - E1',                    # Rule 1.5 — runs before Milk & Milk
     'FRUIT JUICE - E1',
     'ALUMINIUM FOIL - E1',
     'CITRIC ACID / TARTARIC ACID - E1',
@@ -172,7 +173,8 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
 
     # Buckets — each import item lands in exactly one bucket (first-match wins).
     confectionery:    list = []          # Rule 1
-    milk:             list = []          # Rule 2  [(ii, item_names), ...]
+    cocoa:            list = []          # Rule 1.5  — Cocoa @ $5.00 (before Milk)
+    milk:             list = []          # Rule 2    [(ii, item_names), ...]
     juice:            list = []          # Rule 3
     aluminium_foil:   list = []          # Rule 4
     citric_tartaric:  list = []          # Rule 5
@@ -183,6 +185,8 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
         key         = ', '.join(sorted(item_names)) if item_names else (ii.description or '-')
         hs          = (ii.hs_code.hs_code if ii.hs_code else '') or ''
         desc        = (ii.description or '')
+        # Normalised HSN: digits only, for prefix/contains matching.
+        hs_digits   = ''.join(c for c in hs if c.isdigit())
         hs_l        = hs.lower()
         desc_l      = desc.lower()
         cat         = classify_e1_item(key, hs, desc)
@@ -191,17 +195,18 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
         # Priority order mirrors the processing sequence.
         if cat == 'OTHER CONFECTIONERY INGREDIENTS':
             confectionery.append(ii)
+        elif hs_digits.startswith('18031') and 'cocoa' in desc_l:
+            # Rule 1.5: Cocoa paste (HSN 18031000) — planned before Milk & Milk.
+            cocoa.append(ii)
         elif _is_milk_group(item_names, cat):
             milk.append((ii, item_names))
         elif cat == 'FRUIT JUICE' and 'actual user' not in desc_l:
-            # Rule 3: juice items that are not flagged as "Actual User"
             juice.append(ii)
         elif '7607' in hs_l or '7607' in desc_l:
             aluminium_foil.append(ii)
         elif 'citric' in desc_l or 'tartaric' in desc_l:
             citric_tartaric.append(ii)
         elif hs_l.startswith('390') and avail >= 100:
-            # Rule 6: plastic packing — only items with ≥ 100 KG available
             plastic_packing.append(ii)
         # else: unclassified — left unplanned
 
@@ -217,8 +222,23 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
             continue
         line, remaining_cif = _simple_line(
             rep, group_avail, remaining_cif, 3.0,
-            name_ids.get('Other Confectionery Ingredients - E1'),
+            name_ids.get('OTHER CONFECTIONERY INGREDIENTS - E1'),
             'Rule 1 – Confectionery',
+        )
+        if line:
+            lines.append(line)
+
+    # ── Rule 1.5: Cocoa @ $5.00 (HSN 18031 + "Cocoa" in desc) ───────────────
+    # Runs before Milk & Milk so Cocoa CIF is drawn down from the balance first.
+    for rep, group_avail in _group_by_desc(cocoa):
+        if remaining_cif <= 0:
+            break
+        if group_avail < MIN_PLAN_QTY:
+            continue
+        line, remaining_cif = _simple_line(
+            rep, group_avail, remaining_cif, 5.0,
+            name_ids.get('COCOA - E1'),
+            'Rule 1.5 – Cocoa',
         )
         if line:
             lines.append(line)
@@ -270,7 +290,7 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
                 continue
             line, remaining_cif = _simple_line(
                 rep, group_avail, remaining_cif, 2.50,
-                name_ids.get('Fruit Juice - E1'),
+                name_ids.get('FRUIT JUICE - E1'),
                 'Rule 3 – Juice',
             )
             if line:
@@ -285,7 +305,7 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
             continue
         line, remaining_cif = _simple_line(
             rep, group_avail, remaining_cif, 4.50,
-            name_ids.get('Aluminium Foil'),
+            name_ids.get('ALUMINIUM FOIL - E1'),
             'Rule 4 – Aluminium Foil',
         )
         if line:
@@ -316,7 +336,7 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
                 continue
             line, remaining_cif = _simple_line(
                 rep, group_avail, remaining_cif, 1.00,
-                name_ids.get('Plastic Packing Material'),
+                name_ids.get('PP - E1'),
                 'Rule 6 – Plastic Packing',
             )
             if line:

@@ -47,11 +47,11 @@ from apps.license.services.auto_plan_shared import (
 MILK_ITEM_NAMES: tuple[str, ...] = ('SWP - E1', 'DWP - E1', 'WPC - E1')
 
 _ALL_RULE_NAMES: tuple[str, ...] = MILK_ITEM_NAMES + (
-    'Other Confectionery Ingredients - E1',
-    'Fruit Juice - E1',
-    'Aluminium Foil',
+    'OTHER CONFECTIONERY INGREDIENTS - E1',
+    'FRUIT JUICE - E1',
+    'ALUMINIUM FOIL - E1',
     'CITRIC ACID / TARTARIC ACID - E1',
-    'Plastic Packing Material',
+    'PP - E1',
 )
 
 # Minimum available quantity required before an import item is planned.

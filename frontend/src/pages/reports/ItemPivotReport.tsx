@@ -1436,6 +1436,97 @@ export default function ItemPivotReport() {
                                 );
                             })}
 
+                            {/* ── Norms Total Summary ────────────────────────── */}
+                            {(() => {
+                                // Flatten all licenses across every notification group
+                                // for the active norm, then reuse the existing summary engine.
+                                const allNormLicenses: any[] = Object.values(
+                                    reportData?.licenses_by_norm_notification?.[activeNormTab] || {}
+                                ).flat();
+                                if (allNormLicenses.length === 0) return null;
+                                const totalLicenses = allNormLicenses.length;
+                                const totalBalanceCif = allNormLicenses.reduce(
+                                    (s, l) => s + (l.balance_cif || 0), 0
+                                );
+                                const ns = calculateNotificationSummary(allNormLicenses);
+                                const itemRows = [
+                                    ...Object.entries(ns.regularItems as Record<string, any>),
+                                    ...Object.values(ns.restrictedItemsByPercentage as Record<string, any>)
+                                        .flatMap((g: any) => Object.entries(g.items || {})),
+                                ] as [string, any][];
+
+                                return (
+                                    <Card className="mb-4 border-primary/30">
+                                        <CardHeader
+                                            className="flex-row items-center gap-3 text-primary-foreground"
+                                            style={{ background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))' }}>
+                                            <Calculator className="size-4" aria-hidden="true" />
+                                            <h5 className="mb-0 font-semibold">
+                                                {activeNormTab} — Norms Total Summary
+                                            </h5>
+                                            <span className="chip chip-neutral ml-auto">{totalLicenses} Licenses</span>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <div style={{ maxWidth: '1400px', overflowX: 'auto' }}>
+                                                <table className="table table-bordered table-sm mb-0" style={{ tableLayout: 'fixed', width: '1400px' }}>
+                                                    <thead className="table-light">
+                                                        <tr>
+                                                            <th scope="col" style={{ width: '60px' }}>Sr No</th>
+                                                            <th scope="col" style={{ width: '540px' }}>Item Name</th>
+                                                            <th scope="col" className="text-right" style={{ width: '230px' }}>Available Balance QTY</th>
+                                                            <th scope="col" className="text-right" style={{ width: '170px' }}>Unit Price</th>
+                                                            <th scope="col" className="text-right" style={{ width: '300px' }}>Total Planned CIF ($)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {/* Opening Balance */}
+                                                        <tr className="table-info">
+                                                            <td colSpan={2} className="text-center font-bold">OPENING BALANCE</td>
+                                                            <td className="text-right font-bold">{formatIndianNumber(totalBalanceCif, 2)}</td>
+                                                            <td className="text-right font-bold">-</td>
+                                                            <td className="text-right font-bold">-</td>
+                                                        </tr>
+
+                                                        {/* Item rows */}
+                                                        {itemRows.map(([itemName, itemData], idx) => (
+                                                            <tr key={itemName}>
+                                                                <td className="text-center">{idx + 1}</td>
+                                                                <td className="font-bold">{itemName}</td>
+                                                                <td className="text-right">
+                                                                    {formatIndianNumber(itemData.available, 2)}
+                                                                </td>
+                                                                <td className="text-right">
+                                                                    {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
+                                                                </td>
+                                                                <td className="text-right font-semibold">
+                                                                    {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+
+                                                        {/* Grand total */}
+                                                        <tr className="table-primary font-bold">
+                                                            <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
+                                                            <td className="text-right font-bold">
+                                                                {formatIndianNumber(ns.totalPlannedQty || 0, 2)}
+                                                            </td>
+                                                            <td className="text-right font-bold">
+                                                                {(ns.totalPlannedQty || 0) > 0
+                                                                    ? ((ns.totalPlanned || 0) / (ns.totalPlannedQty || 1)).toFixed(2)
+                                                                    : '-'}
+                                                            </td>
+                                                            <td className="text-right font-bold">
+                                                                {formatIndianNumber(ns.totalPlanned || 0, 2)}
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })()}
+
                             {/* Notes and Conditions Section */}
                             {activeNormTab && reportData?.norm_notes_conditions?.[activeNormTab] && (
                                 reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 || reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0

@@ -82,89 +82,50 @@ def _is_milk_group(item_name_list: list[str], e1_cat: Optional[str]) -> bool:
 
 # ─── Rule 2 helper ────────────────────────────────────────────────────────────
 
-def _milk_splits(
-    avail_qty: float,
-    remaining_cif: float,
-    name_ids: dict[str, Optional[int]],
-) -> list[dict]:
+def _optimal_milk_split(total_qty: int, remaining_cif: float) -> tuple[int, int, int]:
     """
-    Compute Rule 2 split lines for one milk import item.
-    Returns list of {item_name_id, item_name_label, planned_quantity,
-                     unit_price, planned_cif_fc}.
+    Greedy optimization: maximize CIF utilization by progressively upgrading
+    cheaper milk products to more expensive ones.
+
+    Priority: SWP ($1.50) → DWP ($5.00) → WPC ($20.00)
+
+    1. Allocate ALL qty as SWP (cheapest → max qty utilization).
+    2. Upgrade SWP→DWP ($3.50 extra each) until budget is consumed.
+    3. Upgrade DWP→WPC ($15.00 extra each) until budget is consumed.
+    4. If budget remains after step 3 with no DWP left, upgrade SWP→WPC ($18.50).
+
+    Returns (q_swp, q_dwp, q_wpc) — non-negative integers.
     """
-    if avail_qty <= 0 or remaining_cif <= 0:
-        return []
+    if total_qty <= 0 or remaining_cif <= 0:
+        return 0, 0, 0
 
-    avg = remaining_cif / avail_qty
+    Q = total_qty
+    C = remaining_cif
 
-    # Case 2.1 — avg < 1.50: single SWP-E1 @ 1.50
-    if avg < 1.50:
-        qty = _floor_qty(remaining_cif / 1.50)   # integer floor
-        return [{
-            'item_name_id':    name_ids.get('SWP - E1'),
-            'item_name_label': 'SWP - E1',
-            'planned_quantity': qty,
-            'unit_price':      1.50,
-            'planned_cif_fc':  _r2(qty * 1.50),  # CIF uses floored qty
-        }]
+    if C < Q * 1.50:
+        return math.floor(C / 1.50), 0, 0
 
-    # Case 2.2 — 1.50 ≤ avg < 5.00: SWP @ 1.50 + DWP @ 5.00
-    # qty1 + qty2 = avail_qty  ;  qty1*1.50 + qty2*5.00 ≈ remaining_cif
-    # → qty2 = (remaining_cif − avail_qty*1.50) / 3.50
-    if avg < 5.00:
-        fqty2 = _floor_qty(max(0.0, (remaining_cif - avail_qty * 1.50) / (5.00 - 1.50)))
-        fqty1 = _floor_qty(avail_qty - fqty2)   # both quantities are integer-floored
-        lines = []
-        if fqty1 > 0:
-            lines.append({
-                'item_name_id':    name_ids.get('SWP - E1'),
-                'item_name_label': 'SWP',
-                'planned_quantity': fqty1,
-                'unit_price':      1.50,
-                'planned_cif_fc':  _r2(fqty1 * 1.50),
-            })
-        if fqty2 > 0:
-            lines.append({
-                'item_name_id':    name_ids.get('DWP - E1'),
-                'item_name_label': 'DWP',
-                'planned_quantity': fqty2,
-                'unit_price':      5.00,
-                'planned_cif_fc':  _r2(fqty2 * 5.00),
-            })
-        return lines
+    budget = C - Q * 1.50
 
-    # Case 2.3 — 5.00 ≤ avg < 20.00: DWP @ 5.00 + WPC @ 20.00
-    # qty2 = (remaining_cif − avail_qty*5.00) / 15.00
-    if avg < 20.00:
-        fqty2 = _floor_qty(max(0.0, (remaining_cif - avail_qty * 5.00) / (20.00 - 5.00)))
-        fqty1 = _floor_qty(avail_qty - fqty2)
-        lines = []
-        if fqty1 > 0:
-            lines.append({
-                'item_name_id':    name_ids.get('DWP - E1'),
-                'item_name_label': 'DWP',
-                'planned_quantity': fqty1,
-                'unit_price':      5.00,
-                'planned_cif_fc':  _r2(fqty1 * 5.00),
-            })
-        if fqty2 > 0:
-            lines.append({
-                'item_name_id':    name_ids.get('WPC - E1'),
-                'item_name_label': 'WPC',
-                'planned_quantity': fqty2,
-                'unit_price':      20.00,
-                'planned_cif_fc':  _r2(fqty2 * 20.00),
-            })
-        return lines
+    # Step 1: SWP → DWP  ($3.50 extra/unit)
+    n_dwp = min(math.floor(budget / 3.50), Q)
+    budget -= n_dwp * 3.50
 
-    # Cases 2.4 / 2.5 — avg ≥ 20.00: WPC, full qty and full remaining CIF
-    return [{
-        'item_name_id':    name_ids.get('WPC - E1'),
-        'item_name_label': 'WPC',
-        'planned_quantity': _floor_qty(avail_qty),
-        'unit_price':      _r2(avg),
-        'planned_cif_fc':  _r2(remaining_cif),
-    }]
+    # Step 2: DWP → WPC  ($15.00 extra/unit)
+    n_wpc = 0
+    if budget > 0 and n_dwp > 0:
+        n_wpc  = min(math.floor(budget / 15.00), n_dwp)
+        budget -= n_wpc * 15.00
+        n_dwp  -= n_wpc
+
+    # Step 3: SWP → WPC  ($18.50 extra/unit, only when no DWP left)
+    q_swp = Q - n_dwp - n_wpc
+    if budget > 0 and n_dwp == 0 and q_swp > 0:
+        n_swp_wpc = min(math.floor(budget / 18.50), q_swp)
+        n_wpc    += n_swp_wpc
+        q_swp    -= n_swp_wpc
+
+    return q_swp, n_dwp, n_wpc
 
 
 # ─── Simple rule helper ───────────────────────────────────────────────────────
@@ -304,24 +265,45 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
         if line:
             lines.append(line)
 
-    # ── Rule 2: Milk & Milk ── SWP / DWP / WPC splits ────────────────────────
+    # ── Rule 2: Milk & Milk ── greedy SWP→DWP→WPC optimizer ─────────────────
+    # Group milk items by description so the same product across serial numbers
+    # is planned as one unit. Plan lines are assigned to the representative
+    # import item (lowest serial number), matching PlanTab grouping in the UI.
+    from collections import defaultdict as _dd
+    milk_by_desc: dict = _dd(list)
     for ii, _ in milk:
+        key = (ii.description or '').strip().upper()
+        milk_by_desc[key].append(ii)
+
+    for _desc, group in milk_by_desc.items():
         if remaining_cif <= 0:
             break
-        avail = float(ii.available_quantity or 0)
-        if avail < MIN_PLAN_QTY:
+        group_qty = int(math.floor(
+            sum(float(ii.available_quantity or 0) for ii in group)
+        ))
+        if group_qty < MIN_PLAN_QTY:
             continue
-        splits = _milk_splits(avail, remaining_cif, name_ids)
-        for sp in splits:
+        rep = min(group, key=lambda x: x.serial_number)
+        q_swp, q_dwp, q_wpc = _optimal_milk_split(group_qty, remaining_cif)
+        for prod, qty, price in [
+            ('SWP - E1', q_swp, 1.50),
+            ('DWP - E1', q_dwp, 5.00),
+            ('WPC - E1', q_wpc, 20.00),
+        ]:
+            if qty <= 0 or remaining_cif <= 0:
+                continue
+            cif = _r2(qty * price)
+            if cif <= 0:
+                continue
             lines.append({
-                'import_item':      ii.id,
-                'item_name':        sp['item_name_id'],
-                'planned_quantity': sp['planned_quantity'],
-                'unit_price':       sp['unit_price'],
-                'planned_cif_fc':   sp['planned_cif_fc'],
-                'note':             f"Auto-planned (E1 Rule 2 — {sp['item_name_label']})",
+                'import_item':      rep.id,
+                'item_name':        name_ids.get(prod),
+                'planned_quantity': float(qty),
+                'unit_price':       price,
+                'planned_cif_fc':   cif,
+                'note':             f'Auto-planned (E1 Rule 2 — {prod})',
             })
-            remaining_cif = _r2(remaining_cif - sp['planned_cif_fc'])
+            remaining_cif = _r2(remaining_cif - cif)
 
     # ── Rule 3: Juice ── $2.50 (ONLY when no Milk & Milk items on licence) ────
     if not has_milk:

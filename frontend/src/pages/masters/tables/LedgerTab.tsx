@@ -478,11 +478,20 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
 
     const commonBalance = isCommonCifBalance(importItems);
 
-    const totalCifFc = importItems.reduce((s, r) => s + (Number(r.cif_fc) || 0), 0);
+    const totalCifFc   = importItems.reduce((s, r) => s + (Number(r.cif_fc)         || 0), 0);
     const totalAllotted = importItems.reduce((s, r) => s + (Number(r.allotted_value) || 0), 0);
-    const totalDebited = importItems.reduce((s, r) => s + (Number(r.debited_value) || 0), 0);
-    const totalBalance = importItems.reduce((s, r) => s + (Number(r.balance_cif_fc) || 0), 0);
+    const totalDebited  = importItems.reduce((s, r) => s + (Number(r.debited_value)  || 0), 0);
+    const totalBalance  = importItems.reduce((s, r) => s + (Number(r.balance_cif_fc) || 0), 0);
     const displayBalance = commonBalance ? Number(item.get_balance_cif ?? 0) : totalBalance;
+
+    // "License Value" = sum of import items' cif_fc when items carry individual CIF.
+    // Many DFIA/multi-item licenses store cif_fc = 0 on every import item and instead
+    // track the total on the export license (e.g. license 0310736639: export cif_fc =
+    // $334,909.19 while all import cif_fc = $0.00).  Fall back to the export total so
+    // "License Value" never shows $0.00 for a valid license.
+    const exportItems  = ((detail as Record<string, unknown>)?.export_license ?? []) as Array<{ cif_fc?: number | string | null; fob_fc?: number | string | null }>;
+    const exportCifFc  = exportItems.reduce((s, e) => s + (Number(e.cif_fc ?? e.fob_fc) || 0), 0);
+    const licenseValue = totalCifFc > 0 ? totalCifFc : exportCifFc;
 
     // ── Usage fetch (UNCHANGED) ────────────────────────────────────────────
     const handleRowClick = useCallback(async (importItem: ImportItem) => {
@@ -605,7 +614,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
         );
     }
 
-    const balancePct = totalCifFc > 0 ? (displayBalance / totalCifFc) * 100 : 0;
+    const balancePct = licenseValue > 0 ? (displayBalance / licenseValue) * 100 : 0;
 
     return (
         <div className="space-y-4 py-3">
@@ -623,14 +632,14 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                 </div>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 sm:grid-cols-3 lg:grid-cols-6">
                     <SummaryMetric label="License No." value={item.license_number || "—"} />
-                    <SummaryMetric label="License Value" value={fmtUsd(totalCifFc)} />
+                    <SummaryMetric label="License Value" value={fmtUsd(licenseValue)} />
                     <SummaryMetric label="Balance CIF" value={fmtUsd(displayBalance)} variant="primary"
                         sub={commonBalance ? "shared across items" : undefined} />
                     <SummaryMetric label="BOE Utilized" value={fmtUsd(totalDebited)} variant="danger" />
                     <SummaryMetric label="Allotted" value={fmtUsd(totalAllotted)} variant="muted" />
                     <SummaryMetric label="Ledger Date" value={String(item.ledger_date ?? "—")} variant="success" />
                 </div>
-                {totalCifFc > 0 && (
+                {licenseValue > 0 && (
                     <div className="border-t border-border/30 px-4 pb-3 pt-2">
                         <div className="mb-1 flex justify-between text-[10px] text-muted-foreground">
                             <span>Utilization</span>
@@ -1006,7 +1015,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                         <tfoot className="border-t-2 border-border bg-muted/40 text-sm font-semibold">
                             <tr>
                                 <td colSpan={4} className="px-3 py-2.5 text-right text-xs uppercase tracking-wider text-muted-foreground">Totals</td>
-                                <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmtUsd(totalCifFc)}</td>
+                                <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmtUsd(licenseValue)}</td>
                                 <td className="px-3 py-2.5 text-right tabular-nums text-xs text-amber-700">{fmtUsd(totalDebited)}</td>
                                 <td className="px-3 py-2.5 text-right tabular-nums text-xs text-violet-700">{fmtUsd(totalAllotted)}</td>
                                 {!commonBalance && <td className="px-3 py-2.5 text-right tabular-nums text-xs text-primary">{fmtUsd(totalBalance)}</td>}
@@ -1029,7 +1038,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                         </div>
                         <div>
                             <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Opening CIF</div>
-                            <div className="text-sm font-bold tabular-nums text-foreground">{fmtUsd(totalCifFc)}</div>
+                            <div className="text-sm font-bold tabular-nums text-foreground">{fmtUsd(licenseValue)}</div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2.5">

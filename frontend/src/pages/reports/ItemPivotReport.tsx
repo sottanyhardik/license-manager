@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback} from "react";
+import React, {useEffect, useState, useCallback, useRef} from "react";
 import {useNavigate} from "react-router-dom";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
@@ -167,6 +167,10 @@ export default function ItemPivotReport() {
     const [showPlanModal, setShowPlanModal] = useState(false);
     const [planLicense, setPlanLicense] = useState(null); // { id, number, balance }
 
+    // AbortController ref — cancels the previous in-flight loadReport request
+    // when a new one starts, preventing stale responses from overwriting fresh data.
+    const reportAbortRef = useRef<AbortController | null>(null);
+
     useEffect(() => {
         loadFilterOptions();
         loadAvailableNorms();
@@ -222,6 +226,15 @@ export default function ItemPivotReport() {
     const loadReport = useCallback(async (normClass) => {
         if (!normClass) return;
 
+        // Cancel any in-flight request for this report — prevents the classic
+        // "stale response overwrites fresh data" race condition where a slow
+        // first request resolves after a faster second one and resets the table.
+        if (reportAbortRef.current) {
+            reportAbortRef.current.abort();
+        }
+        const controller = new AbortController();
+        reportAbortRef.current = controller;
+
         setLoading(true);
         try {
             const response = await api.get(buildItemPivotReportPath({
@@ -234,13 +247,27 @@ export default function ItemPivotReport() {
                 expiryDateFrom,
                 expiryDateTo,
                 purchaseStatus,
-            }));
-            setReportData(response.data);
+            }), { signal: controller.signal });
+
+            // Only commit state if this request was not superseded
+            if (!controller.signal.aborted) {
+                setReportData(response.data);
+            }
         } catch (error) {
+            // Axios names aborted requests 'CanceledError'; ignore them silently
+            if (
+                error?.name === 'CanceledError' ||
+                error?.code === 'ERR_CANCELED' ||
+                controller.signal.aborted
+            ) {
+                return;
+            }
             toast.error(error?.response?.data?.error || 'Failed to load report. Please try again.');
             setReportData(null);
         } finally {
-            setLoading(false);
+            if (!controller.signal.aborted) {
+                setLoading(false);
+            }
         }
     }, [selectedCompanies, excludeCompanies, minBalance, licenseStatus, expiryDateFrom, expiryDateTo, purchaseStatus]);
 
@@ -428,14 +455,16 @@ export default function ItemPivotReport() {
                     if (itemData) {
                         // Available quantity
                         itemAvailable += toFiniteNumber(itemData.available_quantity);
-                        // Planned CIF + quantity. A manually-planned DFIA uses its
-                        // authored plan (plan_cif / plan_quantity); otherwise fall
-                        // back to the norm-derived planned_cif over available qty.
-                        const manual = license.plan_source === 'manual';
-                        itemPlanned    += manual
+                        // Planned CIF + quantity evaluated per-product: use manual
+                        // plan values when this product was manually planned;
+                        // otherwise fall back to norm-derived planned_cif / qty.
+                        const itemHasManual =
+                            toFiniteNumber(itemData.plan_cif) > 0 ||
+                            toFiniteNumber(itemData.plan_quantity) > 0;
+                        itemPlanned    += itemHasManual
                             ? toFiniteNumber(itemData.plan_cif)
                             : toFiniteNumber(itemData.planned_cif);
-                        itemPlannedQty += manual
+                        itemPlannedQty += itemHasManual
                             ? toFiniteNumber(itemData.plan_quantity)
                             : toFiniteNumber(itemData.available_quantity);
 
@@ -1017,10 +1046,10 @@ export default function ItemPivotReport() {
                                                             {reportData.items.filter(item => item.name).map((item, itemIdx) => {
                                                                 const itemData = license.items[item.name] || {};
                                                                 const hasData = itemData.quantity > 0;
-                                                                // Per license: if the license is manually planned show the
-                                                                // manual plan; otherwise show the norm-derived unit price /
-                                                                // planned CIF. Never both for the same license.
-                                                                const hasManualPlan = license.plan_source === 'manual';
+                                                                // Per-product: whether THIS product was manually planned
+                                                                // (independent of every other product on this license).
+                                                                // A product was manually planned when its plan_quantity or
+                                                                // plan_cif is non-zero; otherwise show norm-derived values.
                                                                 // Each item's cells share one background tint so the item's
                                                                 // column group is visually distinct from its neighbours.
                                                                 const itemBg = itemBgColor(itemIdx);
@@ -1063,14 +1092,16 @@ export default function ItemPivotReport() {
                                                                                 </td>
                                                                             </>
                                                                         )}
-                                                                        {/* Manual plan if present, else norm unit price / planned CIF */}
+                                                                        {/* Per-product plan: manual plan takes priority when
+                                                                            this product was manually planned; fall back to
+                                                                            norm-derived values otherwise. */}
                                                                         <td className="text-right" style={{backgroundColor: itemBg}}>
-                                                                            {hasManualPlan
+                                                                            {(Number(itemData.plan_quantity || 0) > 0 || Number(itemData.plan_cif || 0) > 0)
                                                                                 ? Number(itemData.plan_quantity || 0).toFixed(3)
-                                                                                : (itemData.unit_price ? Number(itemData.unit_price).toFixed(2) : '-')}
+                                                                                : (itemData.unit_price != null ? Number(itemData.unit_price).toFixed(2) : '-')}
                                                                         </td>
                                                                         <td className={cn('text-right', hasData && 'font-semibold')} style={{backgroundColor: itemBg}}>
-                                                                            {hasManualPlan
+                                                                            {(Number(itemData.plan_quantity || 0) > 0 || Number(itemData.plan_cif || 0) > 0)
                                                                                 ? Number(itemData.plan_cif || 0).toFixed(2)
                                                                                 : (itemData.planned_cif ? Number(itemData.planned_cif).toFixed(2) : '-')}
                                                                         </td>
@@ -1152,20 +1183,18 @@ export default function ItemPivotReport() {
                                                             const totalRestrictionVal = licenses.reduce((sum, lic) => {
                                                                 return sum + (lic.items[item.name]?.restriction_value || 0);
                                                             }, 0);
-                                                            // Planned CIF + quantity, manual plan aware (matches the
-                                                            // per-licence rows): manual DFIAs use plan_cif/plan_quantity,
-                                                            // norm DFIAs use planned_cif over available quantity.
+                                                            // Planned CIF + quantity per-product (matches per-row logic):
+                                                            // use manual plan values when THIS product was manually
+                                                            // planned; otherwise use norm-derived values.
                                                             const totalPlanned = licenses.reduce((sum, lic) => {
                                                                 const it = lic.items[item.name] || {};
-                                                                return sum + (lic.plan_source === 'manual'
-                                                                    ? (it.plan_cif || 0)
-                                                                    : (it.planned_cif || 0));
+                                                                const itHasManual = (it.plan_quantity || 0) > 0 || (it.plan_cif || 0) > 0;
+                                                                return sum + (itHasManual ? (it.plan_cif || 0) : (it.planned_cif || 0));
                                                             }, 0);
                                                             const totalPlannedQty = licenses.reduce((sum, lic) => {
                                                                 const it = lic.items[item.name] || {};
-                                                                return sum + (lic.plan_source === 'manual'
-                                                                    ? (it.plan_quantity || 0)
-                                                                    : (it.available_quantity || 0));
+                                                                const itHasManual = (it.plan_quantity || 0) > 0 || (it.plan_cif || 0) > 0;
+                                                                return sum + (itHasManual ? (it.plan_quantity || 0) : (it.available_quantity || 0));
                                                             }, 0);
                                                             // Effective unit price = total planned CIF / total planned qty.
                                                             const effectiveUnit = totalPlannedQty > 0 ? totalPlanned / totalPlannedQty : 0;

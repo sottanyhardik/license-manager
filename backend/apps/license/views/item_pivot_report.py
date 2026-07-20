@@ -792,17 +792,25 @@ class ItemPivotReportView(APIView):
             e132_planned_names = set(item_e132_data.keys())
 
         # Add item columns
-        # A manually-planned DFIA only shows the items it planned; the plan
-        # map's keys are that set.
         planned_item_ids = set(item_plan_totals) if item_plan_totals is not None else None
+        # A planning context is active when this licence has a manual plan OR an
+        # automated E132 classification.  Within a planning context we evaluate
+        # each product independently: show it when ANY planning source has data
+        # for it; hide it only when ALL sources are NULL / empty.
+        _planning_context = planned_item_ids is not None or e132_planned_names is not None
         for item_id, item_name in all_items:
-            # "As per planning": show only planned items. Manual plan first, else
-            # the E132 automated plan; every other item is an empty cell.
-            if planned_item_ids is not None and item_id not in planned_item_ids:
-                show_item = False
-            elif e132_planned_names is not None and item_name not in e132_planned_names:
-                show_item = False
+            # Per-product check (independent of every other product):
+            _has_manual = planned_item_ids is not None and item_id in planned_item_ids
+            _has_norm   = bool(item_plan_data.get(item_name))   # E1 / E5 category plan
+            _has_e132   = bool(item_e132_data.get(item_name))   # E132 classification plan
+            _has_any_plan = _has_manual or _has_norm or _has_e132
+
+            if _planning_context:
+                # Planning present — surface only products with at least one
+                # planned value from any source.
+                show_item = _has_any_plan and item_id in item_quantities
             else:
+                # No planning context — surface products with quantities as before.
                 show_item = item_id in item_quantities
 
             if show_item:
@@ -1049,13 +1057,14 @@ class ItemPivotReportView(APIView):
                                 unit_price = item_data.get('unit_price')
                                 row_data.append(unit_price if unit_price else '')
 
-                            # Per license: manual plan if manually planned, else
-                            # norm unit price / planned CIF.
-                            if license_data.get('plan_source') == 'manual':
-                                plan_q = item_data.get('plan_quantity') or 0
-                                plan_c = item_data.get('plan_cif') or 0
-                                row_data.append(plan_q if plan_q else '')
-                                row_data.append(plan_c if plan_c else '')
+                            # Per-product: use manual plan when this product was
+                            # manually planned; fall back to norm-derived values.
+                            # Evaluated independently for each product.
+                            _plan_q = item_data.get('plan_quantity') or 0
+                            _plan_c = item_data.get('plan_cif') or 0
+                            if _plan_q or _plan_c:
+                                row_data.append(_plan_q if _plan_q else '')
+                                row_data.append(_plan_c if _plan_c else '')
                             else:
                                 _up = item_data.get('unit_price')
                                 _pc = item_data.get('planned_cif')
@@ -1312,10 +1321,16 @@ class ItemPivotReportView(APIView):
                                     item_data.get('restriction'),
                                     item_data.get('restriction_value', 0)
                                 ])
-                            # Unit Price + Planned CIF — from the per-item
-                            # planner attached to each row's item dict.
-                            row_data.append(item_data.get('unit_price') or 0)
-                            row_data.append(item_data.get('planned_cif') or 0)
+                            # Per-product: manual plan if this product was manually
+                            # planned; else norm-derived unit price / planned CIF.
+                            _s_plan_q = item_data.get('plan_quantity') or 0
+                            _s_plan_c = item_data.get('plan_cif') or 0
+                            if _s_plan_q or _s_plan_c:
+                                row_data.append(_s_plan_q or 0)
+                                row_data.append(_s_plan_c or 0)
+                            else:
+                                row_data.append(item_data.get('unit_price') or 0)
+                                row_data.append(item_data.get('planned_cif') or 0)
 
                         worksheet.append(_xlsx_safe_row(row_data))
 
@@ -1355,10 +1370,15 @@ class ItemPivotReportView(APIView):
                             cell = WriteOnlyCell(worksheet, value=total_restriction)
                             cell.font = Font(bold=True)
                             totals_row.append(cell)
-                        # Unit Price column total stays blank (it's a rate);
-                        # Planned CIF totals across the column.
+                        # Unit Price column total stays blank (it's a rate).
+                        # Planned CIF total: per-product source (manual plan when
+                        # the product was manually planned, else norm-derived).
                         totals_row.append(None)
-                        total_planned = sum((license_row['items'].get(item_name, {}).get('planned_cif') or 0) for license_row in licenses_list)
+                        def _planned_cif_for(item_d):
+                            pq = item_d.get('plan_quantity') or 0
+                            pc = item_d.get('plan_cif') or 0
+                            return pc if (pq or pc) else (item_d.get('planned_cif') or 0)
+                        total_planned = sum(_planned_cif_for(license_row['items'].get(item_name, {})) for license_row in licenses_list)
                         cell = WriteOnlyCell(worksheet, value=total_planned)
                         cell.font = Font(bold=True)
                         totals_row.append(cell)

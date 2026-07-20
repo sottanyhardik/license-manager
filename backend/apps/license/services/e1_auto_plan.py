@@ -190,6 +190,8 @@ def _simple_line(
 
     Returns (line_dict | None, new_remaining_cif).
     """
+    if unit_price <= 0:
+        return None, remaining_cif                        # guard: zero rate → skip
     raw_cif     = min(avail * unit_price, remaining_cif)
     planned_qty = _floor_qty(raw_cif / unit_price)
     planned_cif = _r2(planned_qty * unit_price)          # re-derive from floored qty

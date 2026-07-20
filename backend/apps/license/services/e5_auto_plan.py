@@ -174,6 +174,8 @@ def _simple_line_e5(
 
     Returns (line_dict | None, new_remaining_cif).
     """
+    if unit_price <= 0:
+        return None, remaining_cif                        # guard: zero rate → skip
     raw_cif     = min(avail * unit_price, remaining_cif)
     planned_qty = _floor_qty(raw_cif / unit_price)
     planned_cif = _r2(planned_qty * unit_price)          # re-derive from floored qty
@@ -397,6 +399,11 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
         )
         if wf_plannable_qty > 0:
             wf_unit_price = _r2(remaining_cif / wf_plannable_qty)
+            if wf_unit_price <= 0:
+                # remaining CIF too small relative to wheat-flour qty:
+                # computed rate rounds to $0.00 which would cause division-by-zero.
+                # Leave the tiny residual as wastage rather than crash.
+                wf_plannable_qty = 0  # skip the loop below
             for ii in wheat_flour:
                 if remaining_cif <= 0:
                     break

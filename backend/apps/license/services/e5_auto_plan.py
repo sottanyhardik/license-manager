@@ -160,10 +160,25 @@ def _simple_line_e5(
     unit_price: float,
     item_name_id: Optional[int],
     rule_label: str,
-) -> tuple[dict, float]:
-    """Build one fixed-price plan line; returns (line_dict, new_remaining_cif)."""
-    planned_cif = _r2(min(avail * unit_price, remaining_cif))
-    planned_qty = _floor_qty(planned_cif / unit_price)
+) -> tuple[Optional[dict], float]:
+    """
+    Build one fixed-price plan line.
+
+    Steps:
+      1. Cap raw CIF at min(avail × rate, remaining_cif).
+      2. Floor the quantity: planned_qty = FLOOR(raw_cif ÷ rate).
+      3. Recalculate CIF from the floored qty: planned_cif = planned_qty × rate.
+         Ensures planned_cif = planned_qty × unit_price exactly.
+         Example: FLOOR(28326.80 ÷ 1.50) = 18884 → CIF = 18884 × 1.50 = 28326.00
+      4. Return None when planned_qty is 0 (callers must guard with `if line:`).
+
+    Returns (line_dict | None, new_remaining_cif).
+    """
+    raw_cif     = min(avail * unit_price, remaining_cif)
+    planned_qty = _floor_qty(raw_cif / unit_price)
+    planned_cif = _r2(planned_qty * unit_price)          # re-derive from floored qty
+    if planned_qty <= 0 or planned_cif <= 0:
+        return None, remaining_cif                        # nothing plannable
     line = {
         'import_item':      ii.id,
         'item_name':        item_name_id,
@@ -266,7 +281,8 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
             name_ids.get('Dietary Fibre - E5'),
             'Rule 1 – Dietary Fibre',
         )
-        lines.append(line)
+        if line:
+            lines.append(line)
 
     # ── Special Validation ────────────────────────────────────────────────────
     # If remaining CIF is less than what milk needs @ $1.50/unit,
@@ -293,7 +309,8 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
                 name_ids.get('PALM KERNEL OIL - E5'),
                 'Rule 2.1 – Palm Kernel Oil',
             )
-            lines.append(line)
+            if line:
+                lines.append(line)
 
         # Case 2.2: RBD Palmolein Oil @ $1.20
         for ii in rbd:
@@ -307,7 +324,8 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
                 name_ids.get('RBD PALMOLEIN OIL - E5'),
                 'Rule 2.2 – RBD Palmolein',
             )
-            lines.append(line)
+            if line:
+                lines.append(line)
 
         # Case 2.3: Olive Oil @ $5.00
         for ii in olive_oil:
@@ -321,10 +339,14 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
                 name_ids.get('OLIVE OIL - E5'),
                 'Rule 2.3 – Olive Oil',
             )
-            lines.append(line)
+            if line:
+                lines.append(line)
 
     if special_milk_triggered:
-        # Special flow: milk first (full qty @ $1.50 as SWP-E5), then oils
+        # Special flow: milk CIF priority.
+        # Planned Qty = FLOOR(remaining_cif ÷ 1.50); CIF = planned_qty × 1.50.
+        # Only the first milk import item absorbs all remaining CIF;
+        # subsequent items see remaining_cif ≈ 0 and produce no line.
         for ii in milk:
             if remaining_cif <= 0:
                 break
@@ -336,7 +358,8 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
                 name_ids.get('SWP - E5'),
                 'Rule Special – Milk priority SWP-E5',
             )
-            lines.append(line)
+            if line:
+                lines.append(line)
         _plan_oils()
         # Rule 3 (normal milk) is SKIPPED — milk already planned above.
 
@@ -385,6 +408,7 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
                     name_ids.get('Wheat Flour - E5'),
                     'Final – Wheat Flour mop-up',
                 )
-                lines.append(line)
+                if line:
+                    lines.append(line)
 
     return lines, remaining_cif

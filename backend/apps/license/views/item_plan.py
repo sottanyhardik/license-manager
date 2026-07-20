@@ -215,8 +215,9 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         if norm != 'E1':
             return Response(
                 {"error": (
-                    f"Auto Plan is available only for E1 licenses. "
-                    f"This license uses norm '{norm or 'unknown'}'."
+                    f"This endpoint is for E1 licenses only. "
+                    f"This license uses norm '{norm or 'unknown'}'. "
+                    f"Use /auto-plan/ for E5 and E132."
                 )},
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -299,10 +300,13 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         elif norm == 'E5':
             from apps.license.services.e5_auto_plan import compute_e5_auto_plan
             lines, remaining_cif = compute_e5_auto_plan(license_obj)
+        elif norm == 'E132':
+            from apps.license.services.e132_auto_plan import compute_e132_auto_plan
+            lines, remaining_cif = compute_e132_auto_plan(license_obj)
         else:
             return Response(
                 {"error": (
-                    f"Auto Plan supports E1 and E5 licenses only. "
+                    f"Auto Plan supports E1, E5, and E132 licenses only. "
                     f"This license uses norm '{norm or 'unknown'}'."
                 )},
                 status=status.HTTP_400_BAD_REQUEST,

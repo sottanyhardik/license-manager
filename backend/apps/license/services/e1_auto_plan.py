@@ -175,13 +175,25 @@ def _simple_line(
     unit_price: float,
     item_name_id: Optional[int],
     rule_label: str,
-) -> tuple[dict, float]:
+) -> tuple[Optional[dict], float]:
     """
     Build one plan line for a fixed-price rule.
-    Caps planned_cif at remaining_cif; returns (line, new_remaining_cif).
+
+    Steps:
+      1. Cap raw CIF at min(avail × rate, remaining_cif).
+      2. Floor the quantity: planned_qty = FLOOR(raw_cif ÷ rate).
+      3. Recalculate CIF from the floored qty: planned_cif = planned_qty × rate.
+         This ensures planned_cif = planned_qty × unit_price exactly, matching
+         the user-visible formula (e.g. 18,884 × 1.50 = 28,326.00, NOT 28,326.80).
+      4. Return None when planned_qty is 0 so callers skip the line safely.
+
+    Returns (line_dict | None, new_remaining_cif).
     """
-    planned_cif = _r2(min(avail * unit_price, remaining_cif))
-    planned_qty = _floor_qty(planned_cif / unit_price)
+    raw_cif     = min(avail * unit_price, remaining_cif)
+    planned_qty = _floor_qty(raw_cif / unit_price)
+    planned_cif = _r2(planned_qty * unit_price)          # re-derive from floored qty
+    if planned_qty <= 0 or planned_cif <= 0:
+        return None, remaining_cif                        # nothing plannable
     line = {
         'import_item':      ii.id,
         'item_name':        item_name_id,
@@ -286,7 +298,8 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
             name_ids.get('OTHER CONFECTIONERY INGREDIENTS'),  # usually None
             'Rule 1 – Confectionery',
         )
-        lines.append(line)
+        if line:
+            lines.append(line)
 
     # ── Rule 2: Milk & Milk ── SWP / DWP / WPC splits ────────────────────────
     for ii, _ in milk:
@@ -320,7 +333,8 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
                 name_ids.get('Juice - E1'),
                 'Rule 3 – Juice',
             )
-            lines.append(line)
+            if line:
+                lines.append(line)
 
     # ── Rule 4: Aluminium Foil ── $4.50 (HSN/desc contains 7607) ─────────────
     aluminium_lines: list[dict] = []
@@ -335,7 +349,8 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
             name_ids.get('Aluminium Foil'),
             'Rule 4 – Aluminium Foil',
         )
-        aluminium_lines.append(line)
+        if line:
+            aluminium_lines.append(line)
     lines.extend(aluminium_lines)
     aluminium_planned = len(aluminium_lines) > 0
 
@@ -351,7 +366,8 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
             name_ids.get('Citric / Tartaric'),
             'Rule 5 – Citric/Tartaric',
         )
-        lines.append(line)
+        if line:
+            lines.append(line)
 
     # ── Rule 6: Plastic Packing Material ── $1.00 (ONLY when no Alum. Foil) ──
     if not aluminium_planned:
@@ -366,6 +382,7 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
                 name_ids.get('Plastic Packing Material'),
                 'Rule 6 – Plastic Packing',
             )
-            lines.append(line)
+            if line:
+                lines.append(line)
 
     return lines, remaining_cif

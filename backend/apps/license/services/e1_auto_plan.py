@@ -39,12 +39,13 @@ from typing import Optional
 
 # ─── Item-name labels looked up from ItemNameModel ────────────────────────────
 
-MILK_ITEM_NAMES: tuple[str, ...] = ('SWP - E1', 'SWP', 'DWP', 'WPC')
+MILK_ITEM_NAMES: tuple[str, ...] = ('SWP - E1', 'DWP - E1', 'WPC - E1')
 
 _ALL_RULE_NAMES: tuple[str, ...] = MILK_ITEM_NAMES + (
-    'Juice - E1',
+    'Other Confectionery Ingredients - E1',
+    'Fruit Juice - E1',
     'Aluminium Foil',
-    'Citric / Tartaric',
+    'CITRIC ACID / TARTARIC ACID - E1',
     'Plastic Packing Material',
 )
 
@@ -116,7 +117,7 @@ def _milk_splits(
         lines = []
         if fqty1 > 0:
             lines.append({
-                'item_name_id':    name_ids.get('SWP'),
+                'item_name_id':    name_ids.get('SWP - E1'),
                 'item_name_label': 'SWP',
                 'planned_quantity': fqty1,
                 'unit_price':      1.50,
@@ -124,7 +125,7 @@ def _milk_splits(
             })
         if fqty2 > 0:
             lines.append({
-                'item_name_id':    name_ids.get('DWP'),
+                'item_name_id':    name_ids.get('DWP - E1'),
                 'item_name_label': 'DWP',
                 'planned_quantity': fqty2,
                 'unit_price':      5.00,
@@ -140,7 +141,7 @@ def _milk_splits(
         lines = []
         if fqty1 > 0:
             lines.append({
-                'item_name_id':    name_ids.get('DWP'),
+                'item_name_id':    name_ids.get('DWP - E1'),
                 'item_name_label': 'DWP',
                 'planned_quantity': fqty1,
                 'unit_price':      5.00,
@@ -148,7 +149,7 @@ def _milk_splits(
             })
         if fqty2 > 0:
             lines.append({
-                'item_name_id':    name_ids.get('WPC'),
+                'item_name_id':    name_ids.get('WPC - E1'),
                 'item_name_label': 'WPC',
                 'planned_quantity': fqty2,
                 'unit_price':      20.00,
@@ -158,7 +159,7 @@ def _milk_splits(
 
     # Cases 2.4 / 2.5 — avg ≥ 20.00: WPC, full qty and full remaining CIF
     return [{
-        'item_name_id':    name_ids.get('WPC'),
+        'item_name_id':    name_ids.get('WPC - E1'),
         'item_name_label': 'WPC',
         'planned_quantity': _floor_qty(avail_qty),
         'unit_price':      _r2(avg),
@@ -295,7 +296,7 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
             continue
         line, remaining_cif = _simple_line(
             ii, avail, remaining_cif, 3.0,
-            name_ids.get('OTHER CONFECTIONERY INGREDIENTS'),  # usually None
+            name_ids.get('Other Confectionery Ingredients - E1'),
             'Rule 1 – Confectionery',
         )
         if line:
@@ -330,7 +331,7 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
                 continue
             line, remaining_cif = _simple_line(
                 ii, avail, remaining_cif, 2.50,
-                name_ids.get('Juice - E1'),
+                name_ids.get('Fruit Juice - E1'),
                 'Rule 3 – Juice',
             )
             if line:
@@ -363,7 +364,7 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
             continue
         line, remaining_cif = _simple_line(
             ii, avail, remaining_cif, 1.60,
-            name_ids.get('Citric / Tartaric'),
+            name_ids.get('CITRIC ACID / TARTARIC ACID - E1'),
             'Rule 5 – Citric/Tartaric',
         )
         if line:

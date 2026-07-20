@@ -98,6 +98,14 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
     )
     license_number = serializers.CharField(source="import_item.license.license_number", read_only=True)
 
+    # Audit metadata — used by PlanningEditor to show "Last saved / By:" in
+    # both the Plan tab and the Plan modal.
+    modified_on = serializers.DateTimeField(read_only=True)
+    modified_by_username = serializers.SerializerMethodField(read_only=True)
+
+    def get_modified_by_username(self, obj):
+        return obj.modified_by.username if obj.modified_by_id else None
+
     class Meta:
         model = LicenseItemPlan
         fields = [
@@ -105,5 +113,6 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
             "planned_quantity", "unit_price", "planned_cif_fc", "planned_cif_inr", "note",
             "item_description", "serial_number", "license_number",
             "item_available_quantity", "item_total_quantity",
+            "modified_on", "modified_by_username",
         ]
         read_only_fields = ["license"]

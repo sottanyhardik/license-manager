@@ -107,6 +107,10 @@ class ItemReportView(APIView):
             'license',
             'license__exporter',
             'license__ownership__current_owner',
+            'license__balance',        # fix N+1: balance_cif
+            'license__notes',          # fix N+1: balance_report_notes, condition_sheet
+            'license__notification_number',
+            'license__purchase_status',
             'hs_code'
         ).prefetch_related('items', latest_transfer_prefetch)
 
@@ -190,24 +194,34 @@ class ItemReportView(APIView):
         # Order by license number and serial number
         items = items.order_by('license__license_number', 'serial_number')
 
+        # Materialise the queryset once so the plan pre-fetch can use the IDs
+        # without issuing a second DB round-trip.
+        item_list = list(items)
+
         # Utilization plan per item. Per LICENSE we use the manual plan if one
         # exists, otherwise the norm (E1/E5/E132) plan — never both.
+        # Pre-compute for ALL unique licenses in one pass rather than calling
+        # effective_plan_for_license() inside the loop (was O(N) DB round-trips).
         from apps.license.services.plan_reporting import plan_map_for_import_items
         from apps.license.services.norm_plan import effective_plan_for_license
-        manual_splits = plan_map_for_import_items([it.id for it in items])
-        _eff_cache = {}
+        manual_splits = plan_map_for_import_items([it.id for it in item_list])
 
-        def _effective(lic):
-            if lic.id not in _eff_cache:
-                _eff_cache[lic.id] = effective_plan_for_license(lic)
-            return _eff_cache[lic.id]
+        # Build per-license effective-plan cache from the already-loaded licenses
+        # (select_related already pulled them; no extra queries needed here).
+        _eff_cache: dict = {}
+        seen_license_ids: set = set()
+        for it in item_list:
+            lid = it.license_id
+            if lid not in seen_license_ids:
+                seen_license_ids.add(lid)
+                _eff_cache[lid] = effective_plan_for_license(it.license)
 
         # Build report data
         report_items = []
-        for item in items:
+        for item in item_list:
             # Get item names
             item_names_list = [{"id": i.id, "name": i.name} for i in item.items.all()]
-            _plan_source, _eff = _effective(item.license)
+            _plan_source, _eff = _eff_cache[item.license_id]
             plan = _eff.get(item.id)
             _ms = manual_splits.get(item.id)
 

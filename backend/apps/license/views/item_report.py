@@ -9,11 +9,13 @@ from django.http import JsonResponse, HttpResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from apps.accounts.permissions import ReportPermission
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.models import ItemNameModel
 from apps.license.models import LicenseImportItemsModel
+
 
 def _safe_int(value, default):
     try:
@@ -21,6 +23,21 @@ def _safe_int(value, default):
     except (TypeError, ValueError):
         return default
 
+
+class _ExcelPassthroughRenderer(BaseRenderer):
+    """
+    Dummy renderer that tells DRF 'excel' is an accepted format so that
+    ?format=excel (or ?_format=excel) does not fail content negotiation.
+    The view returns a plain Django HttpResponse for Excel which DRF
+    passes through without calling this renderer at all.
+    """
+    media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    format = 'excel'
+    charset = None
+    render_style = 'binary'
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data  # never reached — view returns HttpResponse directly
 
 
 logger = logging.getLogger(__name__)
@@ -32,9 +49,12 @@ class ItemReportView(APIView):
 
     GET parameters:
         - item_names: Comma-separated item name IDs for filtering (multiselect)
-        - format: 'json' or 'excel' (default: json)
+        - format / _format: 'json' or 'excel' (default: json)
     """
     permission_classes = [ReportPermission]
+    # Register the excel "format" so DRF content negotiation accepts
+    # ?format=excel (or ?_format=excel) without raising NotAcceptable (406).
+    renderer_classes = [JSONRenderer, _ExcelPassthroughRenderer]
 
     def get(self, request, *args, **kwargs):
         # DRF intercepts ?format= as a content-negotiation override and raises
@@ -78,208 +98,181 @@ class ItemReportView(APIView):
 
     def generate_report(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None):
         """
-        Generate item report with all license import items.
+        Generate item report driven by LicenseItemPlan records.
 
-        Args:
-            item_names: Comma-separated item name IDs for filtering
-            company_ids: Comma-separated company IDs to include (optional)
-            exclude_company_ids: Comma-separated company IDs to exclude (optional)
-            min_balance: Minimum balance CIF to include (default 200)
-            min_avail_qty: Minimum available quantity to include (default 0)
-            license_status: Filter by status - 'active', 'expired', 'expiring_soon', 'all' (default 'active')
-            is_restricted: Filter by restriction status - 'true', 'false', or None for all
-            purchase_status: Comma-separated purchase status codes (e.g., 'GE,MI,SM')
-            product_description: Search text for product description (case-insensitive contains search)
-            hsn_code: Search text for HSN code (case-insensitive contains search)
-            norms: Comma-separated SION norm classes (e.g., '019/2015,098/2009')
-            notification_numbers: Comma-separated license notification numbers (e.g., '019/2015,098/2009')
+        Each row in the report corresponds to one plan line so that the
+        'Item Name' filter targets the *planned* item name (e.g. 'SWP - E5',
+        'DWP - E5') rather than the raw import-item M2M tag.
 
         Returns:
-            Dictionary with report data
+            Dictionary with report data.
         """
         from datetime import date, timedelta
+        from apps.license.models import LicenseItemPlan, LicenseTransferModel
+
         today = date.today()
 
-        # Base query - all import items with licenses
-        from apps.license.models import LicenseTransferModel
-
-        # Prefetch only the latest transfer for each license
+        # ── Build the plan queryset ───────────────────────────────────────────
         latest_transfer_prefetch = Prefetch(
-            'license__transfers',
-            queryset=LicenseTransferModel.objects.select_related('from_company', 'to_company').order_by('-transfer_date', '-transfer_initiation_date'),
-            to_attr='latest_transfers'
+            'import_item__license__transfers',
+            queryset=LicenseTransferModel.objects.select_related(
+                'from_company', 'to_company'
+            ).order_by('-transfer_date', '-transfer_initiation_date'),
+            to_attr='latest_transfers',
         )
 
-        items = LicenseImportItemsModel.objects.select_related(
-            'license',
-            'license__exporter',
-            'license__ownership__current_owner',
-            'license__balance',        # fix N+1: balance_cif
-            'license__notes',          # fix N+1: balance_report_notes, condition_sheet
-            'license__notification_number',
-            'license__purchase_status',
-            'hs_code'
-        ).prefetch_related('items', latest_transfer_prefetch)
+        plans = (
+            LicenseItemPlan.objects
+            .select_related(
+                'item_name',
+                'import_item',
+                'import_item__hs_code',
+                'import_item__license',
+                'import_item__license__exporter',
+                'import_item__license__ownership__current_owner',
+                'import_item__license__balance',
+                'import_item__license__notes',
+                'import_item__license__notification_number',
+                'import_item__license__purchase_status',
+            )
+            .prefetch_related(
+                latest_transfer_prefetch,
+                'import_item__items',
+            )
+        )
 
-        # Apply license status filter
+        # ── License-level filters ─────────────────────────────────────────────
         if license_status == 'active':
-            items = items.filter(
-                license__flags__is_active=True,
-                license__license_expiry_date__gt=today - timedelta(days=30)
+            plans = plans.filter(
+                import_item__license__flags__is_active=True,
+                import_item__license__license_expiry_date__gt=today - timedelta(days=30),
             )
         elif license_status == 'expired':
-            items = items.filter(license__license_expiry_date__lt=today)
+            plans = plans.filter(import_item__license__license_expiry_date__lt=today)
         elif license_status == 'expiring_soon':
-            items = items.filter(
-                license__flags__is_active=True,
-                license__license_expiry_date__gte=today,
-                license__license_expiry_date__lte=today + timedelta(days=30)
+            plans = plans.filter(
+                import_item__license__flags__is_active=True,
+                import_item__license__license_expiry_date__gte=today,
+                import_item__license__license_expiry_date__lte=today + timedelta(days=30),
             )
-        # If 'all', no date or is_active filter applied
 
-        # Apply explicit expiry date range filter
         if expiry_date_from:
             from datetime import datetime as _dt
-            items = items.filter(license__license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date())
+            plans = plans.filter(
+                import_item__license__license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date()
+            )
         if expiry_date_to:
             from datetime import datetime as _dt
-            items = items.filter(license__license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date())
+            plans = plans.filter(
+                import_item__license__license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date()
+            )
 
-        # Filter by min_balance using stored available_value field (can be done in query)
-        # This pre-filters before iteration for better performance
-        items = items.filter(available_value__gte=min_balance)
-
-        # Filter by min_avail_qty (can be done in query)
+        if min_balance > 0:
+            plans = plans.filter(import_item__available_value__gte=min_balance)
         if min_avail_qty > 0:
-            items = items.filter(available_quantity__gte=min_avail_qty)
+            plans = plans.filter(import_item__available_quantity__gte=min_avail_qty)
 
-        # Filter by company IDs if specified
         if company_ids:
-            company_id_list = [int(cid.strip()) for cid in company_ids.split(',') if cid.strip()]
-            items = items.filter(license__exporter_id__in=company_id_list)
-
-        # Exclude company IDs if specified
+            cids = [int(c.strip()) for c in company_ids.split(',') if c.strip()]
+            plans = plans.filter(import_item__license__exporter_id__in=cids)
         if exclude_company_ids:
-            exclude_id_list = [int(cid.strip()) for cid in exclude_company_ids.split(',') if cid.strip()]
-            items = items.exclude(license__exporter_id__in=exclude_id_list)
+            eids = [int(c.strip()) for c in exclude_company_ids.split(',') if c.strip()]
+            plans = plans.exclude(import_item__license__exporter_id__in=eids)
 
-        # Filter by item names if specified
-        if item_names:
-            item_name_ids = [int(id.strip()) for id in item_names.split(',') if id.strip()]
-            items = items.filter(items__id__in=item_name_ids).distinct()
-
-        # Filter by is_restricted if specified
-        if is_restricted is not None:
-            if is_restricted == 'true':
-                items = items.filter(is_restricted=True)
-            elif is_restricted == 'false':
-                items = items.filter(is_restricted=False)
-
-        # Filter by purchase_status if specified
         if purchase_status:
-            purchase_status_list = [ps.strip() for ps in purchase_status.split(',') if ps.strip()]
-            items = items.filter(license__purchase_status__code__in=purchase_status_list)
+            ps_list = [p.strip() for p in purchase_status.split(',') if p.strip()]
+            plans = plans.filter(import_item__license__purchase_status__code__in=ps_list)
 
-        # Filter by product description if specified (case-insensitive contains search)
         if product_description:
-            items = items.filter(description__icontains=product_description)
-
-        # Filter by HSN code if specified (case-insensitive contains search)
+            plans = plans.filter(import_item__description__icontains=product_description)
         if hsn_code:
-            items = items.filter(hs_code__hs_code__icontains=hsn_code)
+            plans = plans.filter(import_item__hs_code__hs_code__icontains=hsn_code)
 
-        # Filter by norms (SION norm class) if specified
         if norms:
             norms_list = [n.strip() for n in norms.split(',') if n.strip()]
-            items = items.filter(items__sion_norm_class__norm_class__in=norms_list).distinct()
+            plans = plans.filter(
+                import_item__items__sion_norm_class__norm_class__in=norms_list
+            ).distinct()
 
-        # Filter by notification numbers (license notification) if specified
         if notification_numbers:
-            notification_list = [n.strip() for n in notification_numbers.split(',') if n.strip()]
-            items = items.filter(license__notification_number__in=notification_list).distinct()
+            notif_list = [n.strip() for n in notification_numbers.split(',') if n.strip()]
+            plans = plans.filter(
+                import_item__license__notification_number__in=notif_list
+            ).distinct()
 
-        # Order by license number and serial number
-        items = items.order_by('license__license_number', 'serial_number')
+        # ── Plan item-name filter (the primary use-case) ──────────────────────
+        if item_names:
+            item_name_ids = [int(i.strip()) for i in item_names.split(',') if i.strip()]
+            plans = plans.filter(item_name__id__in=item_name_ids)
 
-        # Materialise the queryset once so the plan pre-fetch can use the IDs
-        # without issuing a second DB round-trip.
-        item_list = list(items)
+        if is_restricted is not None:
+            if is_restricted == 'true':
+                plans = plans.filter(import_item__is_restricted=True)
+            elif is_restricted == 'false':
+                plans = plans.filter(import_item__is_restricted=False)
 
-        # Utilization plan per item. Per LICENSE we use the manual plan if one
-        # exists, otherwise the norm (E1/E5/E132) plan — never both.
-        # Pre-compute for ALL unique licenses in one pass rather than calling
-        # effective_plan_for_license() inside the loop (was O(N) DB round-trips).
-        from apps.license.services.plan_reporting import plan_map_for_import_items
-        from apps.license.services.norm_plan import effective_plan_for_license
-        manual_splits = plan_map_for_import_items([it.id for it in item_list])
+        plans = plans.order_by(
+            'import_item__license__license_number',
+            'import_item__serial_number',
+            'item_name__name',
+        )
 
-        # Build per-license effective-plan cache from the already-loaded licenses
-        # (select_related already pulled them; no extra queries needed here).
-        _eff_cache: dict = {}
-        seen_license_ids: set = set()
-        for it in item_list:
-            lid = it.license_id
-            if lid not in seen_license_ids:
-                seen_license_ids.add(lid)
-                _eff_cache[lid] = effective_plan_for_license(it.license)
-
-        # Build report data
+        # ── Build report rows ─────────────────────────────────────────────────
         report_items = []
-        for item in item_list:
-            # Get item names
-            item_names_list = [{"id": i.id, "name": i.name} for i in item.items.all()]
-            _plan_source, _eff = _eff_cache[item.license_id]
-            plan = _eff.get(item.id)
-            _ms = manual_splits.get(item.id)
+        for plan in plans:
+            ii = plan.import_item
+            lic = ii.license
 
-            # Use the stored available_value field (updated by balance update task)
-            # This field already contains the correct value:
-            # - For restricted items: restriction-based calculated value
-            # - For non-restricted items: license balance_cif
-            # Note: Make sure to run "Update Balance" in Item Pivot Report to refresh these values
-            available_balance = float(item.available_value or 0)
-
-            # Get latest transfer information
             latest_transfer_info = None
-            if hasattr(item.license, 'latest_transfers') and item.license.latest_transfers:
-                latest_transfer = item.license.latest_transfers[0]
-                latest_transfer_info = str(latest_transfer)  # Uses the __str__ method which formats it nicely
+            transfers = getattr(lic, 'latest_transfers', None)
+            if transfers:
+                latest_transfer_info = str(transfers[0])
+
+            import_item_names = [
+                {'id': n.id, 'name': n.name} for n in ii.items.all()
+            ]
+            planned_item_name = plan.item_name.name if plan.item_name else None
 
             report_items.append({
-                'id': item.id,
-                'license_id': item.license.id,
-                'license_number': item.license.license_number,
-                'license_date': item.license.license_date.isoformat() if item.license.license_date else None,
-                'license_expiry_date': item.license.license_expiry_date.isoformat() if item.license.license_expiry_date else None,
-                'ledger_date': item.license.ledger_date.isoformat() if item.license.ledger_date else None,
-                'exporter_name': item.license.exporter.name if item.license.exporter else None,
-                'current_owner': item.license.current_owner.name if item.license.current_owner else None,
-                'latest_transfer': latest_transfer_info,
-                'hs_code': item.hs_code.hs_code if item.hs_code else None,
-                'product_description': item.description or '',
-                'item_names': item_names_list,
-                'quantity': float(item.quantity or 0),
-                'available_quantity': float(item.available_quantity or 0),
-                'available_balance': available_balance,
-                'balance_cif': float(item.license.balance_cif or 0),
-                'is_restricted': item.is_restricted,
-                'condition_type': item.condition_type or '',
-                'notes': item.license.balance_report_notes or '',
-                'condition_sheet': item.license.condition_sheet or '',
-                'unit': item.unit,
-                'serial_number': item.serial_number,
-                # Effective plan (manual if the license is manually planned,
-                # else norm). Splits are shown only for manual plans.
-                'planned_quantity': plan['planned_quantity'] if plan else 0,
-                'planned_cif': plan['planned_cif'] if plan else 0,
-                'plan_source': _plan_source,
-                'planned_splits': (_ms['splits'] if (_plan_source == 'manual' and _ms) else []),
+                'id':                   ii.id,
+                'plan_id':              plan.id,
+                'license_id':           lic.id,
+                'license_number':       lic.license_number,
+                'license_date':         lic.license_date.isoformat() if lic.license_date else None,
+                'license_expiry_date':  lic.license_expiry_date.isoformat() if lic.license_expiry_date else None,
+                'ledger_date':          lic.ledger_date.isoformat() if lic.ledger_date else None,
+                'exporter_name':        lic.exporter.name if lic.exporter else None,
+                'current_owner':        lic.current_owner.name if lic.current_owner else None,
+                'latest_transfer':      latest_transfer_info,
+                'hs_code':              ii.hs_code.hs_code if ii.hs_code else None,
+                'product_description':  ii.description or '',
+                'serial_number':        ii.serial_number,
+                'unit':                 ii.unit,
+                'condition_type':       ii.condition_type or '',
+                'is_restricted':        ii.is_restricted,
+                # Import reference quantities
+                'quantity':             float(ii.quantity or 0),
+                'available_quantity':   float(ii.available_quantity or 0),
+                'available_balance':    float(ii.available_value or 0),
+                'balance_cif':          float(lic.balance_cif or 0),
+                # Import item names (M2M tags on the import item row)
+                'item_names':           import_item_names,
+                # ── Plan data (primary output) ────────────────────────────────
+                'planned_item_name':    planned_item_name,
+                'planned_item_name_id': plan.item_name_id,
+                'planned_quantity':     float(plan.planned_quantity or 0),
+                'unit_price':           float(plan.unit_price or 0),
+                'planned_cif':          float(plan.planned_cif_fc or 0),
+                'plan_note':            plan.note or '',
+                # House-keeping
+                'notes':                lic.balance_report_notes or '',
+                'condition_sheet':      lic.condition_sheet or '',
             })
 
         return {
             'report_date': date.today().isoformat(),
             'total_items': len(report_items),
-            'items': report_items
+            'items': report_items,
         }
 
     def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None):
@@ -314,13 +307,14 @@ class ItemReportView(APIView):
         header_font = Font(bold=True, color="FFFFFF", size=11)
         header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-        # Headers — "Condition" sits next to "Serial Number" so it's obvious
-        # which licence item the AU / N% restriction applies to.
+        # Headers — plan-driven: Planned Item Name + plan figures are primary.
         headers = [
             'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Ledger Date', 'Exporter Name',
-            'Serial Number', 'Condition', 'HSN Code', 'Product Description', 'Item Name',
-            'Available Quantity', 'Available Balance', 'Balance CIF', 'Notes', 'Condition Sheet', 'Transfer Status',
-            'Plan Qty', 'Plan CIF'
+            'Serial Number', 'Condition', 'HSN Code', 'Product Description',
+            'Planned Item Name',        # from LicenseItemPlan.item_name
+            'Available Quantity', 'Available Balance', 'Balance CIF',
+            'Notes', 'Condition Sheet', 'Transfer Status',
+            'Planned Qty', 'Unit Price', 'Planned CIF',
         ]
 
         def create_sheet(workbook, sheet_name, items_list):
@@ -347,15 +341,16 @@ class ItemReportView(APIView):
             ws.column_dimensions['H'].width = 11  # Condition
             ws.column_dimensions['I'].width = 12  # HSN Code
             ws.column_dimensions['J'].width = 40  # Product Description
-            ws.column_dimensions['K'].width = 25  # Item Name
+            ws.column_dimensions['K'].width = 28  # Planned Item Name
             ws.column_dimensions['L'].width = 18  # Available Quantity
             ws.column_dimensions['M'].width = 18  # Available Balance
             ws.column_dimensions['N'].width = 18  # Balance CIF
             ws.column_dimensions['O'].width = 30  # Notes
             ws.column_dimensions['P'].width = 30  # Condition Sheet
             ws.column_dimensions['Q'].width = 35  # Transfer Status
-            ws.column_dimensions['R'].width = 14  # Plan Qty
-            ws.column_dimensions['S'].width = 16  # Plan CIF
+            ws.column_dimensions['R'].width = 14  # Planned Qty
+            ws.column_dimensions['S'].width = 14  # Unit Price
+            ws.column_dimensions['T'].width = 16  # Planned CIF
 
             # Group items by license
             grouped_items = {}
@@ -381,40 +376,35 @@ class ItemReportView(APIView):
                 row_span = len(license_items)
                 start_row = current_row
 
-                # Add each item in this license group
+                # Add each plan line in this license group
                 for item_idx, item in enumerate(license_items):
-                    item_names_str = ', '.join([i['name'] for i in item['item_names']])
-
-                    # License-level columns (only for first row, will be merged)
+                    # License-level columns (first row only — merged below)
                     if item_idx == 0:
-                        ws.cell(row=current_row, column=1, value=sr_no)  # Sr No
-                        ws.cell(row=current_row, column=2, value=_safe(item['license_number']))  # License No
-                        ws.cell(row=current_row, column=3, value=_safe(item['license_date']))  # License Date
-                        ws.cell(row=current_row, column=4, value=_safe(item['license_expiry_date']))  # License Expiry Date
-                        ws.cell(row=current_row, column=5, value=_safe(item.get('ledger_date')))  # Ledger Date
-                        ws.cell(row=current_row, column=6, value=_safe(item['exporter_name']))  # Exporter Name
-                        ws.cell(row=current_row, column=13, value=item['available_balance'])  # Available Balance
-                        ws.cell(row=current_row, column=14, value=item['balance_cif'])  # Balance CIF
-                        ws.cell(row=current_row, column=15, value=_safe(item['notes']))  # Notes
-                        ws.cell(row=current_row, column=16, value=_safe(item['condition_sheet']))  # Condition Sheet
-                        ws.cell(row=current_row, column=17, value=_safe(item.get('latest_transfer', '')))  # Transfer Status
+                        ws.cell(row=current_row, column=1, value=sr_no)
+                        ws.cell(row=current_row, column=2, value=_safe(item['license_number']))
+                        ws.cell(row=current_row, column=3, value=_safe(item['license_date']))
+                        ws.cell(row=current_row, column=4, value=_safe(item['license_expiry_date']))
+                        ws.cell(row=current_row, column=5, value=_safe(item.get('ledger_date')))
+                        ws.cell(row=current_row, column=6, value=_safe(item['exporter_name']))
+                        ws.cell(row=current_row, column=13, value=item['available_balance'])
+                        ws.cell(row=current_row, column=14, value=item['balance_cif'])
+                        ws.cell(row=current_row, column=15, value=_safe(item['notes']))
+                        ws.cell(row=current_row, column=16, value=_safe(item['condition_sheet']))
+                        ws.cell(row=current_row, column=17, value=_safe(item.get('latest_transfer', '')))
 
-                    # Item-level columns (for each row)
-                    sn_cell = ws.cell(row=current_row, column=7, value=item['serial_number'])  # Serial Number
-                    cond = (item.get('condition_type') or '')
-                    cond_cell = ws.cell(row=current_row, column=8, value=cond)  # Condition
-                    # Tint both Serial-Number and Condition cells so the row
-                    # stands out at a glance.
+                    # Plan-line columns (one row per plan entry)
+                    sn_cell   = ws.cell(row=current_row, column=7,  value=item['serial_number'])
+                    cond      = item.get('condition_type') or ''
+                    cond_cell = ws.cell(row=current_row, column=8,  value=cond)
                     _annotate_condition_cell(sn_cell, cond)
                     _annotate_condition_cell(cond_cell, cond)
-                    ws.cell(row=current_row, column=9, value=_safe(item['hs_code']))  # HSN Code
-                    ws.cell(row=current_row, column=10, value=_safe(item['product_description']))  # Product Description
-                    ws.cell(row=current_row, column=11, value=_safe(item_names_str))  # Item Name
-                    ws.cell(row=current_row, column=12, value=item['available_quantity'])  # Available Quantity
-                    # Utilization plan (per item) — appended so merged license
-                    # columns (13–17) keep their indices.
-                    ws.cell(row=current_row, column=18, value=item.get('planned_quantity') or 0)  # Plan Qty
-                    ws.cell(row=current_row, column=19, value=item.get('planned_cif') or 0)  # Plan CIF
+                    ws.cell(row=current_row, column=9,  value=_safe(item['hs_code']))
+                    ws.cell(row=current_row, column=10, value=_safe(item['product_description']))
+                    ws.cell(row=current_row, column=11, value=_safe(item.get('planned_item_name') or ''))  # Planned Item Name
+                    ws.cell(row=current_row, column=12, value=item['available_quantity'])
+                    ws.cell(row=current_row, column=18, value=item.get('planned_quantity') or 0)           # Planned Qty
+                    ws.cell(row=current_row, column=19, value=item.get('unit_price') or 0)                 # Unit Price
+                    ws.cell(row=current_row, column=20, value=item.get('planned_cif') or 0)                # Planned CIF
 
                     current_row += 1
 
@@ -490,17 +480,21 @@ class ItemReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='available-items')
     def available_items(self, request):
         """
-        Get item names that actually have linked import items with
-        available_value > 0.  Only these names will produce results
-        in the report, so showing the rest in the multi-select filter
-        is misleading.
+        Return the distinct planned item names that appear in LicenseItemPlan
+        for active licenses with balance > 0.
+
+        These are the names users can filter by (e.g. 'SWP - E5', 'DWP - E5').
+        Showing import-side item names here would be misleading because the
+        report is now driven by the plan, not the import M2M tags.
         Returns: List of {id, name} dicts ordered by name.
         """
+        from apps.license.models import LicenseItemPlan
         item_names = (
             ItemNameModel.objects
             .filter(
-                is_active=True,
-                license_import_item__available_value__gt=0,   # has plannable items
+                plan_lines__isnull=False,                          # has at least one plan line
+                plan_lines__import_item__available_value__gt=0,   # on an import item with balance
+                plan_lines__import_item__license__flags__is_active=True,
             )
             .distinct()
             .order_by('name')

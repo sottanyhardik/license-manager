@@ -469,12 +469,20 @@ class ItemReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='available-items')
     def available_items(self, request):
         """
-        Get list of all active item names that have license import items.
-        Returns: List of item names with id and name
+        Get item names that actually have linked import items with
+        available_value > 0.  Only these names will produce results
+        in the report, so showing the rest in the multi-select filter
+        is misleading.
+        Returns: List of {id, name} dicts ordered by name.
         """
-        # Get all item names (active ones)
-        item_names = ItemNameModel.objects.filter(
-            is_active=True
-        ).order_by('name').values('id', 'name')
-
+        item_names = (
+            ItemNameModel.objects
+            .filter(
+                is_active=True,
+                license_import_item__available_value__gt=0,   # has plannable items
+            )
+            .distinct()
+            .order_by('name')
+            .values('id', 'name')
+        )
         return Response(list(item_names))

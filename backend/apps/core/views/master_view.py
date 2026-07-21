@@ -654,7 +654,11 @@ class MasterViewSet(viewsets.ModelViewSet):
                     - export: 'xlsx' or 'pdf' (default: 'xlsx')
                     - All filter params from the list view
                 """
-                export_format = request.query_params.get('export', 'xlsx').lower()
+                # Frontend sends `_export` (with underscore); support both forms.
+                export_format = (
+                    request.query_params.get('_export')
+                    or request.query_params.get('export', 'xlsx')
+                ).lower()
 
                 # Get filtered queryset (applies all filters, search, ordering)
                 queryset = self.filter_queryset(self.get_queryset())

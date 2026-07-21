@@ -144,6 +144,11 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
     balance_cif_fc = serializers.SerializerMethodField(read_only=True)
 
+    # Sum of SALE trade lines for this import item where the parent trade has
+    # NO BOE attached.  These amounts debit the licence balance without a
+    # corresponding BOE, making the double-count visible in the UI.
+    billed_no_boe = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = LicenseImportItemsModel
         fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'items_detail', 'description', 'quantity',
@@ -151,7 +156,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                   'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value',
                   'license_number', 'license_date', 'license_expiry_date',
                   'notification_number', 'exporter_name', 'notes', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
-                  'is_restricted', 'condition_type']
+                  'is_restricted', 'condition_type', 'billed_no_boe']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly
         extra_kwargs = {
@@ -229,6 +234,34 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
     def get_allotted_value(self, obj):
         return float(obj.allotted_value or 0)
+
+    def get_billed_no_boe(self, obj):
+        """
+        Total CIF from SALE trade lines for this import item where the parent
+        trade has no BOE attached (trade.boe is null).
+
+        These amounts are counted in the licence balance calculation as trade
+        debits but have no linked BOE, which can cause apparent double-counting
+        when a separate BOE also debits the same item.  Surfacing this value in
+        the UI lets operators spot and fix the missing BOE link.
+        """
+        try:
+            from apps.trade.models import LicenseTradeLine
+            from django.db.models import Sum, DecimalField
+            from django.db.models.functions import Coalesce
+            from django.db.models import Value
+            from decimal import Decimal
+
+            total = LicenseTradeLine.objects.filter(
+                sr_number=obj,
+                trade__direction='SALE',
+                trade__boe__isnull=True,       # no BOE attached to this trade
+            ).aggregate(
+                t=Coalesce(Sum('cif_fc'), Value(Decimal('0')), output_field=DecimalField())
+            )['t']
+            return float(total or 0)
+        except Exception:
+            return 0.0
 
     def get_balance_cif_fc(self, obj):
         """

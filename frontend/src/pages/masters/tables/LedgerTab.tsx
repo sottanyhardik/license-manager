@@ -66,6 +66,8 @@ interface ImportItem {
     allotted_value?: number;
     debited_quantity?: number;
     debited_value?: number;
+    /** SALE trade CIF billed without a linked BOE — contributes to balance deduction without a matching BOE debit */
+    billed_no_boe?: number;
     balance_cif_fc?: number | null;
     available_quantity?: number;
     available_value?: number;
@@ -487,9 +489,10 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
         && importItems.every((r) => !Number(r.cif_fc));
     const commonBalance = isCommonCifBalance(importItems) || allItemsZeroCif;
 
-    const totalCifFc   = importItems.reduce((s, r) => s + (Number(r.cif_fc)         || 0), 0);
+    const totalCifFc    = importItems.reduce((s, r) => s + (Number(r.cif_fc)         || 0), 0);
     const totalAllotted = importItems.reduce((s, r) => s + (Number(r.allotted_value) || 0), 0);
     const totalDebited  = importItems.reduce((s, r) => s + (Number(r.debited_value)  || 0), 0);
+    const totalBilledNoBoe = importItems.reduce((s, r) => s + (Number(r.billed_no_boe) || 0), 0);
     const totalBalance  = importItems.reduce((s, r) => s + (Number(r.balance_cif_fc) || 0), 0);
     // When commonBalance (incl. all-zero-CIF licenses) use the authoritative
     // license-level balance; otherwise sum per-item balance_cif_fc.
@@ -680,6 +683,9 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                 <th scope="col" className="px-3 py-2.5 text-right">Qty</th>
                                 <th scope="col" className="px-3 py-2.5 text-right">CIF ($)</th>
                                 <th scope="col" className="px-3 py-2.5 text-right">BOE Used</th>
+                                <th scope="col" className="px-3 py-2.5 text-right" title="SALE trade billed without a linked BOE — these amounts deduct from your balance without a corresponding BOE">
+                                    Billed
+                                </th>
                                 <th scope="col" className="px-3 py-2.5 text-right">Allotted</th>
                                 {!commonBalance && <th scope="col" className="px-3 py-2.5 text-right">Balance ($)</th>}
                                 <th scope="col" className="w-7 px-3 py-2.5" aria-label="Expand" />
@@ -718,6 +724,19 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                             <td className="px-3 py-2.5 text-right tabular-nums text-xs">
                                                 {r.debited_value != null && Number(r.debited_value) > 0
                                                     ? <span className="text-amber-700">{fmtUsd(r.debited_value)}</span>
+                                                    : <span className="text-muted-foreground/40">—</span>}
+                                            </td>
+                                            {/* Billed (no BOE) — SALE trade CIF counted without a linked BOE */}
+                                            <td className="px-3 py-2.5 text-right tabular-nums text-xs">
+                                                {r.billed_no_boe != null && Number(r.billed_no_boe) > 0
+                                                    ? (
+                                                        <span
+                                                            className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-orange-700 bg-orange-50 ring-1 ring-orange-200"
+                                                            title="This amount is debiting your balance via a SALE trade that has no BOE linked. Open the trade and link its BOE to fix the balance."
+                                                        >
+                                                            {fmtUsd(r.billed_no_boe)}
+                                                        </span>
+                                                    )
                                                     : <span className="text-muted-foreground/40">—</span>}
                                             </td>
                                             <td className="px-3 py-2.5 text-right tabular-nums text-xs">
@@ -1027,6 +1046,11 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                 <td colSpan={4} className="px-3 py-2.5 text-right text-xs uppercase tracking-wider text-muted-foreground">Totals</td>
                                 <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmtUsd(licenseValue)}</td>
                                 <td className="px-3 py-2.5 text-right tabular-nums text-xs text-amber-700">{fmtUsd(totalDebited)}</td>
+                                <td className="px-3 py-2.5 text-right tabular-nums text-xs">
+                                    {totalBilledNoBoe > 0
+                                        ? <span className="font-semibold text-orange-700">{fmtUsd(totalBilledNoBoe)}</span>
+                                        : <span className="text-muted-foreground/40">—</span>}
+                                </td>
                                 <td className="px-3 py-2.5 text-right tabular-nums text-xs text-violet-700">{fmtUsd(totalAllotted)}</td>
                                 {!commonBalance && <td className="px-3 py-2.5 text-right tabular-nums text-xs text-primary">{fmtUsd(totalBalance)}</td>}
                                 <td />

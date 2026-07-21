@@ -37,7 +37,14 @@ class ItemReportView(APIView):
     permission_classes = [ReportPermission]
 
     def get(self, request, *args, **kwargs):
-        output_format = request.GET.get('format', 'json').lower()
+        # DRF intercepts ?format= as a content-negotiation override and raises
+        # NotAcceptable for unknown formats like 'excel'.  The frontend sends
+        # ?_format=excel (underscore prefix) to bypass that interception.
+        # Support both forms for backward compatibility.
+        output_format = (
+            request.GET.get('_format')
+            or request.GET.get('format', 'json')
+        ).lower()
         item_names = request.GET.get('item_names')  # Comma-separated item name IDs
         company_ids = request.GET.get('company_ids')  # Comma-separated company IDs
         exclude_company_ids = request.GET.get('exclude_company_ids')  # Comma-separated company IDs to exclude

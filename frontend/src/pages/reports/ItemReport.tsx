@@ -79,7 +79,9 @@ export function buildItemReportPath({
     expiryDateFrom,
     expiryDateTo,
 }: ItemReportPathOptions): string {
-    const params = new URLSearchParams({format});
+    // Use _format (underscore prefix) so DRF's ?format= content-negotiation
+    // interceptor does not reject 'excel' as an unknown format.
+    const params = new URLSearchParams(format === 'excel' ? {_format: format} : {format});
     const itemNames = normalizeFilterValues(selectedItemNames);
     const companyIds = normalizeFilterValues(selectedCompanies);
     const excludedCompanyIds = normalizeFilterValues(excludeCompanies);

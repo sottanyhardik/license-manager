@@ -84,7 +84,7 @@ def pivot_license(db, pivot_masters):
     """A single active, sufficiently-balanced license with one import item
     that is both physically present (quantity/allotted/debited/available) and
     manually planned (LicenseItemPlan) — exercising the manual-plan branch of
-    the Unit Price / Planned CIF totals-row logic."""
+    the Plan Qty / Planned CIF totals-row logic."""
     license_obj = LicenseDetailsModel.objects.create(
         license_number="PIVOT-EXCEL-001",
         license_date=date.today() - timedelta(days=30),
@@ -220,11 +220,12 @@ def test_item_pivot_excel_base_cif_totals_land_under_correct_headers(superuser_c
 
 
 @pytest.mark.django_db
-def test_item_pivot_excel_unit_price_total_is_effective_rate(superuser_client, pivot_license):
-    """The per-item 'Unit Price' totals-row cell must hold the effective
-    blended rate (total Planned CIF / total Planned Qty) — matching the
-    on-screen report's `effectiveUnit` total — rather than being left blank
-    (which silently dropped real, summable data for manually-planned rows)."""
+def test_item_pivot_excel_plan_qty_total_is_literal_sum(superuser_client, pivot_license):
+    """The per-item 'Plan Qty' totals-row cell must hold a literal sum of
+    `plan_quantity` across licenses — matching the on-screen report's
+    `totalPlanQty` total — not a blended rate. Rows with no manual plan
+    (norm-derived, shown as a unit-price rate per-row) contribute 0 rather
+    than being folded into a rate."""
     content = _download_excel(superuser_client)
     workbook = load_workbook(BytesIO(content), data_only=True)
     sheet = _first_report_sheet(workbook)
@@ -233,9 +234,9 @@ def test_item_pivot_excel_unit_price_total_is_effective_rate(superuser_client, p
     totals_row = [cell.value for cell in sheet[sheet.max_row]]
 
     item_name = "PIVOT TEST ITEM - PIVOTTEST"
-    unit_price_idx = header_row.index(f"{item_name} Unit Price")
+    plan_qty_idx = header_row.index(f"{item_name} Plan Qty")
     planned_cif_idx = header_row.index(f"{item_name} Planned CIF")
 
-    # planned_cif = 400.00 (manual plan), planned_qty = 40.000 -> rate = 10.00
+    # planned_cif = 400.00 (manual plan), plan_quantity = 40.000 -> literal sum = 40.00
     assert totals_row[planned_cif_idx] == pytest.approx(400.00)
-    assert totals_row[unit_price_idx] == pytest.approx(10.00)
+    assert totals_row[plan_qty_idx] == pytest.approx(40.00)

@@ -1377,7 +1377,7 @@ class ItemPivotReportView(APIView):
                         # e1_plan / e5_plan waterfall so the Excel matches
                         # the bulk Balance report cell-for-cell.
                         headers.extend([
-                            f"{item_name} Unit Price",
+                            f"{item_name} Plan Qty",
                             f"{item_name} Planned CIF",
                         ])
                         item_headers.extend(headers)
@@ -1492,14 +1492,20 @@ class ItemPivotReportView(APIView):
                             cell = WriteOnlyCell(worksheet, value=total_restriction)
                             cell.font = Font(bold=True)
                             totals_row.append(cell)
-                        # Unit Price / Plan Qty total: an effective blended rate
-                        # (total Planned CIF / total Planned Qty), matching the
-                        # on-screen report's `effectiveUnit` total
-                        # (frontend/src/pages/reports/ItemPivotReport.tsx). A
-                        # straight sum would be meaningless here since the column
-                        # holds a rate for norm-derived rows and a quantity for
-                        # manually-planned rows; the blended rate is well-defined
-                        # either way and stays consistent across mixed sheets.
+                        # Plan Qty total: a literal sum of plan_quantity only,
+                        # matching the on-screen report's `totalPlanQty` total
+                        # (frontend/src/pages/reports/ItemPivotReport.tsx). Rows
+                        # with no manual plan (norm-derived, shown as a unit-price
+                        # rate per-row) contribute 0 here rather than being folded
+                        # into a blended rate.
+                        total_plan_qty = sum(
+                            license_row['items'].get(item_name, {}).get('plan_quantity', 0) or 0
+                            for license_row in licenses_list
+                        )
+                        cell = WriteOnlyCell(worksheet, value=total_plan_qty)
+                        cell.font = Font(bold=True)
+                        totals_row.append(cell)
+
                         # Planned CIF total: per-product source (manual plan when
                         # the product was manually planned, else norm-derived).
                         def _planned_cif_for(item_d):
@@ -1507,18 +1513,7 @@ class ItemPivotReportView(APIView):
                             pc = item_d.get('plan_cif') or 0
                             return pc if (pq or pc) else (item_d.get('planned_cif') or 0)
 
-                        def _planned_qty_for(item_d):
-                            pq = item_d.get('plan_quantity') or 0
-                            pc = item_d.get('plan_cif') or 0
-                            return pq if (pq or pc) else (item_d.get('available_quantity') or 0)
-
                         total_planned = sum(_planned_cif_for(license_row['items'].get(item_name, {})) for license_row in licenses_list)
-                        total_planned_qty = sum(_planned_qty_for(license_row['items'].get(item_name, {})) for license_row in licenses_list)
-                        effective_unit = (total_planned / total_planned_qty) if total_planned_qty else None
-                        cell = WriteOnlyCell(worksheet, value=effective_unit)
-                        cell.font = Font(bold=True)
-                        totals_row.append(cell)
-
                         cell = WriteOnlyCell(worksheet, value=total_planned)
                         cell.font = Font(bold=True)
                         totals_row.append(cell)

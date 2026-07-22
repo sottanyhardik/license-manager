@@ -954,7 +954,7 @@ export default function ItemPivotReport() {
                                                                     </>
                                                                 )}
                                                                 {/* Manual plan when present, else norm unit price / planned CIF */}
-                                                                <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty / Unit Price</th>
+                                                                <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty</th>
                                                                 <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Planned CIF</th>
                                                                 {item.name === 'RUTILE - A3627' && (
                                                                     <th scope="col" className="text-right" style={{
@@ -1254,13 +1254,14 @@ export default function ItemPivotReport() {
                                                                 const itHasManual = (it.plan_quantity || 0) > 0 || (it.plan_cif || 0) > 0;
                                                                 return sum + (itHasManual ? (it.plan_cif || 0) : (it.planned_cif || 0));
                                                             }, 0);
-                                                            const totalPlannedQty = licenses.reduce((sum, lic) => {
-                                                                const it = lic.items[item.name] || {};
-                                                                const itHasManual = (it.plan_quantity || 0) > 0 || (it.plan_cif || 0) > 0;
-                                                                return sum + (itHasManual ? (it.plan_quantity || 0) : (it.available_quantity || 0));
+                                                            // Total Plan Qty: sum of the manually-planned quantity only —
+                                                            // mirrors exactly what the per-row "Plan Qty" cell shows (it
+                                                            // never falls back to available_quantity/unit_price), so a
+                                                            // norm-driven row with no manual plan contributes 0 here
+                                                            // rather than being folded into a blended rate.
+                                                            const totalPlanQty = licenses.reduce((sum, lic) => {
+                                                                return sum + Number(lic.items[item.name]?.plan_quantity || 0);
                                                             }, 0);
-                                                            // Effective unit price = total planned CIF / total planned qty.
-                                                            const effectiveUnit = totalPlannedQty > 0 ? totalPlanned / totalPlannedQty : 0;
                                                             return (
                                                                 <React.Fragment key={`total-${item.id}`}>
                                                                     <td className="text-muted-foreground">-</td>
@@ -1285,15 +1286,14 @@ export default function ItemPivotReport() {
                                                                             </td>
                                                                         </>
                                                                     )}
-                                                                    {/* Plan Qty / Unit Price total: the effective rate
-                                                                        (Planned CIF ÷ Planned Qty). Must be exactly one
-                                                                        <td> here — an extra placeholder cell shifts this
-                                                                        and every later item's totals out from under
-                                                                        their headers (was rendering as blank "-" under
+                                                                    {/* Plan Qty total. Must be exactly one <td> here — an
+                                                                        extra placeholder cell shifts this and every later
+                                                                        item's totals out from under their headers (this
+                                                                        column previously rendered blank "-" under
                                                                         "Plan Qty / Unit Price" while the real number
                                                                         landed one column over). */}
                                                                     <td className="text-right">
-                                                                        {effectiveUnit > 0 ? effectiveUnit.toFixed(2) : '-'}
+                                                                        {totalPlanQty > 0 ? totalPlanQty.toFixed(3) : '-'}
                                                                     </td>
                                                                     <td className="text-right font-bold">
                                                                         {totalPlanned > 0 ? totalPlanned.toFixed(2) : '-'}

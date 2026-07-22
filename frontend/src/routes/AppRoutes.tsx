@@ -34,6 +34,7 @@ const ActiveLicenses = lazy(() => import("../pages/reports/ActiveLicenses"));
 const DownloadLicense = lazy(() => import("../pages/reports/DownloadLicense"));
 const ItemPivotReport = lazyLoadWithRetry(() => import("../pages/reports/ItemPivotReport"));
 const ItemReport = lazyLoadWithRetry(() => import("../pages/reports/ItemReport"));
+const PlannedReport = lazyLoadWithRetry(() => import("../pages/reports/PlannedReport"));
 
 const TradeForm = lazy(() => import("../pages/TradeForm"));
 const LedgerUpload = lazy(() => import("../pages/LedgerUpload"));
@@ -51,6 +52,7 @@ const REPORT_ROUTES: [string, ReactElement][] = [
     ["/reports/download-license", <DownloadLicense />],
     ["/reports/item-pivot", <ItemPivotReport />],
     ["/reports/item-report", <ItemReport />],
+    ["/reports/planned-report", <PlannedReport />],
 ];
 
 export default function AppRoutes() {

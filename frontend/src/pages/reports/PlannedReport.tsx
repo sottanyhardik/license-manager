@@ -1,7 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import api from "../../api/axios";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, FileSpreadsheet, Inbox, Loader2, Package, Tag } from "lucide-react";
 import { reportQueryString, type ReportQueryOptions } from "./itemReport/reportQueryString";
@@ -11,13 +9,11 @@ import ItemReportFilters from "./itemReport/ItemReportFilters";
 import ItemReportTotalsBar from "./itemReport/ItemReportTotalsBar";
 import ItemReportTable from "./itemReport/ItemReportTable";
 
-export { normalizeFilterValues, normalizeReportNumber } from "./itemReport/reportQueryString";
-
-export function buildItemReportPath(options: ReportQueryOptions): string {
-    return `reports/item-report/?${reportQueryString(options)}`;
+export function buildPlannedReportPath(options: ReportQueryOptions): string {
+    return `reports/planned-report/?${reportQueryString(options)}`;
 }
 
-export default function ItemReport() {
+export default function PlannedReport() {
     const navigate = useNavigate();
 
     const {
@@ -32,50 +28,14 @@ export default function ItemReport() {
     } = useItemReportFilters();
 
     const {
-        reportData, setReportData, loading, downloading, itemNameOptions,
+        reportData, loading, downloading, itemNameOptions,
         editingCell, editValue, setEditValue, startEdit, cancelEdit, saveEdit, handleExport,
     } = useItemReportData({
-        buildPath: buildItemReportPath,
-        availableItemsPath: "item-report/available-items/",
+        buildPath: buildPlannedReportPath,
+        availableItemsPath: "planned-report/available-items/",
         debouncedFilters,
-        exportFilename: "item_report.xlsx",
+        exportFilename: "planned_report.xlsx",
     });
-
-    const handleItemNamesEdit = async (item: any, selectedOptions: { value: unknown; label: string }[] | null) => {
-        try {
-            const itemNameIds = selectedOptions ? selectedOptions.map(v => v.value) : [];
-            await api.patch(`license-items/${item.id}/`, {
-                items: itemNameIds
-            });
-            toast.success('Item names updated successfully');
-
-            // Fetch updated item data to check if it still matches filters
-            const response = await api.get(buildItemReportPath({format: "json", ...filters}));
-            const updatedReportData = response.data;
-
-            // Find the updated item in the new data
-            const updatedItem = updatedReportData.items.find((i: any) => i.id === item.id);
-
-            if (updatedItem) {
-                // Item still matches filters - update the row
-                setReportData((prev) => {
-                    if (!prev) return prev;
-                    const updatedItems = prev.items.map((i: any) => i.id === item.id ? updatedItem : i);
-                    return {...prev, items: updatedItems};
-                });
-            } else {
-                // Item no longer matches filters - remove it from the list
-                setReportData((prev) => {
-                    if (!prev) return prev;
-                    const filteredItems = prev.items.filter((i: any) => i.id !== item.id);
-                    return {...prev, items: filteredItems, total_items: filteredItems.length};
-                });
-                toast.info('Item removed from list as it no longer matches the filters');
-            }
-        } catch {
-            toast.error('Failed to update item names. Please try again.');
-        }
-    };
 
     return (
         <div className="min-h-screen bg-background">
@@ -93,9 +53,9 @@ export default function ItemReport() {
                         <span className="mx-1.5 opacity-50">/</span>
                         Reports
                         <span className="mx-1.5 opacity-50">/</span>
-                        Item Report
+                        Planned Report
                     </div>
-                    <h1>Item Report</h1>
+                    <h1>Planned Report</h1>
                     {reportData && (
                         <div className="mt-1 flex items-center gap-1 text-[12.5px] text-muted-foreground">
                             <CalendarDays className="size-3.5" aria-hidden="true" />
@@ -167,7 +127,7 @@ export default function ItemReport() {
                         <Card>
                             <CardContent className="flex flex-col items-center py-12 text-center">
                                 <Loader2 className="mb-3 size-10 animate-spin text-primary" />
-                                <h5 className="text-muted-foreground">Loading Item Report…</h5>
+                                <h5 className="text-muted-foreground">Loading Planned Report…</h5>
                                 <p className="text-muted-foreground text-sm">Please wait while we fetch the data</p>
                             </CardContent>
                         </Card>
@@ -204,9 +164,7 @@ export default function ItemReport() {
                     {!loading && hasQuery && reportData && reportData.items.length > 0 && (
                         <ItemReportTable
                             items={reportData.items}
-                            itemNameMode="editable"
-                            itemNameOptions={itemNameOptions}
-                            onItemNamesChange={handleItemNamesEdit}
+                            itemNameMode="readonly"
                             editingCell={editingCell}
                             editValue={editValue}
                             onEditValueChange={setEditValue}

@@ -126,4 +126,9 @@ export const reportEntities = [
         label: "Item Report",
         icon: "list-ul",
     },
+    {
+        path: "/reports/planned-report",
+        label: "Planned Report",
+        icon: "check2-square",
+    },
 ];

@@ -8,6 +8,7 @@ from apps.license.views.expiring_licenses_report import ExpiringLicensesViewSet,
 from apps.license.views.active_licenses_report import ActiveLicensesViewSet, ActiveLicensesReportView
 from apps.license.views.item_pivot_report import ItemPivotViewSet, ItemPivotReportView
 from apps.license.views.item_report import ItemReportViewSet, ItemReportView
+from apps.license.views.planned_report import PlannedReportViewSet, PlannedReportView
 from apps.license.views.inventory_balance_report import InventoryBalanceReportView
 from apps.license.views.inventory_balance_viewset import InventoryBalanceViewSet
 from apps.license.views.license_items import LicenseItemViewSet
@@ -30,6 +31,7 @@ router.register(r"expiring-licenses", ExpiringLicensesViewSet, basename="expirin
 router.register(r"active-licenses", ActiveLicensesViewSet, basename="active-licenses")
 router.register(r"item-pivot", ItemPivotViewSet, basename="item-pivot")
 router.register(r"item-report", ItemReportViewSet, basename="item-report")
+router.register(r"planned-report", PlannedReportViewSet, basename="planned-report")
 router.register(r"incentive-licenses", IncentiveLicenseViewSet, basename="incentive-licenses")
 
 urlpatterns = [
@@ -48,6 +50,7 @@ urlpatterns = [
     path("reports/active-licenses/", ActiveLicensesReportView.as_view(), name="active-licenses-report"),
     path("reports/item-pivot/", ItemPivotReportView.as_view(), name="item-pivot-report"),
     path("reports/item-report/", ItemReportView.as_view(), name="item-report"),
+    path("reports/planned-report/", PlannedReportView.as_view(), name="planned-report"),
     # Router URLs must come LAST
     path("", include(router.urls)),
 ]

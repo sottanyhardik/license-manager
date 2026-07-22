@@ -40,6 +40,7 @@ const PATH_TITLES = [
     { pattern: '/reports/download-license',                     title: 'Download License' },
     { pattern: '/reports/item-pivot',                           title: 'Item Pivot Report' },
     { pattern: '/reports/item-report',                          title: 'Item Report' },
+    { pattern: '/reports/planned-report',                       title: 'Planned Report' },
     { pattern: '/reports/parle/sion-e1',                        title: 'SION E1 Report' },
     { pattern: '/reports/parle/sion-e5',                        title: 'SION E5 Report' },
     { pattern: '/reports/parle/sion-e126',                      title: 'SION E126 Report' },

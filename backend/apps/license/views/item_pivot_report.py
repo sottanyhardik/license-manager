@@ -15,6 +15,7 @@ from django.http import JsonResponse, HttpResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from apps.accounts.permissions import ReportPermission
+from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -24,6 +25,7 @@ from apps.license.models import (
     LicenseDetailsModel, LicenseImportItemsModel,
     LicenseExportItemModel, LicenseTransferModel,
 )
+from apps.license.views.item_report import _ExcelPassthroughRenderer
 
 def _safe_int(value, default):
     try:
@@ -70,6 +72,16 @@ class ItemPivotReportView(APIView):
         - days: Number of days to look back (default: 30)
     """
     permission_classes = [ReportPermission]
+    # Without this, DRF's own content negotiation intercepts ?format=excel
+    # before get() ever runs and raises Http404 (rest_framework.negotiation.
+    # DefaultContentNegotiation.filter_renderers has no renderer whose
+    # `.format` is 'excel', since DEFAULT_RENDERER_CLASSES only registers
+    # JSONRenderer) — i.e. the Export button 404s outright. Registering the
+    # passthrough renderer (same fix already applied to ItemReportView) makes
+    # 'excel' a recognised format so content negotiation succeeds; the view
+    # still returns a plain StreamingHttpResponse for excel, so this renderer
+    # is never actually invoked.
+    renderer_classes = [JSONRenderer, _ExcelPassthroughRenderer]
 
     def get(self, request, *args, **kwargs):
         output_format = request.GET.get('format', 'json').lower()
@@ -1436,9 +1448,15 @@ class ItemPivotReportView(APIView):
                         worksheet.append(_xlsx_safe_row(row_data))
 
                     # Totals row
+                    # base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt',
+                    #   'Exporter', 'Total CIF', 'Debited CIF', 'Alloted CIF',
+                    #   'Balance CIF', 'Notes', 'Condition Sheet']
+                    # 'TOTAL' lands under col 1 (Sr no); cols 2-5 (DFIA No/DFIA
+                    # Dt/Expiry Dt/Exporter) are blank; cols 6-9 are the four
+                    # CIF sums; cols 10-11 (Notes/Condition Sheet) are blank.
                     totals_row = [WriteOnlyCell(worksheet, value='TOTAL')]
                     totals_row[0].font = Font(bold=True)
-                    totals_row.extend([None, None, None, None, None, None])
+                    totals_row.extend([None, None, None, None])  # DFIA No, DFIA Dt, Expiry Dt, Exporter
 
                     total_cif_cell = WriteOnlyCell(worksheet, value=sum(license_row['total_cif'] for license_row in licenses_list))
                     total_cif_cell.font = Font(bold=True)
@@ -1456,6 +1474,8 @@ class ItemPivotReportView(APIView):
                     balance_cif_cell.font = Font(bold=True)
                     totals_row.append(balance_cif_cell)
 
+                    totals_row.extend([None, None])  # Notes, Condition Sheet
+
                     for item in items_with_data:
                         item_name = item['name']
                         has_restriction = item.get('has_restriction', False)
@@ -1472,15 +1492,33 @@ class ItemPivotReportView(APIView):
                             cell = WriteOnlyCell(worksheet, value=total_restriction)
                             cell.font = Font(bold=True)
                             totals_row.append(cell)
-                        # Unit Price column total stays blank (it's a rate).
+                        # Unit Price / Plan Qty total: an effective blended rate
+                        # (total Planned CIF / total Planned Qty), matching the
+                        # on-screen report's `effectiveUnit` total
+                        # (frontend/src/pages/reports/ItemPivotReport.tsx). A
+                        # straight sum would be meaningless here since the column
+                        # holds a rate for norm-derived rows and a quantity for
+                        # manually-planned rows; the blended rate is well-defined
+                        # either way and stays consistent across mixed sheets.
                         # Planned CIF total: per-product source (manual plan when
                         # the product was manually planned, else norm-derived).
-                        totals_row.append(None)
                         def _planned_cif_for(item_d):
                             pq = item_d.get('plan_quantity') or 0
                             pc = item_d.get('plan_cif') or 0
                             return pc if (pq or pc) else (item_d.get('planned_cif') or 0)
+
+                        def _planned_qty_for(item_d):
+                            pq = item_d.get('plan_quantity') or 0
+                            pc = item_d.get('plan_cif') or 0
+                            return pq if (pq or pc) else (item_d.get('available_quantity') or 0)
+
                         total_planned = sum(_planned_cif_for(license_row['items'].get(item_name, {})) for license_row in licenses_list)
+                        total_planned_qty = sum(_planned_qty_for(license_row['items'].get(item_name, {})) for license_row in licenses_list)
+                        effective_unit = (total_planned / total_planned_qty) if total_planned_qty else None
+                        cell = WriteOnlyCell(worksheet, value=effective_unit)
+                        cell.font = Font(bold=True)
+                        totals_row.append(cell)
+
                         cell = WriteOnlyCell(worksheet, value=total_planned)
                         cell.font = Font(bold=True)
                         totals_row.append(cell)

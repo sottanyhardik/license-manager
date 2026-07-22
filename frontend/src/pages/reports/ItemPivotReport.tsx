@@ -1285,9 +1285,13 @@ export default function ItemPivotReport() {
                                                                             </td>
                                                                         </>
                                                                     )}
-                                                                    {/* Unit Price (effective rate) + Planned CIF total. */}
-                                                                    <td className="text-muted-foreground">-</td>
-                                                                    <td className="text-right text-muted-foreground">-</td>
+                                                                    {/* Plan Qty / Unit Price total: the effective rate
+                                                                        (Planned CIF ÷ Planned Qty). Must be exactly one
+                                                                        <td> here — an extra placeholder cell shifts this
+                                                                        and every later item's totals out from under
+                                                                        their headers (was rendering as blank "-" under
+                                                                        "Plan Qty / Unit Price" while the real number
+                                                                        landed one column over). */}
                                                                     <td className="text-right">
                                                                         {effectiveUnit > 0 ? effectiveUnit.toFixed(2) : '-'}
                                                                     </td>

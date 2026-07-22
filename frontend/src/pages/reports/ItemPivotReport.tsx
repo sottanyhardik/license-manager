@@ -1322,9 +1322,10 @@ export default function ItemPivotReport() {
                                                             <table className="table table-bordered table-sm" style={{tableLayout: 'fixed', width: '1400px'}}>
                                                                 <thead className="table-light">
                                                                 <tr>
-                                                                    <th scope="col" style={{width: '80px'}}>Sr No</th>
-                                                                    <th scope="col" style={{width: '620px'}}>Item Name</th>
-                                                                    <th scope="col" className="text-right" style={{width: '230px'}}>Available Balance QTY</th>
+                                                                    <th scope="col" style={{width: '70px'}}>Sr No</th>
+                                                                    <th scope="col" style={{width: '460px'}}>Item Name</th>
+                                                                    <th scope="col" className="text-right" style={{width: '220px'}}>Available Balance QTY</th>
+                                                                    <th scope="col" className="text-right" style={{width: '150px'}}>Planned Qty</th>
                                                                     <th scope="col" className="text-right" style={{width: '170px'}}>Unit Price</th>
                                                                     <th scope="col" className="text-right" style={{width: '300px'}}>Total Planned CIF ($)</th>
                                                                 </tr>
@@ -1338,6 +1339,7 @@ export default function ItemPivotReport() {
                                                                     </td>
                                                                     <td className="text-right font-bold">-</td>
                                                                     <td className="text-right font-bold">-</td>
+                                                                    <td className="text-right font-bold">-</td>
                                                                 </tr>
 
                                                                 {/* Regular Items */}
@@ -1347,6 +1349,9 @@ export default function ItemPivotReport() {
                                                                         <td className="font-bold">{itemName}</td>
                                                                         <td className="text-right">
                                                                             {formatIndianNumber(itemData.available, 2)}
+                                                                        </td>
+                                                                        <td className="text-right">
+                                                                            {itemData.planned_qty ? formatIndianNumber(itemData.planned_qty, 2) : '-'}
                                                                         </td>
                                                                         <td className="text-right">
                                                                             {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
@@ -1371,7 +1376,7 @@ export default function ItemPivotReport() {
                                                                                 return (
                                                                                     <React.Fragment key={percentage}>
                                                                                         <tr className="table-warning">
-                                                                                            <td colSpan={5} className="text-center font-bold">
+                                                                                            <td colSpan={6} className="text-center font-bold">
                                                                                                 <TriangleAlert className="size-4" aria-hidden="true" />
                                                                                                 RESTRICTED ITEMS - {percentage}%
                                                                                             </td>
@@ -1382,6 +1387,9 @@ export default function ItemPivotReport() {
                                                                                                 <td className="font-bold">{itemName}</td>
                                                                                                 <td className="text-right">
                                                                                                     {formatIndianNumber(itemData.available, 2)}
+                                                                                                </td>
+                                                                                                <td className="text-right">
+                                                                                                    {itemData.planned_qty ? formatIndianNumber(itemData.planned_qty, 2) : '-'}
                                                                                                 </td>
                                                                                                 <td className="text-right">
                                                                                                     {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
@@ -1399,6 +1407,7 @@ export default function ItemPivotReport() {
                                                                                             </td>
                                                                                             <td className="text-right font-bold">-</td>
                                                                                             <td className="text-right font-bold">-</td>
+                                                                                            <td className="text-right font-bold">-</td>
                                                                                         </tr>
                                                                                     </React.Fragment>
                                                                                 );
@@ -1410,6 +1419,9 @@ export default function ItemPivotReport() {
                                                                     <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
                                                                     <td className="text-right font-bold">
                                                                         {formatIndianNumber(summary.totalAvailable || 0, 2)}
+                                                                    </td>
+                                                                    <td className="text-right font-bold">
+                                                                        {formatIndianNumber(summary.totalPlannedQty || 0, 2)}
                                                                     </td>
                                                                     <td className="text-right font-bold">
                                                                         {summary.totalPlannedQty > 0
@@ -1467,9 +1479,10 @@ export default function ItemPivotReport() {
                                                 <table className="table table-bordered table-sm mb-0" style={{ tableLayout: 'fixed', width: '1400px' }}>
                                                     <thead className="table-light">
                                                         <tr>
-                                                            <th scope="col" style={{ width: '60px' }}>Sr No</th>
-                                                            <th scope="col" style={{ width: '540px' }}>Item Name</th>
-                                                            <th scope="col" className="text-right" style={{ width: '230px' }}>Available Balance QTY</th>
+                                                            <th scope="col" style={{ width: '50px' }}>Sr No</th>
+                                                            <th scope="col" style={{ width: '400px' }}>Item Name</th>
+                                                            <th scope="col" className="text-right" style={{ width: '220px' }}>Available Balance QTY</th>
+                                                            <th scope="col" className="text-right" style={{ width: '150px' }}>Planned Qty</th>
                                                             <th scope="col" className="text-right" style={{ width: '170px' }}>Unit Price</th>
                                                             <th scope="col" className="text-right" style={{ width: '300px' }}>Total Planned CIF ($)</th>
                                                         </tr>
@@ -1479,6 +1492,7 @@ export default function ItemPivotReport() {
                                                         <tr className="table-info">
                                                             <td colSpan={2} className="text-center font-bold">OPENING BALANCE</td>
                                                             <td className="text-right font-bold">{formatIndianNumber(totalBalanceCif, 2)}</td>
+                                                            <td className="text-right font-bold">-</td>
                                                             <td className="text-right font-bold">-</td>
                                                             <td className="text-right font-bold">-</td>
                                                         </tr>
@@ -1492,6 +1506,9 @@ export default function ItemPivotReport() {
                                                                     {formatIndianNumber(itemData.available, 2)}
                                                                 </td>
                                                                 <td className="text-right">
+                                                                    {itemData.planned_qty ? formatIndianNumber(itemData.planned_qty, 2) : '-'}
+                                                                </td>
+                                                                <td className="text-right">
                                                                     {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
                                                                 </td>
                                                                 <td className="text-right font-semibold">
@@ -1503,6 +1520,9 @@ export default function ItemPivotReport() {
                                                         {/* Grand total */}
                                                         <tr className="table-primary font-bold">
                                                             <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
+                                                            <td className="text-right font-bold">
+                                                                {formatIndianNumber(ns.totalAvailable || 0, 2)}
+                                                            </td>
                                                             <td className="text-right font-bold">
                                                                 {formatIndianNumber(ns.totalPlannedQty || 0, 2)}
                                                             </td>

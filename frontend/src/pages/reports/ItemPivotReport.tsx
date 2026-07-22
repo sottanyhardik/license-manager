@@ -954,8 +954,6 @@ export default function ItemPivotReport() {
                                                                     </>
                                                                 )}
                                                                 {/* Manual plan when present, else norm unit price / planned CIF */}
-                                                                <th scope="col" style={{minWidth: '140px', fontSize: 13.5}}>Import Item Name</th>
-                                                                <th scope="col" className="text-right" style={{minWidth: '90px', fontSize: 13.5}}>Import Qty</th>
                                                                 <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty / Unit Price</th>
                                                                 <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Planned CIF</th>
                                                                 {item.name === 'RUTILE - A3627' && (
@@ -1160,12 +1158,6 @@ export default function ItemPivotReport() {
                                                                         {/* Per-product plan: manual plan takes priority when
                                                                             this product was manually planned; fall back to
                                                                             norm-derived values otherwise. */}
-                                                                        <td style={{backgroundColor: itemBg}} className="text-xs text-muted-foreground">
-                                                                            {itemData.import_item_name || '-'}
-                                                                        </td>
-                                                                        <td className="text-right text-xs text-muted-foreground" style={{backgroundColor: itemBg}}>
-                                                                            {itemData.import_quantity ? Number(itemData.import_quantity).toFixed(3) : '-'}
-                                                                        </td>
                                                                         <td className="text-right" style={{backgroundColor: itemBg}}>
                                                                             {(Number(itemData.plan_quantity || 0) > 0 || Number(itemData.plan_cif || 0) > 0)
                                                                                 ? Number(itemData.plan_quantity || 0).toFixed(3)

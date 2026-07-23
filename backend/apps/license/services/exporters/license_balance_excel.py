@@ -515,142 +515,14 @@ def build_balance_excel(license_obj):
     # ══════════════════════════════════════════════════════════════════════
     # ══════════════════════════════════════════════════════════════════════
     # Section 3: Plan Utilization  (final — matches the PlanTab UI exactly)
-    # One row per planning-item GROUP (see plan_utilization_rows) rather than
-    # one row per raw S.No entry — items that share a description merge into
-    # a single row whose S.No column lists every merged serial.
-    # Columns: Item | HS Code | S.No | Status | Avail Qty | Planned Qty |
-    #          Remaining Qty | Planned CIF | Remaining CIF
+    # Shared with the bulk exporter's per-license sheet builder and the
+    # "Utilization Planning Summary" sheet — see render_plan_utilization_section.
     # ══════════════════════════════════════════════════════════════════════
     from apps.license.services.plan_reporting import plan_map_for_license as _plan_map_fn
-    from apps.license.services.plan_utilization import plan_utilization_rows
+    from apps.license.services.exporters.planning_split_rows import render_plan_utilization_section
     _user_plan_map = _plan_map_fn(license_obj.id)
 
-    PLAN_GRN_FILL = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
-    PLAN_GRN_FONT = Font(bold=True, size=9, color="375623")
-    PLAN_GRY_FILL = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-
-    _plan_data_rows = []
-    _g_avail = 0.0; _g_planned_qty = 0.0; _g_planned_cif = 0.0
-
-    for _grp in plan_utilization_rows(license_obj, plan_map=_user_plan_map):
-        _av = float(_grp['available_quantity'] or 0)
-        # Group-level planned totals == Σ LicenseItemPlan.planned_quantity/
-        # planned_cif_fc across the whole group (plan_status_for's
-        # "original"), which is exactly what summing the group's unioned
-        # splits would give — same figure the old per-item code read off
-        # plan_map's `total_planned_quantity`/`total_planned_cif`, just
-        # aggregated across the merged serials instead of one at a time.
-        _pq = float(_grp['original_quantity']) if _grp['has_plan'] else 0.0
-        _pc = float(_grp['original_cif_fc']) if _grp['has_plan'] else 0.0
-        _g_avail += _av; _g_planned_qty += _pq; _g_planned_cif += _pc
-        _plan_data_rows.append({
-            'desc': _grp['description'] or '-',
-            'hs': _grp['hs_code'] or '-',
-            'sr': ', '.join(str(s) for s in _grp['serials']),
-            'avail': _av, 'pqty': _pq, 'pcif': _pc,
-            'rem_qty': _av - _pq,
-            'planned': _pq > 0 or _pc > 0,
-            'splits': _grp['splits'],
-        })
-    _g_rem_qty = _g_avail - _g_planned_qty
-    _g_rem_cif = _license_balance - _g_planned_cif
-
-    # ── Section header ────────────────────────────────────────────────────
-    ws.merge_cells(f'A{r}:I{r}')
-    _ph = ws[f'A{r}']
-    _ph.value = 'Plan Utilization'
-    _ph.fill = HDR_FILL; _ph.font = Font(bold=True, color="FFFFFF", size=10)
-    _ph.alignment = Alignment(horizontal='center', vertical='center')
-    r += 1
-
-    # ── Summary metrics (2 rows x 4 label-value pairs) ───────────────────
-    _metrics = [
-        [('Balance CIF $', f"${_license_balance:,.2f}", False),
-         ('Planned CIF $', f"${_g_planned_cif:,.2f}", False),
-         ('Remaining CIF $', f"${_g_rem_cif:,.2f}", _g_rem_cif < 0),
-         ('Remaining CIF', f"${max(0,_g_rem_cif):,.2f}", False)],
-        [('Available Qty', f"{_g_avail:,.3f}", False),
-         ('Planned Qty', f"{_g_planned_qty:,.3f}", False),
-         ('Remaining Qty', f"{_g_rem_qty:,.3f}", _g_rem_qty < 0),
-         ('Plan Entries', str(sum(1 for p in _plan_data_rows if p['planned'])), False)],
-    ]
-    for _row_metrics in _metrics:
-        for _mi, (_lbl, _val, _warn) in enumerate(_row_metrics):
-            _col = _mi * 2 + 1
-            _lc = ws.cell(row=r, column=_col, value=_lbl)
-            _lc.fill = HDR_FILL; _lc.font = Font(bold=True, color="FFFFFF", size=8)
-            _lc.border = THIN_BORDER; _lc.alignment = Alignment(horizontal='center', vertical='center')
-            _vc = ws.cell(row=r, column=_col + 1, value=_val)
-            _vc.fill = YEL_FILL; _vc.border = THIN_BORDER
-            _vc.font = Font(bold=True, size=9, color="C00000" if _warn else "1F4E79")
-            _vc.alignment = Alignment(horizontal='right', vertical='center')
-        r += 1
-    r += 1  # spacer
-
-    # ── Table headers ─────────────────────────────────────────────────────
-    for _ci, _ch in enumerate(['Item Description', 'HS Code', 'S.No', 'Status',
-                                'Available Qty', 'Planned Qty', 'Remaining Qty',
-                                'Planned CIF ($)', 'Remaining CIF ($)'], 1):
-        _hdr(ws, r, _ci, _ch)
-    r += 1
-
-    # ── Per-group rows (+ split sub-rows) ──────────────────────────────────
-    from apps.license.services.exporters.planning_split_rows import write_split_sub_rows
-
-    _running_cif = _license_balance
-    for _idx, _pr in enumerate(_plan_data_rows):
-        _rf = None if _idx % 2 == 0 else ALT_FILL
-        _running_cif -= _pr['pcif']
-        # ── Item row ──────────────────────────────────────────────────────
-        _dc = ws.cell(row=r, column=1, value=_pr['desc'])
-        _dc.fill = _rf or PatternFill(fill_type=None); _dc.border = THIN_BORDER
-        _dc.font = NORM; _dc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        _hsc = ws.cell(row=r, column=2, value=_pr['hs'])
-        _hsc.fill = _rf or PatternFill(fill_type=None); _hsc.border = THIN_BORDER
-        _hsc.font = NORM; _hsc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        _snc = ws.cell(row=r, column=3, value=_pr['sr'])
-        _snc.fill = _rf or PatternFill(fill_type=None); _snc.border = THIN_BORDER
-        _snc.font = NORM; _snc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        _sc = ws.cell(row=r, column=4, value='Planned' if _pr['planned'] else 'Not Planned')
-        _sc.fill = PLAN_GRN_FILL if _pr['planned'] else PLAN_GRY_FILL; _sc.border = THIN_BORDER
-        _sc.font = PLAN_GRN_FONT if _pr['planned'] else Font(size=9, color="595959")
-        _sc.alignment = Alignment(horizontal='center', vertical='center')
-        _cell(ws, r, 5, _pr['avail'], fill=_rf, align='right', num_fmt='#,##0.000')
-        if _pr['planned']:
-            _cell(ws, r, 6, _pr['pqty'],    fill=_rf, align='right', num_fmt='#,##0.000')
-            _cell(ws, r, 7, _pr['rem_qty'], fill=PLAN_GRN_FILL if _pr['rem_qty'] <= 0 else _rf,
-                  align='right', num_fmt='#,##0.000')
-            _cell(ws, r, 8, _pr['pcif'],    fill=_rf, align='right', num_fmt='#,##0.00')
-            _cell(ws, r, 9, max(0.0, _running_cif), fill=_rf, align='right', num_fmt='#,##0.00')
-        else:
-            _cell(ws, r, 6, '-', fill=_rf, align='center')
-            _cell(ws, r, 7, _pr['avail'], fill=_rf, align='right', num_fmt='#,##0.000')
-            _cell(ws, r, 8, '-', fill=_rf, align='center')
-            _cell(ws, r, 9, '-', fill=_rf, align='center')
-        r += 1
-        # ── Split sub-rows (union of every merged serial's splits, only for
-        # planned groups) ───────────────────────────────────────────────────
-        if _pr['planned']:
-            r += write_split_sub_rows(
-                ws, r, _pr['splits'],
-                name_col=1, price_col=2, badge_col=4, qty_col=6, cif_col=8,
-                other_cols=(3, 5, 7, 9),
-                value_font=NORM, border=THIN_BORDER,
-                qty_num_fmt='#,##0.000', cif_num_fmt='#,##0.00',
-            )
-
-    # ── Totals row ────────────────────────────────────────────────────────
-    for _ci in range(1, 10):
-        ws.cell(row=r, column=_ci).fill = TOTAL_FILL
-        ws.cell(row=r, column=_ci).border = THIN_BORDER
-    _cell(ws, r, 1, 'TOTALS', fill=TOTAL_FILL, bold=True)
-    _cell(ws, r, 2, '', fill=TOTAL_FILL); _cell(ws, r, 3, '', fill=TOTAL_FILL); _cell(ws, r, 4, '', fill=TOTAL_FILL)
-    _cell(ws, r, 5, _g_avail,           fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(ws, r, 6, _g_planned_qty,     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(ws, r, 7, _g_rem_qty,         fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(ws, r, 8, _g_planned_cif,     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-    _cell(ws, r, 9, max(0.0,_g_rem_cif),fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-    r += 1
+    r = render_plan_utilization_section(ws, r, license_obj, _license_balance, plan_map=_user_plan_map)
 
     # ── Column widths  (A=Item | B=HS | C=S.No | D=Status | E=Avail | F=Planned | G=Rem | H=PlannedCIF | I=RemCIF)
     ws.column_dimensions['A'].width = 38  # Item Description
@@ -694,7 +566,6 @@ def build_bulk_balance_excel(request):
     from django.http import HttpResponse
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from openpyxl.utils import get_column_letter as _gcl
     from io import BytesIO
     from decimal import Decimal as _Dec
     from collections import defaultdict
@@ -926,152 +797,36 @@ def build_bulk_balance_excel(request):
 
         r += 1
 
-        # ── Plan Utilization section (matches PlanTab UI — replaces all norm logic)
-        # One row per planning-item GROUP (see plan_utilization_rows), same as
-        # the single-licence sheet above.
+        # ── Plan Utilization section (matches PlanTab UI) ───────────────────
+        # Shared with the single-licence sheet above and with the
+        # "Utilization Planning Summary" sheet — see
+        # render_plan_utilization_section.
         from apps.license.services.plan_reporting import plan_map_for_license as _plan_map_fn_bulk
-        from apps.license.services.plan_utilization import plan_utilization_rows as _plan_util_rows_bulk
+        from apps.license.services.exporters.planning_split_rows import render_plan_utilization_section
         _user_plan_map_b = _plan_map_fn_bulk(license_obj.id)
 
-        PLAN_GRN_FILL_B = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
-        PLAN_GRN_FONT_B = Font(bold=True, size=9, color="375623")
-        PLAN_GRY_FILL_B = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        _plan_totals_b = {}
+        r = render_plan_utilization_section(
+            ws, r, license_obj, _license_balance,
+            plan_map=_user_plan_map_b, totals_out=_plan_totals_b,
+        )
 
-        _prows_b = []
-        _gb_avail = 0.0; _gb_pqty = 0.0; _gb_pcif = 0.0
-
-        for _grp_b in _plan_util_rows_bulk(license_obj, plan_map=_user_plan_map_b):
-            _av_b = float(_grp_b['available_quantity'] or 0)
-            _pq_b = float(_grp_b['original_quantity']) if _grp_b['has_plan'] else 0.0
-            _pc_b = float(_grp_b['original_cif_fc']) if _grp_b['has_plan'] else 0.0
-            _gb_avail += _av_b; _gb_pqty += _pq_b; _gb_pcif += _pc_b
-            _prows_b.append({
-                'desc': _grp_b['description'] or '-',
-                'hs': _grp_b['hs_code'] or '-',
-                'sr': ', '.join(str(s) for s in _grp_b['serials']),
-                'avail': _av_b, 'pqty': _pq_b, 'pcif': _pc_b,
-                'rem_qty': _av_b - _pq_b,
-                'planned': _pq_b > 0 or _pc_b > 0,
-                'splits': _grp_b['splits'],
-            })
-        _gb_rem_qty = _gb_avail - _gb_pqty
-        _gb_rem_cif = _license_balance - _gb_pcif
-
-        # Section header
-        ws.merge_cells(f'A{r}:I{r}')
-        _bh = ws[f'A{r}']
-        _bh.value = 'Plan Utilization'
-        _bh.fill = HDR_FILL; _bh.font = Font(bold=True, color="FFFFFF", size=10)
-        _bh.alignment = Alignment(horizontal='center', vertical='center')
-        r += 1
-
-        # Summary metrics
-        _bmetrics = [
-            [('Balance CIF $', f"${_license_balance:,.2f}", False),
-             ('Planned CIF $', f"${_gb_pcif:,.2f}", False),
-             ('Remaining CIF $', f"${_gb_rem_cif:,.2f}", _gb_rem_cif < 0),
-             ('Remaining CIF', f"${max(0,_gb_rem_cif):,.2f}", False)],
-            [('Available Qty', f"{_gb_avail:,.3f}", False),
-             ('Planned Qty', f"{_gb_pqty:,.3f}", False),
-             ('Remaining Qty', f"{_gb_rem_qty:,.3f}", _gb_rem_qty < 0),
-             ('Plan Entries', str(sum(1 for p in _prows_b if p['planned'])), False)],
-        ]
-        for _brow_m in _bmetrics:
-            for _bmi, (_lbl_b, _val_b, _warn_b) in enumerate(_brow_m):
-                _bcol = _bmi * 2 + 1
-                _lc_b = ws.cell(row=r, column=_bcol, value=_lbl_b)
-                _lc_b.fill = HDR_FILL; _lc_b.font = Font(bold=True, color="FFFFFF", size=8)
-                _lc_b.border = THIN_BORDER; _lc_b.alignment = Alignment(horizontal='center', vertical='center')
-                _vc_b = ws.cell(row=r, column=_bcol + 1, value=_val_b)
-                _vc_b.fill = YEL_FILL; _vc_b.border = THIN_BORDER
-                _vc_b.font = Font(bold=True, size=9, color="C00000" if _warn_b else "1F4E79")
-                _vc_b.alignment = Alignment(horizontal='right', vertical='center')
-            r += 1
-        r += 1
-
-        # Table headers
-        for _bci, _bch in enumerate(['Item Description', 'HS Code', 'S.No', 'Status',
-                                      'Available Qty', 'Planned Qty', 'Remaining Qty',
-                                      'Planned CIF ($)', 'Remaining CIF ($)'], 1):
-            _hdr(ws, r, _bci, _bch)
-        r += 1
-
-        # Per-group rows (+ split sub-rows)
-        from apps.license.services.exporters.planning_split_rows import write_split_sub_rows
-
-        _running_cif_b = _license_balance
-        for _bidx, _bpr in enumerate(_prows_b):
-            _brf = None if _bidx % 2 == 0 else ALT_FILL
-            _running_cif_b -= _bpr['pcif']
-            # Item row
-            _bdc = ws.cell(row=r, column=1, value=_bpr['desc'])
-            _bdc.fill = _brf or PatternFill(fill_type=None); _bdc.border = THIN_BORDER
-            _bdc.font = NORM; _bdc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-            _bhsc = ws.cell(row=r, column=2, value=_bpr['hs'])
-            _bhsc.fill = _brf or PatternFill(fill_type=None); _bhsc.border = THIN_BORDER
-            _bhsc.font = NORM; _bhsc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-            _bsnc = ws.cell(row=r, column=3, value=_bpr['sr'])
-            _bsnc.fill = _brf or PatternFill(fill_type=None); _bsnc.border = THIN_BORDER
-            _bsnc.font = NORM; _bsnc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-            _bsc = ws.cell(row=r, column=4, value='Planned' if _bpr['planned'] else 'Not Planned')
-            _bsc.fill = PLAN_GRN_FILL_B if _bpr['planned'] else PLAN_GRY_FILL_B
-            _bsc.border = THIN_BORDER
-            _bsc.font = PLAN_GRN_FONT_B if _bpr['planned'] else Font(size=9, color="595959")
-            _bsc.alignment = Alignment(horizontal='center', vertical='center')
-            _cell(ws, r, 5, _bpr['avail'], fill=_brf, align='right', num_fmt='#,##0.000')
-            if _bpr['planned']:
-                _cell(ws, r, 6, _bpr['pqty'],    fill=_brf, align='right', num_fmt='#,##0.000')
-                _cell(ws, r, 7, _bpr['rem_qty'],
-                      fill=PLAN_GRN_FILL_B if _bpr['rem_qty'] <= 0 else _brf,
-                      align='right', num_fmt='#,##0.000')
-                _cell(ws, r, 8, _bpr['pcif'],    fill=_brf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 9, max(0.0, _running_cif_b), fill=_brf, align='right', num_fmt='#,##0.00')
-            else:
-                _cell(ws, r, 6, '-', fill=_brf, align='center')
-                _cell(ws, r, 7, _bpr['avail'], fill=_brf, align='right', num_fmt='#,##0.000')
-                _cell(ws, r, 8, '-', fill=_brf, align='center')
-                _cell(ws, r, 9, '-', fill=_brf, align='center')
-            r += 1
-            # Split sub-rows (union of every merged serial's splits)
-            if _bpr['planned']:
-                r += write_split_sub_rows(
-                    ws, r, _bpr['splits'],
-                    name_col=1, price_col=2, badge_col=4, qty_col=6, cif_col=8,
-                    other_cols=(3, 5, 7, 9),
-                    value_font=NORM, border=THIN_BORDER,
-                    qty_num_fmt='#,##0.000', cif_num_fmt='#,##0.00',
-                )
-
-        # Totals row
-        for _bci2 in range(1, 10):
-            ws.cell(row=r, column=_bci2).fill = TOTAL_FILL
-            ws.cell(row=r, column=_bci2).border = THIN_BORDER
-        _cell(ws, r, 1, 'TOTALS', fill=TOTAL_FILL, bold=True)
-        _cell(ws, r, 2, '', fill=TOTAL_FILL); _cell(ws, r, 3, '', fill=TOTAL_FILL); _cell(ws, r, 4, '', fill=TOTAL_FILL)
-        _cell(ws, r, 5, _gb_avail,            fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-        _cell(ws, r, 6, _gb_pqty,             fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-        _cell(ws, r, 7, _gb_rem_qty,          fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-        _cell(ws, r, 8, _gb_pcif,             fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _cell(ws, r, 9, max(0.0, _gb_rem_cif),fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        r += 1
-
-        # _util_return — keep minimal; norm_type='plan' so summary sheet skips E1/E5/E132 logic
-        _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
+        # _util_return — feeds the "Utilization Planning Summary" sheet. Carries
+        # the already-fetched `license_obj`/`plan_map` so that sheet can call
+        # render_plan_utilization_section() again for the same license without
+        # re-querying plan_map_for_license.
         _exporter_name = license_obj.exporter.name if license_obj.exporter else ''
-        _exporter_iec  = license_obj.exporter.iec  if license_obj.exporter else ''
-        _port_code     = license_obj.port.code     if license_obj.port     else ''
         _util_return = {
-            'lic_no': lic_no, 'norm_type': 'plan',
+            'lic_no': lic_no,
+            'license_obj': license_obj,
             'balance_cif': _license_balance,
             'total_license_cif': total_license_cif,
             'license_date': license_obj.license_date,
             'license_expiry_date': license_obj.license_expiry_date,
-            'port_code': _port_code,
-            'exporter_name': _exporter_name, 'iec': _exporter_iec,
-            'planned': {}, 'qty_per_cat': {}, 'total_planned': _gb_pcif, 'categories': [],
-            'pool_10': 0.0,
+            'exporter_name': _exporter_name,
             'sheet_name': sheet_name,
-            'cell_refs': {'balance_cif': None, 'qty_per_cat': {}, 'planned': {}, 'total_planned': None, 'wastage': None},
+            'plan_map': _user_plan_map_b,
+            'plan_totals': _plan_totals_b,
         }
 
         ws.column_dimensions['A'].width = 38  # Item Description
@@ -1104,477 +859,276 @@ def build_bulk_balance_excel(request):
         _util_summaries.append(_write_license_sheet(wb, license_obj))
 
     # ── Create Utilization Planning Summary as first sheet ─────────────────
-    from apps.license.services.e1_plan import E1_CATS as _E1_CATS_ORDERED_SUMM
-    from apps.license.services.e5_plan import E5_CATS as _E5_CATS_ORDERED_SUMM
-    from apps.license.utils.condition_excel import annotate_cell as _annotate_summary
-    _E1_CATS_LABELS = list(_E1_CATS_ORDERED_SUMM)
-    _E5_CATS_LABELS = list(_E5_CATS_ORDERED_SUMM)
-    _e1_rows = [s for s in _util_summaries if s['norm_type'] == 'E1']
-    _e5_rows = [s for s in _util_summaries if s['norm_type'] == 'E5']
-    _e132_rows = [s for s in _util_summaries if s['norm_type'] == 'E132']
-    _other_rows = [s for s in _util_summaries if s['norm_type'] == 'other']
+    # Norm-grouped planning MATRIX (third design of this sheet): one section
+    # per distinct SION norm actually present among the exported licenses —
+    # a Planning Matrix (one row per license, pivoted by Planning Item Name
+    # into Available/Planned Qty/Planned CIF column groups), a Norm Total
+    # row, and a Planning Item Summary (the same per-item totals,
+    # transposed). After every norm section: a Grand Summary by Norm and a
+    # Grand Total. No norm-specific or item-name-specific branching —
+    # whatever norms/planning items exist in the data become
+    # sections/columns automatically.
+    #
+    # Data source is exclusively `plan_utilization_rows()` (the same
+    # function `render_plan_utilization_section()` calls for every
+    # per-license sheet) plus `rows_for_splits()` for the visible-split
+    # filter — no new planning calculation, no new split query.
+    #
+    # Two attribution rules that must NOT be conflated (see the docstrings
+    # below for the derivation each one mirrors):
+    #   - Planning-item pivot columns (matrix / Norm Total / Planning Item
+    #     Summary): planned qty/CIF are split-exclusive (each visible split
+    #     counted under exactly one item-name column, 'Unassigned' when
+    #     untagged); available qty is the group's FULL available_quantity
+    #     attributed to EVERY distinct item-name column with a visible split
+    #     in that group — an intentional double count across columns,
+    #     matching `item_pivot_report.py`'s `_build_license_row` convention
+    #     (`for item in import_item.items.all(): item_quantities[item.id]
+    #     ['available_quantity'] += ...` — a shared import item's
+    #     availability is added under every attached item name, not
+    #     divided).
+    #   - Grand Summary by Norm / Grand Total: available/planned/CIF are
+    #     GROUP-level totals (never derived from the pivot columns, which
+    #     would inherit the available-qty double count above) — the exact
+    #     same derivation `render_plan_utilization_section()` uses for its
+    #     `totals_out` (Σ available_quantity across every group; Σ
+    #     original_quantity/original_cif_fc across PLANNED groups only).
+    from apps.license.services.plan_utilization import plan_utilization_rows
+    from apps.license.services.exporters.planning_split_rows import rows_for_splits
+    from apps.license.models import LicenseExportItemModel
+    from openpyxl.utils import get_column_letter
+
+    _UNASSIGNED = 'Unassigned'
+
+    # One batched query for every exported license's PRIMARY export norm
+    # (mirrors norm_plan.detect_norm's own `export_license.first()` — i.e.
+    # the lowest-pk export item — without querying per license in a loop).
+    _lic_ids = [lic.id for lic in sorted_licenses]
+    _first_norm_by_license: dict = {}
+    for _lic_id, _norm_code in (
+        LicenseExportItemModel.objects
+        .filter(license_id__in=_lic_ids)
+        .order_by('license_id', 'pk')
+        .values_list('license_id', 'norm_class__norm_class')
+    ):
+        _first_norm_by_license.setdefault(_lic_id, _norm_code)
+
+    # Bucket licenses by norm, preserving the order they were exported in
+    # (== `sorted_licenses` order, already E1-first/E5-second/alpha-rest).
+    _licenses_by_norm: dict = {}
+    _norm_order: list = []
+    for _row in _util_summaries:
+        _norm_code = (_first_norm_by_license.get(_row['license_obj'].id) or '').strip()
+        _norm_label = _norm_code or 'Unclassified'
+        if _norm_label not in _licenses_by_norm:
+            _licenses_by_norm[_norm_label] = []
+            _norm_order.append(_norm_label)
+        _licenses_by_norm[_norm_label].append(_row)
+
+    def _license_pivot_data(_lic_row):
+        """One license's pivot data: `{item_name: {available, planned_qty,
+        planned_cif}}` (floats, split-exclusive planned figures / doubled-up
+        available per the module docstring above) plus this license's
+        GROUP-level totals (`available_quantity`, `planned_quantity`,
+        `planned_cif`) — derived exactly like
+        `render_plan_utilization_section`'s own `_g_avail`/`_g_planned_qty`/
+        `_g_planned_cif` (see that function for the proof these equal Σ of
+        the group's unioned splits when the group has a plan).
+        """
+        _lic_obj = _lic_row['license_obj']
+        _groups = plan_utilization_rows(_lic_obj, plan_map=_lic_row.get('plan_map'))
+        _item_data: dict = {}
+        _totals = {'available_quantity': 0.0, 'planned_quantity': 0.0, 'planned_cif': 0.0}
+        for _grp in _groups:
+            _avail = float(_grp.get('available_quantity') or 0)
+            _totals['available_quantity'] += _avail
+            _has_plan = bool(_grp.get('has_plan'))
+            _totals['planned_quantity'] += float(_grp['original_quantity']) if _has_plan else 0.0
+            _totals['planned_cif'] += float(_grp['original_cif_fc']) if _has_plan else 0.0
+
+            _distinct_names_in_group = set()
+            for _sp in rows_for_splits(_grp.get('splits') or []):
+                _name = (_sp.get('item_name') or '').strip() or _UNASSIGNED
+                _distinct_names_in_group.add(_name)
+                _bucket = _item_data.setdefault(
+                    _name, {'available': 0.0, 'planned_qty': 0.0, 'planned_cif': 0.0},
+                )
+                _bucket['planned_qty'] += float(_sp.get('planned_quantity') or 0)
+                _bucket['planned_cif'] += float(_sp.get('planned_cif_fc') or 0)
+            for _name in _distinct_names_in_group:
+                _item_data.setdefault(
+                    _name, {'available': 0.0, 'planned_qty': 0.0, 'planned_cif': 0.0},
+                )['available'] += _avail
+        return _item_data, _totals
 
     _sw = wb.create_sheet(title="Utilization Planning Summary")
     wb.move_sheet(_sw, offset=-(len(wb.worksheets) - 1))
 
+    ITEM_HDR_FILL = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+    ITEM_HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
+    NORM_BANNER_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+
     _sr = 1
+    _max_matrix_cols = 5  # widened as sections are laid out; Grand Summary needs at least 5.
 
-    def _shdr(ws, row, col, value, span=1):
-        c = ws.cell(row=row, column=col, value=value)
-        c.fill = HDR_FILL; c.font = HDR_FONT
-        c.border = THIN_BORDER
-        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        return c
+    # One row per norm: (norm_label, license_count, available, planned_qty, planned_cif) —
+    # GROUP-level totals only, per the module docstring above.
+    _grand_summary_by_norm: list = []
 
-    def _scell(ws, row, col, value, fill=None, bold=False, align='left', num_fmt=None):
-        c = ws.cell(row=row, column=col, value=value)
-        if fill: c.fill = fill
-        c.font = BOLD if bold else NORM
-        c.border = THIN_BORDER
-        c.alignment = Alignment(horizontal=align, vertical='center', wrap_text=True)
-        if num_fmt: c.number_format = num_fmt
-        return c
+    for _norm_label in _norm_order:
+        _norm_rows = _licenses_by_norm[_norm_label]
 
-    # Fixed summary columns:
-    #   1=Sr No (global counter), 2=License No, 3=License Date, 4=Expiry,
-    #   5=Exporter, 6=Balance CIF, 7=Total CIF. Then category quantity/CIF pairs.
-    _FIXED_SUMMARY_COLS = 7
-    # Each category occupies 3 sub-columns: Bal Qty, Unit Price, Planned CIF ($).
-    # E5 inserts an extra single "10% Balance" column right after the first
-    # category (DIETARY FIBRE), so the E5 total/waste columns shift by +1.
-    _CAT_START_COL = _FIXED_SUMMARY_COLS + 1
-    _E1_TOTAL_COL  = _FIXED_SUMMARY_COLS + len(_E1_CATS_LABELS) * 3 + 1
-    _E1_WASTE_COL  = _E1_TOTAL_COL + 1
-    _E5_POOL10_COL = _CAT_START_COL + 3   # one extra column between cat 0 (DF) and cat 1
-    _E5_TOTAL_COL  = _FIXED_SUMMARY_COLS + len(_E5_CATS_LABELS) * 3 + 1 + 1
-    _E5_WASTE_COL  = _E5_TOTAL_COL + 1
+        # Pass 1: this norm's per-license pivot data/totals + the set of
+        # distinct planning-item names present anywhere in this norm.
+        _per_license = []
+        _item_names_in_norm: set = set()
+        for _row in _norm_rows:
+            _item_data, _totals = _license_pivot_data(_row)
+            _per_license.append((_row, _item_data, _totals))
+            _item_names_in_norm.update(_item_data.keys())
 
-    def _e5_cat_col(ci):
-        """Start column for E5 category index `ci`. Categories after DIETARY
-        FIBRE (ci > 0) are pushed right by 1 to make room for the inserted
-        '10% Balance' column."""
-        return _CAT_START_COL + ci * 3 + (1 if ci > 0 else 0)
-    # The E132 section spans: 7 fixed cols + N planning items × 3 + Total Planning
-    # Value + Wastage. Compute from PLANNING_ORDER so it grows with the item list
-    # (title-row merge and outer borders below use _MAX_COL).
-    from apps.license.services.e132_plan import PLANNING_ORDER as _E132_ORDER
-    _E132_SUMMARY_TOTAL_COL = _FIXED_SUMMARY_COLS + len(_E132_ORDER) * 3 + 1
-    _E132_SUMMARY_WASTE_COL = _E132_SUMMARY_TOTAL_COL + 1
-    _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, _E132_SUMMARY_WASTE_COL)
+        _ordered_item_names = sorted(
+            (n for n in _item_names_in_norm if n != _UNASSIGNED), key=lambda s: s.casefold(),
+        )
+        if _UNASSIGNED in _item_names_in_norm:
+            _ordered_item_names.append(_UNASSIGNED)
 
-    # Global Sr No counter, shared across E1 / E5 / Other sections
-    _global_sr = [0]
+        _n_cols = 4 + 3 * len(_ordered_item_names)
+        _max_matrix_cols = max(_max_matrix_cols, _n_cols)
 
-    WASTE_FILL = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
+        # ── 1. Section header ────────────────────────────────────────────
+        _sw.merge_cells(start_row=_sr, start_column=1, end_row=_sr, end_column=_n_cols)
+        _nh = _sw.cell(row=_sr, column=1, value=f"SION NORM : {_norm_label}")
+        _nh.fill = NORM_BANNER_FILL
+        _nh.font = Font(bold=True, color="FFFFFF", size=12)
+        _nh.alignment = Alignment(horizontal='center', vertical='center')
+        _sr += 1
 
-    def _merge_hdr(ws, r, c1, c2, value, fill_color="1F4E79"):
-        ws.merge_cells(f'{_gcl(c1)}{r}:{_gcl(c2)}{r}')
-        c = ws[f'{_gcl(c1)}{r}']
-        c.value = value
-        c.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
-        c.font = Font(bold=True, color="FFFFFF", size=9)
-        c.border = THIN_BORDER
-        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        # ── 2. Planning Matrix — 2-row header + one row per license ─────
+        _hdr_row1, _hdr_row2 = _sr, _sr + 1
+        for _col, _label in enumerate(['License No', 'Exporter', 'Issue Date', 'Expiry Date'], 1):
+            _sw.merge_cells(start_row=_hdr_row1, start_column=_col, end_row=_hdr_row2, end_column=_col)
+            _hdr(_sw, _hdr_row1, _col, _label)
+        for _i, _name in enumerate(_ordered_item_names):
+            _base_col = 5 + _i * 3
+            _sw.merge_cells(start_row=_hdr_row1, start_column=_base_col, end_row=_hdr_row1, end_column=_base_col + 2)
+            _ic = _sw.cell(row=_hdr_row1, column=_base_col, value=_name)
+            _ic.fill = ITEM_HDR_FILL; _ic.font = ITEM_HDR_FONT
+            _ic.border = THIN_BORDER
+            _ic.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            for _sub_col, _sub_label in enumerate(['Available Qty', 'Planned Qty', 'Planned CIF ($)']):
+                _hdr(_sw, _hdr_row2, _base_col + _sub_col, _sub_label)
+        _sr += 2
 
-    def _sheet_formula(row, cell_ref):
-        if not cell_ref:
-            return None
-        sheet = (row.get('sheet_name') or row.get('lic_no') or '').replace("'", "''")
-        return f"='{sheet}'!{cell_ref}"
+        _norm_item_totals = {
+            _n: {'available': 0.0, 'planned_qty': 0.0, 'planned_cif': 0.0} for _n in _ordered_item_names
+        }
+        _norm_totals = {'available_quantity': 0.0, 'planned_quantity': 0.0, 'planned_cif': 0.0}
 
-    def _sum_formula(col, row1, row2):
-        return f"=SUM({_gcl(col)}{row1}:{_gcl(col)}{row2})"
+        for _idx, (_row, _item_data, _totals) in enumerate(_per_license):
+            _rf = None if _idx % 2 == 0 else ALT_FILL
+            _ld = _row.get('license_date')
+            _ed = _row.get('license_expiry_date')
+            _cell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
+            _cell(_sw, _sr, 2, _row.get('exporter_name') or '-', fill=_rf)
+            _cell(_sw, _sr, 3, _ld.strftime('%d-%m-%Y') if _ld else '-', fill=_rf, align='center')
+            _cell(_sw, _sr, 4, _ed.strftime('%d-%m-%Y') if _ed else '-', fill=_rf, align='center')
+            for _i, _name in enumerate(_ordered_item_names):
+                _base_col = 5 + _i * 3
+                _vals = _item_data.get(_name) or {'available': 0.0, 'planned_qty': 0.0, 'planned_cif': 0.0}
+                _cell(_sw, _sr, _base_col, _vals['available'], fill=_rf, align='right', num_fmt='#,##0.000')
+                _cell(_sw, _sr, _base_col + 1, _vals['planned_qty'], fill=_rf, align='right', num_fmt='#,##0.000')
+                _cell(_sw, _sr, _base_col + 2, _vals['planned_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                _norm_item_totals[_name]['available'] += _vals['available']
+                _norm_item_totals[_name]['planned_qty'] += _vals['planned_qty']
+                _norm_item_totals[_name]['planned_cif'] += _vals['planned_cif']
+            for _k in _norm_totals:
+                _norm_totals[_k] += _totals.get(_k, 0.0)
+            _sr += 1
 
-    # Title row
-    _sw.merge_cells(f'A{_sr}:{_gcl(_MAX_COL)}{_sr}')
-    _tc = _sw[f'A{_sr}']
-    _tc.value = 'UTILIZATION PLANNING SUMMARY'
-    _tc.fill = HDR_FILL; _tc.font = Font(bold=True, color="FFFFFF", size=12)
-    _tc.alignment = Alignment(horizontal='center', vertical='center')
+        # ── 3. Norm Total row ─────────────────────────────────────────────
+        for _ci in range(1, _n_cols + 1):
+            _sw.cell(row=_sr, column=_ci).fill = TOTAL_FILL
+            _sw.cell(row=_sr, column=_ci).border = THIN_BORDER
+        _cell(_sw, _sr, 1, 'NORM TOTAL', fill=TOTAL_FILL, bold=True)
+        _cell(_sw, _sr, 2, '', fill=TOTAL_FILL); _cell(_sw, _sr, 3, '', fill=TOTAL_FILL); _cell(_sw, _sr, 4, '', fill=TOTAL_FILL)
+        for _i, _name in enumerate(_ordered_item_names):
+            _base_col = 5 + _i * 3
+            _t = _norm_item_totals[_name]
+            _cell(_sw, _sr, _base_col, _t['available'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+            _cell(_sw, _sr, _base_col + 1, _t['planned_qty'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+            _cell(_sw, _sr, _base_col + 2, _t['planned_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _sr += 2
+
+        # ── 4. Planning Item Summary — same numbers, transposed ─────────
+        _sw.merge_cells(start_row=_sr, start_column=1, end_row=_sr, end_column=4)
+        _psh = _sw.cell(row=_sr, column=1, value='PLANNING ITEM SUMMARY')
+        _psh.fill = HDR_FILL; _psh.font = Font(bold=True, color="FFFFFF", size=10)
+        _psh.alignment = Alignment(horizontal='center', vertical='center')
+        _sr += 1
+        for _ci, _ch in enumerate(['Planning Item', 'Available Qty', 'Planned Qty', 'Planned CIF ($)'], 1):
+            _hdr(_sw, _sr, _ci, _ch)
+        _sr += 1
+        for _i, _name in enumerate(_ordered_item_names):
+            _rf = None if _i % 2 == 0 else ALT_FILL
+            _t = _norm_item_totals[_name]
+            _cell(_sw, _sr, 1, _name, fill=_rf, bold=True)
+            _cell(_sw, _sr, 2, _t['available'], fill=_rf, align='right', num_fmt='#,##0.000')
+            _cell(_sw, _sr, 3, _t['planned_qty'], fill=_rf, align='right', num_fmt='#,##0.000')
+            _cell(_sw, _sr, 4, _t['planned_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+            _sr += 1
+        _sr += 2
+
+        _grand_summary_by_norm.append((
+            _norm_label, len(_norm_rows),
+            _norm_totals['available_quantity'], _norm_totals['planned_quantity'], _norm_totals['planned_cif'],
+        ))
+
+    # ── 5. Grand Summary by Norm ──────────────────────────────────────────
+    _sw.merge_cells(start_row=_sr, start_column=1, end_row=_sr, end_column=5)
+    _gsh = _sw.cell(row=_sr, column=1, value='GRAND SUMMARY BY NORM')
+    _gsh.fill = HDR_FILL; _gsh.font = Font(bold=True, color="FFFFFF", size=11)
+    _gsh.alignment = Alignment(horizontal='center', vertical='center')
+    _sr += 1
+    for _ci, _ch in enumerate(['SION Norm', 'Licenses', 'Available Qty', 'Planned Qty', 'Planned CIF ($)'], 1):
+        _hdr(_sw, _sr, _ci, _ch)
     _sr += 1
 
-    # ── E1 section ────────────────────────────────────────────────────────
-    if _e1_rows:
-        _merge_hdr(_sw, _sr, 1, _E1_WASTE_COL, 'E1 NORM LICENSES', "2E75B6")
+    _grand_total_licenses = 0
+    _grand_total_available = 0.0
+    _grand_total_planned_qty = 0.0
+    _grand_total_planned_cif = 0.0
+    for _i, (_norm_label, _lic_count, _avail, _pqty, _pcif) in enumerate(_grand_summary_by_norm):
+        _rf = None if _i % 2 == 0 else ALT_FILL
+        _cell(_sw, _sr, 1, _norm_label, fill=_rf, bold=True)
+        _cell(_sw, _sr, 2, _lic_count, fill=_rf, align='center')
+        _cell(_sw, _sr, 3, _avail, fill=_rf, align='right', num_fmt='#,##0.000')
+        _cell(_sw, _sr, 4, _pqty, fill=_rf, align='right', num_fmt='#,##0.000')
+        _cell(_sw, _sr, 5, _pcif, fill=_rf, align='right', num_fmt='#,##0.00')
+        _grand_total_licenses += _lic_count
+        _grand_total_available += _avail
+        _grand_total_planned_qty += _pqty
+        _grand_total_planned_cif += _pcif
         _sr += 1
+    _sr += 1
 
-        _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'Sr No')
-        _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License No')
-        _sw.merge_cells(f'C{_sr}:C{_sr+1}'); _shdr(_sw, _sr, 3, 'License Date')
-        _sw.merge_cells(f'D{_sr}:D{_sr+1}'); _shdr(_sw, _sr, 4, 'License Expiry Date')
-        _sw.merge_cells(f'E{_sr}:E{_sr+1}'); _shdr(_sw, _sr, 5, 'Total CIF $')
-        _sw.merge_cells(f'F{_sr}:F{_sr+1}'); _shdr(_sw, _sr, 6, 'Balance CIF $')
-        _sw.merge_cells(f'G{_sr}:G{_sr+1}'); _shdr(_sw, _sr, 7, 'Exporter Name')
-        for _ci, _cat in enumerate(_E1_CATS_LABELS):
-            _cc = _CAT_START_COL + _ci * 3
-            _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+2)}{_sr}')
-            _shdr(_sw, _sr, _cc, _cat)
-        _sw.merge_cells(f'{_gcl(_E1_TOTAL_COL)}{_sr}:{_gcl(_E1_TOTAL_COL)}{_sr+1}')
-        _shdr(_sw, _sr, _E1_TOTAL_COL, 'TOTAL PLANNED CIF $')
-        _sw.merge_cells(f'{_gcl(_E1_WASTE_COL)}{_sr}:{_gcl(_E1_WASTE_COL)}{_sr+1}')
-        _c = _sw.cell(row=_sr, column=_E1_WASTE_COL, value='Wastage $')
-        _c.fill = WASTE_FILL; _c.font = Font(bold=True, size=9)
-        _c.border = THIN_BORDER
-        _c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        _sr += 1
-        for _ci in range(len(_E1_CATS_LABELS)):
-            _cc = _CAT_START_COL + _ci * 3
-            _shdr(_sw, _sr, _cc,     'Bal Qty')
-            _shdr(_sw, _sr, _cc + 1, 'Unit Price')
-            _shdr(_sw, _sr, _cc + 2, 'Planned CIF ($)')
-        _sr += 1
+    # ── 6. Grand Total ────────────────────────────────────────────────────
+    for _ci in range(1, 6):
+        _sw.cell(row=_sr, column=_ci).fill = TOTAL_FILL
+        _sw.cell(row=_sr, column=_ci).border = THIN_BORDER
+    _cell(_sw, _sr, 1, 'GRAND TOTAL', fill=TOTAL_FILL, bold=True)
+    _cell(_sw, _sr, 2, _grand_total_licenses, fill=TOTAL_FILL, bold=True, align='center')
+    _cell(_sw, _sr, 3, _grand_total_available, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+    _cell(_sw, _sr, 4, _grand_total_planned_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+    _cell(_sw, _sr, 5, _grand_total_planned_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
 
-        _e1_tot = {'bal': 0.0, 'planned': 0.0, 'waste': 0.0,
-                   'qty': {c: 0.0 for c in _E1_CATS_LABELS},
-                   'cif': {c: 0.0 for c in _E1_CATS_LABELS}}
-        _e1_data_start = _sr
-        for _i, _row in enumerate(_e1_rows):
-            _rf = None if _i % 2 == 0 else ALT_FILL
-            _waste = _row['balance_cif'] - _row['total_planned']
-            _refs = _row.get('cell_refs') or {}
-            _ld = _row.get('license_date')
-            _ed = _row.get('license_expiry_date')
-            _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
-            _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
-            _global_sr[0] += 1
-            _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
-            _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
-            _scell(_sw, _sr, 3, _ld_str, fill=_rf, align='center')
-            _scell(_sw, _sr, 4, _ed_str, fill=_rf, align='center')
-            _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
-            _e1_cond_map = _row.get('condition_per_cat') or {}
-            for _ci, _cat in enumerate(_E1_CATS_LABELS):
-                _cc = _CAT_START_COL + _ci * 3
-                _q = _row['qty_per_cat'].get(_cat, 0.0)
-                _p = _row['planned'].get(_cat, 0.0)
-                _q_ref = (_refs.get('qty_per_cat') or {}).get(_cat)
-                _p_ref = (_refs.get('planned') or {}).get(_cat)
-                # Live unit-price formula off this row's Bal Qty (_cc) and
-                # Planned CIF (_cc+2). Auto-updates if either changes.
-                _q_col = _gcl(_cc)
-                _p_col = _gcl(_cc + 2)
-                _up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
-                _cq = _scell(_sw, _sr, _cc,     _sheet_formula(_row, _q_ref) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
-                _cu = _scell(_sw, _sr, _cc + 1, _up_formula,                         fill=_rf, align='right', num_fmt='#,##0.00')
-                _cp = _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
-                # Colour the triplet by the category's License Marking.
-                _cat_cond = _e1_cond_map.get(_cat) or ''
-                if _cat_cond:
-                    _annotate_summary(_cq, _cat_cond)
-                    _annotate_summary(_cu, _cat_cond)
-                    _annotate_summary(_cp, _cat_cond)
-                _e1_tot['qty'][_cat] += _q
-                _e1_tot['cif'][_cat] += _p
-            _scell(_sw, _sr, _E1_TOTAL_COL, _sheet_formula(_row, _refs.get('total_planned')) or _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
-            _wc = _sw.cell(row=_sr, column=_E1_WASTE_COL, value=_sheet_formula(_row, _refs.get('wastage')) or _waste)
-            _wc.fill = WASTE_FILL; _wc.font = Font(bold=True, size=9)
-            _wc.border = THIN_BORDER; _wc.alignment = Alignment(horizontal='right', vertical='center')
-            _wc.number_format = '#,##0.00'
-            _e1_tot['bal']     += _row['balance_cif']
-            _e1_tot['planned'] += _row['total_planned']
-            _e1_tot['waste']   += _waste
-            _sr += 1
-        _e1_data_end = _sr - 1
-
-        # E1 total row
-        _scell(_sw, _sr, 1, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 2, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
-        _scell(_sw, _sr, 3, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 4, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 5, _sum_formula(5, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, 6, _sum_formula(6, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
-        for _ci, _cat in enumerate(_E1_CATS_LABELS):
-            _cc = _CAT_START_COL + _ci * 3
-            # Total-row unit price = SUM(Planned CIF) / SUM(Bal Qty),
-            # referencing the live total cells on this same row.
-            _q_col = _gcl(_cc)
-            _p_col = _gcl(_cc + 2)
-            _tot_up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
-            _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e1_data_start, _e1_data_end),     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _cc + 1, _tot_up_formula,                                      fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _cc + 2, _sum_formula(_cc + 2, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, _E1_TOTAL_COL, _sum_formula(_E1_TOTAL_COL, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _wt = _sw.cell(row=_sr, column=_E1_WASTE_COL, value=_sum_formula(_E1_WASTE_COL, _e1_data_start, _e1_data_end))
-        _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
-        _wt.border = THIN_BORDER; _wt.alignment = Alignment(horizontal='right', vertical='center')
-        _wt.number_format = '#,##0.00'
-        _sr += 2
-
-    # ── E5 section ────────────────────────────────────────────────────────
-    if _e5_rows:
-        _merge_hdr(_sw, _sr, 1, _E5_WASTE_COL, 'E5 NORM LICENSES', "375623")
-        _sr += 1
-
-        _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'Sr No')
-        _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License No')
-        _sw.merge_cells(f'C{_sr}:C{_sr+1}'); _shdr(_sw, _sr, 3, 'License Date')
-        _sw.merge_cells(f'D{_sr}:D{_sr+1}'); _shdr(_sw, _sr, 4, 'License Expiry Date')
-        _sw.merge_cells(f'E{_sr}:E{_sr+1}'); _shdr(_sw, _sr, 5, 'Total CIF $')
-        _sw.merge_cells(f'F{_sr}:F{_sr+1}'); _shdr(_sw, _sr, 6, 'Balance CIF $')
-        _sw.merge_cells(f'G{_sr}:G{_sr+1}'); _shdr(_sw, _sr, 7, 'Exporter Name')
-        for _ci, _cat in enumerate(_E5_CATS_LABELS):
-            _cc = _e5_cat_col(_ci)
-            _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+2)}{_sr}')
-            _shdr(_sw, _sr, _cc, _cat)
-        # 10% Balance — single column wedged between DIETARY FIBRE and SWP.
-        _sw.merge_cells(f'{_gcl(_E5_POOL10_COL)}{_sr}:{_gcl(_E5_POOL10_COL)}{_sr+1}')
-        _shdr(_sw, _sr, _E5_POOL10_COL, '10% Balance')
-        _sw.merge_cells(f'{_gcl(_E5_TOTAL_COL)}{_sr}:{_gcl(_E5_TOTAL_COL)}{_sr+1}')
-        _shdr(_sw, _sr, _E5_TOTAL_COL, 'TOTAL ALLOCATED CIF $')
-        _sw.merge_cells(f'{_gcl(_E5_WASTE_COL)}{_sr}:{_gcl(_E5_WASTE_COL)}{_sr+1}')
-        _c = _sw.cell(row=_sr, column=_E5_WASTE_COL, value='Wastage $')
-        _c.fill = WASTE_FILL; _c.font = Font(bold=True, size=9)
-        _c.border = THIN_BORDER
-        _c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        _sr += 1
-        for _ci in range(len(_E5_CATS_LABELS)):
-            _cc = _e5_cat_col(_ci)
-            _shdr(_sw, _sr, _cc,     'Bal Qty')
-            _shdr(_sw, _sr, _cc + 1, 'Unit Price')
-            _shdr(_sw, _sr, _cc + 2, 'Planned CIF ($)')
-        _sr += 1
-
-        _e5_tot = {'bal': 0.0, 'planned': 0.0, 'waste': 0.0,
-                   'qty': {c: 0.0 for c in _E5_CATS_LABELS},
-                   'cif': {c: 0.0 for c in _E5_CATS_LABELS}}
-        _e5_data_start = _sr
-        for _i, _row in enumerate(_e5_rows):
-            _rf = None if _i % 2 == 0 else ALT_FILL
-            _waste = _row['balance_cif'] - _row['total_planned']
-            _refs = _row.get('cell_refs') or {}
-            _ld = _row.get('license_date')
-            _ed = _row.get('license_expiry_date')
-            _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
-            _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
-            _global_sr[0] += 1
-            _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
-            _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
-            _scell(_sw, _sr, 3, _ld_str, fill=_rf, align='center')
-            _scell(_sw, _sr, 4, _ed_str, fill=_rf, align='center')
-            _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
-            _e5_cond_map = _row.get('condition_per_cat') or {}
-            for _ci, _cat in enumerate(_E5_CATS_LABELS):
-                _cc = _e5_cat_col(_ci)
-                _q = _row['qty_per_cat'].get(_cat, 0.0)
-                _p = _row['planned'].get(_cat, 0.0)
-                _q_ref = (_refs.get('qty_per_cat') or {}).get(_cat)
-                _p_ref = (_refs.get('planned') or {}).get(_cat)
-                # Live unit price = ROUNDDOWN(Planned / Bal Qty, 2), guarded
-                # against /0. Both source cells are pulled live from the
-                # per-licence sheet via _sheet_formula, so the unit price
-                # updates if the user edits either side.
-                _q_col = _gcl(_cc)
-                _p_col = _gcl(_cc + 2)
-                _up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
-                _cq = _scell(_sw, _sr, _cc,     _sheet_formula(_row, _q_ref) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
-                _cu = _scell(_sw, _sr, _cc + 1, _up_formula,                         fill=_rf, align='right', num_fmt='#,##0.00')
-                _cp = _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
-                # Colour the triplet by the category's License Marking.
-                _cat_cond = _e5_cond_map.get(_cat) or ''
-                if _cat_cond:
-                    _annotate_summary(_cq, _cat_cond)
-                    _annotate_summary(_cu, _cat_cond)
-                    _annotate_summary(_cp, _cat_cond)
-                _e5_tot['qty'][_cat] += _q
-                _e5_tot['cif'][_cat] += _p
-            # 10% Balance — display-only; always painted with the 10% colour
-            # since it literally represents the 10% restriction budget.
-            _row_pool10 = _row.get('pool_10', 0.0)
-            _pool10_cell = _scell(_sw, _sr, _E5_POOL10_COL, _row_pool10, fill=_rf, align='right', num_fmt='#,##0.00')
-            _annotate_summary(_pool10_cell, '10%')
-            _e5_tot.setdefault('pool_10', 0.0)
-            _e5_tot['pool_10'] += _row_pool10
-            _scell(_sw, _sr, _E5_TOTAL_COL, _sheet_formula(_row, _refs.get('total_planned')) or _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
-            _wc = _sw.cell(row=_sr, column=_E5_WASTE_COL, value=_sheet_formula(_row, _refs.get('wastage')) or _waste)
-            _wc.fill = WASTE_FILL; _wc.font = Font(bold=True, size=9)
-            _wc.border = THIN_BORDER; _wc.alignment = Alignment(horizontal='right', vertical='center')
-            _wc.number_format = '#,##0.00'
-            _e5_tot['bal']     += _row['balance_cif']
-            _e5_tot['planned'] += _row['total_planned']
-            _e5_tot['waste']   += _waste
-            _sr += 1
-        _e5_data_end = _sr - 1
-
-        # E5 total row
-        _scell(_sw, _sr, 1, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 2, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
-        _scell(_sw, _sr, 3, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 4, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 5, _sum_formula(5, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, 6, _sum_formula(6, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
-        for _ci, _cat in enumerate(_E5_CATS_LABELS):
-            _cc = _e5_cat_col(_ci)
-            # Total-row unit price = SUM(Planned CIF) / SUM(Bal Qty),
-            # referencing the live total cells on this same row.
-            _q_col = _gcl(_cc)
-            _p_col = _gcl(_cc + 2)
-            _tot_up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
-            _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e5_data_start, _e5_data_end),     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _cc + 1, _tot_up_formula,                                      fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _cc + 2, _sum_formula(_cc + 2, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        # 10% Balance total — sum of per-license pool values; painted with
-        # the 10% colour to stay consistent with the data rows above.
-        _pool10_tot_cell = _scell(_sw, _sr, _E5_POOL10_COL,
-               _sum_formula(_E5_POOL10_COL, _e5_data_start, _e5_data_end),
-               fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _annotate_summary(_pool10_tot_cell, '10%')
-        _scell(_sw, _sr, _E5_TOTAL_COL, _sum_formula(_E5_TOTAL_COL, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _wt = _sw.cell(row=_sr, column=_E5_WASTE_COL, value=_sum_formula(_E5_WASTE_COL, _e5_data_start, _e5_data_end))
-        _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
-        _wt.border = THIN_BORDER; _wt.alignment = Alignment(horizontal='right', vertical='center')
-        _wt.number_format = '#,##0.00'
-        _sr += 2
-
-    # ── E132 section ───────────────────────────────────────────────────────
-    # E132 planning classifies each item into one of six planning items (Yeast /
-    # Cheese Cream Butter & Fats / PKO / RBD / Milk / Aluminium Foil). Like E1/E5
-    # the summary shows a per-item Qty / Unit Price / Planning Value column group,
-    # plus TOTAL PLANNING VALUE, one row per licence with a TOTAL row. Column order
-    # follows the planning priority.
-    if _e132_rows:
-        from apps.license.services.e132_plan import PLANNING_ORDER as _E132_ITEMS
-        _E132_LABELS = list(_E132_ITEMS)   # 6 planning items in priority order
-        _E132_CAT_START = _FIXED_SUMMARY_COLS + 1                            # 8
-        _E132_TOTAL_COL = _FIXED_SUMMARY_COLS + len(_E132_LABELS) * 3 + 1
-        _E132_WASTE_COL = _E132_TOTAL_COL + 1
-
-        _merge_hdr(_sw, _sr, 1, _E132_WASTE_COL, 'E132 NORM LICENSES', "7030A0")
-        _sr += 1
-        _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'Sr No')
-        _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License No')
-        _sw.merge_cells(f'C{_sr}:C{_sr+1}'); _shdr(_sw, _sr, 3, 'License Date')
-        _sw.merge_cells(f'D{_sr}:D{_sr+1}'); _shdr(_sw, _sr, 4, 'License Expiry Date')
-        _sw.merge_cells(f'E{_sr}:E{_sr+1}'); _shdr(_sw, _sr, 5, 'Total CIF $')
-        _sw.merge_cells(f'F{_sr}:F{_sr+1}'); _shdr(_sw, _sr, 6, 'Balance CIF $')
-        _sw.merge_cells(f'G{_sr}:G{_sr+1}'); _shdr(_sw, _sr, 7, 'Exporter Name')
-        for _ci, _cat in enumerate(_E132_LABELS):
-            _cc = _E132_CAT_START + _ci * 3
-            _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+2)}{_sr}')
-            _shdr(_sw, _sr, _cc, _cat)
-        _sw.merge_cells(f'{_gcl(_E132_TOTAL_COL)}{_sr}:{_gcl(_E132_TOTAL_COL)}{_sr+1}')
-        _shdr(_sw, _sr, _E132_TOTAL_COL, 'TOTAL PLANNING VALUE $')
-        _sw.merge_cells(f'{_gcl(_E132_WASTE_COL)}{_sr}:{_gcl(_E132_WASTE_COL)}{_sr+1}')
-        _cwh = _sw.cell(row=_sr, column=_E132_WASTE_COL, value='Wastage $')
-        _cwh.fill = WASTE_FILL; _cwh.font = Font(bold=True, size=9)
-        _sr += 1
-        for _ci in range(len(_E132_LABELS)):
-            _cc = _E132_CAT_START + _ci * 3
-            _shdr(_sw, _sr, _cc,     'Qty')
-            _shdr(_sw, _sr, _cc + 1, 'Unit Price')
-            _shdr(_sw, _sr, _cc + 2, 'Planning Value ($)')
-        _sr += 1
-
-        _e132_data_start = _sr
-        for _i, _row in enumerate(_e132_rows):
-            _rf = None if _i % 2 == 0 else ALT_FILL
-            _refs = _row.get('cell_refs') or {}
-            _ld = _row.get('license_date'); _ed = _row.get('license_expiry_date')
-            _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
-            _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
-            _per_item = _row.get('e132_per_item') or {}
-            _refs132 = _row.get('e132_cell_refs') or {}
-            _global_sr[0] += 1
-            _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
-            _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
-            _scell(_sw, _sr, 3, _ld_str, fill=_rf, align='center')
-            _scell(_sw, _sr, 4, _ed_str, fill=_rf, align='center')
-            _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
-            for _ci, _cat in enumerate(_E132_LABELS):
-                _cc = _E132_CAT_START + _ci * 3
-                _pi = _per_item.get(_cat) or {}
-                _present = _cat in _per_item
-                _q = _pi.get('qty', 0.0)
-                _up = _pi.get('unit_price')   # float, or None for To-Be-Defined (Milk)
-                _val = _pi.get('value')
-                _up_cell = _up if _up is not None else ('TBD' if _present else '')
-                _val_cell = _val if _val is not None else ('TBD' if _present else 0.0)
-                # Reference the per-licence sheet cells (edit there → summary
-                # updates), falling back to the static value when no ref exists.
-                _iref = _refs132.get(_cat) or {}
-                _scell(_sw, _sr, _cc,     _sheet_formula(_row, _iref.get('qty')) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
-                _scell(_sw, _sr, _cc + 1, _sheet_formula(_row, _iref.get('unit_price')) or _up_cell, fill=_rf, align='right', num_fmt='#,##0.00')
-                _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _iref.get('value')) or _val_cell, fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _E132_TOTAL_COL, _sheet_formula(_row, _row.get('e132_total_value_ref')) or (_row.get('e132_total_value') or 0.0), fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
-            # Wastage $ = Balance CIF (col F) − Total Planning Value. Live formula so
-            # it recalculates if either cell is edited.
-            _scell(_sw, _sr, _E132_WASTE_COL, f'=F{_sr}-{_gcl(_E132_TOTAL_COL)}{_sr}',
-                   fill=WASTE_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            _sr += 1
-        _e132_data_end = _sr - 1
-
-        # E132 total row
-        _scell(_sw, _sr, 1, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 2, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
-        _scell(_sw, _sr, 3, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 4, '', fill=TOTAL_FILL)
-        _scell(_sw, _sr, 5, _sum_formula(5, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, 6, _sum_formula(6, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
-        for _ci in range(len(_E132_LABELS)):
-            _cc = _E132_CAT_START + _ci * 3
-            # SUM ignores 'TBD' text cells, so Milk's undefined value is excluded.
-            _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e132_data_start, _e132_data_end),     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, _cc + 1, '',                                                       fill=TOTAL_FILL)
-            _scell(_sw, _sr, _cc + 2, _sum_formula(_cc + 2, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, _E132_TOTAL_COL, _sum_formula(_E132_TOTAL_COL, _e132_data_start, _e132_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _scell(_sw, _sr, _E132_WASTE_COL, _sum_formula(_E132_WASTE_COL, _e132_data_start, _e132_data_end), fill=WASTE_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _sr += 2
-
-    # ── Other licenses section ─────────────────────────────────────────────
-    # Layout chosen to share column widths with the E1/E5 tables above:
-    #   A=License No, B=License Date, C=License Expiry Date,
-    #   D=Exporter, E=Balance CIF, F=IEC, G=Port.
-    if _other_rows:
-        _merge_hdr(_sw, _sr, 1, 9, 'OTHER LICENSES', "595959")
-        _sr += 1
-        _shdr(_sw, _sr, 1, 'Sr No')
-        _shdr(_sw, _sr, 2, 'License No')
-        _shdr(_sw, _sr, 3, 'License Date')
-        _shdr(_sw, _sr, 4, 'License Expiry Date')
-        _shdr(_sw, _sr, 5, 'Total CIF $')
-        _shdr(_sw, _sr, 6, 'Balance CIF $')
-        _shdr(_sw, _sr, 7, 'Exporter Name')
-        _shdr(_sw, _sr, 8, 'IEC')
-        _shdr(_sw, _sr, 9, 'Port')
-        _sr += 1
-        for _i, _row in enumerate(_other_rows):
-            _rf = None if _i % 2 == 0 else ALT_FILL
-            _refs = _row.get('cell_refs') or {}
-            _ld = _row.get('license_date')
-            _ed = _row.get('license_expiry_date')
-            _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
-            _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
-            _global_sr[0] += 1
-            _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
-            _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
-            _scell(_sw, _sr, 3, _ld_str, fill=_rf, align='center')
-            _scell(_sw, _sr, 4, _ed_str, fill=_rf, align='center')
-            _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
-            _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
-            _scell(_sw, _sr, 8, _row.get('iec') or '-', fill=_rf, align='center')
-            _scell(_sw, _sr, 9, _row.get('port_code') or '-', fill=_rf, align='center')
-            _sr += 1
-
-    # Column widths for summary sheet
-    _sw.column_dimensions['A'].width = 6   # Sr No
-    _sw.column_dimensions['B'].width = 18  # License No
-    _sw.column_dimensions['C'].width = 14  # License Date
-    _sw.column_dimensions['D'].width = 18  # Expiry Date
-    _sw.column_dimensions['E'].width = 16  # Balance CIF
-    _sw.column_dimensions['F'].width = 16  # Total CIF
-    _sw.column_dimensions['G'].width = 28  # Exporter
-    for _col_idx in range(8, _MAX_COL + 1):
-        _sw.column_dimensions[_gcl(_col_idx)].width = 14
-    _sw.freeze_panes = 'A4'
+    # ── Column widths ──────────────────────────────────────────────────────
+    _sw.column_dimensions['A'].width = 24
+    _sw.column_dimensions['B'].width = 26
+    _sw.column_dimensions['C'].width = 14
+    _sw.column_dimensions['D'].width = 14
+    for _col in range(5, _max_matrix_cols + 1):
+        _sw.column_dimensions[get_column_letter(_col)].width = 14
 
     wb.calculation.calcMode = "auto"
     wb.calculation.fullCalcOnLoad = True

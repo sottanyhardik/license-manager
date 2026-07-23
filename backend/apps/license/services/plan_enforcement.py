@@ -87,3 +87,64 @@ def live_allotted_value_for(item_ids) -> Decimal:
     return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id__in=ids).aggregate(
         total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
     )["total"] or DEC_0
+
+
+def planned_totals_for(item_ids) -> tuple[Decimal, Decimal]:
+    """
+    Sum of LicenseItemPlan.planned_quantity / planned_cif_fc across a group —
+    the "Original Plan" (immutable outside the Plan tab / auto-plan; never
+    touched by allotment create/delete/edit).
+
+    Same aggregate the allocate-time `plan_exceeded` check uses (see
+    `apps/allotment/views_actions.py::allocate_items`), factored out so any
+    read-only display of "what's the plan cap for this item" (e.g. the
+    Allocate screen's Planned Qty/$ display) can never drift from what is
+    actually enforced. Prefer `plan_status_for` below when you also need the
+    Used/Remaining breakdown — it composes this with the live-allotted sums.
+    """
+    from apps.license.models import LicenseItemPlan
+    ids = _normalize_item_ids(item_ids)
+    if not ids:
+        return DEC_000, DEC_0
+    agg = LicenseItemPlan.objects.filter(import_item_id__in=ids).aggregate(
+        pq=Coalesce(Sum("planned_quantity"), Value(DEC_000), output_field=DecimalField()),
+        pv=Coalesce(Sum("planned_cif_fc"), Value(DEC_0), output_field=DecimalField()),
+    )
+    return agg["pq"] or DEC_000, agg["pv"] or DEC_0
+
+
+def plan_status_for(item) -> dict | None:
+    """
+    Original / Used / Remaining planned quantity & CIF-FC for an import
+    item's plan-group (see `plan_grouping.group_ids_of`).
+
+    "Remaining" is deliberately NOT a stored, debited/credited field — it's
+    Original (from `LicenseItemPlan`, immutable from allotment code) minus
+    Used (live-summed from `AllotmentItems` via `live_allotted_*_for`). That
+    means creating/deleting/editing an allotment automatically changes what
+    this function returns on the very next call, with no explicit "credit"
+    or "debit" step required and no risk of drift between what's displayed
+    and what `allocate_items` enforces — both call this same function.
+
+    Returns None when the group has no `LicenseItemPlan` rows at all (i.e.
+    the item is unconstrained by any plan — falls back to availability-based
+    behavior everywhere else in the app).
+    """
+    from apps.license.models import LicenseItemPlan
+    from apps.license.services.plan_grouping import group_ids_of
+
+    gids = group_ids_of(item)
+    if not gids or not LicenseItemPlan.objects.filter(import_item_id__in=gids).exists():
+        return None
+
+    original_qty, original_val = planned_totals_for(gids)
+    used_qty = live_allotted_qty_for(gids)
+    used_val = live_allotted_value_for(gids)
+    return {
+        "original_quantity": original_qty,
+        "used_quantity": used_qty,
+        "remaining_quantity": original_qty - used_qty,
+        "original_cif_fc": original_val,
+        "used_cif_fc": used_val,
+        "remaining_cif_fc": original_val - used_val,
+    }

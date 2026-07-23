@@ -30,6 +30,19 @@ interface AvailableItem {
     items_detail?: Array<{ name: string }>;
     available_quantity: string;
     balance_cif_fc: string;
+    // Utilization-plan status for this item's product group (always present;
+    // the numeric fields are only set when has_plan is true). Original = the
+    // Plan tab / auto-plan cap (immutable from allotment code). Used = live
+    // sum of existing allotments for the group. Remaining = Original − Used
+    // — recomputed on every fetch, so it reflects allotment create/delete/edit
+    // automatically with no client-side bookkeeping.
+    has_plan?: boolean;
+    original_planned_quantity?: string;
+    used_planned_quantity?: string;
+    remaining_planned_quantity?: string;
+    original_planned_cif_fc?: string;
+    used_planned_cif_fc?: string;
+    remaining_planned_cif_fc?: string;
 }
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
@@ -305,11 +318,33 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             maxValue = maxQty * unitPrice;
         }
 
-        // Belt-and-suspenders: clamp maxValue to all caps (restricted CIF + balanced
-        // value) and truncate to 2 decimal places. Math.floor(X/Y)*Y can drift past
-        // X by a float-epsilon, and .toFixed(2) can round half-cents UP — this
-        // line ensures the requested cif_fc never crosses the backend's check.
-        maxValue = Math.min(maxValue, availableCifFc, balancedValueWithBuffer);
+        // Utilization-plan cap: the item can never be allotted past its
+        // Remaining Planned Qty/$ (Original plan minus what's already
+        // allotted to the group — see plan_status_for on the backend).
+        // Effective Max = min(Available, Remaining Planned). Absent when the
+        // item has no plan (has_plan false) — unconstrained, as before.
+        // Same recompute-both-together pattern as the clamps above, so
+        // maxQty and maxValue never end up inconsistent with each other.
+        let remainingPlanValue = Infinity;
+        if (item.has_plan) {
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_quantity ?? "0")));
+            remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif_fc ?? "0"));
+            if (maxQty > remainingPlanQty) {
+                maxQty = remainingPlanQty;
+                maxValue = maxQty * unitPrice;
+            }
+            if (maxValue > remainingPlanValue) {
+                maxQty = Math.floor(remainingPlanValue / unitPrice);
+                maxValue = maxQty * unitPrice;
+            }
+        }
+
+        // Belt-and-suspenders: clamp maxValue to all caps (restricted CIF +
+        // balanced value + remaining plan) and truncate to 2 decimal places.
+        // Math.floor(X/Y)*Y can drift past X by a float-epsilon, and
+        // .toFixed(2) can round half-cents UP — this line ensures the
+        // requested cif_fc never crosses the backend's check.
+        maxValue = Math.min(maxValue, availableCifFc, balancedValueWithBuffer, remainingPlanValue);
         maxValue = Math.floor(maxValue * 100) / 100;
 
         return {
@@ -363,6 +398,25 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             toast.warning(`Quantity adjusted to available CIF: ${inputQty}`);
         }
 
+        // Utilization-plan cap: never allow more than what's left of the
+        // item's plan (Original planned qty/$ minus what's already
+        // allotted to its group). Clamp both qty and value together so the
+        // field always ends in a valid, submittable state.
+        if (item.has_plan) {
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_quantity ?? "0")));
+            const remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif_fc ?? "0"));
+            if (inputQty > remainingPlanQty) {
+                toast.error("Cannot allot quantity greater than remaining planned quantity.");
+                inputQty = remainingPlanQty;
+                allocateCifFc = inputQty * unitPrice;
+            }
+            if (allocateCifFc > remainingPlanValue) {
+                toast.error("Cannot allot CIF value greater than remaining planned value.");
+                inputQty = Math.floor(remainingPlanValue / unitPrice);
+                allocateCifFc = inputQty * unitPrice;
+            }
+        }
+
         setAllocationData({
             ...allocationData,
             [itemId]: {
@@ -403,6 +457,23 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         // Constrain to balanced quantity
         if (allocateQty > balancedQty) {
             allocateQty = balancedQty;
+        }
+
+        // Utilization-plan cap: never allow more than what's left of the
+        // item's plan. Same rule as handleQuantityChange, entered from the
+        // Value field instead of the Qty field.
+        if (item.has_plan) {
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_quantity ?? "0")));
+            const remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif_fc ?? "0"));
+            if (inputValue > remainingPlanValue) {
+                toast.error("Cannot allot CIF value greater than remaining planned value.");
+                inputValue = remainingPlanValue;
+                allocateQty = Math.floor(inputValue / unitPrice);
+            }
+            if (allocateQty > remainingPlanQty) {
+                toast.error("Cannot allot quantity greater than remaining planned quantity.");
+                allocateQty = remainingPlanQty;
+            }
         }
 
         // Recalculate value based on adjusted quantity
@@ -929,6 +1000,37 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <span key={idx} className="rounded border border-primary/20 bg-primary/10 px-1.5 text-[0.7rem] font-semibold leading-[1.6] text-primary">{i.name}</span>
                                         ))}
                                     </div>
+
+                                    {/* ── Row 2.5: Utilization-plan status (Original/Used/Remaining) —
+                                        only rendered for items that actually carry a plan. This is the
+                                        SAME Original/Used/Remaining the Max button below is capped to,
+                                        and what the server re-checks on Confirm — shown here so the
+                                        operator sees the cap before typing, not after a rejection. ── */}
+                                    {item.has_plan && (() => {
+                                        const origQty = Number(item.original_planned_quantity ?? 0);
+                                        const usedQty = Number(item.used_planned_quantity ?? 0);
+                                        const remQty  = Number(item.remaining_planned_quantity ?? 0);
+                                        const origVal = Number(item.original_planned_cif_fc ?? 0);
+                                        const usedVal = Number(item.used_planned_cif_fc ?? 0);
+                                        const remVal  = Number(item.remaining_planned_cif_fc ?? 0);
+                                        return (
+                                            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 bg-primary/5 border-b border-primary/10 px-3 py-[5px] text-[11.5px]">
+                                                <span className="inline-flex items-center gap-1 font-semibold text-primary">
+                                                    <ListChecks className="size-3" aria-hidden="true" />Plan
+                                                </span>
+                                                <span className="text-muted-foreground">
+                                                    Qty — Original <b className="text-foreground font-semibold">{origQty.toFixed(3)}</b>
+                                                    {' · '}Used <b className="text-foreground font-semibold">{usedQty.toFixed(3)}</b>
+                                                    {' · '}Remaining <b className={cn("font-semibold", remQty <= 0 ? "text-destructive" : "text-foreground")}>{remQty.toFixed(3)}</b>
+                                                </span>
+                                                <span className="text-muted-foreground">
+                                                    Value — Original <b className="text-foreground font-semibold">${origVal.toFixed(2)}</b>
+                                                    {' · '}Used <b className="text-foreground font-semibold">${usedVal.toFixed(2)}</b>
+                                                    {' · '}Remaining <b className={cn("font-semibold", remVal <= 0 ? "text-destructive" : "text-foreground")}>${remVal.toFixed(2)}</b>
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* ── Row 3: Stats + Inputs + Action (compact bottom bar) ── */}
                                     <div className="flex items-center flex-wrap bg-muted/40">

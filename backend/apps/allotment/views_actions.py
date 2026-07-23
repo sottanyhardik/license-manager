@@ -246,13 +246,16 @@ class AllotmentActionViewSet(ViewSet):
         # Apply pagination first, then count (more efficient for large datasets)
         start = (page - 1) * page_size
         end = start + page_size
-        paginated_queryset = queryset[start:end]
+        # Materialize once — it's reused below (serializer + optional plan lookup);
+        # re-slicing the queryset twice would re-run the query and risks the two
+        # reads landing in a different order.
+        paginated_items = list(queryset[start:end])
 
         # Get total count - use a faster approximate count for large result sets
         total_count = queryset.count()
 
         # Serialize the data
-        license_serializer = LicenseImportItemSerializer(paginated_queryset, many=True, context={'request': request})
+        license_serializer = LicenseImportItemSerializer(paginated_items, many=True, context={'request': request})
         allotment_serializer = AllotmentSerializer(allotment, context={'request': request})
 
         # Add $20 buffer to required value to handle rounding issues
@@ -260,9 +263,31 @@ class AllotmentActionViewSet(ViewSet):
         allotment_data = allotment_serializer.data
         allotment_data['required_value_with_buffer'] = str(float(allotment_data.get('required_value', 0)) + 20)
 
+        available_items_data = license_serializer.data
+
+        # Attach each item's utilization-plan status — the SAME
+        # Original/Used/Remaining `plan_status_for` computes for the
+        # `plan_exceeded` check in `allocate_items`. Always computed (not an
+        # opt-in toggle): the frontend's Max-allotment cap depends on
+        # `remaining_planned_*`, so it can't be a display-only extra. Cost is
+        # one extra group-lookup + two aggregates per item, bounded by
+        # `page_size` (≤100) — acceptable for a paginated admin screen; batch
+        # by license in one query as a follow-up if this is ever measured slow.
+        from apps.license.services.plan_enforcement import plan_status_for
+        for row, item in zip(available_items_data, paginated_items):
+            status = plan_status_for(item)
+            row['has_plan'] = status is not None
+            if status is not None:
+                row['original_planned_quantity'] = str(status['original_quantity'])
+                row['used_planned_quantity'] = str(status['used_quantity'])
+                row['remaining_planned_quantity'] = str(status['remaining_quantity'])
+                row['original_planned_cif_fc'] = str(status['original_cif_fc'])
+                row['used_planned_cif_fc'] = str(status['used_cif_fc'])
+                row['remaining_planned_cif_fc'] = str(status['remaining_cif_fc'])
+
         return Response({
             'allotment': allotment_data,
-            'available_items': license_serializer.data,
+            'available_items': available_items_data,
             'count': total_count,
             'page': page,
             'page_size': page_size,
@@ -408,37 +433,38 @@ class AllotmentActionViewSet(ViewSet):
                 # group's total planned qty / CIF-FC. Exceeding it returns a
                 # `plan_exceeded` error so the frontend can open the planner.
                 # Groups WITHOUT any plan line fall through to existing behavior.
-                from django.db.models import Sum as _Sum, DecimalField as _DecimalField, Value as _Value
-                from django.db.models.functions import Coalesce as _Coalesce
-                from apps.license.models import LicenseItemPlan as _LIP
-                from apps.license.services.plan_grouping import group_ids_of as _group_ids_of
-                _gids = _group_ids_of(license_item)
-                _group_plans = _LIP.objects.filter(import_item_id__in=_gids)
-                plan_agg = _group_plans.aggregate(
-                    pq=_Coalesce(_Sum('planned_quantity'), _Value(Decimal('0')), output_field=_DecimalField()),
-                    pv=_Coalesce(_Sum('planned_cif_fc'), _Value(Decimal('0')), output_field=_DecimalField()),
-                )
-                if _group_plans.exists():
-                    from apps.license.services.plan_enforcement import (
-                        live_allotted_qty_for, live_allotted_value_for,
-                    )
-                    already_qty = live_allotted_qty_for(_gids)
-                    already_val = live_allotted_value_for(_gids)
-                    planned_qty = Decimal(str(plan_agg['pq'] or 0))
-                    planned_val = Decimal(str(plan_agg['pv'] or 0))
-                    if (already_qty + qty) > planned_qty or (already_val + cif_fc) > planned_val:
+                #
+                # `plan_status_for` is the single source of truth for
+                # Original/Used/Remaining — the same function backs the
+                # Allocate screen's Planned Qty/$ display, so what's shown
+                # there can never drift from what's enforced here. Remaining
+                # is NOT a stored/decremented field: it's Original (from
+                # LicenseItemPlan, untouched by allotment code) minus Used
+                # (live-summed from AllotmentItems), so create/delete/edit of
+                # an allotment automatically changes it on the next read.
+                from apps.license.services.plan_enforcement import plan_status_for
+                plan_status = plan_status_for(license_item)
+                if plan_status is not None:
+                    exceeds_qty = (plan_status["used_quantity"] + qty) > plan_status["original_quantity"]
+                    exceeds_val = (plan_status["used_cif_fc"] + cif_fc) > plan_status["original_cif_fc"]
+                    if exceeds_qty or exceeds_val:
+                        msg = (
+                            "Cannot allot quantity greater than remaining planned quantity."
+                            if exceeds_qty else
+                            "Cannot allot CIF value greater than remaining planned value."
+                        )
                         errors.append({
                             'item_id': item_id,
                             'plan_exceeded': True,
-                            'error': 'Allocation exceeds the utilization plan for this item.',
-                            'planned_quantity': str(planned_qty),
-                            'planned_cif_fc': str(planned_val),
-                            'already_allotted_quantity': str(already_qty),
-                            'already_allotted_cif_fc': str(already_val),
+                            'error': msg,
+                            'original_planned_quantity': str(plan_status["original_quantity"]),
+                            'used_planned_quantity': str(plan_status["used_quantity"]),
+                            'remaining_planned_quantity': str(plan_status["remaining_quantity"]),
+                            'original_planned_cif_fc': str(plan_status["original_cif_fc"]),
+                            'used_planned_cif_fc': str(plan_status["used_cif_fc"]),
+                            'remaining_planned_cif_fc': str(plan_status["remaining_cif_fc"]),
                             'requested_quantity': str(qty),
                             'requested_cif_fc': str(cif_fc),
-                            'remaining_planned_quantity': str(planned_qty - already_qty),
-                            'remaining_planned_cif_fc': str(planned_val - already_val),
                         })
                         continue
                 # ------------------------------------------------------------
@@ -501,10 +527,21 @@ class AllotmentActionViewSet(ViewSet):
         }, status=status.HTTP_201_CREATED if created_items else status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['delete'], url_path='delete-item/(?P<item_id>[^/.]+)')
+    @transaction.atomic
     def delete_allotment_item(self, request, pk=None, item_id=None):
         """
         Delete an allotment item (deallocate a license from this allotment).
         This will restore the available quantity to the license.
+
+        This is the "credit" side of the utilization-plan cap: since
+        `Remaining Planned Qty/$` is computed live as Original minus a live
+        SUM of `AllotmentItems` (see `plan_status_for` /
+        `live_allotted_qty_for`), deleting this row automatically restores
+        the remaining plan on the very next read — no explicit credit step
+        needed. `@transaction.atomic` + `select_for_update()` here (matching
+        `allocate_items`) close the same race window: without it, a
+        concurrent `allocate-items` call on the same import item could read
+        stale "already allotted" totals mid-delete.
         """
         try:
             allotment_item = get_object_or_404(
@@ -515,6 +552,12 @@ class AllotmentActionViewSet(ViewSet):
 
             license_number = allotment_item.item.license.license_number if allotment_item.item else "Unknown"
             qty = allotment_item.qty
+
+            # Lock the parent import item for the duration of the delete so
+            # this can't interleave with a concurrent allocate-items call
+            # that's mid-way through its own plan-cap check on the same item.
+            if allotment_item.item_id:
+                LicenseImportItemsModel.objects.select_for_update().get(id=allotment_item.item_id)
 
             # Delete the allotment item (signals will handle updating available quantity)
             allotment_item.delete()

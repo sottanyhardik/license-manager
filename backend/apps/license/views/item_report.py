@@ -24,6 +24,74 @@ def _safe_int(value, default):
         return default
 
 
+def _merge_report_items_by_group(license_items):
+    """
+    Merge one licence's raw `report_items` rows (one per raw import item,
+    ordered by serial_number — see `generate_report`) into one row per
+    `group_key` (`plan_grouping.plan_group_key`, attached to each row by
+    `generate_report`) — the same grouping `plan_utilization_rows()` uses
+    for the licence-detail API and the balance Excel exports.
+
+    First-seen (= lowest serial number) member's fields seed each merged
+    row; additive fields (`available_quantity`, `planned_quantity`,
+    `planned_cif`) are summed across the group so grand totals are
+    unaffected by merging; `item_names`/`planned_splits` are deduped/unioned
+    across every member (defensive, in case a legacy plan line ever landed
+    on a non-representative member); `serial_number` becomes the
+    comma-joined, ascending list of every merged serial (e.g. "3, 13, 23").
+    `hs_code`/`product_description`/`condition_type` fall back to the first
+    non-empty value across members when the representative's own is blank.
+
+    Only used by `export_to_excel` — `generate_report`'s JSON `items` list
+    stays one row per raw import item (the Item Report table edits item
+    names per raw row, so it needs the raw granularity).
+    """
+    groups: dict = {}
+    order: list = []
+
+    for item in license_items:
+        key = item.get('group_key') or f"ID:{item.get('id')}"
+        group = groups.get(key)
+        if group is None:
+            group = {
+                **item,
+                'available_quantity': 0.0,
+                'planned_quantity': 0.0,
+                'planned_cif': 0.0,
+                'item_names': [],
+                'planned_splits': [],
+                '_serials': [],
+                '_item_name_ids': set(),
+            }
+            groups[key] = group
+            order.append(key)
+
+        group['_serials'].append(item.get('serial_number'))
+        group['available_quantity'] += float(item.get('available_quantity') or 0)
+        group['planned_quantity'] += float(item.get('planned_quantity') or 0)
+        group['planned_cif'] += float(item.get('planned_cif') or 0)
+        if not group.get('hs_code') and item.get('hs_code'):
+            group['hs_code'] = item['hs_code']
+        if not group.get('product_description') and item.get('product_description'):
+            group['product_description'] = item['product_description']
+        if not group.get('condition_type') and item.get('condition_type'):
+            group['condition_type'] = item['condition_type']
+        for name in item.get('item_names') or []:
+            if name['id'] not in group['_item_name_ids']:
+                group['_item_name_ids'].add(name['id'])
+                group['item_names'].append(name)
+        group['planned_splits'].extend(item.get('planned_splits') or [])
+
+    merged = []
+    for key in order:
+        group = groups[key]
+        serials = sorted(s for s in group.pop('_serials') if s is not None)
+        group.pop('_item_name_ids')
+        group['serial_number'] = ', '.join(str(s) for s in serials)
+        merged.append(group)
+    return merged
+
+
 class _ExcelPassthroughRenderer(BaseRenderer):
     """
     Dummy renderer that tells DRF 'excel' is an accepted format so that
@@ -244,6 +312,7 @@ class ItemReportView(APIView):
                 _eff_cache[lid] = effective_plan_for_license(it.license)
 
         # Build report data
+        from apps.license.services.plan_grouping import plan_group_key
         report_items = []
         for item in item_list:
             # Get item names
@@ -294,6 +363,13 @@ class ItemReportView(APIView):
                 'planned_cif': plan['planned_cif'] if plan else 0,
                 'plan_source': _plan_source,
                 'planned_splits': (_ms['splits'] if (_plan_source == 'manual' and _ms) else []),
+                # Additive, non-breaking: the SAME plan_group_key() the Plan
+                # tab / plan_utilization_rows() use to merge S.No rows that
+                # share a product. Only consumed by export_to_excel below
+                # (to merge rows within a licence's block) — the JSON `items`
+                # list itself stays one entry per raw import item, since the
+                # Item Report table edits item names per raw row.
+                'group_key': plan_group_key(item),
             })
 
         return {
@@ -385,6 +461,18 @@ class ItemReportView(APIView):
                     grouped_items[license_id] = []
                 grouped_items[license_id].append(item)
 
+            # Merge each licence's raw rows (one per S.No) into one row per
+            # planning-item group (the same `plan_group_key` grouping
+            # `plan_utilization_rows()` uses) — e.g. 3 S.No rows that share a
+            # description collapse into 1, with a comma-joined Serial Number
+            # cell. Only the Excel export merges; `report_data['items']`
+            # (the JSON API) stays one row per raw import item, since the
+            # Item Report table edits item names per raw row.
+            grouped_items = {
+                license_id: _merge_report_items_by_group(rows)
+                for license_id, rows in grouped_items.items()
+            }
+
             # Define border style for merged cells
             thin_border = Border(
                 left=Side(style='thin'),
@@ -393,12 +481,31 @@ class ItemReportView(APIView):
                 bottom=Side(style='thin')
             )
 
+            # Planning split sub-row rendering is shared with
+            # license_balance_excel.py — see planning_split_rows.py.
+            from apps.license.services.exporters.planning_split_rows import (
+                rows_for_splits, write_split_sub_rows,
+            )
+
             # Add data rows with merged cells for same license
             current_row = 2
             sr_no = 1
 
             for license_id, license_items in grouped_items.items():
-                row_span = len(license_items)
+                # Per-item visible (qty>0 or cif>0) planning splits, sourced
+                # from the same plan_map_for_import_items() map
+                # generate_report() already built (item['planned_splits'],
+                # scoped to manual-plan items there) — no second
+                # LicenseItemPlan query here.
+                item_split_rows = [
+                    rows_for_splits(item.get('planned_splits') or [])
+                    for item in license_items
+                ]
+                # Row span now covers each item's own row PLUS its split
+                # sub-rows, so the merged license-level columns (Sr No,
+                # License No, ... Transfer Status) still span the whole
+                # license block correctly.
+                row_span = len(license_items) + sum(len(s) for s in item_split_rows)
                 start_row = current_row
 
                 # Add each item in this license group
@@ -437,6 +544,27 @@ class ItemReportView(APIView):
                     ws.cell(row=current_row, column=19, value=item.get('planned_cif') or 0)  # Plan CIF
 
                     current_row += 1
+
+                    # ── Planning split sub-rows ─────────────────────────────
+                    # One indented row per manual-plan split — Planning Item
+                    # Name / Unit Price / Planned Qty / Planned CIF / "Split N"
+                    # badge — matching license_balance_excel.py's per-item
+                    # split rows exactly (same source map, same filter).
+                    # item_name is sanitized like every other string field in
+                    # this export (control chars openpyxl rejects).
+                    _raw_splits = item.get('planned_splits') or []
+                    _sanitized_splits = [
+                        {**s, 'item_name': _safe(s.get('item_name'))} for s in _raw_splits
+                    ]
+                    current_row += write_split_sub_rows(
+                        ws, current_row, _sanitized_splits,
+                        name_col=11,   # Item Name
+                        price_col=10,  # Product Description col reused for unit price
+                        badge_col=8,   # Condition col reused for badge
+                        qty_col=18,    # Plan Qty
+                        cif_col=19,    # Plan CIF
+                        other_cols=(7, 9, 12, 13, 14, 15, 16, 17),
+                    )
 
                 # Merge cells for license-level columns
                 if row_span > 1:

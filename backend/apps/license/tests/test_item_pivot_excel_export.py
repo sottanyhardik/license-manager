@@ -136,6 +136,63 @@ def pivot_license(db, pivot_masters):
     return license_obj
 
 
+@pytest.fixture
+def pivot_license_with_multi_split(db, pivot_masters):
+    """A second, separate license whose single import item is split across
+    TWO manual-plan lines (same pivot item-name column, distinct unit price/
+    qty/cif per split) — exercising the "Planning Splits" sheet, which lists
+    every visible split flat rather than folding them into the pivot cell's
+    summed plan_quantity/plan_cif."""
+    license_obj = LicenseDetailsModel.objects.create(
+        license_number="PIVOT-EXCEL-SPLIT-001",
+        license_date=date.today() - timedelta(days=30),
+        license_expiry_date=date.today() + timedelta(days=30),
+        exporter=pivot_masters["exporter"],
+        notification_number=pivot_masters["notification"],
+        scheme_code=pivot_masters["scheme"],
+        purchase_status=pivot_masters["purchase_status"],
+        file_number="PIVOT-FILE-SPLIT-001",
+    )
+    LicenseExportItemModel.objects.create(
+        license=license_obj,
+        description="Pivot split export item",
+        norm_class=pivot_masters["norm_class"],
+        cif_fc=Decimal("500.00"),
+        cif_inr=Decimal("42000.00"),
+    )
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj,
+        serial_number=1,
+        description="Pivot split import item",
+        hs_code=pivot_masters["hs_code"],
+        quantity=Decimal("50.000"),
+        allotted_quantity=Decimal("0"),
+        debited_quantity=Decimal("0"),
+        available_quantity=Decimal("50.000"),
+        debited_value=Decimal("0"),
+        cif_fc=Decimal("300.00"),
+    )
+    import_item.items.add(pivot_masters["item_name"])
+
+    LicenseItemPlan.objects.create(
+        license=license_obj,
+        import_item=import_item,
+        item_name=pivot_masters["item_name"],
+        planned_quantity=Decimal("20.000"),
+        unit_price=Decimal("5.00"),
+        planned_cif_fc=Decimal("100.00"),
+    )
+    LicenseItemPlan.objects.create(
+        license=license_obj,
+        import_item=import_item,
+        item_name=pivot_masters["item_name"],
+        planned_quantity=Decimal("10.000"),
+        unit_price=Decimal("7.50"),
+        planned_cif_fc=Decimal("75.00"),
+    )
+    return license_obj
+
+
 def _download_excel(superuser_client):
     response = superuser_client.get(
         reverse("license:item-pivot-report"),
@@ -148,9 +205,12 @@ def _download_excel(superuser_client):
 
 def _first_report_sheet(workbook):
     # Only one norm/notification combination is present in this fixture set,
-    # so there should be exactly one sheet.
-    assert len(workbook.worksheets) == 1, [ws.title for ws in workbook.worksheets]
-    return workbook.worksheets[0]
+    # so there should be exactly one norm/notification report sheet, plus the
+    # always-appended "Planning Splits" sheet (see
+    # test_item_pivot_excel_has_planning_splits_sheet below).
+    report_sheets = [ws for ws in workbook.worksheets if ws.title != "Planning Splits"]
+    assert len(report_sheets) == 1, [ws.title for ws in workbook.worksheets]
+    return report_sheets[0]
 
 
 @pytest.mark.django_db
@@ -240,3 +300,62 @@ def test_item_pivot_excel_plan_qty_total_is_literal_sum(superuser_client, pivot_
     # planned_cif = 400.00 (manual plan), plan_quantity = 40.000 -> literal sum = 40.00
     assert totals_row[planned_cif_idx] == pytest.approx(400.00)
     assert totals_row[plan_qty_idx] == pytest.approx(40.00)
+
+
+@pytest.mark.django_db
+def test_item_pivot_excel_has_planning_splits_sheet_with_expected_rows(
+    superuser_client, pivot_license_with_multi_split
+):
+    """A "Planning Splits" sheet must always be present (additive detail
+    alongside the pivot grid, which can't host inline child rows) and must
+    list one flat row per visible LicenseItemPlan split — sourced from
+    `rows_for_splits()`, not re-derived filtering."""
+    content = _download_excel(superuser_client)
+    workbook = load_workbook(BytesIO(content), data_only=True)
+
+    assert "Planning Splits" in workbook.sheetnames
+    ws = workbook["Planning Splits"]
+
+    header_row = [cell.value for cell in ws[1]]
+    assert header_row == [
+        "License No", "Product", "Item Name", "Split",
+        "Unit Price", "Planned Qty", "Planned CIF",
+    ]
+
+    item_name = "PIVOT TEST ITEM - PIVOTTEST"
+    data_rows = [
+        [cell.value for cell in row]
+        for row in ws.iter_rows(min_row=2)
+        if row[0].value == "PIVOT-EXCEL-SPLIT-001"
+    ]
+    assert data_rows == [
+        ["PIVOT-EXCEL-SPLIT-001", item_name, item_name, "Split 1", 5.0, 20.0, 100.0],
+        ["PIVOT-EXCEL-SPLIT-001", item_name, item_name, "Split 2", 7.5, 10.0, 75.0],
+    ]
+
+
+@pytest.mark.django_db
+def test_item_pivot_excel_planning_splits_sheet_lists_single_split_license(
+    superuser_client, pivot_license
+):
+    """A license with exactly one (unpriced) manual-plan line still
+    contributes exactly one visible-split row — the sheet lists every
+    visible split regardless of how many lines an item was split into,
+    matching `rows_for_splits()`'s per-item filter (qty>0 or cif>0), not a
+    "must have 2+ splits" heuristic."""
+    content = _download_excel(superuser_client)
+    workbook = load_workbook(BytesIO(content), data_only=True)
+
+    assert "Planning Splits" in workbook.sheetnames
+    ws = workbook["Planning Splits"]
+
+    item_name = "PIVOT TEST ITEM - PIVOTTEST"
+    data_rows = [
+        [cell.value for cell in row]
+        for row in ws.iter_rows(min_row=2)
+        if row[0].value == "PIVOT-EXCEL-001"
+    ]
+    # unit_price defaults to 0 (not set by this fixture) -> unit_price 0.0.
+    assert data_rows == [
+        ["PIVOT-EXCEL-001", item_name, item_name, "Split 1", 0.0, 40.0, 400.0],
+    ]

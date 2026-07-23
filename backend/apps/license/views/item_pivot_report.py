@@ -59,6 +59,42 @@ def _xlsx_safe_row(row):
     return cleaned
 
 
+def _planning_split_sheet_rows(licenses_by_norm_notification, item_names):
+    """Flat (license, pivot-item-column, split) rows for a "Planning Splits"
+    sheet — one row per *visible* LicenseItemPlan split, for every license /
+    item-name-column combination that actually has one.
+
+    The main pivot grid is one row per license with a wide, fixed set of
+    item-name columns (some of it write-only/append-only), so it can't host
+    indented child rows the way license_balance_excel.py / item_report.py do.
+    This sheet is additive detail alongside that grid, not a replacement for
+    its per-item-name Plan Qty / Plan CIF cells.
+
+    Reuses `rows_for_splits()` (the shared filter/label rules) rather than
+    re-deriving the visibility filter here.
+    """
+    from apps.license.services.exporters.planning_split_rows import rows_for_splits
+
+    rows = []
+    for norm_class in sorted(licenses_by_norm_notification.keys()):
+        notifications_dict = licenses_by_norm_notification[norm_class]
+        for notification, licenses_list in sorted(notifications_dict.items()):
+            for lic in licenses_list:
+                for item_name in item_names:
+                    item_data = lic['items'].get(item_name) or {}
+                    for split_row in rows_for_splits(item_data.get('splits') or []):
+                        rows.append((
+                            lic['license_number'],
+                            item_name,
+                            split_row['item_name_label'],
+                            split_row['split_badge'],
+                            split_row['unit_price'],
+                            split_row['planned_quantity'],
+                            split_row['planned_cif_fc'],
+                        ))
+    return rows
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -319,16 +355,29 @@ class ItemPivotReportView(APIView):
             lambda: defaultdict(lambda: {'q': Decimal('0.000'), 'cif': Decimal('0.00')})
         )
         planned_item_ids_all = set()
+        # Same query already fetches every LicenseItemPlan row for this page —
+        # also keep the raw per-line split (item_name/qty/price/cif) so a
+        # "Planning Splits" sheet can be rendered later without a second
+        # query. item_name is resolved (id -> name string) once all_items is
+        # fully populated, below.
         for _pl in (LicenseItemPlan.objects
                     .filter(license_id__in=[_lo.id for _lo in valid_licenses])
                     .values('license_id', 'import_item_id', 'item_name_id',
-                            'planned_quantity', 'planned_cif_fc')):
+                            'planned_quantity', 'unit_price', 'planned_cif_fc')):
             _iname = _pl['item_name_id'] or first_item_of_import.get(_pl['import_item_id'])
             if _iname is None:
                 continue
             _cell = plan_totals_by_license[_pl['license_id']][_iname]
             _cell['q'] += _pl['planned_quantity'] or Decimal('0')
             _cell['cif'] += _pl['planned_cif_fc'] or Decimal('0')
+            _cell.setdefault('splits', []).append({
+                # Resolved to a name string in the pass below, once all_items
+                # (including manually-planned-but-inactive items) is complete.
+                '_item_name_id': _pl['item_name_id'],
+                'planned_quantity': float(_pl['planned_quantity'] or 0),
+                'unit_price': float(_pl['unit_price'] or 0),
+                'planned_cif_fc': float(_pl['planned_cif_fc'] or 0),
+            })
             planned_item_ids_all.add(_iname)
             # Track import reference once per planned-item cell (first plan line wins).
             if 'import_item_name' not in _cell:
@@ -352,6 +401,20 @@ class ItemPivotReportView(APIView):
                 if sion_norm and not (_it.sion_norm_class and _it.sion_norm_class.norm_class == sion_norm):
                     continue
                 all_items[_it.id] = _it
+
+        # Resolve each split's own item_name tag (id -> name string) now that
+        # all_items includes every planned item, even inactive/filtered ones
+        # not directly M2M-attached to their import item. No new query — just
+        # a dict merge of data already fetched above. Falls back to None
+        # (→ "Split N" badge, same as plan_reporting._build_map) for the rare
+        # id that still isn't resolvable (e.g. filtered out by sion_norm).
+        _split_item_name_lookup = dict(item_name_str_by_id)
+        _split_item_name_lookup.update({iid: (it.name or '') for iid, it in all_items.items()})
+        for _lic_cells in plan_totals_by_license.values():
+            for _cell in _lic_cells.values():
+                for _sp in _cell.get('splits', []):
+                    _nid = _sp.pop('_item_name_id', None)
+                    _sp['item_name'] = _split_item_name_lookup.get(_nid) if _nid is not None else None
 
         # Sort items by display_order first, then by name for consistent column order
         sorted_items = sorted(
@@ -954,6 +1017,10 @@ class ItemPivotReportView(APIView):
                     # planned_cif), sourced per plan-line item_name.
                     'plan_quantity': float(_item_plan.get('q') or 0),
                     'plan_cif': float(_item_plan.get('cif') or 0),
+                    # Raw per-line split breakdown (item_name/qty/unit_price/
+                    # cif) for the "Planning Splits" sheet — same source as
+                    # plan_quantity/plan_cif above, just not summed.
+                    'splits': _item_plan.get('splits', []),
                     'condition_type': cond_type,
                     # E132 sequential-debit fields (None for non-E132 norms).
                     'product_code': _e132.get('product_code'),
@@ -987,6 +1054,7 @@ class ItemPivotReportView(APIView):
                     'planned_cif': 0,
                     'plan_quantity': 0,
                     'plan_cif': 0,
+                    'splits': [],
                     'condition_type': '',
                     'product_code': None,
                     'unit_rate': None,
@@ -1257,6 +1325,27 @@ class ItemPivotReportView(APIView):
 
                     worksheet.append(_xlsx_safe_row(totals_row))
 
+            # "Planning Splits" — a separate sheet listing every visible
+            # LicenseItemPlan split (flat, one row each) across all licenses
+            # in this report. Additive detail; the pivot grid's per-item-name
+            # Plan Qty / Plan CIF cells above are unchanged.
+            split_rows = _planning_split_sheet_rows(
+                licenses_by_norm_notification,
+                [item['name'] for item in report_data['items']],
+            )
+            splits_ws = workbook.create_sheet(title="Planning Splits")
+            split_header_row = []
+            for header in ('License No', 'Product', 'Item Name', 'Split',
+                           'Unit Price', 'Planned Qty', 'Planned CIF'):
+                cell = WriteOnlyCell(splits_ws, value=header)
+                cell.font = Font(bold=True, color='FFFFFF')
+                cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+                cell.alignment = Alignment(horizontal='center', wrap_text=True)
+                split_header_row.append(cell)
+            splits_ws.append(_xlsx_safe_row(split_header_row))
+            for split_row in split_rows:
+                splits_ws.append(_xlsx_safe_row(list(split_row)))
+
             # Save workbook to temp file
             workbook.save(temp_file.name)
             workbook.close()
@@ -1519,6 +1608,27 @@ class ItemPivotReportView(APIView):
                         totals_row.append(cell)
 
                     worksheet.append(_xlsx_safe_row(totals_row))
+
+            # "Planning Splits" — a separate sheet listing every visible
+            # LicenseItemPlan split (flat, one row each) across all licenses
+            # in this report. Additive detail; the pivot grid's per-item-name
+            # Plan Qty / Plan CIF cells above are unchanged.
+            split_rows = _planning_split_sheet_rows(
+                licenses_by_norm_notif,
+                [item['name'] for item in report_data['items']],
+            )
+            splits_ws = workbook.create_sheet(title="Planning Splits")
+            split_header_row = []
+            for header in ('License No', 'Product', 'Item Name', 'Split',
+                           'Unit Price', 'Planned Qty', 'Planned CIF'):
+                cell = WriteOnlyCell(splits_ws, value=header)
+                cell.font = Font(bold=True, color='FFFFFF')
+                cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+                cell.alignment = Alignment(horizontal='center', wrap_text=True)
+                split_header_row.append(cell)
+            splits_ws.append(_xlsx_safe_row(split_header_row))
+            for split_row in split_rows:
+                splits_ws.append(_xlsx_safe_row(list(split_row)))
 
             # Save workbook
             workbook.save(temp_file.name)

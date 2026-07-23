@@ -240,6 +240,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         one license's items per call — `list` (many licenses) is unaffected,
         since `import_license` is emptied there for performance (see the
         serializer's `is_list_view` branch).
+
+        Also attaches a top-level `plan_utilization` key: one row per
+        planning-item GROUP (see `plan_utilization_rows`) rather than one row
+        per raw `import_license` entry — e.g. three S.No rows that share a
+        description merge into a single row whose `serials` list carries all
+        three. Purely additive: `import_license` keeps its existing raw,
+        ungrouped shape (other UI — the license edit/MasterForm — reads it as
+        the literal DB rows for CRUD).
         """
         instance = self.get_object()
         serializer = self.get_serializer(instance)
@@ -262,6 +270,18 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     row['original_planned_cif_fc'] = str(plan_status['original_cif_fc'])
                     row['used_planned_cif_fc'] = str(plan_status['used_cif_fc'])
                     row['remaining_planned_cif_fc'] = str(plan_status['remaining_cif_fc'])
+
+        from apps.license.services.plan_utilization import plan_utilization_rows
+
+        _decimal_fields = (
+            'available_quantity', 'total_quantity', 'balance_cif_fc',
+            'original_quantity', 'used_quantity', 'remaining_quantity',
+            'original_cif_fc', 'used_cif_fc', 'remaining_cif_fc',
+        )
+        data['plan_utilization'] = [
+            {**row, **{f: str(row[f]) for f in _decimal_fields if f in row}}
+            for row in plan_utilization_rows(instance)
+        ]
 
         return Response(data)
 

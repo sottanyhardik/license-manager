@@ -24,6 +24,8 @@ import {
     AlertTriangle,
     BookOpen,
     CheckCircle2,
+    ChevronDown,
+    ChevronRight,
     Circle,
     ClipboardList,
     Loader2,
@@ -69,11 +71,19 @@ const emptySplit = (): Split => ({
     item_name: "", planned_quantity: "", unit_price: "", planned_cif_fc: "", note: "",
 });
 
-const groupKeyOf = (desc: string | undefined | null, names: { id: number; name: string }[]): string | null => {
-    const d = (desc || "").trim();
-    if (d) return d.toUpperCase();
-    const ns = names.map((n) => n.name).sort().join(", ");
-    return ns ? "N:" + ns.toUpperCase() : null;
+// A split "counts" for display once it carries a real quantity or CIF — mirrors
+// the same filter the Download License Excel exporter uses (see
+// license_balance_excel.py's split sub-row block) so both surfaces agree on
+// what a "planning allocation" is.
+const validSplitsOf = (g: Group): Split[] =>
+    g.splits.filter((sp) => num(sp.planned_quantity) > 0 || num(sp.planned_cif_fc) > 0);
+
+// Resolve a split's stored item_name (an id, as string) to its display label.
+// Falls back to "Split N" — same fallback the Excel exporter uses — for splits
+// saved without a specific item name tag.
+const splitLabel = (sp: Split, group: Group, index: number): string => {
+    const name = group.itemNames.find((n) => String(n.id) === sp.item_name)?.name;
+    return name || `Split ${index + 1}`;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,7 +106,7 @@ interface Group {
     id: number;
     description: string;
     serials: number[];
-    hsCodes?: string[];
+    hsCode?: string;
     memberIds: number[];
     total_quantity: number;
     available_quantity: number;
@@ -409,6 +419,15 @@ export default function PlanningEditor({
     const [editingGroupId, setEditingGroupId]   = useState<number | null>(null);
     const [savingGroupId, setSavingGroupId]     = useState<number | null>(null);
 
+    // Per-group split-breakdown disclosure. Defaults to expanded (every
+    // planning allocation's item name/price/qty/CIF should be visible without
+    // an extra click) — collapsing is an opt-in density choice, never a way
+    // to hide required info.
+    const [expandedIds, setExpandedIds]         = useState<Record<number, boolean>>({});
+    const toggleExpand = useCallback((gId: number) => {
+        setExpandedIds((prev) => ({ ...prev, [gId]: !(prev[gId] ?? true) }));
+    }, []);
+
     // ── Load ─────────────────────────────────────────────────────────────────
 
     const load = useCallback(async () => {
@@ -440,54 +459,56 @@ export default function PlanningEditor({
                 });
             });
 
-            const importItems: {
-                id: number; serial_number: number;
-                product_description?: string; description?: string;
-                quantity?: number; available_quantity?: number;
-                balance_cif_fc?: number | null; hs_code_label?: string;
-                items_detail?: { id: number; name: string }[];
+            // The backend's shared Plan Utilization service already merges
+            // import items that share a planning group (same grouping
+            // `plan_enforcement` uses for real allotment-cap math) into one
+            // row per group — this component no longer re-derives groups
+            // from the raw `import_license` list itself, so there is exactly
+            // one place (the backend) that decides what counts as "the same
+            // planning item". See `plan_utilization_rows` on the backend.
+            const groupRows: {
+                group_id: number; description?: string | null; hs_code?: string | null;
+                serials?: number[]; member_ids?: number[];
+                item_names?: { id: number; name: string }[];
+                available_quantity?: string | number; total_quantity?: string | number;
+                balance_cif_fc?: string | number;
                 has_plan?: boolean;
-                original_planned_quantity?: string | number; used_planned_quantity?: string | number; remaining_planned_quantity?: string | number;
-                original_planned_cif_fc?: string | number; used_planned_cif_fc?: string | number; remaining_planned_cif_fc?: string | number;
-            }[] = Array.isArray(license?.import_license) ? license.import_license : [];
+                original_quantity?: string | number; used_quantity?: string | number; remaining_quantity?: string | number;
+                original_cif_fc?: string | number; used_cif_fc?: string | number; remaining_cif_fc?: string | number;
+            }[] = Array.isArray(license?.plan_utilization) ? license.plan_utilization : [];
 
-            const groupMap: Record<string, Group> = {};
-            for (const it of importItems) {
-                const itemNames = (it.items_detail ?? []).map((i) => ({ id: i.id, name: i.name }));
-                const key = groupKeyOf(it.product_description || it.description, itemNames) || `ID:${it.id}`;
-                if (!groupMap[key]) {
-                    groupMap[key] = {
-                        id: it.id,
-                        description: it.product_description || it.description || key,
-                        serials: [], hsCodes: [], memberIds: [],
-                        total_quantity: 0, available_quantity: 0, balance_cif_fc: 0,
-                        itemNames: [],
-                        splits: splitsByItem[it.id] ?? [emptySplit()],
-                    };
-                }
-                const g = groupMap[key];
-                g.serials.push(it.serial_number);
-                if (it.hs_code_label && !g.hsCodes!.includes(it.hs_code_label)) g.hsCodes!.push(it.hs_code_label);
-                g.memberIds.push(it.id);
-                g.total_quantity      += Number(it.quantity ?? 0);
-                g.available_quantity  += Number(it.available_quantity ?? 0);
-                g.balance_cif_fc      += Number(it.balance_cif_fc ?? 0);
-                itemNames.forEach((n) => { if (!g.itemNames.find((x) => x.id === n.id)) g.itemNames.push(n); });
+            const built: Group[] = groupRows.map((grp) => {
+                const memberIds = grp.member_ids ?? [];
+                // Union every merged member's plan lines — defensive, same as
+                // the backend's own union across group_ids_of — rather than
+                // assuming plans only ever live on the representative member.
+                const splits = memberIds.flatMap((mid) => splitsByItem[mid] ?? []);
+                const group: Group = {
+                    id: grp.group_id,
+                    description: grp.description || `ID:${grp.group_id}`,
+                    serials: grp.serials ?? [],
+                    hsCode: grp.hs_code || undefined,
+                    memberIds,
+                    total_quantity: Number(grp.total_quantity ?? 0),
+                    available_quantity: Number(grp.available_quantity ?? 0),
+                    balance_cif_fc: Number(grp.balance_cif_fc ?? 0),
+                    itemNames: grp.item_names ?? [],
+                    splits: splits.length ? splits : [emptySplit()],
+                };
                 // Plan status is already group-level (computed server-side
-                // from ALL member ids of this description-group), so it's
-                // identical across every member — just take it, no summing.
-                if (it.has_plan) {
-                    g.has_plan = true;
-                    g.original_planned_quantity  = Number(it.original_planned_quantity ?? 0);
-                    g.used_planned_quantity      = Number(it.used_planned_quantity ?? 0);
-                    g.remaining_planned_quantity = Number(it.remaining_planned_quantity ?? 0);
-                    g.original_planned_cif_fc    = Number(it.original_planned_cif_fc ?? 0);
-                    g.used_planned_cif_fc         = Number(it.used_planned_cif_fc ?? 0);
-                    g.remaining_planned_cif_fc    = Number(it.remaining_planned_cif_fc ?? 0);
+                // across the whole group), so it's take-as-is, never summed.
+                if (grp.has_plan) {
+                    group.has_plan = true;
+                    group.original_planned_quantity  = Number(grp.original_quantity ?? 0);
+                    group.used_planned_quantity      = Number(grp.used_quantity ?? 0);
+                    group.remaining_planned_quantity = Number(grp.remaining_quantity ?? 0);
+                    group.original_planned_cif_fc    = Number(grp.original_cif_fc ?? 0);
+                    group.used_planned_cif_fc        = Number(grp.used_cif_fc ?? 0);
+                    group.remaining_planned_cif_fc    = Number(grp.remaining_cif_fc ?? 0);
                 }
-            }
+                return group;
+            });
 
-            const built = Object.values(groupMap);
             setGroups(built);
             setSavedGroups(JSON.parse(JSON.stringify(built)));
             setPoolBalance(Number(license?.balance_cif ?? balanceCif) || 0);
@@ -772,6 +793,8 @@ export default function PlanningEditor({
                         <thead className="bg-muted/50">
                             <tr className="border-b border-border/50 text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 <th scope="col" className="px-4 py-2.5">Item</th>
+                                <th scope="col" className="px-4 py-2.5">HS Code</th>
+                                <th scope="col" className="px-4 py-2.5">S.No</th>
                                 <th scope="col" className="px-4 py-2.5">Status</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Available Qty</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Planned Qty</th>
@@ -789,6 +812,10 @@ export default function PlanningEditor({
                                 const rem        = g.available_quantity - planned;
                                 const isEditing  = editingGroupId === g.id;
                                 const isSaving   = savingGroupId === g.id;
+                                const splitRows  = validSplitsOf(g);
+                                const hasSplitRows = splitRows.length > 0;
+                                const isExpanded   = hasSplitRows && (expandedIds[g.id] ?? true);
+                                const splitRowsId  = `plan-splits-${g.id}`;
 
                                 // "Planned Qty/CIF" show the live Remaining (Original minus
                                 // usage since this plan was last saved) as the headline number
@@ -812,12 +839,33 @@ export default function PlanningEditor({
                                             )}
                                         >
                                             <td className="px-4 py-3">
-                                                <div className="font-medium text-foreground">{g.description}</div>
-                                                <div className="mt-0.5 text-[10.5px] text-muted-foreground">
-                                                    S.No {g.serials.join(", ")}
-                                                    {g.hsCodes?.length ? ` · HSN ${g.hsCodes.join(", ")}` : ""}
+                                                <div className="flex items-start gap-1.5">
+                                                    {hasSplitRows ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleExpand(g.id)}
+                                                            aria-expanded={isExpanded}
+                                                            aria-controls={splitRowsId}
+                                                            aria-label={`${isExpanded ? "Collapse" : "Expand"} ${splitRows.length} planning item${splitRows.length > 1 ? "s" : ""} for ${g.description}`}
+                                                            className="mt-0.5 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground"
+                                                        >
+                                                            {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                                                    )}
+                                                    <div>
+                                                        <div className="font-medium text-foreground">{g.description}</div>
+                                                        {hasSplitRows && (
+                                                            <span className="sr-only">
+                                                                {splitRows.length} planning item{splitRows.length > 1 ? "s" : ""}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
+                                            <td className="px-4 py-3 text-muted-foreground">{g.hsCode || "—"}</td>
+                                            <td className="px-4 py-3 text-muted-foreground">{g.serials.join(", ")}</td>
                                             <td className="px-4 py-3">
                                                 <StatusBadge status={status} />
                                             </td>
@@ -871,9 +919,42 @@ export default function PlanningEditor({
                                             </td>
                                         </tr>
 
+                                        {isExpanded && splitRows.map((sp, si) => (
+                                            <tr
+                                                key={`${g.id}-split-${sp.key}`}
+                                                id={si === 0 ? splitRowsId : undefined}
+                                                className="border-b border-border/30 bg-primary/[0.02]"
+                                            >
+                                                <td className="px-4 py-1.5 pl-11">
+                                                    <div className="flex items-baseline gap-1.5 text-[12px]">
+                                                        <span className="text-muted-foreground/50" aria-hidden="true">└</span>
+                                                        <span className="text-muted-foreground">Planning Item:</span>
+                                                        <span className="font-medium text-foreground">{splitLabel(sp, g, si)}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-1.5" />
+                                                <td className="px-4 py-1.5" />
+                                                <td className="px-4 py-1.5">
+                                                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9.5px] font-semibold text-muted-foreground">
+                                                        Split {si + 1}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-1.5" />
+                                                <td className="px-4 py-1.5 text-right text-[12px] tabular-nums">{fmtQty(num(sp.planned_quantity))}</td>
+                                                <td className="px-4 py-1.5 text-right text-[12px] tabular-nums text-muted-foreground">
+                                                    {num(sp.unit_price) > 0 ? `$${num(sp.unit_price).toFixed(2)}` : "—"}
+                                                </td>
+                                                <td className="px-4 py-1.5 text-right text-[12px] tabular-nums text-primary">
+                                                    {fmtUsd(num(sp.planned_cif_fc))}
+                                                </td>
+                                                <td className="px-4 py-1.5" />
+                                                <td className="px-4 py-1.5" />
+                                            </tr>
+                                        ))}
+
                                         {isEditing && (
                                             <tr key={`${g.id}-editor`} className="border-b border-primary/20 bg-primary/[0.02]">
-                                                <td colSpan={8} className="p-0">
+                                                <td colSpan={10} className="p-0">
                                                     <InlineEditor
                                                         group={g}
                                                         poolBalance={poolBalance}
@@ -894,10 +975,12 @@ export default function PlanningEditor({
                                 );
                             })}
 
-                            {/* Totals row — 8 columns: Item, Status, Avail, Planned, UnitPrice, CIF, Remaining, Actions */}
+                            {/* Totals row — 10 columns: Item, HS Code, S.No, Status, Avail, Planned, UnitPrice, CIF, Remaining, Actions */}
                             {anyPlanExists && (
                                 <tr className="border-t-2 border-border bg-muted/40 font-semibold text-sm">
                                     <td className="px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Totals</td>
+                                    <td />
+                                    <td />
                                     <td />
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.totalAvail)}</td>
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.totalPlanned)}</td>

@@ -515,40 +515,48 @@ def build_balance_excel(license_obj):
     # ══════════════════════════════════════════════════════════════════════
     # ══════════════════════════════════════════════════════════════════════
     # Section 3: Plan Utilization  (final — matches the PlanTab UI exactly)
-    # Columns: Item | HS Code/S.No | Status | Avail Qty | Planned Qty |
+    # One row per planning-item GROUP (see plan_utilization_rows) rather than
+    # one row per raw S.No entry — items that share a description merge into
+    # a single row whose S.No column lists every merged serial.
+    # Columns: Item | HS Code | S.No | Status | Avail Qty | Planned Qty |
     #          Remaining Qty | Planned CIF | Remaining CIF
     # ══════════════════════════════════════════════════════════════════════
     from apps.license.services.plan_reporting import plan_map_for_license as _plan_map_fn
+    from apps.license.services.plan_utilization import plan_utilization_rows
     _user_plan_map = _plan_map_fn(license_obj.id)
 
     PLAN_GRN_FILL = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
     PLAN_GRN_FONT = Font(bold=True, size=9, color="375623")
     PLAN_GRY_FILL = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 
-    _all_import_items = list(license_obj.import_license.all().order_by('serial_number'))
     _plan_data_rows = []
     _g_avail = 0.0; _g_planned_qty = 0.0; _g_planned_cif = 0.0
 
-    for _imp in _all_import_items:
-        _pd = _user_plan_map.get(_imp.id)
-        _av = float(_imp.available_quantity or 0)
-        _pq = float(_pd['total_planned_quantity'] or 0) if _pd else 0.0
-        _pc = float(_pd['total_planned_cif'] or 0) if _pd else 0.0
+    for _grp in plan_utilization_rows(license_obj, plan_map=_user_plan_map):
+        _av = float(_grp['available_quantity'] or 0)
+        # Group-level planned totals == Σ LicenseItemPlan.planned_quantity/
+        # planned_cif_fc across the whole group (plan_status_for's
+        # "original"), which is exactly what summing the group's unioned
+        # splits would give — same figure the old per-item code read off
+        # plan_map's `total_planned_quantity`/`total_planned_cif`, just
+        # aggregated across the merged serials instead of one at a time.
+        _pq = float(_grp['original_quantity']) if _grp['has_plan'] else 0.0
+        _pc = float(_grp['original_cif_fc']) if _grp['has_plan'] else 0.0
         _g_avail += _av; _g_planned_qty += _pq; _g_planned_cif += _pc
         _plan_data_rows.append({
-            'desc': _imp.description or '-',
-            'hs': str(_imp.hs_code.hs_code if _imp.hs_code else '-'),
-            'sr': str(_imp.serial_number or '-'),
+            'desc': _grp['description'] or '-',
+            'hs': _grp['hs_code'] or '-',
+            'sr': ', '.join(str(s) for s in _grp['serials']),
             'avail': _av, 'pqty': _pq, 'pcif': _pc,
             'rem_qty': _av - _pq,
             'planned': _pq > 0 or _pc > 0,
-            'splits': _pd.get('splits', []) if _pd else [],
+            'splits': _grp['splits'],
         })
     _g_rem_qty = _g_avail - _g_planned_qty
     _g_rem_cif = _license_balance - _g_planned_cif
 
     # ── Section header ────────────────────────────────────────────────────
-    ws.merge_cells(f'A{r}:H{r}')
+    ws.merge_cells(f'A{r}:I{r}')
     _ph = ws[f'A{r}']
     _ph.value = 'Plan Utilization'
     _ph.fill = HDR_FILL; _ph.font = Font(bold=True, color="FFFFFF", size=10)
@@ -580,16 +588,14 @@ def build_balance_excel(license_obj):
     r += 1  # spacer
 
     # ── Table headers ─────────────────────────────────────────────────────
-    for _ci, _ch in enumerate(['Item Description', 'HS Code / S.No', 'Status',
+    for _ci, _ch in enumerate(['Item Description', 'HS Code', 'S.No', 'Status',
                                 'Available Qty', 'Planned Qty', 'Remaining Qty',
                                 'Planned CIF ($)', 'Remaining CIF ($)'], 1):
         _hdr(ws, r, _ci, _ch)
     r += 1
 
-    # ── Per-item rows (+ split sub-rows) ──────────────────────────────────
-    SPLIT_FILL  = PatternFill(start_color="EBF3FF", end_color="EBF3FF", fill_type="solid")
-    SPLIT_FONT  = Font(size=9, color="2B5EA7", italic=True)
-    SPLIT_BADGE = Font(size=8, color="2B5EA7", italic=True)
+    # ── Per-group rows (+ split sub-rows) ──────────────────────────────────
+    from apps.license.services.exporters.planning_split_rows import write_split_sub_rows
 
     _running_cif = _license_balance
     for _idx, _pr in enumerate(_plan_data_rows):
@@ -599,79 +605,64 @@ def build_balance_excel(license_obj):
         _dc = ws.cell(row=r, column=1, value=_pr['desc'])
         _dc.fill = _rf or PatternFill(fill_type=None); _dc.border = THIN_BORDER
         _dc.font = NORM; _dc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        _hsc = ws.cell(row=r, column=2, value=f"{_pr['hs']}\nS.No {_pr['sr']}")
+        _hsc = ws.cell(row=r, column=2, value=_pr['hs'])
         _hsc.fill = _rf or PatternFill(fill_type=None); _hsc.border = THIN_BORDER
         _hsc.font = NORM; _hsc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        _sc = ws.cell(row=r, column=3, value='Planned' if _pr['planned'] else 'Not Planned')
+        _snc = ws.cell(row=r, column=3, value=_pr['sr'])
+        _snc.fill = _rf or PatternFill(fill_type=None); _snc.border = THIN_BORDER
+        _snc.font = NORM; _snc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        _sc = ws.cell(row=r, column=4, value='Planned' if _pr['planned'] else 'Not Planned')
         _sc.fill = PLAN_GRN_FILL if _pr['planned'] else PLAN_GRY_FILL; _sc.border = THIN_BORDER
         _sc.font = PLAN_GRN_FONT if _pr['planned'] else Font(size=9, color="595959")
         _sc.alignment = Alignment(horizontal='center', vertical='center')
-        _cell(ws, r, 4, _pr['avail'], fill=_rf, align='right', num_fmt='#,##0.000')
+        _cell(ws, r, 5, _pr['avail'], fill=_rf, align='right', num_fmt='#,##0.000')
         if _pr['planned']:
-            _cell(ws, r, 5, _pr['pqty'],    fill=_rf, align='right', num_fmt='#,##0.000')
-            _cell(ws, r, 6, _pr['rem_qty'], fill=PLAN_GRN_FILL if _pr['rem_qty'] <= 0 else _rf,
+            _cell(ws, r, 6, _pr['pqty'],    fill=_rf, align='right', num_fmt='#,##0.000')
+            _cell(ws, r, 7, _pr['rem_qty'], fill=PLAN_GRN_FILL if _pr['rem_qty'] <= 0 else _rf,
                   align='right', num_fmt='#,##0.000')
-            _cell(ws, r, 7, _pr['pcif'],    fill=_rf, align='right', num_fmt='#,##0.00')
-            _cell(ws, r, 8, max(0.0, _running_cif), fill=_rf, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 8, _pr['pcif'],    fill=_rf, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 9, max(0.0, _running_cif), fill=_rf, align='right', num_fmt='#,##0.00')
         else:
-            _cell(ws, r, 5, '-', fill=_rf, align='center')
-            _cell(ws, r, 6, _pr['avail'], fill=_rf, align='right', num_fmt='#,##0.000')
-            _cell(ws, r, 7, '-', fill=_rf, align='center')
+            _cell(ws, r, 6, '-', fill=_rf, align='center')
+            _cell(ws, r, 7, _pr['avail'], fill=_rf, align='right', num_fmt='#,##0.000')
             _cell(ws, r, 8, '-', fill=_rf, align='center')
+            _cell(ws, r, 9, '-', fill=_rf, align='center')
         r += 1
-        # ── Split sub-rows (only for planned items with splits) ────────────
+        # ── Split sub-rows (union of every merged serial's splits, only for
+        # planned groups) ───────────────────────────────────────────────────
         if _pr['planned']:
-            _valid_splits = [s for s in _pr['splits']
-                             if float(s.get('planned_quantity') or 0) > 0
-                             or float(s.get('planned_cif_fc') or 0) > 0]
-            for _si, _sp in enumerate(_valid_splits):
-                _sp_qty   = float(_sp.get('planned_quantity') or 0)
-                _sp_cif   = float(_sp.get('planned_cif_fc') or 0)
-                _sp_price = float(_sp.get('unit_price') or 0)
-                _sp_name  = _sp.get('item_name') or f'Split {_si + 1}'
-                # Col A: indented item name
-                _sac = ws.cell(row=r, column=1, value=f'  └ {_sp_name}')
-                _sac.fill = SPLIT_FILL; _sac.border = THIN_BORDER; _sac.font = SPLIT_FONT
-                _sac.alignment = Alignment(horizontal='left', vertical='center')
-                # Col B: unit price
-                _sbc = ws.cell(row=r, column=2, value=f'@ ${_sp_price:,.2f}/unit' if _sp_price else '')
-                _sbc.fill = SPLIT_FILL; _sbc.border = THIN_BORDER; _sbc.font = SPLIT_FONT
-                _sbc.alignment = Alignment(horizontal='left', vertical='center')
-                # Col C: "Split N" badge
-                _scc = ws.cell(row=r, column=3, value=f'Split {_si + 1}')
-                _scc.fill = SPLIT_FILL; _scc.border = THIN_BORDER; _scc.font = SPLIT_BADGE
-                _scc.alignment = Alignment(horizontal='center', vertical='center')
-                # Cols D-H
-                for _sc2 in range(4, 9):
-                    ws.cell(row=r, column=_sc2).fill   = SPLIT_FILL
-                    ws.cell(row=r, column=_sc2).border = THIN_BORDER
-                _cell(ws, r, 5, _sp_qty,   fill=SPLIT_FILL, align='right', num_fmt='#,##0.000')
-                _cell(ws, r, 7, _sp_cif,   fill=SPLIT_FILL, align='right', num_fmt='#,##0.00')
-                r += 1
+            r += write_split_sub_rows(
+                ws, r, _pr['splits'],
+                name_col=1, price_col=2, badge_col=4, qty_col=6, cif_col=8,
+                other_cols=(3, 5, 7, 9),
+                value_font=NORM, border=THIN_BORDER,
+                qty_num_fmt='#,##0.000', cif_num_fmt='#,##0.00',
+            )
 
     # ── Totals row ────────────────────────────────────────────────────────
-    for _ci in range(1, 9):
+    for _ci in range(1, 10):
         ws.cell(row=r, column=_ci).fill = TOTAL_FILL
         ws.cell(row=r, column=_ci).border = THIN_BORDER
     _cell(ws, r, 1, 'TOTALS', fill=TOTAL_FILL, bold=True)
-    _cell(ws, r, 2, '', fill=TOTAL_FILL); _cell(ws, r, 3, '', fill=TOTAL_FILL)
-    _cell(ws, r, 4, _g_avail,           fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(ws, r, 5, _g_planned_qty,     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(ws, r, 6, _g_rem_qty,         fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(ws, r, 7, _g_planned_cif,     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-    _cell(ws, r, 8, max(0.0,_g_rem_cif),fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+    _cell(ws, r, 2, '', fill=TOTAL_FILL); _cell(ws, r, 3, '', fill=TOTAL_FILL); _cell(ws, r, 4, '', fill=TOTAL_FILL)
+    _cell(ws, r, 5, _g_avail,           fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+    _cell(ws, r, 6, _g_planned_qty,     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+    _cell(ws, r, 7, _g_rem_qty,         fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+    _cell(ws, r, 8, _g_planned_cif,     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+    _cell(ws, r, 9, max(0.0,_g_rem_cif),fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
     r += 1
 
-    # ── Column widths  (A=Item | B=HS/SNo | C=Status | D=Avail | E=Planned | F=Rem | G=PlannedCIF | H=RemCIF)
+    # ── Column widths  (A=Item | B=HS | C=S.No | D=Status | E=Avail | F=Planned | G=Rem | H=PlannedCIF | I=RemCIF)
     ws.column_dimensions['A'].width = 38  # Item Description
-    ws.column_dimensions['B'].width = 18  # HS Code / S.No
-    ws.column_dimensions['C'].width = 14  # Status
-    ws.column_dimensions['D'].width = 14  # Available Qty
-    ws.column_dimensions['E'].width = 14  # Planned Qty
-    ws.column_dimensions['F'].width = 14  # Remaining Qty
-    ws.column_dimensions['G'].width = 16  # Planned CIF
-    ws.column_dimensions['H'].width = 16  # Remaining CIF
-    ws.column_dimensions['I'].width = 12
+    ws.column_dimensions['B'].width = 14  # HS Code
+    ws.column_dimensions['C'].width = 14  # S.No
+    ws.column_dimensions['D'].width = 14  # Status
+    ws.column_dimensions['E'].width = 14  # Available Qty
+    ws.column_dimensions['F'].width = 14  # Planned Qty
+    ws.column_dimensions['G'].width = 14  # Remaining Qty
+    ws.column_dimensions['H'].width = 16  # Planned CIF
+    ws.column_dimensions['I'].width = 16  # Remaining CIF
+    ws.column_dimensions['J'].width = 12
 
     ws.freeze_panes = 'A2'
 
@@ -936,37 +927,38 @@ def build_bulk_balance_excel(request):
         r += 1
 
         # ── Plan Utilization section (matches PlanTab UI — replaces all norm logic)
+        # One row per planning-item GROUP (see plan_utilization_rows), same as
+        # the single-licence sheet above.
         from apps.license.services.plan_reporting import plan_map_for_license as _plan_map_fn_bulk
+        from apps.license.services.plan_utilization import plan_utilization_rows as _plan_util_rows_bulk
         _user_plan_map_b = _plan_map_fn_bulk(license_obj.id)
 
         PLAN_GRN_FILL_B = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
         PLAN_GRN_FONT_B = Font(bold=True, size=9, color="375623")
         PLAN_GRY_FILL_B = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 
-        _all_imp_b = list(license_obj.import_license.all().order_by('serial_number'))
         _prows_b = []
         _gb_avail = 0.0; _gb_pqty = 0.0; _gb_pcif = 0.0
 
-        for _imp_b in _all_imp_b:
-            _pd_b = _user_plan_map_b.get(_imp_b.id)
-            _av_b = float(_imp_b.available_quantity or 0)
-            _pq_b = float(_pd_b['total_planned_quantity'] or 0) if _pd_b else 0.0
-            _pc_b = float(_pd_b['total_planned_cif'] or 0) if _pd_b else 0.0
+        for _grp_b in _plan_util_rows_bulk(license_obj, plan_map=_user_plan_map_b):
+            _av_b = float(_grp_b['available_quantity'] or 0)
+            _pq_b = float(_grp_b['original_quantity']) if _grp_b['has_plan'] else 0.0
+            _pc_b = float(_grp_b['original_cif_fc']) if _grp_b['has_plan'] else 0.0
             _gb_avail += _av_b; _gb_pqty += _pq_b; _gb_pcif += _pc_b
             _prows_b.append({
-                'desc': _imp_b.description or '-',
-                'hs': str(_imp_b.hs_code.hs_code if _imp_b.hs_code else '-'),
-                'sr': str(_imp_b.serial_number or '-'),
+                'desc': _grp_b['description'] or '-',
+                'hs': _grp_b['hs_code'] or '-',
+                'sr': ', '.join(str(s) for s in _grp_b['serials']),
                 'avail': _av_b, 'pqty': _pq_b, 'pcif': _pc_b,
                 'rem_qty': _av_b - _pq_b,
                 'planned': _pq_b > 0 or _pc_b > 0,
-                'splits': _pd_b.get('splits', []) if _pd_b else [],
+                'splits': _grp_b['splits'],
             })
         _gb_rem_qty = _gb_avail - _gb_pqty
         _gb_rem_cif = _license_balance - _gb_pcif
 
         # Section header
-        ws.merge_cells(f'A{r}:H{r}')
+        ws.merge_cells(f'A{r}:I{r}')
         _bh = ws[f'A{r}']
         _bh.value = 'Plan Utilization'
         _bh.fill = HDR_FILL; _bh.font = Font(bold=True, color="FFFFFF", size=10)
@@ -998,16 +990,14 @@ def build_bulk_balance_excel(request):
         r += 1
 
         # Table headers
-        for _bci, _bch in enumerate(['Item Description', 'HS Code / S.No', 'Status',
+        for _bci, _bch in enumerate(['Item Description', 'HS Code', 'S.No', 'Status',
                                       'Available Qty', 'Planned Qty', 'Remaining Qty',
                                       'Planned CIF ($)', 'Remaining CIF ($)'], 1):
             _hdr(ws, r, _bci, _bch)
         r += 1
 
-        # Per-item rows (+ split sub-rows)
-        BSPLIT_FILL  = PatternFill(start_color="EBF3FF", end_color="EBF3FF", fill_type="solid")
-        BSPLIT_FONT  = Font(size=9, color="2B5EA7", italic=True)
-        BSPLIT_BADGE = Font(size=8, color="2B5EA7", italic=True)
+        # Per-group rows (+ split sub-rows)
+        from apps.license.services.exporters.planning_split_rows import write_split_sub_rows
 
         _running_cif_b = _license_balance
         for _bidx, _bpr in enumerate(_prows_b):
@@ -1017,65 +1007,52 @@ def build_bulk_balance_excel(request):
             _bdc = ws.cell(row=r, column=1, value=_bpr['desc'])
             _bdc.fill = _brf or PatternFill(fill_type=None); _bdc.border = THIN_BORDER
             _bdc.font = NORM; _bdc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-            _bhsc = ws.cell(row=r, column=2, value=f"{_bpr['hs']}\nS.No {_bpr['sr']}")
+            _bhsc = ws.cell(row=r, column=2, value=_bpr['hs'])
             _bhsc.fill = _brf or PatternFill(fill_type=None); _bhsc.border = THIN_BORDER
             _bhsc.font = NORM; _bhsc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-            _bsc = ws.cell(row=r, column=3, value='Planned' if _bpr['planned'] else 'Not Planned')
+            _bsnc = ws.cell(row=r, column=3, value=_bpr['sr'])
+            _bsnc.fill = _brf or PatternFill(fill_type=None); _bsnc.border = THIN_BORDER
+            _bsnc.font = NORM; _bsnc.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            _bsc = ws.cell(row=r, column=4, value='Planned' if _bpr['planned'] else 'Not Planned')
             _bsc.fill = PLAN_GRN_FILL_B if _bpr['planned'] else PLAN_GRY_FILL_B
             _bsc.border = THIN_BORDER
             _bsc.font = PLAN_GRN_FONT_B if _bpr['planned'] else Font(size=9, color="595959")
             _bsc.alignment = Alignment(horizontal='center', vertical='center')
-            _cell(ws, r, 4, _bpr['avail'], fill=_brf, align='right', num_fmt='#,##0.000')
+            _cell(ws, r, 5, _bpr['avail'], fill=_brf, align='right', num_fmt='#,##0.000')
             if _bpr['planned']:
-                _cell(ws, r, 5, _bpr['pqty'],    fill=_brf, align='right', num_fmt='#,##0.000')
-                _cell(ws, r, 6, _bpr['rem_qty'],
+                _cell(ws, r, 6, _bpr['pqty'],    fill=_brf, align='right', num_fmt='#,##0.000')
+                _cell(ws, r, 7, _bpr['rem_qty'],
                       fill=PLAN_GRN_FILL_B if _bpr['rem_qty'] <= 0 else _brf,
                       align='right', num_fmt='#,##0.000')
-                _cell(ws, r, 7, _bpr['pcif'],    fill=_brf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 8, max(0.0, _running_cif_b), fill=_brf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 8, _bpr['pcif'],    fill=_brf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 9, max(0.0, _running_cif_b), fill=_brf, align='right', num_fmt='#,##0.00')
             else:
-                _cell(ws, r, 5, '-', fill=_brf, align='center')
-                _cell(ws, r, 6, _bpr['avail'], fill=_brf, align='right', num_fmt='#,##0.000')
-                _cell(ws, r, 7, '-', fill=_brf, align='center')
+                _cell(ws, r, 6, '-', fill=_brf, align='center')
+                _cell(ws, r, 7, _bpr['avail'], fill=_brf, align='right', num_fmt='#,##0.000')
                 _cell(ws, r, 8, '-', fill=_brf, align='center')
+                _cell(ws, r, 9, '-', fill=_brf, align='center')
             r += 1
-            # Split sub-rows
+            # Split sub-rows (union of every merged serial's splits)
             if _bpr['planned']:
-                _bvalid_splits = [s for s in _bpr['splits']
-                                  if float(s.get('planned_quantity') or 0) > 0
-                                  or float(s.get('planned_cif_fc') or 0) > 0]
-                for _bsi, _bsp in enumerate(_bvalid_splits):
-                    _bsp_qty   = float(_bsp.get('planned_quantity') or 0)
-                    _bsp_cif   = float(_bsp.get('planned_cif_fc') or 0)
-                    _bsp_price = float(_bsp.get('unit_price') or 0)
-                    _bsp_name  = _bsp.get('item_name') or f'Split {_bsi + 1}'
-                    _bsac = ws.cell(row=r, column=1, value=f'  └ {_bsp_name}')
-                    _bsac.fill = BSPLIT_FILL; _bsac.border = THIN_BORDER; _bsac.font = BSPLIT_FONT
-                    _bsac.alignment = Alignment(horizontal='left', vertical='center')
-                    _bsbc = ws.cell(row=r, column=2, value=f'@ ${_bsp_price:,.2f}/unit' if _bsp_price else '')
-                    _bsbc.fill = BSPLIT_FILL; _bsbc.border = THIN_BORDER; _bsbc.font = BSPLIT_FONT
-                    _bsbc.alignment = Alignment(horizontal='left', vertical='center')
-                    _bscc = ws.cell(row=r, column=3, value=f'Split {_bsi + 1}')
-                    _bscc.fill = BSPLIT_FILL; _bscc.border = THIN_BORDER; _bscc.font = BSPLIT_BADGE
-                    _bscc.alignment = Alignment(horizontal='center', vertical='center')
-                    for _bsc2 in range(4, 9):
-                        ws.cell(row=r, column=_bsc2).fill   = BSPLIT_FILL
-                        ws.cell(row=r, column=_bsc2).border = THIN_BORDER
-                    _cell(ws, r, 5, _bsp_qty, fill=BSPLIT_FILL, align='right', num_fmt='#,##0.000')
-                    _cell(ws, r, 7, _bsp_cif, fill=BSPLIT_FILL, align='right', num_fmt='#,##0.00')
-                    r += 1
+                r += write_split_sub_rows(
+                    ws, r, _bpr['splits'],
+                    name_col=1, price_col=2, badge_col=4, qty_col=6, cif_col=8,
+                    other_cols=(3, 5, 7, 9),
+                    value_font=NORM, border=THIN_BORDER,
+                    qty_num_fmt='#,##0.000', cif_num_fmt='#,##0.00',
+                )
 
         # Totals row
-        for _bci2 in range(1, 9):
+        for _bci2 in range(1, 10):
             ws.cell(row=r, column=_bci2).fill = TOTAL_FILL
             ws.cell(row=r, column=_bci2).border = THIN_BORDER
         _cell(ws, r, 1, 'TOTALS', fill=TOTAL_FILL, bold=True)
-        _cell(ws, r, 2, '', fill=TOTAL_FILL); _cell(ws, r, 3, '', fill=TOTAL_FILL)
-        _cell(ws, r, 4, _gb_avail,            fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-        _cell(ws, r, 5, _gb_pqty,             fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-        _cell(ws, r, 6, _gb_rem_qty,          fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-        _cell(ws, r, 7, _gb_pcif,             fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _cell(ws, r, 8, max(0.0, _gb_rem_cif),fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _cell(ws, r, 2, '', fill=TOTAL_FILL); _cell(ws, r, 3, '', fill=TOTAL_FILL); _cell(ws, r, 4, '', fill=TOTAL_FILL)
+        _cell(ws, r, 5, _gb_avail,            fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+        _cell(ws, r, 6, _gb_pqty,             fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+        _cell(ws, r, 7, _gb_rem_qty,          fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+        _cell(ws, r, 8, _gb_pcif,             fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _cell(ws, r, 9, max(0.0, _gb_rem_cif),fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
         r += 1
 
         # _util_return — keep minimal; norm_type='plan' so summary sheet skips E1/E5/E132 logic
@@ -1098,14 +1075,15 @@ def build_bulk_balance_excel(request):
         }
 
         ws.column_dimensions['A'].width = 38  # Item Description
-        ws.column_dimensions['B'].width = 18  # HS Code / S.No
-        ws.column_dimensions['C'].width = 14  # Status
-        ws.column_dimensions['D'].width = 14  # Available Qty
-        ws.column_dimensions['E'].width = 14  # Planned Qty
-        ws.column_dimensions['F'].width = 14  # Remaining Qty
-        ws.column_dimensions['G'].width = 16  # Planned CIF
-        ws.column_dimensions['H'].width = 16  # Remaining CIF
-        ws.column_dimensions['I'].width = 12
+        ws.column_dimensions['B'].width = 14  # HS Code
+        ws.column_dimensions['C'].width = 14  # S.No
+        ws.column_dimensions['D'].width = 14  # Status
+        ws.column_dimensions['E'].width = 14  # Available Qty
+        ws.column_dimensions['F'].width = 14  # Planned Qty
+        ws.column_dimensions['G'].width = 14  # Remaining Qty
+        ws.column_dimensions['H'].width = 16  # Planned CIF
+        ws.column_dimensions['I'].width = 16  # Remaining CIF
+        ws.column_dimensions['J'].width = 12
         ws.freeze_panes = 'A2'
         return _util_return
 

@@ -239,7 +239,7 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
             if group_avail < MIN_PLAN_QTY:
                 continue
             line, remaining_cif = _simple_line_e5(
-                rep, group_avail, remaining_cif, 2.30,
+                rep, group_avail, remaining_cif, 1.80,
                 name_ids.get('PALM KERNEL OIL - E5'),
                 'Rule 2.1 – Palm Kernel Oil',
             )

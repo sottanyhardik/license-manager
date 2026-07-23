@@ -39,9 +39,13 @@ export default function LicensePlanningPanel({
 
     return (
         <Dialog open={show} onOpenChange={(open) => { if (!open) onHide?.(); }}>
-            {/* max-w-4xl keeps the wide pivot-table layout; overflow-y-auto
-                lets PlanningEditor scroll inside the dialog on small screens. */}
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            {/* Sized like the app's other big-table report modals (see
+                LicenseBalanceModal/TransferLetterModal) — near-full viewport
+                so the 10-column grouped table and its split sub-rows fit
+                without the cramped double-scroll (horizontal + vertical)
+                max-w-4xl caused. overflow-y-auto still lets it scroll on
+                small screens / very long plans. */}
+            <DialogContent className="w-[98vw] max-w-[1800px] max-h-[95vh] overflow-y-auto">
                 <PlanningEditor
                     licenseId={licenseId}
                     licenseNumber={licenseNumber}

@@ -5,7 +5,7 @@ Processing sequence — Normal Flow:
   Rule 1  Dietary Fibre         @ $3.00   (classify_e5_item → DIETARY FIBRE)
   ─── Special Validation ───────────────────────────────────────────────────────
   Rule 2  Edible Oils (waterfall)
-            Case 2.1  Palm Kernel Oil  @ $2.30  (HSN 1513 or desc "Vegetable Oil")
+            Case 2.1  Palm Kernel Oil  @ $1.80  (HSN 1513 or desc "Vegetable Oil")
             Case 2.2  RBD Palmolein   @ $1.20  (HSN 15119020 / RBD category)
             Case 2.3  Olive Oil        @ $5.00  (all other oils)
   Rule 3  Milk & Milk avg-price split
@@ -153,7 +153,7 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
     # ── Bucket import items (hierarchical: first-match wins) ──────────────────
     dietary_fibre: list = []
     milk:          list = []
-    palm_kernel:   list = []   # Case 2.1 — PKO  @ $2.30
+    palm_kernel:   list = []   # Case 2.1 — PKO  @ $1.80
     rbd:           list = []   # Case 2.2 — RBD  @ $1.20
     olive_oil:     list = []   # Case 2.3 — Olive @ $5.00
     wheat_flour:   list = []   # Final mop-up — dynamic rate, absorbs all remaining CIF
@@ -232,7 +232,7 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
         """Inner helper: execute edible-oil rules (group-based) against remaining_cif."""
         nonlocal remaining_cif
 
-        # Case 2.1: Palm Kernel Oil @ $2.30
+        # Case 2.1: Palm Kernel Oil @ $1.80
         for rep, group_avail in _group_by_desc(palm_kernel):
             if remaining_cif <= 0:
                 break

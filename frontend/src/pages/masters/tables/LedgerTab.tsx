@@ -30,6 +30,7 @@ import {
     ChevronRight,
     ClipboardCopy,
     FileText,
+    ListChecks,
     Loader2,
     Package,
     Pencil,
@@ -73,6 +74,20 @@ interface ImportItem {
     available_value?: number;
     condition_type?: string | null;
     items_detail?: ItemDetail[];
+    // Utilization-plan status for this item's product group (present only
+    // when has_plan is true). Original = the Plan tab / auto-plan cap
+    // (immutable from allotment/BOE code). Used = live sum of existing
+    // allotments for the group. Remaining = Original − Used — recomputed on
+    // every fetch, so it reflects allotment create/delete/edit automatically.
+    // Same figures the Allotment screen's Max-allotment cap is built from
+    // (see plan_status_for on the backend) — shown here purely for reporting.
+    has_plan?: boolean;
+    original_planned_quantity?: number | string | null;
+    used_planned_quantity?: number | string | null;
+    remaining_planned_quantity?: number | string | null;
+    original_planned_cif_fc?: number | string | null;
+    used_planned_cif_fc?: number | string | null;
+    remaining_planned_cif_fc?: number | string | null;
 }
 
 interface BoeEntry {
@@ -785,6 +800,12 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                             {r.hs_code_label && <div className="text-[10.5px] font-mono text-muted-foreground">{r.hs_code_label}</div>}
                                                                         </div>
                                                                         <SummaryMetric label="Available Qty" value={fmtQty(r.available_quantity)} />
+                                                                        {/* Planned Qty/$ — the item's Original Plan cap (Plan tab /
+                                                                            auto-plan), at the product-group level. fmtQty/fmtUsd
+                                                                            render "—" on their own when the item has no plan, so
+                                                                            no extra has_plan guard is needed here. */}
+                                                                        <SummaryMetric label="Planned Qty" value={fmtQty(Number(r.original_planned_quantity))} variant="primary" />
+                                                                        <SummaryMetric label="Planned $" value={fmtUsd(r.original_planned_cif_fc)} variant="primary" />
                                                                         <SummaryMetric label="Opening CIF" value={fmtUsd(r.cif_fc)} />
                                                                         <SummaryMetric label="Current Balance CIF" value={fmtUsd(r.balance_cif_fc)} variant={balPct > 50 ? "success" : balPct > 20 ? "default" : "danger"} />
                                                                         <SummaryMetric label="BOE Used" value={fmtUsd(r.debited_value)} variant="danger"
@@ -800,6 +821,30 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                             <div className="text-[10.5px] text-muted-foreground">{fmtInr(r.balance_cif_fc)}</div>
                                                                         </div>
                                                                     </div>
+
+                                                                    {/* Plan usage — only for items that carry a plan (Plan tab /
+                                                                        auto-plan). Planned Qty/$ above is the Original Plan cap;
+                                                                        here's how much of it is already used vs still remaining.
+                                                                        Computed at the item's PRODUCT-GROUP level (summed across
+                                                                        every serial number sharing the same description), so it
+                                                                        can differ from this row's own Allotted/BOE figures above,
+                                                                        which are per-serial. Same numbers the Allotment screen's
+                                                                        Max-allotment cap is built from. */}
+                                                                    {r.has_plan && (
+                                                                        <div className="border-t border-primary/10 bg-primary/5 px-4 py-3">
+                                                                            <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-widest text-primary">
+                                                                                <ListChecks className="size-3.5" aria-hidden="true" />
+                                                                                Plan Usage (product group)
+                                                                            </div>
+                                                                            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                                                                                <SummaryMetric label="Used (Allotted vs Plan)" value={fmtUsd(r.used_planned_cif_fc)} variant="muted"
+                                                                                    sub={`${fmtQty(Number(r.used_planned_quantity))} ${r.unit}`} />
+                                                                                <SummaryMetric label="Remaining Plan" value={fmtUsd(r.remaining_planned_cif_fc)}
+                                                                                    variant={Number(r.remaining_planned_cif_fc) <= 0 ? "danger" : "success"}
+                                                                                    sub={`${fmtQty(Number(r.remaining_planned_quantity))} ${r.unit}`} />
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
 
                                                                 {/* ══ Section 2: Usage ════════════════════════════════ */}

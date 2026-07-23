@@ -157,10 +157,24 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # --- Full replace in one transaction --------------------------------
+        # Compute each line's usage baseline (live-allotted total for its
+        # group, right now) BEFORE deleting the old plan rows — deleting a
+        # LicenseItemPlan row never touches AllotmentItems, so this is safe
+        # either way, but computing it upfront keeps the intent obvious.
+        from apps.license.services.plan_enforcement import group_used_snapshot
+        baseline_cache: dict = {}
+
+        def _baseline(item_id):
+            if item_id not in baseline_cache:
+                item = items_by_id.get(item_id)
+                baseline_cache[item_id] = group_used_snapshot(item) if item is not None else (Decimal("0"), Decimal("0"))
+            return baseline_cache[item_id]
+
         results = []
         with transaction.atomic():
             LicenseItemPlan.objects.filter(license_id=license_id).delete()
             for ln in lines:
+                baseline_qty, baseline_val = _baseline(ln.get("import_item"))
                 payload = {
                     "import_item": ln.get("import_item"),
                     "item_name": ln.get("item_name"),
@@ -172,7 +186,14 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
                 }
                 serializer = LicenseItemPlanSerializer(data=payload)
                 serializer.is_valid(raise_exception=True)
-                serializer.save(license=license_obj)
+                # baseline_used_* aren't user-facing serializer fields — passed
+                # as save() kwargs so they land on the model instance without
+                # needing to be exposed/writable via the API payload.
+                serializer.save(
+                    license=license_obj,
+                    baseline_used_quantity=baseline_qty,
+                    baseline_used_cif_fc=baseline_val,
+                )
                 results.append(serializer.data)
 
         return Response({"saved": len(results), "lines": results}, status=status.HTTP_200_OK)
@@ -235,18 +256,9 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
             )
 
         # Full-replace: delete existing plan and save computed lines.
+        from apps.license.services.plan_enforcement import save_plan_lines_for_license
         with transaction.atomic():
-            LicenseItemPlan.objects.filter(license_id=license_id).delete()
-            for ln in lines:
-                LicenseItemPlan.objects.create(
-                    license=license_obj,
-                    import_item_id=ln["import_item"],
-                    item_name_id=ln.get("item_name"),
-                    planned_quantity=ln["planned_quantity"],
-                    unit_price=ln["unit_price"],
-                    planned_cif_fc=ln["planned_cif_fc"],
-                    note=ln.get("note", ""),
-                )
+            save_plan_lines_for_license(license_obj, lines)
 
         return Response(
             {
@@ -322,18 +334,9 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from apps.license.services.plan_enforcement import save_plan_lines_for_license
         with transaction.atomic():
-            LicenseItemPlan.objects.filter(license_id=license_id).delete()
-            for ln in lines:
-                LicenseItemPlan.objects.create(
-                    license=license_obj,
-                    import_item_id=ln["import_item"],
-                    item_name_id=ln.get("item_name"),
-                    planned_quantity=ln["planned_quantity"],
-                    unit_price=ln["unit_price"],
-                    planned_cif_fc=ln["planned_cif_fc"],
-                    note=ln.get("note", ""),
-                )
+            save_plan_lines_for_license(license_obj, lines)
 
         return Response(
             {
@@ -417,18 +420,9 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
                     res["already_planned"] += 1
                     continue
 
+                from apps.license.services.plan_enforcement import save_plan_lines_for_license
                 with transaction.atomic():
-                    LicenseItemPlan.objects.filter(license=lic).delete()
-                    for ln in lines:
-                        LicenseItemPlan.objects.create(
-                            license=lic,
-                            import_item_id=ln["import_item"],
-                            item_name_id=ln.get("item_name"),
-                            planned_quantity=ln["planned_quantity"],
-                            unit_price=ln["unit_price"],
-                            planned_cif_fc=ln["planned_cif_fc"],
-                            note=ln.get("note", ""),
-                        )
+                    save_plan_lines_for_license(lic, lines)
                 res["planned"] += 1
 
             except Exception as exc:

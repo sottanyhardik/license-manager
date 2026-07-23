@@ -1205,6 +1205,24 @@ class LicenseItemPlan(AuditModel):
     )
     note = models.CharField(max_length=500, blank=True, null=True)
 
+    # Snapshot of the group's ALL-TIME live-allotted qty/CIF, taken the
+    # moment this line was created (see
+    # `plan_enforcement.save_plan_lines_for_license`). `plan_status_for`
+    # subtracts this from the CURRENT all-time live-allotted total to get
+    # "used since this plan was saved" — deliberately NOT derived from
+    # AllotmentItems.created_on, because `allocate_items` "amends" an
+    # existing AllotmentItems row in place (qty += ...) when an item is
+    # re-allotted into the same allotment, which never advances that row's
+    # created_on. A timestamp filter would silently miss any such amendment
+    # made after a re-plan; this snapshot doesn't care how the live total
+    # changed, only that it did.
+    baseline_used_quantity = models.DecimalField(
+        max_digits=15, decimal_places=3, default=DEC_000,
+    )
+    baseline_used_cif_fc = models.DecimalField(
+        max_digits=15, decimal_places=2, default=DEC_0,
+    )
+
     class Meta:
         indexes = [models.Index(fields=["license"]), models.Index(fields=["import_item"])]
 

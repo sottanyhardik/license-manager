@@ -103,6 +103,19 @@ interface Group {
     balance_cif_fc: number;
     itemNames: { id: number; name: string }[];
     splits: Split[];
+    // Utilization-plan status (Original/Used/Remaining), identical across
+    // every member of the group — see plan_status_for on the backend. Used
+    // only counts allotments made since this plan was last (re)saved, so
+    // Remaining correctly resets to Original right after a re-plan instead
+    // of going permanently negative from allotments made under an older,
+    // since-replaced plan.
+    has_plan?: boolean;
+    original_planned_quantity?: number;
+    used_planned_quantity?: number;
+    remaining_planned_quantity?: number;
+    original_planned_cif_fc?: number;
+    used_planned_cif_fc?: number;
+    remaining_planned_cif_fc?: number;
 }
 
 type PlanStatus = "not_planned" | "partial" | "completed" | "over";
@@ -123,6 +136,24 @@ export interface PlanningEditorProps {
 function groupStatus(g: Group): PlanStatus {
     const planned = g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
     if (planned <= 0) return "not_planned";
+
+    // Prefer the live Remaining Plan (Original minus usage since THIS plan
+    // was last saved — see plan_status_for on the backend) over a static
+    // "planned vs. currently-available" comparison. The old comparison trips
+    // "Over Planned" every time a plan gets mostly/fully allotted — Available
+    // Qty already nets out ALL-time consumption (including allotments made
+    // under an earlier, since-replaced plan), so `planned > available` goes
+    // "over" even when nothing is actually wrong. Remaining resets to
+    // Original right after a re-plan and only goes negative when allotments
+    // made AFTER that re-plan actually exceed it — a real problem worth
+    // flagging.
+    if (g.has_plan && g.remaining_planned_quantity != null) {
+        const remaining = g.remaining_planned_quantity;
+        if (remaining < -1e-6) return "over";
+        if (remaining <= 1e-6) return "completed";
+        return "partial";
+    }
+
     if (planned > g.available_quantity + 1e-6) return "over";
     if (planned >= g.available_quantity - 1e-6) return "completed";
     return "partial";
@@ -415,6 +446,9 @@ export default function PlanningEditor({
                 quantity?: number; available_quantity?: number;
                 balance_cif_fc?: number | null; hs_code_label?: string;
                 items_detail?: { id: number; name: string }[];
+                has_plan?: boolean;
+                original_planned_quantity?: string | number; used_planned_quantity?: string | number; remaining_planned_quantity?: string | number;
+                original_planned_cif_fc?: string | number; used_planned_cif_fc?: string | number; remaining_planned_cif_fc?: string | number;
             }[] = Array.isArray(license?.import_license) ? license.import_license : [];
 
             const groupMap: Record<string, Group> = {};
@@ -439,6 +473,18 @@ export default function PlanningEditor({
                 g.available_quantity  += Number(it.available_quantity ?? 0);
                 g.balance_cif_fc      += Number(it.balance_cif_fc ?? 0);
                 itemNames.forEach((n) => { if (!g.itemNames.find((x) => x.id === n.id)) g.itemNames.push(n); });
+                // Plan status is already group-level (computed server-side
+                // from ALL member ids of this description-group), so it's
+                // identical across every member — just take it, no summing.
+                if (it.has_plan) {
+                    g.has_plan = true;
+                    g.original_planned_quantity  = Number(it.original_planned_quantity ?? 0);
+                    g.used_planned_quantity      = Number(it.used_planned_quantity ?? 0);
+                    g.remaining_planned_quantity = Number(it.remaining_planned_quantity ?? 0);
+                    g.original_planned_cif_fc    = Number(it.original_planned_cif_fc ?? 0);
+                    g.used_planned_cif_fc         = Number(it.used_planned_cif_fc ?? 0);
+                    g.remaining_planned_cif_fc    = Number(it.remaining_planned_cif_fc ?? 0);
+                }
             }
 
             const built = Object.values(groupMap);
@@ -731,7 +777,7 @@ export default function PlanningEditor({
                                 <th scope="col" className="px-4 py-2.5 text-right">Planned Qty</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Unit Price</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Planned CIF</th>
-                                <th scope="col" className="px-4 py-2.5 text-right">Remaining Qty</th>
+                                <th scope="col" className="px-4 py-2.5 text-right">Used Qty</th>
                                 <th scope="col" className="px-4 py-2.5 text-center">Actions</th>
                             </tr>
                         </thead>
@@ -743,6 +789,18 @@ export default function PlanningEditor({
                                 const rem        = g.available_quantity - planned;
                                 const isEditing  = editingGroupId === g.id;
                                 const isSaving   = savingGroupId === g.id;
+
+                                // "Planned Qty/CIF" show the live Remaining (Original minus
+                                // usage since this plan was last saved) as the headline number
+                                // when the group has a tracked plan — that's the actionable
+                                // "how much can still be allotted" figure. The true Original
+                                // (what was actually entered/auto-planned) stays visible as a
+                                // "of X" sub-line so re-planning intent is never hidden, just
+                                // no longer the number that drives the Over-Planned badge.
+                                const showRemaining  = g.has_plan && g.remaining_planned_quantity != null;
+                                const displayQty      = showRemaining ? g.remaining_planned_quantity! : planned;
+                                const displayCif       = showRemaining ? g.remaining_planned_cif_fc! : plannedCif;
+                                const qtyDiffersFromOriginal = showRemaining && Math.abs((g.original_planned_quantity ?? 0) - displayQty) > 1e-6;
 
                                 return (
                                     <>
@@ -765,7 +823,14 @@ export default function PlanningEditor({
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums">{fmtQty(g.available_quantity)}</td>
                                             <td className="px-4 py-3 text-right tabular-nums font-semibold">
-                                                {planned > 0 ? fmtQty(planned) : <span className="font-normal text-muted-foreground">—</span>}
+                                                {planned > 0 ? (
+                                                    <>
+                                                        <span className={displayQty < -1e-6 ? "text-destructive" : undefined}>{fmtQty(displayQty)}</span>
+                                                        {qtyDiffersFromOriginal && (
+                                                            <div className="text-[10px] font-normal text-muted-foreground">of {fmtQty(g.original_planned_quantity)} planned</div>
+                                                        )}
+                                                    </>
+                                                ) : <span className="font-normal text-muted-foreground">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                                                 {planned > 0 && plannedCif > 0
@@ -773,15 +838,21 @@ export default function PlanningEditor({
                                                     : <span>—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums">
-                                                {plannedCif > 0
-                                                    ? <span className="text-primary font-semibold">{fmtUsd(plannedCif)}</span>
-                                                    : <span className="text-muted-foreground">—</span>}
+                                                {plannedCif > 0 ? (
+                                                    <>
+                                                        <span className={cn("font-semibold", displayCif < -1e-6 ? "text-destructive" : "text-primary")}>{fmtUsd(displayCif)}</span>
+                                                        {qtyDiffersFromOriginal && (
+                                                            <div className="text-[10px] font-normal text-muted-foreground">of {fmtUsd(g.original_planned_cif_fc)} planned</div>
+                                                        )}
+                                                    </>
+                                                ) : <span className="text-muted-foreground">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums">
                                                 <span className={cn("font-semibold",
+                                                    showRemaining ? "text-foreground" :
                                                     rem < -1e-6 ? "text-destructive" :
                                                     rem < 1e-6 && planned > 0 ? "text-emerald-700" : "text-muted-foreground",
-                                                )}>{fmtQty(rem)}</span>
+                                                )}>{fmtQty(showRemaining ? g.used_planned_quantity! : rem)}</span>
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 {isEditing ? (

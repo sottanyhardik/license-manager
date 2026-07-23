@@ -221,6 +221,50 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         return response
 
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Attach each import item's utilization-plan status (Original/Used/
+        Remaining) to the detail response — the SAME `plan_status_for` the
+        Allotment screen's Max-allotment cap and the Balance tab's Plan
+        metrics read (see `nested_items` below and
+        `apps/allotment/views_actions.py`). The Plan tab
+        (`PlanningEditor.tsx`) builds its groups from THIS endpoint's
+        `import_license`, not `nested_items` — without this, its own
+        "Over Planned" badge compares the immutable Original Plan against
+        current Available Qty, which trips every time a plan gets
+        mostly/fully allotted even though nothing is actually wrong (Original
+        was fully — or nearly fully — used as intended).
+
+        Reimplemented rather than wrapping `super().retrieve()` so
+        `get_object()` (and its permission check) runs only once. Bounded to
+        one license's items per call — `list` (many licenses) is unaffected,
+        since `import_license` is emptied there for performance (see the
+        serializer's `is_list_view` branch).
+        """
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        data = serializer.data
+
+        import_rows = data.get('import_license') if isinstance(data, dict) else None
+        if import_rows:
+            from apps.license.services.plan_enforcement import plan_status_for
+            items_by_id = {it.id: it for it in instance.import_license.all()}
+            for row in import_rows:
+                item = items_by_id.get(row.get('id'))
+                if item is None:
+                    continue
+                plan_status = plan_status_for(item)
+                row['has_plan'] = plan_status is not None
+                if plan_status is not None:
+                    row['original_planned_quantity'] = str(plan_status['original_quantity'])
+                    row['used_planned_quantity'] = str(plan_status['used_quantity'])
+                    row['remaining_planned_quantity'] = str(plan_status['remaining_quantity'])
+                    row['original_planned_cif_fc'] = str(plan_status['original_cif_fc'])
+                    row['used_planned_cif_fc'] = str(plan_status['used_cif_fc'])
+                    row['remaining_planned_cif_fc'] = str(plan_status['remaining_cif_fc'])
+
+        return Response(data)
+
     def get_object(self):
         """
         Override to support lookup by either pk (ID) or license_number.
@@ -441,10 +485,30 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         """
         license_obj = self.get_object()
 
+        import_items = list(license_obj.import_license.all())
+        import_data = LicenseImportItemSerializer(import_items, many=True, context={'request': request}).data
+
+        # Attach each item's utilization-plan status (Original/Used/Remaining)
+        # — the SAME `plan_status_for` the Allotment screen's Max-allotment
+        # cap reads (see apps/allotment/views_actions.py::available_licenses),
+        # so the Balance tab's "Plan" figures can never disagree with what's
+        # actually enforced there. Absent (has_plan=False) for items with no
+        # LicenseItemPlan rows — unconstrained, nothing to show.
+        from apps.license.services.plan_enforcement import plan_status_for
+        for row, item in zip(import_data, import_items):
+            plan_status = plan_status_for(item)
+            row['has_plan'] = plan_status is not None
+            if plan_status is not None:
+                row['original_planned_quantity'] = str(plan_status['original_quantity'])
+                row['used_planned_quantity'] = str(plan_status['used_quantity'])
+                row['remaining_planned_quantity'] = str(plan_status['remaining_quantity'])
+                row['original_planned_cif_fc'] = str(plan_status['original_cif_fc'])
+                row['used_planned_cif_fc'] = str(plan_status['used_cif_fc'])
+                row['remaining_planned_cif_fc'] = str(plan_status['remaining_cif_fc'])
+
         return Response({
             'export_license': LicenseExportItemSerializer(license_obj.export_license.all(), many=True).data,
-            'import_license': LicenseImportItemSerializer(license_obj.import_license.all(), many=True,
-                                                          context={'request': request}).data,
+            'import_license': import_data,
             'license_documents': LicenseDocumentSerializer(license_obj.license_documents.all(), many=True).data
         })
 

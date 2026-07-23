@@ -57,17 +57,8 @@ def _is_fully_planned(license_obj, threshold: float = 0.99) -> bool:
 
 def _save_lines(license_obj, lines: list[dict]) -> None:
     """Full-replace: delete existing plan, insert new lines atomically."""
-    LicenseItemPlan.objects.filter(license=license_obj).delete()
-    for ln in lines:
-        LicenseItemPlan.objects.create(
-            license=license_obj,
-            import_item_id=ln["import_item"],
-            item_name_id=ln.get("item_name"),
-            planned_quantity=ln["planned_quantity"],
-            unit_price=ln["unit_price"],
-            planned_cif_fc=ln["planned_cif_fc"],
-            note=ln.get("note", ""),
-        )
+    from apps.license.services.plan_enforcement import save_plan_lines_for_license
+    save_plan_lines_for_license(license_obj, lines)
 
 
 # ── command ───────────────────────────────────────────────────────────────────

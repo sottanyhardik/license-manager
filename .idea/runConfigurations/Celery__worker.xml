@@ -16,7 +16,7 @@
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="SCRIPT_NAME" value="celery" />
-    <option name="PARAMETERS" value="-A lmanagement worker -l info" />
+    <option name="PARAMETERS" value="-A lmanagement worker --pool=solo -l info" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="true" />
     <option name="MODULE_MODE" value="true" />

@@ -273,11 +273,23 @@ class TestLicenseAPI:
         def _header_item_cols(banner_row):
             """{item_name: base_col} from the matrix's 2-row header."""
             hdr_row = banner_row + 1
-            cols, col = {}, 5
+            cols, col = {}, 10
             while summary.cell(row=hdr_row, column=col).value:
                 cols[summary.cell(row=hdr_row, column=col).value] = col
                 col += 3
             return cols
+
+        def _fixed_header_cells(banner_row):
+            hdr_row = banner_row + 1
+            return [summary.cell(row=hdr_row, column=c).value for c in range(1, 10)]
+
+        # -- The 9 fixed columns are reordered/expanded per the CIF Summary
+        # spec: License No | Issue Date | Expiry Date | Exporter | SION Norm
+        # | Total CIF ($) | Debited CIF ($) | Allotted CIF ($) | Balance CIF ($).
+        assert _fixed_header_cells(banner_rows['SION NORM : Unclassified']) == [
+            'License No', 'Issue Date', 'Expiry Date', 'Exporter', 'SION Norm',
+            'Total CIF ($)', 'Debited CIF ($)', 'Allotted CIF ($)', 'Balance CIF ($)',
+        ]
 
         # -- Unclassified section: DWP/SWP columns in alphabetical order,
         # doubled-up Available Qty, split-exclusive Planned Qty/CIF.
@@ -393,6 +405,41 @@ class TestLicenseAPI:
         assert summary.cell(row=grand_total_row, column=5).value == pytest.approx(
             sum(v[3] for v in norm_summary.values())
         )
+
+        # -- License CIF Summary columns (SION Norm, Total CIF, Debited CIF,
+        # Allotted CIF, Balance CIF) at columns 5-9 of each license's own
+        # Planning Matrix row. Total/Debited CIF must match
+        # LicenseBalanceCalculator directly (single source of truth, not the
+        # older ad-hoc total_cif/total_license_cif variables); Allotted CIF
+        # must match this license's own Plan Utilization "Planned CIF"
+        # TOTALS (the same figure already cross-checked above via
+        # `_per_license_planned_cif`, NOT
+        # LicenseBalanceCalculator.calculate_allotment()'s real-allotment
+        # figure); Balance CIF must match `license_obj.get_balance_cif`
+        # verbatim (not an independent Total-Debited-Allotted subtraction).
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+        def _license_row(license_number):
+            for row in summary.iter_rows():
+                if row[0].value == license_number:
+                    return row
+            raise AssertionError(f'no Planning Matrix row found for {license_number}')
+
+        for _lic, _norm in ((test_license, 'Unclassified'), (other_license, 'E999')):
+            _row_cells = _license_row(_lic.license_number)
+            assert _row_cells[4].value == _norm  # SION Norm
+            assert _row_cells[5].value == pytest.approx(
+                float(LicenseBalanceCalculator.calculate_credit(_lic))
+            )  # Total CIF ($)
+            assert _row_cells[6].value == pytest.approx(
+                float(LicenseBalanceCalculator.calculate_debit(_lic))
+            )  # Debited CIF ($)
+            assert _row_cells[7].value == pytest.approx(
+                _per_license_planned_cif(_lic.license_number)
+            )  # Allotted CIF ($) == Plan Utilization Planned CIF, not calculate_allotment()
+            assert _row_cells[8].value == pytest.approx(
+                float(_lic.get_balance_cif)
+            )  # Balance CIF ($)
 
     def test_bulk_balance_excel_summary_highlights_expiring_licenses(
         self,

@@ -896,6 +896,7 @@ def build_bulk_balance_excel(request):
     from apps.license.services.plan_utilization import plan_utilization_rows
     from apps.license.services.exporters.planning_split_rows import rows_for_splits
     from apps.license.models import LicenseExportItemModel
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
     from openpyxl.utils import get_column_letter
 
     _UNASSIGNED = 'Unassigned'
@@ -1022,7 +1023,7 @@ def build_bulk_balance_excel(request):
         if _UNASSIGNED in _item_names_in_norm:
             _ordered_item_names.append(_UNASSIGNED)
 
-        _n_cols = 4 + 3 * len(_ordered_item_names)
+        _n_cols = 9 + 3 * len(_ordered_item_names)
         _max_matrix_cols = max(_max_matrix_cols, _n_cols)
 
         # ── 1. Section header ────────────────────────────────────────────
@@ -1035,11 +1036,14 @@ def build_bulk_balance_excel(request):
 
         # ── 2. Planning Matrix — 2-row header + one row per license ─────
         _hdr_row1, _hdr_row2 = _sr, _sr + 1
-        for _col, _label in enumerate(['License No', 'Exporter', 'Issue Date', 'Expiry Date'], 1):
+        for _col, _label in enumerate([
+            'License No', 'Issue Date', 'Expiry Date', 'Exporter', 'SION Norm',
+            'Total CIF ($)', 'Debited CIF ($)', 'Allotted CIF ($)', 'Balance CIF ($)',
+        ], 1):
             _sw.merge_cells(start_row=_hdr_row1, start_column=_col, end_row=_hdr_row2, end_column=_col)
             _hdr(_sw, _hdr_row1, _col, _label)
         for _i, _name in enumerate(_ordered_item_names):
-            _base_col = 5 + _i * 3
+            _base_col = 10 + _i * 3
             _sw.merge_cells(start_row=_hdr_row1, start_column=_base_col, end_row=_hdr_row1, end_column=_base_col + 2)
             _ic = _sw.cell(row=_hdr_row1, column=_base_col, value=_name)
             _ic.fill = ITEM_HDR_FILL; _ic.font = ITEM_HDR_FONT
@@ -1053,17 +1057,54 @@ def build_bulk_balance_excel(request):
             _n: {'available': 0.0, 'planned_qty': 0.0, 'planned_cif': 0.0} for _n in _ordered_item_names
         }
         _norm_totals = {'available_quantity': 0.0, 'planned_quantity': 0.0, 'planned_cif': 0.0}
+        _norm_cif_totals = {'total_cif': 0.0, 'debited_cif': 0.0, 'allotted_cif': 0.0, 'balance_cif': 0.0}
 
         for _idx, (_row, _item_data, _totals) in enumerate(_per_license):
             _rf = None if _idx % 2 == 0 else ALT_FILL
             _ld = _row.get('license_date')
             _ed = _row.get('license_expiry_date')
+            _lic_obj = _row['license_obj']
+
+            # Total CIF / Debited CIF — sourced directly from the centralized
+            # LicenseBalanceCalculator (the same single source of truth
+            # `get_balance_cif`/`calculate_balance` themselves compose from).
+            # Deliberately NOT the ad-hoc `total_cif`/`total_license_cif`
+            # computed earlier in `_write_license_sheet` from the raw
+            # BOE/allotment summary-rows loop — that older calculation
+            # doesn't exclude BOEs linked to trades and ignores
+            # `calculate_trade()`.
+            _total_cif = float(LicenseBalanceCalculator.calculate_credit(_lic_obj))
+            _debited_cif = float(LicenseBalanceCalculator.calculate_debit(_lic_obj))
+            # Allotted CIF — per product's explicit instruction, this is the
+            # Plan Utilization "Planned CIF" figure (Σ this license's group
+            # totals, same number feeding Grand Summary by Norm), NOT
+            # LicenseBalanceCalculator.calculate_allotment()'s real-allotment
+            # figure. The two can legitimately differ when a plan isn't
+            # fully executed as real allotments yet.
+            _allotted_cif = _totals['planned_cif']
+            # Balance CIF — reuse the already-computed/cached value from
+            # `_write_license_sheet` (== `license_obj.get_balance_cif`).
+            # NOT recomputed as Total − Debited − Allotted: `get_balance_cif`
+            # nets against real allotment transactions + trade CIF, neither
+            # of which the other three columns expose, so the four columns
+            # will not always reconcile arithmetically — that's expected.
+            _balance_cif = _row['balance_cif']
+
             _cell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
-            _cell(_sw, _sr, 2, _row.get('exporter_name') or '-', fill=_rf)
-            _cell(_sw, _sr, 3, _ld.strftime('%d-%m-%Y') if _ld else '-', fill=_rf, align='center')
-            _cell(_sw, _sr, 4, _ed.strftime('%d-%m-%Y') if _ed else '-', fill=_rf, align='center')
+            _cell(_sw, _sr, 2, _ld.strftime('%d-%m-%Y') if _ld else '-', fill=_rf, align='center')
+            _cell(_sw, _sr, 3, _ed.strftime('%d-%m-%Y') if _ed else '-', fill=_rf, align='center')
+            _cell(_sw, _sr, 4, _row.get('exporter_name') or '-', fill=_rf)
+            _cell(_sw, _sr, 5, _norm_label, fill=_rf)
+            _cell(_sw, _sr, 6, _total_cif, fill=_rf, align='right', num_fmt='#,##0.00')
+            _cell(_sw, _sr, 7, _debited_cif, fill=_rf, align='right', num_fmt='#,##0.00')
+            _cell(_sw, _sr, 8, _allotted_cif, fill=_rf, align='right', num_fmt='#,##0.00')
+            _cell(_sw, _sr, 9, _balance_cif, fill=_rf, align='right', num_fmt='#,##0.00')
+            _norm_cif_totals['total_cif'] += _total_cif
+            _norm_cif_totals['debited_cif'] += _debited_cif
+            _norm_cif_totals['allotted_cif'] += _allotted_cif
+            _norm_cif_totals['balance_cif'] += _balance_cif
             for _i, _name in enumerate(_ordered_item_names):
-                _base_col = 5 + _i * 3
+                _base_col = 10 + _i * 3
                 _vals = _item_data.get(_name) or {'available': 0.0, 'planned_qty': 0.0, 'planned_cif': 0.0}
                 _cell(_sw, _sr, _base_col, _vals['available'], fill=_rf, align='right', num_fmt='#,##0.000')
                 _cell(_sw, _sr, _base_col + 1, _vals['planned_qty'], fill=_rf, align='right', num_fmt='#,##0.000')
@@ -1093,8 +1134,13 @@ def build_bulk_balance_excel(request):
             _sw.cell(row=_sr, column=_ci).border = THIN_BORDER
         _cell(_sw, _sr, 1, 'NORM TOTAL', fill=TOTAL_FILL, bold=True)
         _cell(_sw, _sr, 2, '', fill=TOTAL_FILL); _cell(_sw, _sr, 3, '', fill=TOTAL_FILL); _cell(_sw, _sr, 4, '', fill=TOTAL_FILL)
+        _cell(_sw, _sr, 5, '', fill=TOTAL_FILL)
+        _cell(_sw, _sr, 6, _norm_cif_totals['total_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _cell(_sw, _sr, 7, _norm_cif_totals['debited_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _cell(_sw, _sr, 8, _norm_cif_totals['allotted_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _cell(_sw, _sr, 9, _norm_cif_totals['balance_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
         for _i, _name in enumerate(_ordered_item_names):
-            _base_col = 5 + _i * 3
+            _base_col = 10 + _i * 3
             _t = _norm_item_totals[_name]
             _cell(_sw, _sr, _base_col, _t['available'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
             _cell(_sw, _sr, _base_col + 1, _t['planned_qty'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
@@ -1164,11 +1210,16 @@ def build_bulk_balance_excel(request):
     _cell(_sw, _sr, 5, _grand_total_planned_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
 
     # ── Column widths ──────────────────────────────────────────────────────
-    _sw.column_dimensions['A'].width = 24
-    _sw.column_dimensions['B'].width = 26
-    _sw.column_dimensions['C'].width = 14
-    _sw.column_dimensions['D'].width = 14
-    for _col in range(5, _max_matrix_cols + 1):
+    _sw.column_dimensions['A'].width = 22  # License No
+    _sw.column_dimensions['B'].width = 14  # Issue Date
+    _sw.column_dimensions['C'].width = 14  # Expiry Date
+    _sw.column_dimensions['D'].width = 24  # Exporter
+    _sw.column_dimensions['E'].width = 14  # SION Norm
+    _sw.column_dimensions['F'].width = 16  # Total CIF ($)
+    _sw.column_dimensions['G'].width = 16  # Debited CIF ($)
+    _sw.column_dimensions['H'].width = 16  # Allotted CIF ($)
+    _sw.column_dimensions['I'].width = 16  # Balance CIF ($)
+    for _col in range(10, _max_matrix_cols + 1):
         _sw.column_dimensions[get_column_letter(_col)].width = 14
 
     wb.calculation.calcMode = "auto"

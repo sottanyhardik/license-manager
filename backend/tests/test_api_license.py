@@ -1,6 +1,7 @@
 """
 API Tests for License Endpoints
 """
+from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 
@@ -392,6 +393,87 @@ class TestLicenseAPI:
         assert summary.cell(row=grand_total_row, column=5).value == pytest.approx(
             sum(v[3] for v in norm_summary.values())
         )
+
+    def test_bulk_balance_excel_summary_highlights_expiring_licenses(
+        self,
+        authenticated_client,
+        test_license,
+        test_company,
+        test_port,
+    ):
+        """Planning Matrix rows are highlighted by expiry status, computed at
+        export time (no conditional-formatting formulas) -- expired (dark
+        red / white bold), <=30 days (light red / black bold), <=60 days
+        (light yellow / black), otherwise untouched. The highlight must
+        never bleed into Norm Total / Grand Total rows."""
+        EXPIRED_FILL = '00C00000'
+        EXPIRING_30_FILL = '00FFC7CE'
+        EXPIRING_60_FILL = '00FFF2CC'
+        HIGHLIGHT_FILLS = {EXPIRED_FILL, EXPIRING_30_FILL, EXPIRING_60_FILL}
+
+        today = date.today()
+        test_license.license_expiry_date = today + timedelta(days=365)
+        test_license.save(update_fields=['license_expiry_date'])
+
+        expired = LicenseDetailsModel.objects.create(
+            license_number='LIC-EXPIRY-EXPIRED-0001',
+            exporter=test_company, port=test_port,
+            license_expiry_date=today - timedelta(days=5),
+        )
+        expiring_30 = LicenseDetailsModel.objects.create(
+            license_number='LIC-EXPIRY-30-0001',
+            exporter=test_company, port=test_port,
+            license_expiry_date=today + timedelta(days=20),
+        )
+        expiring_60 = LicenseDetailsModel.objects.create(
+            license_number='LIC-EXPIRY-60-0001',
+            exporter=test_company, port=test_port,
+            license_expiry_date=today + timedelta(days=45),
+        )
+
+        url = reverse('license:licenses-bulk-balance-excel')
+        response = authenticated_client.post(
+            url,
+            {'license_numbers': [
+                test_license.license_number, expired.license_number,
+                expiring_30.license_number, expiring_60.license_number,
+            ]},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        workbook = load_workbook(BytesIO(response.content), data_only=False)
+        summary = workbook['Utilization Planning Summary']
+
+        def _row_for_license(license_number):
+            for row in summary.iter_rows():
+                if row[0].value == license_number:
+                    return row[0].row
+            raise AssertionError(f'no Planning Matrix row found for {license_number}')
+
+        def _fill_of(row_idx):
+            return summary.cell(row=row_idx, column=1).fill.start_color.rgb
+
+        expired_cell = summary.cell(row=_row_for_license(expired.license_number), column=1)
+        assert expired_cell.fill.start_color.rgb == EXPIRED_FILL
+        assert expired_cell.font.bold is True
+        assert expired_cell.font.color.rgb == '00FFFFFF'
+
+        expiring_30_cell = summary.cell(row=_row_for_license(expiring_30.license_number), column=1)
+        assert expiring_30_cell.fill.start_color.rgb == EXPIRING_30_FILL
+        assert expiring_30_cell.font.bold is True
+
+        expiring_60_cell = summary.cell(row=_row_for_license(expiring_60.license_number), column=1)
+        assert expiring_60_cell.fill.start_color.rgb == EXPIRING_60_FILL
+        assert expiring_60_cell.font.bold is False
+
+        # 365 days out keeps the normal alternating-row fill, not a highlight.
+        assert _fill_of(_row_for_license(test_license.license_number)) not in HIGHLIGHT_FILLS
+
+        # The highlight must never bleed into aggregate rows.
+        for row in summary.iter_rows():
+            if row[0].value in ('NORM TOTAL', 'GRAND TOTAL'):
+                assert row[0].fill.start_color.rgb not in HIGHLIGHT_FILLS
 
 
 @pytest.mark.api

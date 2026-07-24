@@ -968,6 +968,35 @@ def build_bulk_balance_excel(request):
     ITEM_HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
     NORM_BANNER_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
 
+    # ── Expiry traffic-light — computed once at export time (no conditional-
+    # formatting formulas, so colors stay correct even with recalc disabled).
+    # Applied only to a license's own Planning Matrix row (see the per-license
+    # loop below) — never to section banners, header rows, Norm Total,
+    # Planning Item Summary, Grand Summary by Norm, or Grand Total.
+    EXPIRED_FILL      = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+    EXPIRED_FONT      = Font(bold=True, color="FFFFFF", size=9)
+    EXPIRING_30_FILL  = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+    EXPIRING_30_FONT  = Font(bold=True, color="000000", size=9)
+    EXPIRING_60_FILL  = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    EXPIRING_60_FONT  = Font(bold=False, color="000000", size=9)
+    from datetime import date as _expiry_date_cls
+    _expiry_today = _expiry_date_cls.today()
+
+    def _expiry_highlight(expiry_date):
+        """(fill, font) override for a license row, or (None, None) when the
+        license isn't within the expiry window — callers keep the normal
+        alternating-row fill/font in that case."""
+        if not expiry_date:
+            return None, None
+        days = (expiry_date - _expiry_today).days
+        if days < 0:
+            return EXPIRED_FILL, EXPIRED_FONT
+        if days <= 30:
+            return EXPIRING_30_FILL, EXPIRING_30_FONT
+        if days <= 60:
+            return EXPIRING_60_FILL, EXPIRING_60_FONT
+        return None, None
+
     _sr = 1
     _max_matrix_cols = 5  # widened as sections are laid out; Grand Summary needs at least 5.
 
@@ -1044,6 +1073,18 @@ def build_bulk_balance_excel(request):
                 _norm_item_totals[_name]['planned_cif'] += _vals['planned_cif']
             for _k in _norm_totals:
                 _norm_totals[_k] += _totals.get(_k, 0.0)
+
+            # Expiry traffic-light — overrides this row's fill/font across
+            # every column (License No through the last item's Planned CIF)
+            # when the license is expired or expiring soon; otherwise the
+            # normal alternating-row fill/font above is left untouched.
+            _hl_fill, _hl_font = _expiry_highlight(_ed)
+            if _hl_fill is not None:
+                for _hc in range(1, _n_cols + 1):
+                    _hcell = _sw.cell(row=_sr, column=_hc)
+                    _hcell.fill = _hl_fill
+                    _hcell.font = _hl_font
+
             _sr += 1
 
         # ── 3. Norm Total row ─────────────────────────────────────────────

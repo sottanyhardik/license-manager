@@ -225,6 +225,7 @@ def render_plan_utilization_section(
     *,
     plan_map: Optional[Dict[int, Dict[str, Any]]] = None,
     totals_out: Optional[Dict[str, Any]] = None,
+    groups: Optional[List[Dict[str, Any]]] = None,
 ) -> int:
     """Render one license's "Plan Utilization" section starting at row `r`.
 
@@ -264,6 +265,14 @@ def render_plan_utilization_section(
         `remaining_cif`, `plan_entries` — matching exactly what the rendered
         TOTALS row shows. Callers that only need the next row (both
         pre-existing call sites) can omit this.
+      groups: pre-computed `plan_utilization_rows(license_obj, plan_map=plan_map)`
+        result, for callers that already built it and need the SAME groups
+        again elsewhere (e.g. the bulk exporter's "Utilization Planning
+        Summary" pivot, which used to call `plan_utilization_rows()` a
+        second time for every license — doubling that call's whole query
+        cost). Pass the list you already have to skip the recomputation;
+        computed here (same as before) when omitted, so both pre-existing
+        call sites are unaffected.
 
     Returns:
       The next free row after the section (its own totals row inclusive).
@@ -275,6 +284,8 @@ def render_plan_utilization_section(
 
     if plan_map is None:
         plan_map = plan_map_for_license(license_obj.id)
+    if groups is None:
+        groups = plan_utilization_rows(license_obj, plan_map=plan_map)
 
     HDR_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
     TOTAL_FILL = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
@@ -314,7 +325,7 @@ def render_plan_utilization_section(
     _g_planned_qty = 0.0
     _g_planned_cif = 0.0
 
-    for _grp in plan_utilization_rows(license_obj, plan_map=plan_map):
+    for _grp in groups:
         _av = float(_grp['available_quantity'] or 0)
         # Group-level planned totals == Σ LicenseItemPlan.planned_quantity/
         # planned_cif_fc across the whole group (plan_status_for's

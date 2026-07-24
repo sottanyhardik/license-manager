@@ -176,6 +176,55 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
     return created
 
 
+def plan_status_for_ids(gids) -> dict | None:
+    """
+    Same computation as `plan_status_for`, factored out to accept an
+    already-computed group-id list instead of an import item.
+
+    For callers that already grouped the license's FULL import-item list in
+    Python using the exact same `plan_grouping.plan_group_key` function (e.g.
+    `plan_utilization.plan_utilization_rows` when it was not handed a
+    caller-filtered `items` subset) — their computed member-id list for a
+    group is guaranteed set-identical to what `group_ids_of(representative)`
+    would return via a fresh DB query, since both iterate the same
+    `license_id`-scoped item set with the same key function. Such callers can
+    pass that list here directly and skip `group_ids_of`'s redundant
+    re-query of the license's full item list.
+
+    `plan_status_for(item)` is now a thin wrapper around this function — see
+    it for the full behavior contract (Original/Used/Remaining semantics).
+    Do not call this with an id list that is not provably equal to
+    `group_ids_of` for some item in that group; the two must stay
+    interchangeable for identical results.
+    """
+    from django.db.models import Min
+
+    from apps.license.models import LicenseItemPlan
+
+    if not gids:
+        return None
+    plans = LicenseItemPlan.objects.filter(import_item_id__in=gids)
+    baseline = plans.aggregate(
+        bq=Min("baseline_used_quantity"), bv=Min("baseline_used_cif_fc"),
+    )
+    if baseline["bq"] is None:
+        return None  # no plan rows for this group at all
+
+    original_qty, original_val = planned_totals_for(gids)
+    current_used_qty = live_allotted_qty_for(gids)
+    current_used_val = live_allotted_value_for(gids)
+    used_qty = max(DEC_000, current_used_qty - baseline["bq"])
+    used_val = max(DEC_0, current_used_val - baseline["bv"])
+    return {
+        "original_quantity": original_qty,
+        "used_quantity": used_qty,
+        "remaining_quantity": original_qty - used_qty,
+        "original_cif_fc": original_val,
+        "used_cif_fc": used_val,
+        "remaining_cif_fc": original_val - used_val,
+    }
+
+
 def plan_status_for(item) -> dict | None:
     """
     Original / Used / Remaining planned quantity & CIF-FC for an import
@@ -205,31 +254,7 @@ def plan_status_for(item) -> dict | None:
     the item is unconstrained by any plan — falls back to availability-based
     behavior everywhere else in the app).
     """
-    from django.db.models import Min
-
-    from apps.license.models import LicenseItemPlan
     from apps.license.services.plan_grouping import group_ids_of
 
     gids = group_ids_of(item)
-    if not gids:
-        return None
-    plans = LicenseItemPlan.objects.filter(import_item_id__in=gids)
-    baseline = plans.aggregate(
-        bq=Min("baseline_used_quantity"), bv=Min("baseline_used_cif_fc"),
-    )
-    if baseline["bq"] is None:
-        return None  # no plan rows for this group at all
-
-    original_qty, original_val = planned_totals_for(gids)
-    current_used_qty = live_allotted_qty_for(gids)
-    current_used_val = live_allotted_value_for(gids)
-    used_qty = max(DEC_000, current_used_qty - baseline["bq"])
-    used_val = max(DEC_0, current_used_val - baseline["bv"])
-    return {
-        "original_quantity": original_qty,
-        "used_quantity": used_qty,
-        "remaining_quantity": original_qty - used_qty,
-        "original_cif_fc": original_val,
-        "used_cif_fc": used_val,
-        "remaining_cif_fc": original_val - used_val,
-    }
+    return plan_status_for_ids(gids)

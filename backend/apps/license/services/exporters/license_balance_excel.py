@@ -704,9 +704,14 @@ def build_bulk_balance_excel(request):
             'qty_by_cond': {},
             'plan_qty': 0.0, 'plan_cif': 0.0,
         })
+        # Pre-computed once for every exported license by the caller (see
+        # `_balance_by_license` in `build_bulk_balance_excel`) — reused here
+        # AND passed into `effective_plan_for_license` below so norm-classified
+        # licenses don't re-trigger `get_balance_cif` a second time.
+        _license_balance = float(_balance_by_license.get(license_obj.id, 0) or 0)
         # Effective plan per license: manual if manually planned, else norm.
         from apps.license.services.norm_plan import effective_plan_for_license
-        _plan_source, _plan_map = effective_plan_for_license(license_obj)
+        _plan_source, _plan_map = effective_plan_for_license(license_obj, balance_cif=_license_balance)
         for _item in license_obj.import_license.all():
             _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
             _avail = float(_item.available_quantity or 0)
@@ -729,7 +734,6 @@ def build_bulk_balance_excel(request):
             _ct = (_item.condition_type or '').strip()
             _bal_agg[_key]['qty_by_cond'][_ct] = _bal_agg[_key]['qty_by_cond'].get(_ct, 0.0) + _avail
 
-        _license_balance = float(license_obj.get_balance_cif or 0)
         total_license_cif = total_cif + _license_balance
 
         r = 1
@@ -803,18 +807,27 @@ def build_bulk_balance_excel(request):
         # render_plan_utilization_section.
         from apps.license.services.plan_reporting import plan_map_for_license as _plan_map_fn_bulk
         from apps.license.services.exporters.planning_split_rows import render_plan_utilization_section
+        from apps.license.services.plan_utilization import plan_utilization_rows as _plan_utilization_rows_bulk
         _user_plan_map_b = _plan_map_fn_bulk(license_obj.id)
+        # Computed ONCE per license and reused by both this sheet's own
+        # "Plan Utilization" table AND the "Utilization Planning Summary"
+        # sheet's Planning Matrix pivot (`_license_pivot_data`, via
+        # `_util_return['groups']` below) — that pivot used to call
+        # `plan_utilization_rows()` a second, independent time per license,
+        # doubling the whole plan_status_for/group_ids_of query cost for
+        # every exported license.
+        _groups_b = _plan_utilization_rows_bulk(license_obj, plan_map=_user_plan_map_b)
 
         _plan_totals_b = {}
         r = render_plan_utilization_section(
             ws, r, license_obj, _license_balance,
-            plan_map=_user_plan_map_b, totals_out=_plan_totals_b,
+            plan_map=_user_plan_map_b, totals_out=_plan_totals_b, groups=_groups_b,
         )
 
         # _util_return — feeds the "Utilization Planning Summary" sheet. Carries
-        # the already-fetched `license_obj`/`plan_map` so that sheet can call
-        # render_plan_utilization_section() again for the same license without
-        # re-querying plan_map_for_license.
+        # the already-fetched `license_obj`/`plan_map`/`groups` so that sheet
+        # can build its pivot for the same license without re-querying
+        # plan_map_for_license or re-running plan_utilization_rows.
         _exporter_name = license_obj.exporter.name if license_obj.exporter else ''
         _util_return = {
             'lic_no': lic_no,
@@ -827,6 +840,7 @@ def build_bulk_balance_excel(request):
             'sheet_name': sheet_name,
             'plan_map': _user_plan_map_b,
             'plan_totals': _plan_totals_b,
+            'groups': _groups_b,
         }
 
         ws.column_dimensions['A'].width = 38  # Item Description
@@ -853,6 +867,20 @@ def build_bulk_balance_excel(request):
         return ('2_' + norm_str, norm_str)
 
     sorted_licenses = sorted(licenses, key=_norm_sort_key)
+
+    # Batch-compute every exported license's final balance (== what
+    # `license_obj.get_balance_cif` / `LicenseBalanceCalculator.calculate_balance`
+    # would return) ONCE here, in 4 queries total, instead of `_write_license_sheet`
+    # triggering `get_balance_cif` per license (4 queries: credit+debit+
+    # allotment+trade) — and, for norm-classified (E1/E5/E132) licenses,
+    # `effective_plan_for_license` → `norm_plan_for_license` triggering it a
+    # SECOND time per license. `_write_license_sheet` reads this dict via
+    # closure instead of the model property; nothing outside this one bulk
+    # export (Allocate screen, license detail API, single-license
+    # `balance_excel`) is touched — `get_balance_cif` itself is unchanged.
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator as _LBC_bulk
+    _bulk_lic_ids = [lic.id for lic in sorted_licenses]
+    _balance_by_license = _LBC_bulk.calculate_balance_for_licenses(_bulk_lic_ids)
 
     _util_summaries = []
     for license_obj in sorted_licenses:
@@ -904,7 +932,7 @@ def build_bulk_balance_excel(request):
     # One batched query for every exported license's PRIMARY export norm
     # (mirrors norm_plan.detect_norm's own `export_license.first()` — i.e.
     # the lowest-pk export item — without querying per license in a loop).
-    _lic_ids = [lic.id for lic in sorted_licenses]
+    _lic_ids = _bulk_lic_ids
     _first_norm_by_license: dict = {}
     for _lic_id, _norm_code in (
         LicenseExportItemModel.objects
@@ -913,6 +941,13 @@ def build_bulk_balance_excel(request):
         .values_list('license_id', 'norm_class__norm_class')
     ):
         _first_norm_by_license.setdefault(_lic_id, _norm_code)
+
+    # One batched query each for Total CIF / Debited CIF across every
+    # exported license, instead of `LicenseBalanceCalculator.calculate_credit`/
+    # `calculate_debit` being called once per license (2 queries x 214
+    # licenses in production) inside the per-license loop below.
+    _credit_by_license = LicenseBalanceCalculator.calculate_credit_for_licenses(_lic_ids)
+    _debit_by_license = LicenseBalanceCalculator.calculate_debit_for_licenses(_lic_ids)
 
     # Bucket licenses by norm, preserving the order they were exported in
     # (== `sorted_licenses` order, already E1-first/E5-second/alpha-rest).
@@ -937,7 +972,13 @@ def build_bulk_balance_excel(request):
         the group's unioned splits when the group has a plan).
         """
         _lic_obj = _lic_row['license_obj']
-        _groups = plan_utilization_rows(_lic_obj, plan_map=_lic_row.get('plan_map'))
+        # Reuse the SAME groups `_write_license_sheet` already computed for
+        # this license (see `_util_return['groups']`) instead of calling
+        # `plan_utilization_rows()` a second time — that used to double the
+        # whole plan_status_for/group_ids_of query cost for every license.
+        _groups = _lic_row.get('groups')
+        if _groups is None:  # pragma: no cover - defensive; always set today
+            _groups = plan_utilization_rows(_lic_obj, plan_map=_lic_row.get('plan_map'))
         _item_data: dict = {}
         _totals = {'available_quantity': 0.0, 'planned_quantity': 0.0, 'planned_cif': 0.0}
         for _grp in _groups:
@@ -1067,14 +1108,18 @@ def build_bulk_balance_excel(request):
 
             # Total CIF / Debited CIF — sourced directly from the centralized
             # LicenseBalanceCalculator (the same single source of truth
-            # `get_balance_cif`/`calculate_balance` themselves compose from).
+            # `get_balance_cif`/`calculate_balance` themselves compose from),
+            # via the batched `_credit_by_license`/`_debit_by_license` maps
+            # computed once above — same numbers `calculate_credit`/
+            # `calculate_debit` would give per license (Coalesce'd to 0 when
+            # a license has none), just without a query per license.
             # Deliberately NOT the ad-hoc `total_cif`/`total_license_cif`
             # computed earlier in `_write_license_sheet` from the raw
             # BOE/allotment summary-rows loop — that older calculation
             # doesn't exclude BOEs linked to trades and ignores
             # `calculate_trade()`.
-            _total_cif = float(LicenseBalanceCalculator.calculate_credit(_lic_obj))
-            _debited_cif = float(LicenseBalanceCalculator.calculate_debit(_lic_obj))
+            _total_cif = float(_credit_by_license.get(_lic_obj.id, 0))
+            _debited_cif = float(_debit_by_license.get(_lic_obj.id, 0))
             # Allotted CIF — per product's explicit instruction, this is the
             # Plan Utilization "Planned CIF" figure (Σ this license's group
             # totals, same number feeding Grand Summary by Norm), NOT

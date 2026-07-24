@@ -90,6 +90,59 @@ class LicenseBalanceCalculator:
         )
 
     @staticmethod
+    def calculate_credit_for_licenses(license_ids) -> dict:
+        """
+        Batched sibling of `calculate_credit` — total credit (export CIF)
+        for MANY licenses in one query, grouped by license id.
+
+        For bulk report/export code that used to call `calculate_credit`
+        once per license (one query each): call this once with all the ids
+        instead. Returns a `{license_id: Decimal}` map; a license id with no
+        export items is simply absent (callers should use `.get(id, DEC_0)`,
+        matching `calculate_credit`'s own zero-default via `Coalesce`).
+
+        Args:
+            license_ids: iterable of license pks.
+
+        Returns:
+            `{license_id: Decimal}` total credit per license.
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        rows = (
+            LicenseExportItemModel.objects
+            .filter(license_id__in=ids)
+            .values("license_id")
+            .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+        )
+        return {row["license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
+    @staticmethod
+    def calculate_debit_for_licenses(license_ids) -> dict:
+        """
+        Batched sibling of `calculate_debit` — total debit (non-trade BOE
+        CIF) for MANY licenses in one query, grouped by license id. Same
+        `bill_of_entry__license_trades__isnull=True` exclusion as
+        `calculate_debit`. See `calculate_credit_for_licenses` for the
+        return-shape/zero-default contract.
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        rows = (
+            RowDetails.objects
+            .filter(
+                sr_number__license_id__in=ids,
+                transaction_type=DEBIT,
+                bill_of_entry__license_trades__isnull=True,
+            )
+            .values("sr_number__license_id")
+            .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+        )
+        return {row["sr_number__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
+    @staticmethod
     def calculate_allotment(license_obj) -> Decimal:
         """
         Calculate total allotment (non-BOE) for license.
@@ -140,6 +193,94 @@ class LicenseBalanceCalculator:
             )["total"],
             DEC_0,
         )
+
+    @staticmethod
+    def calculate_allotment_for_licenses(license_ids) -> dict:
+        """
+        Batched sibling of `calculate_allotment` — total allotment (non-BOE)
+        for MANY licenses in one query, grouped by license id. Same
+        `allotment__bill_of_entry__isnull=True` filter as `calculate_allotment`.
+        See `calculate_credit_for_licenses` for the return-shape/zero-default
+        contract.
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        rows = (
+            AllotmentItems.objects
+            .filter(
+                item__license_id__in=ids,
+                allotment__bill_of_entry__isnull=True,
+            )
+            .values("item__license_id")
+            .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+        )
+        return {row["item__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
+    @staticmethod
+    def calculate_trade_for_licenses(license_ids) -> dict:
+        """
+        Batched sibling of `calculate_trade` — total SALE-trade CIF for MANY
+        licenses in one query, grouped by license id. Same
+        `trade__direction='SALE'` filter as `calculate_trade`. See
+        `calculate_credit_for_licenses` for the return-shape/zero-default
+        contract.
+        """
+        from apps.trade.models import LicenseTradeLine
+
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        rows = (
+            LicenseTradeLine.objects
+            .filter(
+                sr_number__license_id__in=ids,
+                trade__direction='SALE',
+            )
+            .values("sr_number__license_id")
+            .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+        )
+        return {row["sr_number__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
+    @classmethod
+    def calculate_balance_for_licenses(cls, license_ids) -> dict:
+        """
+        Batched sibling of `calculate_balance` — final balance for MANY
+        licenses in a fixed 4 queries total (not 4×N), by composing
+        `calculate_credit_for_licenses`, `calculate_debit_for_licenses`,
+        `calculate_allotment_for_licenses`, `calculate_trade_for_licenses`.
+
+        Same formula/rounding/floor-at-0 as `calculate_balance`:
+        `credit - (debit + allotment + trade)`, quantized to 2dp, floored at 0.
+
+        Unlike the four per-component maps above (which omit a license id
+        with no matching rows), every id in `license_ids` gets an entry here
+        — missing components simply contribute `DEC_0`, matching what a
+        per-license `calculate_balance(license_obj)` call would have
+        computed for a license with no rows in some component.
+
+        Args:
+            license_ids: iterable of license pks.
+
+        Returns:
+            `{license_id: Decimal}` final balance per license.
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        credit = cls.calculate_credit_for_licenses(ids)
+        debit = cls.calculate_debit_for_licenses(ids)
+        allotment = cls.calculate_allotment_for_licenses(ids)
+        trade = cls.calculate_trade_for_licenses(ids)
+
+        result = {}
+        for lid in ids:
+            balance = credit.get(lid, DEC_0) - (
+                debit.get(lid, DEC_0) + allotment.get(lid, DEC_0) + trade.get(lid, DEC_0)
+            )
+            balance = quantize_2dp(balance)
+            result[lid] = balance if balance >= DEC_0 else DEC_0
+        return result
 
     @classmethod
     def calculate_balance(cls, license_obj) -> Decimal:

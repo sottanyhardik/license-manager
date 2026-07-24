@@ -94,10 +94,26 @@ def plan_utilization_rows(
         Python (not via `.order_by()`, which would issue a fresh query
         against any prefetch cache the caller already populated).
     """
-    from apps.license.services.plan_enforcement import plan_status_for
+    from apps.license.services.plan_enforcement import plan_status_for, plan_status_for_ids
     from apps.license.services.plan_grouping import plan_group_key
     from apps.license.services.plan_reporting import plan_map_for_license
 
+    # `group_ids_of(representative)` (called inside `plan_status_for`) always
+    # re-queries the license's FULL import-item list from the DB, scoped only
+    # by `license_id` — it has no notion of a caller-filtered subset. When
+    # `items` was left at its default (i.e. IS that same full, unfiltered
+    # license-scoped set), the `member_ids` we build below while grouping is
+    # therefore guaranteed set-identical to what `group_ids_of` would return
+    # for that group's representative — same license, same `plan_group_key`,
+    # same universe of items. In that case we call `plan_status_for_ids`
+    # directly with the already-computed `member_ids` and skip
+    # `group_ids_of`'s redundant DB round-trip entirely (this is the hot path
+    # for every production caller — none pass an explicit `items` override).
+    # A caller that DOES pass a filtered `items` subset gets the original,
+    # always-correct `plan_status_for(representative)` path unchanged, since
+    # its `member_ids` would only cover the filtered subset, not necessarily
+    # the item's whole plan-group.
+    _items_explicit = items is not None
     if items is None:
         items = list(license_obj.import_license.all())
     items = sorted(items, key=lambda it: it.serial_number or 0)
@@ -159,7 +175,10 @@ def plan_utilization_rows(
                 ", ".join(n["name"] for n in group["item_names"]) or f"ID:{group['group_id']}"
             )
 
-        status = plan_status_for(representative)
+        if _items_explicit:
+            status = plan_status_for(representative)
+        else:
+            status = plan_status_for_ids(group["member_ids"])
         if status is None:
             group["has_plan"] = False
         else:

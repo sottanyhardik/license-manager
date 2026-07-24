@@ -34,7 +34,7 @@ def detect_norm(license_obj) -> str:
     return ""
 
 
-def effective_plan_for_license(license_obj):
+def effective_plan_for_license(license_obj, *, balance_cif=None):
     """
     Per-import-item effective plan, net of allotments.
 
@@ -49,6 +49,14 @@ def effective_plan_for_license(license_obj):
         signals, this figure shrinks when an allotment is made and grows back when
         one is removed, with no stored-plan mutation.
 
+    Args:
+      balance_cif: optional pre-computed `license_obj.get_balance_cif` value
+        (int/float/Decimal), for bulk callers that already batched every
+        license's balance and want to avoid `norm_plan_for_license`
+        re-triggering the model property's own DB round-trips. Defaults to
+        `None`, in which case `norm_plan_for_license` computes it itself
+        exactly as before — existing callers are unaffected.
+
     Returns (source, {import_item_id: {planned_quantity, unit_price, planned_cif}})
     where source is 'manual' (any manual line present), 'norm', or '' (neither).
     """
@@ -56,7 +64,7 @@ def effective_plan_for_license(license_obj):
     from apps.license.models import LicenseImportItemsModel
 
     manual = plan_map_for_license(license_obj.id)
-    norm = norm_plan_for_license(license_obj)
+    norm = norm_plan_for_license(license_obj, balance_cif=balance_cif)
 
     # Per-item merge: manual line wins for its item; norm fills every other item.
     out = {}
@@ -98,15 +106,21 @@ def effective_plan_for_license(license_obj):
     return source, out
 
 
-def norm_plan_for_license(license_obj) -> dict:
-    """Per-import-item norm plan: {item_id: {planned_quantity, unit_price, planned_cif}}."""
+def norm_plan_for_license(license_obj, *, balance_cif=None) -> dict:
+    """Per-import-item norm plan: {item_id: {planned_quantity, unit_price, planned_cif}}.
+
+    Args:
+      balance_cif: optional pre-computed `license_obj.get_balance_cif` value.
+        When omitted (the default, used by every caller except the bulk
+        exporter), computed here exactly as before via the model property.
+    """
     from apps.license.models import LicenseImportItemsModel
 
     norm = detect_norm(license_obj)
     if not norm:
         return {}
 
-    balance_cif = float(license_obj.get_balance_cif or 0)
+    balance_cif = float(balance_cif) if balance_cif is not None else float(license_obj.get_balance_cif or 0)
     import_items = (
         LicenseImportItemsModel.objects
         .filter(license=license_obj)

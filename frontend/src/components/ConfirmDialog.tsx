@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle, Info, XOctagon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -111,7 +112,13 @@ export const ConfirmDialog = ({
 
     if (!show) return null;
 
-    return (
+    // Portalled to <body> — rendered inline, `fixed inset-0` would center
+    // within whatever ancestor happens to establish a containing block for
+    // fixed-position descendants (any transform/filter/perspective/contain
+    // up the tree, e.g. AdminLayout's scrollable <main>), not the real
+    // viewport. Portalling guarantees this dialog always centers on the
+    // actual screen regardless of where it's rendered from.
+    return createPortal(
         /* Backdrop */
         <div
             className="fixed inset-0 z-[1060] flex items-center justify-center p-4"
@@ -182,7 +189,8 @@ export const ConfirmDialog = ({
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

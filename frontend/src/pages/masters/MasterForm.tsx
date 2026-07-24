@@ -13,7 +13,7 @@ import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import { navigateToList } from "../../utils/navigationUtils";
 import { useBackButton } from "../../hooks/useBackButton";
 import { ENTITY_SECTIONS } from "./entitySections";
-import { buildLicensePatch, buildLicenseSummary } from "./masterFormHelpers";
+import { buildLicensePatch, buildLicenseSummary, isFileLikeFieldName } from "./masterFormHelpers";
 import LicenseParsePanel from "./LicenseParsePanel";
 import TradeMetaBadges from "./TradeMetaBadges";
 import BoeParsePanel from "./BoeParsePanel";
@@ -513,7 +513,7 @@ export default function MasterForm({
         }
 
         // Handle file/image fields
-        if (fieldName.includes("logo") || fieldName.includes("signature") || fieldName.includes("stamp") || fieldName.includes("image")) {
+        if (isFileLikeFieldName(fieldName)) {
             const existingFileUrl = typeof value === 'string' && value ? value : null;
             const hasNewFile = value instanceof File;
 

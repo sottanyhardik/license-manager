@@ -5,7 +5,7 @@ import api from "../../../api/axios";
 import { formatDateForInput, parseDate as parseDateUtil } from "../../../utils/dateFormatter";
 import * as validateFormUtil from "../../../utils/formValidation";
 import { ValidationRules } from "../../../utils/formValidation";
-import { getMasterFormApiBase } from "../masterFormHelpers";
+import { getMasterFormApiBase, isFileLikeFieldName } from "../masterFormHelpers";
 import { markNewItemCreated } from "../../../utils/filterPersistence";
 
 /** Shared field name map used for both frontend validation messages and backend error formatting. */
@@ -290,6 +290,16 @@ export function useMasterFormSubmit({
                 return checkForFiles(formData);
             };
 
+            // logo/signature/stamp/*image* fields come back from GET as a URL
+            // string. Echoing that string back on submit trips DRF's "submitted
+            // data was not a file" error — strip it unless the user picked a new
+            // File, in which case it's a genuine upload and must stay.
+            const submitData: Record<string, any> = {};
+            Object.entries(formData).forEach(([key, value]) => {
+                if (isFileLikeFieldName(key) && typeof value === 'string') return;
+                submitData[key] = value;
+            });
+
             let response: any;
             if (hasFiles()) {
                 // Use FormData for file uploads
@@ -329,7 +339,7 @@ export function useMasterFormSubmit({
                     }
                 };
 
-                Object.entries(formData).forEach(([key, value]) => {
+                Object.entries(submitData).forEach(([key, value]) => {
                     // boe_pdf_copy is handled by the dedicated PATCH below — never
                     // include the existing URL string (or even a new File) here, or
                     // DRF rejects the string as "not a file".
@@ -349,7 +359,7 @@ export function useMasterFormSubmit({
             } else {
                 // Use regular JSON for non-file data
                 // Clean up date fields
-                const cleanedFormData: Record<string, any> = { ...formData };
+                const cleanedFormData: Record<string, any> = { ...submitData };
 
                 // Remove audit fields (should never be sent from frontend)
                 delete cleanedFormData.created_on;

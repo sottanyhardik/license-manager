@@ -29,7 +29,7 @@ export default function TradeForm() {
         incentive_license: null,
         from_company: null,
         to_company: null,
-        boe: null,
+        boes: [],
         invoice_number: "",
         invoice_date: new Date(),
         remarks: "",
@@ -46,6 +46,11 @@ export default function TradeForm() {
     const [fieldErrors, setFieldErrors] = useState<Record<string, any>>({});
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
     const isInitialLoadRef = useRef(true);
+    // Tracks whether a BOE-triggered line prefill has fired at least once in this
+    // session, so subsequent BOE adds keep appending lines even though `lines` is
+    // no longer empty (accumulate), while still never prefilling if the user had
+    // already populated lines manually before adding any BOE.
+    const hasAutoPrefilledRef = useRef(false);
     const [initialFormData, setInitialFormData] = useState(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -72,15 +77,11 @@ export default function TradeForm() {
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [hasUnsavedChanges]);
 
-    // Define handlePrefillFromBOE before useEffect
-    const handlePrefillFromBOE = useCallback(async () => {
-        if (!formData.boe) {
-            return;
-        }
-
-        // Only prefill if lines are empty (for create mode or when explicitly requested)
-        // Don't auto-prefill in edit mode if lines already exist
-        if (formData.lines && formData.lines.length > 0) {
+    // Fetches a single BOE's details and appends its lines to formData.lines
+    // (rather than replacing them), so multiple BOEs can each contribute lines
+    // without wiping out ones already pulled from a previously-added BOE.
+    const handlePrefillFromBOE = useCallback(async (boeId: number | string) => {
+        if (!boeId) {
             return;
         }
 
@@ -88,8 +89,6 @@ export default function TradeForm() {
         const loadingToastId = toast.loading("Loading BOE details...");
 
         try {
-            // boe can be either ID or object with id
-            const boeId = typeof formData.boe === 'object' ? formData.boe.id : formData.boe;
             const { data } = await api.get(`bill-of-entries/${boeId}/`);
 
             // Create lines from BOE item_details
@@ -110,7 +109,7 @@ export default function TradeForm() {
 
             setFormData(prev => ({
                 ...prev,
-                lines: lines
+                lines: [...prev.lines, ...lines]
             }));
 
             toast.success("BOE details loaded successfully", {
@@ -123,7 +122,7 @@ export default function TradeForm() {
                 duration: 3000,
             });
         }
-    }, [formData.boe, formData.lines, billingMode]);
+    }, [billingMode]);
 
     const formDataRef = useRef(formData);
     formDataRef.current = formData;
@@ -215,13 +214,40 @@ export default function TradeForm() {
         }
     }, [isEdit]);
 
-    // Auto-prefill from BOE when BOE is selected (only if lines are empty)
-    useEffect(() => {
-        if (formData.boe) {
-            handlePrefillFromBOE();
+    const handleAddBoe = () => {
+        setFormData(prev => ({
+            ...prev,
+            boes: [...(prev.boes || []), null]
+        }));
+    };
+
+    const handleRemoveBoe = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            boes: (prev.boes || []).filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleBoeChange = (index: number, val: unknown) => {
+        setFormData(prev => {
+            const boes = [...(prev.boes || [])];
+            boes[index] = val;
+            return { ...prev, boes };
+        });
+
+        // Auto-prefill lines from the newly-selected BOE, but only while we
+        // haven't yet diverged from the "auto" flow: either lines are still
+        // empty (first BOE ever added in this session), or a previous BOE add
+        // already prefilled successfully (accumulate across multiple adds).
+        const boeId = getEntityId(val);
+        if (boeId) {
+            const linesEmpty = !formDataRef.current.lines || formDataRef.current.lines.length === 0;
+            if (linesEmpty || hasAutoPrefilledRef.current) {
+                hasAutoPrefilledRef.current = true;
+                handlePrefillFromBOE(boeId);
+            }
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.boe]);
+    };
 
     const handleFromCompanyChange = async (val) => {
         setFormData(prev => ({ ...prev, from_company: val }));
@@ -605,13 +631,12 @@ export default function TradeForm() {
                 // Add regular fields - extract IDs from FK objects
                 const fromCompanyId = getEntityId(formData.from_company);
                 const toCompanyId = getEntityId(formData.to_company);
-                const boeId = getEntityId(formData.boe);
 
                 formDataObj.append('direction', formData.direction);
                 formDataObj.append('license_type', formData.license_type);
                 if (fromCompanyId) formDataObj.append('from_company', fromCompanyId);
                 if (toCompanyId) formDataObj.append('to_company', toCompanyId);
-                if (boeId) formDataObj.append('boe', boeId);
+                formDataObj.append('boes', JSON.stringify((formData.boes || []).filter(Boolean).map(getEntityId)));
                 formDataObj.append('invoice_number', formData.invoice_number?.trim() || '');
                 formDataObj.append('invoice_date', formatTradeDateForApi(formData.invoice_date));
                 formDataObj.append('remarks', formData.remarks || '');
@@ -1112,33 +1137,60 @@ export default function TradeForm() {
                     {formData.direction !== 'PURCHASE' && (
                         <div>
                             <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">BOE (optional)</label>
-                            <HybridSelect
-                                fieldMeta={{
-                                    endpoint: (() => {
+                            <div className="space-y-2">
+                                {(formData.boes || []).map((boe, index) => {
+                                    const endpoint = (() => {
                                         // In create mode: only show BOEs without invoice
                                         if (!isEdit) {
                                             return "/bill-of-entries/?invoice_no__isnull=true";
                                         }
-                                        // In edit mode: show BOEs without invoice OR current BOE OR BOEs with current invoice
-                                        const currentBoeId = formData.boe ? (typeof formData.boe === 'object' ? formData.boe.id : formData.boe) : null;
+                                        // In edit mode: show BOEs without invoice OR already-selected
+                                        // BOEs (excluding this row's own, kept visible via current_invoice)
+                                        // OR BOEs with current invoice number
+                                        const otherBoeIds = (formData.boes || [])
+                                            .map((b, i) => (i === index ? null : getEntityId(b)))
+                                            .filter(Boolean);
                                         const currentInvoice = formData.invoice_number ? encodeURIComponent(formData.invoice_number) : null;
 
-                                        let endpoint = "/bill-of-entries/?available_for_trade=true";
-                                        if (currentBoeId) {
-                                            endpoint += `&current_boe=${currentBoeId}`;
+                                        let ep = "/bill-of-entries/?available_for_trade=true";
+                                        if (otherBoeIds.length > 0) {
+                                            ep += `&current_boe=${otherBoeIds.join(',')}`;
                                         }
                                         if (currentInvoice) {
-                                            endpoint += `&current_invoice=${currentInvoice}`;
+                                            ep += `&current_invoice=${currentInvoice}`;
                                         }
-                                        return endpoint;
-                                    })(),
-                                    label_field: "bill_of_entry_number"
-                                }}
-                                value={formData.boe}
-                                onChange={(val) => setFormData(prev => ({ ...prev, boe: val }))}
-                                isClearable={true}
-                                placeholder="Search and select BOE (without invoice)..."
-                            />
+                                        return ep;
+                                    })();
+
+                                    return (
+                                        <div key={index} className="flex items-center gap-2">
+                                            <div className="flex-1">
+                                                <HybridSelect
+                                                    fieldMeta={{
+                                                        endpoint,
+                                                        label_field: "bill_of_entry_number"
+                                                    }}
+                                                    value={boe}
+                                                    onChange={(val) => handleBoeChange(index, val)}
+                                                    isClearable={true}
+                                                    placeholder="Search and select BOE (without invoice)..."
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="flex items-center gap-1.5 rounded bg-destructive px-2.5 py-1.5 text-xs font-medium text-destructive-foreground cursor-pointer hover:bg-destructive/90"
+                                                onClick={() => handleRemoveBoe(index)}
+                                            >
+                                                <Trash2 className="size-4" aria-hidden="true" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <button type="button" className="mt-2 flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
+                                onClick={handleAddBoe}>
+                                <Plus className="size-4" aria-hidden="true" />Add BOE
+                            </button>
                         </div>
                     )}
                     <div>

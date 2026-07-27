@@ -101,7 +101,7 @@ function mockGet(url: string) {
                 license_type: "DFIA",
                 from_company: 101,
                 to_company: 202,
-                boe: null,
+                boes: [],
                 invoice_number: "TRD-42",
                 invoice_date: "01-07-2026",
                 remarks: "Existing trade",

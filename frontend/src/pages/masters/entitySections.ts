@@ -119,8 +119,8 @@ export const ENTITY_SECTIONS = {
             title: 'References',
             icon: 'link-45deg',
             color: 'var(--tb-brand)',
-            fields: ['incentive_license', 'boe'],
-            cols: { incentive_license: 'col-md-6', boe: 'col-md-6' },
+            fields: ['incentive_license', 'boes'],
+            cols: { incentive_license: 'col-md-6', boes: 'col-md-6' },
         },
         {
             title: 'Documents & Notes',

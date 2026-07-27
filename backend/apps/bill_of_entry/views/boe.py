@@ -156,9 +156,14 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
             # Build filter conditions
             filter_conditions = Q(invoice_no__isnull=True) | Q(invoice_no='')
 
-            # Include current BOE if provided
+            # Include currently-linked BOE(s) if provided (comma-separated list of ids,
+            # or a single bare id for backward compatibility)
             if current_boe:
-                filter_conditions |= Q(id=current_boe)
+                current_boe_ids = [
+                    boe_id.strip() for boe_id in current_boe.split(',') if boe_id.strip()
+                ]
+                if current_boe_ids:
+                    filter_conditions |= Q(id__in=current_boe_ids)
 
             # Include BOEs with current invoice number if provided
             if current_invoice:

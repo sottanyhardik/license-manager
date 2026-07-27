@@ -1027,7 +1027,7 @@ export default function MasterList() {
                                                     try {
                                                         const resp = await api.get(`trades/${item.id}/`);
                                                         const p = resp.data;
-                                                        const saleData = { direction: 'SALE', license_type: p.license_type || 'DFIA', from_company: p.to_company?.id || p.to_company, to_company: p.from_company?.id || p.from_company, boe: p.boe?.id || p.boe, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], remarks: p.remarks || '', from_pan: p.to_pan, from_gst: p.to_gst, from_addr_line_1: p.to_addr_line_1, from_addr_line_2: p.to_addr_line_2, to_pan: p.from_pan, to_gst: p.from_gst, to_addr_line_1: p.from_addr_line_1, to_addr_line_2: p.from_addr_line_2, lines: (p.lines || []).map(l => ({ sr_number: l.sr_number, description: l.description, hsn_code: l.hsn_code, mode: l.mode, qty_kg: l.qty_kg, rate_inr_per_kg: l.rate_inr_per_kg, cif_fc: l.cif_fc, exc_rate: l.exc_rate, cif_inr: l.cif_inr, fob_inr: l.fob_inr, pct: l.pct, amount_inr: l.amount_inr })), incentive_lines: [], payments: [] };
+                                                        const saleData = { direction: 'SALE', license_type: p.license_type || 'DFIA', from_company: p.to_company?.id || p.to_company, to_company: p.from_company?.id || p.from_company, boes: (p.boes || []).map(b => b?.id || b), invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], remarks: p.remarks || '', from_pan: p.to_pan, from_gst: p.to_gst, from_addr_line_1: p.to_addr_line_1, from_addr_line_2: p.to_addr_line_2, to_pan: p.from_pan, to_gst: p.from_gst, to_addr_line_1: p.from_addr_line_1, to_addr_line_2: p.from_addr_line_2, lines: (p.lines || []).map(l => ({ sr_number: l.sr_number, description: l.description, hsn_code: l.hsn_code, mode: l.mode, qty_kg: l.qty_kg, rate_inr_per_kg: l.rate_inr_per_kg, cif_fc: l.cif_fc, exc_rate: l.exc_rate, cif_inr: l.cif_inr, fob_inr: l.fob_inr, pct: l.pct, amount_inr: l.amount_inr })), incentive_lines: [], payments: [] };
                                                         const nr = await api.post('trades/', saleData);
                                                         toast.success('SALE trade created. Opening in edit mode...');
                                                         saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
@@ -1078,10 +1078,10 @@ export default function MasterList() {
                                                     <div className="text-[14.5px] font-medium text-foreground">{item.to_company_label || '—'}</div>
                                                 </div>
                                             </div>
-                                            {item.boe_label && (
+                                            {item.boes && item.boes.length > 0 && (
                                                 <div className="min-w-[100px]">
                                                     <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">BOE</div>
-                                                    <div className="text-[13.5px] font-medium text-primary">{item.boe_label}</div>
+                                                    <div className="text-[13.5px] font-medium text-primary">{item.boes.map(b => b.bill_of_entry_number).join(', ')}</div>
                                                 </div>
                                             )}
                                             {item.incentive_license && (
@@ -1280,7 +1280,7 @@ export default function MasterList() {
                                                 license_type: purchaseTrade.license_type || 'DFIA',  // Copy license type
                                                 from_company: purchaseTrade.to_company?.id || purchaseTrade.to_company,  // Swap: purchase TO becomes sale FROM
                                                 to_company: purchaseTrade.from_company?.id || purchaseTrade.from_company,  // Swap: purchase FROM becomes sale TO
-                                                boe: purchaseTrade.boe?.id || purchaseTrade.boe,
+                                                boes: (purchaseTrade.boes || []).map(b => b?.id || b),
                                                 invoice_number: '',  // Leave empty for user to fill
                                                 invoice_date: new Date().toISOString().split('T')[0],  // Today's date
                                                 remarks: purchaseTrade.remarks || '',

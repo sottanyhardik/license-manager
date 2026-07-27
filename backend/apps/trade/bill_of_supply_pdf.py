@@ -571,16 +571,14 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     # Build footer text with BOE information if available
     footer_text = f'<b>Amount Chargeable (in words)</b><br/>INR {amount_words} Only'
 
-    # Add BOE information if BOE exists
-    if trade.boe:
-        boe_number = trade.boe.bill_of_entry_number if hasattr(trade.boe, 'bill_of_entry_number') else str(trade.boe)
-        boe_date = ''
-        if hasattr(trade.boe, 'boe_date') and trade.boe.boe_date:
-            boe_date = trade.boe.boe_date.strftime('%d-%m-%Y')
-
+    # Add BOE information if any BOEs exist
+    trade_boes = list(trade.boes.all())
+    if trade_boes:
+        boe_number = ', '.join(
+            b.bill_of_entry_number if hasattr(b, 'bill_of_entry_number') else str(b)
+            for b in trade_boes
+        )
         boe_info = f'<br/><b>BOE:</b> {boe_number}'
-        if boe_date:
-            boe_info += f' <b>Date:</b> {boe_date}'
         footer_text += boe_info
 
     # Add trade remarks if available

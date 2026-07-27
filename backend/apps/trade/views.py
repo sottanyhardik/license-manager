@@ -54,10 +54,10 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
                 "fk_endpoint": "/masters/companies/",
                 "label_field": "name"
             },
-            "boe": {
+            "boes": {
                 "type": "fk",
                 "fk_endpoint": "/bill-of-entries/",
-                "label_field": "boe_number"
+                "label_field": "bill_of_entry_number"
             },
             "incentive_license": {
                 "type": "fk",
@@ -84,7 +84,7 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
             "direction",
             "license_type",
             "incentive_license",
-            "boe",
+            "boes",
             "from_company",
             "to_company",
             "invoice_number",
@@ -95,7 +95,7 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
         "fk_endpoint_overrides": {
             "from_company": "/masters/companies/",
             "to_company": "/masters/companies/",
-            "boe": "/bill-of-entries/",
+            "boes": "/bill-of-entries/",
             "incentive_license": "/incentive-licenses/"
         },
         "nested_list_display": {
@@ -273,10 +273,11 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.select_related(
-            'from_company', 'to_company', 'boe', 'incentive_license', 'linked_trade',
+            'from_company', 'to_company', 'incentive_license', 'linked_trade',
             'created_by', 'modified_by',
         )
         qs = qs.prefetch_related(
+            'boes',
             'lines',
             'lines__sr_number',
             'lines__sr_number__license',

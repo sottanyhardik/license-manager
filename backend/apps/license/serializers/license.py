@@ -238,7 +238,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     def get_billed_no_boe(self, obj):
         """
         Total CIF from SALE trade lines for this import item where the parent
-        trade has no BOE attached (trade.boe is null).
+        trade has no BOE attached (trade.boes is empty).
 
         These amounts are counted in the licence balance calculation as trade
         debits but have no linked BOE, which can cause apparent double-counting
@@ -255,7 +255,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
             total = LicenseTradeLine.objects.filter(
                 sr_number=obj,
                 trade__direction='SALE',
-                trade__boe__isnull=True,       # no BOE attached to this trade
+                trade__boes__isnull=True,       # no BOE attached to this trade
             ).aggregate(
                 t=Coalesce(Sum('cif_fc'), Value(Decimal('0')), output_field=DecimalField())
             )['t']

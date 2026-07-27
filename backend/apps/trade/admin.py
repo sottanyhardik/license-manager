@@ -40,7 +40,7 @@ class LicenseTradeAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Trade Information', {
-            'fields': ('direction', 'invoice_number', 'invoice_date', 'boe')
+            'fields': ('direction', 'invoice_number', 'invoice_date', 'boes')
         }),
         ('Parties', {
             'fields': (
@@ -67,7 +67,7 @@ class LicenseTradeAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queryset with select_related"""
         qs = super().get_queryset(request)
-        return qs.select_related('from_company', 'to_company', 'boe')
+        return qs.select_related('from_company', 'to_company').prefetch_related('boes')
 
 
 @admin.register(LicenseTradeLine)

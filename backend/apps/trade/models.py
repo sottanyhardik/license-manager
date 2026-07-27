@@ -177,12 +177,10 @@ class LicenseTrade(AuditModel):
         help_text="Incentive License (RODTEP/ROSTL/MEIS) - used when license_type is INCENTIVE"
     )
 
-    # Optional: one BOE can be referenced by many trades
-    boe = models.ForeignKey(
+    # Optional: many BOEs can be referenced by many trades
+    boes = models.ManyToManyField(
         BillOfEntryModel,
-        null=True,
         blank=True,
-        on_delete=models.SET_NULL,
         related_name="license_trades",
     )
 
@@ -575,12 +573,13 @@ def clear_boe_invoice_on_trade_delete(sender, instance, **kwargs):
     When a trade is deleted, clear the invoice_no from the associated BOE.
     This allows the BOE to be reused for other trades.
     """
-    if instance.boe and instance.invoice_number:
-        # Only clear if the BOE's invoice_no matches this trade's invoice_number
-        if instance.boe.invoice_no == instance.invoice_number:
-            instance.boe.invoice_no = None
-            instance.boe.invoice_date = None
-            instance.boe.save(update_fields=['invoice_no', 'invoice_date'])
+    if instance.invoice_number:
+        for boe in instance.boes.all():
+            # Only clear if the BOE's invoice_no matches this trade's invoice_number
+            if boe.invoice_no == instance.invoice_number:
+                boe.invoice_no = None
+                boe.invoice_date = None
+                boe.save(update_fields=['invoice_no', 'invoice_date'])
 
 
 @receiver(post_save, sender=IncentiveTradeLine)

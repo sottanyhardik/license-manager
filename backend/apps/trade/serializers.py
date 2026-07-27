@@ -86,7 +86,6 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     # Display fields
     from_company_label = serializers.CharField(source='from_company.name', read_only=True)
     to_company_label = serializers.CharField(source='to_company.name', read_only=True)
-    boe_label = serializers.CharField(source='boe.boe_number', read_only=True, allow_null=True)
     direction_label = serializers.CharField(source='get_direction_display', read_only=True)
     license_type_label = serializers.CharField(source='get_license_type_display', read_only=True)
     incentive_license = serializers.SerializerMethodField()
@@ -134,7 +133,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
             data = data.copy() if hasattr(data, 'copy') else dict(data)
 
         # Handle both JSON string format AND flattened FormData format
-        for field in ['lines', 'incentive_lines', 'payments']:
+        for field in ['lines', 'incentive_lines', 'payments', 'boes']:
             if field in data:
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug("Field '%s' found. Type: %s", field, type(data[field]).__name__)
@@ -251,12 +250,11 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                 'name': instance.to_company.name,
             }
 
-        # Replace BOE ID with nested object for frontend display
-        if instance.boe:
-            data['boe'] = {
-                'id': instance.boe.id,
-                'bill_of_entry_number': instance.boe.bill_of_entry_number,
-            }
+        # Replace BOE IDs with nested objects for frontend display
+        data['boes'] = [
+            {'id': b.id, 'bill_of_entry_number': b.bill_of_entry_number}
+            for b in instance.boes.all()
+        ]
 
         data['linked_trade_id'] = instance.linked_trade_id
         data['linked_trade_info'] = self.get_linked_trade_info(instance)
@@ -278,6 +276,9 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         incentive_lines_data = validated_data.pop('incentive_lines', [])
         payments_data = validated_data.pop('payments', [])
         auto_create_paired = validated_data.pop('auto_create_paired', False)
+        # M2M fields can't be passed to .objects.create() (no PK yet) - set them
+        # once the trade instance exists.
+        boes_data = validated_data.pop('boes', [])
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("CREATE: lines=%d, incentive=%d, payments=%d", len(lines_data), len(incentive_lines_data), len(payments_data))
@@ -307,10 +308,15 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         trade.recompute_totals()
         trade.refresh_from_db()
 
-        # Update BOE invoice_no if BOE is linked
-        if trade.boe and trade.invoice_number:
-            trade.boe.invoice_no = trade.invoice_number
-            trade.boe.save(update_fields=['invoice_no'])
+        # Link BOEs (M2M requires the trade to already have a PK)
+        trade.boes.set(boes_data)
+
+        # Update linked BOEs' invoice_no/invoice_date if this trade has an invoice
+        if trade.invoice_number:
+            for boe in trade.boes.all():
+                boe.invoice_no = trade.invoice_number
+                boe.invoice_date = trade.invoice_date
+                boe.save(update_fields=['invoice_no', 'invoice_date'])
 
         # Auto-create the paired counterpart trade (Sale↔Purchase)
         if auto_create_paired and trade.direction in ('PURCHASE', 'SALE', 'COMMISSION_PURCHASE', 'COMMISSION_SALE'):
@@ -333,7 +339,6 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                 direction=paired_direction,
                 license_type=trade.license_type,
                 incentive_license=trade.incentive_license,
-                boe=trade.boe,
                 from_company=paired_from,
                 to_company=paired_to,
                 invoice_number=paired_invoice,
@@ -342,6 +347,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                 linked_trade=trade,
                 created_by=trade.created_by,
             )
+            paired_trade.boes.set(trade.boes.all())
             paired_trade.snapshot_parties()
 
             for line in trade.lines.all():
@@ -391,13 +397,22 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         incentive_lines_data = validated_data.pop('incentive_lines', None)
         payments_data = validated_data.pop('payments', None)
 
-        # Track old BOE before update to clear invoice_no if BOE changes
-        old_boe = instance.boe
+        # Track old BOEs before update to clear invoice_no from ones that are removed
+        old_boe_ids = set(instance.boes.values_list('id', flat=True))
+
+        # M2M fields can't go through setattr - pop and apply separately once the
+        # instance is saved. Use a sentinel to distinguish "not provided" (leave
+        # existing BOEs untouched) from "explicitly provided as an empty list".
+        _BOES_NOT_PROVIDED = object()
+        new_boes = validated_data.pop('boes', _BOES_NOT_PROVIDED)
 
         # Update header fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        if new_boes is not _BOES_NOT_PROVIDED:
+            instance.boes.set(new_boes)
 
         # Snapshot party details if companies changed
         instance.snapshot_parties()
@@ -437,17 +452,25 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         instance.refresh_from_db()
 
         # Handle BOE invoice_no updates
-        # If BOE changed, clear invoice_no from old BOE
-        if old_boe and old_boe != instance.boe:
-            # Only clear if this trade's invoice is still on the old BOE
-            if old_boe.invoice_no == instance.invoice_number:
-                old_boe.invoice_no = None
-                old_boe.save(update_fields=['invoice_no'])
+        new_boe_ids = set(instance.boes.values_list('id', flat=True))
 
-        # Update new BOE with invoice_no if BOE is linked
-        if instance.boe and instance.invoice_number:
-            instance.boe.invoice_no = instance.invoice_number
-            instance.boe.save(update_fields=['invoice_no'])
+        # BOEs removed from this trade: clear invoice_no/invoice_date if this
+        # trade's invoice number is still the one stamped on them.
+        removed_boe_ids = old_boe_ids - new_boe_ids
+        if removed_boe_ids:
+            from apps.bill_of_entry.models import BillOfEntryModel
+            for boe in BillOfEntryModel.objects.filter(id__in=removed_boe_ids):
+                if boe.invoice_no == instance.invoice_number:
+                    boe.invoice_no = None
+                    boe.invoice_date = None
+                    boe.save(update_fields=['invoice_no', 'invoice_date'])
+
+        # Stamp invoice_no/invoice_date on all BOEs currently linked to this trade
+        if instance.invoice_number:
+            for boe in instance.boes.all():
+                boe.invoice_no = instance.invoice_number
+                boe.invoice_date = instance.invoice_date
+                boe.save(update_fields=['invoice_no', 'invoice_date'])
 
         return instance
 

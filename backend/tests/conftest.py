@@ -174,11 +174,11 @@ def test_trade(db, test_company, test_company_2, test_bill_of_entry):
         direction="PURCHASE",
         from_company=test_company,
         to_company=test_company_2,
-        boe=test_bill_of_entry,
         invoice_number=f"INV-TEST-{uuid.uuid4().int % 9999:04d}",
         invoice_date=datetime.now().date(),
         remarks="Test trade",
     )
+    trade.boes.set([test_bill_of_entry])
     # Create one trade line per BOE RowDetails
     for row in test_bill_of_entry.item_details.all():
         LicenseTradeLine.objects.create(

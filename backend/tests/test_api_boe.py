@@ -124,7 +124,7 @@ class TestBOEIntegration:
     
     def test_boe_linked_to_trade(self, authenticated_client, test_trade):
         """Test BOE is linked to trade via invoice number"""
-        boe = test_trade.boe
+        boe = test_trade.boes.first()
         assert boe.invoice_no == test_trade.invoice_number
         
         # Verify via API

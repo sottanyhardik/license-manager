@@ -47,7 +47,7 @@ export function buildTradeJsonPayload(formData: Record<string, any>, autoCreateP
         license_type: formData.license_type,
         from_company: getEntityId(formData.from_company),
         to_company: getEntityId(formData.to_company),
-        boe: getEntityId(formData.boe) || null,
+        boes: (formData.boes || []).filter(Boolean).map(getEntityId),
         invoice_number: formData.invoice_number?.trim() || "",
         invoice_date: formatTradeDateForApi(formData.invoice_date),
         remarks: formData.remarks || "",

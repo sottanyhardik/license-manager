@@ -46,6 +46,7 @@ urlpatterns = [
     path("api/", include("apps.allotment.urls", namespace="allotment")),
     path("api/", include("apps.bill_of_entry.urls", namespace="bill_of_entry")),
     path("api/", include("apps.trade.urls", namespace="trade")),
+    path("api/", include("apps.reconciliation.urls", namespace="reconciliation")),
     path("api/", include("apps.tasks.urls", namespace="tasks")),
     path("api/masters/", include("apps.core.urls", namespace="masters")),
 

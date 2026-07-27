@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import Sum, DecimalField, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Sum, DecimalField, Value, OuterRef, F, Subquery
+from django.db.models.functions import Coalesce, Least, Greatest
 
 from apps.core.constants import DEC_0, DEBIT
 from apps.core.utils.decimal_utils import to_decimal
@@ -24,6 +24,14 @@ from apps.bill_of_entry.models import RowDetails
 from apps.allotment.models import AllotmentItems
 
 DECIMAL_CENT = Decimal("0.01")
+
+# Output field for allocation-driven annotations in calculate_debit() /
+# calculate_allotment() below: sized to match
+# apps.reconciliation.models.{InvoiceBOEAllocation,BOEAllotmentAllocation}
+# .allocated_cif_fc (max_digits=20, decimal_places=3), which is itself sized
+# to cover RowDetails.cif_fc (15, 3) with room for the larger
+# LicenseTradeLine.cif_fc (20, 2) side -- see that module's docstring.
+_ALLOCATION_DECIMAL_FIELD = DecimalField(max_digits=20, decimal_places=3)
 
 
 def quantize_2dp(value: Decimal) -> Decimal:
@@ -64,12 +72,87 @@ class LicenseBalanceCalculator:
         )
 
     @staticmethod
+    def get_debit_rows(license_obj):
+        """
+        Annotated RowDetails debit-row queryset for a license: each row
+        carries `allocated` / `matched` / `contributed` annotations (see
+        `calculate_debit`'s docstring for the allocation-driven partial-
+        exclusion business rule this implements).
+
+        Factored out of `calculate_debit` so the Financial Ledger PDF
+        (services/exporters/license_balance_pdf.py) can render the exact
+        same rows the Balance Engine sums, rather than recomputing the
+        allocation logic a second time and risking the two drifting apart.
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            Annotated RowDetails queryset (transaction_type=DEBIT only).
+        """
+        from apps.reconciliation.models import InvoiceBOEAllocation
+
+        allocated_subquery = (
+            InvoiceBOEAllocation.objects.filter(
+                row_details_id=OuterRef("pk"),
+                status=InvoiceBOEAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+            .order_by()
+            .values("row_details_id")
+            .annotate(total=Sum("allocated_cif_fc"))
+            .values("total")
+        )
+
+        return (
+            RowDetails.objects.filter(
+                sr_number__license=license_obj,
+                transaction_type=DEBIT,
+            )
+            .annotate(
+                allocated=Coalesce(
+                    Subquery(allocated_subquery, output_field=_ALLOCATION_DECIMAL_FIELD),
+                    Value(DEC_0),
+                    output_field=_ALLOCATION_DECIMAL_FIELD,
+                )
+            )
+            .annotate(
+                matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
+            )
+            .annotate(
+                contributed=Greatest(
+                    F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
+                )
+            )
+        )
+
+    @staticmethod
     def calculate_debit(license_obj) -> Decimal:
         """
         Calculate total debit (BOE transactions) for license.
 
-        Only counts BOE RowDetails where the BOE is NOT linked to a trade.
-        BOEs linked to trades are counted separately in calculate_trade().
+        Business rule: One physical import may generate multiple documents,
+        but it must produce exactly one licence debit.
+
+        ALLOCATION-DRIVEN (Phase A): each BOE debit row (RowDetails)
+        contributes `cif_fc - min(cif_fc, allocated)` to the license's
+        debit, floored at 0, where `allocated` is the sum of that row's
+        ACTIVE, current `InvoiceBOEAllocation` rows (see
+        apps.reconciliation.models.InvoiceBOEAllocation) -- i.e. however
+        much of this exact row has been explicitly matched to a SALE
+        LicenseTradeLine. This replaces the earlier binary, BOE-level
+        `Exists()` exclusion (which excluded a row's ENTIRE cif_fc the
+        instant ANY SALE line on a trade linking that exact BOE existed)
+        with a real partial-allocation ledger: one invoice can be split
+        across many BOEs, one BOE can back many invoices, and amounts
+        rarely divide evenly, so exclusion must happen at the allocated-
+        amount level, not the whole-row level.
+
+        The matched portion is counted instead via the matching SALE trade
+        line in calculate_trade(), so together they debit the license
+        exactly once per allocated amount -- any UNMATCHED remainder of a
+        BOE row (no allocation, or a partial one) still counts here as
+        debit, which the earlier binary exclusion could hide entirely.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -77,14 +160,11 @@ class LicenseBalanceCalculator:
         Returns:
             Total debit CIF as Decimal
         """
+        rows = LicenseBalanceCalculator.get_debit_rows(license_obj)
 
         return to_decimal(
-            RowDetails.objects.filter(
-                sr_number__license=license_obj,
-                transaction_type=DEBIT,
-                bill_of_entry__license_trades__isnull=True  # Exclude BOEs linked to trades
-            ).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+            rows.aggregate(
+                total=Coalesce(Sum("contributed"), Value(DEC_0), output_field=DecimalField())
             )["total"],
             DEC_0,
         )
@@ -121,33 +201,136 @@ class LicenseBalanceCalculator:
     @staticmethod
     def calculate_debit_for_licenses(license_ids) -> dict:
         """
-        Batched sibling of `calculate_debit` — total debit (non-trade BOE
-        CIF) for MANY licenses in one query, grouped by license id. Same
-        `bill_of_entry__license_trades__isnull=True` exclusion as
-        `calculate_debit`. See `calculate_credit_for_licenses` for the
-        return-shape/zero-default contract.
+        Batched sibling of `calculate_debit` — total debit (allocation-
+        driven, partial exclusion; see `calculate_debit`'s docstring for
+        the business rule) for MANY licenses in one query, grouped by
+        license id. Same per-row allocation annotation as `calculate_debit`
+        — evaluated per-RowDetails-row via a single correlated subquery
+        regardless of how many licenses are batched, so the grouping
+        doesn't change the exclusion semantics and stays a bounded number
+        of queries (not one per license). See `calculate_credit_for_licenses`
+        for the return-shape/zero-default contract.
         """
         ids = list(license_ids)
         if not ids:
             return {}
+        from apps.reconciliation.models import InvoiceBOEAllocation
+
+        allocated_subquery = (
+            InvoiceBOEAllocation.objects.filter(
+                row_details_id=OuterRef("pk"),
+                status=InvoiceBOEAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+            .order_by()
+            .values("row_details_id")
+            .annotate(total=Sum("allocated_cif_fc"))
+            .values("total")
+        )
+
         rows = (
             RowDetails.objects
             .filter(
                 sr_number__license_id__in=ids,
                 transaction_type=DEBIT,
-                bill_of_entry__license_trades__isnull=True,
+            )
+            .annotate(
+                allocated=Coalesce(
+                    Subquery(allocated_subquery, output_field=_ALLOCATION_DECIMAL_FIELD),
+                    Value(DEC_0),
+                    output_field=_ALLOCATION_DECIMAL_FIELD,
+                )
+            )
+            .annotate(
+                matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
+            )
+            .annotate(
+                contributed=Greatest(
+                    F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
+                )
             )
             .values("sr_number__license_id")
-            .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+            .annotate(total=Coalesce(Sum("contributed"), Value(DEC_0), output_field=DecimalField()))
         )
         return {row["sr_number__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
+    @staticmethod
+    def get_allotment_rows(license_obj):
+        """
+        Annotated AllotmentItems queryset for a license: each row carries
+        `allocated` / `matched` / `contributed` annotations (see
+        `calculate_allotment`'s docstring for the allocation-driven
+        partial-exclusion business rule this implements).
+
+        Factored out of `calculate_allotment` so the Financial Ledger PDF
+        (services/exporters/license_balance_pdf.py) can render the exact
+        same "Active Allotment" rows the Balance Engine sums — filtering
+        this queryset to `contributed > 0` is precisely "no BOE linked OR
+        remaining allocation exists".
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            Annotated AllotmentItems queryset for the license.
+        """
+        from apps.reconciliation.models import BOEAllotmentAllocation
+
+        allocated_subquery = (
+            BOEAllotmentAllocation.objects.filter(
+                allotment_item_id=OuterRef("pk"),
+                status=BOEAllotmentAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+            .order_by()
+            .values("allotment_item_id")
+            .annotate(total=Sum("allocated_cif_fc"))
+            .values("total")
+        )
+
+        return (
+            AllotmentItems.objects.filter(
+                item__license=license_obj,
+            )
+            .annotate(
+                allocated=Coalesce(
+                    Subquery(allocated_subquery, output_field=_ALLOCATION_DECIMAL_FIELD),
+                    Value(DEC_0),
+                    output_field=_ALLOCATION_DECIMAL_FIELD,
+                )
+            )
+            .annotate(
+                matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
+            )
+            .annotate(
+                contributed=Greatest(
+                    F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
+                )
+            )
+        )
 
     @staticmethod
     def calculate_allotment(license_obj) -> Decimal:
         """
         Calculate total allotment (non-BOE) for license.
 
-        Only counts allotments where bill_of_entry is NULL (not yet converted to BOE).
+        ALLOCATION-DRIVEN (Phase A): every AllotmentItems row for the
+        license contributes `cif_fc - min(cif_fc, allocated)` to the
+        license's allotment total, floored at 0, where `allocated` is the
+        sum of that row's ACTIVE, current `BOEAllotmentAllocation` rows
+        (see apps.reconciliation.models.BOEAllotmentAllocation) — i.e.
+        however much of this exact allotment item has been explicitly
+        matched to a RowDetails BOE debit row. This replaces the earlier
+        binary `allotment__bill_of_entry__isnull=True` inclusion (which
+        counted an allotment's FULL cif_fc unless ANY BOE was linked to its
+        parent Allotment at all) with a real partial-allocation ledger: a
+        BOE can only partially consume an allotment, and amounts rarely
+        divide evenly.
+
+        Only the CIF component feeds the licence balance formula (matching
+        this method's existing behavior, which has never summed qty) — the
+        BOEAllotmentAllocation sum subtracted is therefore also
+        `allocated_cif_fc`, to stay in the same unit.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -155,15 +338,34 @@ class LicenseBalanceCalculator:
         Returns:
             Total allotment CIF as Decimal
         """
+        rows = LicenseBalanceCalculator.get_allotment_rows(license_obj)
 
         return to_decimal(
-            AllotmentItems.objects.filter(
-                item__license=license_obj,
-                allotment__bill_of_entry__isnull=True
-            ).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+            rows.aggregate(
+                total=Coalesce(Sum("contributed"), Value(DEC_0), output_field=DecimalField())
             )["total"],
             DEC_0,
+        )
+
+    @staticmethod
+    def get_trade_rows(license_obj):
+        """
+        SALE LicenseTradeLine queryset for a license (see `calculate_trade`'s
+        docstring). Factored out so the Financial Ledger PDF
+        (services/exporters/license_balance_pdf.py) can list the exact same
+        rows the Balance Engine sums as licence trade debits.
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            LicenseTradeLine queryset (trade__direction='SALE' only).
+        """
+        from apps.trade.models import LicenseTradeLine
+
+        return LicenseTradeLine.objects.filter(
+            sr_number__license=license_obj,
+            trade__direction='SALE'  # Only count SALE trades that debit the license
         )
 
     @staticmethod
@@ -182,13 +384,8 @@ class LicenseBalanceCalculator:
         Returns:
             Total trade CIF as Decimal
         """
-        from apps.trade.models import LicenseTradeLine
-
         return to_decimal(
-            LicenseTradeLine.objects.filter(
-                sr_number__license=license_obj,
-                trade__direction='SALE'  # Only count SALE trades that debit the license
-            ).aggregate(
+            LicenseBalanceCalculator.get_trade_rows(license_obj).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
             )["total"],
             DEC_0,
@@ -197,23 +394,55 @@ class LicenseBalanceCalculator:
     @staticmethod
     def calculate_allotment_for_licenses(license_ids) -> dict:
         """
-        Batched sibling of `calculate_allotment` — total allotment (non-BOE)
-        for MANY licenses in one query, grouped by license id. Same
-        `allotment__bill_of_entry__isnull=True` filter as `calculate_allotment`.
-        See `calculate_credit_for_licenses` for the return-shape/zero-default
-        contract.
+        Batched sibling of `calculate_allotment` — total allotment
+        (allocation-driven, partial exclusion; see `calculate_allotment`'s
+        docstring for the business rule) for MANY licenses in one query,
+        grouped by license id. Same per-row allocation annotation as
+        `calculate_allotment` — evaluated per-AllotmentItems-row via a
+        single correlated subquery regardless of how many licenses are
+        batched, so it stays a bounded number of queries (not one per
+        license). See `calculate_credit_for_licenses` for the return-
+        shape/zero-default contract.
         """
         ids = list(license_ids)
         if not ids:
             return {}
+        from apps.reconciliation.models import BOEAllotmentAllocation
+
+        allocated_subquery = (
+            BOEAllotmentAllocation.objects.filter(
+                allotment_item_id=OuterRef("pk"),
+                status=BOEAllotmentAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+            .order_by()
+            .values("allotment_item_id")
+            .annotate(total=Sum("allocated_cif_fc"))
+            .values("total")
+        )
+
         rows = (
             AllotmentItems.objects
             .filter(
                 item__license_id__in=ids,
-                allotment__bill_of_entry__isnull=True,
+            )
+            .annotate(
+                allocated=Coalesce(
+                    Subquery(allocated_subquery, output_field=_ALLOCATION_DECIMAL_FIELD),
+                    Value(DEC_0),
+                    output_field=_ALLOCATION_DECIMAL_FIELD,
+                )
+            )
+            .annotate(
+                matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
+            )
+            .annotate(
+                contributed=Greatest(
+                    F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
+                )
             )
             .values("item__license_id")
-            .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+            .annotate(total=Coalesce(Sum("contributed"), Value(DEC_0), output_field=DecimalField()))
         )
         return {row["item__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
 

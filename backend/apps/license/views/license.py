@@ -2,7 +2,7 @@
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.accounts.permissions import LicensePermission, LicenseReadOnlyPermission
+from apps.accounts.permissions import LicenseBalanceLedgerPermission, LicensePermission, LicenseReadOnlyPermission
 from apps.core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, \
     NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
@@ -14,6 +14,7 @@ from apps.license.serializers import LicenseDetailsSerializer, LicenseExportItem
     LicenseDocumentSerializer
 from apps.license.views.active_dfia_report import add_active_dfia_report_action
 from apps.license.views.license_report import add_license_report_action
+from apps.license.views.license_balance_ledger import add_license_balance_ledger_actions
 
 
 # Helper function to get default purchase status IDs from codes
@@ -195,12 +196,25 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     permission_classes = [LicensePermission]
     lookup_value_regex = '[^/]+'  # Allow both numbers and strings
 
+    # Actions attached by add_license_balance_ledger_actions — gated by their
+    # own fine-grained permission class rather than LicensePermission,
+    # since several of them require BOE/TRADE/ALLOTMENT write roles, not
+    # just LICENSE_MANAGER. See LicenseBalanceLedgerPermission's docstring.
+    _BALANCE_LEDGER_ACTIONS = {
+        'balance_ledger', 'allocate_invoice_boe', 'edit_invoice_boe_allocation',
+        'reverse_invoice_boe_allocation', 'allocate_boe_allotment',
+        'edit_boe_allotment_allocation', 'reverse_boe_allotment_allocation',
+        'mark_external_invoice', 'reverse_external_invoice', 'recalculate',
+    }
+
     def get_permissions(self):
         # bulk_balance_excel uses POST only because the licence-number list
         # goes in the request body; behaviour is read-only. Allow any role
         # that can read licences.
         if getattr(self, 'action', None) == 'bulk_balance_excel':
             return [LicenseReadOnlyPermission()]
+        if getattr(self, 'action', None) in self._BALANCE_LEDGER_ACTIONS:
+            return [LicenseBalanceLedgerPermission()]
         return super().get_permissions()
 
     # Apply advanced filter backends
@@ -542,8 +556,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         - item_id: ID of the export or import item
         - type: 'export' or 'import'
         """
-        from apps.bill_of_entry.models import RowDetails
-        from apps.allotment.models import AllotmentItems
+        from apps.license.models import LicenseImportItemsModel
+        from apps.license.services.item_usage import get_item_usage
 
         self.get_object()
         item_id = request.query_params.get('item_id')
@@ -556,63 +570,35 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         allotments = []
 
         if item_type == 'import':
-            # Find BOE usage through RowDetails (sr_number points to LicenseImportItemsModel)
-            # Only show transaction_type = 'D' (Debited)
-            row_details = RowDetails.objects.filter(
-                sr_number_id=item_id,
-                transaction_type='D'
-            ).select_related(
-                'bill_of_entry',
-                'bill_of_entry__company',
-                'bill_of_entry__port'
-            ).values(
-                'bill_of_entry__id',
-                'bill_of_entry__bill_of_entry_number',
-                'bill_of_entry__bill_of_entry_date',
-                'bill_of_entry__port__name',
-                'bill_of_entry__company__name',
-                'qty',
-                'cif_fc',
-                'cif_inr'
-            )
+            try:
+                import_item = LicenseImportItemsModel.objects.get(pk=item_id)
+            except LicenseImportItemsModel.DoesNotExist:
+                return Response({'boes': [], 'allotments': []})
 
-            for detail in row_details:
+            usage = get_item_usage(import_item)
+
+            for detail in usage['boes']:
+                boe = detail.bill_of_entry
                 boes.append({
-                    'id': detail['bill_of_entry__id'],
-                    'bill_of_entry_number': detail['bill_of_entry__bill_of_entry_number'],
-                    'date': detail['bill_of_entry__bill_of_entry_date'],
-                    'port': detail['bill_of_entry__port__name'],
-                    'company': detail['bill_of_entry__company__name'],
-                    'quantity': float(detail['qty']),
-                    'cif_fc': float(detail['cif_fc']),
-                    'cif_inr': float(detail['cif_inr'])
+                    'id': boe.id if boe else None,
+                    'bill_of_entry_number': boe.bill_of_entry_number if boe else None,
+                    'date': boe.bill_of_entry_date if boe else None,
+                    'port': boe.port.name if (boe and boe.port) else None,
+                    'company': boe.company.name if (boe and boe.company) else None,
+                    'quantity': float(detail.qty),
+                    'cif_fc': float(detail.cif_fc),
+                    'cif_inr': float(detail.cif_inr)
                 })
 
-            # Find Allotment usage through AllotmentItems
-            # Only show allotments where bill_of_entry is NULL (not yet converted to BOE)
-            allotment_items = AllotmentItems.objects.filter(
-                item_id=item_id,
-                allotment__bill_of_entry__isnull=True
-            ).select_related(
-                'allotment',
-                'allotment__company'
-            ).values(
-                'allotment__id',
-                'allotment__invoice',
-                'allotment__company__name',
-                'qty',
-                'cif_fc',
-                'cif_inr'
-            )
-
-            for item in allotment_items:
+            for item in usage['allotments']:
+                allotment = item.allotment
                 allotments.append({
-                    'id': item['allotment__id'],
-                    'allotment_number': item['allotment__invoice'] or f"Allotment #{item['allotment__id']}",
-                    'company': item['allotment__company__name'],
-                    'quantity': float(item['qty']),
-                    'cif_fc': float(item['cif_fc']),
-                    'cif_inr': float(item['cif_inr'])
+                    'id': allotment.id if allotment else None,
+                    'allotment_number': (allotment.invoice if allotment else None) or f"Allotment #{allotment.id if allotment else ''}",
+                    'company': allotment.company.name if (allotment and allotment.company) else None,
+                    'quantity': float(item.qty),
+                    'cif_fc': float(item.cif_fc),
+                    'cif_inr': float(item.cif_inr)
                 })
 
         elif item_type == 'export':
@@ -836,3 +822,4 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 # Add license report actions to viewset
 LicenseDetailsViewSet = add_license_report_action(LicenseDetailsViewSet)
 LicenseDetailsViewSet = add_active_dfia_report_action(LicenseDetailsViewSet)
+LicenseDetailsViewSet = add_license_balance_ledger_actions(LicenseDetailsViewSet)

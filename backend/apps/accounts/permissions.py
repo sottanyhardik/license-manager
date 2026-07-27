@@ -69,6 +69,37 @@ class TradePermission(BaseRolePermission):
     required_roles_for_write = ['TRADE_MANAGER']
 
 
+class ReconciliationPermission(permissions.BasePermission):
+    """
+    Permission class for the BOE / Invoice Reconciliation panel.
+
+    Reads span both trade and BOE data, so any role with view access to
+    EITHER is sufficient. Writes (link/merge-boe/note/recalculate) mutate
+    both trade records (boes M2M) and BOE records, so they require the
+    write role for BOTH `TradePermission` and `BillOfEntryPermission`
+    (TRADE_MANAGER *and* BOE_MANAGER) — matching the "reuse whichever
+    permission classes already gate LicenseTradeViewSet/BillOfEntryViewSet"
+    convention rather than inventing a new role.
+    """
+    read_roles = ['TRADE_MANAGER', 'TRADE_VIEWER', 'BOE_MANAGER', 'BOE_VIEWER', 'ACCOUNT_ACCESS', 'TL_GENERATE']
+    write_roles_trade = ['TRADE_MANAGER']
+    write_roles_boe = ['BOE_MANAGER']
+
+    def has_permission(self, request, view):
+        if request.user and request.user.is_superuser:
+            return True
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.method in permissions.SAFE_METHODS:
+            return request.user.has_any_role(self.read_roles)
+
+        return (
+            request.user.has_any_role(self.write_roles_trade)
+            and request.user.has_any_role(self.write_roles_boe)
+        )
+
+
 class IncentiveLicensePermission(BaseRolePermission):
     """Permission class for Incentive License operations"""
     required_roles_for_read = ['INCENTIVE_LICENSE_MANAGER', 'INCENTIVE_LICENSE_VIEWER']
@@ -148,3 +179,68 @@ class TransferLetterPermission(permissions.BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         return request.user.has_any_role(self._allowed)
+
+
+class LicenseBalanceLedgerPermission(permissions.BasePermission):
+    """
+    Permission class for the per-licence Balance & Financial Reconciliation
+    Workspace (`apps/license/views/license_balance_ledger.py`).
+
+    Read actions (view the ledger, download PDF/Excel, view audit log) accept
+    any role with view access to license/BOE data — consistent with
+    `LicensePermission`/`BillOfEntryPermission`'s read sets.
+
+    Write actions are split by which two record types they mutate, mirroring
+    `ReconciliationPermission`'s "require the write role for BOTH sides"
+    convention rather than inventing a new role:
+      - invoice<->BOE allocation (create/edit/reverse) touches a
+        `LicenseTradeLine` (trade) and a `RowDetails` (BOE) — requires
+        TRADE_MANAGER *and* BOE_MANAGER.
+      - BOE<->allotment allocation touches a `RowDetails` (BOE) and an
+        `AllotmentItems` (allotment) — requires BOE_MANAGER *and*
+        ALLOTMENT_MANAGER.
+      - marking/reversing an external (out-of-system) invoice link only
+        touches the BOE side — requires BOE_MANAGER alone.
+      - recalculation is licence-level — requires LICENSE_MANAGER.
+
+    Backend enforcement is authoritative regardless of what the frontend
+    hides — every `has_permission` check below runs independent of UI state.
+    """
+
+    read_roles = [
+        'LICENSE_MANAGER', 'LICENSE_VIEWER',
+        'BOE_MANAGER', 'BOE_VIEWER',
+        'TRADE_MANAGER', 'TRADE_VIEWER',
+        'ACCOUNT_ACCESS',
+    ]
+
+    # view.action -> required role set(s). A tuple of role-lists means ALL
+    # lists must each be satisfied (AND-of-ORs); a single list means ANY
+    # role in it is sufficient.
+    write_action_roles = {
+        'allocate_invoice_boe': (['TRADE_MANAGER'], ['BOE_MANAGER']),
+        'edit_invoice_boe_allocation': (['TRADE_MANAGER'], ['BOE_MANAGER']),
+        'reverse_invoice_boe_allocation': (['TRADE_MANAGER'], ['BOE_MANAGER']),
+        'allocate_boe_allotment': (['BOE_MANAGER'], ['ALLOTMENT_MANAGER']),
+        'edit_boe_allotment_allocation': (['BOE_MANAGER'], ['ALLOTMENT_MANAGER']),
+        'reverse_boe_allotment_allocation': (['BOE_MANAGER'], ['ALLOTMENT_MANAGER']),
+        'mark_external_invoice': (['BOE_MANAGER'],),
+        'reverse_external_invoice': (['BOE_MANAGER'],),
+        'recalculate': (['LICENSE_MANAGER'],),
+    }
+
+    def has_permission(self, request, view):
+        if request.user and request.user.is_superuser:
+            return True
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.method in permissions.SAFE_METHODS:
+            return request.user.has_any_role(self.read_roles)
+
+        role_sets = self.write_action_roles.get(getattr(view, 'action', None))
+        if role_sets is None:
+            # Unknown/unmapped write action — deny by default rather than
+            # silently allowing a new action nobody has gated yet.
+            return False
+        return all(request.user.has_any_role(roles) for roles in role_sets)

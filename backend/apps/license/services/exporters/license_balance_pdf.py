@@ -3,7 +3,342 @@
 Extracted verbatim from ``LicenseDetailsViewSet.balance_pdf`` as part of the
 clean-architecture refactor: the viewset (delivery layer) now only resolves the
 license and delegates rendering here. Behaviour is unchanged.
+
+The report also renders a "Licence Financial Ledger" (bank-statement style
+CIF reconciliation) ahead of the original Export/Import/BOE/Allotment tables
+("the Customs Ledger"), plus a Final Reconciliation Summary at the end. See
+`_build_financial_ledger_elements` / `_build_final_reconciliation_elements`.
 """
+import re
+from decimal import Decimal
+
+
+def _split_invoice_numbers(raw):
+    """Split a free-text invoice field into a clean, ordered, deduped list.
+
+    Only splits on comma/semicolon/newline — NOT '/', because this system's
+    own generated invoice numbers (`LicenseTrade.next_invoice_number`) are
+    themselves in `PREFIX/FY/NNNN` form (e.g. "LGL/2026-27/0016"); splitting
+    on '/' would shred a single invoice number into three fragments.
+    """
+    if not raw:
+        return []
+    seen = []
+    for part in re.split(r'[,\n;]+', str(raw)):
+        part = part.strip()
+        if part and part not in seen:
+            seen.append(part)
+    return seen
+
+
+def _format_invoice_list(invoice_numbers):
+    return ', '.join(invoice_numbers) if invoice_numbers else '-'
+
+
+def _item_display_name(license_import_item, fallback=''):
+    """Same "join item names, else description" convention already used
+    elsewhere in this file (e.g. the existing BOE/Allotment summary tables)."""
+    if license_import_item is None:
+        return fallback or '-'
+    if license_import_item.items.exists():
+        return ', '.join(i.name for i in license_import_item.items.all())
+    return license_import_item.description or fallback or '-'
+
+
+def _boe_invoice_allocation_map(license_obj):
+    """
+    {row_details_id: [invoice_number, ...]} of invoice numbers reconciled to
+    each BOE debit row via active `InvoiceBOEAllocation` matches (the
+    reconciliation panel), so the Financial Ledger and the enriched Customs
+    Ledger both show invoices matched there too, not just the BOE's own
+    free-text `invoice_no` field. One query for the whole license (not
+    per-row), to stay cheap on licenses with hundreds of BOEs.
+    """
+    from apps.reconciliation.models import InvoiceBOEAllocation
+
+    alloc_map = {}
+    rows = InvoiceBOEAllocation.objects.filter(
+        row_details__sr_number__license=license_obj,
+        status=InvoiceBOEAllocation.STATUS_ACTIVE,
+        is_current=True,
+    ).values_list('row_details_id', 'trade_line__trade__invoice_number')
+    for row_details_id, invoice_number in rows:
+        if invoice_number:
+            alloc_map.setdefault(row_details_id, []).append(invoice_number)
+    return alloc_map
+
+
+def _boe_row_invoice_numbers(row_details, alloc_map):
+    """Union of the BOE's own free-text invoice(s) and any invoice numbers
+    matched to this exact row via the reconciliation panel."""
+    boe = row_details.bill_of_entry
+    numbers = _split_invoice_numbers(boe.invoice_no if boe else None)
+    for invoice_number in alloc_map.get(row_details.id, []):
+        for piece in _split_invoice_numbers(invoice_number):
+            if piece not in numbers:
+                numbers.append(piece)
+    return numbers
+
+
+def _build_financial_ledger_elements(license_obj, alloc_map):
+    """
+    Render the "Licence Financial Ledger" — a bank-statement style
+    breakdown of CIF utilisation (Opening Balance -> BOE debits ->
+    outstanding Active Allotments -> reconciled Trade sales -> Current
+    Balance) plus its Financial Summary.
+
+    All calculation lives in `LicenseBalanceLedgerBuilder.build_financial_ledger`
+    (the single source of truth also consumed by the JSON API and Excel) —
+    this function ONLY formats those rows into a ReportLab table. It cannot
+    independently drift from `calculate_balance()` because it never touches
+    the underlying querysets itself.
+
+    Returns (elements, summary); `summary` feeds the Final Reconciliation
+    Summary appended after the (unmodified) Customs Ledger.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+
+    from apps.license.services.license_balance_ledger_builder import (
+        LicenseBalanceLedgerBuilder, boe_external_invoice_map,
+    )
+
+    styles = getSampleStyleSheet()
+    cell_style = ParagraphStyle('fl_cell', parent=styles['Normal'], fontSize=6, leading=7.5)
+    cell_style_r = ParagraphStyle('fl_cell_r', parent=cell_style, alignment=TA_RIGHT)
+    header_style = ParagraphStyle(
+        'fl_hdr', parent=styles['Normal'], fontSize=6.2, leading=7.5,
+        textColor=colors.whitesmoke, fontName='Helvetica-Bold', alignment=TA_CENTER,
+    )
+
+    def C(text):
+        return Paragraph('' if text is None else str(text), cell_style)
+
+    def CR(text):
+        return Paragraph('' if text is None else str(text), cell_style_r)
+
+    def fmt_money(value):
+        return f"{float(value):,.2f}" if value is not None else '-'
+
+    def fmt_qty(value):
+        return f"{float(value):,.2f}" if value is not None else '-'
+
+    def fmt_date(d):
+        return d.strftime('%d-%m-%Y') if d else '-'
+
+    COLOR_OPENING = colors.HexColor('#1a5276')
+    COLOR_BOE = colors.HexColor('#eafaf1')
+    COLOR_ALLOT = colors.HexColor('#fef9e7')
+    COLOR_TRADE = colors.HexColor('#f4ecf7')
+    COLOR_FINAL = colors.HexColor('#2c3e50')
+    COLOR_MISMATCH = colors.HexColor('#f5b7b1')
+    COLOR_HDR = colors.HexColor('#1a1a1a')
+    ROW_KIND_COLORS = {
+        'opening': COLOR_OPENING, 'boe': COLOR_BOE, 'allotment': COLOR_ALLOT, 'trade': COLOR_TRADE,
+    }
+
+    ext_map = boe_external_invoice_map(license_obj)
+    ledger_rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj, alloc_map, ext_map)
+
+    header_row = [
+        'Sr', 'Txn Date', 'Txn Type', 'Doc Number', 'BOE Number', 'BOE Date',
+        'Company (Importer)', 'Item Name', 'Invoice(s)', 'Qty',
+        'BOE CIF (USD)', 'BOE INR', 'Credit (USD)', 'Debit (USD)',
+        'Running Balance (USD)', 'Remarks',
+    ]
+    table_data = [[Paragraph(h, header_style) for h in header_row]]
+    row_bgs = []
+
+    for r in ledger_rows:
+        table_data.append([
+            CR(r['sr']), C(fmt_date(r['date'])), C(r['type']),
+            C(r['document_number'] or '-'), C(r['boe_number'] or '-'), C(fmt_date(r['boe_date'])),
+            C(r['company'] or '-'), C(r['item_name'] or '-'),
+            C(_format_invoice_list(r['invoice_numbers'])),
+            CR(fmt_qty(r['qty'])),
+            CR(fmt_money(r['cif_usd'])), CR(fmt_money(r['cif_inr'])),
+            CR(fmt_money(r['credit']) if r['credit'] else '-'),
+            CR(fmt_money(r['debit']) if r['debit'] else '-'),
+            CR(fmt_money(r['running_balance'])),
+            C(r['remarks']),
+        ])
+        if r['row_kind'] == 'final':
+            row_bgs.append(COLOR_MISMATCH if r.get('mismatched') else COLOR_FINAL)
+        else:
+            row_bgs.append(ROW_KIND_COLORS[r['row_kind']])
+
+    mismatched = summary['mismatched']
+
+    col_w = [
+        7 * mm, 14 * mm, 16 * mm, 18 * mm, 16 * mm, 14 * mm, 30 * mm, 25 * mm, 20 * mm, 13 * mm,
+        16 * mm, 17 * mm, 14 * mm, 14 * mm, 17 * mm, 24 * mm,
+    ]
+
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), COLOR_HDR),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+    ]
+    for i, bg in enumerate(row_bgs, start=1):
+        text_color = colors.whitesmoke if bg in (COLOR_OPENING, COLOR_FINAL) else colors.black
+        style_cmds.append(('BACKGROUND', (0, i), (-1, i), bg))
+        style_cmds.append(('TEXTCOLOR', (0, i), (-1, i), text_color))
+        if bg is COLOR_MISMATCH:
+            style_cmds.append(('FONTNAME', (0, i), (-1, i), 'Helvetica-Bold'))
+
+    ledger_table = Table(table_data, colWidths=col_w, repeatRows=1)
+    ledger_table.setStyle(TableStyle(style_cmds))
+
+    def section_bar(text, bg='#0b3d59', size=12):
+        bar = Table([[text]], colWidths=[sum(col_w)])
+        bar.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor(bg)),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), size),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        return bar
+
+    elements = [section_bar('LICENCE FINANCIAL LEDGER'), Spacer(1, 3), ledger_table, Spacer(1, 6)]
+
+    # 3. FINANCIAL SUMMARY & RECONCILIATION
+    summary_style = ParagraphStyle('fs_lbl', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold')
+    summary_val_style = ParagraphStyle('fs_val', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT)
+
+    summary_rows = [
+        ['Original Licence CIF', f"${fmt_money(summary['opening_balance'])}"],
+        ['Total BOE Debits', f"${fmt_money(summary['total_boe_debit'])}"],
+        ['Outstanding Active Allotments', f"${fmt_money(summary['total_allotment_debit'])}"],
+    ]
+    if summary['total_trade_debit'] > Decimal('0.00'):
+        summary_rows.append(['Total Reconciled Trade (Sold) Debits', f"${fmt_money(summary['total_trade_debit'])}"])
+    summary_rows += [
+        ['Current Available Balance', f"${fmt_money(summary['computed_balance'])}"],
+        ['Licence Balance Engine', f"${fmt_money(summary['engine_balance'])}"],
+        ['Difference', f"${fmt_money(summary['difference'])}"],
+        ['Tolerance', f"${fmt_money(summary['tolerance'])}"],
+    ]
+    summary_table_data = [[Paragraph(lbl, summary_style), Paragraph(val, summary_val_style)] for lbl, val in summary_rows]
+    summary_table = Table(summary_table_data, colWidths=[200 * mm, 75 * mm])
+    summary_style_cmds = [
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f7f9fb')),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+    ]
+    last_row = len(summary_table_data) - 1
+    if mismatched:
+        summary_style_cmds.append(('BACKGROUND', (0, last_row - 1), (-1, last_row - 1), COLOR_MISMATCH))
+    summary_table.setStyle(TableStyle(summary_style_cmds))
+
+    status_color = colors.HexColor('#c0392b') if mismatched else colors.HexColor('#1e8449')
+    status_text = 'FINANCIAL RECONCILIATION FAILED' if mismatched else 'MATCHED'
+    status_style = ParagraphStyle(
+        'fs_status', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold',
+        textColor=status_color, alignment=TA_CENTER,
+    )
+    status_bar = Table([[Paragraph(status_text, status_style)]], colWidths=[sum(col_w)])
+    status_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fdecea') if mismatched else colors.HexColor('#eafaf1')),
+        ('BOX', (0, 0), (-1, -1), 1, status_color),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    elements += [
+        section_bar('FINANCIAL SUMMARY & RECONCILIATION', bg='#34495e', size=10),
+        Spacer(1, 3), summary_table, Spacer(1, 3), status_bar, Spacer(1, 8),
+    ]
+
+    return elements, summary
+
+
+def _build_final_reconciliation_elements(license_obj, ledger_summary):
+    """
+    "5. Final Reconciliation Summary" — appended after the unmodified
+    Customs Ledger. Compares the Financial Ledger's own balance against
+    BOTH `license_obj.balance_cif` (the denormalized value the Customs
+    Ledger's own "Summary (Balance Quantity)" table displays) and the live
+    Balance Engine — this also catches a stale denormalized `balance_cif`
+    that has not been recalculated, not just a bug in this new ledger.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+
+    from apps.license.services.license_balance_ledger_builder import LicenseBalanceLedgerBuilder
+
+    styles = getSampleStyleSheet()
+
+    rec = LicenseBalanceLedgerBuilder.build_reconciliation_summary(license_obj, ledger_summary)
+    matched = rec['matched']
+
+    label_style = ParagraphStyle('rec_lbl', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold')
+    value_style = ParagraphStyle('rec_val', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT)
+
+    rows = [
+        ['Financial Ledger Balance', f"${rec['financial_ledger_balance']:,.2f}"],
+        ['Customs Ledger Balance', f"${rec['customs_ledger_balance']:,.2f}"],
+        ['Licence Balance Engine', f"${rec['balance_engine']:,.2f}"],
+        ['Difference', f"${rec['difference']:,.2f}"],
+        ['Tolerance', f"${rec['tolerance']:,.2f}"],
+    ]
+    rec_table_data = [[Paragraph(lbl, label_style), Paragraph(val, value_style)] for lbl, val in rows]
+    rec_table = Table(rec_table_data, colWidths=[140 * mm, 137 * mm])
+    rec_style_cmds = [
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f7f9fb')),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+    ]
+    if not matched:
+        rec_style_cmds.append(('BACKGROUND', (0, 3), (-1, 3), colors.HexColor('#f5b7b1')))
+    rec_table.setStyle(TableStyle(rec_style_cmds))
+
+    status_color = colors.HexColor('#1e8449') if matched else colors.HexColor('#c0392b')
+    status_text = '✓ MATCHED' if matched else '⚠ DIFFERENCE FOUND'
+    status_style = ParagraphStyle(
+        'rec_status', parent=styles['Normal'], fontSize=12, fontName='Helvetica-Bold',
+        textColor=status_color, alignment=TA_CENTER,
+    )
+    status_table = Table([[Paragraph(status_text, status_style)]], colWidths=[277 * mm])
+    status_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#eafaf1') if matched else colors.HexColor('#fdecea')),
+        ('BOX', (0, 0), (-1, -1), 1, status_color),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+
+    header_bar = Table([['FINANCIAL RECONCILIATION']], colWidths=[277 * mm])
+    header_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#0b3d59')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    return [Spacer(1, 10), header_bar, Spacer(1, 4), rec_table, Spacer(1, 4), status_table]
+
+
 def build_balance_pdf_response(license_obj, request):
     """
     Generate PDF report for license balance details with all BOEs and Allotments.
@@ -17,8 +352,7 @@ def build_balance_pdf_response(license_obj, request):
     from reportlab.lib.enums import TA_CENTER, TA_LEFT
     import io
     from datetime import date
-    from apps.bill_of_entry.models import RowDetails
-    from apps.allotment.models import AllotmentItems
+    from apps.license.services.item_usage import get_item_usage
 
 
     # Create PDF buffer
@@ -115,7 +449,13 @@ def build_balance_pdf_response(license_obj, request):
     elements.append(header_table)
     elements.append(Spacer(1, 5))
 
-    # Export Items Section
+    # 2. Financial Licence Ledger (NEW) — bank-statement style CIF
+    # reconciliation, inserted before the existing Customs Ledger below.
+    alloc_map = _boe_invoice_allocation_map(license_obj)
+    ledger_elements, ledger_summary = _build_financial_ledger_elements(license_obj, alloc_map)
+    elements.extend(ledger_elements)
+
+    # 4. Existing Customs Ledger — Export Items Section
     if license_obj.export_license.exists():
         # Section header as table row
         export_section_header = Table([['Export Items']], colWidths=[275*mm])
@@ -216,10 +556,8 @@ def build_balance_pdf_response(license_obj, request):
             elements.append(Spacer(1, 3))
 
             # BOEs
-            boes = RowDetails.objects.filter(
-                sr_number_id=item.id,
-                transaction_type='D'
-            ).select_related('bill_of_entry', 'bill_of_entry__company', 'bill_of_entry__port')
+            _usage = get_item_usage(item)
+            boes = _usage['boes']
 
             if boes.exists():
                 # BOEs header as section row
@@ -236,7 +574,7 @@ def build_balance_pdf_response(license_obj, request):
                 ]))
                 elements.append(boe_section_header)
 
-                boe_data = [['BOE Number', 'Date', 'Port', 'Company', 'Qty', 'CIF $', 'CIF INR']]
+                boe_data = [['BOE Number', 'Date', 'Port', 'Company', 'Qty', 'CIF $', 'CIF INR', 'Invoice(s)']]
 
                 # Calculate totals
                 total_qty = 0
@@ -255,7 +593,8 @@ def build_balance_pdf_response(license_obj, request):
                         Paragraph(detail.bill_of_entry.company.name or '-' if detail.bill_of_entry.company else '-', styles['Normal']),
                         f"{float(detail.qty):.2f}",
                         f"{float(detail.cif_fc):.2f}",
-                        f"{float(detail.cif_inr):.2f}"
+                        f"{float(detail.cif_inr):.2f}",
+                        Paragraph(_format_invoice_list(_boe_row_invoice_numbers(detail, alloc_map)), styles['Normal']),
                     ])
 
                 # Add total footer row
@@ -263,10 +602,11 @@ def build_balance_pdf_response(license_obj, request):
                     '', '', '', 'Total',
                     f"{total_qty:.2f}",
                     f"{total_cif_fc:.2f}",
-                    f"{total_cif_inr:.2f}"
+                    f"{total_cif_inr:.2f}",
+                    '',
                 ])
 
-                boe_table = Table(boe_data, colWidths=[40*mm, 25*mm, 50*mm, 70*mm, 25*mm, 30*mm, 35*mm])
+                boe_table = Table(boe_data, colWidths=[40*mm, 25*mm, 40*mm, 55*mm, 25*mm, 30*mm, 35*mm, 25*mm])
                 boe_table.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -289,12 +629,9 @@ def build_balance_pdf_response(license_obj, request):
                 elements.append(boe_table)
                 elements.append(Spacer(1, 5))
 
-            # Allotments
-            # Only show allotments where bill_of_entry is NULL (not yet converted to BOE)
-            allotments = AllotmentItems.objects.filter(
-                item_id=item.id,
-                allotment__bill_of_entry__isnull=True
-            ).select_related('allotment', 'allotment__company')
+            # Allotments — reuses `_usage` fetched above for the BOE table (one
+            # get_item_usage() call per item covers both tables now).
+            allotments = _usage['allotments']
 
             if allotments.exists():
                 # Allotments header as section row
@@ -311,7 +648,7 @@ def build_balance_pdf_response(license_obj, request):
                 ]))
                 elements.append(allot_section_header)
 
-                allot_data = [['Company', 'Qty', 'CIF $', 'CIF INR']]
+                allot_data = [['Company', 'Qty', 'CIF $', 'CIF INR', 'Invoice']]
 
                 # Calculate totals
                 total_allot_qty = 0
@@ -327,7 +664,8 @@ def build_balance_pdf_response(license_obj, request):
                         Paragraph(allot.allotment.company.name if allot.allotment.company else '-', styles['Normal']),
                         f"{float(allot.qty):.2f}",
                         f"{float(allot.cif_fc):.2f}",
-                        f"{float(allot.cif_inr):.2f}"
+                        f"{float(allot.cif_inr):.2f}",
+                        Paragraph(_format_invoice_list(_split_invoice_numbers(allot.allotment.invoice)), styles['Normal']),
                     ])
 
                 # Add total footer row
@@ -335,10 +673,11 @@ def build_balance_pdf_response(license_obj, request):
                     'Total',
                     f"{total_allot_qty:.2f}",
                     f"{total_allot_cif_fc:.2f}",
-                    f"{total_allot_cif_inr:.2f}"
+                    f"{total_allot_cif_inr:.2f}",
+                    '',
                 ])
 
-                allot_table = Table(allot_data, colWidths=[155*mm, 40*mm, 40*mm, 40*mm])
+                allot_table = Table(allot_data, colWidths=[130*mm, 40*mm, 40*mm, 40*mm, 25*mm])
                 allot_table.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e67e22')),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -462,9 +801,8 @@ def build_balance_pdf_response(license_obj, request):
     for item in license_obj.import_license.all():
         item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
 
-        boes = RowDetails.objects.filter(
-            sr_number_id=item.id, transaction_type='D'
-        ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+        _usage = get_item_usage(item)
+        boes = _usage['boes']
 
         for rd in boes:
             qty     = float(rd.qty or 0)
@@ -482,9 +820,7 @@ def build_balance_pdf_response(license_obj, request):
                 P(f"{qty:,.2f}"), P(f"{rate:.2f}"), P(f"{cif:,.2f}"),
             ], COLOR_BOE))
 
-        allotments = AllotmentItems.objects.filter(
-            item_id=item.id, allotment__bill_of_entry__isnull=True
-        ).select_related('allotment', 'allotment__company')
+        allotments = _usage['allotments']
 
         for ai in allotments:
             qty     = float(ai.qty or 0)
@@ -677,6 +1013,9 @@ def build_balance_pdf_response(license_obj, request):
         bal_table.setStyle(bal_style)
         elements.append(Spacer(1, 8))
         elements.append(bal_table)
+
+    # 5. Final Reconciliation Summary
+    elements.extend(_build_final_reconciliation_elements(license_obj, ledger_summary))
 
     # Build PDF
     doc.build(elements)

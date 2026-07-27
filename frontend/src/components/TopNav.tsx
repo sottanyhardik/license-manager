@@ -26,6 +26,7 @@ const NAV_GROUPS = [
             { path: "/allotments",      label: "Allotments",     icon: "box-seam",         roles: ["ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER"] },
             { path: "/bill-of-entries", label: "Bill of Entry",  icon: "receipt",          roles: ["BOE_MANAGER", "BOE_VIEWER", "TL_GENERATE", "ACCOUNT_ACCESS"] },
             { path: "/trades",          label: "Trade In & Out", icon: "arrow-left-right", roles: ["TRADE_MANAGER", "TRADE_VIEWER"] },
+            { path: "/reconciliation",  label: "Reconciliation", icon: "check2-square",    roles: ["BOE_MANAGER", "TRADE_MANAGER", "ACCOUNT_ACCESS"] },
         ],
     },
 ];

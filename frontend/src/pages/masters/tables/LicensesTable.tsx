@@ -18,6 +18,7 @@ import {
     useState,
 } from "react";
 import {
+    BarChart3,
     BookCheck,
     Calendar,
     CalendarX,
@@ -266,6 +267,7 @@ interface ActionPanelProps {
     onEdit: () => void;
     onDownloadPdf: () => void;
     onDownloadExcel: () => void;
+    onOpenBalanceWorkspace: () => void;
     onFetchDGFT: () => void;
     onDelete: () => void;
 }
@@ -277,6 +279,7 @@ function ActionPanel({
     onEdit,
     onDownloadPdf,
     onDownloadExcel,
+    onOpenBalanceWorkspace,
     onFetchDGFT,
     onDelete,
 }: ActionPanelProps) {
@@ -287,6 +290,7 @@ function ActionPanel({
         >
             {/* Actions */}
             <div className="flex flex-col gap-0.5">
+                <ActionRow icon={BarChart3} label="Balance Workspace" onClick={onOpenBalanceWorkspace} />
                 <ActionRow icon={FileText} label="Balance PDF" onClick={onDownloadPdf} />
                 <ActionRow icon={FileSpreadsheet} label="Balance Excel" onClick={onDownloadExcel} />
 
@@ -1042,6 +1046,10 @@ const LicenseRow = memo(function LicenseRow({
         navigate(`/licenses/${item.id}/edit`);
     }, [entityName, filterParams, currentPage, pageSize, navigate, item.id]);
 
+    const navigateToBalanceWorkspace = useCallback(() => {
+        navigate(`/licenses/${item.id}/balance`);
+    }, [navigate, item.id]);
+
     const handleDownloadPdf = useCallback(async () => {
         try {
             const r = await api.get(`licenses/${item.id}/balance-pdf/`, {
@@ -1288,6 +1296,7 @@ const LicenseRow = memo(function LicenseRow({
                             onEdit={navigateToEdit}
                             onDownloadPdf={handleDownloadPdf}
                             onDownloadExcel={handleDownloadExcel}
+                            onOpenBalanceWorkspace={navigateToBalanceWorkspace}
                             onFetchDGFT={() => onFetchDGFT(item)}
                             onDelete={() => onDelete(item)}
                         />

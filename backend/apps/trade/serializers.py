@@ -466,11 +466,9 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                     boe.save(update_fields=['invoice_no', 'invoice_date'])
 
         # Stamp invoice_no/invoice_date on all BOEs currently linked to this trade
-        if instance.invoice_number:
-            for boe in instance.boes.all():
-                boe.invoice_no = instance.invoice_number
-                boe.invoice_date = instance.invoice_date
-                boe.save(update_fields=['invoice_no', 'invoice_date'])
+        from .services.trade_service import stamp_boe_invoice_from_trade
+        for boe in instance.boes.all():
+            stamp_boe_invoice_from_trade(instance, boe)
 
         return instance
 

@@ -73,12 +73,12 @@ function TableSkeleton({ colCount = 5, rowCount = 6 }) {
 export default function DataTable({
     data = [],
     columns = [],
-    onEdit,
-    onDelete,
+    onEdit = undefined,
+    onDelete = undefined,
     customActions = [],
     loading = false,
     inlineEditable = [],
-    onInlineUpdate,
+    onInlineUpdate = undefined,
     customCellRender = {},
     getRowStyle = null,
 }) {

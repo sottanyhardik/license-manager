@@ -1,6 +1,6 @@
 import { Link as LinkIcon, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { clickable } from "../../utils/clickable";
+import { clickable } from "@/utils/clickable.ts";
 import { formatTruthyInr } from "./masterDisplayFormatters";
 
 interface LinkTradeModalProps {

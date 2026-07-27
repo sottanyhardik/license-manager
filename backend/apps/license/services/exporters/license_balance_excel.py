@@ -306,25 +306,157 @@ def build_balance_excel_unused(license_obj):
     return response
 
 
+def _write_financial_ledger_sheet(wb, license_obj):
+    """
+    Adds a "Financial Ledger" worksheet — the same bank-statement rows and
+    Financial Summary / Reconciliation Summary numbers as the PDF's Licence
+    Financial Ledger section and the workspace UI, all read from
+    `LicenseBalanceLedgerBuilder` so the three surfaces can never disagree.
+    Inserted as the FIRST sheet in the workbook.
+    """
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from apps.license.services.license_balance_ledger_builder import LicenseBalanceLedgerBuilder
+
+    ws = wb.create_sheet("Financial Ledger", 0)
+
+    HDR_FILL = PatternFill(start_color="1A1A1A", end_color="1A1A1A", fill_type="solid")
+    HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
+    ROW_FILLS = {
+        'opening': PatternFill(start_color="1A5276", end_color="1A5276", fill_type="solid"),
+        'boe': PatternFill(start_color="EAFAF1", end_color="EAFAF1", fill_type="solid"),
+        'allotment': PatternFill(start_color="FEF9E7", end_color="FEF9E7", fill_type="solid"),
+        'trade': PatternFill(start_color="F4ECF7", end_color="F4ECF7", fill_type="solid"),
+        'final': PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid"),
+    }
+    MISMATCH_FILL = PatternFill(start_color="F5B7B1", end_color="F5B7B1", fill_type="solid")
+    THIN = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    ws.merge_cells('A1:P1')
+    ws['A1'] = 'LICENCE FINANCIAL LEDGER'
+    ws['A1'].font = Font(bold=True, color="FFFFFF", size=14)
+    ws['A1'].fill = HDR_FILL
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 26
+
+    headers = [
+        'Sr', 'Txn Date', 'Txn Type', 'Doc Number', 'BOE Number', 'BOE Date',
+        'Company (Importer)', 'Item Name', 'Invoice(s)', 'Qty',
+        'BOE CIF (USD)', 'BOE INR', 'Credit (USD)', 'Debit (USD)',
+        'Running Balance (USD)', 'Remarks',
+    ]
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=2, column=col, value=h)
+        c.font = HDR_FONT
+        c.fill = HDR_FILL
+        c.border = THIN
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+    r = 3
+    for row_data in rows:
+        fill = MISMATCH_FILL if row_data.get('mismatched') else ROW_FILLS.get(row_data['row_kind'])
+        font_white = row_data['row_kind'] in ('opening', 'final') and not row_data.get('mismatched')
+        values = [
+            row_data['sr'],
+            row_data['date'].strftime('%d-%m-%Y') if row_data['date'] else '-',
+            row_data['type'],
+            row_data['document_number'] or '-',
+            row_data['boe_number'] or '-',
+            row_data['boe_date'].strftime('%d-%m-%Y') if row_data['boe_date'] else '-',
+            row_data['company'] or '-',
+            row_data['item_name'] or '-',
+            ', '.join(row_data['invoice_numbers']) if row_data['invoice_numbers'] else '-',
+            float(row_data['qty']) if row_data['qty'] is not None else '-',
+            float(row_data['cif_usd']) if row_data['cif_usd'] is not None else '-',
+            float(row_data['cif_inr']) if row_data['cif_inr'] is not None else '-',
+            float(row_data['credit']) if row_data['credit'] else '-',
+            float(row_data['debit']) if row_data['debit'] else '-',
+            float(row_data['running_balance']),
+            row_data['remarks'],
+        ]
+        for col, val in enumerate(values, 1):
+            c = ws.cell(row=r, column=col, value=val)
+            c.border = THIN
+            if fill:
+                c.fill = fill
+            if font_white:
+                c.font = Font(color="FFFFFF", bold=True)
+            if col in (10, 11, 12, 13, 14, 15) and isinstance(val, float):
+                c.number_format = '#,##0.00'
+                c.alignment = Alignment(horizontal='right')
+            else:
+                c.alignment = Alignment(horizontal='left', wrap_text=True)
+        r += 1
+
+    r += 1
+    ws.merge_cells(f'A{r}:P{r}')
+    ws[f'A{r}'] = 'FINANCIAL SUMMARY & RECONCILIATION'
+    ws[f'A{r}'].font = Font(bold=True, color="FFFFFF", size=11)
+    ws[f'A{r}'].fill = PatternFill(start_color="34495E", end_color="34495E", fill_type="solid")
+    ws[f'A{r}'].alignment = Alignment(horizontal='center', vertical='center')
+    r += 1
+
+    summary_rows = [
+        ('Original Licence CIF', summary['opening_balance']),
+        ('Total BOE Debits', summary['total_boe_debit']),
+        ('Outstanding Active Allotments', summary['total_allotment_debit']),
+    ]
+    if summary['total_trade_debit'] > 0:
+        summary_rows.append(('Total Reconciled Trade (Sold) Debits', summary['total_trade_debit']))
+    summary_rows += [
+        ('Current Available Balance', summary['computed_balance']),
+        ('Licence Balance Engine', summary['engine_balance']),
+        ('Difference', summary['difference']),
+        ('Tolerance', summary['tolerance']),
+    ]
+    for label, value in summary_rows:
+        ws.cell(row=r, column=1, value=label).font = Font(bold=True)
+        vcell = ws.cell(row=r, column=2, value=float(value))
+        vcell.number_format = '#,##0.00'
+        r += 1
+
+    r += 1
+    status_text = 'FINANCIAL RECONCILIATION FAILED' if summary['mismatched'] else 'MATCHED'
+    status_color = 'C0392B' if summary['mismatched'] else '1E8449'
+    ws.merge_cells(f'A{r}:P{r}')
+    ws[f'A{r}'] = status_text
+    ws[f'A{r}'].font = Font(bold=True, color=status_color, size=12)
+    ws[f'A{r}'].alignment = Alignment(horizontal='center')
+
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = 12
+    ws.column_dimensions['C'].width = 16
+    ws.column_dimensions['D'].width = 16
+    ws.column_dimensions['E'].width = 14
+    ws.column_dimensions['F'].width = 12
+    ws.column_dimensions['G'].width = 24
+    ws.column_dimensions['H'].width = 22
+    ws.column_dimensions['I'].width = 20
+    for col in ['J', 'K', 'L', 'M', 'N', 'O']:
+        ws.column_dimensions[col].width = 15
+    ws.column_dimensions['P'].width = 28
+    ws.freeze_panes = 'A3'
+
+    return summary
+
+
 def build_balance_excel(license_obj):
     """
-    Generate Excel summary report matching the two bottom tables in balance_pdf:
-    1. Summary (BOE & Allotments)
-    2. Summary (Balance Quantity)
+    Generate Excel summary report: a "Financial Ledger" sheet (from
+    `LicenseBalanceLedgerBuilder`) followed by the "Summary (BOE &
+    Allotments)" table plus the Plan Utilization section.
     """
     from django.http import HttpResponse
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from io import BytesIO
-    from decimal import Decimal as _Dec
-    from collections import defaultdict
-    from apps.bill_of_entry.models import RowDetails
-    from apps.allotment.models import AllotmentItems
+    from apps.license.services.item_usage import get_item_usage
 
 
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Summary"
+    _write_financial_ledger_sheet(wb, license_obj)
 
     # ── Styles ────────────────────────────────────────────────────────────
     HDR_FILL   = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
@@ -370,9 +502,8 @@ def build_balance_excel(license_obj):
     for item in license_obj.import_license.all():
         item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
 
-        boes = RowDetails.objects.filter(
-            sr_number_id=item.id, transaction_type='D'
-        ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+        _usage = get_item_usage(item)
+        boes = _usage['boes']
 
         for rd in boes:
             qty  = float(rd.qty or 0)
@@ -390,9 +521,7 @@ def build_balance_excel(license_obj):
                 'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
             }, True))
 
-        allotments = AllotmentItems.objects.filter(
-            item_id=item.id, allotment__bill_of_entry__isnull=True
-        ).select_related('allotment', 'allotment__company')
+        allotments = _usage['allotments']
 
         for ai in allotments:
             qty     = float(ai.qty or 0)
@@ -412,29 +541,6 @@ def build_balance_excel(license_obj):
 
     # BOEs first (sorted by BOE date), then allotments (sorted by allotment date)
     summary_rows.sort(key=lambda x: (x[0], x[1]))
-
-    # ── Pre-aggregate balance data ─────────────────────────────────────────
-    # New restriction model: condition_type on LicenseImportItemsModel is
-    # the source of truth. Percentage conditions share a pool computed by
-    # compute_condition_pools(); AU / blank use the full licence balance.
-    from apps.license.services.condition_pool import compute_condition_pools as _ccp
-    _cond_pools = _ccp(license_obj)
-
-    _bal_agg = defaultdict(lambda: {
-        'qty': 0.0, 'total_qty': 0.0, 'sr_ids': [],
-        'description': '', 'hs_code': '', 'condition_type': ''
-    })
-    for _item in license_obj.import_license.all():
-        _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
-        _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
-        _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)
-        _bal_agg[_key]['sr_ids'].append(_item.serial_number)
-        if not _bal_agg[_key]['description']:
-            _bal_agg[_key]['description'] = _item.description or _key
-        if not _bal_agg[_key]['hs_code']:
-            _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
-        if _item.condition_type and not _bal_agg[_key]['condition_type']:
-            _bal_agg[_key]['condition_type'] = _item.condition_type
 
     _license_balance = float(license_obj.get_balance_cif or 0)
     total_license_cif = total_cif + _license_balance

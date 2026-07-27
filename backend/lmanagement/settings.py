@@ -1,6 +1,7 @@
 # FILE: lmanagement/settings.py
 import os
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 # ---------------------------------------------------------------------
@@ -72,6 +73,7 @@ INSTALLED_APPS = [
     "apps.bill_of_entry",
     "apps.allotment",
     "apps.trade",
+    "apps.reconciliation",
     "apps.tasks",
 ]
 
@@ -392,6 +394,13 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 # (used in LicenseDetailsModel.get_glass_formers to scope BOE+allotment debits).
 # Override per environment via env var if the owning company differs.
 BISCUIT_COMPANY_ID = int(os.getenv("BISCUIT_COMPANY_ID", "567"))
+
+# BOE / Invoice Reconciliation panel (apps.reconciliation) — tolerance
+# thresholds below which a CIF/quantity mismatch between an invoice (trade
+# lines) and its linked BOE(s) is NOT flagged as a discrepancy. Also reused
+# as the near-duplicate-BOE CIF tolerance in `duplicate_boes()`.
+RECONCILIATION_CIF_TOLERANCE = Decimal(os.getenv("RECONCILIATION_CIF_TOLERANCE", "1.00"))
+RECONCILIATION_QTY_TOLERANCE = Decimal(os.getenv("RECONCILIATION_QTY_TOLERANCE", "1.000"))
 
 # ---------------------------------------------------------------------
 # Master-Data Service integration (ADR-001) — OFF by default

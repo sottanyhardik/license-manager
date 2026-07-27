@@ -186,3 +186,28 @@ def link_trades(trade_pk: int, partner_pk: Optional[int]):
 
 class PartnerTradeNotFound(LookupError):
     """Raised when the partner trade PK cannot be resolved."""
+
+
+# ---------------------------------------------------------------------------
+# BOE invoice stamping
+# ---------------------------------------------------------------------------
+
+def stamp_boe_invoice_from_trade(trade, boe) -> None:
+    """
+    Stamp `boe.invoice_no` / `boe.invoice_date` from `trade`'s own invoice
+    fields, when the trade has an invoice number set.
+
+    Shared by `LicenseTradeSerializer.update()` (re-stamps every BOE
+    currently linked to the trade after a header/`boes` edit) and the
+    reconciliation panel's `link` action (single BOE attach), so both code
+    paths that "attach a BOE to a trade" apply the exact same stamping
+    rule and can't drift apart.
+
+    Args:
+        trade: LicenseTrade instance.
+        boe: BillOfEntryModel instance to stamp.
+    """
+    if trade.invoice_number:
+        boe.invoice_no = trade.invoice_number
+        boe.invoice_date = trade.invoice_date
+        boe.save(update_fields=["invoice_no", "invoice_date"])

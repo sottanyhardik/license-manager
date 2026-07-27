@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Check, CheckCircle, ExternalLink, Eye, FileText, Info, Loader2, MoreHorizontal, PackagePlus, Receipt, Table, TriangleAlert, Wand2, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, BarChart3, Check, CheckCircle, ExternalLink, Eye, FileText, Info, Loader2, MoreHorizontal, PackagePlus, Receipt, Table, TriangleAlert, Wand2, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMasterFormData } from "./hooks/useMasterFormData";
 import { useMasterFormCalculations } from "./hooks/useMasterFormCalculations";
@@ -1015,6 +1015,18 @@ export default function MasterForm({
                                     disabled={saving}
                                 >
                                     <Eye className="size-4" />View Balance
+                                </Button>
+                            )}
+
+                            {entityName === "licenses" && isEdit && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="lg"
+                                    onClick={() => navigate(`/licenses/${id}/balance`)}
+                                    disabled={saving}
+                                >
+                                    <BarChart3 className="size-4" />Balance Workspace
                                 </Button>
                             )}
 

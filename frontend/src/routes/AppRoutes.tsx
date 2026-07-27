@@ -37,9 +37,12 @@ const ItemReport = lazyLoadWithRetry(() => import("../pages/reports/ItemReport")
 const PlannedReport = lazyLoadWithRetry(() => import("../pages/reports/PlannedReport"));
 
 const TradeForm = lazy(() => import("../pages/TradeForm"));
+const ReconciliationPanel = lazyLoadWithRetry(() => import("../pages/ReconciliationPanel"));
+const ReconciliationIssues = lazyLoadWithRetry(() => import("../pages/ReconciliationIssues"));
 const LedgerUpload = lazy(() => import("../pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("../pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("../pages/LicenseLedgerDetail"));
+const LicenseBalanceWorkspace = lazy(() => import("../pages/license-balance/LicenseBalanceWorkspace"));
 const PDFViewer = lazy(() => import("../pages/PDFViewer"));
 
 const REPORT_ROUTES: [string, ReactElement][] = [
@@ -174,6 +177,21 @@ export default function AppRoutes() {
                     </ProtectedRoute>
                 } />
 
+                {/* Reconciliation */}
+                <Route path="/reconciliation" element={
+                    <ProtectedRoute requiredAnyRole={["BOE_MANAGER", "TRADE_MANAGER", "ACCOUNT_ACCESS"]}>
+                        <AdminLayout><ReconciliationPanel /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                {/* Reconciliation Issues — read-only portfolio-wide discovery companion to
+                    /reconciliation above. Gated on ReconciliationPermission.read_roles
+                    (backend/apps/accounts/permissions.py) since it only reads. */}
+                <Route path="/reconciliation-issues" element={
+                    <ProtectedRoute requiredAnyRole={["TRADE_MANAGER", "TRADE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "ACCOUNT_ACCESS", "TL_GENERATE"]}>
+                        <AdminLayout><ReconciliationIssues /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+
                 {/* Incentive License CRUD */}
                 <Route path="/incentive-licenses" element={
                     <ProtectedRoute requiredAnyRole={["INCENTIVE_LICENSE_MANAGER", "INCENTIVE_LICENSE_VIEWER"]}>
@@ -205,6 +223,13 @@ export default function AppRoutes() {
                 <Route path="/license-ledger/:id/:companyId?" element={
                     <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
                         <AdminLayout><LicenseLedgerDetail /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+
+                {/* Licence Balance & Financial Reconciliation Workspace */}
+                <Route path="/licenses/:id/balance" element={
+                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "LICENSE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "TRADE_MANAGER", "TRADE_VIEWER"]}>
+                        <AdminLayout><LicenseBalanceWorkspace /></AdminLayout>
                     </ProtectedRoute>
                 } />
 

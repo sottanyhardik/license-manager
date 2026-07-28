@@ -306,30 +306,48 @@ def build_balance_excel_unused(license_obj):
     return response
 
 
-def _write_financial_ledger_sheet(wb, license_obj):
+def _write_financial_ledger_sheet(wb, rows, summary):
     """
     Adds a "Financial Ledger" worksheet — the same bank-statement rows and
     Financial Summary / Reconciliation Summary numbers as the PDF's Licence
     Financial Ledger section and the workspace UI, all read from
     `LicenseBalanceLedgerBuilder` so the three surfaces can never disagree.
+
+    `rows`/`summary` are `LicenseBalanceLedgerBuilder.build_financial_ledger()`'s
+    own return value — computed ONCE by the caller (`build_balance_excel`)
+    and passed in here; this function does no calculation of its own.
+    Hierarchical "boe_allocation" rows' `children` (one per underlying BOE
+    allocation) are rendered immediately below their parent, informational
+    only (blank Credit/Debit/Running Balance — same convention as the PDF's
+    `_build_financial_ledger_elements`), and grouped via openpyxl's native
+    row outlining (`outline_level`) so they can be collapsed/expanded in
+    Excel itself — `summaryBelow=False` puts the collapse control on the
+    parent row since the parent sits ABOVE its children here, not below.
+
     Inserted as the FIRST sheet in the workbook.
     """
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from apps.license.services.license_balance_ledger_builder import LicenseBalanceLedgerBuilder
 
     ws = wb.create_sheet("Financial Ledger", 0)
+    ws.sheet_properties.outlinePr.summaryBelow = False
 
     HDR_FILL = PatternFill(start_color="1A1A1A", end_color="1A1A1A", fill_type="solid")
     HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
     ROW_FILLS = {
         'opening': PatternFill(start_color="1A5276", end_color="1A5276", fill_type="solid"),
         'boe': PatternFill(start_color="EAFAF1", end_color="EAFAF1", fill_type="solid"),
+        'boe_allocation': PatternFill(start_color="D4EFDF", end_color="D4EFDF", fill_type="solid"),
         'allotment': PatternFill(start_color="FEF9E7", end_color="FEF9E7", fill_type="solid"),
         'trade': PatternFill(start_color="F4ECF7", end_color="F4ECF7", fill_type="solid"),
         'final': PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid"),
     }
+    CHILD_FILL = PatternFill(start_color="F4F6F7", end_color="F4F6F7", fill_type="solid")
+    CHILD_FONT = Font(color="555555", size=9)
     MISMATCH_FILL = PatternFill(start_color="F5B7B1", end_color="F5B7B1", fill_type="solid")
     THIN = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    def fmt_date(d):
+        return d.strftime('%d-%m-%Y') if d else '-'
 
     ws.merge_cells('A1:P1')
     ws['A1'] = 'LICENCE FINANCIAL LEDGER'
@@ -351,18 +369,17 @@ def _write_financial_ledger_sheet(wb, license_obj):
         c.border = THIN
         c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-    rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
     r = 3
     for row_data in rows:
         fill = MISMATCH_FILL if row_data.get('mismatched') else ROW_FILLS.get(row_data['row_kind'])
         font_white = row_data['row_kind'] in ('opening', 'final') and not row_data.get('mismatched')
         values = [
             row_data['sr'],
-            row_data['date'].strftime('%d-%m-%Y') if row_data['date'] else '-',
+            fmt_date(row_data['date']),
             row_data['type'],
             row_data['document_number'] or '-',
             row_data['boe_number'] or '-',
-            row_data['boe_date'].strftime('%d-%m-%Y') if row_data['boe_date'] else '-',
+            row_data.get('boe_date_display') or fmt_date(row_data['boe_date']),
             row_data['company'] or '-',
             row_data['item_name'] or '-',
             ', '.join(row_data['invoice_numbers']) if row_data['invoice_numbers'] else '-',
@@ -388,6 +405,39 @@ def _write_financial_ledger_sheet(wb, license_obj):
                 c.alignment = Alignment(horizontal='left', wrap_text=True)
         r += 1
 
+        # Hierarchy — one row per underlying BOE allocation under a
+        # consolidated "BOE Allocation" parent row (see `build_financial_
+        # ledger`'s docstring). Informational only: Credit/Debit/Running
+        # Balance stay blank, the parent row above already carries the
+        # accounting impact. `outline_level = 1` groups these rows under
+        # their parent for Excel's native collapse/expand.
+        for child in (row_data.get('children') or []):
+            child_values = [
+                '', '', f"↳ {child.get('type', '-')}", '',
+                child.get('boe_number') or '-', fmt_date(child.get('boe_date')),
+                child.get('company') or '-', child.get('item_name') or '-',
+                ', '.join(child.get('invoice_numbers') or []) if child.get('invoice_numbers') else '-',
+                float(child['qty']) if child.get('qty') is not None else '-',
+                float(child['cif_usd']) if child.get('cif_usd') is not None else '-',
+                float(child['cif_inr']) if child.get('cif_inr') is not None else '-',
+                '-', '-', '-',
+                f"{child.get('status', '-')} — {child.get('remarks', '-')}",
+            ]
+            for col, val in enumerate(child_values, 1):
+                c = ws.cell(row=r, column=col, value=val)
+                c.border = THIN
+                c.fill = CHILD_FILL
+                c.font = CHILD_FONT
+                if col == 3:
+                    c.alignment = Alignment(horizontal='left', wrap_text=True, indent=2)
+                elif col in (10, 11, 12) and isinstance(val, float):
+                    c.number_format = '#,##0.00'
+                    c.alignment = Alignment(horizontal='right')
+                else:
+                    c.alignment = Alignment(horizontal='left', wrap_text=True)
+            ws.row_dimensions[r].outline_level = 1
+            r += 1
+
     r += 1
     ws.merge_cells(f'A{r}:P{r}')
     ws[f'A{r}'] = 'FINANCIAL SUMMARY & RECONCILIATION'
@@ -399,10 +449,12 @@ def _write_financial_ledger_sheet(wb, license_obj):
     summary_rows = [
         ('Original Licence CIF', summary['opening_balance']),
         ('Total BOE Debits', summary['total_boe_debit']),
-        ('Outstanding Active Allotments', summary['total_allotment_debit']),
     ]
+    if summary.get('total_invoice_allocation_debit', 0) > 0:
+        summary_rows.append(('Total Invoice Allocation Debits', summary['total_invoice_allocation_debit']))
+    summary_rows.append(('Outstanding Active Allotments', summary['total_allotment_debit']))
     if summary['total_trade_debit'] > 0:
-        summary_rows.append(('Total Reconciled Trade (Sold) Debits', summary['total_trade_debit']))
+        summary_rows.append(('Total Unmatched Trade (Sold) Debits', summary['total_trade_debit']))
     summary_rows += [
         ('Current Available Balance', summary['computed_balance']),
         ('Licence Balance Engine', summary['engine_balance']),
@@ -437,37 +489,288 @@ def _write_financial_ledger_sheet(wb, license_obj):
     ws.column_dimensions['P'].width = 28
     ws.freeze_panes = 'A3'
 
-    return summary
 
+def _write_customs_ledger_sheet(wb, rows, summary):
+    """
+    Adds a "Customs Ledger" worksheet — the running CUSTOMS utilisation
+    statement from `LicenseBalanceLedgerBuilder.build_customs_ledger()`
+    (see its docstring: every BOE debits the licence at its FULL raw CIF,
+    unconditionally, unlike the Financial Ledger's allocation-adjusted
+    debit — the two are expected to diverge whenever reconciliation is
+    incomplete, which is the actionable signal this report exists to
+    surface). Preceded by its own "Customs Summary" block, mirroring the
+    PDF's `_build_customs_ledger_elements` column set and section order.
 
-def build_balance_excel(license_obj):
+    `rows`/`summary` are computed ONCE by the caller — no calculation
+    happens in this function.
     """
-    Generate Excel summary report: a "Financial Ledger" sheet (from
-    `LicenseBalanceLedgerBuilder`) followed by the "Summary (BOE &
-    Allotments)" table plus the Plan Utilization section.
-    """
-    from django.http import HttpResponse
-    import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from io import BytesIO
+
+    ws = wb.create_sheet("Customs Ledger")
+
+    HDR_FILL = PatternFill(start_color="1A1A1A", end_color="1A1A1A", fill_type="solid")
+    HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
+    ROW_FILLS = {
+        'customs_opening': PatternFill(start_color="1A5276", end_color="1A5276", fill_type="solid"),
+        'customs_boe': PatternFill(start_color="EAF2F8", end_color="EAF2F8", fill_type="solid"),
+        'customs_pending_allotment': PatternFill(start_color="FDEBD0", end_color="FDEBD0", fill_type="solid"),
+        'final': PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid"),
+    }
+    MISMATCH_FILL = PatternFill(start_color="F5B7B1", end_color="F5B7B1", fill_type="solid")
+    THIN = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    def fmt_date(d):
+        return d.strftime('%d-%m-%Y') if d else '-'
+
+    ws.merge_cells('A1:O1')
+    ws['A1'] = 'CUSTOMS SUMMARY'
+    ws['A1'].font = Font(bold=True, color="FFFFFF", size=14)
+    ws['A1'].fill = PatternFill(start_color="34495E", end_color="34495E", fill_type="solid")
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 26
+
+    difference = abs(summary['computed_balance'] - summary['engine_balance'])
+    r = 2
+    summary_rows = [
+        ('Original Licence CIF', summary['opening_balance']),
+        ('Total BOE CIF', summary['total_boe_cif']),
+        ('Pending Allotment CIF', summary['total_pending_allotment_cif']),
+        ('Available Balance', summary['computed_balance']),
+        ('Balance Engine', summary['engine_balance']),
+        ('Difference', difference),
+    ]
+    for label, value in summary_rows:
+        ws.cell(row=r, column=1, value=label).font = Font(bold=True)
+        vcell = ws.cell(row=r, column=2, value=float(value))
+        vcell.number_format = '#,##0.00'
+        if summary['mismatched'] and label == 'Difference':
+            ws.cell(row=r, column=1).fill = MISMATCH_FILL
+            ws.cell(row=r, column=2).fill = MISMATCH_FILL
+        r += 1
+
+    r += 1
+    status_text = 'RECONCILIATION FAILED' if summary['mismatched'] else 'MATCHED'
+    status_color = 'C0392B' if summary['mismatched'] else '1E8449'
+    ws.merge_cells(f'A{r}:O{r}')
+    ws[f'A{r}'] = status_text
+    ws[f'A{r}'].font = Font(bold=True, color=status_color, size=12)
+    ws[f'A{r}'].alignment = Alignment(horizontal='center')
+    r += 2
+
+    ws.merge_cells(f'A{r}:O{r}')
+    ws[f'A{r}'] = 'CUSTOMS LEDGER'
+    ws[f'A{r}'].font = Font(bold=True, color="FFFFFF", size=14)
+    ws[f'A{r}'].fill = HDR_FILL
+    ws[f'A{r}'].alignment = Alignment(horizontal='center', vertical='center')
+    r += 1
+
+    headers = [
+        'Sr', 'Date', 'Transaction Type', 'Document Number', 'BOE Number', 'BOE Date',
+        'Company', 'Item', 'Quantity', 'CIF (USD)', 'Credit (USD)', 'Debit (USD)',
+        'Running Balance (USD)', 'Status', 'Remarks',
+    ]
+    header_row = r
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=header_row, column=col, value=h)
+        c.font = HDR_FONT
+        c.fill = HDR_FILL
+        c.border = THIN
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    r += 1
+
+    for row_data in rows:
+        fill = MISMATCH_FILL if row_data.get('mismatched') else ROW_FILLS.get(row_data['row_kind'])
+        font_white = row_data['row_kind'] in ('customs_opening', 'final') and not row_data.get('mismatched')
+        values = [
+            row_data['sr'],
+            fmt_date(row_data['date']),
+            row_data['type'],
+            row_data['document_number'] or '-',
+            row_data['boe_number'] or '-',
+            fmt_date(row_data['boe_date']),
+            row_data['company'] or '-',
+            row_data['item_name'] or '-',
+            float(row_data['qty']) if row_data['qty'] is not None else '-',
+            float(row_data['cif_usd']) if row_data['cif_usd'] is not None else '-',
+            float(row_data['credit']) if row_data['credit'] else '-',
+            float(row_data['debit']) if row_data['debit'] else '-',
+            float(row_data['running_balance']),
+            row_data.get('status', '-'),
+            row_data['remarks'],
+        ]
+        for col, val in enumerate(values, 1):
+            c = ws.cell(row=r, column=col, value=val)
+            c.border = THIN
+            if fill:
+                c.fill = fill
+            if font_white:
+                c.font = Font(color="FFFFFF", bold=True)
+            if col in (9, 10, 11, 12, 13) and isinstance(val, float):
+                c.number_format = '#,##0.00'
+                c.alignment = Alignment(horizontal='right')
+            else:
+                c.alignment = Alignment(horizontal='left', wrap_text=True)
+        r += 1
+
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = 12
+    ws.column_dimensions['C'].width = 18
+    ws.column_dimensions['D'].width = 18
+    ws.column_dimensions['E'].width = 16
+    ws.column_dimensions['F'].width = 12
+    ws.column_dimensions['G'].width = 24
+    ws.column_dimensions['H'].width = 22
+    for col in ['I', 'J', 'K', 'L', 'M']:
+        ws.column_dimensions[col].width = 16
+    ws.column_dimensions['N'].width = 14
+    ws.column_dimensions['O'].width = 28
+    ws.freeze_panes = f'A{header_row + 1}'
+
+
+def _write_timeline_sheet(wb, events):
+    """
+    Adds a "Timeline" worksheet — `LicenseBalanceLedgerBuilder.build_timeline()`'s
+    real, timestamped business-lifecycle events (never fabricated), with
+    hierarchical children (e.g. each BOE under an "Invoice <-> BOE
+    Reconciled" parent) rendered immediately below their parent and grouped
+    via openpyxl row outlining, same pattern as the Financial Ledger sheet.
+    If there are no events, a single explanatory row is written instead of
+    an empty table (matches the PDF's empty-state handling).
+    """
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    ws = wb.create_sheet("Timeline")
+    ws.sheet_properties.outlinePr.summaryBelow = False
+
+    HDR_FILL = PatternFill(start_color="1A1A1A", end_color="1A1A1A", fill_type="solid")
+    HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
+    TONE_FILLS = {
+        'blue': PatternFill(start_color="D6EAF8", end_color="D6EAF8", fill_type="solid"),
+        'orange': PatternFill(start_color="FDEBD0", end_color="FDEBD0", fill_type="solid"),
+        'green': PatternFill(start_color="D5F5E3", end_color="D5F5E3", fill_type="solid"),
+        'purple': PatternFill(start_color="E8DAEF", end_color="E8DAEF", fill_type="solid"),
+        'teal': PatternFill(start_color="D1F2EB", end_color="D1F2EB", fill_type="solid"),
+        'grey': PatternFill(start_color="F2F3F4", end_color="F2F3F4", fill_type="solid"),
+        'red': PatternFill(start_color="FADBD8", end_color="FADBD8", fill_type="solid"),
+    }
+    CHILD_FILL = PatternFill(start_color="F7F9FA", end_color="F7F9FA", fill_type="solid")
+    CHILD_FONT = Font(color="555555", size=9)
+    THIN = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    def fmt_dt(dt):
+        return dt.strftime('%d-%m-%Y %H:%M') if dt else '-'
+
+    def fmt_money(value):
+        return float(value) if value is not None else '-'
+
+    ws.merge_cells('A1:J1')
+    ws['A1'] = 'TIMELINE'
+    ws['A1'].font = Font(bold=True, color="FFFFFF", size=14)
+    ws['A1'].fill = PatternFill(start_color="0B3D59", end_color="0B3D59", fill_type="solid")
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 26
+
+    if not events:
+        ws.merge_cells('A2:J2')
+        ws['A2'] = 'No timeline events recorded for this licence yet.'
+        ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
+        ws.column_dimensions['A'].width = 20
+        return
+
+    headers = ['Sr', 'Date', 'Event Type', 'Document Number', 'Company', 'Qty', 'CIF (USD)', 'User', 'Status', 'Remarks']
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=2, column=col, value=h)
+        c.font = HDR_FONT
+        c.fill = HDR_FILL
+        c.border = THIN
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    r = 3
+    for e in events:
+        fill = TONE_FILLS.get(e.get('color'))
+        values = [
+            e['sr'], fmt_dt(e['date']), e['label'],
+            e.get('document_number') or '-', e.get('company') or '-',
+            fmt_money(e.get('quantity')), fmt_money(e.get('cif')),
+            e.get('user') or '-', e.get('status') or '-', e.get('remarks') or '-',
+        ]
+        for col, val in enumerate(values, 1):
+            c = ws.cell(row=r, column=col, value=val)
+            c.border = THIN
+            if fill:
+                c.fill = fill
+            if col in (6, 7) and isinstance(val, float):
+                c.number_format = '#,##0.00'
+                c.alignment = Alignment(horizontal='right')
+            else:
+                c.alignment = Alignment(horizontal='left', wrap_text=True)
+        r += 1
+
+        for child in (e.get('children') or []):
+            child_values = [
+                '', fmt_dt(child.get('date')), f"↳ {child.get('label', '-')}",
+                child.get('document_number') or '-', child.get('company') or '-',
+                fmt_money(child.get('quantity')), fmt_money(child.get('cif')),
+                child.get('user') or '-', child.get('status') or '-', child.get('remarks') or '-',
+            ]
+            for col, val in enumerate(child_values, 1):
+                c = ws.cell(row=r, column=col, value=val)
+                c.border = THIN
+                c.fill = CHILD_FILL
+                c.font = CHILD_FONT
+                if col == 3:
+                    c.alignment = Alignment(horizontal='left', wrap_text=True, indent=2)
+                elif col in (6, 7) and isinstance(val, float):
+                    c.number_format = '#,##0.00'
+                    c.alignment = Alignment(horizontal='right')
+                else:
+                    c.alignment = Alignment(horizontal='left', wrap_text=True)
+            ws.row_dimensions[r].outline_level = 1
+            r += 1
+
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = 18
+    ws.column_dimensions['C'].width = 30
+    ws.column_dimensions['D'].width = 20
+    ws.column_dimensions['E'].width = 24
+    ws.column_dimensions['F'].width = 14
+    ws.column_dimensions['G'].width = 16
+    ws.column_dimensions['H'].width = 18
+    ws.column_dimensions['I'].width = 16
+    ws.column_dimensions['J'].width = 40
+    ws.freeze_panes = 'A3'
+
+
+def _write_reconciliation_sheet(wb, license_obj, financial_summary, customs_summary, reconciliation):
+    """
+    Adds a "Reconciliation" worksheet: the three-way Financial Ledger vs.
+    Customs Ledger vs. Balance Engine comparison from
+    `LicenseBalanceLedgerBuilder.build_reconciliation_summary()`
+    (`reconciliation`, passed in — computed once by the caller), plus the
+    pre-existing (real, tested) "Summary (BOE & Allotments)" table and Plan
+    Utilization section that used to live on this workbook's old "Summary"
+    sheet — folded in here rather than dropped.
+
+    `financial_summary`/`customs_summary` are accepted for symmetry with
+    the other `_write_X_sheet` helpers but are not directly rendered here
+    (their numbers already feed `reconciliation`); kept as explicit
+    parameters so a future addition to this sheet never has to recompute
+    them.
+    """
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from datetime import date as _date_cls
     from apps.license.services.item_usage import get_item_usage
 
+    ws = wb.create_sheet("Reconciliation")
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Summary"
-    _write_financial_ledger_sheet(wb, license_obj)
-
-    # ── Styles ────────────────────────────────────────────────────────────
-    HDR_FILL   = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
-    HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
-    BOE_FILL   = PatternFill(start_color="DEEAF1", end_color="DEEAF1", fill_type="solid")
+    HDR_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
+    BOE_FILL = PatternFill(start_color="DEEAF1", end_color="DEEAF1", fill_type="solid")
     ALLOT_FILL = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
     TOTAL_FILL = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-    YEL_FILL   = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-    ALT_FILL   = PatternFill(start_color="F9F9F9", end_color="F9F9F9", fill_type="solid")
-    BOLD       = Font(bold=True, size=9)
-    NORM       = Font(size=9)
+    MISMATCH_FILL = PatternFill(start_color="F5B7B1", end_color="F5B7B1", fill_type="solid")
+    BOLD = Font(bold=True, size=9)
+    NORM = Font(size=9)
     THIN_BORDER = Border(
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
@@ -494,9 +797,8 @@ def build_balance_excel(license_obj):
     ledger_date_str = license_obj.ledger_date.strftime('%d-%m-%Y') if license_obj.ledger_date else '-'
     lic_no = license_obj.license_number or '-'
 
-    # ── Collect summary rows ──────────────────────────────────────────────
-    from datetime import date as _date_cls
-    summary_rows = []   # (group, sort_date, row_data_dict, is_boe)
+    # ── Collect summary rows (BOE & Allotments) ─────────────────────────
+    summary_rows = []
     total_cif = 0.0
 
     for item in license_obj.import_license.all():
@@ -574,12 +876,50 @@ def build_balance_excel(license_obj):
         c.font = INFO_FONT
         c.border = THIN_BORDER
         c.alignment = Alignment(horizontal='right' if col == 4 else 'left', vertical='center')
-    r += 1
+    r += 2
 
     # ══════════════════════════════════════════════════════════════════════
-    # Section 2: Summary (BOE & Allotments)
+    # Section 2: Final Reconciliation Summary (three-way)
     # ══════════════════════════════════════════════════════════════════════
-    # Section header (merged A:G)
+    ws.merge_cells(f'A{r}:G{r}')
+    sh = ws[f'A{r}']
+    sh.value = 'FINAL RECONCILIATION SUMMARY'
+    sh.fill = PatternFill(start_color="0B3D59", end_color="0B3D59", fill_type="solid")
+    sh.font = Font(bold=True, color="FFFFFF", size=11)
+    sh.alignment = Alignment(horizontal='center', vertical='center')
+    r += 1
+
+    rec_rows = [
+        ('Financial Ledger Balance', reconciliation['financial_ledger_balance']),
+        ('Customs Ledger Balance', reconciliation['customs_ledger_balance']),
+        ('Licence Balance Engine', reconciliation['balance_engine']),
+        ('Difference', reconciliation['difference']),
+        ('Tolerance', reconciliation['tolerance']),
+    ]
+    diff_row = None
+    for label, value in rec_rows:
+        ws.cell(row=r, column=1, value=label).font = Font(bold=True)
+        vcell = ws.cell(row=r, column=2, value=float(value))
+        vcell.number_format = '#,##0.00'
+        if label == 'Difference':
+            diff_row = r
+        r += 1
+    if not reconciliation['matched'] and diff_row:
+        ws.cell(row=diff_row, column=1).fill = MISMATCH_FILL
+        ws.cell(row=diff_row, column=2).fill = MISMATCH_FILL
+
+    r += 1
+    status_text = '✓ MATCHED' if reconciliation['matched'] else '⚠ DIFFERENCE FOUND'
+    status_color = '1E8449' if reconciliation['matched'] else 'C0392B'
+    ws.merge_cells(f'A{r}:G{r}')
+    ws[f'A{r}'] = status_text
+    ws[f'A{r}'].font = Font(bold=True, color=status_color, size=12)
+    ws[f'A{r}'].alignment = Alignment(horizontal='center')
+    r += 2
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Section 3: Summary (BOE & Allotments)
+    # ══════════════════════════════════════════════════════════════════════
     ws.merge_cells(f'A{r}:G{r}')
     sh = ws[f'A{r}']
     sh.value = 'Summary (BOE & Allotments)'
@@ -587,13 +927,11 @@ def build_balance_excel(license_obj):
     sh.alignment = Alignment(horizontal='center', vertical='center')
     r += 1
 
-    # Column headers
     SUMM_COLS = ['Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']
     for col, h in enumerate(SUMM_COLS, 1):
         _hdr(ws, r, col, h)
     r += 1
 
-    # Data rows
     for _s, _sd, row_data, is_boe in summary_rows:
         fill = BOE_FILL if is_boe else ALLOT_FILL
         _cell(ws, r, 1, row_data['item'],      fill=fill)
@@ -619,8 +957,7 @@ def build_balance_excel(license_obj):
     r += 1  # blank row
 
     # ══════════════════════════════════════════════════════════════════════
-    # ══════════════════════════════════════════════════════════════════════
-    # Section 3: Plan Utilization  (final — matches the PlanTab UI exactly)
+    # Section 4: Plan Utilization  (matches the PlanTab UI exactly)
     # Shared with the bulk exporter's per-license sheet builder and the
     # "Utilization Planning Summary" sheet — see render_plan_utilization_section.
     # ══════════════════════════════════════════════════════════════════════
@@ -644,9 +981,192 @@ def build_balance_excel(license_obj):
 
     ws.freeze_panes = 'A2'
 
+
+def _write_audit_log_sheet(wb, license_obj):
+    """
+    Adds an "Audit Log" worksheet: every `ReconciliationLog` row for this
+    licence's import items (the same append-only audit trail
+    `LicenseBalanceLedgerBuilder.build_timeline()` reuses for its "Manual
+    Adjustments" / reconciliation-action events — the
+    `ReconciliationLog.objects.filter(license_item__license=license_obj)`
+    query is reproduced verbatim here, see that method's docstring) plus
+    every persisted `IgnoredWarning` row (ignore/restore history) for this
+    licence, if any — both are real, persisted rows, never fabricated.
+    """
+    import json
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from apps.reconciliation.models import ReconciliationLog, IgnoredWarning
+
+    ws = wb.create_sheet("Audit Log")
+
+    HDR_FILL = PatternFill(start_color="1A1A1A", end_color="1A1A1A", fill_type="solid")
+    HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
+    ALT_FILL = PatternFill(start_color="F7F9FA", end_color="F7F9FA", fill_type="solid")
+    THIN = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    def user_label(user):
+        if not user:
+            return '-'
+        return getattr(user, 'get_full_name', lambda: None)() or getattr(user, 'username', None) or '-'
+
+    def fmt_dt(dt):
+        return dt.strftime('%d-%m-%Y %H:%M') if dt else '-'
+
+    def fmt_json(value):
+        if not value:
+            return '-'
+        try:
+            return json.dumps(value, default=str)
+        except TypeError:
+            return str(value)
+
+    ws.merge_cells('A1:I1')
+    ws['A1'] = 'AUDIT LOG'
+    ws['A1'].font = Font(bold=True, color="FFFFFF", size=14)
+    ws['A1'].fill = HDR_FILL
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 26
+
+    r = 2
+    ws.merge_cells(f'A{r}:I{r}')
+    ws[f'A{r}'] = 'Reconciliation Actions'
+    ws[f'A{r}'].font = Font(bold=True, color="FFFFFF", size=10)
+    ws[f'A{r}'].fill = PatternFill(start_color="34495E", end_color="34495E", fill_type="solid")
+    ws[f'A{r}'].alignment = Alignment(horizontal='center', vertical='center')
+    r += 1
+
+    logs = list(
+        ReconciliationLog.objects.filter(license_item__license=license_obj)
+        .select_related('user')
+        .order_by('created_on')
+    )
+    log_headers = ['Sr', 'Date/Time', 'Action', 'User', 'Reason', 'Before', 'After']
+    for col, h in enumerate(log_headers, 1):
+        c = ws.cell(row=r, column=col, value=h)
+        c.font = HDR_FONT
+        c.fill = HDR_FILL
+        c.border = THIN
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    r += 1
+
+    if not logs:
+        ws.merge_cells(f'A{r}:I{r}')
+        ws[f'A{r}'] = 'No reconciliation actions recorded for this licence yet.'
+        ws[f'A{r}'].alignment = Alignment(horizontal='center', vertical='center')
+        r += 1
+    else:
+        for i, log in enumerate(logs, 1):
+            fill = ALT_FILL if i % 2 == 0 else None
+            values = [
+                i, fmt_dt(log.created_on), log.get_action_display(),
+                user_label(log.user), log.reason or '-',
+                fmt_json(log.before), fmt_json(log.after),
+            ]
+            for col, val in enumerate(values, 1):
+                c = ws.cell(row=r, column=col, value=val)
+                c.border = THIN
+                if fill:
+                    c.fill = fill
+                c.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            r += 1
+
+    r += 1
+
+    ws.merge_cells(f'A{r}:I{r}')
+    ws[f'A{r}'] = 'Ignored / Restored Warnings'
+    ws[f'A{r}'].font = Font(bold=True, color="FFFFFF", size=10)
+    ws[f'A{r}'].fill = PatternFill(start_color="34495E", end_color="34495E", fill_type="solid")
+    ws[f'A{r}'].alignment = Alignment(horizontal='center', vertical='center')
+    r += 1
+
+    ignored_warnings = list(
+        IgnoredWarning.objects.filter(license=license_obj)
+        .select_related('ignored_by', 'restored_by')
+        .order_by('-ignored_at')
+    )
+    warn_headers = [
+        'Warning Type', 'Entity Type', 'Entity ID', 'Status',
+        'Ignored By', 'Ignored At', 'Restored By', 'Restored At', 'Reason',
+    ]
+    for col, h in enumerate(warn_headers, 1):
+        c = ws.cell(row=r, column=col, value=h)
+        c.font = HDR_FONT
+        c.fill = HDR_FILL
+        c.border = THIN
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    r += 1
+
+    if not ignored_warnings:
+        ws.merge_cells(f'A{r}:I{r}')
+        ws[f'A{r}'] = 'No ignored/restored warnings recorded for this licence yet.'
+        ws[f'A{r}'].alignment = Alignment(horizontal='center', vertical='center')
+        r += 1
+    else:
+        for i, iw in enumerate(ignored_warnings, 1):
+            fill = ALT_FILL if i % 2 == 0 else None
+            values = [
+                iw.warning_type, iw.entity_type, iw.entity_id,
+                'Ignored' if iw.ignored else 'Restored',
+                user_label(iw.ignored_by), fmt_dt(iw.ignored_at),
+                user_label(iw.restored_by), fmt_dt(iw.restored_at),
+                iw.reason or '-',
+            ]
+            for col, val in enumerate(values, 1):
+                c = ws.cell(row=r, column=col, value=val)
+                c.border = THIN
+                if fill:
+                    c.fill = fill
+                c.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            r += 1
+
+    ws.column_dimensions['A'].width = 22
+    ws.column_dimensions['B'].width = 18
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 16
+    ws.column_dimensions['E'].width = 40
+    ws.column_dimensions['F'].width = 40
+    ws.column_dimensions['G'].width = 18
+    ws.column_dimensions['H'].width = 18
+    ws.column_dimensions['I'].width = 30
+    ws.freeze_panes = 'A2'
+
+
+def build_balance_excel(license_obj):
+    """
+    Generate the Licence Balance Workspace Excel export: five worksheets —
+    "Financial Ledger", "Customs Ledger", "Timeline", "Reconciliation", and
+    "Audit Log" — all built from `LicenseBalanceLedgerBuilder` data. Each
+    builder method is called exactly ONCE here and its result passed to the
+    relevant `_write_X_sheet` helper, so none of these worksheets can
+    independently drift from the JSON API workspace or the PDF report —
+    and no calculation happens anywhere in this module.
+    """
+    from django.http import HttpResponse
+    import openpyxl
+    from io import BytesIO
+    from apps.license.services.license_balance_ledger_builder import (
+        LicenseBalanceLedgerBuilder, boe_invoice_allocation_map, boe_external_invoice_map,
+    )
+
+    alloc_map = boe_invoice_allocation_map(license_obj)
+    ext_map = boe_external_invoice_map(license_obj)
+    financial_rows, financial_summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj, alloc_map, ext_map)
+    customs_rows, customs_summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
+    timeline_events = LicenseBalanceLedgerBuilder.build_timeline(license_obj)
+    reconciliation = LicenseBalanceLedgerBuilder.build_reconciliation_summary(license_obj, financial_summary, customs_summary)
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    _write_financial_ledger_sheet(wb, financial_rows, financial_summary)
+    _write_customs_ledger_sheet(wb, customs_rows, customs_summary)
+    _write_timeline_sheet(wb, timeline_events)
+    _write_reconciliation_sheet(wb, license_obj, financial_summary, customs_summary, reconciliation)
+    _write_audit_log_sheet(wb, license_obj)
+
     # ── Save ──────────────────────────────────────────────────────────────
-    # Recalculate formulas (e.g. the E132 TOTAL =SUM) on open so viewers show
-    # computed values, not blank cached results.
+    # Recalculate formulas (e.g. the Plan Utilization TOTAL =SUM) on open so
+    # viewers show computed values, not blank cached results.
     wb.calculation.calcMode = "auto"
     wb.calculation.fullCalcOnLoad = True
     wb.calculation.forceFullCalc = True

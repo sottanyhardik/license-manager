@@ -205,6 +205,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         'reverse_invoice_boe_allocation', 'allocate_boe_allotment',
         'edit_boe_allotment_allocation', 'reverse_boe_allotment_allocation',
         'mark_external_invoice', 'reverse_external_invoice', 'recalculate',
+        'ignore_warning', 'restore_warning',
     }
 
     def get_permissions(self):

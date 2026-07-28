@@ -227,6 +227,14 @@ class LicenseBalanceLedgerPermission(permissions.BasePermission):
         'mark_external_invoice': (['BOE_MANAGER'],),
         'reverse_external_invoice': (['BOE_MANAGER'],),
         'recalculate': (['LICENSE_MANAGER'],),
+        # Ignoring/restoring a warning is pure workflow bookkeeping (never
+        # touches allocations/invoices/BOEs/allotments/balances — see
+        # `IgnoredWarning`'s docstring), so it's gated more loosely than the
+        # financial-mutation actions above: ANY manager role that already
+        # has write access somewhere in this workspace ("Manage
+        # Reconciliation" in product terms), not a specific AND-of-two.
+        'ignore_warning': (['LICENSE_MANAGER', 'BOE_MANAGER', 'TRADE_MANAGER', 'ALLOTMENT_MANAGER'],),
+        'restore_warning': (['LICENSE_MANAGER', 'BOE_MANAGER', 'TRADE_MANAGER', 'ALLOTMENT_MANAGER'],),
     }
 
     def has_permission(self, request, view):

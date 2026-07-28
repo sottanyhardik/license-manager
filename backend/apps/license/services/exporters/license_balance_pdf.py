@@ -131,14 +131,25 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
 
     COLOR_OPENING = colors.HexColor('#1a5276')
     COLOR_BOE = colors.HexColor('#eafaf1')
+    COLOR_BOE_ALLOCATION = colors.HexColor('#d4efdf')
+    COLOR_CHILD = colors.HexColor('#f4f6f7')
     COLOR_ALLOT = colors.HexColor('#fef9e7')
     COLOR_TRADE = colors.HexColor('#f4ecf7')
     COLOR_FINAL = colors.HexColor('#2c3e50')
     COLOR_MISMATCH = colors.HexColor('#f5b7b1')
     COLOR_HDR = colors.HexColor('#1a1a1a')
     ROW_KIND_COLORS = {
-        'opening': COLOR_OPENING, 'boe': COLOR_BOE, 'allotment': COLOR_ALLOT, 'trade': COLOR_TRADE,
+        'opening': COLOR_OPENING, 'boe': COLOR_BOE, 'boe_allocation': COLOR_BOE_ALLOCATION,
+        'allotment': COLOR_ALLOT, 'trade': COLOR_TRADE,
     }
+    child_cell_style = ParagraphStyle('fl_child_cell', parent=cell_style, textColor=colors.HexColor('#555555'))
+    child_cell_style_r = ParagraphStyle('fl_child_cell_r', parent=child_cell_style, alignment=TA_RIGHT)
+
+    def CC(text):
+        return Paragraph('' if text is None else str(text), child_cell_style)
+
+    def CCR(text):
+        return Paragraph('' if text is None else str(text), child_cell_style_r)
 
     ext_map = boe_external_invoice_map(license_obj)
     ledger_rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj, alloc_map, ext_map)
@@ -153,9 +164,10 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
     row_bgs = []
 
     for r in ledger_rows:
+        boe_date_text = r.get('boe_date_display') or fmt_date(r['boe_date'])
         table_data.append([
             CR(r['sr']), C(fmt_date(r['date'])), C(r['type']),
-            C(r['document_number'] or '-'), C(r['boe_number'] or '-'), C(fmt_date(r['boe_date'])),
+            C(r['document_number'] or '-'), C(r['boe_number'] or '-'), C(boe_date_text),
             C(r['company'] or '-'), C(r['item_name'] or '-'),
             C(_format_invoice_list(r['invoice_numbers'])),
             CR(fmt_qty(r['qty'])),
@@ -169,6 +181,23 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
             row_bgs.append(COLOR_MISMATCH if r.get('mismatched') else COLOR_FINAL)
         else:
             row_bgs.append(ROW_KIND_COLORS[r['row_kind']])
+
+        # Hierarchy: child rows are ALWAYS rendered (expanded by default —
+        # PDF is static, there's no interactive collapse). Informational
+        # only — Credit/Debit/Running Balance stay blank, the parent row
+        # above already carries the accounting impact.
+        for child in (r.get('children') or []):
+            table_data.append([
+                CC(''), CC(''), CC(f"↳ {child['type']}"),
+                CC(''), CC(child.get('boe_number') or '-'), CC(fmt_date(child.get('boe_date'))),
+                CC(child.get('company') or '-'), CC(child.get('item_name') or '-'),
+                CC(_format_invoice_list(child.get('invoice_numbers') or [])),
+                CCR(fmt_qty(child.get('qty'))),
+                CCR(fmt_money(child.get('cif_usd'))), CCR(fmt_money(child.get('cif_inr'))),
+                CCR('-'), CCR('-'), CCR('-'),
+                CC(f"{child.get('status', '-')} — {child.get('remarks', '-')}"),
+            ])
+            row_bgs.append(COLOR_CHILD)
 
     mismatched = summary['mismatched']
 
@@ -218,10 +247,12 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
     summary_rows = [
         ['Original Licence CIF', f"${fmt_money(summary['opening_balance'])}"],
         ['Total BOE Debits', f"${fmt_money(summary['total_boe_debit'])}"],
-        ['Outstanding Active Allotments', f"${fmt_money(summary['total_allotment_debit'])}"],
     ]
+    if summary.get('total_invoice_allocation_debit', Decimal('0.00')) > Decimal('0.00'):
+        summary_rows.append(['Total Invoice Allocation Debits', f"${fmt_money(summary['total_invoice_allocation_debit'])}"])
+    summary_rows.append(['Outstanding Active Allotments', f"${fmt_money(summary['total_allotment_debit'])}"])
     if summary['total_trade_debit'] > Decimal('0.00'):
-        summary_rows.append(['Total Reconciled Trade (Sold) Debits', f"${fmt_money(summary['total_trade_debit'])}"])
+        summary_rows.append(['Total Unmatched Trade (Sold) Debits', f"${fmt_money(summary['total_trade_debit'])}"])
     summary_rows += [
         ['Current Available Balance', f"${fmt_money(summary['computed_balance'])}"],
         ['Licence Balance Engine', f"${fmt_money(summary['engine_balance'])}"],
@@ -265,14 +296,268 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
     return elements, summary
 
 
-def _build_final_reconciliation_elements(license_obj, ledger_summary):
+def _build_customs_ledger_elements(license_obj):
     """
-    "5. Final Reconciliation Summary" — appended after the unmodified
-    Customs Ledger. Compares the Financial Ledger's own balance against
-    BOTH `license_obj.balance_cif` (the denormalized value the Customs
-    Ledger's own "Summary (Balance Quantity)" table displays) and the live
-    Balance Engine — this also catches a stale denormalized `balance_cif`
-    that has not been recalculated, not just a bug in this new ledger.
+    "2. Customs Ledger" — the running CUSTOMS utilisation statement (see
+    `LicenseBalanceLedgerBuilder.build_customs_ledger`'s docstring for why
+    this deliberately debits every BOE at its FULL raw amount,
+    unconditionally, unlike the Financial Ledger). Preceded by its own
+    "Customs Summary" block per the report layout.
+
+    Returns (elements, customs_summary) — the summary feeds the Final
+    Reconciliation Summary's three-way comparison.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+
+    from apps.license.services.license_balance_ledger_builder import LicenseBalanceLedgerBuilder
+
+    styles = getSampleStyleSheet()
+    cell_style = ParagraphStyle('cl_cell', parent=styles['Normal'], fontSize=6, leading=7.5)
+    cell_style_r = ParagraphStyle('cl_cell_r', parent=cell_style, alignment=TA_RIGHT)
+    header_style = ParagraphStyle(
+        'cl_hdr', parent=styles['Normal'], fontSize=6.2, leading=7.5,
+        textColor=colors.whitesmoke, fontName='Helvetica-Bold', alignment=TA_CENTER,
+    )
+
+    def C(text):
+        return Paragraph('' if text is None else str(text), cell_style)
+
+    def CR(text):
+        return Paragraph('' if text is None else str(text), cell_style_r)
+
+    def fmt_money(value):
+        return f"{float(value):,.2f}" if value is not None else '-'
+
+    def fmt_qty(value):
+        return f"{float(value):,.2f}" if value is not None else '-'
+
+    def fmt_date(d):
+        return d.strftime('%d-%m-%Y') if d else '-'
+
+    COLOR_OPENING = colors.HexColor('#1a5276')
+    COLOR_BOE = colors.HexColor('#eaf2f8')
+    COLOR_PENDING = colors.HexColor('#fdebd0')
+    COLOR_FINAL = colors.HexColor('#2c3e50')
+    COLOR_MISMATCH = colors.HexColor('#f5b7b1')
+    COLOR_HDR = colors.HexColor('#1a1a1a')
+    ROW_KIND_COLORS = {
+        'customs_opening': COLOR_OPENING, 'customs_boe': COLOR_BOE, 'customs_pending_allotment': COLOR_PENDING,
+    }
+
+    rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
+
+    def section_bar(text, bg='#0b3d59', size=12):
+        bar = Table([[text]], colWidths=[275 * mm])
+        bar.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor(bg)),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), size),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        return bar
+
+    # ---- Customs Summary (shown ABOVE the ledger table) ----
+    difference = abs(summary['computed_balance'] - summary['engine_balance'])
+    summary_style = ParagraphStyle('cs_lbl', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold')
+    summary_val_style = ParagraphStyle('cs_val', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT)
+    summary_rows = [
+        ['Original Licence CIF', f"${fmt_money(summary['opening_balance'])}"],
+        ['Total BOE CIF', f"${fmt_money(summary['total_boe_cif'])}"],
+        ['Pending Allotment CIF', f"${fmt_money(summary['total_pending_allotment_cif'])}"],
+        ['Available Balance', f"${fmt_money(summary['computed_balance'])}"],
+        ['Balance Engine', f"${fmt_money(summary['engine_balance'])}"],
+        ['Difference', f"${fmt_money(difference)}"],
+    ]
+    summary_table = Table(
+        [[Paragraph(lbl, summary_style), Paragraph(val, summary_val_style)] for lbl, val in summary_rows],
+        colWidths=[200 * mm, 75 * mm],
+    )
+    summary_style_cmds = [
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f7f9fb')),
+        ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+    ]
+    if summary['mismatched']:
+        summary_style_cmds.append(('BACKGROUND', (0, 5), (-1, 5), COLOR_MISMATCH))
+    summary_table.setStyle(TableStyle(summary_style_cmds))
+
+    status_color = colors.HexColor('#c0392b') if summary['mismatched'] else colors.HexColor('#1e8449')
+    status_text = 'RECONCILIATION FAILED' if summary['mismatched'] else 'MATCHED'
+    status_style = ParagraphStyle(
+        'cs_status', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold',
+        textColor=status_color, alignment=TA_CENTER,
+    )
+    status_bar = Table([[Paragraph(status_text, status_style)]], colWidths=[275 * mm])
+    status_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fdecea') if summary['mismatched'] else colors.HexColor('#eafaf1')),
+        ('BOX', (0, 0), (-1, -1), 1, status_color),
+        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    elements = [
+        section_bar('CUSTOMS SUMMARY', bg='#34495e', size=10),
+        Spacer(1, 3), summary_table, Spacer(1, 3), status_bar, Spacer(1, 8),
+    ]
+
+    # ---- Customs Ledger table ----
+    header_row = [
+        'Sr', 'Date', 'Transaction Type', 'Document Number', 'BOE Number', 'BOE Date',
+        'Company', 'Item', 'Quantity', 'CIF (USD)', 'Credit (USD)', 'Debit (USD)',
+        'Running Balance (USD)', 'Status', 'Remarks',
+    ]
+    table_data = [[Paragraph(h, header_style) for h in header_row]]
+    row_bgs = []
+    for r in rows:
+        table_data.append([
+            CR(r['sr']), C(fmt_date(r['date'])), C(r['type']),
+            C(r['document_number'] or '-'), C(r['boe_number'] or '-'), C(fmt_date(r['boe_date'])),
+            C(r['company'] or '-'), C(r['item_name'] or '-'),
+            CR(fmt_qty(r['qty'])), CR(fmt_money(r['cif_usd'])),
+            CR(fmt_money(r['credit']) if r['credit'] else '-'),
+            CR(fmt_money(r['debit']) if r['debit'] else '-'),
+            CR(fmt_money(r['running_balance'])),
+            C(r.get('status', '-')), C(r['remarks']),
+        ])
+        if r['row_kind'] == 'final':
+            row_bgs.append(COLOR_MISMATCH if r.get('mismatched') else COLOR_FINAL)
+        else:
+            row_bgs.append(ROW_KIND_COLORS.get(r['row_kind'], colors.white))
+
+    col_w = [
+        7 * mm, 16 * mm, 20 * mm, 20 * mm, 18 * mm, 16 * mm, 32 * mm, 28 * mm,
+        16 * mm, 20 * mm, 18 * mm, 18 * mm, 22 * mm, 18 * mm, 26 * mm,
+    ]
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), COLOR_HDR),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+        ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2), ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+    ]
+    for i, bg in enumerate(row_bgs, start=1):
+        text_color = colors.whitesmoke if bg in (COLOR_OPENING, COLOR_FINAL) else colors.black
+        style_cmds.append(('BACKGROUND', (0, i), (-1, i), bg))
+        style_cmds.append(('TEXTCOLOR', (0, i), (-1, i), text_color))
+
+    ledger_table = Table(table_data, colWidths=col_w, repeatRows=1)
+    ledger_table.setStyle(TableStyle(style_cmds))
+
+    elements += [section_bar('CUSTOMS LEDGER'), Spacer(1, 3), ledger_table, Spacer(1, 8)]
+    return elements, summary
+
+
+def _build_timeline_elements(license_obj):
+    """"3. Timeline" — real business-lifecycle events only (see
+    `LicenseBalanceLedgerBuilder.build_timeline`'s docstring); nothing
+    rendered here is fabricated. Expanded by default — child events (e.g.
+    each BOE under an "Invoice <-> BOE Reconciled" event) are printed
+    immediately indented below their parent, since PDF has no interactive
+    collapse."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+
+    from apps.license.services.license_balance_ledger_builder import LicenseBalanceLedgerBuilder
+
+    styles = getSampleStyleSheet()
+    cell_style = ParagraphStyle('tl_cell', parent=styles['Normal'], fontSize=6, leading=7.5)
+    header_style = ParagraphStyle(
+        'tl_hdr', parent=styles['Normal'], fontSize=6.2, leading=7.5,
+        textColor=colors.whitesmoke, fontName='Helvetica-Bold', alignment=TA_CENTER,
+    )
+    child_style = ParagraphStyle('tl_child', parent=cell_style, textColor=colors.HexColor('#555555'))
+
+    def C(text):
+        return Paragraph('' if text is None else str(text), cell_style)
+
+    def CC(text):
+        return Paragraph('' if text is None else str(text), child_style)
+
+    def fmt_money(value):
+        return f"{float(value):,.2f}" if value is not None else '-'
+
+    def fmt_dt(dt):
+        return dt.strftime('%d-%m-%Y %H:%M') if dt else '-'
+
+    TONE_COLORS = {
+        'blue': colors.HexColor('#d6eaf8'), 'orange': colors.HexColor('#fdebd0'),
+        'green': colors.HexColor('#d5f5e3'), 'purple': colors.HexColor('#e8daef'),
+        'teal': colors.HexColor('#d1f2eb'), 'grey': colors.HexColor('#f2f3f4'),
+        'red': colors.HexColor('#fadbd8'),
+    }
+
+    events = LicenseBalanceLedgerBuilder.build_timeline(license_obj)
+
+    header_row = ['Sr', 'Date', 'Event Type', 'Document Number', 'Company', 'Qty', 'CIF (USD)', 'User', 'Status', 'Remarks']
+    table_data = [[Paragraph(h, header_style) for h in header_row]]
+    row_bgs = []
+
+    for e in events:
+        table_data.append([
+            C(e['sr']), C(fmt_dt(e['date'])), C(e['label']),
+            C(e.get('document_number') or '-'), C(e.get('company') or '-'),
+            C(fmt_money(e.get('quantity'))), C(fmt_money(e.get('cif'))),
+            C(e.get('user') or '-'), C(e.get('status') or '-'), C(e.get('remarks') or '-'),
+        ])
+        row_bgs.append(TONE_COLORS.get(e.get('color'), colors.white))
+        for child in (e.get('children') or []):
+            table_data.append([
+                CC(''), CC(fmt_dt(child.get('date'))), CC(f"↳ {child['label']}"),
+                CC(child.get('document_number') or '-'), CC(child.get('company') or '-'),
+                CC(fmt_money(child.get('quantity'))), CC(fmt_money(child.get('cif'))),
+                CC(child.get('user') or '-'), CC(child.get('status') or '-'), CC(child.get('remarks') or '-'),
+            ])
+            row_bgs.append(colors.HexColor('#f7f9fa'))
+
+    col_w = [7 * mm, 28 * mm, 32 * mm, 30 * mm, 34 * mm, 20 * mm, 22 * mm, 24 * mm, 20 * mm, 58 * mm]
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a1a')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+        ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2), ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+    ]
+    for i, bg in enumerate(row_bgs, start=1):
+        style_cmds.append(('BACKGROUND', (0, i), (-1, i), bg))
+
+    section_bar = Table([['TIMELINE']], colWidths=[275 * mm])
+    section_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#0b3d59')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    if not events:
+        empty = Paragraph(
+            'No timeline events recorded for this licence yet.',
+            ParagraphStyle('tl_empty', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER),
+        )
+        return [section_bar, Spacer(1, 6), empty, Spacer(1, 8)]
+
+    table = Table(table_data, colWidths=col_w, repeatRows=1)
+    table.setStyle(TableStyle(style_cmds))
+    return [section_bar, Spacer(1, 3), table, Spacer(1, 8)]
+
+
+def _build_final_reconciliation_elements(license_obj, ledger_summary, customs_summary=None):
+    """
+    "6. Final Reconciliation Summary" — the closing three-way check:
+    Financial Ledger balance vs. Customs Ledger balance (from the REAL
+    running Customs Ledger, `build_customs_ledger`, not the denormalized
+    `balance_cif` proxy) vs. the live Balance Engine.
     """
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -284,7 +569,7 @@ def _build_final_reconciliation_elements(license_obj, ledger_summary):
 
     styles = getSampleStyleSheet()
 
-    rec = LicenseBalanceLedgerBuilder.build_reconciliation_summary(license_obj, ledger_summary)
+    rec = LicenseBalanceLedgerBuilder.build_reconciliation_summary(license_obj, ledger_summary, customs_summary)
     matched = rec['matched']
 
     label_style = ParagraphStyle('rec_lbl', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold')
@@ -1014,8 +1299,17 @@ def build_balance_pdf_response(license_obj, request):
         elements.append(Spacer(1, 8))
         elements.append(bal_table)
 
-    # 5. Final Reconciliation Summary
-    elements.extend(_build_final_reconciliation_elements(license_obj, ledger_summary))
+    # 4. Customs Summary + Customs Ledger (running utilisation statement —
+    # separate from the itemised Export/Import/BOE/Allotment tables above,
+    # which stay untouched as the item-level detail appendix).
+    customs_elements, customs_summary = _build_customs_ledger_elements(license_obj)
+    elements.extend(customs_elements)
+
+    # 5. Timeline
+    elements.extend(_build_timeline_elements(license_obj))
+
+    # 6. Final Reconciliation Summary (three-way: Financial vs Customs vs Engine)
+    elements.extend(_build_final_reconciliation_elements(license_obj, ledger_summary, customs_summary))
 
     # Build PDF
     doc.build(elements)

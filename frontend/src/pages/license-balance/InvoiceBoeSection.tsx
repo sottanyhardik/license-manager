@@ -8,39 +8,46 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import BoeAllocationDrawer, { type AllocationCandidate, type AllocationSelection } from "@/components/BoeAllocationDrawer";
+import BoeAllocationDrawer, {
+    type AllocationCandidate,
+    type AllocationSelection,
+} from "@/components/BoeAllocationDrawer";
 import { licenseBalanceKeys } from "./useLicenseBalanceLedger";
 import { extractApiError, fmtDate, fmtNum, invoiceBoeStatusVariant } from "./licenseBalanceHelpers";
-import type { BoeAllotmentEntry, InvoiceBoeEntry } from "./types";
+import type { BoeInvoiceCandidate, InvoiceBoeEntry } from "./types";
 
 interface InvoiceBoeSectionProps {
     licenseId: string | number;
     invoices: InvoiceBoeEntry[];
-    /** Used only to derive the "Find BOE" / "Mark External Invoice" candidate list — see `fetchBoeCandidates` below. */
-    boeAllotment: BoeAllotmentEntry[];
+    /** The correct candidate source for "Find BOE" / "Mark External Invoice" — INVOICE-side remaining capacity per BOE. */
+    boeInvoiceCandidates: BoeInvoiceCandidate[];
 }
 
 /**
- * Derives the candidate BOE list for the "Find BOE" drawer and the "Mark
- * External Invoice" picker.
+ * Maps `boe_invoice_candidates` (server-computed via
+ * `remaining_for_row_details_invoice_side`, see
+ * `LicenseBalanceLedgerBuilder.build_boe_invoice_candidates`) to the
+ * drawer's generic candidate shape.
  *
- * BACKEND GAP (flagged in the final report): there is no dedicated
- * `GET /licenses/<id>/available-boes/` search endpoint yet. Every entry in
- * `boe_allotment` IS a BOE debit row on this licence, so filtering to rows
- * with remaining invoice-side capacity is a correct, if client-side-only,
- * stand-in. This is the ONE place that logic lives — swapping in a real
- * search endpoint later only requires changing this function.
+ * This REPLACES the previous client-side derivation from `boe_allotment`
+ * (the ALLOTMENT-side remaining), which was the root cause of a false
+ * "Selected total exceeds the remaining amount available to allocate"
+ * error: a BOE's allotment-side remaining and invoice-side remaining are
+ * two independent consumption tracks that only coincidentally match when
+ * neither has any allocations yet.
  */
-function fetchBoeCandidates(boeAllotment: BoeAllotmentEntry[]): AllocationCandidate[] {
-    return boeAllotment
-        .filter((boe) => boe.remaining_cif > 0 || boe.remaining_qty > 0)
-        .map((boe) => ({
-            id: boe.row_details_id,
-            label: boe.bill_of_entry_number,
-            sublabel: [fmtDate(boe.bill_of_entry_date), boe.company].filter(Boolean).join(" · "),
-            remainingQty: boe.remaining_qty,
-            remainingCif: boe.remaining_cif,
-        }));
+function toAllocationCandidates(candidates: BoeInvoiceCandidate[]): AllocationCandidate[] {
+    return candidates.map((c) => ({
+        id: c.row_details_id,
+        number: c.bill_of_entry_number,
+        date: c.bill_of_entry_date,
+        counterparty: c.company,
+        itemName: c.item_name,
+        totalQty: c.boe_qty,
+        totalCif: c.boe_cif,
+        remainingQty: c.remaining_qty,
+        remainingCif: c.remaining_cif,
+    }));
 }
 
 const EMPTY_EXTERNAL_FORM = { rowDetailsId: "", invoiceNumber: "", qty: "", cifFc: "", cifInr: "" };
@@ -51,7 +58,7 @@ const EMPTY_EXTERNAL_FORM = { rowDetailsId: "", invoiceNumber: "", qty: "", cifF
  * sibling-`<tr>`-with-`colSpan`), plus the "Find BOE" allocation drawer and
  * the "Mark External Invoice" flow.
  */
-export default function InvoiceBoeSection({ licenseId, invoices, boeAllotment }: InvoiceBoeSectionProps) {
+export default function InvoiceBoeSection({ licenseId, invoices, boeInvoiceCandidates }: InvoiceBoeSectionProps) {
     const { hasRole } = useContext(AuthContext);
     const queryClient = useQueryClient();
     const { confirmDangerousAction, confirmDialog } = useConfirmDialog();
@@ -68,7 +75,12 @@ export default function InvoiceBoeSection({ licenseId, invoices, boeAllotment }:
     const canAllocate = hasRole("TRADE_MANAGER") && hasRole("BOE_MANAGER");
     const canMarkExternal = hasRole("BOE_MANAGER");
 
-    const boeCandidates = useMemo(() => fetchBoeCandidates(boeAllotment), [boeAllotment]);
+    const boeCandidates = useMemo(() => toAllocationCandidates(boeInvoiceCandidates), [boeInvoiceCandidates]);
+    // The "Mark External Invoice" picker only makes sense for BOEs that still have invoice-side capacity left.
+    const markExternalBoeOptions = useMemo(
+        () => boeCandidates.filter((c) => c.remainingCif > 0 || c.remainingQty > 0),
+        [boeCandidates]
+    );
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: licenseBalanceKeys.ledger(licenseId) });
 
@@ -251,19 +263,31 @@ export default function InvoiceBoeSection({ licenseId, invoices, boeAllotment }:
                 </table>
             </div>
 
-            <BoeAllocationDrawer
-                open={drawerInvoice !== null}
-                onClose={() => setDrawerInvoice(null)}
-                title={`Allocate Invoice ${drawerInvoice?.invoice_number ?? ""} to BOE(s)`}
-                description="Select one or more BOEs to allocate this invoice against."
-                qtyLabel="Qty"
-                candidates={boeCandidates}
-                targetRemainingQty={drawerInvoice?.remaining_qty}
-                targetRemainingCif={drawerInvoice?.remaining_cif}
-                confirmLabel="Allocate"
-                onConfirm={handleAllocateConfirm}
-                notice="No dedicated 'available BOEs' search endpoint exists yet — this list is derived client-side from this licence's BOE data, filtered to BOEs with remaining capacity."
-            />
+            {drawerInvoice && (
+                <BoeAllocationDrawer
+                    open={drawerInvoice !== null}
+                    onClose={() => setDrawerInvoice(null)}
+                    title={`Allocate Invoice ${drawerInvoice.invoice_number} to BOE(s)`}
+                    description="Select one or more BOEs to allocate this invoice against."
+                    qtyLabel="Qty"
+                    numberLabel="BOE Number"
+                    dateLabel="BOE Date"
+                    candidates={boeCandidates}
+                    summary={{
+                        label: "Invoice",
+                        number: drawerInvoice.invoice_number,
+                        counterparty: drawerInvoice.supplier,
+                        totalQty: drawerInvoice.invoice_qty,
+                        totalCif: drawerInvoice.invoice_cif,
+                        allocatedQty: drawerInvoice.matched_qty,
+                        allocatedCif: drawerInvoice.matched_cif,
+                        remainingQty: drawerInvoice.remaining_qty,
+                        remainingCif: drawerInvoice.remaining_cif,
+                    }}
+                    confirmLabel="Allocate"
+                    onConfirm={handleAllocateConfirm}
+                />
+            )}
 
             <Dialog open={markExternalOpen} onOpenChange={(o) => !markExternalSubmitting && setMarkExternalOpen(o)}>
                 <DialogContent>
@@ -282,12 +306,15 @@ export default function InvoiceBoeSection({ licenseId, invoices, boeAllotment }:
                                 onChange={(e) => setMarkExternalForm((f) => ({ ...f, rowDetailsId: e.target.value }))}
                             >
                                 <option value="">Select a BOE…</option>
-                                {boeCandidates.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.label}
-                                        {c.sublabel ? ` (${c.sublabel})` : ""}
-                                    </option>
-                                ))}
+                                {markExternalBoeOptions.map((c) => {
+                                    const sublabel = [fmtDate(c.date), c.counterparty].filter(Boolean).join(" · ");
+                                    return (
+                                        <option key={c.id} value={c.id}>
+                                            {c.number}
+                                            {sublabel ? ` (${sublabel})` : ""}
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
                         <div>

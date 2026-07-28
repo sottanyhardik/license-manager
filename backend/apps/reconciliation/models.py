@@ -113,6 +113,8 @@ class ReconciliationLog(models.Model):
     ACTION_REVERSE_ALLOCATION = "REVERSE_ALLOCATION"
     ACTION_MARK_EXTERNAL_INVOICE = "MARK_EXTERNAL_INVOICE"
     ACTION_REVERSE_EXTERNAL_INVOICE = "REVERSE_EXTERNAL_INVOICE"
+    ACTION_WARNING_IGNORED = "WARNING_IGNORED"
+    ACTION_WARNING_RESTORED = "WARNING_RESTORED"
     ACTION_CHOICES = (
         (ACTION_LINK, "Link"),
         (ACTION_MERGE_BOE, "Merge BOE"),
@@ -124,6 +126,8 @@ class ReconciliationLog(models.Model):
         (ACTION_REVERSE_ALLOCATION, "Reverse Allocation"),
         (ACTION_MARK_EXTERNAL_INVOICE, "Mark External Invoice"),
         (ACTION_REVERSE_EXTERNAL_INVOICE, "Reverse External Invoice"),
+        (ACTION_WARNING_IGNORED, "Warning Ignored"),
+        (ACTION_WARNING_RESTORED, "Warning Restored"),
     )
 
     action = models.CharField(max_length=30, choices=ACTION_CHOICES, db_index=True)
@@ -504,4 +508,67 @@ class ExternalInvoiceLink(AuditModel):
         return (
             f"ExternalInvoiceLink[{self.pk}] row_details={self.row_details_id} "
             f"invoice_number={self.invoice_number!r} {self.status}"
+        )
+
+
+class IgnoredWarning(models.Model):
+    """
+    Workflow-only "ignore" flag for a Licence Balance Workspace warning
+    (`LicenseBalanceLedgerBuilder.build_warnings`).
+
+    Deliberately NOT append-only like `InvoiceBOEAllocation`/
+    `BOEAllotmentAllocation`/`ExternalInvoiceLink` — a warning's identity
+    (`license`, `warning_type`, `entity_type`, `entity_id`) is stable and
+    recomputed fresh on every `build()` call, so there is exactly one row
+    per warning identity and `ignored` is toggled in place (restore sets
+    `ignored=False` rather than creating a new row) — matches the product
+    spec's "Ignored = False -> Returns to Active Warnings" exactly.
+
+    CRITICAL: ignoring a warning is PURE workflow bookkeeping. It must
+    NEVER be read by `LicenseBalanceLedgerBuilder`'s financial calculations
+    (`build_financial_ledger`/`build_customs_ledger`/`calculate_balance`
+    etc.) — those must produce identical numbers whether a warning is
+    ignored or not. Only `build_warnings` (via `apply_ignored_status`)
+    reads this model, purely to split results into active/ignored for
+    display.
+    """
+
+    warning_type = models.CharField(max_length=64, db_index=True)
+    entity_type = models.CharField(max_length=32, db_index=True)
+    entity_id = models.CharField(max_length=64, db_index=True)
+    license = models.ForeignKey(
+        "license.LicenseDetailsModel",
+        on_delete=models.CASCADE,
+        related_name="ignored_warnings",
+    )
+
+    ignored = models.BooleanField(default=True, db_index=True)
+    ignored_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+    ignored_at = models.DateTimeField(null=True, blank=True)
+    reason = models.TextField(blank=True, default="")
+
+    restored_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+    restored_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["license", "warning_type", "entity_type", "entity_id"],
+                name="uniq_ignored_warning_identity",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["license", "ignored"]),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"IgnoredWarning[{self.pk}] {self.warning_type}/{self.entity_type}:{self.entity_id} "
+            f"license={self.license_id} ignored={self.ignored}"
         )

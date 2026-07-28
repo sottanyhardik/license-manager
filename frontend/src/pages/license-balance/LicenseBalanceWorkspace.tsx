@@ -2,7 +2,7 @@ import { useContext, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, FileSpreadsheet, FileText, Loader2, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, FileSpreadsheet, FileText, Loader2, RefreshCw } from "lucide-react";
 
 import api from "@/api/axios";
 import { AuthContext } from "@/context/AuthContext";
@@ -22,8 +22,10 @@ import InvoiceBoeSection from "./InvoiceBoeSection";
 import BoeAllotmentSection from "./BoeAllotmentSection";
 import BalanceTimeline from "./BalanceTimeline";
 import CustomsLedgerSection from "./CustomsLedgerSection";
+import CustomsLedgerTable from "./CustomsLedgerTable";
 import FinancialSummarySection from "./FinancialSummarySection";
 import FinalReconciliationSection from "./FinalReconciliationSection";
+import WarningsPanel from "./WarningsPanel";
 
 /**
  * Licence Balance & Financial Reconciliation Workspace — full-page
@@ -38,7 +40,6 @@ export default function LicenseBalanceWorkspace() {
     const { confirmDangerousAction, confirmDialog } = useConfirmDialog();
 
     const { data, isLoading, isError, error } = useLicenseBalanceLedger(id);
-    const [dismissedWarnings, setDismissedWarnings] = useState<Set<number>>(new Set());
     const [downloadingPdf, setDownloadingPdf] = useState(false);
     const [downloadingExcel, setDownloadingExcel] = useState(false);
     const [recalculating, setRecalculating] = useState(false);
@@ -109,8 +110,18 @@ export default function LicenseBalanceWorkspace() {
         );
     }
 
-    const { license, financial_ledger, invoice_boe, boe_allotment, reconciliation, warnings } = data;
-    const visibleWarnings = warnings.filter((_, idx) => !dismissedWarnings.has(idx));
+    const {
+        license,
+        financial_ledger,
+        customs_ledger,
+        invoice_boe,
+        boe_allotment,
+        boe_invoice_candidates,
+        allotment_candidates,
+        reconciliation,
+        warnings,
+        timeline,
+    } = data;
 
     return (
         <div>
@@ -169,26 +180,17 @@ export default function LicenseBalanceWorkspace() {
             </div>
 
             {/* Warnings */}
-            {visibleWarnings.length > 0 && (
-                <div className="mb-5 space-y-2">
-                    {warnings.map((warning, idx) =>
-                        dismissedWarnings.has(idx) ? null : (
-                            <Alert key={idx} variant="destructive" className="pr-10">
-                                <AlertTriangle className="size-4" />
-                                <AlertDescription>{warning}</AlertDescription>
-                                <button
-                                    type="button"
-                                    onClick={() => setDismissedWarnings((prev) => new Set(prev).add(idx))}
-                                    aria-label="Dismiss warning"
-                                    className="absolute right-3 top-3 cursor-pointer text-destructive/70 hover:text-destructive"
-                                >
-                                    <X className="size-4" />
-                                </button>
-                            </Alert>
-                        )
-                    )}
-                </div>
-            )}
+            <Card className="mb-5">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <AlertTriangle className="size-4 text-muted-foreground" />
+                        Warnings
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <WarningsPanel licenseId={id ?? ""} warnings={warnings} />
+                </CardContent>
+            </Card>
 
             <div className="space-y-5">
                 <Card>
@@ -202,13 +204,21 @@ export default function LicenseBalanceWorkspace() {
 
                 <Card>
                     <CardContent className="pt-4">
-                        <InvoiceBoeSection licenseId={id ?? ""} invoices={invoice_boe} boeAllotment={boe_allotment} />
+                        <InvoiceBoeSection
+                            licenseId={id ?? ""}
+                            invoices={invoice_boe}
+                            boeInvoiceCandidates={boe_invoice_candidates}
+                        />
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardContent className="pt-4">
-                        <BoeAllotmentSection licenseId={id ?? ""} boeAllotment={boe_allotment} />
+                        <BoeAllotmentSection
+                            licenseId={id ?? ""}
+                            boeAllotment={boe_allotment}
+                            allotmentCandidates={allotment_candidates}
+                        />
                     </CardContent>
                 </Card>
 
@@ -217,13 +227,22 @@ export default function LicenseBalanceWorkspace() {
                         <CardTitle>Timeline</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <BalanceTimeline rows={financial_ledger.rows} />
+                        <BalanceTimeline events={timeline} />
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Customs Ledger</CardTitle>
+                        <CardTitle>Customs Ledger — Running Balance</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <CustomsLedgerTable rows={customs_ledger.rows} summary={customs_ledger.summary} />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Customs Ledger — Item Detail</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <CustomsLedgerSection licenseId={id ?? ""} />

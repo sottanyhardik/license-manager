@@ -9,52 +9,47 @@ import { Button } from "@/components/ui/button";
 import BoeAllocationDrawer, { type AllocationCandidate, type AllocationSelection } from "@/components/BoeAllocationDrawer";
 import { licenseBalanceKeys } from "./useLicenseBalanceLedger";
 import { boeAllotmentStatusVariant, extractApiError, fmtDate, fmtNum } from "./licenseBalanceHelpers";
-import type { BoeAllotmentEntry } from "./types";
+import type { AllotmentCandidate, BoeAllotmentEntry } from "./types";
 
 interface BoeAllotmentSectionProps {
     licenseId: string | number;
     boeAllotment: BoeAllotmentEntry[];
+    /** The correct candidate source for "Find Allotment" — real remaining-capacity-to-be-sourced per allotment item. */
+    allotmentCandidates: AllotmentCandidate[];
 }
 
 /**
- * Derives the candidate allotment list for the "Find Allotment" drawer.
+ * Maps `allotment_candidates` (server-computed via
+ * `remaining_for_allotment_item`, see
+ * `LicenseBalanceLedgerBuilder.build_allotment_candidates`) to the drawer's
+ * generic candidate shape.
  *
- * BACKEND GAP (flagged in the final report, see also `InvoiceBoeSection.tsx`
- * for the mirrored BOE-side gap): the ledger payload has no "all allotments
- * with free capacity for this licence" list — `boe_allotment[].linked_allotments`
- * only ever contains allotments ALREADY allocated to a specific BOE. As a
- * pragmatic stand-in until a dedicated
- * `GET /licenses/<id>/available-allotments/` endpoint exists, this pulls the
- * distinct allotments already referenced anywhere on this licence so the
- * picker isn't empty — but it CANNOT show true remaining capacity per
- * allotment (not present in this payload), so remaining is left `null` and
- * the drawer surfaces a visible notice. Isolated in this one function so
- * swapping in a real search endpoint later is a one-line change at the call
- * site.
+ * This REPLACES the previous client-side derivation from
+ * `boe_allotment[].linked_allotments` (which only ever listed allotments
+ * ALREADY allocated to some BOE, with no real remaining-capacity figure —
+ * `remainingQty`/`remainingCif` were hardcoded to `null`). The new list has
+ * real, server-computed remaining capacity for every allotment item with
+ * some left, whether or not it has been touched yet.
  */
-function fetchAllotmentCandidates(boeAllotment: BoeAllotmentEntry[]): AllocationCandidate[] {
-    const seen = new Map<number, AllocationCandidate>();
-    for (const boe of boeAllotment) {
-        for (const linked of boe.linked_allotments) {
-            if (!seen.has(linked.allotment_item_id)) {
-                seen.set(linked.allotment_item_id, {
-                    id: linked.allotment_item_id,
-                    label: linked.allotment_number,
-                    sublabel: undefined,
-                    remainingQty: null,
-                    remainingCif: null,
-                });
-            }
-        }
-    }
-    return Array.from(seen.values());
+function toAllocationCandidates(candidates: AllotmentCandidate[]): AllocationCandidate[] {
+    return candidates.map((c) => ({
+        id: c.allotment_item_id,
+        number: c.allotment_number,
+        date: c.estimated_arrival_date,
+        counterparty: c.company,
+        itemName: c.item_name,
+        totalQty: c.allotment_qty,
+        totalCif: c.allotment_cif,
+        remainingQty: c.remaining_qty,
+        remainingCif: c.remaining_cif,
+    }));
 }
 
 /**
  * Section 3 — BOE ↔ Allotment Reconciliation. Mirrors `InvoiceBoeSection.tsx`
  * one-for-one: expandable rows, a "Find Allotment" allocation drawer.
  */
-export default function BoeAllotmentSection({ licenseId, boeAllotment }: BoeAllotmentSectionProps) {
+export default function BoeAllotmentSection({ licenseId, boeAllotment, allotmentCandidates }: BoeAllotmentSectionProps) {
     const { hasRole } = useContext(AuthContext);
     const queryClient = useQueryClient();
 
@@ -65,7 +60,7 @@ export default function BoeAllotmentSection({ licenseId, boeAllotment }: BoeAllo
     // allocation requires BOE_MANAGER AND ALLOTMENT_MANAGER.
     const canAllocate = hasRole("BOE_MANAGER") && hasRole("ALLOTMENT_MANAGER");
 
-    const allotmentCandidates = useMemo(() => fetchAllotmentCandidates(boeAllotment), [boeAllotment]);
+    const allotmentDrawerCandidates = useMemo(() => toAllocationCandidates(allotmentCandidates), [allotmentCandidates]);
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: licenseBalanceKeys.ledger(licenseId) });
 
@@ -203,19 +198,31 @@ export default function BoeAllotmentSection({ licenseId, boeAllotment }: BoeAllo
                 </table>
             </div>
 
-            <BoeAllocationDrawer
-                open={drawerBoe !== null}
-                onClose={() => setDrawerBoe(null)}
-                title={`Allocate BOE ${drawerBoe?.bill_of_entry_number ?? ""} to Allotment(s)`}
-                description="Select one or more allotments to source this BOE from."
-                qtyLabel="Qty"
-                candidates={allotmentCandidates}
-                targetRemainingQty={drawerBoe?.remaining_qty}
-                targetRemainingCif={drawerBoe?.remaining_cif}
-                confirmLabel="Allocate"
-                onConfirm={handleAllocateConfirm}
-                notice="No dedicated 'available allotments' search endpoint exists yet — this list shows allotments already referenced elsewhere on this licence as a placeholder and cannot show true remaining capacity. A GET /licenses/{id}/available-allotments/ endpoint is needed for accurate results."
-            />
+            {drawerBoe && (
+                <BoeAllocationDrawer
+                    open={drawerBoe !== null}
+                    onClose={() => setDrawerBoe(null)}
+                    title={`Allocate BOE ${drawerBoe.bill_of_entry_number} to Allotment(s)`}
+                    description="Select one or more allotments to source this BOE from."
+                    qtyLabel="Qty"
+                    numberLabel="Allotment Number"
+                    dateLabel="Est. Arrival"
+                    candidates={allotmentDrawerCandidates}
+                    summary={{
+                        label: "BOE",
+                        number: drawerBoe.bill_of_entry_number,
+                        counterparty: drawerBoe.company,
+                        totalQty: drawerBoe.boe_qty,
+                        totalCif: drawerBoe.boe_cif,
+                        allocatedQty: drawerBoe.matched_qty,
+                        allocatedCif: drawerBoe.matched_cif,
+                        remainingQty: drawerBoe.remaining_qty,
+                        remainingCif: drawerBoe.remaining_cif,
+                    }}
+                    confirmLabel="Allocate"
+                    onConfirm={handleAllocateConfirm}
+                />
+            )}
         </div>
     );
 }

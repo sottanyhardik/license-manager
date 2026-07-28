@@ -292,6 +292,13 @@ def add_license_balance_ledger_actions(viewset_class):
 
         ReconciliationLog.objects.create(
             action=ReconciliationLog.ACTION_RECALCULATE,
+            # `license_item` is the only license-identifying FK this log
+            # model carries (see its own docstring — it's always associated
+            # via an item/trade/BOE, never a bare license); a recalculation
+            # covers the whole licence, so pick any one representative item
+            # purely so this event is queryable by license (`build_timeline`
+            # filters on `license_item__license=license_obj`).
+            license_item=license_obj.import_license.first(),
             before={'balance_cif': str(before_balance)},
             after={'balance_cif': str(new_balance)},
             reason=request.data.get('reason', ''),
@@ -299,10 +306,66 @@ def add_license_balance_ledger_actions(viewset_class):
         )
         return Response({'balance_cif': float(new_balance)})
 
+    @action(detail=True, methods=['post'], url_path='ignore-warning')
+    def ignore_warning(self, request, pk=None):
+        """
+        Body: {warning_type, entity_type, entity_id, reason?}. Pure
+        workflow bookkeeping — never touches any financial record (see
+        `IgnoredWarning`'s docstring). The identity fields must exactly
+        match what `build_warnings()` currently computes for this licence;
+        rather than trust arbitrary client input, we re-derive the current
+        warning set and require the target to actually be present.
+        """
+        from apps.license.services.license_balance_ledger_builder import LicenseBalanceLedgerBuilder
+        from apps.reconciliation.services.warning_service import ignore_warning as ignore_warning_service
+
+        license_obj = self.get_object()
+        warning_type = request.data.get('warning_type')
+        entity_type = request.data.get('entity_type')
+        entity_id = str(request.data.get('entity_id', ''))
+        if not warning_type or not entity_type or not entity_id:
+            return Response({'error': 'warning_type, entity_type and entity_id are required.'}, status=400)
+
+        data = LicenseBalanceLedgerBuilder.build(license_obj)
+        match = next(
+            (w for w in data['warnings']
+             if w['warning_type'] == warning_type and w['entity_type'] == entity_type and w['entity_id'] == entity_id),
+            None,
+        )
+        if match is None:
+            return Response({'error': 'No active warning matches that identity for this licence.'}, status=404)
+
+        obj = ignore_warning_service(
+            license_obj, warning_type, entity_type, entity_id,
+            user=request.user, reason=request.data.get('reason', ''),
+        )
+        return Response({'id': obj.id, 'ignored': obj.ignored}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='restore-warning')
+    def restore_warning(self, request, pk=None):
+        """Body: {warning_type, entity_type, entity_id, reason?}."""
+        from apps.reconciliation.models import IgnoredWarning
+        from apps.reconciliation.services.warning_service import restore_warning as restore_warning_service
+
+        license_obj = self.get_object()
+        warning_type = request.data.get('warning_type')
+        entity_type = request.data.get('entity_type')
+        entity_id = str(request.data.get('entity_id', ''))
+        try:
+            ignored = IgnoredWarning.objects.get(
+                license=license_obj, warning_type=warning_type, entity_type=entity_type, entity_id=entity_id,
+            )
+        except IgnoredWarning.DoesNotExist:
+            return Response({'error': 'No ignored warning matches that identity for this licence.'}, status=404)
+
+        restore_warning_service(ignored, user=request.user, reason=request.data.get('reason', ''))
+        return Response({'id': ignored.id, 'ignored': ignored.ignored})
+
     for method in (
         balance_ledger, allocate_invoice_boe, edit_invoice_boe_allocation, reverse_invoice_boe_allocation,
         allocate_boe_allotment, edit_boe_allotment_allocation, reverse_boe_allotment_allocation,
         mark_external_invoice, reverse_external_invoice, recalculate,
+        ignore_warning, restore_warning,
     ):
         setattr(viewset_class, method.__name__, method)
 

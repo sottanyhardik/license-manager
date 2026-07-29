@@ -172,6 +172,29 @@ export interface CustomsLedgerRow {
     row_details_id?: number;
     allotment_item_id?: number;
     mismatched?: boolean;
+    /** Only ever `true` on a `"customs_boe"` row when the ledger was fetched
+     * with `?show_hidden=true` (`GET .../balance-ledger/`) — a previous-owner
+     * BOE debit (`RowDetails.is_hidden`), kept for audit but excluded from
+     * every balance/financial calculation by default. Omitted/false rows
+     * render exactly as before. */
+    is_hidden?: boolean;
+    /** Free-text reason captured when the row was hidden (`POST
+     * .../hide-boe/`'s `reason`) — shown as a tooltip/subtitle next to the
+     * "Hidden" badge. */
+    hidden_reason?: string | null;
+    /** Not currently populated on this row by the backend builder (only
+     * `is_hidden`/`hidden_reason` are) — present on the wire type for
+     * forward-compatibility with `hide-boe`/`restore-boe`'s own response
+     * shape (`{id, is_hidden, rows_affected, hidden_by, hidden_at}`). */
+    hidden_by?: string | null;
+    hidden_at?: string | null;
+    /** NOT currently returned by `LicenseBalanceLedgerBuilder.build_customs_
+     * ledger` on `"customs_boe"` rows — the `BillOfEntryModel` PK the
+     * `hide-boe`/`restore-boe` actions need as `boe_id`. Until the backend
+     * adds it here, the Hide/Restore row action stays hidden for rows
+     * missing this field rather than guessing an id from `boe_number`
+     * (not globally unique — see `BillOfEntryModel.Meta.unique_together`). */
+    bill_of_entry_id?: number;
 }
 
 export interface CustomsLedgerSummary {

@@ -39,9 +39,10 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
     const { hasRole } = useContext(AuthContext);
     const queryClient = useQueryClient();
     const [recalculating, setRecalculating] = useState(false);
+    const [showHiddenBoe, setShowHiddenBoe] = useState(false);
 
     const summaryQuery = useLicenseOverviewSummary(licenseId, isActive);
-    const ledgerQuery = useLicenseBalanceLedger(isActive ? licenseId : undefined);
+    const ledgerQuery = useLicenseBalanceLedger(isActive ? licenseId : undefined, showHiddenBoe);
 
     const canRecalculate = hasRole("LICENSE_MANAGER");
 
@@ -153,7 +154,13 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
                             <CardTitle>Customs Ledger — Running Balance</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <CustomsLedgerTable rows={ledgerQuery.data.customs_ledger.rows} summary={ledgerQuery.data.customs_ledger.summary} />
+                            <CustomsLedgerTable
+                                rows={ledgerQuery.data.customs_ledger.rows}
+                                summary={ledgerQuery.data.customs_ledger.summary}
+                                licenseId={licenseId}
+                                showHidden={showHiddenBoe}
+                                onShowHiddenChange={setShowHiddenBoe}
+                            />
                         </CardContent>
                     </Card>
 

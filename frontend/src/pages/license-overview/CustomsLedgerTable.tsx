@@ -1,18 +1,30 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, EyeOff, RotateCcw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+import api from "@/api/axios";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { CustomsLedgerRow, CustomsLedgerSummary } from "@/pages/license-balance/types";
-import { customsLedgerRowClass, customsStatusVariant, fmtDate, fmtNum } from "@/pages/license-balance/licenseBalanceHelpers";
+import { customsLedgerRowClass, customsStatusVariant, extractApiError, fmtDate, fmtNum } from "@/pages/license-balance/licenseBalanceHelpers";
+import { licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
 import SummaryCard from "./SummaryCard";
 
 interface CustomsLedgerTableProps {
     rows: CustomsLedgerRow[];
     summary: CustomsLedgerSummary;
+    licenseId: string | number | undefined;
+    showHidden: boolean;
+    onShowHiddenChange: (next: boolean) => void;
 }
 
 const HEADERS = [
     "Sr", "Date", "Type", "Doc Number", "BOE Number", "BOE Date", "Company", "Item",
-    "Qty", "CIF USD", "Credit", "Debit", "Running Balance", "Status", "Remarks",
+    "Qty", "CIF USD", "Credit", "Debit", "Running Balance", "Status", "Remarks", "Actions",
 ];
 
 /** One step of the Available Balance flow — a compact value chip, optionally
@@ -68,10 +80,65 @@ function FlowStep({
  *
  * Relocated (unchanged) from `pages/license-balance/` — still backed by
  * `useLicenseBalanceLedger`.
+ *
+ * Hidden-BOE (previous-owner) support: `showHidden` drives the `?show_hidden`
+ * param on `useLicenseBalanceLedger` (lifted to `OverviewTab` since that's
+ * where the hook lives); when on, `rows` includes `is_hidden` BOE debits with
+ * `hidden_reason` set, rendered muted/struck-through with a "Hidden" badge.
+ * The per-row Hide/Restore action posts to `licenses/<id>/hide-boe/` /
+ * `restore-boe/` (mirrors `pages/reconciliation/MissingBoeTab.tsx`'s
+ * `handleNote`: `window.prompt` for a reason, plain `api.post`, then a
+ * manual `queryClient.invalidateQueries` — no `useMutation`, matching this
+ * workspace's established convention per `useLicenseBalanceLedger.ts`'s own
+ * docstring). Gated on `row.bill_of_entry_id` — NOT yet returned by
+ * `LicenseBalanceLedgerBuilder.build_customs_ledger` for `"customs_boe"`
+ * rows (only `is_hidden`/`hidden_reason` are), so the action stays hidden
+ * until the backend adds that field rather than guessing an id from
+ * `boe_number` (not globally unique on its own).
  */
-export default function CustomsLedgerTable({ rows, summary }: CustomsLedgerTableProps) {
+export default function CustomsLedgerTable({ rows, summary, licenseId, showHidden, onShowHiddenChange }: CustomsLedgerTableProps) {
+    const queryClient = useQueryClient();
+
+    const invalidate = () => {
+        if (licenseId === undefined || licenseId === null || licenseId === "") return;
+        queryClient.invalidateQueries({ queryKey: licenseBalanceKeys.ledger(licenseId) });
+    };
+
+    const handleHide = async (row: CustomsLedgerRow) => {
+        if (!licenseId || !row.bill_of_entry_id) return;
+        const reason = window.prompt("Reason for hiding this BOE as a previous owner's utilisation:");
+        if (reason === null) return;
+        try {
+            await api.post(`licenses/${licenseId}/hide-boe/`, { boe_id: row.bill_of_entry_id, reason });
+            toast.success("BOE hidden.");
+            invalidate();
+        } catch (err) {
+            toast.error(extractApiError(err, "Failed to hide BOE."));
+        }
+    };
+
+    const handleRestore = async (row: CustomsLedgerRow) => {
+        if (!licenseId || !row.bill_of_entry_id) return;
+        const reason = window.prompt("Reason for restoring this BOE:");
+        if (reason === null) return;
+        try {
+            await api.post(`licenses/${licenseId}/restore-boe/`, { boe_id: row.bill_of_entry_id, reason });
+            toast.success("BOE restored.");
+            invalidate();
+        } catch (err) {
+            toast.error(extractApiError(err, "Failed to restore BOE."));
+        }
+    };
+
     return (
         <div className="space-y-3">
+            <div className="flex items-center justify-end gap-2">
+                <Label htmlFor="customs-ledger-show-hidden" className="text-xs font-medium text-muted-foreground">
+                    Show Hidden BOEs
+                </Label>
+                <Switch id="customs-ledger-show-hidden" checked={showHidden} onCheckedChange={onShowHiddenChange} />
+            </div>
+
             {/* Available Balance flow: Original CIF -> (-) Total BOE CIF ->
                 Remaining After BOE -> (-) Pending/Unlinked Allotted CIF ->
                 Available Balance. Horizontal + wrapping, so it's one shallow
@@ -127,30 +194,79 @@ export default function CustomsLedgerTable({ rows, summary }: CustomsLedgerTable
                                 </td>
                             </tr>
                         )}
-                        {rows.map((row) => (
-                            <tr
-                                key={row.sr}
-                                className={cn("border-t border-border/60", customsLedgerRowClass(row.row_kind, row.mismatched))}
-                            >
-                                <td className="px-3 py-2">{row.sr}</td>
-                                <td className="whitespace-nowrap px-3 py-2">{fmtDate(row.date)}</td>
-                                <td className="whitespace-nowrap px-3 py-2 font-medium">{row.type}</td>
-                                <td className="px-3 py-2">{row.document_number ?? "—"}</td>
-                                <td className="px-3 py-2">{row.boe_number ?? "—"}</td>
-                                <td className="whitespace-nowrap px-3 py-2">{fmtDate(row.boe_date)}</td>
-                                <td className="px-3 py-2">{row.company ?? "—"}</td>
-                                <td className="px-3 py-2">{row.item_name ?? "—"}</td>
-                                <td className="px-3 py-2 text-right">{fmtNum(row.qty)}</td>
-                                <td className="px-3 py-2 text-right">{fmtNum(row.cif_usd)}</td>
-                                <td className="px-3 py-2 text-right">{fmtNum(row.credit)}</td>
-                                <td className="px-3 py-2 text-right">{fmtNum(row.debit)}</td>
-                                <td className="px-3 py-2 text-right font-medium">{fmtNum(row.running_balance)}</td>
-                                <td className="px-3 py-2">
-                                    <Badge variant={customsStatusVariant(row.status)}>{row.status}</Badge>
-                                </td>
-                                <td className="px-3 py-2">{row.remarks ?? "—"}</td>
-                            </tr>
-                        ))}
+                        {rows.map((row) => {
+                            const isHideable = row.row_kind === "customs_boe" && Boolean(row.bill_of_entry_id);
+                            return (
+                                <tr
+                                    key={row.sr}
+                                    className={cn(
+                                        "border-t border-border/60",
+                                        row.is_hidden
+                                            ? "bg-muted/30 text-muted-foreground [&_td]:text-muted-foreground [&_td]:line-through"
+                                            : customsLedgerRowClass(row.row_kind, row.mismatched)
+                                    )}
+                                >
+                                    <td className="px-3 py-2">{row.sr}</td>
+                                    <td className="whitespace-nowrap px-3 py-2">{fmtDate(row.date)}</td>
+                                    <td className="whitespace-nowrap px-3 py-2 font-medium">
+                                        {row.type}
+                                        {row.is_hidden && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Badge variant="secondary" className="ml-2 gap-1 align-middle no-underline cursor-default">
+                                                        <EyeOff className="size-3" aria-hidden="true" />
+                                                        Hidden
+                                                    </Badge>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    {row.hidden_reason || "Hidden as a previous owner's utilisation."}
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-2">{row.document_number ?? "—"}</td>
+                                    <td className="px-3 py-2">{row.boe_number ?? "—"}</td>
+                                    <td className="whitespace-nowrap px-3 py-2">{fmtDate(row.boe_date)}</td>
+                                    <td className="px-3 py-2">{row.company ?? "—"}</td>
+                                    <td className="px-3 py-2">{row.item_name ?? "—"}</td>
+                                    <td className="px-3 py-2 text-right">{fmtNum(row.qty)}</td>
+                                    <td className="px-3 py-2 text-right">{fmtNum(row.cif_usd)}</td>
+                                    <td className="px-3 py-2 text-right">{fmtNum(row.credit)}</td>
+                                    <td className="px-3 py-2 text-right">{fmtNum(row.debit)}</td>
+                                    <td className="px-3 py-2 text-right font-medium">{fmtNum(row.running_balance)}</td>
+                                    <td className="px-3 py-2">
+                                        <Badge variant={customsStatusVariant(row.status)}>{row.status}</Badge>
+                                    </td>
+                                    <td className="px-3 py-2">{row.remarks ?? "—"}</td>
+                                    <td className="px-3 py-2">
+                                        {isHideable && !row.is_hidden && (
+                                            <Button
+                                                size="icon"
+                                                variant="outline"
+                                                className="size-7"
+                                                onClick={() => handleHide(row)}
+                                                title="Hide as Previous Owner"
+                                                aria-label="Hide as Previous Owner"
+                                            >
+                                                <EyeOff className="size-3.5" aria-hidden="true" />
+                                            </Button>
+                                        )}
+                                        {isHideable && row.is_hidden && showHidden && (
+                                            <Button
+                                                size="icon"
+                                                variant="outline"
+                                                className="size-7"
+                                                onClick={() => handleRestore(row)}
+                                                title="Restore"
+                                                aria-label="Restore"
+                                            >
+                                                <RotateCcw className="size-3.5" aria-hidden="true" />
+                                            </Button>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

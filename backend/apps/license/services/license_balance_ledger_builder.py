@@ -784,6 +784,12 @@ class LicenseBalanceLedgerBuilder:
                 # distinguish previous-owner rows when the toggle is on.
                 'is_hidden': row.is_hidden,
                 'hidden_reason': row.hidden_reason,
+                # The actual BillOfEntryModel PK — needed by the frontend's
+                # hide-boe/restore-boe actions (those endpoints take `boe_id`,
+                # NOT `row_details_id`/`boe_number`, since a BOE number alone
+                # isn't globally unique and row_details_id is a different
+                # model's PK). `boe` is already null-guarded above.
+                'bill_of_entry_id': boe.id if boe else None,
             })
             sr += 1
 

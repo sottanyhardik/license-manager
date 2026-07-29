@@ -290,40 +290,69 @@ class LicenseBalanceLedgerBuilder:
 
         opening_balance = license_obj.opening_balance  # = calculate_credit(): total export CIF
         # Total raw CIF of BOE debits marked "hidden" (previous-owner
-        # utilisation, see `RowDetails.is_hidden`) — the subtrahend in the
-        # 3-way Opening Balance gate immediately below. Zero for every
-        # licence with no hidden BOEs, which is what keeps this change
-        # additive/backward-compatible (see this method's docstring).
+        # utilisation, see `RowDetails.is_hidden`). Zero for every licence
+        # with no hidden BOEs, which is what keeps this change additive/
+        # backward-compatible (see this method's docstring).
         hidden_total = LicenseBalanceCalculator.calculate_hidden_boe_debit_total(license_obj)
+        has_hidden = hidden_total > DEC_0
+        # Only needed for the Previous Owner Utilisation netting below —
+        # computed unconditionally (cheap) so it's available before the
+        # "Licence Trade (Purchased)" row loop further down decides whether
+        # to also suppress its own rows for this same amount.
+        purchase_credit_for_netting = LicenseBalanceCalculator.calculate_purchase_credit(license_obj)
         rows = []
         sr = 1
 
         # 3-way Opening Balance gate, checked in this order:
-        #   1. hidden_total > 0 -> ALWAYS show the Opening Balance row (even
-        #      when has_purchase), as an explicit "original - hidden =
-        #      remaining tradable licence" line -- `running` starts at
-        #      `opening_balance - hidden_total` rather than either the full
-        #      original CIF or zero, so the ledger's audit trail makes the
-        #      previous-owner exclusion visible instead of a pre-collapsed
-        #      net (see this method's docstring / the design doc's "Remaining
-        #      Tradable Licence" rule).
+        #   1. has_hidden -> the Opening Balance row is NEVER reduced (ALWAYS
+        #      the full Original Licence CIF, credited at face value, shown
+        #      regardless of has_purchase), followed immediately by a
+        #      separate "Previous Owner Utilisation" DEBIT row =
+        #      hidden_total + purchase_credit_for_netting. Both permanently
+        #      leave the "still available to purchase" pool: hidden BOEs
+        #      were never ours, and CIF this company has ALREADY purchased
+        #      is no longer "available" -- it's owned. Folding the purchase
+        #      amount into THIS debit means the "Licence Trade (Purchased)"
+        #      row below is suppressed for this licence (see the
+        #      `suppress_purchase_rows` flag) -- a purchase's only ledger
+        #      effect here is this subtraction, netted back via
+        #      `calculate_financial_balance`'s own `+ purchase_credit` term,
+        #      so an unsold purchase still counts toward the final balance
+        #      while a matched Purchase/Sale pair nets to zero, exactly as
+        #      intended (see `LicenseBalanceCalculator.
+        #      calculate_opening_balance`'s docstring for the same formula,
+        #      kept in lock-step so the two never diverge).
         #   2. else has_purchase -> unchanged: `running` starts at 0, no row
         #      (a licence with a Purchase trade tells its story from that
         #      trading history, not the original DGFT-issued face value).
         #   3. else -> unchanged: `running` starts at `opening_balance`, row
         #      shown with remarks='Licence Issued'.
-        if hidden_total > DEC_0:
-            running = opening_balance - hidden_total
+        suppress_purchase_rows = False
+        if has_hidden:
+            running = opening_balance
             rows.append({
                 'sr': sr, 'date': license_obj.license_date, 'type': 'Opening Balance',
                 'document_number': license_obj.license_number or '-',
                 'boe_number': None, 'boe_date': None, 'company': None, 'item_name': None,
                 'invoice_numbers': [], 'qty': None, 'cif_usd': None, 'cif_inr': None,
-                'credit': opening_balance, 'debit': hidden_total, 'running_balance': running,
-                'remarks': 'Remaining Tradable Licence (Original CIF less Hidden BOE Utilisation)',
-                'row_kind': 'opening',
+                'credit': opening_balance, 'debit': DEC_0, 'running_balance': running,
+                'remarks': 'Licence Issued', 'row_kind': 'opening',
             })
             sr += 1
+
+            previous_owner_utilisation = hidden_total + purchase_credit_for_netting
+            running = running - previous_owner_utilisation
+            rows.append({
+                'sr': sr, 'date': license_obj.license_date, 'type': 'Previous Owner Utilisation',
+                'document_number': license_obj.license_number or '-',
+                'boe_number': None, 'boe_date': None, 'company': None, 'item_name': None,
+                'invoice_numbers': [], 'qty': None, 'cif_usd': None, 'cif_inr': None,
+                'credit': DEC_0, 'debit': previous_owner_utilisation, 'running_balance': running,
+                'remarks': 'Hidden BOEs (Previous Owner) + Purchased Licence CIF',
+                'row_kind': 'previous_owner_utilisation',
+            })
+            sr += 1
+            suppress_purchase_rows = True
         elif has_purchase:
             running = DEC_0
         else:
@@ -358,6 +387,13 @@ class LicenseBalanceLedgerBuilder:
             if credit <= DEC_0:
                 continue
             total_purchase_credit += credit
+            if suppress_purchase_rows:
+                # Already netted into the "Previous Owner Utilisation" debit
+                # above — adding a separate Purchase Credit row here would
+                # count the same CIF twice (see the opening-balance gate's
+                # docstring). `total_purchase_credit` still accumulates for
+                # `summary` below; it just never becomes a ledger row.
+                continue
             date = trade.invoice_date if trade else None
             dated_entries.append((date or _date.max, 0, trade.invoice_number if trade else '', {
                 'type': 'Licence Trade (Purchased)',
@@ -636,6 +672,10 @@ class LicenseBalanceLedgerBuilder:
         summary = {
             'opening_balance': opening_balance,
             'hidden_boe_total': hidden_total,
+            # `hidden_total + purchase_credit_for_netting` when has_hidden,
+            # else 0 — the exact debit rendered as the "Previous Owner
+            # Utilisation" row above (0 when there's nothing to net).
+            'previous_owner_utilisation': (hidden_total + purchase_credit_for_netting) if has_hidden else DEC_0,
             'total_boe_debit': total_boe_debit,
             'total_invoice_allocation_debit': total_invoice_allocation_debit,
             'total_allotment_debit': total_allotment_debit,
@@ -701,25 +741,28 @@ class LicenseBalanceLedgerBuilder:
         unrelated to this and continue to display and debit unconditionally,
         exactly as before.
 
-        `show_hidden=False` (default) excludes previous-owner "hidden" BOE
-        debit rows the same way every other live calculation does (threaded
-        to `get_debit_rows(..., include_hidden=show_hidden)` — see that
-        method's docstring). This IS the one deliberate exception where
-        `include_hidden=True` is ever passed: the Customs Ledger is the
-        permanent audit view of "what physically came through customs
-        against this licence", so `show_hidden=True` renders hidden rows
-        too (flagged via each row's `is_hidden`/`hidden_reason` fields) AND
-        folds their raw `cif_fc` into THIS ledger's own `total_boe_cif`/
-        `running`/`computed_balance` — a deliberately more literal "every
-        physical BOE, hidden or not" statement than the Balance Engine
-        (`calculate_balance`, which always excludes hidden rows). The two
-        will then legitimately diverge by exactly `hidden_total`; that gap
-        surfaces via the SAME `mismatched`/`difference` mechanism this
-        method already uses for every other real reconciliation gap (see
-        this docstring's opening paragraphs) — never silently forced to
-        match. The Final "Current Balance" row's `running_balance` still
-        always anchors on the live `engine_balance` regardless of
-        `show_hidden`, exactly as before.
+        `show_hidden` affects ONLY which rows are returned — it NEVER
+        changes any total. Hidden (previous-owner) BOE debit rows are
+        ALWAYS fetched (`get_debit_rows(..., include_hidden=True)`,
+        unconditionally) and ALWAYS folded into `total_boe_cif`/`running`/
+        `computed_balance`: the Customs Ledger is the permanent, literal
+        audit trail of "every physical BOE that came through customs
+        against this licence, hidden or not" — Available Customs Balance
+        is always `Original Licence CIF - Total BOE Utilisation (hidden +
+        visible) - Pending Allotments`, full stop. `show_hidden=False`
+        (default) simply drops hidden rows from the returned `rows` list
+        afterward (each remaining row keeps the SAME `running_balance` it
+        would have had with hidden rows shown — the toggle never
+        recomputes anything, it only changes what's visible); `show_hidden
+        =True` includes them, flagged via `is_hidden`/`hidden_reason`. This
+        is deliberately more literal than the Financial Ledger/Balance
+        Engine (`calculate_balance`, `calculate_financial_balance`, both of
+        which always exclude hidden BOEs) — the two ledgers are EXPECTED to
+        diverge by exactly the hidden BOE total, and that gap is the
+        reconciliation signal this workspace surfaces (see this docstring's
+        opening paragraphs), never silently forced to match. The Final
+        "Current Balance" row's `running_balance` still always anchors on
+        the live `engine_balance` regardless of `show_hidden`.
         """
         from apps.license.services.balance_calculator import LicenseBalanceCalculator, quantize_2dp
         from apps.reconciliation.models import InvoiceBOEAllocation
@@ -751,7 +794,10 @@ class LicenseBalanceLedgerBuilder:
         )
 
         boe_rows = (
-            LicenseBalanceCalculator.get_debit_rows(license_obj, include_hidden=show_hidden)
+            # Always includes hidden rows regardless of `show_hidden` — see
+            # this method's docstring: totals must never change with the
+            # toggle, only which rows are returned (filtered below).
+            LicenseBalanceCalculator.get_debit_rows(license_obj, include_hidden=True)
             .select_related('bill_of_entry__company', 'sr_number')
             .prefetch_related('sr_number__items')
             .order_by('bill_of_entry__bill_of_entry_date', 'bill_of_entry__bill_of_entry_number')
@@ -865,6 +911,17 @@ class LicenseBalanceLedgerBuilder:
             'mismatched': mismatched,
             'tolerance': TOLERANCE,
         }
+
+        # Visibility-only filter, applied LAST: every total/running_balance
+        # above is already computed from the full (hidden-inclusive) row
+        # set, so dropping hidden rows here can never change a number that
+        # survives into `summary` or any remaining row's `running_balance`
+        # — exactly "toggle affects only visibility" (see docstring).
+        if not show_hidden:
+            rows = [r for r in rows if not r.get('is_hidden')]
+        for display_sr, r in enumerate(rows, start=1):
+            r['sr'] = display_sr
+
         return rows, summary
 
     # ------------------------------------------------------------------

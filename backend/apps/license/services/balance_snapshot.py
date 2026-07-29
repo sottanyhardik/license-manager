@@ -37,6 +37,15 @@ def _empty_snapshot() -> Dict[str, Any]:
         "total_licence_cif": DEC_0,
         "debited_cif": DEC_0,
         "outstanding_allotted_cif": DEC_0,
+        # Additive "two engines" fields (Financial Balance Engine) — see
+        # `get_snapshot_bulk`'s docstring for the full field writeup.
+        "original_licence_cif": DEC_0,
+        "hidden_boe_total": DEC_0,
+        "opening_balance": DEC_0,
+        "remaining_tradable_licence": DEC_0,
+        "financial_balance": DEC_0,
+        "customs_balance": DEC_0,
+        "balance_difference": DEC_0,
         "items": {},
     }
 
@@ -53,6 +62,21 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
         (`total_licence_cif`), `.calculate_boe_debit_total_for_licenses`
         (`debited_cif`), `.calculate_allotment_for_licenses`
         (`outstanding_allotted_cif`).
+      - "Two engines" fields (Financial Balance Engine, additive — see
+        `LicenseBalanceCalculator.calculate_financial_balance`'s and
+        `.calculate_opening_balance`'s docstrings for the formulas/gate
+        this composes verbatim, never re-derives): `.calculate_credit_
+        for_licenses` again for `original_licence_cif` (alias of `total_
+        licence_cif` — same map, same number, business-vocabulary name),
+        `.calculate_hidden_boe_debit_total_for_licenses` (`hidden_boe_
+        total`), `.calculate_opening_balance_for_licenses` (`opening_
+        balance` / `remaining_tradable_licence` — same number, two names:
+        the design doc's "Remaining Tradable Licence" is this value's
+        display name whenever hidden BOEs exist), `.calculate_financial_
+        balance_for_licenses` (`financial_balance`), `balance_cif` again
+        as `customs_balance` (alias distinguishing the two engines), and
+        `balance_difference = financial_balance - customs_balance` (the
+        ONLY arithmetic this block performs itself, on top of lookups).
       - Per-item CIF: `apps.license.services.condition_pool.
         available_value_bulk_map` for `available_value`/`balance_cif_fc`
         (aliases of the same Decimal — see that function's docstring and
@@ -85,6 +109,13 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
             "total_licence_cif": Decimal,
             "debited_cif": Decimal,
             "outstanding_allotted_cif": Decimal,
+            "original_licence_cif": Decimal,      # alias of total_licence_cif
+            "hidden_boe_total": Decimal,
+            "opening_balance": Decimal,            # alias: remaining_tradable_licence
+            "remaining_tradable_licence": Decimal, # alias of opening_balance
+            "financial_balance": Decimal,
+            "customs_balance": Decimal,            # alias of balance_cif
+            "balance_difference": Decimal,         # financial_balance - customs_balance
             "items": {
                 item_id: {
                     "available_value": Decimal,
@@ -117,6 +148,14 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
     credit_map = LicenseBalanceCalculator.calculate_credit_for_licenses(ids)
     debit_map = LicenseBalanceCalculator.calculate_boe_debit_total_for_licenses(ids)
     allotment_map = LicenseBalanceCalculator.calculate_allotment_for_licenses(ids)
+
+    # "Two engines" fields (Financial Balance Engine, additive) — each
+    # composes its own `_for_licenses` bulk sibling on `balance_calculator.
+    # py` (never a per-license loop); see this function's docstring for the
+    # full field-by-field writeup.
+    hidden_map = LicenseBalanceCalculator.calculate_hidden_boe_debit_total_for_licenses(ids)
+    opening_map = LicenseBalanceCalculator.calculate_opening_balance_for_licenses(ids)
+    financial_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(ids)
 
     # One query for every import item across all requested licenses.
     items = list(LicenseImportItemsModel.objects.filter(license_id__in=ids))
@@ -164,16 +203,27 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
             "average_cif": average_cif,
         }
 
-    return {
-        lid: {
-            "balance_cif": balance_map.get(lid, DEC_0),
+    result = {}
+    for lid in ids:
+        balance_cif = balance_map.get(lid, DEC_0)
+        financial_balance = financial_map.get(lid, DEC_0)
+        opening_balance = opening_map.get(lid, DEC_0)
+        result[lid] = {
+            "balance_cif": balance_cif,
             "total_licence_cif": credit_map.get(lid, DEC_0),
             "debited_cif": debit_map.get(lid, DEC_0),
             "outstanding_allotted_cif": allotment_map.get(lid, DEC_0),
+            # "Two engines" fields — see this function's docstring.
+            "original_licence_cif": credit_map.get(lid, DEC_0),
+            "hidden_boe_total": hidden_map.get(lid, DEC_0),
+            "opening_balance": opening_balance,
+            "remaining_tradable_licence": opening_balance,
+            "financial_balance": financial_balance,
+            "customs_balance": balance_cif,
+            "balance_difference": financial_balance - balance_cif,
             "items": items_by_license.get(lid, {}),
         }
-        for lid in ids
-    }
+    return result
 
 
 def get_snapshot(license_id) -> Dict[str, Any]:

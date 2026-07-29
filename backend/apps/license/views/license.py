@@ -15,6 +15,7 @@ from apps.license.serializers import LicenseDetailsSerializer, LicenseExportItem
 from apps.license.views.active_dfia_report import add_active_dfia_report_action
 from apps.license.views.license_report import add_license_report_action
 from apps.license.views.license_balance_ledger import add_license_balance_ledger_actions
+from apps.license.views.license_overview import add_license_overview_actions
 
 
 # Helper function to get default purchase status IDs from codes
@@ -206,6 +207,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         'edit_boe_allotment_allocation', 'reverse_boe_allotment_allocation',
         'mark_external_invoice', 'reverse_external_invoice', 'recalculate',
         'ignore_warning', 'restore_warning',
+        # License Overview dashboard actions (add_license_overview_actions) —
+        # all read-only (GET), so they only ever hit LicenseBalanceLedgerPermission's
+        # SAFE_METHODS/read_roles branch, never write_action_roles.
+        'overview_summary', 'overview_boes', 'overview_allotments',
+        'overview_items', 'overview_invoice_ledger', 'plan_utilization',
     }
 
     def get_permissions(self):
@@ -223,6 +229,29 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
     search_fields = ['license_number', 'file_number', 'exporter__name']
     ordering_fields = ['license_date', 'license_expiry_date', 'balance_cif', 'exporter__name', 'license_number']
+
+    def paginate_queryset(self, queryset):
+        """
+        Stash the current page's license ids so `get_serializer_context()`
+        can batch-compute LIVE balances for exactly this page (see
+        `LicenseBalanceCalculator.calculate_balance_for_licenses` — a fixed
+        4 queries total for the whole page, not 4×N). This is what makes it
+        possible for the list view to show the SAME live Balance CIF as the
+        detail view / License Overview without reintroducing the N+1 that
+        the stored `LicenseBalance.balance_cif` column was originally
+        caching to avoid.
+        """
+        page = super().paginate_queryset(queryset)
+        self._live_balance_page_ids = [obj.id for obj in page] if page is not None else None
+        return page
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        page_ids = getattr(self, '_live_balance_page_ids', None)
+        if page_ids:
+            from apps.license.services.balance_calculator import LicenseBalanceCalculator
+            context['live_balance_map'] = LicenseBalanceCalculator.calculate_balance_for_licenses(page_ids)
+        return context
 
     def list(self, request, *args, **kwargs):
         """Override list to add dynamic purchase_status default to metadata"""
@@ -824,3 +853,4 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 LicenseDetailsViewSet = add_license_report_action(LicenseDetailsViewSet)
 LicenseDetailsViewSet = add_active_dfia_report_action(LicenseDetailsViewSet)
 LicenseDetailsViewSet = add_license_balance_ledger_actions(LicenseDetailsViewSet)
+LicenseDetailsViewSet = add_license_overview_actions(LicenseDetailsViewSet)

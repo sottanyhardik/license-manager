@@ -213,8 +213,25 @@ class LicenseBalanceLedgerBuilder:
         docstring: allocated + remaining == the BOE's/invoice's full
         amount, always.
 
-        `summary` carries the numbers needed by the Financial Summary and
-        the Final Reconciliation Summary.
+        Display is further filtered to the still-unreconciled subset: BOE
+        rows (and the always-invoice-matched "BOE Allocation" rows) only
+        appear when the BOE has NO invoice relationship at all — a
+        filtered-out BOE/BOE-Allocation row's debit does NOT reduce
+        `running`, so `total_boe_debit`/`total_invoice_allocation_debit`
+        (in `summary`) still sum every underlying transaction while the
+        displayed running balance reflects only what's shown. Active
+        Allotment rows are handled differently: `get_allotment_rows()`
+        itself already excludes any allotment with a BOE association
+        (`AllotmentModel.is_boe`) at the query level — forcing its
+        `contributed` to 0 — so `total_allotment_debit` here is ALREADY the
+        corrected, BOE-association-excluded total, not the full one; there
+        is no separate row ever hidden in this loop.
+
+        Net effect: the Current Balance row's `running_balance` (and its
+        reconciliation-against-`calculate_balance()` mismatch check) now
+        reflects the displayed-only running balance for BOE/invoice
+        matching, combined with the corrected (not merely hidden) allotment
+        total, not the licence's raw unfiltered totals.
         """
         from apps.license.services.balance_calculator import LicenseBalanceCalculator, quantize_2dp
         from apps.reconciliation.services.allocation_service import remaining_for_trade_line
@@ -347,16 +364,28 @@ class LicenseBalanceLedgerBuilder:
             }))
 
         # Merge BOE rows and consolidated allocation rows into one
-        # chronological sequence (oldest first), assign date/sr/running
-        # balance in that merged order.
+        # chronological sequence (oldest first); assign running balance in
+        # that merged order.
+        #
+        # Display filter — Financial Ledger shows BOEs with NO invoice
+        # relationship only: a 'boe_allocation' row is by definition a BOE
+        # matched to an invoice (it IS the consolidated invoice/BOE
+        # transaction), so it never displays; a 'boe' row displays only when
+        # it carries no `invoice_numbers` at all (a partially-invoice-matched
+        # BOE's unallocated remainder is still excluded, not just a fully
+        # unmatched one). A hidden entry's debit is NOT subtracted from
+        # `running` — only displayed rows affect the running balance shown
+        # in the ledger.
         dated_entries.sort(key=lambda entry: (entry[0], entry[1]))
         for sort_date, _, entry in dated_entries:
-            running -= entry['debit']
-            entry['sr'] = sr
-            entry['date'] = None if sort_date == _date.max else sort_date
-            entry['running_balance'] = running
-            rows.append(entry)
-            sr += 1
+            display = entry['row_kind'] == 'boe' and not entry['invoice_numbers']
+            if display:
+                running -= entry['debit']
+                entry['sr'] = sr
+                entry['date'] = None if sort_date == _date.max else sort_date
+                entry['running_balance'] = running
+                rows.append(entry)
+                sr += 1
 
         allot_rows = (
             LicenseBalanceCalculator.get_allotment_rows(license_obj)
@@ -365,6 +394,11 @@ class LicenseBalanceLedgerBuilder:
             .prefetch_related('item__items')
             .order_by('allotment__estimated_arrival_date')
         )
+        # `get_allotment_rows()` already excludes any allotment with
+        # `is_boe=True` at the query level (forces `contributed=0`, which
+        # the `contributed__gt=DEC_0` filter above then drops entirely) — so
+        # every row reaching this loop is already guaranteed to have no BOE
+        # association. No further per-row is_boe filtering is needed here.
         total_allotment_debit = DEC_0
         for a_row in allot_rows:
             allotment = a_row.allotment
@@ -496,6 +530,15 @@ class LicenseBalanceLedgerBuilder:
         can trust at a glance); THIS ledger's own accumulated total is
         returned separately as `summary['computed_balance']` for explicit
         side-by-side comparison in the Customs Summary.
+
+        "Pending Allotment" rows: `get_allotment_rows()` already excludes any
+        allotment with a BOE association (`AllotmentModel.is_boe`) at the
+        query level (forces `contributed=0`, dropped by the
+        `contributed__gt=DEC_0` filter below), so `total_pending_allotment_
+        cif` here is already the corrected, BOE-association-excluded total —
+        there is no separate row ever hidden in this loop. BOE rows are
+        unrelated to this and continue to display and debit unconditionally,
+        exactly as before.
         """
         from apps.license.services.balance_calculator import LicenseBalanceCalculator, quantize_2dp
         from apps.reconciliation.models import InvoiceBOEAllocation
@@ -558,6 +601,12 @@ class LicenseBalanceLedgerBuilder:
             })
             sr += 1
 
+        # Snapshot for the "Remaining After BOE" step of the Available
+        # Balance flow (Original CIF -> (-) Total BOE CIF -> Remaining After
+        # BOE -> (-) Pending Allotment CIF -> Available Balance) — `running`
+        # at this exact point, before any allotment debit is applied.
+        remaining_after_boe = running
+
         allot_rows = (
             LicenseBalanceCalculator.get_allotment_rows(license_obj)
             .filter(contributed__gt=DEC_0)
@@ -565,6 +614,10 @@ class LicenseBalanceLedgerBuilder:
             .prefetch_related('item__items')
             .order_by('allotment__estimated_arrival_date')
         )
+        # `get_allotment_rows()` already excludes any allotment with
+        # `is_boe=True` at the query level (see docstring above) — every row
+        # reaching this loop is already guaranteed to have no BOE
+        # association, so no further per-row filtering is needed here.
         total_pending_allotment_cif = DEC_0
         for a_row in allot_rows:
             allotment = a_row.allotment
@@ -612,6 +665,7 @@ class LicenseBalanceLedgerBuilder:
         summary = {
             'opening_balance': opening_balance,
             'total_boe_cif': total_boe_cif,
+            'remaining_after_boe': remaining_after_boe,
             'total_pending_allotment_cif': total_pending_allotment_cif,
             'computed_balance': computed_balance,
             'engine_balance': engine_balance,

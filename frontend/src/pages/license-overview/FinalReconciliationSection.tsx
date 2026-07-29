@@ -1,13 +1,17 @@
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { ReconciliationSummary } from "./types";
-import { fmtNum } from "./licenseBalanceHelpers";
+import type { ReconciliationSummary } from "@/pages/license-balance/types";
+import { fmtNum } from "@/pages/license-balance/licenseBalanceHelpers";
 
 interface FinalReconciliationSectionProps {
     reconciliation: ReconciliationSummary;
 }
 
-/** Section 7 — Final Reconciliation, from the `reconciliation` object. */
+/**
+ * Overview tab's Final Reconciliation section, from the `reconciliation`
+ * object. Relocated (unchanged) from `pages/license-balance/` — still
+ * backed by `useLicenseBalanceLedger`.
+ */
 export default function FinalReconciliationSection({ reconciliation }: FinalReconciliationSectionProps) {
     const rows: [string, string][] = [
         ["Financial Ledger Balance", fmtNum(reconciliation.financial_ledger_balance)],

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import api from "@/api/axios";
-import { fmtNum } from "./licenseBalanceHelpers";
+import { fmtNum } from "@/pages/license-balance/licenseBalanceHelpers";
 
 interface CustomsImportItem {
     id: number;
@@ -27,7 +27,7 @@ function itemLabel(item: CustomsImportItem): string {
 }
 
 /**
- * Section 5 — Customs Ledger.
+ * Overview tab's Customs Ledger — Item Detail section.
  *
  * `LicenseBalanceModal.tsx`'s Export/Import item tables are tightly coupled
  * to that modal's local inline-editing state (item tags, condition-type
@@ -36,6 +36,8 @@ function itemLabel(item: CustomsImportItem): string {
  * warrants. Per the brief's explicit fallback, this renders a simplified,
  * REAL (not placeholder) view of the same `licenses/{id}/` data: per-item
  * Available/Debited/Allotted/Balance CIF, read-only.
+ *
+ * Relocated (unchanged) from `pages/license-balance/`.
  */
 export default function CustomsLedgerSection({ licenseId }: CustomsLedgerSectionProps) {
     const { data, isLoading, isError } = useQuery({

@@ -7,9 +7,9 @@ import { AuthContext } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import BoeAllocationDrawer, { type AllocationCandidate, type AllocationSelection } from "@/components/BoeAllocationDrawer";
-import { licenseBalanceKeys } from "./useLicenseBalanceLedger";
-import { boeAllotmentStatusVariant, extractApiError, fmtDate, fmtNum } from "./licenseBalanceHelpers";
-import type { AllotmentCandidate, BoeAllotmentEntry } from "./types";
+import { licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
+import { boeAllotmentStatusVariant, extractApiError, fmtDate, fmtNum } from "@/pages/license-balance/licenseBalanceHelpers";
+import type { AllotmentCandidate, BoeAllotmentEntry } from "@/pages/license-balance/types";
 
 interface BoeAllotmentSectionProps {
     licenseId: string | number;
@@ -46,8 +46,13 @@ function toAllocationCandidates(candidates: AllotmentCandidate[]): AllocationCan
 }
 
 /**
- * Section 3 — BOE ↔ Allotment Reconciliation. Mirrors `InvoiceBoeSection.tsx`
- * one-for-one: expandable rows, a "Find Allotment" allocation drawer.
+ * Overview tab's BOE ↔ Allotment Reconciliation section. Mirrors
+ * `InvoiceBoeSection.tsx` one-for-one: expandable rows, a "Find Allotment"
+ * allocation drawer.
+ *
+ * Relocated (unchanged) from `pages/license-balance/` — still backed by
+ * `useLicenseBalanceLedger`; this is the allocation-editing entry point kept
+ * alongside the Warnings panel in this feature's v1.
  */
 export default function BoeAllotmentSection({ licenseId, boeAllotment, allotmentCandidates }: BoeAllotmentSectionProps) {
     const { hasRole } = useContext(AuthContext);
@@ -55,6 +60,15 @@ export default function BoeAllotmentSection({ licenseId, boeAllotment, allotment
 
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [drawerBoe, setDrawerBoe] = useState<BoeAllotmentEntry | null>(null);
+
+    // Only BOEs that still have remaining capacity to be sourced from an
+    // allotment belong in this reconciliation panel — the panel itself is
+    // only rendered by the parent when unmatched allotments exist at all
+    // (see `OverviewTab.tsx`'s `allotment_candidates.length > 0` gate).
+    const unmatchedBoeAllotment = useMemo(
+        () => boeAllotment.filter((boe) => boe.remaining_qty > 0 || boe.remaining_cif > 0),
+        [boeAllotment]
+    );
 
     // Per `LicenseBalanceLedgerPermission.write_action_roles`: BOE<->allotment
     // allocation requires BOE_MANAGER AND ALLOTMENT_MANAGER.
@@ -118,14 +132,14 @@ export default function BoeAllotmentSection({ licenseId, boeAllotment, allotment
                         </tr>
                     </thead>
                     <tbody>
-                        {boeAllotment.length === 0 && (
+                        {unmatchedBoeAllotment.length === 0 && (
                             <tr>
                                 <td colSpan={12} className="px-3 py-6 text-center text-muted-foreground">
                                     No BOE debit rows on this licence.
                                 </td>
                             </tr>
                         )}
-                        {boeAllotment.map((boe) => {
+                        {unmatchedBoeAllotment.map((boe) => {
                             const isOpen = expanded.has(boe.row_details_id);
                             const canFindAllotment = canAllocate && (boe.remaining_cif > 0 || boe.remaining_qty > 0);
                             return (

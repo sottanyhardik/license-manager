@@ -43,7 +43,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { openPdfPreview } from "../../../utils/pdfPreview";
-import { openDocument } from "../../../utils/documentDownload";
+import { openDocument, openAuthedFile } from "../../../utils/documentDownload";
 import { saveFilterState } from "../../../utils/filterPersistence";
 import LedgerTab from "./LedgerTab";
 import PlanTab from "./PlanTab";
@@ -267,7 +267,7 @@ interface ActionPanelProps {
     onEdit: () => void;
     onDownloadPdf: () => void;
     onDownloadExcel: () => void;
-    onOpenBalanceWorkspace: () => void;
+    onOpenOverview: () => void;
     onFetchDGFT: () => void;
     onDelete: () => void;
 }
@@ -279,7 +279,7 @@ function ActionPanel({
     onEdit,
     onDownloadPdf,
     onDownloadExcel,
-    onOpenBalanceWorkspace,
+    onOpenOverview,
     onFetchDGFT,
     onDelete,
 }: ActionPanelProps) {
@@ -290,7 +290,7 @@ function ActionPanel({
         >
             {/* Actions */}
             <div className="flex flex-col gap-0.5">
-                <ActionRow icon={BarChart3} label="Balance Workspace" onClick={onOpenBalanceWorkspace} />
+                <ActionRow icon={BarChart3} label="License Overview" onClick={onOpenOverview} />
                 <ActionRow icon={FileText} label="Balance PDF" onClick={onDownloadPdf} />
                 <ActionRow icon={FileSpreadsheet} label="Balance Excel" onClick={onDownloadExcel} />
 
@@ -1046,16 +1046,18 @@ const LicenseRow = memo(function LicenseRow({
         navigate(`/licenses/${item.id}/edit`);
     }, [entityName, filterParams, currentPage, pageSize, navigate, item.id]);
 
-    const navigateToBalanceWorkspace = useCallback(() => {
-        navigate(`/licenses/${item.id}/balance`);
+    const navigateToOverview = useCallback(() => {
+        navigate(`/licenses/${item.id}/overview`);
     }, [navigate, item.id]);
 
+    // Both handlers below use the shared `openAuthedFile`/`openPdfPreview`
+    // helpers (axios instance already attaches the auth header on every
+    // request — no need to set it manually) — same pattern
+    // `LicenseOverviewPage.tsx` uses for its own PDF/Excel buttons, replacing
+    // the previous bespoke blob+anchor-download code for Excel.
     const handleDownloadPdf = useCallback(async () => {
         try {
-            const r = await api.get(`licenses/${item.id}/balance-pdf/`, {
-                responseType: "blob",
-                headers: { Authorization: `Bearer ${localStorage.getItem("access")}` },
-            });
+            const r = await api.get(`licenses/${item.id}/balance-pdf/`, { responseType: "blob" });
             openPdfPreview(r.data as Blob, `${item.license_number || item.id}-balance.pdf`);
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to generate PDF");
@@ -1064,21 +1066,7 @@ const LicenseRow = memo(function LicenseRow({
 
     const handleDownloadExcel = useCallback(async () => {
         try {
-            const r = await api.get(`licenses/${item.id}/balance-excel/`, {
-                responseType: "blob",
-                headers: { Authorization: `Bearer ${localStorage.getItem("access")}` },
-            });
-            const blob = new Blob([r.data as Blob], {
-                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${item.license_number || item.id}-balance.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => window.URL.revokeObjectURL(url), 10_000);
+            await openAuthedFile(`licenses/${item.id}/balance-excel/`, `${item.license_number || item.id}-balance.xlsx`);
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to generate Excel");
         }
@@ -1296,7 +1284,7 @@ const LicenseRow = memo(function LicenseRow({
                             onEdit={navigateToEdit}
                             onDownloadPdf={handleDownloadPdf}
                             onDownloadExcel={handleDownloadExcel}
-                            onOpenBalanceWorkspace={navigateToBalanceWorkspace}
+                            onOpenOverview={navigateToOverview}
                             onFetchDGFT={() => onFetchDGFT(item)}
                             onDelete={() => onDelete(item)}
                         />

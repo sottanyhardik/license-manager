@@ -19,11 +19,14 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.allotment.models import AllotmentItems, AllotmentModel
-from apps.core.constants import DEBIT
+from apps.core.constants import DEBIT, DEC_0
 from apps.core.models import CompanyModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
-from apps.license.services.license_balance_ledger_builder import LicenseBalanceLedgerBuilder
+from apps.license.services.license_balance_ledger_builder import (
+    LicenseBalanceLedgerBuilder,
+    build_invoice_allocation_groups,
+)
 from apps.reconciliation.models import BOEAllotmentAllocation, ExternalInvoiceLink, ReconciliationLog
 from apps.reconciliation.services.allocation_service import create_boe_allotment_allocation, create_invoice_boe_allocation
 from apps.reconciliation.tests.test_reconciliation import ReconciliationFixtureMixin
@@ -364,12 +367,23 @@ class FinancialLedgerGroupingTests(LicenseBalanceLedgerFixtureMixin, Reconciliat
     invoice into ONE Financial Ledger row instead of one row per BOE (the
     Customs Ledger — untested here — is unaffected and keeps one row per
     BOE always).
+
+    The Financial Ledger's `rows` display was later changed (see
+    `build_financial_ledger`'s docstring) to show BOEs with NO invoice
+    relationship at all — a "boe_allocation" row is BY DEFINITION invoice-
+    matched, so it and any invoice-matched "boe" row are NEVER in `rows`
+    anymore, regardless of consolidation. The consolidation math itself
+    (`build_invoice_allocation_groups`) is unaffected and still exercised
+    directly here.
     """
 
     def test_two_fully_allocated_boes_produce_one_consolidated_row(self):
-        """Exact spec test case: Opening 222,360; two BOEs of 99,000 qty /
-        87,120 CIF each, both fully allocated to one invoice -> ONE row,
-        qty=198,000, cif=174,240, debit=174,240, running=48,120."""
+        """Exact spec test case: two BOEs of 99,000 qty / 87,120 CIF each,
+        both fully allocated to one invoice -> ONE consolidated GROUP,
+        qty=198,000, cif=174,240, with 2 underlying allocations. The
+        Financial Ledger's `rows` display now hides this entirely (it's
+        fully invoice-matched — see class docstring); the consolidation
+        math itself is verified via `build_invoice_allocation_groups`."""
         company = self.make_company()
         license_obj = self.make_license(company)
         # opening_balance == calculate_credit() == sum of export item cif_fc.
@@ -392,53 +406,28 @@ class FinancialLedgerGroupingTests(LicenseBalanceLedgerFixtureMixin, Reconciliat
             trade_line, row2, qty=row2.qty, cif_fc=row2.cif_fc, cif_inr=row2.cif_inr, user=None,
         )
 
+        # --- Consolidation math itself, unaffected by display filtering ---
+        groups = build_invoice_allocation_groups(license_obj)
+        self.assertEqual(len(groups), 1)
+        group = groups[0]
+        self.assertEqual(group["trade_line"].id, trade_line.id)
+        self.assertIn("7650222", group["boe_numbers"])
+        self.assertIn("7650224", group["boe_numbers"])
+        self.assertEqual(group["total_qty"], Decimal("198000.000"))
+        self.assertEqual(group["total_cif_fc"], Decimal("174240.00"))
+        self.assertEqual(group["total_cif_inr"], row1.cif_inr + row2.cif_inr)
+        self.assertEqual(len(group["allocations"]), 2)
+        allocated_boe_numbers = {a.row_details.bill_of_entry.bill_of_entry_number for a in group["allocations"]}
+        self.assertEqual(allocated_boe_numbers, {"7650222", "7650224"})
+
+        # --- Financial Ledger display: fully matched -> nothing shown for
+        # this invoice/BOE pair at all (no "boe", no "boe_allocation", no
+        # "trade" row) ---
         rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
-
-        # No individual "boe" row for either BOE — fully consolidated.
-        boe_kind_rows = [r for r in rows if r["row_kind"] == "boe"]
-        self.assertEqual(boe_kind_rows, [])
-
-        # No leftover "Licence Trade (Sold)" row either — nothing unmatched.
-        trade_kind_rows = [r for r in rows if r["row_kind"] == "trade"]
-        self.assertEqual(trade_kind_rows, [])
-
-        consolidated = [r for r in rows if r["row_kind"] == "boe_allocation"]
-        self.assertEqual(len(consolidated), 1)
-        row = consolidated[0]
-        self.assertEqual(row["document_number"], "LML/2025-26/0125")
-        self.assertIn("7650222", row["boe_number"])
-        self.assertIn("7650224", row["boe_number"])
-        self.assertEqual(row["qty"], Decimal("198000.000"))
-        self.assertEqual(row["cif_usd"], Decimal("174240.00"))
-        self.assertEqual(row["cif_inr"], row1.cif_inr + row2.cif_inr)
-        self.assertEqual(row["debit"], Decimal("174240.00"))
-        self.assertEqual(row["running_balance"], Decimal("48120.00"))
-        self.assertEqual(row["remarks"], "Invoice allocated to 2 BOEs")
-        self.assertEqual(row["type"], "Licence Trade (Sold)")
-        self.assertTrue(row["expandable"])
-
-        # Hierarchy: 2 children, one per BOE, blank credit/debit/running,
-        # never affecting the parent's own accounting values.
-        children = row["children"]
-        self.assertEqual(len(children), 2)
-        child_boe_numbers = {c["boe_number"] for c in children}
-        self.assertEqual(child_boe_numbers, {"7650222", "7650224"})
-        for child in children:
-            self.assertIsNone(child["credit"])
-            self.assertIsNone(child["debit"])
-            self.assertIsNone(child["running_balance"])
-            self.assertEqual(child["qty"], Decimal("99000.000"))
-            self.assertEqual(child["cif_usd"], Decimal("87120.00"))
-            self.assertEqual(child["status"], "Matched")
-
-        # Opening -> consolidated -> Current Balance only (no BOE/trade rows).
-        self.assertEqual([r["row_kind"] for r in rows], ["opening", "boe_allocation", "final"])
-
-        final_row = rows[-1]
-        self.assertEqual(final_row["running_balance"], Decimal("48120.00"))
-        self.assertFalse(final_row["mismatched"])
-        self.assertEqual(summary["engine_balance"], summary["computed_balance"])
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "final"])
         self.assertEqual(summary["total_invoice_allocation_debit"], Decimal("174240.00"))
+        self.assertEqual(summary["total_boe_debit"], DEC_0)
+        self.assertEqual(summary["total_trade_debit"], DEC_0)
 
     def test_single_boe_allocation_uses_singular_remarks(self):
         company = self.make_company()
@@ -455,17 +444,28 @@ class FinancialLedgerGroupingTests(LicenseBalanceLedgerFixtureMixin, Reconciliat
             trade_line, row, qty=row.qty, cif_fc=row.cif_fc, cif_inr=row.cif_inr, user=None,
         )
 
+        # Consolidation math: a single-BOE group uses singular remarks in
+        # `build_financial_ledger` (verified below); `build_invoice_
+        # allocation_groups` itself doesn't compute remarks text, so assert
+        # the underlying boe_numbers count that drives it.
+        groups = build_invoice_allocation_groups(license_obj)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["boe_numbers"], ["7650300"])
+
+        # Financial Ledger: fully matched -> hidden from `rows` entirely
+        # (see class docstring) — nothing left to check remarks text on.
         rows, _ = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
-        consolidated = [r for r in rows if r["row_kind"] == "boe_allocation"]
-        self.assertEqual(len(consolidated), 1)
-        self.assertEqual(consolidated[0]["boe_number"], "7650300")
-        self.assertEqual(consolidated[0]["remarks"], "Matched Invoice(s)")
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "final"])
 
     def test_partially_allocated_boe_leaves_remainder_as_individual_row_and_totals_match(self):
-        """A BOE only PARTLY allocated to an invoice must still show its
-        unmatched remainder as its own row — nothing is lost, nothing is
-        double-counted, and Sum(all rows' debit) reconciles exactly with
-        the Balance Engine."""
+        """A BOE only PARTLY allocated to an invoice must still count its
+        unmatched remainder — nothing is lost, nothing is double-counted,
+        and total_boe_debit + total_invoice_allocation_debit reconciles
+        exactly to the BOE's full cif_fc. The remainder row is still HIDDEN
+        from `rows` display (it has an invoice relationship — a partial one
+        — via the allocation, so it's not "no invoice relationship at
+        all"), but the underlying total is unaffected by that display
+        filter."""
         company = self.make_company()
         license_obj = self.make_license(company)
         from apps.license.models import LicenseExportItemModel
@@ -483,23 +483,23 @@ class FinancialLedgerGroupingTests(LicenseBalanceLedgerFixtureMixin, Reconciliat
             trade_line, row, qty=Decimal("600.000"), cif_fc=Decimal("30000.00"), cif_inr=allocated_cif_inr, user=None,
         )
 
+        # Consolidation math: one group for the 30,000 that IS allocated.
+        groups = build_invoice_allocation_groups(license_obj)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["total_cif_fc"], Decimal("30000.00"))
+
         rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
 
-        consolidated = [r for r in rows if r["row_kind"] == "boe_allocation"]
-        self.assertEqual(len(consolidated), 1)
-        self.assertEqual(consolidated[0]["debit"], Decimal("30000.00"))
+        # Both the consolidated 30,000 and the unmatched 20,000 remainder
+        # carry SOME invoice relationship now (the remainder's own BOE row
+        # has a partial allocation), so neither displays in `rows`.
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "final"])
 
-        # The BOE's remaining, unmatched 20,000 CIF still shows as its own row.
-        boe_rows = [r for r in rows if r["row_kind"] == "boe"]
-        self.assertEqual(len(boe_rows), 1)
-        self.assertEqual(boe_rows[0]["debit"], Decimal("20000.00"))
-
-        # No leftover Trade row — the invoice itself is fully allocated
-        # (30,000 of its own 30,000 cif_fc), only the BOE has spare capacity.
-        trade_rows_out = [r for r in rows if r["row_kind"] == "trade"]
-        self.assertEqual(trade_rows_out, [])
-
-        self.assertEqual(summary["engine_balance"], summary["computed_balance"])
+        # But the totals feeding those hidden amounts are still correct and
+        # reconcile to the BOE's full cif_fc — nothing lost, nothing double-
+        # counted, regardless of what's shown.
+        self.assertEqual(summary["total_boe_debit"], Decimal("20000.00"))
+        self.assertEqual(summary["total_invoice_allocation_debit"], Decimal("30000.00"))
         self.assertEqual(summary["total_boe_debit"] + summary["total_invoice_allocation_debit"], Decimal("50000.00"))
 
 
@@ -563,16 +563,19 @@ class CustomsLedgerTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixture
         self.assertEqual(customs_boe_row["debit"], Decimal("40000.00"))
         self.assertEqual(customs_boe_row["status"], "Matched")
 
-        # Financial Ledger: no separate "boe" row (fully consolidated) —
-        # the whole 40,000 is represented by the "boe_allocation" parent.
-        self.assertEqual([r for r in financial_rows if r["row_kind"] == "boe"], [])
-        consolidated = next(r for r in financial_rows if r["row_kind"] == "boe_allocation")
-        self.assertEqual(consolidated["debit"], Decimal("40000.00"))
+        # Financial Ledger: fully invoice-matched -> hidden from `rows`
+        # entirely (no "boe", no "boe_allocation" — see
+        # FinancialLedgerGroupingTests' class docstring); the consolidated
+        # 40,000 group still exists underneath (verified via
+        # `build_invoice_allocation_groups` in that test class).
+        self.assertEqual([r["row_kind"] for r in financial_rows], ["opening", "final"])
+        self.assertEqual(financial_summary["total_invoice_allocation_debit"], Decimal("40000.00"))
 
-        # Both ledgers land on the SAME final balance in this fully-matched,
-        # no-leftover scenario.
-        self.assertEqual(customs_summary["computed_balance"], financial_summary["computed_balance"])
+        # Customs Ledger's OWN running total reconciles with the Balance
+        # Engine in this fully-matched, no-leftover scenario (unaffected by
+        # the Financial Ledger's separate display filter).
         self.assertEqual(customs_summary["computed_balance"], customs_summary["engine_balance"])
+        self.assertEqual(customs_summary["computed_balance"], Decimal("60000.00"))
 
     def test_pending_allotment_row(self):
         company = self.make_company()

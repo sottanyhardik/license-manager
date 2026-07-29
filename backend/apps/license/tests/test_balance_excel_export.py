@@ -114,35 +114,26 @@ class BalanceExcelFinancialLedgerHierarchyTests(
         )
         return license_obj
 
-    def test_children_rendered_with_outline_level_below_parent(self):
+    def test_fully_matched_invoice_produces_no_consolidated_row_in_financial_ledger_sheet(self):
+        """
+        `build_financial_ledger()`'s `rows` were later changed (see that
+        method's docstring) to show BOEs with NO invoice relationship at
+        all — a "boe_allocation" row is BY DEFINITION invoice-matched, so
+        it (and its child BOE rows / Excel outline-level hierarchy) never
+        appears in `rows` anymore, for ANY consumer of that shared data,
+        including this Excel sheet. A fully-matched, two-BOE invoice like
+        this fixture therefore now produces NO row for it at all on the
+        Financial Ledger sheet — this is the same filter the web UI
+        Overview page applies, not something Excel-specific.
+        """
         license_obj = self._build_license_with_two_fully_allocated_boes()
 
         response = build_balance_excel(license_obj)
         wb = openpyxl.load_workbook(io.BytesIO(response.content))
         ws = wb["Financial Ledger"]
 
-        # Find the consolidated "Licence Trade (Sold)" parent row (col C = Txn Type)
-        # by locating the row whose Doc Number matches the invoice.
-        parent_row = None
-        for r in range(3, ws.max_row + 1):
-            if ws.cell(row=r, column=4).value == "LML/2025-26/0125":
-                parent_row = r
-                break
-        self.assertIsNotNone(parent_row, "expected a consolidated BOE Allocation parent row")
-
-        # Parent row itself carries no outline level (it's the summary row).
-        self.assertEqual(ws.row_dimensions[parent_row].outline_level, 0)
-
-        child_row_1 = parent_row + 1
-        child_row_2 = parent_row + 2
-        for child_row, boe_number in ((child_row_1, "7650222"), (child_row_2, "7650224")):
-            self.assertEqual(ws.row_dimensions[child_row].outline_level, 1)
-            self.assertEqual(ws.cell(row=child_row, column=3).value, "↳ BOE")
-            self.assertEqual(ws.cell(row=child_row, column=5).value, boe_number)
-            # Credit/Debit/Running Balance stay blank on child rows.
-            self.assertEqual(ws.cell(row=child_row, column=13).value, "-")
-            self.assertEqual(ws.cell(row=child_row, column=14).value, "-")
-            self.assertEqual(ws.cell(row=child_row, column=15).value, "-")
+        doc_numbers = [ws.cell(row=r, column=4).value for r in range(3, ws.max_row + 1)]
+        self.assertNotIn("LML/2025-26/0125", doc_numbers)
 
         # summaryBelow=False -> the collapse control sits with the parent
         # (which is ABOVE its children here), not below the detail block.

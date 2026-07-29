@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactElement } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
 import AdminLayout from "../layout/AdminLayout";
@@ -42,8 +42,14 @@ const ReconciliationIssues = lazyLoadWithRetry(() => import("../pages/Reconcilia
 const LedgerUpload = lazy(() => import("../pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("../pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("../pages/LicenseLedgerDetail"));
-const LicenseBalanceWorkspace = lazy(() => import("../pages/license-balance/LicenseBalanceWorkspace"));
+const LicenseOverviewPage = lazy(() => import("../pages/license-overview/LicenseOverviewPage"));
 const PDFViewer = lazy(() => import("../pages/PDFViewer"));
+
+/** Old `/licenses/:id/balance` bookmarks/links redirect to the new Overview page — explicit absolute target (built from the route's own `:id` param) rather than a relative `Navigate` path, so the destination is unambiguous. */
+function RedirectToLicenseOverview() {
+    const { id } = useParams<{ id: string }>();
+    return <Navigate to={`/licenses/${id}/overview`} replace />;
+}
 
 const REPORT_ROUTES: [string, ReactElement][] = [
     ["/reports/parle/sion-e1", <SionE1 />],
@@ -226,12 +232,14 @@ export default function AppRoutes() {
                     </ProtectedRoute>
                 } />
 
-                {/* Licence Balance & Financial Reconciliation Workspace */}
-                <Route path="/licenses/:id/balance" element={
+                {/* License Overview dashboard — replaces the old Balance Workspace */}
+                <Route path="/licenses/:id/overview" element={
                     <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "LICENSE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "TRADE_MANAGER", "TRADE_VIEWER"]}>
-                        <AdminLayout><LicenseBalanceWorkspace /></AdminLayout>
+                        <AdminLayout><LicenseOverviewPage /></AdminLayout>
                     </ProtectedRoute>
                 } />
+                {/* Old bookmarks/links to the retired Balance Workspace redirect here. */}
+                <Route path="/licenses/:id/balance" element={<RedirectToLicenseOverview />} />
 
                 {/* PDF Viewer */}
                 <Route path="/pdf-viewer" element={

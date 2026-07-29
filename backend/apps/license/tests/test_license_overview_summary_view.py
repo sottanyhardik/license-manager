@@ -1,0 +1,122 @@
+"""
+View-level tests for `GET .../overview-summary/`
+(`apps/license/services/license_overview_summary.py` /
+`apps/license/views/license_overview.py`).
+
+Asserts response shape + fixture-accurate values, and pins a fixed
+(low) query count via `assertNumQueries`.
+"""
+from decimal import Decimal
+
+from django.test import TestCase
+from rest_framework.test import APIClient
+
+from apps.allotment.models import AllotmentItems, AllotmentModel
+from apps.license.models import LicenseImportItemsModel, LicenseItemPlan
+from apps.license.tests.test_balance_ledger_views import LicenseBalanceLedgerFixtureMixin
+
+
+class LicenseOverviewSummaryViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.make_superuser())
+
+    def test_returns_header_fields_and_summary_cards(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=1,
+            description="Widget A",
+            quantity=Decimal("1000.000"),
+            cif_fc=Decimal("5000.00"),
+            debited_quantity=Decimal("100.000"),
+            debited_value=Decimal("500.00"),
+            allotted_quantity=Decimal("50.000"),
+            allotted_value=Decimal("250.00"),
+        )
+        boe = self.make_boe(company)
+        self.make_debit_row(boe, license_obj.import_license.first(), cif_fc=Decimal("400.00"), qty=Decimal("40.000"))
+
+        with self.assertNumQueries(10):
+            resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        data = resp.data
+        self.assertEqual(data["license_number"], license_obj.license_number)
+        self.assertEqual(data["authorisation_number"], license_obj.registration_number)
+        self.assertEqual(data["importer"], company.name)
+        self.assertEqual(data["status"], "Active")
+
+        summary = data["summary"]
+        self.assertEqual(set(summary.keys()), {
+            "total_boes", "total_allotments", "total_planned_cif",
+            "total_cif", "total_debited_cif", "total_allotted_cif",
+            "total_balance_cif",
+        })
+        self.assertEqual(summary["total_boes"], 1)
+        self.assertEqual(summary["total_allotments"], 0)
+        self.assertEqual(summary["total_planned_cif"], 0.0)
+        self.assertEqual(summary["total_debited_cif"], 400.0)
+
+    def test_planned_cif_sums_item_plan_lines_and_defaults_to_zero(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=1,
+            description="Widget A",
+            quantity=Decimal("1000.000"),
+            cif_fc=Decimal("5000.00"),
+        )
+        LicenseItemPlan.objects.create(
+            import_item=item,
+            license=license_obj,
+            planned_quantity=Decimal("600.000"),
+            planned_cif_fc=Decimal("3000.00"),
+        )
+
+        resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["summary"]["total_planned_cif"], 3000.0)
+
+    def test_total_allotments_excludes_boe_linked(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Widget A",
+            quantity=Decimal("1000.000"),
+        )
+
+        unlinked = AllotmentModel.objects.create(company=company, item_name="Unlinked")
+        AllotmentItems.objects.create(item=item, allotment=unlinked, cif_fc=Decimal("100.00"), qty=Decimal("10.000"))
+
+        linked = AllotmentModel.objects.create(company=company, item_name="Linked to BOE", is_boe=True)
+        AllotmentItems.objects.create(item=item, allotment=linked, cif_fc=Decimal("200.00"), qty=Decimal("20.000"))
+
+        resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["summary"]["total_allotments"], 1)
+
+    def test_expired_status_takes_priority(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        license_obj.flags.is_expired = True
+        license_obj.flags.save()
+
+        resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["status"], "Expired")
+
+    def test_denies_authenticated_user_with_no_roles(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+
+        client = APIClient()
+        client.force_authenticate(user=self.make_plain_user())
+        resp = client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
+
+        self.assertEqual(resp.status_code, 403)

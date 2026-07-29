@@ -615,13 +615,25 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         return data
 
     def get_get_balance_cif(self, obj):
-        """Return the stored balance_cif column directly (O(1)) instead of the
-        expensive live property, which runs 4 aggregate queries per row and kills
-        list-view performance. Clamp negatives to zero so this matches the live
-        calculator's semantics exactly (it returns max(balance, 0)); the stored
-        column can hold a negative-zero that would otherwise serialize as '-0.00'."""
+        """Return the LIVE balance for this license — same
+        `LicenseBalanceCalculator` formula the License Overview page and the
+        detail view use, so all three always agree. For list views, the
+        viewset batch-computes this for the whole page in one shot
+        (`LicenseBalanceCalculator.calculate_balance_for_licenses`, a fixed
+        4 queries total, not 4×N — see `LicenseDetailsViewSet.
+        get_serializer_context`) and passes it via `self.context
+        ['live_balance_map']`; fall back to the stored column only if no
+        batch map was supplied (e.g. this serializer used outside that
+        viewset's `list`/`retrieve` flow). Clamp negatives to zero so this
+        matches the live calculator's semantics exactly (it returns
+        max(balance, 0)); the stored column can hold a negative-zero that
+        would otherwise serialize as '-0.00'."""
         from decimal import Decimal
-        bal = obj.balance_cif
+        live_map = self.context.get('live_balance_map')
+        if live_map is not None:
+            bal = live_map.get(obj.id)
+        else:
+            bal = obj.balance_cif
         if bal is None:
             return bal
         return bal if bal > 0 else Decimal('0.00')
@@ -688,17 +700,37 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             if 'license_documents_read' in rep:
                 rep['license_documents'] = rep.pop('license_documents_read')
 
-        # balance_cif: the DETAIL view recomputes the live value (single object, cheap,
-        # and keeps the "fresh" guarantee); the LIST view keeps the stored column, which
-        # signals keep in sync and which avoids N balance-aggregate queries per row.
-        # (The stored column is what get_get_balance_cif() returns.)
-        if not is_list_view:
-            from decimal import Decimal
-            fresh = instance.get_balance_cif
-            # Clamp to match the list path (stored column) so both views agree; the
-            # live calculator can yield a negative-zero that serializes as '-0.00'.
-            if fresh is not None and fresh <= 0:
-                fresh = Decimal('0.00')
+        # balance_cif: both DETAIL and LIST views now show the LIVE value —
+        # same `LicenseBalanceCalculator` formula either way, so this field
+        # always agrees with `get_balance_cif`/get_get_balance_cif() and with
+        # the License Overview page. Detail view recomputes it directly
+        # (single object, cheap); list view reads the viewset's batch-
+        # computed `live_balance_map` (see `get_get_balance_cif`'s
+        # docstring) to stay a fixed number of queries for the whole page.
+        from decimal import Decimal
+
+        def _clamp(value):
+            # The live calculator can yield a negative-zero that serializes
+            # as '-0.00' — clamp to a plain zero.
+            if value is not None and value <= 0:
+                return Decimal('0.00')
+            return value
+
+        if is_list_view:
+            # `get_balance_cif` is already correct here — `get_get_balance_cif()`
+            # (a SerializerMethodField, evaluated during `super().to_representation()`
+            # above) reads the same `live_balance_map` itself. Only the plain
+            # `balance_cif` field needs an explicit override, since it has no
+            # custom getter and `super().to_representation()` populated it
+            # from the model's stored-column property.
+            live_map = self.context.get('live_balance_map')
+            if live_map is not None:
+                rep['balance_cif'] = _clamp(live_map.get(instance.id))
+            # else: no batch map available (serializer used outside the
+            # viewset's paginated `list` flow) — leave the stored-column
+            # value `super().to_representation()` already produced.
+        else:
+            fresh = _clamp(instance.get_balance_cif)
             rep['balance_cif'] = fresh
             if 'get_balance_cif' in rep:
                 rep['get_balance_cif'] = fresh

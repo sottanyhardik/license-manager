@@ -54,18 +54,28 @@ class TestLicenseBalanceCalculator(TestCase):
         # Assert
         assert result == DEC_0
 
+    @patch('apps.trade.models.LicenseTrade')
     @patch('apps.license.services.balance_calculator.RowDetails')
-    def test_calculate_debit_with_boe(self, mock_row_details):
+    def test_calculate_debit_with_boe(self, mock_row_details, mock_license_trade):
         """
         Should calculate total BOE debits via the allocation-driven
         annotation chain (Phase A): `.filter(...).annotate(allocated=...)
-        .annotate(matched=...).annotate(contributed=...).aggregate(...)`,
-        replacing the old `~Exists(linked_sale_line)` binary exclusion.
+        .annotate(virtual_allocated=...).annotate(matched=...)
+        .annotate(contributed=...).aggregate(...)`, replacing the old
+        `~Exists(linked_sale_line)` binary exclusion.
+
+        `LicenseTrade` is mocked to report zero SALE trades with a legacy
+        `.boes` link (the common case) so `_virtual_boe_debit_exclusion_case`
+        short-circuits to a constant 0 without touching the real ORM on a
+        Mock `license_obj` — see `TestCalculateDebitLineLevelExclusion` for
+        real-DB coverage of the virtual-match behavior itself.
         """
         # Setup mock
+        mock_license_trade.objects.filter.return_value.distinct.return_value.filter.return_value \
+            .prefetch_related.return_value = []
         mock_license = Mock()
         mock_queryset = Mock()
-        annotated = mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value
+        annotated = mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value.annotate.return_value
         annotated.aggregate.return_value = {'total': Decimal('300.00')}
         mock_row_details.objects.filter.return_value = mock_queryset
 
@@ -79,13 +89,16 @@ class TestLicenseBalanceCalculator(TestCase):
             transaction_type=DEBIT,
         )
 
+    @patch('apps.trade.models.LicenseTrade')
     @patch('apps.license.services.balance_calculator.RowDetails')
-    def test_calculate_debit_no_boe(self, mock_row_details):
+    def test_calculate_debit_no_boe(self, mock_row_details, mock_license_trade):
         """Should return zero when no BOE"""
         # Setup mock
+        mock_license_trade.objects.filter.return_value.distinct.return_value.filter.return_value \
+            .prefetch_related.return_value = []
         mock_license = Mock()
         mock_queryset = Mock()
-        annotated = mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value
+        annotated = mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value.annotate.return_value
         annotated.aggregate.return_value = {'total': DEC_0}
         mock_row_details.objects.filter.return_value = mock_queryset
 

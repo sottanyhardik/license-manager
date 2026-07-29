@@ -1,8 +1,8 @@
 import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { FinancialLedgerChildRow, FinancialLedgerRow } from "./types";
-import { financialLedgerRowClass, fmtDate, fmtInvoiceNumbers, fmtNum } from "./licenseBalanceHelpers";
+import type { FinancialLedgerChildRow, FinancialLedgerRow } from "@/pages/license-balance/types";
+import { financialLedgerRowClass, fmtDate, fmtInvoiceNumbers, fmtNum } from "@/pages/license-balance/licenseBalanceHelpers";
 
 interface FinancialLedgerTableProps {
     rows: FinancialLedgerRow[];
@@ -14,7 +14,7 @@ const HEADERS = [
 ];
 
 /** One informational child row nested under a "boe_allocation" parent —
- * always blank Credit/Debit/Running Balance (see `types.ts`'s
+ * always blank Credit/Debit/Running Balance (see `license-balance/types.ts`'s
  * `FinancialLedgerChildRow` docstring). */
 function ChildRow({ child }: { child: FinancialLedgerChildRow }) {
     return (
@@ -43,16 +43,19 @@ function ChildRow({ child }: { child: FinancialLedgerChildRow }) {
 }
 
 /**
- * Section 1 — Financial Ledger. Hand-rolled `<table>` (not `DataTable.tsx`,
- * which doesn't support this many custom-styled columns) — same approach as
- * `pages/reconciliation/ComparisonTab.tsx`'s row-styling pattern, adapted to
- * a plain table since every row here needs its own semantic color by
- * `row_kind`.
+ * Overview tab's Financial Ledger table. Hand-rolled `<table>` (not
+ * `DataTable.tsx`, which doesn't support this many custom-styled columns) —
+ * same approach as `pages/reconciliation/ComparisonTab.tsx`'s row-styling
+ * pattern, adapted to a plain table since every row here needs its own
+ * semantic color by `row_kind`.
  *
  * "boe_allocation" rows carry a `children` array (one per underlying BOE
  * allocation) — rendered as extra `<tr>`s directly below their parent,
  * expanded by default (mirrors the PDF, which has no interactive collapse)
  * with an optional collapse toggle since this view IS interactive.
+ *
+ * Relocated (unchanged) from `pages/license-balance/` — still backed by
+ * `useLicenseBalanceLedger`.
  */
 export default function FinancialLedgerTable({ rows }: FinancialLedgerTableProps) {
     const [collapsed, setCollapsed] = useState<Set<number>>(new Set());

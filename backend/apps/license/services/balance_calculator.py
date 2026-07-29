@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import Sum, DecimalField, Value, OuterRef, F, Subquery
+from django.db.models import Case, DecimalField, F, OuterRef, Subquery, Sum, Value, When
 from django.db.models.functions import Coalesce, Least, Greatest
 
 from apps.core.constants import DEC_0, DEBIT
@@ -72,17 +72,91 @@ class LicenseBalanceCalculator:
         )
 
     @staticmethod
+    def _compute_virtual_boe_trade_matches(trades_queryset):
+        """
+        Given a queryset of SALE `LicenseTrade` rows that have at least one
+        legacy `.boes` attachment, returns `{row_details_id: Decimal}` of
+        CIF amounts that WOULD be allocated by `backfill_boe_allocations`
+        (see `apps.reconciliation.services.boe_link_reconciler.
+        reconcile_trade_boe_links`) — i.e. unambiguous 1:1 matches within
+        the existing reconciliation tolerances — WITHOUT writing anything.
+
+        This is the single shared computation behind the debit-side fix in
+        `get_debit_rows()`/`calculate_debit_for_licenses()`: reuses the
+        SAME conservative matching logic already trusted for the persisted-
+        allocation path (never forked/duplicated), so a licence's Balance
+        CIF is correct even before anyone runs the backfill command for
+        real. Deliberately excludes `ambiguous`/`mismatch`/`no_match`
+        results — those trade lines reference data that cannot be resolved
+        without a human decision (multiple candidate BOEs, or amounts that
+        genuinely don't line up), so they are intentionally left counted
+        as-is rather than guessed at.
+        """
+        from apps.core.utils.decimal_utils import to_decimal
+        from apps.reconciliation.services.boe_link_reconciler import reconcile_trade_boe_links
+
+        by_row_details: dict = {}
+        for trade in trades_queryset.prefetch_related("lines", "boes"):
+            for result in reconcile_trade_boe_links(trade, dry_run=True):
+                if result["status"] != "auto_migrated":
+                    continue
+                row_id = result["row_details_id"]
+                amount = to_decimal(result["matched_cif_fc"], DEC_0)
+                by_row_details[row_id] = by_row_details.get(row_id, DEC_0) + amount
+        return by_row_details
+
+    @staticmethod
+    def _virtual_boe_debit_exclusion_case(*, license_obj=None, license_ids=None):
+        """
+        A `Case`/`When` SQL expression that yields the virtual (unpersisted)
+        matched CIF for each `RowDetails` primary key found by
+        `_compute_virtual_boe_trade_matches`, else 0 — built for either a
+        single license (`get_debit_rows`) or a batch of them
+        (`calculate_debit_for_licenses`), sharing the exact same underlying
+        computation either way. Exactly one of `license_obj`/`license_ids`
+        must be given.
+        """
+        from apps.trade.models import LicenseTrade
+
+        trades = LicenseTrade.objects.filter(direction=LicenseTrade.DIR_SALE, boes__isnull=False).distinct()
+        if license_obj is not None:
+            trades = trades.filter(lines__sr_number__license=license_obj)
+        else:
+            trades = trades.filter(lines__sr_number__license_id__in=list(license_ids))
+
+        by_row_details = LicenseBalanceCalculator._compute_virtual_boe_trade_matches(trades)
+        if not by_row_details:
+            return Value(DEC_0, output_field=_ALLOCATION_DECIMAL_FIELD)
+        return Case(
+            *[When(pk=row_id, then=Value(amount)) for row_id, amount in by_row_details.items()],
+            default=Value(DEC_0),
+            output_field=_ALLOCATION_DECIMAL_FIELD,
+        )
+
+    @staticmethod
     def get_debit_rows(license_obj):
         """
         Annotated RowDetails debit-row queryset for a license: each row
-        carries `allocated` / `matched` / `contributed` annotations (see
-        `calculate_debit`'s docstring for the allocation-driven partial-
-        exclusion business rule this implements).
+        carries `allocated` / `virtual_allocated` / `matched` / `contributed`
+        annotations (see `calculate_debit`'s docstring for the allocation-
+        driven partial-exclusion business rule this implements).
 
         Factored out of `calculate_debit` so the Financial Ledger PDF
         (services/exporters/license_balance_pdf.py) can render the exact
         same rows the Balance Engine sums, rather than recomputing the
         allocation logic a second time and risking the two drifting apart.
+
+        `virtual_allocated` (on top of the persisted-`InvoiceBOEAllocation`-
+        driven `allocated`) nets out unambiguous `trade.boes` matches that
+        have not yet been written as a real allocation record — see
+        `_virtual_boe_debit_exclusion_case`. This is the ONLY side of the
+        debit/trade pair adjusted: `calculate_trade()` intentionally keeps
+        counting every SALE line's cif_fc unconditionally (per its own
+        docstring, "the matched portion is counted instead via the matching
+        SALE trade line in calculate_trade()") — the exclusion belongs
+        solely here, exactly mirroring how a persisted allocation already
+        works, so together debit+trade still debit the license exactly once
+        per matched amount, virtual or persisted.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -103,6 +177,7 @@ class LicenseBalanceCalculator:
             .annotate(total=Sum("allocated_cif_fc"))
             .values("total")
         )
+        virtual_case = LicenseBalanceCalculator._virtual_boe_debit_exclusion_case(license_obj=license_obj)
 
         return (
             RowDetails.objects.filter(
@@ -116,8 +191,11 @@ class LicenseBalanceCalculator:
                     output_field=_ALLOCATION_DECIMAL_FIELD,
                 )
             )
+            .annotate(virtual_allocated=virtual_case)
             .annotate(
-                matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
+                matched=Least(
+                    F("cif_fc"), F("allocated") + F("virtual_allocated"), output_field=_ALLOCATION_DECIMAL_FIELD
+                )
             )
             .annotate(
                 contributed=Greatest(
@@ -227,6 +305,13 @@ class LicenseBalanceCalculator:
             .annotate(total=Sum("allocated_cif_fc"))
             .values("total")
         )
+        # Same virtual (unpersisted) trade.boes-match exclusion as
+        # `get_debit_rows()` — one shared computation, kept in sync so
+        # batched (bulk report) and single-license Balance CIF never
+        # diverge. Bounded by how many SALE trades in this batch carry a
+        # legacy `.boes` tag (system-wide, a small, fixed set — not one
+        # query per license).
+        virtual_case = LicenseBalanceCalculator._virtual_boe_debit_exclusion_case(license_ids=ids)
 
         rows = (
             RowDetails.objects
@@ -241,8 +326,11 @@ class LicenseBalanceCalculator:
                     output_field=_ALLOCATION_DECIMAL_FIELD,
                 )
             )
+            .annotate(virtual_allocated=virtual_case)
             .annotate(
-                matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
+                matched=Least(
+                    F("cif_fc"), F("allocated") + F("virtual_allocated"), output_field=_ALLOCATION_DECIMAL_FIELD
+                )
             )
             .annotate(
                 contributed=Greatest(
@@ -267,6 +355,22 @@ class LicenseBalanceCalculator:
         same "Active Allotment" rows the Balance Engine sums — filtering
         this queryset to `contributed > 0` is precisely "no BOE linked OR
         remaining allocation exists".
+
+        `contributed` is forced to 0 whenever the parent `AllotmentModel.
+        is_boe` is True, REGARDLESS of whether a `BOEAllotmentAllocation`
+        row exists yet — this is the coarse, binary signal the pre-Phase-A
+        design used (`allotment__bill_of_entry__isnull=True`, see below) and
+        it must still fully exclude, on top of (not replaced by) the finer
+        BOEAllotmentAllocation-driven partial exclusion: `is_boe` is set the
+        moment a BOE is tagged to the allotment via the BOE form's picker
+        (`apps/bill_of_entry/serializers.py`), which can happen well before
+        (or entirely without) anyone creating the matching
+        `BOEAllotmentAllocation` ledger row. Without this, an allotment
+        tagged to a BOE but not yet formally allocated silently contributes
+        its FULL cif_fc as an "outstanding commitment" even though the
+        underlying goods have already been debited against the licence via
+        that BOE's own `RowDetails` row — double-counting the same physical
+        import once as a pending allotment and once as a BOE debit.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -303,8 +407,12 @@ class LicenseBalanceCalculator:
                 matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
             )
             .annotate(
-                contributed=Greatest(
-                    F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
+                contributed=Case(
+                    When(allotment__is_boe=True, then=Value(DEC_0)),
+                    default=Greatest(
+                        F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
+                    ),
+                    output_field=_ALLOCATION_DECIMAL_FIELD,
                 )
             )
         )
@@ -437,8 +545,15 @@ class LicenseBalanceCalculator:
                 matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
             )
             .annotate(
-                contributed=Greatest(
-                    F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
+                # Same is_boe binary exclusion as get_allotment_rows() — see
+                # that method's docstring. Kept in sync so batched (bulk
+                # report) and single-license balances never diverge.
+                contributed=Case(
+                    When(allotment__is_boe=True, then=Value(DEC_0)),
+                    default=Greatest(
+                        F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
+                    ),
+                    output_field=_ALLOCATION_DECIMAL_FIELD,
                 )
             )
             .values("item__license_id")

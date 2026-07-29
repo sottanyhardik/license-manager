@@ -12,9 +12,9 @@ import BoeAllocationDrawer, {
     type AllocationCandidate,
     type AllocationSelection,
 } from "@/components/BoeAllocationDrawer";
-import { licenseBalanceKeys } from "./useLicenseBalanceLedger";
-import { extractApiError, fmtDate, fmtNum, invoiceBoeStatusVariant } from "./licenseBalanceHelpers";
-import type { BoeInvoiceCandidate, InvoiceBoeEntry } from "./types";
+import { licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
+import { extractApiError, fmtDate, fmtNum, invoiceBoeStatusVariant } from "@/pages/license-balance/licenseBalanceHelpers";
+import type { BoeInvoiceCandidate, InvoiceBoeEntry } from "@/pages/license-balance/types";
 
 interface InvoiceBoeSectionProps {
     licenseId: string | number;
@@ -53,15 +53,24 @@ function toAllocationCandidates(candidates: BoeInvoiceCandidate[]): AllocationCa
 const EMPTY_EXTERNAL_FORM = { rowDetailsId: "", invoiceNumber: "", qty: "", cifFc: "", cifInr: "" };
 
 /**
- * Section 2 — Invoice ↔ BOE Reconciliation. One expandable row per
- * `invoice_boe` entry (expand pattern mirrors `AccordionTable.tsx`'s
+ * Overview tab's Invoice ↔ BOE Reconciliation section. One expandable row
+ * per `invoice_boe` entry (expand pattern mirrors `AccordionTable.tsx`'s
  * sibling-`<tr>`-with-`colSpan`), plus the "Find BOE" allocation drawer and
  * the "Mark External Invoice" flow.
+ *
+ * Relocated (unchanged) from `pages/license-balance/` — still backed by
+ * `useLicenseBalanceLedger`; this is the allocation-editing entry point kept
+ * alongside the Warnings panel in this feature's v1.
  */
 export default function InvoiceBoeSection({ licenseId, invoices, boeInvoiceCandidates }: InvoiceBoeSectionProps) {
     const { hasRole } = useContext(AuthContext);
     const queryClient = useQueryClient();
     const { confirmDangerousAction, confirmDialog } = useConfirmDialog();
+
+    // Only invoices with no BOE attached at all belong in this reconciliation
+    // panel — once one or more BOEs are linked, there's nothing left to
+    // reconcile for that invoice.
+    const unmatchedInvoices = useMemo(() => invoices.filter((invoice) => invoice.linked_boes.length === 0), [invoices]);
 
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
     const [drawerInvoice, setDrawerInvoice] = useState<InvoiceBoeEntry | null>(null);
@@ -179,14 +188,14 @@ export default function InvoiceBoeSection({ licenseId, invoices, boeInvoiceCandi
                         </tr>
                     </thead>
                     <tbody>
-                        {invoices.length === 0 && (
+                        {unmatchedInvoices.length === 0 && (
                             <tr>
                                 <td colSpan={12} className="px-3 py-6 text-center text-muted-foreground">
-                                    No invoices recorded on this licence.
+                                    No unmatched invoices on this licence.
                                 </td>
                             </tr>
                         )}
-                        {invoices.map((invoice) => {
+                        {unmatchedInvoices.map((invoice) => {
                             const key = rowKey(invoice);
                             const isOpen = expanded.has(key);
                             const canFindBoe =

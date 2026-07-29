@@ -1,12 +1,16 @@
 import { Badge } from "@/components/ui/badge";
-import type { FinancialLedgerSummary } from "./types";
-import { fmtNum } from "./licenseBalanceHelpers";
+import type { FinancialLedgerSummary } from "@/pages/license-balance/types";
+import { fmtNum } from "@/pages/license-balance/licenseBalanceHelpers";
 
 interface FinancialSummarySectionProps {
     summary: FinancialLedgerSummary;
 }
 
-/** Section 6 — Financial Summary: a small key-value table from `financial_ledger.summary`. */
+/**
+ * Overview tab's Financial Summary section: a small key-value table from
+ * `financial_ledger.summary`. Relocated (unchanged) from
+ * `pages/license-balance/` — still backed by `useLicenseBalanceLedger`.
+ */
 export default function FinancialSummarySection({ summary }: FinancialSummarySectionProps) {
     const rows: [string, string][] = [
         ["Original Licence CIF", fmtNum(summary.opening_balance)],

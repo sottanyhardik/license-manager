@@ -141,6 +141,12 @@ export interface CustomsLedgerRow {
 export interface CustomsLedgerSummary {
     opening_balance: number;
     total_boe_cif: number;
+    /** `opening_balance - total_boe_cif` — the balance flow's midpoint,
+     * before the Pending Allotment deduction. */
+    remaining_after_boe: number;
+    /** Sum of `AllotmentItems.contributed` for allotments with NO BOE
+     * association (`AllotmentModel.is_boe`) — allotments already linked to
+     * a BOE are excluded entirely, not just their matched portion. */
     total_pending_allotment_cif: number;
     computed_balance: number;
     engine_balance: number;

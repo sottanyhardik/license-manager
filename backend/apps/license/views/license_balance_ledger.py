@@ -40,11 +40,18 @@ def add_license_balance_ledger_actions(viewset_class):
     @action(detail=True, methods=['get'], url_path='balance-ledger')
     def balance_ledger(self, request, pk=None):
         """GET the full LicenseLedgerData dataset for one licence — the
-        single source consumed by the workspace UI, PDF, and Excel."""
+        single source consumed by the workspace UI, PDF, and Excel.
+
+        `?show_hidden=true` renders previous-owner "hidden" BOE rows in the
+        Customs Ledger section only (see `LicenseBalanceLedgerBuilder.build`/
+        `build_customs_ledger`'s docstrings) — every other section is
+        unaffected regardless of this flag.
+        """
         from apps.license.services.license_balance_ledger_builder import LicenseBalanceLedgerBuilder
 
         license_obj = self.get_object()
-        data = LicenseBalanceLedgerBuilder.build(license_obj)
+        show_hidden = request.query_params.get('show_hidden', '').lower() in ('1', 'true', 'yes')
+        data = LicenseBalanceLedgerBuilder.build(license_obj, show_hidden=show_hidden)
         return Response(_json_safe(data))
 
     @action(detail=True, methods=['post'], url_path='recalculate')
@@ -139,9 +146,57 @@ def add_license_balance_ledger_actions(viewset_class):
         restore_warning_service(ignored, user=request.user, reason=request.data.get('reason', ''))
         return Response({'id': ignored.id, 'ignored': ignored.ignored})
 
+    @action(detail=True, methods=['post'], url_path='hide-boe')
+    def hide_boe(self, request, pk=None):
+        """
+        Body: {boe_id, reason?}. Marks a BOE (previous-owner utilisation)
+        as hidden — excluded from every balance/financial calculation for
+        THIS licence only (a BOE spanning multiple licences is untouched
+        for any other licence — see `boe_service.hide_boe_for_license`'s
+        docstring). Idempotent.
+        """
+        from apps.bill_of_entry.models import BillOfEntryModel
+        from apps.bill_of_entry.services.boe_service import hide_boe_for_license
+
+        license_obj = self.get_object()
+        boe_id = request.data.get('boe_id')
+        if not boe_id:
+            return Response({'error': 'boe_id is required.'}, status=400)
+        try:
+            boe = BillOfEntryModel.objects.get(pk=boe_id)
+        except BillOfEntryModel.DoesNotExist:
+            return Response({'error': 'No BOE matches that id.'}, status=404)
+
+        result = hide_boe_for_license(
+            boe, license_obj, user=request.user, reason=request.data.get('reason', ''),
+        )
+        return Response(result, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='restore-boe')
+    def restore_boe(self, request, pk=None):
+        """Body: {boe_id, reason?}. Un-hides a previously-hidden BOE for
+        this licence — see `boe_service.restore_boe_for_license`."""
+        from apps.bill_of_entry.models import BillOfEntryModel
+        from apps.bill_of_entry.services.boe_service import restore_boe_for_license
+
+        license_obj = self.get_object()
+        boe_id = request.data.get('boe_id')
+        if not boe_id:
+            return Response({'error': 'boe_id is required.'}, status=400)
+        try:
+            boe = BillOfEntryModel.objects.get(pk=boe_id)
+        except BillOfEntryModel.DoesNotExist:
+            return Response({'error': 'No BOE matches that id.'}, status=404)
+
+        result = restore_boe_for_license(
+            boe, license_obj, user=request.user, reason=request.data.get('reason', ''),
+        )
+        return Response(result)
+
     for method in (
         balance_ledger, recalculate,
         ignore_warning, restore_warning,
+        hide_boe, restore_boe,
     ):
         setattr(viewset_class, method.__name__, method)
 

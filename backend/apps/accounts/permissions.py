@@ -202,6 +202,13 @@ class LicenseBalanceLedgerPermission(permissions.BasePermission):
       - marking/reversing an external (out-of-system) invoice link only
         touches the BOE side — requires BOE_MANAGER alone.
       - recalculation is licence-level — requires LICENSE_MANAGER.
+      - hiding/restoring a BOE (previous-owner utilisation, see
+        `RowDetails.is_hidden`) is a REAL financial mutation — unlike
+        ignore/restore-warning, it changes what counts toward Balance CIF
+        — so it follows the "require the write role for BOTH sides"
+        convention above: touches a `RowDetails` (BOE) AND recomputes the
+        licence's own `LicenseBalance`/item caches (`update_license_flags`)
+        — requires BOE_MANAGER *and* LICENSE_MANAGER.
 
     Backend enforcement is authoritative regardless of what the frontend
     hides — every `has_permission` check below runs independent of UI state.
@@ -227,6 +234,12 @@ class LicenseBalanceLedgerPermission(permissions.BasePermission):
         # Reconciliation" in product terms), not a specific AND-of-two.
         'ignore_warning': (['LICENSE_MANAGER', 'BOE_MANAGER', 'TRADE_MANAGER', 'ALLOTMENT_MANAGER'],),
         'restore_warning': (['LICENSE_MANAGER', 'BOE_MANAGER', 'TRADE_MANAGER', 'ALLOTMENT_MANAGER'],),
+        # Hiding/restoring a BOE is a real financial mutation (changes
+        # Balance CIF), unlike the pure-bookkeeping warning actions above —
+        # gated as an explicit AND-of-two, same convention as the
+        # allocation actions.
+        'hide_boe': (['BOE_MANAGER'], ['LICENSE_MANAGER']),
+        'restore_boe': (['BOE_MANAGER'], ['LICENSE_MANAGER']),
     }
 
     def has_permission(self, request, view):

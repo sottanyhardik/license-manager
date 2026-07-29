@@ -145,6 +145,16 @@ class DashboardDataView(APIView):
 
     def _get_boe_stats(self):
         """Get BOE statistics"""
+        # NOTE (Hidden BOEs / previous-owner utilisation, see
+        # `apps.bill_of_entry.models.RowDetails.is_hidden`): deliberately
+        # NOT filtered here. `is_hidden` is scoped per (BOE, licence) pair
+        # at RowDetails granularity — a single BOE can be hidden for one
+        # licence and still live/current for another (see
+        # `BillOfEntryModel.get_licenses`). This dashboard counts BOE
+        # records system-wide, with no licence context to resolve that
+        # ambiguity against, and is a raw activity/record count, not a
+        # licence balance or financial figure — the one thing hidden BOEs
+        # are defined to affect. Out of scope by design; left unfiltered.
         # Total BOE (all records - both with and without invoices)
         total_count = BillOfEntryModel.objects.count()
 
@@ -218,6 +228,10 @@ class DashboardDataView(APIView):
 
     def _get_boe_monthly_trend(self):
         """Get BOE count by month for last 6 months"""
+        # NOTE: same deliberate choice as `_get_boe_stats` above — hidden
+        # BOEs are a per-(BOE, licence) concept and this trend is a
+        # system-wide, licence-agnostic activity count, not a balance
+        # figure. Left unfiltered.
         # Calculate date 6 months ago
         today = date.today()
         six_months_ago = today - relativedelta(months=6)

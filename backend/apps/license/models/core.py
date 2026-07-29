@@ -464,8 +464,12 @@ class LicenseDetailsModel(AuditModel):
             from django.conf import settings
             biscuit_company_id = settings.BISCUIT_COMPANY_ID
             borax_quantity = (total_quantity / _to_decimal("0.62")) * _to_decimal("0.1")
+            # Previous-owner "hidden" rows (see `RowDetails.is_hidden`) are
+            # excluded — feeds the borax/rutile split report (`tables.py`),
+            # a balance/report figure like any other DEBIT sum.
             debit = _to_decimal(
                 RowDetails.objects.filter(sr_number__license=self, bill_of_entry__company=biscuit_company_id, transaction_type=DEBIT)
+                .exclude(is_hidden=True)
                 .aggregate(total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"],
                 DEC_000,
             )
@@ -959,9 +963,14 @@ class LicenseImportItemsModel(models.Model):
             return avail if avail >= DEC_000 else DEC_000
 
     def _calculate_item_debit(self) -> Decimal:
-        """Calculate total debit for this specific import item"""
+        """Calculate total debit for this specific import item.
+
+        Excludes previous-owner "hidden" rows (see `RowDetails.is_hidden`)
+        — a debit total by definition, and no consumer of this figure
+        should ever silently include previous-owner utilisation.
+        """
         return _to_decimal(
-            RowDetails.objects.filter(sr_number=self, transaction_type=DEBIT).aggregate(
+            RowDetails.objects.filter(sr_number=self, transaction_type=DEBIT).exclude(is_hidden=True).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
             DEC_0,
         )

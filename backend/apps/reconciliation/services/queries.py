@@ -10,6 +10,16 @@ plain list of dicts (or a single summary dict) built from the existing
 `trade` / `bill_of_entry` / `license` models — there is no new
 source-of-truth data here, only detection of where the rule above is
 currently violated or unlinked.
+
+NOTE (Hidden BOEs / previous-owner utilisation, see
+`apps.bill_of_entry.models.RowDetails.is_hidden`): the `RowDetails`
+queries in this module deliberately do NOT exclude hidden rows. A hidden
+BOE is still a real, physical BOE that was genuinely filed — hiding it
+only means "exclude from THIS licence's balance/financial figures", never
+"pretend it doesn't exist." Reconciliation matching/audit here is
+concerned with whether a document trail is internally consistent, not
+with whose balance it counts toward, so hidden BOEs must keep
+participating in it exactly as before. Do NOT "fix" this in a future PR.
 """
 
 from __future__ import annotations

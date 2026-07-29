@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import Case, DecimalField, Exists, F, OuterRef, Subquery, Sum, Value, When
+from django.db.models import Case, DecimalField, Exists, F, OuterRef, Q, Subquery, Sum, Value, When
 from django.db.models.functions import Coalesce, Least, Greatest
 
 from apps.core.constants import DEC_0, DEBIT
@@ -37,6 +37,19 @@ _ALLOCATION_DECIMAL_FIELD = DecimalField(max_digits=20, decimal_places=3)
 def quantize_2dp(value: Decimal) -> Decimal:
     """Quantize decimal to 2 decimal places."""
     return to_decimal(value, DEC_0).quantize(DECIMAL_CENT, rounding=ROUND_HALF_UP)
+
+
+def exclude_hidden(qs):
+    """
+    Exclude previous-owner "hidden" BOE debit rows (`RowDetails.is_hidden`)
+    from a queryset. Applied at every site that builds a DEBIT `RowDetails`
+    queryset for a live balance/report calculation — see
+    `LicenseBalanceCalculator.get_debit_rows`'s `include_hidden` param for
+    the one deliberate exception (the Customs Ledger's `show_hidden` audit
+    view). A single, shared definition so every consumer's exclusion can
+    never silently diverge.
+    """
+    return qs.exclude(is_hidden=True)
 
 
 class LicenseBalanceCalculator:
@@ -72,17 +85,36 @@ class LicenseBalanceCalculator:
         )
 
     @staticmethod
-    def _compute_linked_boe_row_ids(trades_queryset):
+    def _sale_trades_with_boes_for(*, license_obj=None, license_ids=None):
         """
-        Given a queryset of SALE `LicenseTrade` rows that have at least one
-        legacy `.boes` attachment, returns `{row_details_id: Decimal}` of
-        the FULL `cif_fc` of every `RowDetails` row that
-        `find_boe_allocation_candidates` (see `apps.reconciliation.services.
-        boe_link_reconciler` — the SAME candidate lookup `reconcile_trade_
-        boe_links` itself uses) identifies as belonging to a SALE trade
-        line, for exclusion from `calculate_debit()`.
+        Shared trades-queryset builder for the legacy-tag scan
+        (`_scan_linked_boe_candidates`): every SALE `LicenseTrade` carrying
+        >=1 legacy `.boes` attachment and >=1 line for the given license(s).
+        Exactly one of `license_obj`/`license_ids` must be given. Factored
+        out so every caller of `_scan_linked_boe_candidates` (currently just
+        `resolve_boes_represented_by_invoice_for_licenses`) builds the
+        identical base queryset.
+        """
+        from apps.trade.models import LicenseTrade
 
-        A linked BOE is excluded in FULL regardless of whether its CIF
+        trades = LicenseTrade.objects.filter(direction=LicenseTrade.DIR_SALE, boes__isnull=False).distinct()
+        if license_obj is not None:
+            return trades.filter(lines__sr_number__license=license_obj)
+        return trades.filter(lines__sr_number__license_id__in=list(license_ids))
+
+    @staticmethod
+    def _scan_linked_boe_candidates(trades_queryset):
+        """
+        THE single shared scan over `trades_queryset` (SALE trades carrying
+        a legacy `.boes` tag) that calls `find_boe_allocation_candidates`
+        (see `apps.reconciliation.services.boe_link_reconciler` — the SAME
+        candidate lookup `reconcile_trade_boe_links` itself uses, covered by
+        11 passing tests in `apps.reconciliation.tests.
+        test_boe_link_reconciler`) once per SALE trade line. Every consumer
+        of this candidate data MUST go through this one loop — never a
+        second, independent copy of it.
+
+        A linked BOE is treated as matched regardless of whether its CIF
         matches the trade line's own CIF within tolerance — i.e. this
         covers `"auto_migrated"`, `"mismatch"`, AND `"ambiguous"` candidates
         alike (only `"no_match"` contributes nothing, since no candidate
@@ -91,54 +123,189 @@ class LicenseBalanceCalculator:
         BOE is linked to an invoice, that invoice is its sole financial
         representation from then on, and a CIF discrepancy is a data-quality
         signal surfaced separately (see `build_financial_ledger`'s
-        `mismatch_warning`), never a second debit. Reuses the exact same
-        candidate-finding logic the reconciliation panel/backfill command
-        already trust, so a licence's Balance CIF is correct even before
-        anyone creates a formal `InvoiceBOEAllocation` for real.
+        `mismatch_warning`), never a second debit.
+
+        Returns `boe_ids_by_license`: `{license_id: {bill_of_entry_id,
+        ...}}` of every candidate row's BOE id, grouped by the trade LINE's
+        own licence (`line.sr_number.license_id` — the same licence the
+        candidate row itself belongs to, since `find_boe_allocation_
+        candidates` only ever returns rows matching that exact line's own
+        `sr_number_id`). Feeds `resolve_boes_represented_by_invoice_for_
+        licenses`'s BOE-level "represented" set — see that function's
+        docstring for the multi-item-BOE gap this closes.
         """
         from apps.reconciliation.services.boe_link_reconciler import find_boe_allocation_candidates
 
-        by_row_details: dict = {}
-        for trade in trades_queryset.prefetch_related("lines", "boes"):
+        boe_ids_by_license: dict = {}
+        for trade in trades_queryset.prefetch_related("lines__sr_number", "boes"):
             for line in trade.lines.all():
-                for candidate in find_boe_allocation_candidates(line):
-                    by_row_details[candidate.id] = to_decimal(candidate.cif_fc, DEC_0)
-        return by_row_details
+                candidates = find_boe_allocation_candidates(line)
+                if not candidates:
+                    continue
+                license_id = line.sr_number.license_id
+                for candidate in candidates:
+                    boe_ids_by_license.setdefault(license_id, set()).add(candidate.bill_of_entry_id)
+        return boe_ids_by_license
+
+    @staticmethod
+    def resolve_boes_represented_by_invoice(license_obj) -> set:
+        """
+        Set of `BillOfEntryModel` ids "represented by an invoice" for this
+        licence — the ONE place that answers "has this physical BOE already
+        been accounted for by a Sale invoice," so `_linked_boe_debit_
+        exclusion_case`/`get_debit_rows`/`build_financial_ledger` (Pending
+        BOE suppression) never answer it independently.
+
+        Combines BOTH:
+          (a) any BOE with >=1 ACTIVE, current `InvoiceBOEAllocation` on ANY
+              of its debit rows for this licence, and
+          (b) any BOE `find_boe_allocation_candidates` identifies (via
+              `_scan_linked_boe_candidates`) as linked to a SALE trade line
+              through the legacy `trade.boes` M2M — `"auto_migrated"`,
+              `"mismatch"`, and `"ambiguous"` candidates alike (see that
+              method's docstring for why).
+
+        Once EITHER mechanism matches ANY debit row of a BOE, the WHOLE BOE
+        is "represented" — every debit row on that physical BOE is treated
+        as accounted for, not just the specific row that matched. This
+        closes a real gap: `find_boe_allocation_candidates` (and a single
+        `InvoiceBOEAllocation`) only ever matches ONE licence item's row at
+        a time, so a BOE covering SEVERAL licence items (multiple
+        `RowDetails` rows, different `sr_number`s, same `bill_of_entry`)
+        used to leave its OTHER items' rows wrongly "Pending" even though
+        the same physical document is already represented by an invoice.
+
+        Returns a (possibly empty) `set` of `bill_of_entry_id`s.
+        """
+        return LicenseBalanceCalculator.resolve_boes_represented_by_invoice_for_licenses(
+            [license_obj.id]
+        ).get(license_obj.id, set())
+
+    @staticmethod
+    def resolve_boes_represented_by_invoice_for_licenses(license_ids) -> dict:
+        """
+        Bulk sibling of `resolve_boes_represented_by_invoice` —
+        `{license_id: {bill_of_entry_id, ...}}` for MANY licenses in a
+        fixed, small number of queries (not one per license). See that
+        method's docstring for the "whole BOE represented" business rule.
+        Every id in `license_ids` is present in the result (empty set when
+        nothing represents any of that licence's BOEs).
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+
+        from apps.reconciliation.models import InvoiceBOEAllocation
+
+        result: dict = {lid: set() for lid in ids}
+
+        # (a) Formal, active InvoiceBOEAllocation — any BOE with >=1 such
+        # allocation on any of its debit rows, per license. One fixed query
+        # regardless of how many licenses/BOEs are in play.
+        formal_rows = (
+            InvoiceBOEAllocation.objects.filter(
+                row_details__sr_number__license_id__in=ids,
+                status=InvoiceBOEAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+            .values_list("row_details__sr_number__license_id", "row_details__bill_of_entry_id")
+            .distinct()
+        )
+        for license_id, boe_id in formal_rows:
+            if boe_id is not None:
+                result.setdefault(license_id, set()).add(boe_id)
+
+        # (b) Legacy-tag/candidate match — the ONE shared trade-line-
+        # scanning loop, `_scan_linked_boe_candidates` (never a second,
+        # independent copy of it).
+        trades = LicenseBalanceCalculator._sale_trades_with_boes_for(license_ids=ids)
+        boe_ids_by_license = LicenseBalanceCalculator._scan_linked_boe_candidates(trades)
+        for license_id, boe_ids in boe_ids_by_license.items():
+            result.setdefault(license_id, set()).update(boe_ids)
+
+        return result
 
     @staticmethod
     def _linked_boe_debit_exclusion_case(*, license_obj=None, license_ids=None):
         """
-        A `Case`/`When` SQL expression that yields the full CIF of each
-        `RowDetails` primary key found by `_compute_linked_boe_row_ids`,
-        else 0 — built for either a single license (`get_debit_rows`) or a
-        batch of them (`calculate_debit_for_licenses`), sharing the exact
-        same underlying computation either way. Exactly one of
+        A `Case`/`When` SQL expression that yields the full CIF of every
+        `RowDetails` row whose `bill_of_entry_id` is in the BOE-id set
+        returned by `resolve_boes_represented_by_invoice[_for_licenses]`
+        AND which has NO active formal allocation of its OWN (`allocated ==
+        0`) — else 0. Built for either a single license (`get_debit_rows`)
+        or a batch of them (`calculate_debit_for_licenses`), sharing the
+        exact same underlying resolver either way. Exactly one of
         `license_obj`/`license_ids` must be given.
+
+        PRECONDITION: the caller's queryset must already carry an
+        `allocated` annotation (the per-row ACTIVE/current
+        `InvoiceBOEAllocation` sum) BEFORE this expression is added as
+        `linked_excluded` — both `get_debit_rows` and
+        `calculate_debit_for_licenses` already annotate `allocated` first;
+        `F("allocated")`/`Q(allocated=...)` below resolve against that
+        annotation at query-compile time, not at the time this `Case` is
+        built.
+
+        Keyed on `bill_of_entry_id`, NOT `row_details_id` — see `resolve_
+        boes_represented_by_invoice`'s docstring: once ANY debit row of a
+        BOE is represented (by a formal allocation or a legacy-tag
+        candidate match), every OTHER debit row of that same physical BOE
+        that has no allocation of its own also gets its FULL `cif_fc`
+        excluded (the multi-item-BOE gap fix).
+
+        The `allocated == 0` guard is deliberate and NOT part of a naive
+        "exclude the whole BOE unconditionally" reading: a row that already
+        carries its own PARTIAL formal allocation (e.g. 300 of a 1000 CIF
+        row) must keep leaving its unmatched remainder (700) visible to
+        `calculate_debit()`/the Financial Ledger's Pending row — see
+        `apps.reconciliation.tests.test_allocation_service.
+        InvoiceBOEAllocationTests.test_partial_allocation_leaves_correct_
+        unmatched_remainder` and `apps.license.tests.test_balance_ledger_
+        views.FinancialLedgerGroupingTests.
+        test_partially_allocated_boe_leaves_remainder_as_individual_row_and_
+        totals_match` — both pre-existing, deliberately-tested Phase-A
+        partial-allocation-ledger behavior this refactor must not regress.
+        Only a row with NO allocation of its own (a sibling row, or a
+        legacy-candidate match that never became a formal allocation) falls
+        through to the BOE-level "represented" exclusion.
         """
-        from apps.trade.models import LicenseTrade
-
-        trades = LicenseTrade.objects.filter(direction=LicenseTrade.DIR_SALE, boes__isnull=False).distinct()
         if license_obj is not None:
-            trades = trades.filter(lines__sr_number__license=license_obj)
+            represented = LicenseBalanceCalculator.resolve_boes_represented_by_invoice(license_obj)
         else:
-            trades = trades.filter(lines__sr_number__license_id__in=list(license_ids))
+            by_license = LicenseBalanceCalculator.resolve_boes_represented_by_invoice_for_licenses(
+                list(license_ids)
+            )
+            represented = set()
+            for boe_ids in by_license.values():
+                represented |= boe_ids
 
-        by_row_details = LicenseBalanceCalculator._compute_linked_boe_row_ids(trades)
-        if not by_row_details:
+        if not represented:
             return Value(DEC_0, output_field=_ALLOCATION_DECIMAL_FIELD)
         return Case(
-            *[When(pk=row_id, then=Value(amount)) for row_id, amount in by_row_details.items()],
+            When(
+                Q(bill_of_entry_id__in=represented) & Q(allocated=DEC_0),
+                then=F("cif_fc"),
+            ),
             default=Value(DEC_0),
             output_field=_ALLOCATION_DECIMAL_FIELD,
         )
 
     @staticmethod
-    def get_debit_rows(license_obj):
+    def get_debit_rows(license_obj, include_hidden=False):
         """
         Annotated RowDetails debit-row queryset for a license: each row
         carries `allocated` / `linked_excluded` / `matched` / `contributed`
         annotations (see `calculate_debit`'s docstring for the allocation-
         driven partial-exclusion business rule this implements).
+
+        `include_hidden=False` (default) excludes previous-owner "hidden"
+        rows (`RowDetails.is_hidden`, see `exclude_hidden`) — every live
+        balance/financial calculation built on this queryset (`calculate_
+        debit`, `calculate_boe_debit_total`, `build_financial_ledger`,
+        `build_timeline`, etc.) therefore excludes hidden BOEs automatically.
+        `include_hidden=True` is the one deliberate exception: the Customs
+        Ledger's audit view (`build_customs_ledger`'s `show_hidden` param),
+        which must still be able to show hidden rows on request.
 
         Factored out of `calculate_debit` so the Financial Ledger PDF
         (services/exporters/license_balance_pdf.py) can render the exact
@@ -183,11 +350,15 @@ class LicenseBalanceCalculator:
         )
         linked_case = LicenseBalanceCalculator._linked_boe_debit_exclusion_case(license_obj=license_obj)
 
+        rows = RowDetails.objects.filter(
+            sr_number__license=license_obj,
+            transaction_type=DEBIT,
+        )
+        if not include_hidden:
+            rows = exclude_hidden(rows)
+
         return (
-            RowDetails.objects.filter(
-                sr_number__license=license_obj,
-                transaction_type=DEBIT,
-            )
+            rows
             .annotate(
                 allocated=Coalesce(
                     Subquery(allocated_subquery, output_field=_ALLOCATION_DECIMAL_FIELD),
@@ -303,12 +474,42 @@ class LicenseBalanceCalculator:
         if not ids:
             return {}
         rows = (
-            RowDetails.objects
-            .filter(sr_number__license_id__in=ids, transaction_type=DEBIT)
+            exclude_hidden(
+                RowDetails.objects.filter(sr_number__license_id__in=ids, transaction_type=DEBIT)
+            )
             .values("sr_number__license_id")
             .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
         )
         return {row["sr_number__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
+    @staticmethod
+    def calculate_hidden_boe_debit_total(license_obj) -> Decimal:
+        """
+        Total raw `cif_fc` of HIDDEN (previous-owner) DEBIT `RowDetails`
+        rows for this licence — the subtrahend in the Financial Ledger's
+        Opening Balance rule (`Original Licence CIF - Hidden BOE total`,
+        see `LicenseBalanceLedgerBuilder.build_financial_ledger`'s
+        docstring). Symmetric complement of `calculate_boe_debit_total`
+        (which now excludes hidden rows via `get_debit_rows`) — together
+        they still sum to the total raw debit across every BOE row
+        regardless of hidden status.
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            Total hidden BOE debit CIF as Decimal
+        """
+        return to_decimal(
+            RowDetails.objects.filter(
+                sr_number__license=license_obj,
+                transaction_type=DEBIT,
+                is_hidden=True,
+            ).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+            )["total"],
+            DEC_0,
+        )
 
     @staticmethod
     def calculate_credit_for_licenses(license_ids) -> dict:
@@ -376,10 +577,11 @@ class LicenseBalanceCalculator:
         linked_case = LicenseBalanceCalculator._linked_boe_debit_exclusion_case(license_ids=ids)
 
         rows = (
-            RowDetails.objects
-            .filter(
-                sr_number__license_id__in=ids,
-                transaction_type=DEBIT,
+            exclude_hidden(
+                RowDetails.objects.filter(
+                    sr_number__license_id__in=ids,
+                    transaction_type=DEBIT,
+                )
             )
             .annotate(
                 allocated=Coalesce(
@@ -405,23 +607,26 @@ class LicenseBalanceCalculator:
         return {row["sr_number__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
 
     @staticmethod
-    def get_allotment_rows(license_obj):
+    def _annotate_allotment_contribution(queryset):
         """
-        Annotated AllotmentItems queryset for a license: each row carries
+        Shared annotation chain for `get_allotment_rows` (single license) /
+        `get_allotment_rows_bulk` (many licenses): each row carries
         `allocated` / `matched` / `contributed` (CIF) and `allocated_qty` /
         `matched_qty` / `contributed_qty` (quantity) annotations (see
         `calculate_allotment`'s docstring for the allocation-driven
         partial-exclusion business rule this implements — the quantity
         annotations are the exact same rule, applied to `qty`/`allocated_qty`
         instead of `cif_fc`/`allocated_cif_fc`, so a licence item's Available
-        Quantity — see `get_outstanding_allotment_totals` — can never
-        structurally drift from the Balance Engine's own CIF figure).
+        Quantity — see `get_outstanding_allotment_totals` /
+        `get_outstanding_allotment_totals_for_items` — can never structurally
+        drift from the Balance Engine's own CIF figure).
 
-        Factored out of `calculate_allotment` so the Financial Ledger PDF
-        (services/exporters/license_balance_pdf.py) can render the exact
-        same "Active Allotment" rows the Balance Engine sums — filtering
-        this queryset to `contributed > 0` is precisely "no BOE linked OR
-        remaining allocation exists".
+        Factored out of the old single-license `get_allotment_rows` body so
+        the single-license and license-spanning-bulk queryset builders share
+        ONE implementation of this annotation chain and can never silently
+        diverge — `queryset` is caller-filtered (one license or many) before
+        being passed in here; this only adds annotations, never a license
+        filter.
 
         `contributed` is forced to 0 whenever the parent `AllotmentModel` has
         ANY linked BOE at all (an `Exists()` check against the real
@@ -450,10 +655,12 @@ class LicenseBalanceCalculator:
         a pending allotment and once as a BOE debit.
 
         Args:
-            license_obj: LicenseDetailsModel instance
+            queryset: an `AllotmentItems` queryset, already filtered by the
+                caller to one license (`get_allotment_rows`) or many
+                (`get_allotment_rows_bulk`).
 
         Returns:
-            Annotated AllotmentItems queryset for the license.
+            The same queryset with the annotations above applied.
         """
         from apps.bill_of_entry.models import BillOfEntryModel
         from apps.reconciliation.models import BOEAllotmentAllocation
@@ -492,9 +699,7 @@ class LicenseBalanceCalculator:
         )
 
         return (
-            AllotmentItems.objects.filter(
-                item__license=license_obj,
-            )
+            queryset
             .annotate(
                 allocated=Coalesce(
                     Subquery(allocated_subquery, output_field=_ALLOCATION_DECIMAL_FIELD),
@@ -536,6 +741,56 @@ class LicenseBalanceCalculator:
         )
 
     @staticmethod
+    def get_allotment_rows(license_obj):
+        """
+        Annotated AllotmentItems queryset for a license — see
+        `_annotate_allotment_contribution` for the full annotation/business-
+        rule writeup (allocated/matched/contributed CIF+qty, BOE-link
+        exclusion, partial-allocation netting).
+
+        Factored out of `calculate_allotment` so the Financial Ledger PDF
+        (services/exporters/license_balance_pdf.py) can render the exact
+        same "Active Allotment" rows the Balance Engine sums — filtering
+        this queryset to `contributed > 0` is precisely "no BOE linked OR
+        remaining allocation exists".
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            Annotated AllotmentItems queryset for the license.
+        """
+        return LicenseBalanceCalculator._annotate_allotment_contribution(
+            AllotmentItems.objects.filter(item__license=license_obj)
+        )
+
+    @staticmethod
+    def get_allotment_rows_bulk(license_ids):
+        """
+        License-SPANNING sibling of `get_allotment_rows` — same annotation
+        chain (`_annotate_allotment_contribution`, shared verbatim so the
+        two can never silently diverge), filtered by
+        `item__license_id__in=license_ids` instead of a single license.
+
+        Used by `get_outstanding_allotment_totals_for_items` (grouped by
+        `item_id`) for bulk/batched per-item consumers — see
+        `apps.license.services.balance_snapshot`.
+
+        Args:
+            license_ids: iterable of license pks.
+
+        Returns:
+            Annotated AllotmentItems queryset spanning all given licenses
+            (empty queryset if `license_ids` is empty).
+        """
+        ids = list(license_ids)
+        if not ids:
+            return AllotmentItems.objects.none()
+        return LicenseBalanceCalculator._annotate_allotment_contribution(
+            AllotmentItems.objects.filter(item__license_id__in=ids)
+        )
+
+    @staticmethod
     def get_outstanding_allotment_totals(import_item) -> tuple[Decimal, Decimal]:
         """
         `(outstanding_qty, outstanding_cif)` for ONE licence item — the
@@ -567,6 +822,48 @@ class LicenseBalanceCalculator:
             )
         )
         return to_decimal(row["qty"], DEC_0), to_decimal(row["cif"], DEC_0)
+
+    @staticmethod
+    def get_outstanding_allotment_totals_for_items(license_ids) -> dict:
+        """
+        Batched, license-spanning sibling of `get_outstanding_allotment_
+        totals` — `{item_id: (outstanding_qty, outstanding_cif)}` for every
+        import item across MANY licenses in one query, via
+        `get_allotment_rows_bulk` (same AT-type filter, same BOE-link-
+        exclusion + partial-allocation netting — see that method's and
+        `_annotate_allotment_contribution`'s docstrings for the shared
+        business rule this can never diverge from).
+
+        Used by `ItemBalanceCalculator.calculate_available_quantity_for_items`
+        and `apps.license.services.balance_snapshot` so the snapshot's
+        per-item Available/Outstanding-Allotted Quantity stay in the exact
+        same lineage as the single-item `get_outstanding_allotment_totals`.
+
+        Args:
+            license_ids: iterable of license pks.
+
+        Returns:
+            `{item_id: (Decimal, Decimal)}`; an item id with no outstanding
+            AT-type allotment rows is simply absent — callers should use
+            `.get(id, (DEC_0, DEC_0))`, matching this method's zero-default
+            single-item counterpart.
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        rows = (
+            LicenseBalanceCalculator.get_allotment_rows_bulk(ids)
+            .filter(allotment__type='AT')
+            .values('item_id')
+            .annotate(
+                qty=Coalesce(Sum("contributed_qty"), Value(DEC_0), output_field=DecimalField()),
+                cif=Coalesce(Sum("contributed"), Value(DEC_0), output_field=DecimalField()),
+            )
+        )
+        return {
+            row["item_id"]: (to_decimal(row["qty"], DEC_0), to_decimal(row["cif"], DEC_0))
+            for row in rows
+        }
 
     @staticmethod
     def calculate_allotment(license_obj) -> Decimal:
@@ -1035,10 +1332,10 @@ class ItemBalanceCalculator:
 
             # Debit is for entire license
             debit = to_decimal(
-                RowDetails.objects.filter(
+                exclude_hidden(RowDetails.objects.filter(
                     sr_number__license=import_item.license,
                     transaction_type=DEBIT
-                ).aggregate(
+                )).aggregate(
                     Sum('cif_fc')
                 )['cif_fc__sum'],
                 DEC_0
@@ -1049,10 +1346,10 @@ class ItemBalanceCalculator:
 
             # Debit is for this specific item
             debit = to_decimal(
-                RowDetails.objects.filter(
+                exclude_hidden(RowDetails.objects.filter(
                     sr_number=import_item,
                     transaction_type=DEBIT
-                ).aggregate(
+                )).aggregate(
                     Sum('cif_fc')
                 )['cif_fc__sum'],
                 DEC_0
@@ -1108,10 +1405,10 @@ class ItemBalanceCalculator:
         total_quantity = to_decimal(import_item.quantity, DEC_0)
 
         debited = to_decimal(
-            RowDetails.objects.filter(
+            exclude_hidden(RowDetails.objects.filter(
                 sr_number=import_item,
                 transaction_type=DEBIT
-            ).aggregate(
+            )).aggregate(
                 Sum('qty')
             )['qty__sum'],
             DEC_0
@@ -1121,6 +1418,85 @@ class ItemBalanceCalculator:
 
         available = total_quantity - debited - allotted
         return available if available >= DEC_0 else DEC_0
+
+    @staticmethod
+    def calculate_debited_quantity_for_items(item_ids) -> dict:
+        """
+        Batched sibling of the `debited` component inside
+        `calculate_available_quantity` — raw DEBIT `RowDetails.qty` total for
+        MANY import items in one query, grouped by item id. Same shape/
+        zero-default contract as `LicenseBalanceCalculator.
+        calculate_boe_debit_total_for_licenses` (grouped by item instead of
+        license).
+
+        Args:
+            item_ids: iterable of `LicenseImportItemsModel` pks.
+
+        Returns:
+            `{item_id: Decimal}`; an item id with no DEBIT rows is simply
+            absent — callers should use `.get(id, DEC_0)`.
+        """
+        ids = list(item_ids)
+        if not ids:
+            return {}
+        rows = (
+            exclude_hidden(
+                RowDetails.objects.filter(sr_number_id__in=ids, transaction_type=DEBIT)
+            )
+            .values("sr_number_id")
+            .annotate(total=Coalesce(Sum("qty"), Value(DEC_0), output_field=DecimalField()))
+        )
+        return {row["sr_number_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
+    @staticmethod
+    def calculate_available_quantity_for_items(items) -> dict:
+        """
+        Batched sibling of `calculate_available_quantity` — same formula
+        (`quantity - debited - outstanding AT-type allotted`, floored at 0),
+        for MANY import items, possibly spanning MANY licenses, in a fixed
+        small number of queries. Composes
+        `calculate_debited_quantity_for_items` and `LicenseBalanceCalculator.
+        get_outstanding_allotment_totals_for_items` — same Balance-Engine
+        lineage as the per-item method above (NOT `apps.core.scripts.
+        calculate_balance.calculate_available_quantity`'s legacy stored-field
+        lineage — see that per-item method's docstring for the distinction),
+        so bulk callers (e.g. `apps.license.services.balance_snapshot`) stay
+        aligned with the Allotment Max-button path.
+
+        Accepts an iterable of ALREADY-FETCHED `LicenseImportItemsModel`
+        instances (mirrors `apps.license.services.condition_pool.
+        available_value_bulk_map`'s `items`-not-`ids` convention — the
+        caller typically already has them loaded from one query and this
+        avoids a second).
+
+        Args:
+            items: iterable of `LicenseImportItemsModel` instances.
+
+        Returns:
+            `{item_id: Decimal}`, present for every item in `items`
+            (always floored at 0), matching what a per-item
+            `calculate_available_quantity(item)` call would return.
+        """
+        items = list(items)
+        if not items:
+            return {}
+        item_ids = [item.id for item in items]
+        license_ids = list({item.license_id for item in items if item.license_id})
+
+        debited_map = ItemBalanceCalculator.calculate_debited_quantity_for_items(item_ids)
+        outstanding_map = (
+            LicenseBalanceCalculator.get_outstanding_allotment_totals_for_items(license_ids)
+            if license_ids else {}
+        )
+
+        result = {}
+        for item in items:
+            total_quantity = to_decimal(item.quantity, DEC_0)
+            debited = debited_map.get(item.id, DEC_0)
+            outstanding_qty, _outstanding_cif = outstanding_map.get(item.id, (DEC_0, DEC_0))
+            available = total_quantity - debited - outstanding_qty
+            result[item.id] = available if available >= DEC_0 else DEC_0
+        return result
 
     @classmethod
     def calculate_item_components(cls, import_item) -> dict[str, Decimal]:

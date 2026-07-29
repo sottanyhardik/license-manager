@@ -33,6 +33,11 @@ def get_item_usage(import_item):
 
     boes = (
         RowDetails.objects.filter(sr_number=import_item, transaction_type=DEBIT)
+        # Previous-owner "hidden" rows (see `RowDetails.is_hidden`) are
+        # excluded — this usage query feeds live balance/report figures
+        # (Item Summary drawer, Excel exporters), never the Customs History
+        # audit view.
+        .exclude(is_hidden=True)
         .select_related('bill_of_entry__company', 'bill_of_entry__port')
     )
     allotments = (
@@ -67,6 +72,7 @@ def get_item_usage_for_items(item_ids):
     boes_by_item = defaultdict(list)
     for row in (
         RowDetails.objects.filter(sr_number_id__in=ids, transaction_type=DEBIT)
+        .exclude(is_hidden=True)
         .select_related('bill_of_entry__company', 'bill_of_entry__port')
     ):
         boes_by_item[row.sr_number_id].append(row)

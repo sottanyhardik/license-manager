@@ -308,3 +308,193 @@ def update_invoice_no(boe, invoice_no: str) -> dict[str, Any]:
         "invoice_no": boe.invoice_no,
         "message": "Invoice number updated",
     }
+
+
+# ---------------------------------------------------------------------------
+# Hidden BOEs (previous-owner utilisation)
+# ---------------------------------------------------------------------------
+#
+# `RowDetails.is_hidden` marks a DEBIT row as belonging to a previous
+# licence owner — excluded from every balance/financial calculation (see
+# `apps.license.services.balance_calculator.exclude_hidden` and every call
+# site listed in its docstring) but permanently retained and visible in the
+# Customs History audit view (`build_customs_ledger`'s `show_hidden` param).
+#
+# Scoped to `(bill_of_entry, license)`, NEVER the whole BOE: a single
+# physical BOE can span multiple licences (`BillOfEntryModel.get_licenses`
+# joins license numbers across all of a BOE's `RowDetails` rows), so hiding
+# it for one licence must never silently zero out its debit against an
+# unrelated licence.
+
+
+def _username(user) -> str | None:
+    if not user:
+        return None
+    return getattr(user, "get_username", lambda: None)() or getattr(user, "username", None)
+
+
+def hide_boe_for_license(boe, license_obj, user, reason: str = "") -> dict[str, Any]:
+    """
+    Marks every DEBIT `RowDetails` row of `boe` that belongs to
+    `license_obj` as hidden. Idempotent: re-hiding an already-hidden row
+    just refreshes who/when/why.
+
+    CRITICAL: the bulk `.update()` below bypasses `RowDetails`' own
+    `post_save`/`post_delete` signals (`apps.license.signals`), so the
+    denormalized `LicenseBalance.balance_cif` / item `available_value`/
+    `debited_value` caches would otherwise go stale the instant this
+    returns — exactly the `AllotmentModel.is_boe`-staleness anti-pattern
+    this codebase's own comments elsewhere warn against. `update_license_
+    flags` is therefore called explicitly, inside the same transaction, for
+    every DISTINCT licence actually touched by the affected rows
+    (resolved fresh from the rows themselves rather than trusting the
+    caller-supplied `license_obj` alone, in case this scope is ever
+    widened to span more than one licence).
+
+    Args:
+        boe: BillOfEntryModel instance.
+        license_obj: LicenseDetailsModel instance — the licence this hide
+            action is scoped to (does NOT affect this BOE's rows against
+            any other licence).
+        user: acting User for the audit fields (may be None).
+        reason: free-text reason, stored on every affected row and the
+            `ReconciliationLog` entry.
+
+    Returns:
+        dict with: id (boe id), is_hidden (True), rows_affected (int),
+        hidden_by (username or None), hidden_at (ISO datetime string, or
+        None if no rows were affected).
+    """
+    from django.db import transaction
+    from django.utils import timezone
+
+    from apps.bill_of_entry.models import RowDetails
+    from apps.core.constants import DEBIT
+    from apps.license.models import LicenseDetailsModel
+    from apps.license.signals import update_license_flags
+    from apps.reconciliation.models import ReconciliationLog
+
+    reason = (reason or "").strip()
+    now = timezone.now()
+
+    with transaction.atomic():
+        rows = RowDetails.objects.filter(
+            bill_of_entry=boe, sr_number__license=license_obj, transaction_type=DEBIT,
+        )
+        affected_license_ids = list(
+            rows.values_list("sr_number__license_id", flat=True).distinct()
+        )
+        rows_affected = rows.update(
+            is_hidden=True,
+            hidden_reason=reason,
+            hidden_by=user,
+            hidden_at=now,
+            restored_by=None,
+            restored_at=None,
+        )
+
+        for license_id in affected_license_ids:
+            touched_license = LicenseDetailsModel.objects.filter(pk=license_id).first()
+            if touched_license:
+                update_license_flags(touched_license)
+
+        ReconciliationLog.objects.create(
+            action=ReconciliationLog.ACTION_HIDE_BOE,
+            bill_of_entry=boe,
+            license_item=license_obj.import_license.first(),
+            reason=reason,
+            user=user,
+            before={"is_hidden": False},
+            after={
+                "is_hidden": True,
+                "license_id": license_obj.id,
+                "bill_of_entry_number": boe.bill_of_entry_number,
+                "rows_affected": rows_affected,
+            },
+        )
+
+    return {
+        "id": boe.id,
+        "is_hidden": True,
+        "rows_affected": rows_affected,
+        "hidden_by": _username(user),
+        "hidden_at": now.isoformat() if rows_affected else None,
+    }
+
+
+def restore_boe_for_license(boe, license_obj, user, reason: str = "") -> dict[str, Any]:
+    """
+    Un-hides every DEBIT `RowDetails` row of `boe` that belongs to
+    `license_obj` and is currently hidden — the row is never deleted (kept
+    for audit history of who hid/restored it and when, same convention as
+    `IgnoredWarning`/`restore_warning`). Only previously-hidden rows are
+    touched; an already-visible row is left untouched (`rows_affected`
+    reports exactly how many rows this call changed).
+
+    Same `update_license_flags` recompute-on-toggle requirement as
+    `hide_boe_for_license` — see that function's docstring.
+
+    Args:
+        boe: BillOfEntryModel instance.
+        license_obj: LicenseDetailsModel instance — the licence this
+            restore action is scoped to.
+        user: acting User for the audit fields (may be None).
+        reason: free-text reason, stored on the `ReconciliationLog` entry.
+
+    Returns:
+        dict with: id (boe id), is_hidden (False), rows_affected (int),
+        restored_by (username or None), restored_at (ISO datetime string,
+        or None if no rows were affected).
+    """
+    from django.db import transaction
+    from django.utils import timezone
+
+    from apps.bill_of_entry.models import RowDetails
+    from apps.core.constants import DEBIT
+    from apps.license.models import LicenseDetailsModel
+    from apps.license.signals import update_license_flags
+    from apps.reconciliation.models import ReconciliationLog
+
+    reason = (reason or "").strip()
+    now = timezone.now()
+
+    with transaction.atomic():
+        rows = RowDetails.objects.filter(
+            bill_of_entry=boe, sr_number__license=license_obj, transaction_type=DEBIT, is_hidden=True,
+        )
+        affected_license_ids = list(
+            rows.values_list("sr_number__license_id", flat=True).distinct()
+        )
+        rows_affected = rows.update(
+            is_hidden=False,
+            restored_by=user,
+            restored_at=now,
+        )
+
+        for license_id in affected_license_ids:
+            touched_license = LicenseDetailsModel.objects.filter(pk=license_id).first()
+            if touched_license:
+                update_license_flags(touched_license)
+
+        ReconciliationLog.objects.create(
+            action=ReconciliationLog.ACTION_RESTORE_BOE,
+            bill_of_entry=boe,
+            license_item=license_obj.import_license.first(),
+            reason=reason,
+            user=user,
+            before={"is_hidden": True},
+            after={
+                "is_hidden": False,
+                "license_id": license_obj.id,
+                "bill_of_entry_number": boe.bill_of_entry_number,
+                "rows_affected": rows_affected,
+            },
+        )
+
+    return {
+        "id": boe.id,
+        "is_hidden": False,
+        "rows_affected": rows_affected,
+        "restored_by": _username(user),
+        "restored_at": now.isoformat() if rows_affected else None,
+    }

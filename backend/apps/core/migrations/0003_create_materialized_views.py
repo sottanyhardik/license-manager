@@ -31,6 +31,15 @@ class Migration(migrations.Migration):
         # Depends on the normalization migration that introduced LicenseFlags etc.
         # The view SQL references license_licenseflags.
         ("license", "0005_licensebalance_licenseflags_licensenotes_and_more"),
+        # The view SQL joins on bill_of_entry_rowdetails.sr_number_id, which
+        # only exists from this migration on. This was a MISSING dependency
+        # edge (latent bug: with no explicit ordering constraint, Django's
+        # migration-graph topological sort was free to schedule this
+        # migration before bill_of_entry's own chain finished — it happened
+        # to land after by luck until an unrelated bill_of_entry migration
+        # addition shifted the sort order and surfaced it as
+        # `column rd.sr_number_id does not exist` on a fresh/test database).
+        ("bill_of_entry", "0002_initial"),
     ]
 
     operations = [

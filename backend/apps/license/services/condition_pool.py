@@ -97,7 +97,7 @@ def compute_condition_pools(license_obj) -> dict[str, Decimal]:
 
         debited = RowDetails.objects.filter(
             sr_number_id__in=item_ids, transaction_type="D"
-        ).aggregate(
+        ).exclude(is_hidden=True).aggregate(
             t=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
         )["t"] or DEC_0
 
@@ -187,7 +187,9 @@ def compute_condition_pools_bulk(license_ids) -> dict[int, dict[str, Decimal]]:
 
     if all_item_ids:
         debited_map = _per_item(
-            RowDetails.objects.filter(sr_number_id__in=all_item_ids, transaction_type="D"),
+            RowDetails.objects.filter(
+                sr_number_id__in=all_item_ids, transaction_type="D"
+            ).exclude(is_hidden=True),
             "sr_number_id",
         )
         allotted_map = _per_item(

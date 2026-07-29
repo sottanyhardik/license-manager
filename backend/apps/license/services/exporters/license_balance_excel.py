@@ -179,10 +179,13 @@ def build_balance_excel_unused(license_obj):
             current_row += 1
 
             # BOE Details
+            # Previous-owner "hidden" rows (see `RowDetails.is_hidden`) are
+            # excluded — this report is a balance/financial figure, not the
+            # Customs History audit view.
             boes = RowDetails.objects.filter(
                 sr_number_id=item.id,
                 transaction_type='D'
-            ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+            ).exclude(is_hidden=True).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
             if boes.exists():
                 current_row += 1
                 ws.merge_cells(f'A{current_row}:G{current_row}')
@@ -1288,9 +1291,12 @@ def build_bulk_balance_excel(request):
         for item in license_obj.import_license.all():
             item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
 
+            # Previous-owner "hidden" rows (see `RowDetails.is_hidden`) are
+            # excluded — this bulk export is a balance/financial figure,
+            # not the Customs History audit view.
             boes = RowDetails.objects.filter(
                 sr_number_id=item.id, transaction_type='D'
-            ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+            ).exclude(is_hidden=True).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
 
             for rd in boes:
                 qty  = float(rd.qty or 0)

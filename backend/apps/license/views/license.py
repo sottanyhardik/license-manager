@@ -204,6 +204,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     _BALANCE_LEDGER_ACTIONS = {
         'balance_ledger', 'recalculate',
         'ignore_warning', 'restore_warning',
+        'hide_boe', 'restore_boe',
         # License Overview dashboard actions (add_license_overview_actions) —
         # all read-only (GET), so they only ever hit LicenseBalanceLedgerPermission's
         # SAFE_METHODS/read_roles branch, never write_action_roles.

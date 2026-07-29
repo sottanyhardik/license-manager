@@ -22,6 +22,13 @@ auto-creates an allocation for an UNAMBIGUOUS 1:1 match (exactly one
 candidate `RowDetails`, both CIF and quantity within the existing
 reconciliation tolerances) — anything else is left untouched and reported so
 a human decides, never guessed.
+
+NOTE (Hidden BOEs / previous-owner utilisation, see
+`apps.bill_of_entry.models.RowDetails.is_hidden`): `find_boe_allocation_
+candidates` below deliberately does NOT exclude hidden rows. Hiding a BOE
+only removes it from THIS licence's balance/financial figures — it is
+still a real document that can legitimately be linked to a trade/invoice
+for reconciliation purposes. Do NOT "fix" this in a future PR.
 """
 from __future__ import annotations
 

@@ -55,6 +55,12 @@ def list_boe_rows(license_obj) -> List[Dict[str, Any]]:
 
     grouped = (
         RowDetails.objects.filter(sr_number__license=license_obj)
+        # Previous-owner "hidden" DEBIT rows (see `RowDetails.is_hidden`)
+        # are excluded from this BOEs-tab summary — a hidden row never
+        # contributes to this licence's utilisation in any balance/report
+        # figure. Never excludes CREDIT rows (hide/restore only ever
+        # touches DEBIT rows — see `boe_service.hide_boe_for_license`).
+        .exclude(is_hidden=True)
         .annotate(
             allocated=Coalesce(
                 Subquery(allocated_subquery, output_field=_ALLOC_FIELD),

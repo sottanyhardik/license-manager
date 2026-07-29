@@ -115,6 +115,8 @@ class ReconciliationLog(models.Model):
     ACTION_REVERSE_EXTERNAL_INVOICE = "REVERSE_EXTERNAL_INVOICE"
     ACTION_WARNING_IGNORED = "WARNING_IGNORED"
     ACTION_WARNING_RESTORED = "WARNING_RESTORED"
+    ACTION_HIDE_BOE = "HIDE_BOE"
+    ACTION_RESTORE_BOE = "RESTORE_BOE"
     ACTION_CHOICES = (
         (ACTION_LINK, "Link"),
         (ACTION_MERGE_BOE, "Merge BOE"),
@@ -128,6 +130,8 @@ class ReconciliationLog(models.Model):
         (ACTION_REVERSE_EXTERNAL_INVOICE, "Reverse External Invoice"),
         (ACTION_WARNING_IGNORED, "Warning Ignored"),
         (ACTION_WARNING_RESTORED, "Warning Restored"),
+        (ACTION_HIDE_BOE, "Hide BOE (Previous Owner)"),
+        (ACTION_RESTORE_BOE, "Restore BOE"),
     )
 
     action = models.CharField(max_length=30, choices=ACTION_CHOICES, db_index=True)

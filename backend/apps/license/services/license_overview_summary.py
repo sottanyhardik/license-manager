@@ -3,10 +3,14 @@ License Overview — summary/header cards (`GET .../overview-summary/`).
 
 Header fields + the 7-card numeric summary shown at the top of the new
 "License Overview" dashboard's Overview tab. Deliberately additive and
-read-only: reuses `LicenseBalanceCalculator.calculate_all_components` for
+read-only: reuses `apps.license.services.balance_snapshot.get_snapshot` for
 every CIF figure (never re-sums `RowDetails`/`LicenseTradeLine` directly —
 see that module's docstring for why a naive raw sum double-counts a SALE
-trade's BOE via the legacy `trade.boes` M2M).
+trade's BOE via the legacy `trade.boes` M2M). The snapshot is itself a thin
+composition over the exact same bulk `LicenseBalanceCalculator` calls
+`calculate_all_components` used, so this produces numerically identical
+figures — the point of the redirect is that every Balance-CIF consumer now
+goes through the one shared snapshot entry point.
 """
 from __future__ import annotations
 
@@ -19,7 +23,8 @@ from django.db.models.functions import Coalesce
 from apps.allotment.models import AllotmentItems
 from apps.bill_of_entry.models import RowDetails
 from apps.core.constants import DEC_0
-from apps.license.services.balance_calculator import LicenseBalanceCalculator
+from apps.license.services import balance_snapshot
+from apps.license.services.balance_calculator import quantize_2dp
 
 
 def _synthesize_status(license_obj) -> str:
@@ -40,13 +45,26 @@ def get_overview_counts(license_obj) -> Dict[str, Any]:
     Returns a dict with license header fields plus a `summary` dict of the
     7 numeric overview cards.
 
-    Query shape: O(1) regardless of item/BOE/allotment/plan count —
-    `calculate_all_components` (4 queries, allocation-aware — including the
-    virtual `trade.boes` match netting inside `calculate_debit()`, see that
-    module), 1 distinct-count query each for Total BOEs / Total Allotments,
-    1 `Coalesce(Sum(...))` aggregate for Total Planned CIF.
+    Query shape: O(1) regardless of item/BOE/allotment/plan count — the
+    snapshot (allocation-aware — including the virtual `trade.boes` match
+    netting inside the underlying `calculate_boe_debit_total_for_licenses`,
+    see that module), 1 distinct-count query each for Total BOEs / Total
+    Allotments, 1 `Coalesce(Sum(...))` aggregate for Total Planned CIF.
     """
-    components = LicenseBalanceCalculator.calculate_all_components(license_obj)
+    snapshot = balance_snapshot.get_snapshot(license_obj.id)
+    # `calculate_all_components` used to quantize credit/debit/allotment to
+    # 2dp individually for display (its `balance` was already quantized via
+    # the shared credit-(debit+allotment) formula) — the snapshot's
+    # license-level fields are the same underlying bulk-query totals but
+    # left unquantized (matching other bulk consumers, e.g.
+    # `license_balance_excel.py`), so quantize here to keep this endpoint's
+    # numbers byte-identical to before the redirect.
+    components = {
+        "credit": quantize_2dp(snapshot["total_licence_cif"]),
+        "debit": quantize_2dp(snapshot["debited_cif"]),
+        "allotment": quantize_2dp(snapshot["outstanding_allotted_cif"]),
+        "balance": snapshot["balance_cif"],  # already quantized by calculate_balance_for_licenses
+    }
 
     # NOTE: `.values("bill_of_entry").distinct().count()` looks correct but
     # isn't — `RowDetails.Meta.ordering = ["transaction_type",
@@ -58,7 +76,16 @@ def get_overview_counts(license_obj) -> Dict[str, Any]:
     # licenses: the buggy form over-counted by exactly 1 in every case
     # checked, `Count(distinct=True)` matched the BOEs tab's actual row
     # count exactly).
-    total_boes = RowDetails.objects.filter(sr_number__license=license_obj).aggregate(
+    # Previous-owner "hidden" BOE debit rows (see `RowDetails.is_hidden`)
+    # are excluded — they no longer count toward this licence's utilisation
+    # in ANY balance/financial figure, and the overview card is no
+    # exception. A BOE hidden for this licence's rows but still carrying
+    # non-hidden rows here (e.g. a CREDIT row, or a DEBIT row not yet
+    # hidden) is still counted, matching the row-level (not whole-BOE)
+    # granularity of the hide/restore feature.
+    total_boes = RowDetails.objects.filter(sr_number__license=license_obj).exclude(
+        is_hidden=True
+    ).aggregate(
         n=Count("bill_of_entry", distinct=True)
     )["n"]
     # Only count allotments NOT already linked to a BOE — checked against the

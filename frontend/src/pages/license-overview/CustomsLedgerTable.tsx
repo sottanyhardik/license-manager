@@ -1,4 +1,4 @@
-import { ArrowDown } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { CustomsLedgerRow, CustomsLedgerSummary } from "@/pages/license-balance/types";
@@ -15,8 +15,10 @@ const HEADERS = [
     "Qty", "CIF USD", "Credit", "Debit", "Running Balance", "Status", "Remarks",
 ];
 
-/** One step of the Available Balance flow — a value, optionally preceded by
- * an operator badge ("−" for a deduction, "=" for a resulting total). */
+/** One step of the Available Balance flow — a compact value chip, optionally
+ * preceded by an inline operator ("−" for a deduction, "=" for a resulting
+ * total). Laid out horizontally (wrapping on narrow screens) rather than as
+ * a tall vertical stack, so the whole flow fits in one shallow strip. */
 function FlowStep({
     label,
     value,
@@ -29,23 +31,23 @@ function FlowStep({
     emphasize?: boolean;
 }) {
     return (
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex items-center gap-2">
             {operator && (
                 <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-                    <ArrowDown className="size-3.5" />
+                    <ArrowRight className="size-3.5 shrink-0" />
                     <span>{operator}</span>
                 </div>
             )}
             <div
                 className={cn(
-                    "min-w-40 rounded-lg border px-4 py-2.5 text-center",
+                    "flex items-baseline gap-1.5 whitespace-nowrap rounded-md border px-2.5 py-1",
                     emphasize ? "border-primary/40 bg-primary/5" : "border-border/70 bg-card"
                 )}
             >
-                <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-                <div className={cn("mt-0.5 text-lg font-bold tabular-nums", emphasize ? "text-primary" : "text-foreground")}>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+                <span className={cn("text-sm font-bold tabular-nums", emphasize ? "text-primary" : "text-foreground")}>
                     {value}
-                </div>
+                </span>
             </div>
         </div>
     );
@@ -69,13 +71,17 @@ function FlowStep({
  */
 export default function CustomsLedgerTable({ rows, summary }: CustomsLedgerTableProps) {
     return (
-        <div className="space-y-5">
+        <div className="space-y-3">
             {/* Available Balance flow: Original CIF -> (-) Total BOE CIF ->
                 Remaining After BOE -> (-) Pending/Unlinked Allotted CIF ->
-                Available Balance. Every value is read straight off `summary`
-                (computed server-side) — nothing is re-derived here. */}
-            <div className="rounded-lg border border-border/70 bg-muted/10 p-4">
-                <div className="flex flex-col items-center gap-1">
+                Available Balance. Horizontal + wrapping, so it's one shallow
+                strip instead of a tall column. Every value is read straight
+                off `summary` (computed server-side) — nothing is re-derived
+                here. The card grid below only repeats the figures NOT
+                already visible in this flow (Balance Engine/Difference/
+                Status), to avoid showing the same number twice. */}
+            <div className="rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                     <FlowStep label="Original Licence CIF" value={fmtNum(summary.opening_balance)} />
                     <FlowStep label="Total BOE CIF" value={fmtNum(summary.total_boe_cif)} operator="−" />
                     <FlowStep label="Remaining After BOE" value={fmtNum(summary.remaining_after_boe)} operator="=" />
@@ -85,10 +91,6 @@ export default function CustomsLedgerTable({ rows, summary }: CustomsLedgerTable
             </div>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <SummaryCard label="Original Licence CIF" value={fmtNum(summary.opening_balance)} />
-                <SummaryCard label="Total BOE CIF" value={fmtNum(summary.total_boe_cif)} />
-                <SummaryCard label="Pending / Unlinked Allotted CIF" value={fmtNum(summary.total_pending_allotment_cif)} />
-                <SummaryCard label="Remaining After BOE" value={fmtNum(summary.remaining_after_boe)} />
                 <SummaryCard label="Available Balance" value={fmtNum(summary.computed_balance)} variant="primary" size="lg" />
                 <SummaryCard label="Balance Engine" value={fmtNum(summary.engine_balance)} size="lg" />
                 <SummaryCard

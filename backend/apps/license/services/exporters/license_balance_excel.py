@@ -316,9 +316,10 @@ def _write_financial_ledger_sheet(wb, rows, summary):
     `rows`/`summary` are `LicenseBalanceLedgerBuilder.build_financial_ledger()`'s
     own return value — computed ONCE by the caller (`build_balance_excel`)
     and passed in here; this function does no calculation of its own.
-    Hierarchical "boe_allocation" rows' `children` (one per underlying BOE
-    allocation) are rendered immediately below their parent, informational
-    only (blank Credit/Debit/Running Balance — same convention as the PDF's
+    Hierarchical "trade" (Licence Trade Sold) rows' `children` (one per
+    underlying BOE allocation, when the sale is matched to one) are
+    rendered immediately below their parent, informational only (blank
+    Credit/Debit/Running Balance — same convention as the PDF's
     `_build_financial_ledger_elements`), and grouped via openpyxl's native
     row outlining (`outline_level`) so they can be collapsed/expanded in
     Excel itself — `summaryBelow=False` puts the collapse control on the
@@ -328,6 +329,12 @@ def _write_financial_ledger_sheet(wb, rows, summary):
     """
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
+    if not summary['has_trading_activity']:
+        # No Purchase or Sale trade at all — matches the UI/PDF: this sheet
+        # adds nothing over the (unmodified) Customs Ledger sheet, so it's
+        # omitted from the workbook entirely rather than created empty.
+        return
+
     ws = wb.create_sheet("Financial Ledger", 0)
     ws.sheet_properties.outlinePr.summaryBelow = False
 
@@ -336,8 +343,8 @@ def _write_financial_ledger_sheet(wb, rows, summary):
     ROW_FILLS = {
         'opening': PatternFill(start_color="1A5276", end_color="1A5276", fill_type="solid"),
         'boe': PatternFill(start_color="EAFAF1", end_color="EAFAF1", fill_type="solid"),
-        'boe_allocation': PatternFill(start_color="D4EFDF", end_color="D4EFDF", fill_type="solid"),
         'allotment': PatternFill(start_color="FEF9E7", end_color="FEF9E7", fill_type="solid"),
+        'trade_purchase': PatternFill(start_color="EAF2F8", end_color="EAF2F8", fill_type="solid"),
         'trade': PatternFill(start_color="F4ECF7", end_color="F4ECF7", fill_type="solid"),
         'final': PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid"),
     }
@@ -356,6 +363,19 @@ def _write_financial_ledger_sheet(wb, rows, summary):
     ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
     ws.row_dimensions[1].height = 26
 
+    header_row_num = 2
+    warning = summary['missing_purchase_warning']
+    if warning['show_warning']:
+        # Shown instead of a fabricated Opening Balance row when a Sale
+        # exists with no matching Purchase — same message as the UI/PDF.
+        ws.merge_cells('A2:P2')
+        ws['A2'] = f"⚠ {warning['message']}"
+        ws['A2'].font = Font(bold=True, color="7D6608", size=10)
+        ws['A2'].fill = PatternFill(start_color="FEF9E7", end_color="FEF9E7", fill_type="solid")
+        ws['A2'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        ws.row_dimensions[2].height = 20
+        header_row_num = 3
+
     headers = [
         'Sr', 'Txn Date', 'Txn Type', 'Doc Number', 'BOE Number', 'BOE Date',
         'Company (Importer)', 'Item Name', 'Invoice(s)', 'Qty',
@@ -363,13 +383,13 @@ def _write_financial_ledger_sheet(wb, rows, summary):
         'Running Balance (USD)', 'Remarks',
     ]
     for col, h in enumerate(headers, 1):
-        c = ws.cell(row=2, column=col, value=h)
+        c = ws.cell(row=header_row_num, column=col, value=h)
         c.font = HDR_FONT
         c.fill = HDR_FILL
         c.border = THIN
         c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-    r = 3
+    r = header_row_num + 1
     for row_data in rows:
         fill = MISMATCH_FILL if row_data.get('mismatched') else ROW_FILLS.get(row_data['row_kind'])
         font_white = row_data['row_kind'] in ('opening', 'final') and not row_data.get('mismatched')
@@ -453,8 +473,10 @@ def _write_financial_ledger_sheet(wb, rows, summary):
     if summary.get('total_invoice_allocation_debit', 0) > 0:
         summary_rows.append(('Total Invoice Allocation Debits', summary['total_invoice_allocation_debit']))
     summary_rows.append(('Outstanding Active Allotments', summary['total_allotment_debit']))
+    if summary.get('total_purchase_credit', 0) > 0:
+        summary_rows.append(('Total Purchase Credits', summary['total_purchase_credit']))
     if summary['total_trade_debit'] > 0:
-        summary_rows.append(('Total Unmatched Trade (Sold) Debits', summary['total_trade_debit']))
+        summary_rows.append(('Total Trade (Sold) Debits', summary['total_trade_debit']))
     summary_rows += [
         ('Current Available Balance', summary['computed_balance']),
         ('Licence Balance Engine', summary['engine_balance']),
@@ -487,7 +509,7 @@ def _write_financial_ledger_sheet(wb, rows, summary):
     for col in ['J', 'K', 'L', 'M', 'N', 'O']:
         ws.column_dimensions[col].width = 15
     ws.column_dimensions['P'].width = 28
-    ws.freeze_panes = 'A3'
+    ws.freeze_panes = f'A{header_row_num + 1}'
 
 
 def _write_customs_ledger_sheet(wb, rows, summary):

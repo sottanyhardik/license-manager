@@ -26,7 +26,10 @@ from apps.reconciliation.tests.test_reconciliation import ReconciliationFixtureM
 
 from .test_balance_ledger_views import LicenseBalanceLedgerFixtureMixin
 
-EXPECTED_SHEET_NAMES = ["Financial Ledger", "Customs Ledger", "Timeline", "Reconciliation", "Audit Log"]
+# A minimal license (no BOEs, allotments, or trades) has NO Purchase/Sale
+# activity, so the Financial Ledger sheet is omitted entirely — see
+# `has_trading_activity` in `build_financial_ledger`'s docstring.
+EXPECTED_SHEET_NAMES_NO_TRADING = ["Customs Ledger", "Timeline", "Reconciliation", "Audit Log"]
 
 
 class BalanceExcelStructureTests(LicenseBalanceLedgerFixtureMixin, TestCase):
@@ -44,7 +47,7 @@ class BalanceExcelStructureTests(LicenseBalanceLedgerFixtureMixin, TestCase):
 
         wb = self._load_workbook(license_obj)
 
-        self.assertEqual(wb.sheetnames, EXPECTED_SHEET_NAMES)
+        self.assertEqual(wb.sheetnames, EXPECTED_SHEET_NAMES_NO_TRADING)
 
     def test_each_sheet_has_real_rows(self):
         company = self.make_company()
@@ -53,8 +56,8 @@ class BalanceExcelStructureTests(LicenseBalanceLedgerFixtureMixin, TestCase):
 
         wb = self._load_workbook(license_obj)
 
-        # Financial Ledger: at least header row + Opening Balance + Current Balance.
-        self.assertGreaterEqual(wb["Financial Ledger"].max_row, 4)
+        # Financial Ledger sheet is entirely absent (no trading activity).
+        self.assertNotIn("Financial Ledger", wb.sheetnames)
         # Customs Ledger: Customs Summary block + header + at least opening/final rows.
         self.assertGreaterEqual(wb["Customs Ledger"].max_row, 10)
         # Reconciliation: license info row + reconciliation block + BOE/Allotment summary + plan utilization.
@@ -114,17 +117,15 @@ class BalanceExcelFinancialLedgerHierarchyTests(
         )
         return license_obj
 
-    def test_fully_matched_invoice_produces_no_consolidated_row_in_financial_ledger_sheet(self):
+    def test_fully_matched_invoice_produces_one_trade_row_with_children_in_financial_ledger_sheet(self):
         """
-        `build_financial_ledger()`'s `rows` were later changed (see that
-        method's docstring) to show BOEs with NO invoice relationship at
-        all — a "boe_allocation" row is BY DEFINITION invoice-matched, so
-        it (and its child BOE rows / Excel outline-level hierarchy) never
-        appears in `rows` anymore, for ANY consumer of that shared data,
-        including this Excel sheet. A fully-matched, two-BOE invoice like
-        this fixture therefore now produces NO row for it at all on the
-        Financial Ledger sheet — this is the same filter the web UI
-        Overview page applies, not something Excel-specific.
+        `build_financial_ledger()`'s BOE rows are skipped once fully
+        allocated (their `contributed` is 0) — the two BOEs in this fixture
+        are both fully allocated to the SAME invoice, so neither BOE
+        produces its own row. Their combined 174,240 debit is instead
+        carried by the SALE trade line's own "Licence Trade (Sold)" row
+        (see that method's docstring), with the two underlying allocations
+        rendered as Excel-outlined child rows immediately below it.
         """
         license_obj = self._build_license_with_two_fully_allocated_boes()
 
@@ -133,7 +134,13 @@ class BalanceExcelFinancialLedgerHierarchyTests(
         ws = wb["Financial Ledger"]
 
         doc_numbers = [ws.cell(row=r, column=4).value for r in range(3, ws.max_row + 1)]
-        self.assertNotIn("LML/2025-26/0125", doc_numbers)
+        self.assertIn("LML/2025-26/0125", doc_numbers)
+
+        # No SEPARATE row for either individual BOE (both fully allocated
+        # into the one trade row above) — the trade row's own BOE Number
+        # column is the joined display string of both.
+        boe_numbers = [ws.cell(row=r, column=5).value for r in range(3, ws.max_row + 1)]
+        self.assertIn("7650222, 7650224", boe_numbers)
 
         # summaryBelow=False -> the collapse control sits with the parent
         # (which is ABOVE its children here), not below the detail block.

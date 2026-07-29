@@ -39,8 +39,10 @@ export function fmtInvoiceNumbers(values: string[] | null | undefined): string {
 const ROW_KIND_CLASSES: Record<FinancialLedgerRowKind, string> = {
     opening: "bg-info/10",
     boe: "bg-success/10",
-    boe_allocation: "bg-success/20",
     allotment: "bg-warning/10",
+    /** A credit entry, like Opening Balance — kept visually distinct from
+     * the debit-side "trade" (Sold) rows below. */
+    trade_purchase: "bg-info/10",
     trade: "bg-primary/10",
     final: "bg-muted font-semibold",
 };

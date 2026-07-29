@@ -1,6 +1,7 @@
 import { Fragment, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import type { FinancialLedgerChildRow, FinancialLedgerRow } from "@/pages/license-balance/types";
 import { financialLedgerRowClass, fmtDate, fmtInvoiceNumbers, fmtNum } from "@/pages/license-balance/licenseBalanceHelpers";
 
@@ -13,9 +14,9 @@ const HEADERS = [
     "Invoices", "Qty", "CIF USD", "CIF INR", "Credit", "Debit", "Running Balance", "Remarks",
 ];
 
-/** One informational child row nested under a "boe_allocation" parent —
- * always blank Credit/Debit/Running Balance (see `license-balance/types.ts`'s
- * `FinancialLedgerChildRow` docstring). */
+/** One informational child row nested under a "trade" (Licence Trade Sold)
+ * parent — always blank Credit/Debit/Running Balance (see
+ * `license-balance/types.ts`'s `FinancialLedgerChildRow` docstring). */
 function ChildRow({ child }: { child: FinancialLedgerChildRow }) {
     return (
         <tr className="border-t border-border/40 bg-muted/40 text-muted-foreground">
@@ -42,6 +43,34 @@ function ChildRow({ child }: { child: FinancialLedgerChildRow }) {
     );
 }
 
+/** Expandable detail row for a "trade" (Sold) row's `mismatch_warning` — a
+ * BOE tagged to this invoice whose CIF doesn't cleanly reconcile (or maps
+ * to more than one candidate BOE). Never affects `running_balance`; this
+ * is a data-quality signal, not a second financial movement — see
+ * `license-balance/types.ts`'s `mismatch_warning` docstring. */
+function MismatchDetailRow({ warning }: { warning: NonNullable<FinancialLedgerRow["mismatch_warning"]> }) {
+    return (
+        <tr className="border-t border-border/40 bg-warning/5 text-muted-foreground">
+            <td className="px-3 py-1.5" colSpan={2} />
+            <td className="whitespace-nowrap px-3 py-1.5 pl-6 italic" colSpan={2}>
+                ↳ {warning.status === "ambiguous" ? "Multiple BOEs Linked" : "CIF Mismatch"}
+            </td>
+            <td className="px-3 py-1.5" colSpan={2}>
+                BOE CIF: <span className="font-medium text-foreground">{fmtNum(warning.boe_cif)}</span>
+            </td>
+            <td className="px-3 py-1.5" colSpan={2}>
+                Invoice CIF: <span className="font-medium text-foreground">{fmtNum(warning.invoice_cif)}</span>
+            </td>
+            <td className="px-3 py-1.5" colSpan={2}>
+                Difference: <span className="font-medium text-destructive">{fmtNum(warning.difference)}</span>
+            </td>
+            <td className="px-3 py-1.5" colSpan={6}>
+                Requires manual review via the reconciliation workflow — this figure is not double-counted in the balance.
+            </td>
+        </tr>
+    );
+}
+
 /**
  * Overview tab's Financial Ledger table. Hand-rolled `<table>` (not
  * `DataTable.tsx`, which doesn't support this many custom-styled columns) —
@@ -49,10 +78,11 @@ function ChildRow({ child }: { child: FinancialLedgerChildRow }) {
  * pattern, adapted to a plain table since every row here needs its own
  * semantic color by `row_kind`.
  *
- * "boe_allocation" rows carry a `children` array (one per underlying BOE
- * allocation) — rendered as extra `<tr>`s directly below their parent,
- * expanded by default (mirrors the PDF, which has no interactive collapse)
- * with an optional collapse toggle since this view IS interactive.
+ * "trade" (Licence Trade Sold) rows matched to a real allocation carry a
+ * `children` array (one per underlying BOE allocation) — rendered as extra
+ * `<tr>`s directly below their parent, expanded by default (mirrors the
+ * PDF, which has no interactive collapse) with an optional collapse toggle
+ * since this view IS interactive.
  *
  * Relocated (unchanged) from `pages/license-balance/` — still backed by
  * `useLicenseBalanceLedger`.
@@ -91,6 +121,8 @@ export default function FinancialLedgerTable({ rows }: FinancialLedgerTableProps
                     )}
                     {rows.map((row) => {
                         const hasChildren = Boolean(row.children && row.children.length > 0);
+                        const warning = row.mismatch_warning?.show_warning ? row.mismatch_warning : null;
+                        const isExpandable = hasChildren || Boolean(warning);
                         const isCollapsed = collapsed.has(row.sr);
                         return (
                             <Fragment key={row.sr}>
@@ -98,12 +130,12 @@ export default function FinancialLedgerTable({ rows }: FinancialLedgerTableProps
                                     <td className="px-3 py-2">{row.sr}</td>
                                     <td className="whitespace-nowrap px-3 py-2">{fmtDate(row.date)}</td>
                                     <td className="whitespace-nowrap px-3 py-2 font-medium">
-                                        {hasChildren ? (
+                                        {isExpandable ? (
                                             <button
                                                 type="button"
                                                 onClick={() => toggle(row.sr)}
                                                 className="inline-flex cursor-pointer items-center gap-1 hover:underline"
-                                                aria-label={isCollapsed ? "Expand allocation detail" : "Collapse allocation detail"}
+                                                aria-label={isCollapsed ? "Expand detail" : "Collapse detail"}
                                             >
                                                 {isCollapsed ? (
                                                     <ChevronRight className="size-3.5" />
@@ -114,6 +146,17 @@ export default function FinancialLedgerTable({ rows }: FinancialLedgerTableProps
                                             </button>
                                         ) : (
                                             row.type
+                                        )}
+                                        {row.status && (
+                                            <Badge variant="warning" className="ml-2 align-middle">
+                                                {row.status}
+                                            </Badge>
+                                        )}
+                                        {warning && (
+                                            <Badge variant="destructive" className="ml-2 align-middle gap-1">
+                                                <AlertTriangle className="size-3" />
+                                                {warning.status === "ambiguous" ? "Multiple BOEs" : "CIF Mismatch"}
+                                            </Badge>
                                         )}
                                     </td>
                                     <td className="px-3 py-2">{row.document_number ?? "—"}</td>
@@ -134,10 +177,11 @@ export default function FinancialLedgerTable({ rows }: FinancialLedgerTableProps
                                     <td className="px-3 py-2 text-right font-medium">{fmtNum(row.running_balance)}</td>
                                     <td className="px-3 py-2">{row.remarks ?? "—"}</td>
                                 </tr>
-                                {hasChildren && !isCollapsed &&
+                                {!isCollapsed && hasChildren &&
                                     row.children!.map((child, idx) => (
                                         <ChildRow key={`${row.sr}-${child.allocation_id ?? idx}`} child={child} />
                                     ))}
+                                {!isCollapsed && warning && <MismatchDetailRow key={`${row.sr}-mismatch`} warning={warning} />}
                             </Fragment>
                         );
                     })}

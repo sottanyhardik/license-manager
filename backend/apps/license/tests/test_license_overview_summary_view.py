@@ -38,7 +38,11 @@ class LicenseOverviewSummaryViewTests(LicenseBalanceLedgerFixtureMixin, TestCase
         boe = self.make_boe(company)
         self.make_debit_row(boe, license_obj.import_license.first(), cif_fc=Decimal("400.00"), qty=Decimal("40.000"))
 
-        with self.assertNumQueries(10):
+        # +1 vs. the earlier baseline: `calculate_balance()` now runs one
+        # combined `has_trading_activity()` EXISTS query to decide whether
+        # to anchor on Purchase credit or the original export-item CIF —
+        # see that method's docstring. Still O(1), not per-row.
+        with self.assertNumQueries(11):
             resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
 
         self.assertEqual(resp.status_code, 200, resp.data)

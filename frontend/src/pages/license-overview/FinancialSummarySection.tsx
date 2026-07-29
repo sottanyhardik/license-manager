@@ -16,6 +16,7 @@ export default function FinancialSummarySection({ summary }: FinancialSummarySec
         ["Original Licence CIF", fmtNum(summary.opening_balance)],
         ["Total BOE Debits", fmtNum(summary.total_boe_debit)],
         ["Outstanding Active Allotments", fmtNum(summary.total_allotment_debit)],
+        ...(summary.total_purchase_credit > 0 ? ([["Total Purchase Credits", fmtNum(summary.total_purchase_credit)]] as [string, string][]) : []),
         ...(summary.total_trade_debit > 0 ? ([["Total Trade Debits", fmtNum(summary.total_trade_debit)]] as [string, string][]) : []),
         ["Current Available Balance", fmtNum(summary.computed_balance)],
         ["Licence Balance Engine", fmtNum(summary.engine_balance)],

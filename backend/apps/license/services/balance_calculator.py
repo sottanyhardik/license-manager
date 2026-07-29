@@ -72,49 +72,48 @@ class LicenseBalanceCalculator:
         )
 
     @staticmethod
-    def _compute_virtual_boe_trade_matches(trades_queryset):
+    def _compute_linked_boe_row_ids(trades_queryset):
         """
         Given a queryset of SALE `LicenseTrade` rows that have at least one
         legacy `.boes` attachment, returns `{row_details_id: Decimal}` of
-        CIF amounts that WOULD be allocated by `backfill_boe_allocations`
-        (see `apps.reconciliation.services.boe_link_reconciler.
-        reconcile_trade_boe_links`) — i.e. unambiguous 1:1 matches within
-        the existing reconciliation tolerances — WITHOUT writing anything.
+        the FULL `cif_fc` of every `RowDetails` row that
+        `find_boe_allocation_candidates` (see `apps.reconciliation.services.
+        boe_link_reconciler` — the SAME candidate lookup `reconcile_trade_
+        boe_links` itself uses) identifies as belonging to a SALE trade
+        line, for exclusion from `calculate_debit()`.
 
-        This is the single shared computation behind the debit-side fix in
-        `get_debit_rows()`/`calculate_debit_for_licenses()`: reuses the
-        SAME conservative matching logic already trusted for the persisted-
-        allocation path (never forked/duplicated), so a licence's Balance
-        CIF is correct even before anyone runs the backfill command for
-        real. Deliberately excludes `ambiguous`/`mismatch`/`no_match`
-        results — those trade lines reference data that cannot be resolved
-        without a human decision (multiple candidate BOEs, or amounts that
-        genuinely don't line up), so they are intentionally left counted
-        as-is rather than guessed at.
+        A linked BOE is excluded in FULL regardless of whether its CIF
+        matches the trade line's own CIF within tolerance — i.e. this
+        covers `"auto_migrated"`, `"mismatch"`, AND `"ambiguous"` candidates
+        alike (only `"no_match"` contributes nothing, since no candidate
+        exists to find). This is a deliberate design choice: the Financial
+        Ledger is an accounting ledger, not a reconciliation report — once a
+        BOE is linked to an invoice, that invoice is its sole financial
+        representation from then on, and a CIF discrepancy is a data-quality
+        signal surfaced separately (see `build_financial_ledger`'s
+        `mismatch_warning`), never a second debit. Reuses the exact same
+        candidate-finding logic the reconciliation panel/backfill command
+        already trust, so a licence's Balance CIF is correct even before
+        anyone creates a formal `InvoiceBOEAllocation` for real.
         """
-        from apps.core.utils.decimal_utils import to_decimal
-        from apps.reconciliation.services.boe_link_reconciler import reconcile_trade_boe_links
+        from apps.reconciliation.services.boe_link_reconciler import find_boe_allocation_candidates
 
         by_row_details: dict = {}
         for trade in trades_queryset.prefetch_related("lines", "boes"):
-            for result in reconcile_trade_boe_links(trade, dry_run=True):
-                if result["status"] != "auto_migrated":
-                    continue
-                row_id = result["row_details_id"]
-                amount = to_decimal(result["matched_cif_fc"], DEC_0)
-                by_row_details[row_id] = by_row_details.get(row_id, DEC_0) + amount
+            for line in trade.lines.all():
+                for candidate in find_boe_allocation_candidates(line):
+                    by_row_details[candidate.id] = to_decimal(candidate.cif_fc, DEC_0)
         return by_row_details
 
     @staticmethod
-    def _virtual_boe_debit_exclusion_case(*, license_obj=None, license_ids=None):
+    def _linked_boe_debit_exclusion_case(*, license_obj=None, license_ids=None):
         """
-        A `Case`/`When` SQL expression that yields the virtual (unpersisted)
-        matched CIF for each `RowDetails` primary key found by
-        `_compute_virtual_boe_trade_matches`, else 0 — built for either a
-        single license (`get_debit_rows`) or a batch of them
-        (`calculate_debit_for_licenses`), sharing the exact same underlying
-        computation either way. Exactly one of `license_obj`/`license_ids`
-        must be given.
+        A `Case`/`When` SQL expression that yields the full CIF of each
+        `RowDetails` primary key found by `_compute_linked_boe_row_ids`,
+        else 0 — built for either a single license (`get_debit_rows`) or a
+        batch of them (`calculate_debit_for_licenses`), sharing the exact
+        same underlying computation either way. Exactly one of
+        `license_obj`/`license_ids` must be given.
         """
         from apps.trade.models import LicenseTrade
 
@@ -124,7 +123,7 @@ class LicenseBalanceCalculator:
         else:
             trades = trades.filter(lines__sr_number__license_id__in=list(license_ids))
 
-        by_row_details = LicenseBalanceCalculator._compute_virtual_boe_trade_matches(trades)
+        by_row_details = LicenseBalanceCalculator._compute_linked_boe_row_ids(trades)
         if not by_row_details:
             return Value(DEC_0, output_field=_ALLOCATION_DECIMAL_FIELD)
         return Case(
@@ -137,7 +136,7 @@ class LicenseBalanceCalculator:
     def get_debit_rows(license_obj):
         """
         Annotated RowDetails debit-row queryset for a license: each row
-        carries `allocated` / `virtual_allocated` / `matched` / `contributed`
+        carries `allocated` / `linked_excluded` / `matched` / `contributed`
         annotations (see `calculate_debit`'s docstring for the allocation-
         driven partial-exclusion business rule this implements).
 
@@ -146,17 +145,22 @@ class LicenseBalanceCalculator:
         same rows the Balance Engine sums, rather than recomputing the
         allocation logic a second time and risking the two drifting apart.
 
-        `virtual_allocated` (on top of the persisted-`InvoiceBOEAllocation`-
-        driven `allocated`) nets out unambiguous `trade.boes` matches that
-        have not yet been written as a real allocation record — see
-        `_virtual_boe_debit_exclusion_case`. This is the ONLY side of the
+        `linked_excluded` (on top of the persisted-`InvoiceBOEAllocation`-
+        driven `allocated`) nets out the FULL cif_fc of any `RowDetails` row
+        that `find_boe_allocation_candidates` identifies as linked to a
+        SALE trade line via the legacy `trade.boes` M2M — regardless of
+        whether the CIF matches within tolerance — see
+        `_linked_boe_debit_exclusion_case`. This is the ONLY side of the
         debit/trade pair adjusted: `calculate_trade()` intentionally keeps
         counting every SALE line's cif_fc unconditionally (per its own
         docstring, "the matched portion is counted instead via the matching
         SALE trade line in calculate_trade()") — the exclusion belongs
         solely here, exactly mirroring how a persisted allocation already
         works, so together debit+trade still debit the license exactly once
-        per matched amount, virtual or persisted.
+        per linked amount, whether formally allocated, cleanly auto-
+        matched, or merely tagged-but-mismatched (a CIF discrepancy is
+        surfaced as a warning on the invoice row instead — see
+        `build_financial_ledger`'s `mismatch_warning` — never a second debit).
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -177,7 +181,7 @@ class LicenseBalanceCalculator:
             .annotate(total=Sum("allocated_cif_fc"))
             .values("total")
         )
-        virtual_case = LicenseBalanceCalculator._virtual_boe_debit_exclusion_case(license_obj=license_obj)
+        linked_case = LicenseBalanceCalculator._linked_boe_debit_exclusion_case(license_obj=license_obj)
 
         return (
             RowDetails.objects.filter(
@@ -191,10 +195,10 @@ class LicenseBalanceCalculator:
                     output_field=_ALLOCATION_DECIMAL_FIELD,
                 )
             )
-            .annotate(virtual_allocated=virtual_case)
+            .annotate(linked_excluded=linked_case)
             .annotate(
                 matched=Least(
-                    F("cif_fc"), F("allocated") + F("virtual_allocated"), output_field=_ALLOCATION_DECIMAL_FIELD
+                    F("cif_fc"), F("allocated") + F("linked_excluded"), output_field=_ALLOCATION_DECIMAL_FIELD
                 )
             )
             .annotate(
@@ -305,13 +309,12 @@ class LicenseBalanceCalculator:
             .annotate(total=Sum("allocated_cif_fc"))
             .values("total")
         )
-        # Same virtual (unpersisted) trade.boes-match exclusion as
-        # `get_debit_rows()` — one shared computation, kept in sync so
-        # batched (bulk report) and single-license Balance CIF never
-        # diverge. Bounded by how many SALE trades in this batch carry a
-        # legacy `.boes` tag (system-wide, a small, fixed set — not one
-        # query per license).
-        virtual_case = LicenseBalanceCalculator._virtual_boe_debit_exclusion_case(license_ids=ids)
+        # Same linked-BOE exclusion as `get_debit_rows()` — one shared
+        # computation, kept in sync so batched (bulk report) and single-
+        # license Balance CIF never diverge. Bounded by how many SALE
+        # trades in this batch carry a legacy `.boes` tag (system-wide, a
+        # small, fixed set — not one query per license).
+        linked_case = LicenseBalanceCalculator._linked_boe_debit_exclusion_case(license_ids=ids)
 
         rows = (
             RowDetails.objects
@@ -326,10 +329,10 @@ class LicenseBalanceCalculator:
                     output_field=_ALLOCATION_DECIMAL_FIELD,
                 )
             )
-            .annotate(virtual_allocated=virtual_case)
+            .annotate(linked_excluded=linked_case)
             .annotate(
                 matched=Least(
-                    F("cif_fc"), F("allocated") + F("virtual_allocated"), output_field=_ALLOCATION_DECIMAL_FIELD
+                    F("cif_fc"), F("allocated") + F("linked_excluded"), output_field=_ALLOCATION_DECIMAL_FIELD
                 )
             )
             .annotate(
@@ -477,6 +480,40 @@ class LicenseBalanceCalculator:
         )
 
     @staticmethod
+    def get_purchase_trade_rows(license_obj):
+        """
+        PURCHASE-direction `LicenseTradeLine` queryset for a license — the
+        symmetric counterpart to `get_trade_rows()` (SALE only). Factored
+        out the same way, so the Financial Ledger (`license_balance_ledger_
+        builder.py`) can render "Licence Trade (Purchased)" credit rows
+        without re-deriving the direction filter.
+
+        NOT summed into `calculate_credit()`, which remains unchanged — the
+        licence's face-value credit is, and stays, sourced solely from
+        `LicenseExportItemModel` (see `calculate_credit`'s docstring). It IS
+        summed by `calculate_purchase_credit()` and used by
+        `calculate_balance()` as the credit anchor for any licence with
+        trading activity (see that method's docstring) — the Balance Engine
+        and Financial Ledger must always reconcile exactly, and the ledger's
+        own `running` already anchors on real Purchase credit rather than
+        the original export-item CIF once trading exists.
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            LicenseTradeLine queryset (trade__direction in PURCHASE/
+            COMMISSION_PURCHASE — same two directions `build_timeline`
+            already treats as "purchase" for its own event labeling).
+        """
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        return LicenseTradeLine.objects.filter(
+            sr_number__license=license_obj,
+            trade__direction__in=(LicenseTrade.DIR_PURCHASE, LicenseTrade.DIR_COMMISSION_PURCHASE),
+        )
+
+    @staticmethod
     def calculate_trade(license_obj) -> Decimal:
         """
         Calculate total trade CIF $ for license.
@@ -498,6 +535,80 @@ class LicenseBalanceCalculator:
             )["total"],
             DEC_0,
         )
+
+    @staticmethod
+    def calculate_purchase_credit(license_obj) -> Decimal:
+        """
+        Sum of every PURCHASE trade line's cif_fc for this licence — the
+        credit-side counterpart to `calculate_trade()` (SALE debit), used
+        ONLY by `calculate_balance()`'s trading-licence branch (see that
+        method's docstring). Mirrors `get_purchase_trade_rows()`'s own
+        "display-only" note: this is the one place that note no longer
+        applies, now that a trading licence's Balance Engine anchors on its
+        actual trading history instead of the original export-item CIF,
+        exactly like `build_financial_ledger()`'s `running` already does.
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            Total purchase CIF as Decimal
+        """
+        return to_decimal(
+            LicenseBalanceCalculator.get_purchase_trade_rows(license_obj).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+            )["total"],
+            DEC_0,
+        )
+
+    @staticmethod
+    def has_trading_activity(license_obj) -> bool:
+        """
+        True when this licence has ANY Purchase or Sale trade line at all —
+        the SAME condition `build_financial_ledger()` uses to decide whether
+        to anchor on the original export-item CIF or on real trading
+        history (see that method's docstring). Shared here so
+        `calculate_balance()` and the Financial Ledger can never independently
+        drift on which licences get which formula.
+
+        ONE combined `.exists()` query (not two) — same direction set as
+        `get_purchase_trade_rows()` + `get_trade_rows()` OR'd together,
+        rather than checking each separately, since `calculate_balance()`
+        runs this on every call (list views, bulk recompute tasks).
+        """
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        return LicenseTradeLine.objects.filter(
+            sr_number__license=license_obj,
+            trade__direction__in=(
+                LicenseTrade.DIR_PURCHASE, LicenseTrade.DIR_COMMISSION_PURCHASE, LicenseTrade.DIR_SALE,
+            ),
+        ).exists()
+
+    @staticmethod
+    def has_trading_activity_for_licenses(license_ids) -> dict:
+        """
+        Batched sibling of `has_trading_activity` — `{license_id: bool}` for
+        MANY licenses in 2 queries total (not 2xN), used by
+        `calculate_balance_for_licenses()`.
+        """
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        # Same direction sets as `get_purchase_trade_rows()` (PURCHASE +
+        # COMMISSION_PURCHASE) and `get_trade_rows()` (SALE only — NOT
+        # COMMISSION_SALE, matching that method's own filter exactly).
+        trading_ids = set(
+            LicenseTradeLine.objects.filter(
+                sr_number__license_id__in=ids,
+                trade__direction__in=(
+                    LicenseTrade.DIR_PURCHASE, LicenseTrade.DIR_COMMISSION_PURCHASE, LicenseTrade.DIR_SALE,
+                ),
+            ).values_list("sr_number__license_id", flat=True)
+        )
+        return {lid: (lid in trading_ids) for lid in ids}
 
     @staticmethod
     def calculate_allotment_for_licenses(license_ids) -> dict:
@@ -586,22 +697,46 @@ class LicenseBalanceCalculator:
         )
         return {row["sr_number__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
 
+    @staticmethod
+    def calculate_purchase_credit_for_licenses(license_ids) -> dict:
+        """
+        Batched sibling of `calculate_purchase_credit` — total PURCHASE-trade
+        CIF for MANY licenses in one query, grouped by license id. Same
+        direction set as `get_purchase_trade_rows`. See
+        `calculate_credit_for_licenses` for the return-shape/zero-default
+        contract.
+        """
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        rows = (
+            LicenseTradeLine.objects
+            .filter(
+                sr_number__license_id__in=ids,
+                trade__direction__in=(LicenseTrade.DIR_PURCHASE, LicenseTrade.DIR_COMMISSION_PURCHASE),
+            )
+            .values("sr_number__license_id")
+            .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+        )
+        return {row["sr_number__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
     @classmethod
     def calculate_balance_for_licenses(cls, license_ids) -> dict:
         """
         Batched sibling of `calculate_balance` — final balance for MANY
-        licenses in a fixed 4 queries total (not 4×N), by composing
+        licenses in a fixed 6 queries total (not 6×N), by composing
         `calculate_credit_for_licenses`, `calculate_debit_for_licenses`,
-        `calculate_allotment_for_licenses`, `calculate_trade_for_licenses`.
+        `calculate_allotment_for_licenses`, `calculate_trade_for_licenses`,
+        `calculate_purchase_credit_for_licenses`, `has_trading_activity_for_licenses`.
 
-        Same formula/rounding/floor-at-0 as `calculate_balance`:
-        `credit - (debit + allotment + trade)`, quantized to 2dp, floored at 0.
-
-        Unlike the four per-component maps above (which omit a license id
-        with no matching rows), every id in `license_ids` gets an entry here
-        — missing components simply contribute `DEC_0`, matching what a
-        per-license `calculate_balance(license_obj)` call would have
-        computed for a license with no rows in some component.
+        Same formula/rounding/floor-at-0 as `calculate_balance` (see that
+        method's docstring for the trading-licence branch): every id in
+        `license_ids` gets an entry here — missing components simply
+        contribute `DEC_0`, matching what a per-license
+        `calculate_balance(license_obj)` call would have computed for a
+        license with no rows in some component.
 
         Args:
             license_ids: iterable of license pks.
@@ -616,10 +751,13 @@ class LicenseBalanceCalculator:
         debit = cls.calculate_debit_for_licenses(ids)
         allotment = cls.calculate_allotment_for_licenses(ids)
         trade = cls.calculate_trade_for_licenses(ids)
+        purchase_credit = cls.calculate_purchase_credit_for_licenses(ids)
+        trading = cls.has_trading_activity_for_licenses(ids)
 
         result = {}
         for lid in ids:
-            balance = credit.get(lid, DEC_0) - (
+            anchor = purchase_credit.get(lid, DEC_0) if trading.get(lid, False) else credit.get(lid, DEC_0)
+            balance = anchor - (
                 debit.get(lid, DEC_0) + allotment.get(lid, DEC_0) + trade.get(lid, DEC_0)
             )
             balance = quantize_2dp(balance)
@@ -629,9 +767,26 @@ class LicenseBalanceCalculator:
     @classmethod
     def calculate_balance(cls, license_obj) -> Decimal:
         """
-        Calculate final balance for license.
+        Calculate final balance for license — the single "Balance Engine"
+        value shown everywhere (List/Detail, Overview, PDF/Excel, Customs
+        Ledger's anchor row) and the one `build_financial_ledger()`'s own
+        running total must always reconcile with exactly (never merely
+        within tolerance).
 
-        Formula: Credit - (Debit + Allotment + Trade)
+        Formula:
+        - No Purchase/Sale trading activity at all: `Credit - (Debit +
+          Allotment + Trade)` (unchanged; `Trade` is always 0 here since it
+          requires a SALE line).
+        - ANY Purchase/Sale trading activity: `PurchaseCredit - (Debit +
+          Allotment + Trade)` — the SAME `has_trading_activity` condition and
+          the SAME switch from the original export-item CIF to real trading
+          history that `build_financial_ledger()`'s `running` already makes
+          (see that method's docstring: a traded licence's ledger is no
+          longer anchored on a fabricated Opening Balance). `Debit`/`Trade`
+          already correctly net out matched vs. unmatched BOE/invoice amounts
+          (see `calculate_debit`/`calculate_trade`'s own docstrings) — this
+          branch is the only piece that was missing for the two to always
+          agree exactly.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -639,12 +794,16 @@ class LicenseBalanceCalculator:
         Returns:
             Final balance as Decimal (minimum 0), quantized to 2 decimal places
         """
-        credit = cls.calculate_credit(license_obj)
         debit = cls.calculate_debit(license_obj)
         allotment = cls.calculate_allotment(license_obj)
         trade = cls.calculate_trade(license_obj)
+        anchor = (
+            cls.calculate_purchase_credit(license_obj)
+            if cls.has_trading_activity(license_obj)
+            else cls.calculate_credit(license_obj)
+        )
 
-        balance = credit - (debit + allotment + trade)
+        balance = anchor - (debit + allotment + trade)
         balance = quantize_2dp(balance)
         return balance if balance >= DEC_0 else DEC_0
 
@@ -652,6 +811,11 @@ class LicenseBalanceCalculator:
     def calculate_all_components(cls, license_obj) -> dict[str, Decimal]:
         """
         Calculate all balance components at once.
+
+        `credit` always stays "original export-item CIF" (used for display
+        elsewhere as e.g. "Original CIF") regardless of trading activity —
+        only `balance` itself switches to the purchase-credit-anchored
+        formula for a traded licence; see `calculate_balance`'s docstring.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -663,7 +827,8 @@ class LicenseBalanceCalculator:
         debit = cls.calculate_debit(license_obj)
         allotment = cls.calculate_allotment(license_obj)
         trade = cls.calculate_trade(license_obj)
-        balance = credit - (debit + allotment + trade)
+        anchor = cls.calculate_purchase_credit(license_obj) if cls.has_trading_activity(license_obj) else credit
+        balance = anchor - (debit + allotment + trade)
         balance = quantize_2dp(balance)
 
         return {

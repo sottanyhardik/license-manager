@@ -128,14 +128,31 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
 
             {ledgerQuery.data && (
                 <>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Financial Ledger</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <FinancialLedgerTable rows={ledgerQuery.data.financial_ledger.rows} />
-                        </CardContent>
-                    </Card>
+                    {/* Financial Ledger only appears when this licence has been
+                        traded (Purchase and/or Sale) — a licence with neither has
+                        nothing this section adds over the Customs Ledger below, so
+                        it's hidden entirely rather than shown empty or opening-
+                        balance-only. See `has_trading_activity` on the backend. */}
+                    {ledgerQuery.data.financial_ledger.summary.has_trading_activity && (
+                        <>
+                            {ledgerQuery.data.financial_ledger.summary.missing_purchase_warning.show_warning && (
+                                <Alert variant="warning">
+                                    <AlertTriangle className="size-4" />
+                                    <AlertDescription>
+                                        {ledgerQuery.data.financial_ledger.summary.missing_purchase_warning.message}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Financial Ledger</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <FinancialLedgerTable rows={ledgerQuery.data.financial_ledger.rows} />
+                                </CardContent>
+                            </Card>
+                        </>
+                    )}
 
                     <Card>
                         <CardHeader>

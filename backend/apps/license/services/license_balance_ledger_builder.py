@@ -195,43 +195,66 @@ class LicenseBalanceLedgerBuilder:
         """
         Returns `(rows, summary)`.
 
-        `rows` is a list of plain dicts (see keys below) in ledger order:
-        Opening Balance -> [BOE debits AND consolidated Invoice/BOE
-        Allocation transactions, merged and sorted by date] -> Active
-        Allotments -> Licence Trade (Sold) debits (unallocated remainder
-        only) -> Current Balance.
+        `rows` is a list of plain dicts (see keys below), ALL merged into
+        ONE chronologically-sorted sequence (not separate blocks per
+        category): [Opening Balance — OMITTED for a licence with any
+        Purchase/Sale trading activity, see below] -> [Licence Trade
+        (Purchased) credits, BOE Utilisation (Pending Invoice) debits,
+        Active Allotment debits, Licence Trade (Sold) debits — interleaved
+        by date, tie-broken Purchase -> BOE Pending -> Allotment -> Sale on
+        same-day entries] -> Current Balance.
 
-        Multiple BOEs allocated to the SAME invoice are combined into ONE
-        "BOE Allocation" row (see `build_invoice_allocation_groups`) instead
-        of one row per BOE — the Financial Ledger represents the
-        reconciled financial transaction against the invoice, not the raw
-        Customs data (the Customs Ledger elsewhere in the report still
-        shows every individual BOE, unchanged). A BOE's UNALLOCATED
-        remainder (if only partially matched) still appears as its own
-        ordinary "BOE" row so no CIF is ever lost or double-counted — see
-        the module-level proof in `build_invoice_allocation_groups`'s
-        docstring: allocated + remaining == the BOE's/invoice's full
-        amount, always.
+        A licence with ANY Purchase or Sale trade (`summary['has_trading_
+        activity']`) tells its story from that trading history, not the
+        original DGFT-issued face value: no "Opening Balance" row is
+        generated, and `running` starts at 0 so the first Purchase (or, if
+        none exists yet, the first BOE/Sale — see `summary[
+        'missing_purchase_warning']`, shown as a banner instead of a
+        fabricated Opening Balance) is the ledger's true first entry. A
+        licence with NEITHER keeps the original opening-balance-anchored
+        statement below unchanged; callers should not render this ledger's
+        UI/PDF/Excel section at all in that case (there is nothing to show
+        that isn't already covered by the Customs Ledger) — see `summary[
+        'has_trading_activity']`.
 
-        Display is further filtered to the still-unreconciled subset: BOE
-        rows (and the always-invoice-matched "BOE Allocation" rows) only
-        appear when the BOE has NO invoice relationship at all — a
-        filtered-out BOE/BOE-Allocation row's debit does NOT reduce
-        `running`, so `total_boe_debit`/`total_invoice_allocation_debit`
-        (in `summary`) still sum every underlying transaction while the
-        displayed running balance reflects only what's shown. Active
-        Allotment rows are handled differently: `get_allotment_rows()`
-        itself already excludes any allotment with a BOE association
+        EVERY BOE debit row with an unallocated remainder (`contributed >
+        0`, from `get_debit_rows()` — the SAME annotated queryset
+        `calculate_debit()` sums) is shown as "BOE Utilisation (Pending
+        Invoice)", regardless of whether the BOE happens to carry a
+        free-text `invoice_no` or an `ExternalInvoiceLink` tag — those are
+        informational annotations only and were PREVIOUSLY (incorrectly)
+        treated as if they reconciled the debit, silently dropping it from
+        both the display AND the running balance with nothing else picking
+        it up. Only a REAL `InvoiceBOEAllocation` reduces `contributed`
+        (and therefore removes the row here) — once fully allocated the
+        row's `contributed` is 0 and it is skipped entirely, because its
+        full amount is now represented by the matching SALE trade line's
+        own row (see below): never both, never neither.
+
+        A SALE trade line's debit is its line's FULL `cif_fc` — the SAME
+        value `calculate_trade()` sums — not merely its unallocated
+        remainder. Once a trade line has >=1 active `InvoiceBOEAllocation`,
+        the matching `build_invoice_allocation_groups()` entry is attached
+        to this SAME row as informational `children` (one per underlying
+        BOE allocation — see that function's docstring) instead of being a
+        separate top-level row: "once invoiced, show only the invoice
+        transaction." `total_invoice_allocation_debit` (in `summary`) still
+        reports how much of `total_trade_debit` is backed by a real
+        allocation, purely informational.
+
+        This is exactly the same combined rule `calculate_debit()` +
+        `calculate_trade()` already use for the Balance Engine (unallocated
+        BOE remainder + full SALE line, together summing every matched CIF
+        exactly once) — `computed_balance` below and `calculate_balance()`
+        can therefore never structurally drift; see `LicenseBalanceCalculator
+        .calculate_balance`'s docstring for the credit-anchor side of this
+        same unification.
+
+        Active Allotment rows are unaffected: `get_allotment_rows()` itself
+        already excludes any allotment with a BOE association
         (`AllotmentModel.is_boe`) at the query level — forcing its
-        `contributed` to 0 — so `total_allotment_debit` here is ALREADY the
-        corrected, BOE-association-excluded total, not the full one; there
-        is no separate row ever hidden in this loop.
-
-        Net effect: the Current Balance row's `running_balance` (and its
-        reconciliation-against-`calculate_balance()` mismatch check) now
-        reflects the displayed-only running balance for BOE/invoice
-        matching, combined with the corrected (not merely hidden) allotment
-        total, not the licence's raw unfiltered totals.
+        `contributed` to 0 — so `total_allotment_debit` here is already the
+        corrected, BOE-association-excluded total.
         """
         from apps.license.services.balance_calculator import LicenseBalanceCalculator, quantize_2dp
         from apps.reconciliation.services.allocation_service import remaining_for_trade_line
@@ -241,34 +264,102 @@ class LicenseBalanceLedgerBuilder:
         if ext_map is None:
             ext_map = boe_external_invoice_map(license_obj)
 
+        # Existence (not "has remaining/unmatched amount") — a fully-
+        # allocated Sale trade line still represents a real sale event that
+        # requires a purchase counterpart, and any Purchase trade line at
+        # all is enough to treat this licence as "acquired via trading"
+        # rather than via the original DGFT-issued opening balance.
+        has_purchase = LicenseBalanceCalculator.get_purchase_trade_rows(license_obj).exists()
+        has_sale = LicenseBalanceCalculator.get_trade_rows(license_obj).exists()
+        has_trading_activity = has_purchase or has_sale
+        missing_purchase_warning = {
+            'show_warning': has_sale and not has_purchase,
+            'message': (
+                'Purchase invoice has not been created for this licence. '
+                'Please create the Purchase invoice before the trading '
+                'history can be fully reconciled.'
+            ),
+        }
+
         opening_balance = license_obj.opening_balance  # = calculate_credit(): total export CIF
         rows = []
         sr = 1
-        running = opening_balance
 
-        rows.append({
-            'sr': sr, 'date': license_obj.license_date, 'type': 'Opening Balance',
-            'document_number': license_obj.license_number or '-',
-            'boe_number': None, 'boe_date': None, 'company': None, 'item_name': None,
-            'invoice_numbers': [], 'qty': None, 'cif_usd': None, 'cif_inr': None,
-            'credit': opening_balance, 'debit': DEC_0, 'running_balance': running,
-            'remarks': 'Licence Issued', 'row_kind': 'opening',
-        })
-        sr += 1
+        # A traded licence's Financial Ledger tells the story of its actual
+        # trading history (Purchase -> Sale), not the original DGFT-issued
+        # face value — the Opening Balance row is a fiction once real
+        # Purchase/Sale transactions exist (whichever side is present), so
+        # `running` starts at 0 and the first Purchase (or, if missing, the
+        # first Sale — see `missing_purchase_warning` above) IS the ledger's
+        # first entry. A licence with NO trading activity at all keeps the
+        # original opening-balance-anchored behaviour unchanged — the
+        # caller decides whether to render this ledger at all based on
+        # `summary['has_trading_activity']` (see "Hide Financial Ledger
+        # When No Trading Exists" — this function still computes the full,
+        # correct dataset either way, it just isn't displayed).
+        if has_trading_activity:
+            running = DEC_0
+        else:
+            running = opening_balance
+            rows.append({
+                'sr': sr, 'date': license_obj.license_date, 'type': 'Opening Balance',
+                'document_number': license_obj.license_number or '-',
+                'boe_number': None, 'boe_date': None, 'company': None, 'item_name': None,
+                'invoice_numbers': [], 'qty': None, 'cif_usd': None, 'cif_inr': None,
+                'credit': opening_balance, 'debit': DEC_0, 'running_balance': running,
+                'remarks': 'Licence Issued', 'row_kind': 'opening',
+            })
+            sr += 1
 
-        # ---- BOE debits (unallocated / partially-allocated remainder only) ----
+        # All four categories merged into ONE chronologically-sorted, tie-
+        # broken sequence — Purchase(0) -> BOE Pending(1) -> Allotment(2) ->
+        # Sale(3) on same-day entries — rather than four separate sequential
+        # blocks, so same-day transactions across categories interleave
+        # correctly (see this method's docstring).
+        dated_entries = []  # (sort_date, tie_rank, tie_key, entry_dict)
+
+        # ---- Licence Trade (Purchased) — full credit, unconditional ----
+        purchase_rows = (
+            LicenseBalanceCalculator.get_purchase_trade_rows(license_obj)
+            .select_related('trade__from_company', 'sr_number')
+            .prefetch_related('sr_number__items')
+        )
+        total_purchase_credit = DEC_0
+        for p_row in purchase_rows:
+            trade = p_row.trade
+            credit = p_row.cif_fc or DEC_0
+            if credit <= DEC_0:
+                continue
+            total_purchase_credit += credit
+            date = trade.invoice_date if trade else None
+            dated_entries.append((date or _date.max, 0, trade.invoice_number if trade else '', {
+                'type': 'Licence Trade (Purchased)',
+                'document_number': trade.invoice_number if trade else '-',
+                'boe_number': None, 'boe_date': None,
+                'company': trade.from_company.name if (trade and trade.from_company) else '-',
+                'item_name': item_display_name(p_row.sr_number),
+                'invoice_numbers': split_invoice_numbers(trade.invoice_number if trade else None),
+                'qty': p_row.qty_kg if p_row.mode == p_row.MODE_QTY else None,
+                'cif_usd': None, 'cif_inr': None,
+                'credit': credit, 'debit': DEC_0,
+                'remarks': 'Licence Trade Purchased', 'row_kind': 'trade_purchase',
+            }))
+
+        # ---- BOE Utilisation (Pending Invoice) — unallocated remainder ----
         # A BOE with an active allocation contributes ONLY its allocated
         # slice to `contributed` (see get_debit_rows/calculate_debit) — once
         # fully allocated, contributed == 0 and the row carries no further
-        # debit, so it is skipped here entirely (its full amount is
-        # represented by the consolidated "BOE Allocation" row below).
+        # debit, so it is skipped here entirely (its full amount is now
+        # represented by the matching SALE trade line's own row below).
+        # Shown regardless of any free-text `invoice_no`/external-invoice
+        # tag — those are informational annotations only, never a real
+        # reconciliation, and must never hide a real outstanding debit.
         boe_rows = (
             LicenseBalanceCalculator.get_debit_rows(license_obj)
             .select_related('bill_of_entry__company', 'sr_number')
             .prefetch_related('sr_number__items')
         )
         total_boe_debit = DEC_0
-        dated_entries = []  # (sort_date, sort_tiebreak, row_dict_without_sr_or_running)
         for row in boe_rows:
             boe = row.bill_of_entry
             debit = row.contributed
@@ -277,14 +368,13 @@ class LicenseBalanceLedgerBuilder:
             total_boe_debit += debit
 
             invoices = boe_row_invoice_numbers(row, alloc_map, ext_map)
-            remarks = 'Matched Invoice(s)' if invoices else '-'
+            remarks = 'Awaiting Invoice'
             if debit < row.cif_fc:
-                note = f"Reconciled ${row.cif_fc - debit:,.2f} via Trade"
-                remarks = f"{remarks} | {note}" if remarks != '-' else note
+                remarks = f"{remarks} | Reconciled ${row.cif_fc - debit:,.2f} via Trade"
 
             boe_date = boe.bill_of_entry_date if boe else None
-            dated_entries.append((boe_date or _date.max, boe.bill_of_entry_number if boe else '', {
-                'type': 'BOE',
+            dated_entries.append((boe_date or _date.max, 1, boe.bill_of_entry_number if boe else '', {
+                'type': 'BOE Utilisation (Pending Invoice)',
                 'document_number': boe.bill_of_entry_number if boe else '-',
                 'boe_number': boe.bill_of_entry_number if boe else '-',
                 'boe_date': boe_date,
@@ -293,122 +383,29 @@ class LicenseBalanceLedgerBuilder:
                 'invoice_numbers': invoices,
                 'qty': row.qty, 'cif_usd': row.cif_fc, 'cif_inr': row.cif_inr,
                 'credit': DEC_0, 'debit': debit,
-                'remarks': remarks, 'row_kind': 'boe',
+                'remarks': remarks, 'row_kind': 'boe', 'status': 'Pending Invoice',
                 'row_details_id': row.id,
             }))
 
-        # ---- Consolidated Invoice/BOE Allocation transactions ----
-        total_invoice_allocation_debit = DEC_0
-        for group in build_invoice_allocation_groups(license_obj):
-            trade_line = group['trade_line']
-            trade = trade_line.trade
-            debit = group['total_cif_fc']
-            total_invoice_allocation_debit += debit
-
-            boe_count = len(group['boe_numbers'])
-            remarks = 'Matched Invoice(s)' if boe_count == 1 else f"Invoice allocated to {boe_count} BOEs"
-
-            # Child rows — one per underlying BOE allocation, informational
-            # only. They explain HOW the parent's debit is made up; they
-            # never carry their own credit/debit/running_balance (the
-            # parent already IS the accounting impact — showing it again on
-            # each child would double-count visually, even though it can't
-            # double-count arithmetically since children are never summed).
-            children = []
-            for alloc in group['allocations']:
-                boe = alloc.row_details.bill_of_entry
-                fully_matched = alloc.allocated_cif_fc >= alloc.row_details.cif_fc
-                children.append({
-                    'type': 'BOE', 'row_kind': 'boe_child',
-                    'boe_number': boe.bill_of_entry_number if boe else '-',
-                    'boe_date': boe.bill_of_entry_date if boe else None,
-                    'company': boe.company.name if (boe and boe.company) else '-',
-                    'item_name': item_display_name(alloc.row_details.sr_number),
-                    'invoice_numbers': split_invoice_numbers(trade.invoice_number if trade else None),
-                    'qty': alloc.allocated_qty, 'cif_usd': alloc.allocated_cif_fc, 'cif_inr': alloc.allocated_cif_inr,
-                    'status': 'Matched' if fully_matched else 'Partially Matched',
-                    'remarks': 'Fully allocated' if fully_matched else 'Partially allocated — remainder unmatched',
-                    'row_details_id': alloc.row_details_id, 'allocation_id': alloc.id,
-                    # Blank on purpose — the parent already contains the
-                    # accounting impact (Section 1 spec: "Leave Credit,
-                    # Debit, Running Balance blank on child rows").
-                    'credit': None, 'debit': None, 'running_balance': None,
-                })
-
-            dated_entries.append((group['earliest_boe_date'] or _date.max, group['boe_numbers'][0] if group['boe_numbers'] else '', {
-                'type': 'Licence Trade (Sold)',
-                'document_number': trade.invoice_number if trade else '-',
-                # `boe_number`/`boe_date_display` are pre-joined display
-                # strings (matching the DISPLAY RULES spec verbatim, e.g.
-                # "7650222, 7650224"); `boe_date` stays a single date (the
-                # earliest linked BOE) for type-consistency with 'boe' rows
-                # and for chronological sorting. `linked_boe_numbers`/
-                # `linked_boe_dates` give the UI the raw list for smarter
-                # truncation ("7650222 (+1)") with a tooltip.
-                'boe_number': ', '.join(group['boe_numbers']),
-                'boe_date': group['earliest_boe_date'],
-                'boe_date_display': ', '.join(
-                    d.strftime('%d-%m-%Y') if d else '-' for d in group['boe_dates']
-                ),
-                'company': ', '.join(group['companies']) if group['companies'] else '-',
-                'item_name': ', '.join(group['item_names']) if group['item_names'] else '-',
-                'invoice_numbers': split_invoice_numbers(trade.invoice_number if trade else None),
-                'qty': group['total_qty'], 'cif_usd': group['total_cif_fc'], 'cif_inr': group['total_cif_inr'],
-                'credit': DEC_0, 'debit': debit,
-                'remarks': remarks, 'row_kind': 'boe_allocation',
-                'linked_boe_numbers': group['boe_numbers'],
-                'linked_boe_dates': [d.isoformat() if d else None for d in group['boe_dates']],
-                'trade_line_id': trade_line.id,
-                'expandable': True,
-                'children': children,
-            }))
-
-        # Merge BOE rows and consolidated allocation rows into one
-        # chronological sequence (oldest first); assign running balance in
-        # that merged order.
-        #
-        # Display filter — Financial Ledger shows BOEs with NO invoice
-        # relationship only: a 'boe_allocation' row is by definition a BOE
-        # matched to an invoice (it IS the consolidated invoice/BOE
-        # transaction), so it never displays; a 'boe' row displays only when
-        # it carries no `invoice_numbers` at all (a partially-invoice-matched
-        # BOE's unallocated remainder is still excluded, not just a fully
-        # unmatched one). A hidden entry's debit is NOT subtracted from
-        # `running` — only displayed rows affect the running balance shown
-        # in the ledger.
-        dated_entries.sort(key=lambda entry: (entry[0], entry[1]))
-        for sort_date, _, entry in dated_entries:
-            display = entry['row_kind'] == 'boe' and not entry['invoice_numbers']
-            if display:
-                running -= entry['debit']
-                entry['sr'] = sr
-                entry['date'] = None if sort_date == _date.max else sort_date
-                entry['running_balance'] = running
-                rows.append(entry)
-                sr += 1
-
+        # ---- Active Allotment — outstanding commitment, no BOE yet ----
+        # `get_allotment_rows()` already excludes any allotment with
+        # `is_boe=True` at the query level (forces `contributed=0`, which
+        # the `contributed__gt=DEC_0` filter below then drops entirely) — so
+        # every row reaching this loop is already guaranteed to have no BOE
+        # association.
         allot_rows = (
             LicenseBalanceCalculator.get_allotment_rows(license_obj)
             .filter(contributed__gt=DEC_0)
             .select_related('allotment__company', 'item')
             .prefetch_related('item__items')
-            .order_by('allotment__estimated_arrival_date')
         )
-        # `get_allotment_rows()` already excludes any allotment with
-        # `is_boe=True` at the query level (forces `contributed=0`, which
-        # the `contributed__gt=DEC_0` filter above then drops entirely) — so
-        # every row reaching this loop is already guaranteed to have no BOE
-        # association. No further per-row is_boe filtering is needed here.
         total_allotment_debit = DEC_0
         for a_row in allot_rows:
             allotment = a_row.allotment
             debit = a_row.contributed
             total_allotment_debit += debit
-            running -= debit
-
-            rows.append({
-                'sr': sr,
-                'date': allotment.estimated_arrival_date if allotment else None,
+            date = allotment.estimated_arrival_date if allotment else None
+            dated_entries.append((date or _date.max, 2, f"ALT-{allotment.id}" if allotment else '', {
                 'type': 'Active Allotment',
                 'document_number': f"ALT-{allotment.id}" if allotment else '-',
                 'boe_number': None, 'boe_date': None,
@@ -416,56 +413,180 @@ class LicenseBalanceLedgerBuilder:
                 'item_name': item_display_name(a_row.item, fallback=(allotment.item_name if allotment else '')),
                 'invoice_numbers': split_invoice_numbers(allotment.invoice if allotment else None),
                 'qty': a_row.qty, 'cif_usd': None, 'cif_inr': None,
-                'credit': DEC_0, 'debit': debit, 'running_balance': running,
+                'credit': DEC_0, 'debit': debit,
                 'remarks': 'Outstanding Commitment', 'row_kind': 'allotment',
                 'allotment_item_id': a_row.id,
-            })
-            sr += 1
+            }))
 
-        # Licence Trade (Sold) debits — the UNALLOCATED remainder only.
-        # calculate_balance() subtracts calculate_trade()'s FULL cif_fc per
-        # SALE trade line unconditionally, but any portion already
-        # represented by a consolidated "BOE Allocation" row above must not
-        # be counted here again. `remaining_for_trade_line` (allocated_cif
-        # subtracted) gives exactly the leftover: for a trade line with NO
-        # allocations, remaining == the full cif_fc (identical to the old
-        # unconditional behaviour); for one FULLY allocated, remaining == 0
-        # and it is omitted entirely (its full amount is already shown via
-        # the consolidated row); for a PARTIALLY allocated one, only the
-        # genuinely-unmatched slice shows here. allocated + remaining ==
-        # the trade line's own cif_fc always (allocations can never exceed
-        # it — enforced at allocation-creation time), so total debit across
-        # the consolidated rows + this section is unchanged from before.
-        trade_rows = (
+        # ---- Licence Trade (Sold) — full debit, with allocation drill-down ----
+        # A SALE trade line debits its FULL cif_fc — the same value
+        # `calculate_trade()` sums — never merely its unallocated remainder:
+        # the matching BOE's own remainder is already excluded above (its
+        # `contributed` nets out whatever this trade line has linked to
+        # it), so together they debit the licence exactly once per CIF,
+        # matched or not (see this method's docstring). Any active
+        # `InvoiceBOEAllocation` group for this trade line is attached as
+        # informational `children` (never summed) so a matched invoice
+        # still shows which BOEs back it — "once invoiced, show only the
+        # invoice transaction," not a separate top-level "BOE Allocation" row.
+        #
+        # A BOE merely TAGGED to this trade (legacy `.boes` M2M) but not yet
+        # formally allocated is ALSO folded into this same row — reusing
+        # `find_boe_allocation_candidates`/`reconcile_trade_boe_links`
+        # (`apps.reconciliation.services.boe_link_reconciler`, the exact
+        # lookup the reconciliation panel/backfill command already trust) —
+        # so the Financial Ledger is an accounting ledger (one financial
+        # event per BOE, ever) rather than a reconciliation report: a CIF
+        # mismatch between the BOE and the invoice is surfaced as
+        # `mismatch_warning` on THIS row, never as a second debit-bearing
+        # "BOE Utilisation (Pending Invoice)" row (already guaranteed by
+        # `get_debit_rows()`'s widened exclusion above — this section only
+        # adds the display-side BOE numbers/warning, no new debit math).
+        from apps.reconciliation.services.boe_link_reconciler import find_boe_allocation_candidates, reconcile_trade_boe_links
+
+        groups_by_trade_line = {
+            group['trade_line'].id: group for group in build_invoice_allocation_groups(license_obj)
+        }
+        total_invoice_allocation_debit = sum(
+            (g['total_cif_fc'] for g in groups_by_trade_line.values()), DEC_0
+        )
+        sale_rows = (
             LicenseBalanceCalculator.get_trade_rows(license_obj)
             .select_related('trade__to_company', 'sr_number')
             .prefetch_related('sr_number__items')
-            .order_by('trade__invoice_date', 'trade__invoice_number')
         )
-        total_trade_debit = DEC_0
-        for t_row in trade_rows:
-            trade = t_row.trade
-            remaining_qty, remaining_cif, _remaining_cif_inr = remaining_for_trade_line(t_row)
-            if remaining_cif <= DEC_0:
-                continue
-            debit = remaining_cif
-            total_trade_debit += debit
-            running -= debit
 
-            rows.append({
-                'sr': sr,
-                'date': trade.invoice_date if trade else None,
+        # One `reconcile_trade_boe_links` (dry-run, read-only) call per
+        # distinct trade — cached so a trade with several lines for this
+        # licence isn't re-queried per line.
+        recon_cache = {}
+
+        def _recon_result_for(t_row):
+            trade = t_row.trade
+            if trade is None:
+                return None
+            if trade.id not in recon_cache:
+                recon_cache[trade.id] = {
+                    r['trade_line_id']: r for r in reconcile_trade_boe_links(trade, dry_run=True)
+                }
+            return recon_cache[trade.id].get(t_row.id)
+
+        total_trade_debit = DEC_0
+        for t_row in sale_rows:
+            trade = t_row.trade
+            debit = t_row.cif_fc or DEC_0
+            if debit <= DEC_0:
+                continue
+            total_trade_debit += debit
+
+            group = groups_by_trade_line.get(t_row.id)
+            children = []
+            linked_boe_numbers = list(group['boe_numbers']) if group else []
+            linked_boe_dates = list(group['boe_dates']) if group else []
+            if group:
+                # Informational only — never carries its own credit/debit/
+                # running_balance (the parent row above already IS the
+                # accounting impact).
+                for alloc in group['allocations']:
+                    boe = alloc.row_details.bill_of_entry
+                    fully_matched = alloc.allocated_cif_fc >= alloc.row_details.cif_fc
+                    children.append({
+                        'type': 'BOE', 'row_kind': 'boe_child',
+                        'boe_number': boe.bill_of_entry_number if boe else '-',
+                        'boe_date': boe.bill_of_entry_date if boe else None,
+                        'company': boe.company.name if (boe and boe.company) else '-',
+                        'item_name': item_display_name(alloc.row_details.sr_number),
+                        'invoice_numbers': split_invoice_numbers(trade.invoice_number if trade else None),
+                        'qty': alloc.allocated_qty, 'cif_usd': alloc.allocated_cif_fc, 'cif_inr': alloc.allocated_cif_inr,
+                        'status': 'Matched' if fully_matched else 'Partially Matched',
+                        'remarks': 'Fully allocated' if fully_matched else 'Partially allocated — remainder unmatched',
+                        'row_details_id': alloc.row_details_id, 'allocation_id': alloc.id,
+                        'credit': None, 'debit': None, 'running_balance': None,
+                    })
+
+            # Legacy-tagged (not-yet-formally-allocated) BOEs, from the
+            # SAME candidate lookup `get_debit_rows()`'s exclusion just used
+            # — never a second calculation, purely for display here.
+            mismatch_warning = None
+            recon_result = _recon_result_for(t_row)
+            if recon_result and recon_result['status'] in ('auto_migrated', 'mismatch', 'ambiguous'):
+                candidates = find_boe_allocation_candidates(t_row)
+                for candidate in candidates:
+                    boe = candidate.bill_of_entry
+                    number = boe.bill_of_entry_number if boe else '-'
+                    if number not in linked_boe_numbers:
+                        linked_boe_numbers.append(number)
+                        linked_boe_dates.append(boe.bill_of_entry_date if boe else None)
+                if recon_result['status'] in ('mismatch', 'ambiguous'):
+                    boe_cif_total = sum((c.cif_fc for c in candidates), DEC_0)
+                    _, invoice_cif, _ = remaining_for_trade_line(t_row)
+                    mismatch_warning = {
+                        'show_warning': True,
+                        'status': recon_result['status'],
+                        'boe_cif': boe_cif_total,
+                        'invoice_cif': invoice_cif,
+                        'difference': abs(boe_cif_total - invoice_cif),
+                        'message': (
+                            'CIF Mismatch — Requires Review' if recon_result['status'] == 'mismatch'
+                            else 'Multiple BOEs Linked — Requires Review'
+                        ),
+                    }
+
+            if mismatch_warning:
+                # Spelled out with figures (not just the headline message)
+                # since PDF/Excel have no interactive expandable detail —
+                # the UI renders `mismatch_warning`'s structured fields
+                # directly instead of parsing this string.
+                remarks = (
+                    f"⚠ {mismatch_warning['message']}: BOE ${mismatch_warning['boe_cif']:,.2f} vs "
+                    f"Invoice ${mismatch_warning['invoice_cif']:,.2f} "
+                    f"(Δ ${mismatch_warning['difference']:,.2f})"
+                )
+            elif group:
+                boe_count = len(linked_boe_numbers)
+                remarks = 'Matched Invoice(s)' if boe_count == 1 else f"Invoice allocated to {boe_count} BOE(s)"
+            elif linked_boe_numbers:
+                remarks = 'Matched Invoice(s)'
+            else:
+                remarks = 'Reconciled Sale'
+
+            earliest_linked_date = min((d for d in linked_boe_dates if d), default=None)
+            date = trade.invoice_date if trade else None
+            dated_entries.append((date or _date.max, 3, trade.invoice_number if trade else '', {
                 'type': 'Licence Trade (Sold)',
                 'document_number': trade.invoice_number if trade else '-',
-                'boe_number': None, 'boe_date': None,
+                # Comma-joined display string of every linked BOE (formal
+                # allocation + legacy-tagged), regardless of reconciliation
+                # status — `None` (renders "—") only when nothing is linked
+                # at all.
+                'boe_number': ', '.join(linked_boe_numbers) if linked_boe_numbers else None,
+                'boe_date': earliest_linked_date,
+                'boe_date_display': (
+                    ', '.join(d.strftime('%d-%m-%Y') if d else '-' for d in linked_boe_dates)
+                    if linked_boe_dates else None
+                ),
                 'company': trade.to_company.name if (trade and trade.to_company) else '-',
                 'item_name': item_display_name(t_row.sr_number),
                 'invoice_numbers': split_invoice_numbers(trade.invoice_number if trade else None),
-                'qty': remaining_qty if t_row.mode == t_row.MODE_QTY else None,
+                'qty': t_row.qty_kg if t_row.mode == t_row.MODE_QTY else None,
                 'cif_usd': None, 'cif_inr': None,
-                'credit': DEC_0, 'debit': debit, 'running_balance': running,
-                'remarks': 'Reconciled Sale — unmatched remainder (see Invoice ↔ BOE Reconciliation)', 'row_kind': 'trade',
-            })
+                'credit': DEC_0, 'debit': debit,
+                'remarks': remarks, 'row_kind': 'trade',
+                'linked_boe_numbers': linked_boe_numbers,
+                'linked_boe_dates': [d.isoformat() if d else None for d in linked_boe_dates],
+                'trade_line_id': t_row.id,
+                'expandable': bool(children),
+                'children': children,
+                'mismatch_warning': mismatch_warning,
+            }))
+
+        dated_entries.sort(key=lambda entry: (entry[0], entry[1], entry[2]))
+        for sort_date, _tie_rank, _tie_key, entry in dated_entries:
+            running += entry['credit'] - entry['debit']
+            entry['sr'] = sr
+            entry['date'] = None if sort_date == _date.max else sort_date
+            entry['running_balance'] = running
+            rows.append(entry)
             sr += 1
 
         engine_balance = LicenseBalanceCalculator.calculate_balance(license_obj)
@@ -490,12 +611,26 @@ class LicenseBalanceLedgerBuilder:
             'total_boe_debit': total_boe_debit,
             'total_invoice_allocation_debit': total_invoice_allocation_debit,
             'total_allotment_debit': total_allotment_debit,
+            'total_purchase_credit': total_purchase_credit,
             'total_trade_debit': total_trade_debit,
             'computed_balance': computed_balance,
             'engine_balance': engine_balance,
             'difference': difference,
             'mismatched': mismatched,
             'tolerance': TOLERANCE,
+            # Whether this ledger has ANY Purchase or Sale trade activity at
+            # all — consumers (UI card, PDF, Excel) use this to decide
+            # whether to render the Financial Ledger section at all (see
+            # "Hide Financial Ledger When No Trading Exists"). `rows` above
+            # are still fully computed either way (the original opening-
+            # balance-anchored statement, unchanged, when this is False).
+            'has_trading_activity': has_trading_activity,
+            'has_purchase': has_purchase,
+            'has_sale': has_sale,
+            # Shown as a banner above the ledger instead of a fabricated
+            # Opening Balance row when a Sale exists with no matching
+            # Purchase — never shown otherwise.
+            'missing_purchase_warning': missing_purchase_warning,
         }
         return rows, summary
 

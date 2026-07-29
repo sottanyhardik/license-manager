@@ -131,16 +131,16 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
 
     COLOR_OPENING = colors.HexColor('#1a5276')
     COLOR_BOE = colors.HexColor('#eafaf1')
-    COLOR_BOE_ALLOCATION = colors.HexColor('#d4efdf')
     COLOR_CHILD = colors.HexColor('#f4f6f7')
     COLOR_ALLOT = colors.HexColor('#fef9e7')
+    COLOR_TRADE_PURCHASE = colors.HexColor('#eaf2f8')
     COLOR_TRADE = colors.HexColor('#f4ecf7')
     COLOR_FINAL = colors.HexColor('#2c3e50')
     COLOR_MISMATCH = colors.HexColor('#f5b7b1')
     COLOR_HDR = colors.HexColor('#1a1a1a')
     ROW_KIND_COLORS = {
-        'opening': COLOR_OPENING, 'boe': COLOR_BOE, 'boe_allocation': COLOR_BOE_ALLOCATION,
-        'allotment': COLOR_ALLOT, 'trade': COLOR_TRADE,
+        'opening': COLOR_OPENING, 'boe': COLOR_BOE,
+        'allotment': COLOR_ALLOT, 'trade_purchase': COLOR_TRADE_PURCHASE, 'trade': COLOR_TRADE,
     }
     child_cell_style = ParagraphStyle('fl_child_cell', parent=cell_style, textColor=colors.HexColor('#555555'))
     child_cell_style_r = ParagraphStyle('fl_child_cell_r', parent=child_cell_style, alignment=TA_RIGHT)
@@ -153,6 +153,14 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
 
     ext_map = boe_external_invoice_map(license_obj)
     ledger_rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj, alloc_map, ext_map)
+
+    if not summary['has_trading_activity']:
+        # No Purchase or Sale trade at all — this section adds nothing over
+        # the (unmodified) Customs Ledger below, so it's omitted from the
+        # PDF entirely, matching the UI. `summary` is still returned in
+        # full so `_build_final_reconciliation_elements` (called by the
+        # caller with this exact return value) keeps working unchanged.
+        return [], summary
 
     header_row = [
         'Sr', 'Txn Date', 'Txn Type', 'Doc Number', 'BOE Number', 'BOE Date',
@@ -238,7 +246,23 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
         ]))
         return bar
 
-    elements = [section_bar('LICENCE FINANCIAL LEDGER'), Spacer(1, 3), ledger_table, Spacer(1, 6)]
+    elements = [section_bar('LICENCE FINANCIAL LEDGER'), Spacer(1, 3)]
+
+    warning = summary['missing_purchase_warning']
+    if warning['show_warning']:
+        warning_style = ParagraphStyle(
+            'fl_warning', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold',
+            textColor=colors.HexColor('#7d6608'), alignment=TA_CENTER,
+        )
+        warning_bar = Table([[Paragraph(f"⚠ {warning['message']}", warning_style)]], colWidths=[sum(col_w)])
+        warning_bar.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fef9e7')),
+            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#f1c40f')),
+            ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements += [warning_bar, Spacer(1, 4)]
+
+    elements += [ledger_table, Spacer(1, 6)]
 
     # 3. FINANCIAL SUMMARY & RECONCILIATION
     summary_style = ParagraphStyle('fs_lbl', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold')
@@ -251,8 +275,10 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
     if summary.get('total_invoice_allocation_debit', Decimal('0.00')) > Decimal('0.00'):
         summary_rows.append(['Total Invoice Allocation Debits', f"${fmt_money(summary['total_invoice_allocation_debit'])}"])
     summary_rows.append(['Outstanding Active Allotments', f"${fmt_money(summary['total_allotment_debit'])}"])
+    if summary.get('total_purchase_credit', Decimal('0.00')) > Decimal('0.00'):
+        summary_rows.append(['Total Purchase Credits', f"${fmt_money(summary['total_purchase_credit'])}"])
     if summary['total_trade_debit'] > Decimal('0.00'):
-        summary_rows.append(['Total Unmatched Trade (Sold) Debits', f"${fmt_money(summary['total_trade_debit'])}"])
+        summary_rows.append(['Total Trade (Sold) Debits', f"${fmt_money(summary['total_trade_debit'])}"])
     summary_rows += [
         ['Current Available Balance', f"${fmt_money(summary['computed_balance'])}"],
         ['Licence Balance Engine', f"${fmt_money(summary['engine_balance'])}"],

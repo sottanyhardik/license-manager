@@ -172,7 +172,8 @@ class TestLicenseBalanceCalculator(TestCase):
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('1000.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0):
+             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
+             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
@@ -188,7 +189,8 @@ class TestLicenseBalanceCalculator(TestCase):
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('100.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0):
+             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
+             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
@@ -204,7 +206,8 @@ class TestLicenseBalanceCalculator(TestCase):
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('500.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0):
+             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
+             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
@@ -220,7 +223,8 @@ class TestLicenseBalanceCalculator(TestCase):
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('1000.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0):
+             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
+             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
@@ -240,7 +244,8 @@ class TestLicenseBalanceCalculator(TestCase):
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('100.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
              patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0):
+             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
+             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
@@ -570,7 +575,8 @@ class TestEdgeCases(TestCase):
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=large_value), \
              patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=DEC_0), \
              patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0):
+             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
+             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
 
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
             assert result == large_value
@@ -583,7 +589,8 @@ class TestEdgeCases(TestCase):
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=small_value), \
              patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=DEC_0), \
              patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0):
+             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
+             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
 
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
             assert result == small_value
@@ -793,3 +800,70 @@ class TestCalculateDebitLineLevelExclusion(DjangoTestCase):
             [license_obj.id]
         )
         assert batched_debit.get(license_obj.id, DEC_0) == Decimal("400.00")
+
+    def test_debit_excluded_when_linked_boe_cif_mismatches_trade_line(self):
+        """
+        Real-bug regression: a BOE tagged to a SALE trade (`.boes`) whose
+        CIF does NOT match the trade line's CIF within
+        `settings.RECONCILIATION_CIF_TOLERANCE` used to double-debit (the
+        BOE's own row counted in full via `calculate_debit()` AND the trade
+        line counted in full via `calculate_trade()`, since
+        `reconcile_trade_boe_links` classifies this as `"mismatch"` and
+        deliberately does not auto-migrate it).
+
+        Per the Financial Ledger's accounting-vs-reconciliation separation
+        (see `_compute_linked_boe_row_ids`'s docstring), a linked BOE is
+        now excluded in FULL regardless of the mismatch -- the invoice
+        supersedes it. The mismatch itself is surfaced as a warning on the
+        Financial Ledger's "Licence Trade (Sold)" row, never as a second
+        debit.
+        """
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj, serial_number=1)
+        boe = self._make_boe(company)
+        debit_row = self._make_debit_row(boe, item, cif_fc=Decimal("1000.00"))
+        trade = self._make_sale_trade(company, boes=[boe])
+        # 10.00 CIF difference -- beyond the 1.00 default tolerance, so
+        # this is a "mismatch", not an "auto_migrated" clean match.
+        trade_line = self._make_trade_line(trade, item, cif_fc=Decimal("990.00"))
+
+        debit = LicenseBalanceCalculator.calculate_debit(license_obj)
+        trade_total = LicenseBalanceCalculator.calculate_trade(license_obj)
+
+        assert debit == DEC_0, (
+            "A BOE tagged to a sale trade must be excluded in full even "
+            "when its CIF doesn't cleanly match the invoice -- the "
+            "mismatch is a reconciliation signal, not a second debit"
+        )
+        assert trade_total == Decimal("990.00")
+
+        # No formal allocation nor a persisted write happened -- this is
+        # computed live from the `.boes` tag alone (dry-run reconciliation).
+        from apps.reconciliation.models import InvoiceBOEAllocation
+        assert not InvoiceBOEAllocation.objects.filter(row_details=debit_row).exists()
+
+        batched_debit = LicenseBalanceCalculator.calculate_debit_for_licenses([license_obj.id])
+        assert batched_debit.get(license_obj.id, DEC_0) == DEC_0
+
+    def test_debit_excluded_for_all_candidates_when_ambiguous(self):
+        """A BOE tagged to a trade that matches MORE THAN ONE candidate
+        RowDetails row for the same item (ambiguous -- reconcile_trade_boe_
+        links can't auto-select) still excludes ALL candidates in full,
+        each capped at its own cif_fc -- the invoice supersedes every
+        linked BOE, not just an unambiguous single one."""
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj, serial_number=1)
+        boe1 = self._make_boe(company)
+        boe2 = self._make_boe(company)
+        self._make_debit_row(boe1, item, cif_fc=Decimal("500.00"))
+        self._make_debit_row(boe2, item, cif_fc=Decimal("500.00"))
+        trade = self._make_sale_trade(company, boes=[boe1, boe2])
+        self._make_trade_line(trade, item, cif_fc=Decimal("1000.00"))
+
+        debit = LicenseBalanceCalculator.calculate_debit(license_obj)
+        trade_total = LicenseBalanceCalculator.calculate_trade(license_obj)
+
+        assert debit == DEC_0
+        assert trade_total == Decimal("1000.00")

@@ -66,8 +66,13 @@ class LicenseOverviewAllotmentsViewTests(LicenseBalanceLedgerFixtureMixin, TestC
         license_obj = self.make_license(company)
         item = self.make_item(license_obj, 1)
 
-        boe_allotment = self.make_allotment(company, is_boe=True)
+        # Deliberately does NOT set `is_boe=True` — status is now derived
+        # from the REAL `BillOfEntryModel.allotment` M2M link, not that
+        # hand-maintained cache boolean (found stale at real-world scale).
+        boe_allotment = self.make_allotment(company)
         self.make_allotment_item(boe_allotment, item, cif_fc=Decimal("100.00"))
+        boe = self.make_boe(company)
+        boe.allotment.add(boe_allotment)
 
         allotted_allotment = self.make_allotment(company, is_allotted=True)
         self.make_allotment_item(allotted_allotment, item, cif_fc=Decimal("100.00"))
@@ -88,7 +93,7 @@ class LicenseOverviewAllotmentsViewTests(LicenseBalanceLedgerFixtureMixin, TestC
         item_small = self.make_item(license_small, 1)
         self._make_n_allotments(license_small, company_small, item_small, 10)
 
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(5):
             resp_small = self.client.get(f"/api/licenses/{license_small.id}/overview-allotments/")
         self.assertEqual(resp_small.status_code, 200, resp_small.data)
         self.assertEqual(len(resp_small.data), 10)
@@ -98,7 +103,7 @@ class LicenseOverviewAllotmentsViewTests(LicenseBalanceLedgerFixtureMixin, TestC
         item_large = self.make_item(license_large, 1)
         self._make_n_allotments(license_large, company_large, item_large, 50)
 
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(5):
             resp_large = self.client.get(f"/api/licenses/{license_large.id}/overview-allotments/")
         self.assertEqual(resp_large.status_code, 200, resp_large.data)
         self.assertEqual(len(resp_large.data), 50)

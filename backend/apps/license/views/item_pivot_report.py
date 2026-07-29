@@ -437,7 +437,12 @@ class ItemPivotReportView(APIView):
         cond_pools_by_license = compute_condition_pools_bulk([_lo.id for _lo in valid_licenses])
 
         # Fix #2: batch AllotmentItems query — was 1 query PER licence (N+1).
-        # One query returns cif_fc sums keyed by license_id.
+        # One query returns cif_fc sums keyed by license_id. NOTE: this is a
+        # DFIA-specific "Alloted CIF" column (`is_allotted=True` is the DFIA
+        # allotment flag, see AllotmentModel's help_text) — a narrower,
+        # separate metric from the shared Balance CIF's allotment component
+        # (`LicenseBalanceCalculator.calculate_allotment`), not a duplicate
+        # of it; left as-is.
         from apps.allotment.models import AllotmentItems as _AllotmentItems
         _license_ids = [_lo.id for _lo in valid_licenses]
         alloted_cif_by_license: dict = defaultdict(lambda: Decimal('0'))
@@ -448,6 +453,16 @@ class ItemPivotReportView(APIView):
         ).values('item__license_id', 'cif_fc'):
             if _row['cif_fc'] is not None:
                 alloted_cif_by_license[_row['item__license_id']] += Decimal(str(_row['cif_fc']))
+
+        # Balance CIF must be identical everywhere in the app — read LIVE via
+        # the shared `LicenseBalanceCalculator` (same batched method the
+        # License List view uses), never the denormalized `balance_cif`
+        # column directly, which is only refreshed by a background task/
+        # manual trigger and can go stale relative to the live calculation
+        # (e.g. right after a Balance Engine formula change, or any edit
+        # that doesn't happen to fire a recalculation signal).
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        live_balance_by_license = LicenseBalanceCalculator.calculate_balance_for_licenses(_license_ids)
 
         # Build license data with item columns, grouped by norm first, then notification
         # (defaultdict is imported at module level).
@@ -460,6 +475,7 @@ class ItemPivotReportView(APIView):
                 document_types=doc_types_by_license.get(license_obj.id, frozenset()),
                 condition_pools=cond_pools_by_license.get(license_obj.id, {}),
                 alloted_cif=alloted_cif_by_license.get(license_obj.id, Decimal('0')),
+                balance_cif=live_balance_by_license.get(license_obj.id, Decimal('0')),
             )
 
             if license_row:
@@ -587,7 +603,7 @@ class ItemPivotReportView(APIView):
 
     def _build_license_row(self, license_obj: LicenseDetailsModel, all_items: List[tuple],
                            item_plan_totals=None, document_types=None,
-                           condition_pools=None, alloted_cif=None) -> Dict[str, Any]:
+                           condition_pools=None, alloted_cif=None, balance_cif=None) -> Dict[str, Any]:
         """
         Build a single license row with item columns.
 
@@ -725,10 +741,18 @@ class ItemPivotReportView(APIView):
                     if item.id not in restriction_groups[restriction_key]['item_ids']:
                         restriction_groups[restriction_key]['item_ids'].append(item.id)
 
-        # Calculate available CIF within restriction for each group
-        # Use stored balance_cif field instead of property to avoid extra queries
-        # Convert to Decimal to handle potential float value from database
-        balance_cif = Decimal(str(license_obj.balance_cif)) if license_obj.balance_cif is not None else Decimal('0')
+        # Calculate available CIF within restriction for each group.
+        # `balance_cif` is pre-computed LIVE by `generate_report` in a single
+        # batched `calculate_balance_for_licenses` call (the same shared
+        # Balance Engine used everywhere else) and passed in here — never
+        # the denormalized `license_obj.balance_cif` column directly, which
+        # is only refreshed by a background task/manual trigger and can go
+        # stale. Standalone callers (balance_cif=None) fall back to a live
+        # per-licence calculation so behaviour is unchanged outside the main
+        # report path — see `alloted_cif`'s identical fallback above.
+        if balance_cif is None:
+            from apps.license.services.balance_calculator import LicenseBalanceCalculator
+            balance_cif = LicenseBalanceCalculator.calculate_balance(license_obj)
         for group_name, group_data in restriction_groups.items():
             if group_data['restriction_percentage'] and total_cif > 0:
                 # Convert restriction_percentage to Decimal to avoid float * Decimal error

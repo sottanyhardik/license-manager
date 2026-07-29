@@ -693,6 +693,19 @@ def build_balance_pdf_response(license_obj, request):
     elements.append(title)
     elements.append(Spacer(1, 3))
 
+    # Computed ONCE, up front, and reused everywhere this PDF shows "Balance
+    # CIF" (header, Export Items section, BOE/Allotments summary, Balance
+    # Quantity summary) — never re-read from the (possibly stale)
+    # denormalized `license_obj.balance_cif` field, so the same document
+    # can never show two different Balance CIF figures. `_build_financial_
+    # ledger_elements` below computes this exact same value internally as
+    # `engine_balance`; reusing it here instead of a second standalone call
+    # keeps this to the one canonical `LicenseBalanceCalculator.
+    # calculate_balance()` computation for the whole PDF.
+    alloc_map = _boe_invoice_allocation_map(license_obj)
+    ledger_elements, ledger_summary = _build_financial_ledger_elements(license_obj, alloc_map)
+    live_balance_cif = ledger_summary['engine_balance']
+
     # Add license header information split into 2 rows for clarity
     # Check if license has specific document types
     has_tl = license_obj.license_documents.filter(type='TRANSFER LETTER').exists()
@@ -722,7 +735,7 @@ def build_balance_pdf_response(license_obj, request):
         # Row 2: Values
         [
             license_obj.purchase_status or '-',
-            f"{float(license_obj.balance_cif or 0):.2f}",
+            f"{float(live_balance_cif):.2f}",
             license_obj.get_norm_class or '-',
             '',
             Paragraph(str(license_obj.latest_transfer) if license_obj.latest_transfer else '-', styles['Normal'])
@@ -762,8 +775,7 @@ def build_balance_pdf_response(license_obj, request):
 
     # 2. Financial Licence Ledger (NEW) — bank-statement style CIF
     # reconciliation, inserted before the existing Customs Ledger below.
-    alloc_map = _boe_invoice_allocation_map(license_obj)
-    ledger_elements, ledger_summary = _build_financial_ledger_elements(license_obj, alloc_map)
+    # (computed up front — see `live_balance_cif` above)
     elements.extend(ledger_elements)
 
     # 4. Existing Customs Ledger — Export Items Section
@@ -787,7 +799,7 @@ def build_balance_pdf_response(license_obj, request):
             export_data.append([
                 Paragraph(item_desc, styles['Normal']),
                 f"{float(item.cif_fc or item.fob_fc or 0):.2f}",
-                f"{float(license_obj.balance_cif or 0):.2f}"
+                f"{float(live_balance_cif):.2f}"
             ])
 
         export_table = Table(export_data, colWidths=[185*mm, 45*mm, 45*mm])
@@ -1162,7 +1174,7 @@ def build_balance_pdf_response(license_obj, request):
         row_colors.append(colors.HexColor('#f2f2f2'))
 
         # ── License info mini-header (License No | License Date | Total CIF) ──
-        total_license_cif = total_cif + float(license_obj.balance_cif or 0)
+        total_license_cif = total_cif + float(live_balance_cif)
         info_style = ParagraphStyle('info', parent=styles['Normal'], fontSize=8, leading=11,
                                     textColor=colors.white, fontName='Helvetica-Bold')
         def IP(label, value):
@@ -1234,7 +1246,7 @@ def build_balance_pdf_response(license_obj, request):
 
     # ── Balance Summary Table ─────────────────────────────────────────────
     if _bal_agg:
-        total_bal_cif_fc = float(license_obj.balance_cif or 0)
+        total_bal_cif_fc = float(live_balance_cif)
         COLOR_YELLOW = colors.HexColor('#ffff00')
 
         # "Summary (Balance Quantity)" section header
@@ -1268,7 +1280,7 @@ def build_balance_pdf_response(license_obj, request):
         def BY(text):   # yellow-cell (black bold)
             return Paragraph(str(text), Pb_yel)
 
-        _license_balance = float(license_obj.get_balance_cif or 0)
+        _license_balance = float(live_balance_cif)
         bal_table_data = [
             # Row 0: cols 0-3 merged "BALANCE CIF $" | col 4 = total (yellow)
             [BH('BALANCE CIF $'), '', '', '', BY(f"{total_bal_cif_fc:,.2f}")],

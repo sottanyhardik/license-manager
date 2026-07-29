@@ -61,13 +61,19 @@ def get_overview_counts(license_obj) -> Dict[str, Any]:
     total_boes = RowDetails.objects.filter(sr_number__license=license_obj).aggregate(
         n=Count("bill_of_entry", distinct=True)
     )["n"]
-    # Only count allotments NOT already linked to a BOE (`is_boe=True` means
-    # the allotment has been consumed into a BOE elsewhere — see
-    # `license_overview_allotments.py::_allotment_status`'s "Linked to BOE"
-    # status, same field). `AllotmentModel`/`AllotmentItems` have no
+    # Only count allotments NOT already linked to a BOE — checked against the
+    # REAL `BillOfEntryModel.allotment` M2M relationship, not the hand-
+    # maintained `AllotmentModel.is_boe` cache boolean, which has been found
+    # stale at real-world scale (allotments linked via the M2M with is_boe
+    # still False — see `LicenseBalanceCalculator.get_allotment_rows`'s
+    # docstring for the same fix applied to the Balance Engine/Customs
+    # Ledger). `.distinct()` on the grouping column already makes this safe
+    # against the one-row-per-linked-BOE join fan-out `isnull=True` doesn't
+    # multiply rows for (a NULL match is always exactly one row), so no
+    # `Exists()` is needed here. `AllotmentModel`/`AllotmentItems` have no
     # soft-delete field to additionally exclude.
     total_allotments = (
-        AllotmentItems.objects.filter(item__license=license_obj, allotment__is_boe=False)
+        AllotmentItems.objects.filter(item__license=license_obj, allotment__bill_of_entry__isnull=True)
         .values("allotment")
         .distinct()
         .count()

@@ -524,6 +524,104 @@ class CustomsLedgerTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixture
             Decimal("160000.00"),
         )
 
+    def test_boe_tagged_allotment_never_shown_as_pending_and_never_double_deducted(self):
+        """
+        An allotment already tagged to a BOE via the REAL `BillOfEntryModel.
+        allotment` M2M relationship (set by the BOE form's allotment picker,
+        `apps/bill_of_entry/serializers.py`) must NOT appear as a "Pending
+        Allotment" in the Customs Ledger, and its CIF must not reduce
+        `running` a second time — the BOE's own debit (via its `RowDetails`
+        row) is the sole, authoritative customs movement for that
+        utilisation. Reuses `get_allotment_rows()`'s existing `Exists()`
+        linked-BOE exclusion (`balance_calculator.py`) — no new matching
+        logic.
+
+        Deliberately does NOT set `AllotmentModel.is_boe=True` — that hand-
+        maintained cache boolean has been found stale at real-world scale
+        (allotments linked via the real M2M with `is_boe` still `False`),
+        which is exactly the bug this test guards against; the exclusion
+        must work from the real relationship alone.
+        """
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+
+        item = self.make_item(license_obj, 1)
+        boe = self.make_boe(company, number="9000010")
+        self.make_debit_row(boe, item, cif_fc=Decimal("30000.00"), qty=Decimal("300.000"))
+
+        allotment = AllotmentModel.objects.create(company=company, item_name="Test Allotment", is_boe=False)
+        boe.allotment.add(allotment)
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("20000.00"), cif_inr=Decimal("1690000.00"),
+            qty=Decimal("200.000"),
+        )
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
+
+        self.assertEqual([r for r in rows if r["row_kind"] == "customs_pending_allotment"], [])
+        self.assertEqual(summary["total_pending_allotment_cif"], DEC_0)
+        # Only the BOE's own 30,000 debit reduces the balance — the tagged
+        # allotment's 20,000 is never deducted a second time.
+        self.assertEqual(summary["computed_balance"], Decimal("70000.00"))  # 100000 - 30000
+
+    def test_unlinked_allotment_still_shown_as_pending_in_customs_ledger(self):
+        """Sanity check for the above: an allotment with NO BOE association
+        at all must still appear as a real outstanding commitment — the
+        exclusion must be specific to linked allotments, not blanket."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+
+        item = self.make_item(license_obj, 1)
+        allotment = AllotmentModel.objects.create(company=company, item_name="Test Allotment", is_boe=False)
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("20000.00"), cif_inr=Decimal("1690000.00"),
+            qty=Decimal("200.000"),
+        )
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
+
+        pending_rows = [r for r in rows if r["row_kind"] == "customs_pending_allotment"]
+        self.assertEqual(len(pending_rows), 1)
+        self.assertEqual(pending_rows[0]["debit"], Decimal("20000.00"))
+        self.assertEqual(summary["total_pending_allotment_cif"], Decimal("20000.00"))
+        self.assertEqual(summary["computed_balance"], Decimal("80000.00"))  # 100000 - 20000
+
+    def test_partially_boe_allocated_allotment_only_deducts_remainder_once(self):
+        """An allotment PARTLY consumed by a formal `BOEAllotmentAllocation`
+        (not `is_boe`-tagged) must show only its unallocated remainder as
+        Pending — the allocated portion is never double-deducted, and
+        nothing is silently lost either."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+
+        item = self.make_item(license_obj, 1)
+        boe = self.make_boe(company, number="9000011")
+        row = self.make_debit_row(boe, item, cif_fc=Decimal("10000.00"), qty=Decimal("100.000"))
+        allotment = AllotmentModel.objects.create(company=company, item_name="Test Allotment", is_boe=False)
+        allotment_item = AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("20000.00"), cif_inr=Decimal("1690000.00"),
+            qty=Decimal("200.000"),
+        )
+        create_boe_allotment_allocation(
+            row, allotment_item, qty=Decimal("100.000"), cif_fc=Decimal("10000.00"), cif_inr=Decimal("845000.00"),
+            user=None,
+        )
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
+
+        pending_rows = [r for r in rows if r["row_kind"] == "customs_pending_allotment"]
+        self.assertEqual(len(pending_rows), 1)
+        self.assertEqual(pending_rows[0]["debit"], Decimal("10000.00"))  # 20000 - 10000 allocated
+        self.assertEqual(summary["total_pending_allotment_cif"], Decimal("10000.00"))
+        # 100000 - 10000 (BOE) - 10000 (allotment remainder) = 80000
+        self.assertEqual(summary["computed_balance"], Decimal("80000.00"))
+
 
 class TimelineTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase):
     """`build_timeline` must reflect ONLY real persisted records — never a

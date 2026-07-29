@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import Case, DecimalField, F, OuterRef, Subquery, Sum, Value, When
+from django.db.models import Case, DecimalField, Exists, F, OuterRef, Subquery, Sum, Value, When
 from django.db.models.functions import Coalesce, Least, Greatest
 
 from apps.core.constants import DEC_0, DEBIT
@@ -359,21 +359,31 @@ class LicenseBalanceCalculator:
         this queryset to `contributed > 0` is precisely "no BOE linked OR
         remaining allocation exists".
 
-        `contributed` is forced to 0 whenever the parent `AllotmentModel.
-        is_boe` is True, REGARDLESS of whether a `BOEAllotmentAllocation`
-        row exists yet — this is the coarse, binary signal the pre-Phase-A
-        design used (`allotment__bill_of_entry__isnull=True`, see below) and
-        it must still fully exclude, on top of (not replaced by) the finer
-        BOEAllotmentAllocation-driven partial exclusion: `is_boe` is set the
-        moment a BOE is tagged to the allotment via the BOE form's picker
-        (`apps/bill_of_entry/serializers.py`), which can happen well before
-        (or entirely without) anyone creating the matching
-        `BOEAllotmentAllocation` ledger row. Without this, an allotment
-        tagged to a BOE but not yet formally allocated silently contributes
-        its FULL cif_fc as an "outstanding commitment" even though the
-        underlying goods have already been debited against the licence via
-        that BOE's own `RowDetails` row — double-counting the same physical
-        import once as a pending allotment and once as a BOE debit.
+        `contributed` is forced to 0 whenever the parent `AllotmentModel` has
+        ANY linked BOE at all (an `Exists()` check against the real
+        `BillOfEntryModel.allotment` M2M relationship set by the BOE form's
+        allotment picker, `apps/bill_of_entry/serializers.py`), REGARDLESS of
+        whether a `BOEAllotmentAllocation` row exists yet — this must still
+        fully exclude, on top of (not replaced by) the finer
+        BOEAllotmentAllocation-driven partial exclusion below.
+
+        This checks the REAL relationship rather than `AllotmentModel.
+        is_boe` (a hand-maintained cache boolean set/cleared alongside the
+        M2M by that same serializer) — `is_boe` has been found stale at
+        real-world scale (thousands of allotments linked to a BOE via the
+        M2M with `is_boe` still `False`), which silently let an allotment
+        show as an outstanding "Pending Allotment" AND get debited a second
+        time even though the linked BOE's own `RowDetails` row already
+        debits the identical utilisation — see `build_customs_ledger`'s
+        "Pending Allotment" rows / `build_financial_ledger`'s "Active
+        Allotment" rows, both driven by this same annotation.
+
+        Without this exclusion, an allotment tagged to a BOE but not yet
+        formally allocated silently contributes its FULL cif_fc as an
+        "outstanding commitment" even though the underlying goods have
+        already been debited against the licence via that BOE's own
+        `RowDetails` row — double-counting the same physical import once as
+        a pending allotment and once as a BOE debit.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -381,6 +391,7 @@ class LicenseBalanceCalculator:
         Returns:
             Annotated AllotmentItems queryset for the license.
         """
+        from apps.bill_of_entry.models import BillOfEntryModel
         from apps.reconciliation.models import BOEAllotmentAllocation
 
         allocated_subquery = (
@@ -393,6 +404,16 @@ class LicenseBalanceCalculator:
             .values("allotment_item_id")
             .annotate(total=Sum("allocated_cif_fc"))
             .values("total")
+        )
+        # `Exists()` rather than a `Case`/`When` over the `allotment__
+        # bill_of_entry` M2M lookup directly: the latter would add a JOIN to
+        # the through table, duplicating this row once per linked BOE (an
+        # allotment can legitimately be linked to more than one) — corrupting
+        # `calculate_allotment()`'s `Sum('contributed')` aggregate. `Exists`
+        # is a correlated subquery, never joined into the outer FROM clause,
+        # so it can't duplicate rows regardless of how many BOEs are linked.
+        has_linked_boe = Exists(
+            BillOfEntryModel.objects.filter(allotment=OuterRef("allotment_id"))
         )
 
         return (
@@ -411,7 +432,7 @@ class LicenseBalanceCalculator:
             )
             .annotate(
                 contributed=Case(
-                    When(allotment__is_boe=True, then=Value(DEC_0)),
+                    When(has_linked_boe, then=Value(DEC_0)),
                     default=Greatest(
                         F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
                     ),
@@ -626,6 +647,7 @@ class LicenseBalanceCalculator:
         ids = list(license_ids)
         if not ids:
             return {}
+        from apps.bill_of_entry.models import BillOfEntryModel
         from apps.reconciliation.models import BOEAllotmentAllocation
 
         allocated_subquery = (
@@ -638,6 +660,13 @@ class LicenseBalanceCalculator:
             .values("allotment_item_id")
             .annotate(total=Sum("allocated_cif_fc"))
             .values("total")
+        )
+        # Same `Exists()` linked-BOE exclusion as `get_allotment_rows()` —
+        # see that method's docstring for why this must be an `Exists()`
+        # subquery, not a `Case`/`When` over the M2M lookup directly (which
+        # would duplicate rows and corrupt this `Sum('contributed')`).
+        has_linked_boe = Exists(
+            BillOfEntryModel.objects.filter(allotment=OuterRef("allotment_id"))
         )
 
         rows = (
@@ -656,11 +685,10 @@ class LicenseBalanceCalculator:
                 matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
             )
             .annotate(
-                # Same is_boe binary exclusion as get_allotment_rows() — see
-                # that method's docstring. Kept in sync so batched (bulk
+                # Kept in sync with get_allotment_rows() so batched (bulk
                 # report) and single-license balances never diverge.
                 contributed=Case(
-                    When(allotment__is_boe=True, then=Value(DEC_0)),
+                    When(has_linked_boe, then=Value(DEC_0)),
                     default=Greatest(
                         F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
                     ),

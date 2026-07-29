@@ -96,8 +96,13 @@ class LicenseOverviewSummaryViewTests(LicenseBalanceLedgerFixtureMixin, TestCase
         unlinked = AllotmentModel.objects.create(company=company, item_name="Unlinked")
         AllotmentItems.objects.create(item=item, allotment=unlinked, cif_fc=Decimal("100.00"), qty=Decimal("10.000"))
 
-        linked = AllotmentModel.objects.create(company=company, item_name="Linked to BOE", is_boe=True)
+        # Deliberately does NOT set `is_boe=True` — exclusion is now based on
+        # the REAL `BillOfEntryModel.allotment` M2M link, not that hand-
+        # maintained cache boolean (found stale at real-world scale).
+        linked = AllotmentModel.objects.create(company=company, item_name="Linked to BOE")
         AllotmentItems.objects.create(item=item, allotment=linked, cif_fc=Decimal("200.00"), qty=Decimal("20.000"))
+        boe = self.make_boe(company)
+        boe.allotment.add(linked)
 
         resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
 

@@ -349,9 +349,14 @@ class LicenseBalanceCalculator:
     def get_allotment_rows(license_obj):
         """
         Annotated AllotmentItems queryset for a license: each row carries
-        `allocated` / `matched` / `contributed` annotations (see
+        `allocated` / `matched` / `contributed` (CIF) and `allocated_qty` /
+        `matched_qty` / `contributed_qty` (quantity) annotations (see
         `calculate_allotment`'s docstring for the allocation-driven
-        partial-exclusion business rule this implements).
+        partial-exclusion business rule this implements — the quantity
+        annotations are the exact same rule, applied to `qty`/`allocated_qty`
+        instead of `cif_fc`/`allocated_cif_fc`, so a licence item's Available
+        Quantity — see `get_outstanding_allotment_totals` — can never
+        structurally drift from the Balance Engine's own CIF figure).
 
         Factored out of `calculate_allotment` so the Financial Ledger PDF
         (services/exporters/license_balance_pdf.py) can render the exact
@@ -405,6 +410,17 @@ class LicenseBalanceCalculator:
             .annotate(total=Sum("allocated_cif_fc"))
             .values("total")
         )
+        allocated_qty_subquery = (
+            BOEAllotmentAllocation.objects.filter(
+                allotment_item_id=OuterRef("pk"),
+                status=BOEAllotmentAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+            .order_by()
+            .values("allotment_item_id")
+            .annotate(total=Sum("allocated_qty"))
+            .values("total")
+        )
         # `Exists()` rather than a `Case`/`When` over the `allotment__
         # bill_of_entry` M2M lookup directly: the latter would add a JOIN to
         # the through table, duplicating this row once per linked BOE (an
@@ -428,7 +444,17 @@ class LicenseBalanceCalculator:
                 )
             )
             .annotate(
+                allocated_qty=Coalesce(
+                    Subquery(allocated_qty_subquery, output_field=_ALLOCATION_DECIMAL_FIELD),
+                    Value(DEC_0),
+                    output_field=_ALLOCATION_DECIMAL_FIELD,
+                )
+            )
+            .annotate(
                 matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
+            )
+            .annotate(
+                matched_qty=Least(F("qty"), F("allocated_qty"), output_field=_ALLOCATION_DECIMAL_FIELD)
             )
             .annotate(
                 contributed=Case(
@@ -439,7 +465,49 @@ class LicenseBalanceCalculator:
                     output_field=_ALLOCATION_DECIMAL_FIELD,
                 )
             )
+            .annotate(
+                contributed_qty=Case(
+                    When(has_linked_boe, then=Value(DEC_0)),
+                    default=Greatest(
+                        F("qty") - F("matched_qty"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
+                    ),
+                    output_field=_ALLOCATION_DECIMAL_FIELD,
+                )
+            )
         )
+
+    @staticmethod
+    def get_outstanding_allotment_totals(import_item) -> tuple[Decimal, Decimal]:
+        """
+        `(outstanding_qty, outstanding_cif)` for ONE licence item — the
+        single source of truth for "Allotted Quantity"/"Allotted CIF" in the
+        Item Summary, the Balance Engine, and `apps.core.scripts.
+        calculate_balance`'s stored-field writer alike. Reuses
+        `get_allotment_rows()` verbatim (same `has_linked_boe`/partial-
+        allocation exclusion as the licence-level Balance Engine — a BOE-
+        linked allotment, fully or partially, is never counted here, and a
+        formally-allocated remainder is netted the same way).
+
+        Restricted to `AllotmentModel.type == 'AT'` — ARO-type allotments
+        are treated as already-debited (folded into "Debited", not
+        "Allotted") by `calculate_balance.py`'s existing AT/ARO split, which
+        this does not change.
+
+        Args:
+            import_item: LicenseImportItemsModel instance
+
+        Returns:
+            (outstanding_qty, outstanding_cif) as Decimals.
+        """
+        row = (
+            LicenseBalanceCalculator.get_allotment_rows(import_item.license)
+            .filter(item=import_item, allotment__type='AT')
+            .aggregate(
+                qty=Coalesce(Sum("contributed_qty"), Value(DEC_0), output_field=DecimalField()),
+                cif=Coalesce(Sum("contributed"), Value(DEC_0), output_field=DecimalField()),
+            )
+        )
+        return to_decimal(row["qty"], DEC_0), to_decimal(row["cif"], DEC_0)
 
     @staticmethod
     def calculate_allotment(license_obj) -> Decimal:
@@ -924,16 +992,12 @@ class ItemBalanceCalculator:
                 DEC_0
             )
 
-        # Add allotments to debit (only non-BOE allotments)
-        allotment = to_decimal(
-            AllotmentItems.objects.filter(
-                item=import_item,
-                allotment__bill_of_entry__isnull=True
-            ).aggregate(
-                Sum('cif_fc')
-            )['cif_fc__sum'],
-            DEC_0
-        )
+        # Add outstanding (BOE-unlinked) allotments to debit — reuses the
+        # SAME Balance Engine helper `calculate_available_quantity` below
+        # uses, rather than an independent `allotment__bill_of_entry__
+        # isnull=True` filter (the legacy, partial-allocation-unaware join
+        # check `get_allotment_rows`'s docstring documents replacing).
+        _allotted_qty, allotment = LicenseBalanceCalculator.get_outstanding_allotment_totals(import_item)
 
         total_debit = debit + allotment
 
@@ -957,18 +1021,26 @@ class ItemBalanceCalculator:
     @staticmethod
     def calculate_available_quantity(import_item) -> Decimal:
         """
-        Calculate available quantity for an import item.
-        
+        Available Quantity for an import item = current stored `quantity`
+        (NEVER `old_quantity` — see `apps.core.scripts.calculate_balance.
+        calculate_available_quantity`'s docstring for why that legacy
+        substitution was removed) − Debited − Outstanding (BOE-unlinked)
+        Allotted. The allotted term reuses `LicenseBalanceCalculator.
+        get_outstanding_allotment_totals` — the same Balance Engine
+        exclusion (`Exists()` against the real BOE↔allotment relationship,
+        plus `BOEAllotmentAllocation` partial-allocation netting) every
+        other consumer (Item Summary, Financial/Customs Ledger, the stored
+        `available_quantity` field) uses, so this can never structurally
+        drift from them.
+
         Args:
             import_item: LicenseImportItemsModel instance
-            
+
         Returns:
             Available quantity as Decimal
         """
-
         total_quantity = to_decimal(import_item.quantity, DEC_0)
 
-        # Sum debited quantities
         debited = to_decimal(
             RowDetails.objects.filter(
                 sr_number=import_item,
@@ -979,16 +1051,7 @@ class ItemBalanceCalculator:
             DEC_0
         )
 
-        # Sum allotted quantities (only non-BOE allotments)
-        allotted = to_decimal(
-            AllotmentItems.objects.filter(
-                item=import_item,
-                allotment__bill_of_entry__isnull=True
-            ).aggregate(
-                Sum('qty')
-            )['qty__sum'],
-            DEC_0
-        )
+        allotted, _allotted_cif = LicenseBalanceCalculator.get_outstanding_allotment_totals(import_item)
 
         available = total_quantity - debited - allotted
         return available if available >= DEC_0 else DEC_0

@@ -10,6 +10,9 @@ interface CustomsImportItem {
     quantity?: number | null;
     allotted_quantity?: number | null;
     debited_quantity?: number | null;
+    /** Informational only — from the Planning module (`plan_reporting.
+     * plan_map_for_import_items`), never a component of `available_quantity`. */
+    planned_quantity?: number | null;
     available_quantity?: number | null;
     cif_fc?: number | null;
     balance_cif_fc?: number | null;
@@ -27,7 +30,7 @@ function itemLabel(item: CustomsImportItem): string {
 }
 
 /**
- * Overview tab's Customs Ledger — Item Detail section.
+ * Overview tab's Customs Ledger — Item Detail ("Quantity Summary") section.
  *
  * `LicenseBalanceModal.tsx`'s Export/Import item tables are tightly coupled
  * to that modal's local inline-editing state (item tags, condition-type
@@ -35,7 +38,12 @@ function itemLabel(item: CustomsImportItem): string {
  * that state along would be a much larger refactor than this workspace
  * warrants. Per the brief's explicit fallback, this renders a simplified,
  * REAL (not placeholder) view of the same `licenses/{id}/` data: per-item
- * Available/Debited/Allotted/Balance CIF, read-only.
+ * Total/Debited/Allotted/Planned/Available Qty + Balance CIF, read-only.
+ *
+ * Available Qty = Total − Debited − Allotted (outstanding, BOE-unlinked
+ * only) — the same Balance Engine formula everywhere else in the app.
+ * Planned Qty is purely informational (from the Planning module) and never
+ * reduces Available Qty.
  *
  * Relocated (unchanged) from `pages/license-balance/`.
  */
@@ -68,8 +76,9 @@ export default function CustomsLedgerSection({ licenseId }: CustomsLedgerSection
                     <tr>
                         <th scope="col" className="px-3 py-2 text-left font-semibold">Item</th>
                         <th scope="col" className="px-3 py-2 text-right font-semibold">Total Qty</th>
-                        <th scope="col" className="px-3 py-2 text-right font-semibold">Allotted Qty</th>
                         <th scope="col" className="px-3 py-2 text-right font-semibold">Debited Qty</th>
+                        <th scope="col" className="px-3 py-2 text-right font-semibold">Allotted Qty</th>
+                        <th scope="col" className="px-3 py-2 text-right font-semibold" title="Informational only — never reduces Available Qty">Planned Qty</th>
                         <th scope="col" className="px-3 py-2 text-right font-semibold">Available Qty</th>
                         <th scope="col" className="px-3 py-2 text-right font-semibold">CIF FC</th>
                         <th scope="col" className="px-3 py-2 text-right font-semibold">Balance CIF FC</th>
@@ -78,7 +87,7 @@ export default function CustomsLedgerSection({ licenseId }: CustomsLedgerSection
                 <tbody>
                     {items.length === 0 && (
                         <tr>
-                            <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
+                            <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
                                 No import items on this licence.
                             </td>
                         </tr>
@@ -87,9 +96,10 @@ export default function CustomsLedgerSection({ licenseId }: CustomsLedgerSection
                         <tr key={item.id} className="border-t border-border/60">
                             <td className="px-3 py-2">{itemLabel(item)}</td>
                             <td className="px-3 py-2 text-right">{fmtNum(item.quantity)}</td>
-                            <td className="px-3 py-2 text-right">{fmtNum(item.allotted_quantity)}</td>
                             <td className="px-3 py-2 text-right">{fmtNum(item.debited_quantity)}</td>
-                            <td className="px-3 py-2 text-right">{fmtNum(item.available_quantity)}</td>
+                            <td className="px-3 py-2 text-right">{fmtNum(item.allotted_quantity)}</td>
+                            <td className="px-3 py-2 text-right text-muted-foreground">{fmtNum(item.planned_quantity)}</td>
+                            <td className="px-3 py-2 text-right font-medium">{fmtNum(item.available_quantity)}</td>
                             <td className="px-3 py-2 text-right">{fmtNum(item.cif_fc)}</td>
                             <td className="px-3 py-2 text-right font-medium">{fmtNum(item.balance_cif_fc)}</td>
                         </tr>

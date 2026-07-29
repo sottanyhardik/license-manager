@@ -142,6 +142,12 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     allotted_quantity = serializers.SerializerMethodField(read_only=True)
     allotted_value = serializers.SerializerMethodField(read_only=True)
 
+    # Informational only — reuses the Planning module's own calculation
+    # (`plan_reporting.plan_map_for_import_items`); never feeds into
+    # Available Quantity (see that field's docstring in
+    # `apps.core.scripts.calculate_balance.calculate_available_quantity`).
+    planned_quantity = serializers.SerializerMethodField(read_only=True)
+
     balance_cif_fc = serializers.SerializerMethodField(read_only=True)
 
     # Sum of SALE trade lines for this import item where the parent trade has
@@ -153,7 +159,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         model = LicenseImportItemsModel
         fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'items_detail', 'description', 'quantity',
                   'old_quantity', 'unit', 'cif_fc', 'cif_inr', 'available_quantity', 'available_value',
-                  'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value',
+                  'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value', 'planned_quantity',
                   'license_number', 'license_date', 'license_expiry_date',
                   'notification_number', 'exporter_name', 'notes', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
                   'is_restricted', 'condition_type', 'billed_no_boe']
@@ -234,6 +240,22 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
     def get_allotted_value(self, obj):
         return float(obj.allotted_value or 0)
+
+    def get_planned_quantity(self, obj):
+        """
+        Reuses `plan_reporting.plan_map_for_import_items` — never a second
+        planning calculation. `LicenseDetailsSerializer.to_representation`
+        batches this ONCE for every import item on the licence (see
+        `self.context['plan_map']`); a bare `LicenseImportItemSerializer`
+        used standalone falls back to a single-item call so behaviour is
+        unchanged outside the licence-detail response.
+        """
+        plan_map = self.context.get('plan_map')
+        if plan_map is None:
+            from apps.license.services.plan_reporting import plan_map_for_import_items
+            plan_map = plan_map_for_import_items([obj.id])
+        entry = plan_map.get(obj.id)
+        return float(entry['total_planned_quantity']) if entry else 0.0
 
     def get_billed_no_boe(self, obj):
         """
@@ -673,13 +695,24 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
                                                       required=required)
 
     def to_representation(self, instance) -> Dict[str, Any]:
-        rep = super().to_representation(instance)
-
         # Check if this is a list view
         request = self.context.get('request')
         is_list_view = request and hasattr(request, 'parser_context') and \
                        request.parser_context.get('view') and \
                        request.parser_context['view'].action == 'list'
+
+        # Batch this licence's Planned Quantity map ONCE (not once per
+        # import item) BEFORE nested serialization runs — same technique as
+        # `live_balance_map` for Balance CIF list views, just injected here
+        # since a single detail-view retrieve has no page_ids hook. List
+        # views never reach `LicenseImportItemSerializer` at all (`import_
+        # license_read` is popped in `__init__`), so this is skipped there.
+        if not is_list_view and 'plan_map' not in self.context:
+            from apps.license.services.plan_reporting import plan_map_for_import_items
+            item_ids = [item.id for item in instance.import_license.all()]
+            self.context['plan_map'] = plan_map_for_import_items(item_ids) if item_ids else {}
+
+        rep = super().to_representation(instance)
 
         if is_list_view:
             # For list view, add empty arrays for nested items (fields were removed in __init__)

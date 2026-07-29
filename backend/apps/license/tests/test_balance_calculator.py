@@ -75,7 +75,10 @@ class TestLicenseBalanceCalculator(TestCase):
             .prefetch_related.return_value = []
         mock_license = Mock()
         mock_queryset = Mock()
-        annotated = mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value.annotate.return_value
+        annotated = (
+            mock_queryset.annotate.return_value.annotate.return_value
+            .annotate.return_value.annotate.return_value
+        )
         annotated.aggregate.return_value = {'total': Decimal('300.00')}
         mock_row_details.objects.filter.return_value = mock_queryset
 
@@ -98,7 +101,10 @@ class TestLicenseBalanceCalculator(TestCase):
             .prefetch_related.return_value = []
         mock_license = Mock()
         mock_queryset = Mock()
-        annotated = mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value.annotate.return_value
+        annotated = (
+            mock_queryset.annotate.return_value.annotate.return_value
+            .annotate.return_value.annotate.return_value
+        )
         annotated.aggregate.return_value = {'total': DEC_0}
         mock_row_details.objects.filter.return_value = mock_queryset
 
@@ -119,7 +125,10 @@ class TestLicenseBalanceCalculator(TestCase):
         # Setup mock
         mock_license = Mock()
         mock_queryset = Mock()
-        annotated = mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value
+        annotated = (
+            mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value
+            .annotate.return_value.annotate.return_value.annotate.return_value
+        )
         annotated.aggregate.return_value = {'total': Decimal('200.00')}
         mock_allotment_items.objects.filter.return_value = mock_queryset
 
@@ -154,7 +163,10 @@ class TestLicenseBalanceCalculator(TestCase):
         # Setup mock
         mock_license = Mock()
         mock_queryset = Mock()
-        annotated = mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value
+        annotated = (
+            mock_queryset.annotate.return_value.annotate.return_value.annotate.return_value
+            .annotate.return_value.annotate.return_value.annotate.return_value
+        )
         annotated.aggregate.return_value = {'total': DEC_0}
         mock_allotment_items.objects.filter.return_value = mock_queryset
 
@@ -258,8 +270,7 @@ class TestItemBalanceCalculator(TestCase):
     """Tests for ItemBalanceCalculator class"""
 
     @patch('apps.license.services.balance_calculator.RowDetails')
-    @patch('apps.license.services.balance_calculator.AllotmentItems')
-    def test_calculate_item_credit_debit_with_item_cif(self, mock_allotment, mock_row_details):
+    def test_calculate_item_credit_debit_with_item_cif(self, mock_row_details):
         """Should calculate credit/debit using specific item CIF"""
         # Setup mock
         mock_item = Mock()
@@ -271,13 +282,15 @@ class TestItemBalanceCalculator(TestCase):
         mock_debit_qs.aggregate.return_value = {'cif_fc__sum': Decimal('100.00')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
-        # Mock allotment query
-        mock_allotment_qs = Mock()
-        mock_allotment_qs.aggregate.return_value = {'cif_fc__sum': Decimal('50.00')}
-        mock_allotment.objects.filter.return_value = mock_allotment_qs
-
-        # Execute
-        credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
+        # Outstanding (BOE-unlinked) allotment total — now delegates to the
+        # shared Balance Engine helper rather than querying AllotmentItems
+        # directly (see `get_outstanding_allotment_totals`'s docstring).
+        with patch.object(
+            LicenseBalanceCalculator, 'get_outstanding_allotment_totals',
+            return_value=(Decimal('0'), Decimal('50.00')),
+        ):
+            # Execute
+            credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
 
         # Assert
         assert credit == Decimal('500.00')
@@ -285,8 +298,7 @@ class TestItemBalanceCalculator(TestCase):
 
     @patch('apps.license.services.balance_calculator.LicenseExportItemModel')
     @patch('apps.license.services.balance_calculator.RowDetails')
-    @patch('apps.license.services.balance_calculator.AllotmentItems')
-    def test_calculate_item_credit_debit_zero_cif(self, mock_allotment, mock_row_details, mock_export):
+    def test_calculate_item_credit_debit_zero_cif(self, mock_row_details, mock_export):
         """Should calculate using total export CIF when item CIF is zero"""
         # Setup mock
         mock_item = Mock()
@@ -303,21 +315,19 @@ class TestItemBalanceCalculator(TestCase):
         mock_debit_qs.aggregate.return_value = {'cif_fc__sum': Decimal('300.00')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
-        # Mock allotment query
-        mock_allotment_qs = Mock()
-        mock_allotment_qs.aggregate.return_value = {'cif_fc__sum': Decimal('100.00')}
-        mock_allotment.objects.filter.return_value = mock_allotment_qs
-
-        # Execute
-        credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
+        with patch.object(
+            LicenseBalanceCalculator, 'get_outstanding_allotment_totals',
+            return_value=(Decimal('0'), Decimal('100.00')),
+        ):
+            # Execute
+            credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
 
         # Assert
         assert credit == Decimal('1000.00')  # Total export CIF
         assert total_debit == Decimal('400.00')  # 300 + 100
 
     @patch('apps.license.services.balance_calculator.RowDetails')
-    @patch('apps.license.services.balance_calculator.AllotmentItems')
-    def test_calculate_item_credit_debit_no_debits(self, mock_allotment, mock_row_details):
+    def test_calculate_item_credit_debit_no_debits(self, mock_row_details):
         """Should handle zero debits"""
         # Setup mock
         mock_item = Mock()
@@ -329,13 +339,12 @@ class TestItemBalanceCalculator(TestCase):
         mock_debit_qs.aggregate.return_value = {'cif_fc__sum': None}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
-        # Mock allotment query
-        mock_allotment_qs = Mock()
-        mock_allotment_qs.aggregate.return_value = {'cif_fc__sum': None}
-        mock_allotment.objects.filter.return_value = mock_allotment_qs
-
-        # Execute
-        credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
+        with patch.object(
+            LicenseBalanceCalculator, 'get_outstanding_allotment_totals',
+            return_value=(DEC_0, DEC_0),
+        ):
+            # Execute
+            credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
 
         # Assert
         assert credit == Decimal('500.00')
@@ -368,8 +377,7 @@ class TestItemBalanceCalculator(TestCase):
             assert result == DEC_0
 
     @patch('apps.license.services.balance_calculator.RowDetails')
-    @patch('apps.license.services.balance_calculator.AllotmentItems')
-    def test_calculate_available_quantity(self, mock_allotment, mock_row_details):
+    def test_calculate_available_quantity(self, mock_row_details):
         """Should calculate available quantity"""
         # Setup mock
         mock_item = Mock()
@@ -380,20 +388,22 @@ class TestItemBalanceCalculator(TestCase):
         mock_debit_qs.aggregate.return_value = {'qty__sum': Decimal('300')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
-        # Mock allotted quantity
-        mock_allotment_qs = Mock()
-        mock_allotment_qs.aggregate.return_value = {'qty__sum': Decimal('200')}
-        mock_allotment.objects.filter.return_value = mock_allotment_qs
-
-        # Execute
-        result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
+        # Outstanding (BOE-unlinked) allotted quantity — now delegates to
+        # the shared Balance Engine helper (see
+        # `get_outstanding_allotment_totals`'s docstring) rather than
+        # querying AllotmentItems directly.
+        with patch.object(
+            LicenseBalanceCalculator, 'get_outstanding_allotment_totals',
+            return_value=(Decimal('200'), Decimal('0')),
+        ):
+            # Execute
+            result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
 
         # Assert
         assert result == Decimal('500')  # 1000 - 300 - 200
 
     @patch('apps.license.services.balance_calculator.RowDetails')
-    @patch('apps.license.services.balance_calculator.AllotmentItems')
-    def test_calculate_available_quantity_zero(self, mock_allotment, mock_row_details):
+    def test_calculate_available_quantity_zero(self, mock_row_details):
         """Should return zero when fully allocated"""
         # Setup mock
         mock_item = Mock()
@@ -404,13 +414,12 @@ class TestItemBalanceCalculator(TestCase):
         mock_debit_qs.aggregate.return_value = {'qty__sum': Decimal('600')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
-        # Mock allotted quantity
-        mock_allotment_qs = Mock()
-        mock_allotment_qs.aggregate.return_value = {'qty__sum': Decimal('500')}
-        mock_allotment.objects.filter.return_value = mock_allotment_qs
-
-        # Execute
-        result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
+        with patch.object(
+            LicenseBalanceCalculator, 'get_outstanding_allotment_totals',
+            return_value=(Decimal('500'), Decimal('0')),
+        ):
+            # Execute
+            result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
 
         # Assert
         assert result == DEC_0  # Should not go negative
@@ -867,3 +876,247 @@ class TestCalculateDebitLineLevelExclusion(DjangoTestCase):
 
         assert debit == DEC_0
         assert trade_total == Decimal("1000.00")
+
+
+class TestAvailableQuantityUsesCurrentQuantityNotOldQuantity(DjangoTestCase):
+    """
+    Real-DB regression tests for the removed `old_quantity` dependency.
+
+    Business rule under test: Available Quantity must always use the
+    licence item's CURRENT stored `quantity`, never the frozen `old_quantity`
+    snapshot — even for a restricted item under notification 019/2015 (the
+    one condition that used to trigger the `old_quantity` substitution in
+    `apps.core.scripts.calculate_balance.calculate_available_quantity`).
+    """
+
+    def _make_company(self):
+        return CompanyModel.objects.create(
+            iec=str(uuid.uuid4().int)[:10],
+            name="Amended Licence Exporter",
+        )
+
+    def _make_license(self, company, notification_number=None):
+        return LicenseDetailsModel.objects.create(
+            license_number="03" + str(uuid.uuid4().int)[:8],
+            license_date=datetime.now().date(),
+            license_expiry_date=datetime.now().date() + timedelta(days=365),
+            exporter=company,
+            notification_number=notification_number,
+        )
+
+    def _make_restricted_item(self, license_obj, quantity, old_quantity, sion_norm_class):
+        from apps.core.models import ItemNameModel
+
+        item = LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=1,
+            description="Amended Restricted Item",
+            quantity=quantity,
+            old_quantity=old_quantity,
+            available_quantity=quantity,
+        )
+        item_name = ItemNameModel.objects.create(
+            name=f"Restricted Item {uuid.uuid4().hex[:8]}",
+            sion_norm_class=sion_norm_class,
+            restriction_percentage=Decimal("5.00"),
+        )
+        item.items.add(item_name)
+        return item
+
+    def _make_debit_row(self, item, cif_fc, qty):
+        boe = BillOfEntryModel.objects.create(
+            company=item.license.exporter,
+            bill_of_entry_number=str(uuid.uuid4().int)[:9],
+            bill_of_entry_date=datetime.now().date(),
+            exchange_rate=Decimal("84.50"),
+        )
+        return RowDetails.objects.create(
+            bill_of_entry=boe,
+            sr_number=item,
+            transaction_type=DEBIT,
+            cif_inr=cif_fc * Decimal("84.5"),
+            cif_fc=cif_fc,
+            qty=qty,
+        )
+
+    def test_amended_licence_item_uses_current_quantity_not_old_quantity(self):
+        """
+        The exact reported bug: old_quantity=857, current quantity=2909.261
+        (the licence was amended, increasing this item's entitlement),
+        debited=857. The old branch computed `857 - 857 = 0` (wrong,
+        pinned to the pre-amendment ceiling); the correct answer reflects
+        the amendment: `2909.261 - 857 = 2052.261`.
+        """
+        from apps.core.models import NotificationNumber, SionNormClassModel, HeadSIONNormsModel
+        from apps.core.scripts.calculate_balance import calculate_available_quantity
+
+        notif = NotificationNumber.objects.create(code="019/2015", label="019/2015")
+        head_norm = HeadSIONNormsModel.objects.create(name="Test Head Norm E1")
+        norm_class = SionNormClassModel.objects.create(head_norm=head_norm, norm_class="E1", is_active=True)
+
+        company = self._make_company()
+        license_obj = self._make_license(company, notification_number=notif)
+        item = self._make_restricted_item(
+            license_obj, quantity=Decimal("2909.261"), old_quantity=Decimal("857.000"),
+            sion_norm_class=norm_class,
+        )
+        self._make_debit_row(item, cif_fc=Decimal("464.45"), qty=Decimal("857.000"))
+        item.refresh_from_db()
+
+        available = calculate_available_quantity(item)
+
+        # `round_decimal_down(..., 0)` floors to a whole number — pre-existing,
+        # unrelated rounding behaviour, unchanged by this fix.
+        assert available == Decimal("2052.00"), (
+            "Available Quantity must use the CURRENT quantity (2909.261), "
+            "never the frozen old_quantity (857) — even under notification "
+            "019/2015 with a restricted item"
+        )
+
+    def test_item_balance_calculator_agrees_with_core_script(self):
+        """`ItemBalanceCalculator.calculate_available_quantity` (the other,
+        historically-independent implementation) must land on the exact
+        same figure as the core-script writer for the identical amended-
+        licence scenario — single source of truth, not two formulas that
+        happen to agree only by coincidence."""
+        from apps.core.models import NotificationNumber, SionNormClassModel, HeadSIONNormsModel
+        from apps.core.scripts.calculate_balance import calculate_available_quantity
+
+        notif = NotificationNumber.objects.create(code="019/2015", label="019/2015")
+        head_norm = HeadSIONNormsModel.objects.create(name="Test Head Norm E1 (2)")
+        norm_class = SionNormClassModel.objects.create(head_norm=head_norm, norm_class="E1B", is_active=True)
+
+        company = self._make_company()
+        license_obj = self._make_license(company, notification_number=notif)
+        item = self._make_restricted_item(
+            license_obj, quantity=Decimal("14546.304"), old_quantity=Decimal("4288.000"),
+            sion_norm_class=norm_class,
+        )
+        self._make_debit_row(item, cif_fc=Decimal("49593.22"), qty=Decimal("6088.000"))
+        item.refresh_from_db()
+
+        core_script_result = calculate_available_quantity(item)
+        item_calculator_result = ItemBalanceCalculator.calculate_available_quantity(item)
+
+        # `calculate_available_quantity` floors to a whole number
+        # (`round_decimal_down(..., 0)`, pre-existing, unchanged); `Item
+        # BalanceCalculator`'s version keeps full precision — both must
+        # agree to within that expected floor/precision difference, never
+        # diverge because one still used old_quantity and the other didn't.
+        assert core_script_result == Decimal("8458.00")
+        assert item_calculator_result == Decimal("8458.304")
+        assert abs(core_script_result - item_calculator_result) < Decimal("1.00")
+
+
+class TestOutstandingAllotmentQuantityExclusion(DjangoTestCase):
+    """
+    Real-DB regression tests for `LicenseBalanceCalculator.
+    get_outstanding_allotment_totals` — the shared Balance Engine helper
+    `calculate_balance.py`'s stored-field writer AND `ItemBalanceCalculator`
+    both now delegate to, mirroring the CIF-side fix already proven for the
+    Customs Ledger's "Pending Allotment" duplicate-debit bug.
+    """
+
+    def _make_company(self):
+        return CompanyModel.objects.create(
+            iec=str(uuid.uuid4().int)[:10],
+            name="Outstanding Allotment Exporter",
+        )
+
+    def _make_license(self, company):
+        return LicenseDetailsModel.objects.create(
+            license_number="03" + str(uuid.uuid4().int)[:8],
+            license_date=datetime.now().date(),
+            license_expiry_date=datetime.now().date() + timedelta(days=365),
+            exporter=company,
+        )
+
+    def _make_item(self, license_obj):
+        return LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=1,
+            description="Outstanding Allotment Item",
+            quantity=Decimal("1000.000"),
+            available_quantity=Decimal("1000.000"),
+        )
+
+    def test_boe_linked_allotment_quantity_excluded_even_when_not_formally_allocated(self):
+        """An allotment tagged to a REAL BOE (via the `BillOfEntryModel.
+        allotment` M2M — not the stale `is_boe` cache flag) must contribute
+        ZERO outstanding quantity, mirroring the CIF-side fix — the BOE's
+        own debit is the sole authoritative customs movement."""
+        from apps.allotment.models import AllotmentItems, AllotmentModel
+
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+
+        boe = BillOfEntryModel.objects.create(
+            company=company, bill_of_entry_number=str(uuid.uuid4().int)[:9],
+            bill_of_entry_date=datetime.now().date(), exchange_rate=Decimal("84.50"),
+        )
+        allotment = AllotmentModel.objects.create(company=company, item_name="Linked Allotment", is_boe=False)
+        boe.allotment.add(allotment)
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("500.00"), cif_inr=Decimal("42250.00"),
+            qty=Decimal("100.000"),
+        )
+
+        qty, cif = LicenseBalanceCalculator.get_outstanding_allotment_totals(item)
+
+        assert qty == DEC_0
+        assert cif == DEC_0
+
+    def test_unlinked_allotment_quantity_still_counted(self):
+        """Sanity check: an allotment with no BOE association at all must
+        still count its full outstanding quantity."""
+        from apps.allotment.models import AllotmentItems, AllotmentModel
+
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+
+        allotment = AllotmentModel.objects.create(company=company, item_name="Unlinked Allotment", is_boe=False)
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("500.00"), cif_inr=Decimal("42250.00"),
+            qty=Decimal("100.000"),
+        )
+
+        qty, cif = LicenseBalanceCalculator.get_outstanding_allotment_totals(item)
+
+        assert qty == Decimal("100.000")
+        assert cif == Decimal("500.00")
+
+    def test_partially_allocated_allotment_only_leaves_remainder_quantity(self):
+        """A formal, PARTIAL `BOEAllotmentAllocation` (no `.boes` M2M tag)
+        must leave only the unallocated remainder as outstanding — nothing
+        lost, nothing double-counted."""
+        from apps.allotment.models import AllotmentItems, AllotmentModel
+        from apps.reconciliation.services.allocation_service import create_boe_allotment_allocation
+
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+
+        boe = BillOfEntryModel.objects.create(
+            company=company, bill_of_entry_number=str(uuid.uuid4().int)[:9],
+            bill_of_entry_date=datetime.now().date(), exchange_rate=Decimal("84.50"),
+        )
+        row = RowDetails.objects.create(
+            bill_of_entry=boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=Decimal("300.00"), cif_inr=Decimal("25350.00"), qty=Decimal("60.000"),
+        )
+        allotment = AllotmentModel.objects.create(company=company, item_name="Partially Allocated", is_boe=False)
+        allotment_item = AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("500.00"), cif_inr=Decimal("42250.00"),
+            qty=Decimal("100.000"),
+        )
+        create_boe_allotment_allocation(
+            row, allotment_item, qty=Decimal("60.000"), cif_fc=Decimal("300.00"), cif_inr=Decimal("25350.00"),
+            user=None,
+        )
+
+        qty, cif = LicenseBalanceCalculator.get_outstanding_allotment_totals(item)
+
+        assert qty == Decimal("40.000")  # 100 - 60 allocated
+        assert cif == Decimal("200.00")  # 500 - 300 allocated

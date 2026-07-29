@@ -1023,8 +1023,12 @@ def build_balance_pdf_response(license_obj, request):
                 elements.append(allot_table)
                 elements.append(Spacer(1, 5))
 
-            # Balance calculation as table footer
-            balance = float(item.quantity or 0) - float(item.debited_quantity or 0) - float(item.allotted_quantity or 0)
+            # Balance calculation as table footer — reads the stored, single-
+            # source-of-truth `available_quantity` field (`Total − Debited −
+            # Outstanding Allotted`, kept correct by `apps.core.scripts.
+            # calculate_balance.update_balance_values`) rather than
+            # recombining the other three columns independently here.
+            balance = float(item.available_quantity or 0)
             balance_table = Table([[f'Balance Quantity: {balance:.2f}']], colWidths=[275*mm])
             balance_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#e8e8e8')),

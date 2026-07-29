@@ -250,9 +250,13 @@ def build_balance_excel_unused(license_obj):
                         cell.border = thin_border
                     current_row += 1
 
-            # Balance calculation
+            # Balance calculation — reads the stored, single-source-of-truth
+            # `available_quantity` field (`Total − Debited − Outstanding
+            # Allotted`, kept correct by `apps.core.scripts.calculate_
+            # balance.update_balance_values`) rather than recombining the
+            # other three columns independently here.
             current_row += 1
-            balance = float(item.quantity or 0) - float(item.debited_quantity or 0) - float(item.allotted_quantity or 0)
+            balance = float(item.available_quantity or 0)
             ws.merge_cells(f'A{current_row}:J{current_row}')
             balance_cell = ws[f'A{current_row}']
             balance_cell.value = f"Balance Quantity: {balance:.2f}"

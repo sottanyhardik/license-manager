@@ -177,15 +177,14 @@ class TestLicenseBalanceCalculator(TestCase):
         assert result == DEC_0
 
     def test_calculate_balance_positive(self):
-        """Should calculate positive balance"""
+        """Should calculate positive balance: Credit - (BOE Debit + Allotment),
+        no Purchase/Sale/trade term — matches the Customs Ledger formula."""
         # Setup mock
         mock_license = Mock()
 
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('1000.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
+             patch.object(LicenseBalanceCalculator, 'calculate_boe_debit_total', return_value=Decimal('300.00')), \
+             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
@@ -199,10 +198,8 @@ class TestLicenseBalanceCalculator(TestCase):
         mock_license = Mock()
 
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('100.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
+             patch.object(LicenseBalanceCalculator, 'calculate_boe_debit_total', return_value=Decimal('300.00')), \
+             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
@@ -216,10 +213,8 @@ class TestLicenseBalanceCalculator(TestCase):
         mock_license = Mock()
 
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('500.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
+             patch.object(LicenseBalanceCalculator, 'calculate_boe_debit_total', return_value=Decimal('300.00')), \
+             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
@@ -233,10 +228,8 @@ class TestLicenseBalanceCalculator(TestCase):
         mock_license = Mock()
 
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('1000.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
+             patch.object(LicenseBalanceCalculator, 'calculate_boe_debit_total', return_value=Decimal('300.00')), \
+             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
@@ -245,7 +238,6 @@ class TestLicenseBalanceCalculator(TestCase):
             assert result['credit'] == Decimal('1000.00')
             assert result['debit'] == Decimal('300.00')
             assert result['allotment'] == Decimal('200.00')
-            assert result['trade'] == DEC_0
             assert result['balance'] == Decimal('500.00')
 
     def test_calculate_all_components_negative_balance(self):
@@ -254,10 +246,8 @@ class TestLicenseBalanceCalculator(TestCase):
         mock_license = Mock()
 
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=Decimal('100.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=Decimal('300.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
+             patch.object(LicenseBalanceCalculator, 'calculate_boe_debit_total', return_value=Decimal('300.00')), \
+             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=Decimal('200.00')):
 
             # Execute
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
@@ -582,10 +572,8 @@ class TestEdgeCases(TestCase):
         large_value = Decimal('999999999999.99')
 
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=large_value), \
-             patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
+             patch.object(LicenseBalanceCalculator, 'calculate_boe_debit_total', return_value=DEC_0), \
+             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=DEC_0):
 
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
             assert result == large_value
@@ -596,10 +584,8 @@ class TestEdgeCases(TestCase):
         small_value = Decimal('0.01')
 
         with patch.object(LicenseBalanceCalculator, 'calculate_credit', return_value=small_value), \
-             patch.object(LicenseBalanceCalculator, 'calculate_debit', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'calculate_trade', return_value=DEC_0), \
-             patch.object(LicenseBalanceCalculator, 'has_trading_activity', return_value=False):
+             patch.object(LicenseBalanceCalculator, 'calculate_boe_debit_total', return_value=DEC_0), \
+             patch.object(LicenseBalanceCalculator, 'calculate_allotment', return_value=DEC_0):
 
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
             assert result == small_value

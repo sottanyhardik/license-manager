@@ -117,36 +117,31 @@ def calculate_allotted_value(instance, agg_values=None):
 
 
 def calculate_available_value(instance):
+    """
+    Single source of truth: `LicenseImportItemsModel.available_value_calculated`
+    (condition_type `%`-pool + 0.01-CIF-marker aware) — the same property
+    `apps.license.signals._update_all_import_items_available_value` writes
+    from the item-save signal. Previously this re-derived its own formula
+    (a bare `LicenseBalanceCalculator.calculate_balance()` call, blind to
+    both the pool and marker rules), which could disagree with that other
+    writer for restricted/marker items. The one carve-out that ISN'T part
+    of the pooled property: if every OTHER item on the licence has zero
+    CIF, serial_number 1 takes the licence's full balance_cif directly.
+    """
     from apps.license.models import LicenseImportItemsModel
-    from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
-    # Use the centralized calculator directly to avoid recursion through properties
-    available_value = LicenseBalanceCalculator.calculate_balance(instance.license)
-
-    # Business Logic: If all items OTHER THAN serial_number = 1 have CIF = 0,
-    # then serial_number 1's available_value should be balance_cif
     if instance.license:
         all_import_items = LicenseImportItemsModel.objects.filter(license=instance.license)
-
-        # Get all items except serial_number = 1
         other_items = [item for item in all_import_items if item.serial_number != 1]
-
-        # Check if all other items (not serial_number 1) have zero CIF
         all_others_zero_cif = all(
             to_float(item.cif_fc) == 0 and to_float(item.cif_inr) == 0
             for item in other_items
         ) if other_items else False
 
-        # If all other items have zero CIF, and this is serial_number 1
         if all_others_zero_cif and instance.serial_number == 1:
-            # Return the license's balance_cif (use stored value to avoid recursion)
             return round(to_float(instance.license.balance_cif), 2)
 
-    # NOTE: This logic is now handled by available_value_calculated property in the model
-    # which uses restriction_percentage directly from ItemNameModel
-    # Keeping this for backward compatibility but it should delegate to the model property
-    value = available_value
-    return round(value, 2)
+    return round(to_float(instance.available_value_calculated), 2)
 
 
 def update_balance_values(item):

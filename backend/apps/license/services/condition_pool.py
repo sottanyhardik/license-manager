@@ -109,8 +109,13 @@ def compute_condition_pools(license_obj) -> dict[str, Decimal]:
 
         traded = DEC_0
         if LicenseTradeLine is not None:
+            # Only SALE trade lines debit the pool, matching
+            # LicenseBalanceCalculator.calculate_trade()'s own direction
+            # filter -- Purchase trade adds to the license (already
+            # accounted for elsewhere) and must not reduce the pool.
             traded = LicenseTradeLine.objects.filter(
-                sr_number_id__in=item_ids
+                sr_number_id__in=item_ids,
+                trade__direction='SALE',
             ).aggregate(
                 t=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
             )["t"] or DEC_0
@@ -193,8 +198,15 @@ def compute_condition_pools_bulk(license_ids) -> dict[int, dict[str, Decimal]]:
         )
         try:
             from apps.trade.models import LicenseTradeLine
+            # Only SALE trade lines debit the pool, matching
+            # LicenseBalanceCalculator.calculate_trade()'s own direction
+            # filter -- Purchase trade adds to the license and must not
+            # reduce the pool.
             traded_map = _per_item(
-                LicenseTradeLine.objects.filter(sr_number_id__in=all_item_ids),
+                LicenseTradeLine.objects.filter(
+                    sr_number_id__in=all_item_ids,
+                    trade__direction='SALE',
+                ),
                 "sr_number_id",
             )
         except Exception:

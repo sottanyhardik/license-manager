@@ -197,25 +197,21 @@ class LicenseBalanceLedgerBuilder:
 
         `rows` is a list of plain dicts (see keys below), ALL merged into
         ONE chronologically-sorted sequence (not separate blocks per
-        category): [Opening Balance — OMITTED for a licence with any
-        Purchase/Sale trading activity, see below] -> [Licence Trade
-        (Purchased) credits, BOE Utilisation (Pending Invoice) debits,
-        Active Allotment debits, Licence Trade (Sold) debits — interleaved
-        by date, tie-broken Purchase -> BOE Pending -> Allotment -> Sale on
-        same-day entries] -> Current Balance.
+        category): [Opening Balance — OMITTED once a Purchase trade exists,
+        see below] -> [Licence Trade (Purchased) credits, BOE Utilisation
+        (Pending Invoice) debits, Active Allotment debits, Licence Trade
+        (Sold) debits — interleaved by date, tie-broken Purchase -> BOE
+        Pending -> Allotment -> Sale on same-day entries] -> Current
+        Balance.
 
-        A licence with ANY Purchase or Sale trade (`summary['has_trading_
-        activity']`) tells its story from that trading history, not the
-        original DGFT-issued face value: no "Opening Balance" row is
-        generated, and `running` starts at 0 so the first Purchase (or, if
-        none exists yet, the first BOE/Sale — see `summary[
-        'missing_purchase_warning']`, shown as a banner instead of a
-        fabricated Opening Balance) is the ledger's true first entry. A
-        licence with NEITHER keeps the original opening-balance-anchored
-        statement below unchanged; callers should not render this ledger's
-        UI/PDF/Excel section at all in that case (there is nothing to show
-        that isn't already covered by the Customs Ledger) — see `summary[
-        'has_trading_activity']`.
+        A licence with a Purchase trade (`summary['has_purchase']`) tells
+        its story from that trading history, not the original DGFT-issued
+        face value: no "Opening Balance" row is generated, and `running`
+        starts at 0 so the first Purchase is the ledger's true first entry.
+        A licence with NO Purchase (whether or not it has a Sale — see
+        `summary['missing_purchase_warning']` for that anomaly) keeps the
+        original opening-balance-anchored statement below: `running` starts
+        at the licence's opening CIF and the Opening Balance row is emitted.
 
         EVERY BOE debit row with an unallocated remainder (`contributed >
         0`, from `get_debit_rows()` — the SAME annotated queryset
@@ -255,6 +251,17 @@ class LicenseBalanceLedgerBuilder:
         (`AllotmentModel.is_boe`) at the query level — forcing its
         `contributed` to 0 — so `total_allotment_debit` here is already the
         corrected, BOE-association-excluded total.
+
+        The Opening-Balance gate is keyed on `has_purchase` alone, not on
+        `has_trading_activity` (`has_purchase or has_sale`) — a Sale-without-
+        Purchase licence now also gets an Opening Balance row. Since
+        `calculate_balance()`'s anchor for that same licence is
+        `calculate_purchase_credit()` (zero, no Purchase line) rather than
+        this row's `opening_balance`, the resulting gap is surfaced via this
+        function's own `mismatched`/`difference` check below, rather than
+        silently forcing the two to agree — consistent with how this
+        function already treats `missing_purchase_warning` as a data
+        problem to flag, not paper over.
         """
         from apps.license.services.balance_calculator import LicenseBalanceCalculator, quantize_2dp
         from apps.reconciliation.services.allocation_service import remaining_for_trade_line
@@ -285,19 +292,16 @@ class LicenseBalanceLedgerBuilder:
         rows = []
         sr = 1
 
-        # A traded licence's Financial Ledger tells the story of its actual
-        # trading history (Purchase -> Sale), not the original DGFT-issued
-        # face value — the Opening Balance row is a fiction once real
-        # Purchase/Sale transactions exist (whichever side is present), so
-        # `running` starts at 0 and the first Purchase (or, if missing, the
-        # first Sale — see `missing_purchase_warning` above) IS the ledger's
-        # first entry. A licence with NO trading activity at all keeps the
-        # original opening-balance-anchored behaviour unchanged — the
-        # caller decides whether to render this ledger at all based on
-        # `summary['has_trading_activity']` (see "Hide Financial Ledger
-        # When No Trading Exists" — this function still computes the full,
-        # correct dataset either way, it just isn't displayed).
-        if has_trading_activity:
+        # A licence with a Purchase trade tells the story of its actual
+        # trading history, not the original DGFT-issued face value — the
+        # Opening Balance row is a fiction once a real Purchase exists, so
+        # `running` starts at 0 and the first Purchase IS the ledger's first
+        # entry. A licence with NO Purchase (never traded, or a Sale exists
+        # with no matching Purchase — see `missing_purchase_warning` above)
+        # keeps the original opening-balance-anchored behaviour: `running`
+        # starts at the licence's opening CIF and an Opening Balance row is
+        # shown.
+        if has_purchase:
             running = DEC_0
         else:
             running = opening_balance
@@ -619,11 +623,9 @@ class LicenseBalanceLedgerBuilder:
             'mismatched': mismatched,
             'tolerance': TOLERANCE,
             # Whether this ledger has ANY Purchase or Sale trade activity at
-            # all — consumers (UI card, PDF, Excel) use this to decide
-            # whether to render the Financial Ledger section at all (see
-            # "Hide Financial Ledger When No Trading Exists"). `rows` above
-            # are still fully computed either way (the original opening-
-            # balance-anchored statement, unchanged, when this is False).
+            # all — informational only; the Financial Ledger section is
+            # always rendered now (an Opening-Balance-only ledger is a
+            # meaningful statement for a never-traded licence, not nothing).
             'has_trading_activity': has_trading_activity,
             'has_purchase': has_purchase,
             'has_sale': has_sale,

@@ -333,12 +333,6 @@ def _write_financial_ledger_sheet(wb, rows, summary):
     """
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
-    if not summary['has_trading_activity']:
-        # No Purchase or Sale trade at all — matches the UI/PDF: this sheet
-        # adds nothing over the (unmodified) Customs Ledger sheet, so it's
-        # omitted from the workbook entirely rather than created empty.
-        return
-
     ws = wb.create_sheet("Financial Ledger", 0)
     ws.sheet_properties.outlinePr.summaryBelow = False
 
@@ -1596,10 +1590,12 @@ def build_bulk_balance_excel(request):
 
     # One batched query each for Total CIF / Debited CIF across every
     # exported license, instead of `LicenseBalanceCalculator.calculate_credit`/
-    # `calculate_debit` being called once per license (2 queries x 214
-    # licenses in production) inside the per-license loop below.
+    # `calculate_boe_debit_total` being called once per license (2 queries x
+    # 214 licenses in production) inside the per-license loop below. Raw,
+    # unconditional BOE debit — matches the Balance CIF formula exactly
+    # (`calculate_balance`), not the allocation-netted `calculate_debit`.
     _credit_by_license = LicenseBalanceCalculator.calculate_credit_for_licenses(_lic_ids)
-    _debit_by_license = LicenseBalanceCalculator.calculate_debit_for_licenses(_lic_ids)
+    _debit_by_license = LicenseBalanceCalculator.calculate_boe_debit_total_for_licenses(_lic_ids)
 
     # Bucket licenses by norm, preserving the order they were exported in
     # (== `sorted_licenses` order, already E1-first/E5-second/alpha-rest).

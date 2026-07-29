@@ -279,10 +279,12 @@ class FinancialLedgerGroupingTests(LicenseBalanceLedgerFixtureMixin, Reconciliat
 
         # --- Financial Ledger display: both BOEs fully matched -> no "boe"
         # rows; ONE "trade" row carries the full 174,240 debit, with both
-        # allocations as its children ---
+        # allocations as its children. No Purchase trade exists here, so an
+        # Opening Balance row leads the ledger (see `has_purchase` in
+        # `build_financial_ledger`'s docstring). ---
         rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
-        self.assertEqual([r["row_kind"] for r in rows], ["trade", "final"])
-        trade_row = rows[0]
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "trade", "final"])
+        trade_row = rows[1]
         self.assertEqual(trade_row["debit"], Decimal("174240.00"))
         self.assertEqual(len(trade_row["children"]), 2)
         self.assertEqual(summary["total_invoice_allocation_debit"], Decimal("174240.00"))
@@ -313,11 +315,12 @@ class FinancialLedgerGroupingTests(LicenseBalanceLedgerFixtureMixin, Reconciliat
         self.assertEqual(groups[0]["boe_numbers"], ["7650300"])
 
         # Financial Ledger: fully matched -> BOE row skipped, its 50,000
-        # debit now carried by the "trade" row with singular remarks.
+        # debit now carried by the "trade" row with singular remarks. No
+        # Purchase trade exists, so an Opening Balance row leads the ledger.
         rows, _ = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
-        self.assertEqual([r["row_kind"] for r in rows], ["trade", "final"])
-        self.assertEqual(rows[0]["remarks"], "Matched Invoice(s)")
-        self.assertEqual(rows[0]["debit"], Decimal("50000.00"))
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "trade", "final"])
+        self.assertEqual(rows[1]["remarks"], "Matched Invoice(s)")
+        self.assertEqual(rows[1]["debit"], Decimal("50000.00"))
 
     def test_partially_allocated_boe_leaves_remainder_as_individual_row_and_totals_match(self):
         """A BOE only PARTLY allocated to an invoice must still count its
@@ -354,8 +357,9 @@ class FinancialLedgerGroupingTests(LicenseBalanceLedgerFixtureMixin, Reconciliat
         # BOE's unallocated 20,000 remainder shows as its own Pending
         # Invoice row; the trade line's own 30,000 (fully allocated) shows
         # via the "trade" row — both real, neither lost, neither doubled.
-        self.assertEqual([r["row_kind"] for r in rows], ["boe", "trade", "final"])
-        boe_row, trade_row, _ = rows
+        # No Purchase trade exists, so an Opening Balance row leads.
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "boe", "trade", "final"])
+        _opening_row, boe_row, trade_row, _ = rows
         self.assertEqual(boe_row["debit"], Decimal("20000.00"))
         self.assertEqual(boe_row["status"], "Pending Invoice")
         self.assertEqual(trade_row["debit"], Decimal("30000.00"))
@@ -412,15 +416,14 @@ class CustomsLedgerTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixture
         the Customs Ledger always debits its full raw amount and just flags
         it "Matched" instead of omitting it.
 
-        This licence has a Sale but no Purchase, so the Balance Engine
-        anchors on purchase credit (0), not the original export-item CIF —
-        see `LicenseBalanceCalculator.calculate_balance`'s docstring. The
-        Financial Ledger's own running total uses the same anchor, so it
-        reconciles with the Balance Engine exactly (both 0, floored). The
-        Customs Ledger, however, is untouched and still anchors on the
-        original opening balance — so its own running total (60,000)
-        legitimately diverges from the Balance Engine here; that gap is the
-        actionable "create a Purchase invoice" signal, not a bug."""
+        Balance CIF (`calculate_balance`) now uses that SAME raw, invoice-
+        allocation-blind BOE debit — so here it agrees with the Customs
+        Ledger's own running total exactly (100000 - 40000 = 60000), even
+        though the Financial Ledger's OWN row display nets the BOE to 0 and
+        carries the debit via the "trade" row instead. Two different
+        internal bookkeeping paths landing on the same final number for
+        this licence is exactly the point: Balance CIF no longer depends on
+        which path a licence happens to take."""
         company = self.make_company()
         license_obj = self.make_license(company)
         from apps.license.models import LicenseExportItemModel
@@ -440,25 +443,23 @@ class CustomsLedgerTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixture
         self.assertEqual(customs_boe_row["debit"], Decimal("40000.00"))
         self.assertEqual(customs_boe_row["status"], "Matched")
 
-        # Financial Ledger: fully invoice-matched -> BOE row skipped, its
-        # 40,000 debit now carried by the "trade" row (with the allocation
-        # as an informational child).
-        self.assertEqual([r["row_kind"] for r in financial_rows], ["trade", "final"])
-        self.assertEqual(financial_rows[0]["debit"], Decimal("40000.00"))
+        # Financial Ledger: no Purchase -> Opening Balance row leads;
+        # fully invoice-matched -> BOE row skipped, its 40,000 debit now
+        # carried by the "trade" row (with the allocation as an
+        # informational child).
+        self.assertEqual([r["row_kind"] for r in financial_rows], ["opening", "trade", "final"])
+        self.assertEqual(financial_rows[0]["credit"], Decimal("100000.00"))
+        self.assertEqual(financial_rows[1]["debit"], Decimal("40000.00"))
         self.assertEqual(financial_summary["total_invoice_allocation_debit"], Decimal("40000.00"))
 
-        # Financial Ledger's own running total reconciles EXACTLY with the
-        # Balance Engine — the actual acceptance criterion this feature
-        # exists to guarantee.
-        self.assertEqual(financial_summary["computed_balance"], financial_summary["engine_balance"])
-        self.assertEqual(financial_summary["computed_balance"], DEC_0)
+        # Financial Ledger's own running total, the Customs Ledger's own
+        # running total, and the Balance Engine all land on 60,000 here.
+        self.assertEqual(financial_summary["computed_balance"], Decimal("60000.00"))
+        self.assertEqual(financial_summary["engine_balance"], Decimal("60000.00"))
+        self.assertFalse(financial_summary["mismatched"])
 
-        # Customs Ledger's OWN running total (opening-balance-anchored,
-        # untouched) legitimately diverges from the Balance Engine here —
-        # this licence has no Purchase trade, so the engine has no credit
-        # anchor beyond the (zero) purchase credit.
         self.assertEqual(customs_summary["computed_balance"], Decimal("60000.00"))
-        self.assertEqual(customs_summary["engine_balance"], DEC_0)
+        self.assertEqual(customs_summary["engine_balance"], Decimal("60000.00"))
 
     def test_pending_allotment_row(self):
         company = self.make_company()
@@ -509,19 +510,18 @@ class CustomsLedgerTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixture
         trade_rows = [r for r in financial_rows if r["row_kind"] == "trade"]
         self.assertEqual(len(trade_rows), 1)
         self.assertEqual(trade_rows[0]["debit"], Decimal("25000.00"))
-        # This licence has a Sale but no Purchase, so no opening balance is
-        # fabricated — the running balance starts at 0 (see
-        # `has_trading_activity` in `build_financial_ledger`'s docstring) and
-        # the 40000 BOE debit + 25000 trade debit drive it negative, which is
-        # then floored at 0 (pre-existing clamp, unrelated to this feature).
-        self.assertEqual(financial_summary["computed_balance"], Decimal("0.00"))
+        # This licence has no Purchase, so an Opening Balance row leads the
+        # ledger too (see `has_purchase` in `build_financial_ledger`'s
+        # docstring) — running: 200000 - 40000 (BOE) - 25000 (trade) = 135000.
+        self.assertEqual([r["row_kind"] for r in financial_rows], ["opening", "boe", "trade", "final"])
+        self.assertEqual(financial_summary["computed_balance"], Decimal("135000.00"))
 
-        # The two ledgers legitimately disagree — the Customs Ledger still
-        # reflects the licence's real opening balance while the Financial
-        # Ledger (correctly) has no basis to assume one without a Purchase.
+        # The two ledgers legitimately disagree — the Customs Ledger has no
+        # concept of the unmatched trade line at all, while the Financial
+        # Ledger debits it — a gap of exactly that trade's own CIF.
         self.assertEqual(
             customs_summary["computed_balance"] - financial_summary["computed_balance"],
-            Decimal("160000.00"),
+            Decimal("25000.00"),
         )
 
     def test_boe_tagged_allotment_never_shown_as_pending_and_never_double_deducted(self):
@@ -621,6 +621,62 @@ class CustomsLedgerTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixture
         self.assertEqual(summary["total_pending_allotment_cif"], Decimal("10000.00"))
         # 100000 - 10000 (BOE) - 10000 (allotment remainder) = 80000
         self.assertEqual(summary["computed_balance"], Decimal("80000.00"))
+
+
+class FinancialLedgerOpeningBalanceGateTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase):
+    """`build_financial_ledger()`'s Opening Balance row is keyed on
+    `has_purchase` alone (not `has_trading_activity`) — see that method's
+    docstring. The Financial Ledger section is also no longer hidden for a
+    never-traded licence (PDF/Excel/frontend `has_trading_activity` gates
+    removed): an Opening-Balance-only statement is a real thing to show."""
+
+    def _make_purchase_trade(self, company, item, cif_fc):
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        trade = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_PURCHASE,
+            to_company=company,
+            invoice_number=f"PUR-{uuid.uuid4().int % 999999:06d}",
+            invoice_date=datetime.now().date(),
+        )
+        LicenseTradeLine.objects.create(
+            trade=trade, sr_number=item, description=item.description or "Test Item",
+            mode=LicenseTradeLine.MODE_CIF_INR, cif_fc=cif_fc, cif_inr=cif_fc * Decimal("84.5"),
+        )
+        return trade
+
+    def test_no_purchase_no_sale_shows_opening_balance_row(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("50000.00"))
+        self.make_item(license_obj, 1)
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "final"])
+        self.assertFalse(summary["has_purchase"])
+        self.assertFalse(summary["has_sale"])
+        opening_row = rows[0]
+        self.assertEqual(opening_row["credit"], Decimal("50000.00"))
+        self.assertEqual(opening_row["debit"], DEC_0)
+        self.assertEqual(opening_row["running_balance"], Decimal("50000.00"))
+        self.assertEqual(summary["computed_balance"], Decimal("50000.00"))
+        self.assertEqual(summary["computed_balance"], summary["engine_balance"])
+        self.assertFalse(summary["mismatched"])
+
+    def test_purchase_exists_no_opening_balance_row(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("60000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual([r["row_kind"] for r in rows], ["trade_purchase", "final"])
+        self.assertTrue(summary["has_purchase"])
+        self.assertNotIn("opening", [r["row_kind"] for r in rows])
+        self.assertEqual(summary["computed_balance"], Decimal("60000.00"))
 
 
 class TimelineTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase):
@@ -839,15 +895,25 @@ class WarningManagementTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFix
         )
 
 
-class BalanceEngineFinancialLedgerReconciliationTests(
+class BalanceEngineCustomsLedgerReconciliationTests(
     LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase
 ):
     """
-    The actual acceptance criterion behind "unify the Balance Engine with
-    the Financial Ledger": `LicenseBalanceCalculator.calculate_balance()`
-    and `build_financial_ledger()`'s own `computed_balance` must land on
-    the EXACT same number (not merely within tolerance) for every shape of
-    trading activity a licence can have.
+    The acceptance criterion behind "Customs Ledger is the single source of
+    truth for Balance CIF" (real-bug regression: licence 5211016017 showed
+    $0.00 via the Balance Engine but $243,034.85 via the Customs Ledger --
+    see `LicenseBalanceCalculator.calculate_balance`'s docstring for the
+    root cause): `calculate_balance()` and `build_customs_ledger()`'s own
+    `computed_balance` must land on the EXACT same number for every shape
+    of trading activity a licence can have. Purchase/Sale trades never
+    participate in this number at all, however large.
+
+    `build_financial_ledger()`'s OWN `computed_balance` (its Purchase/Sale
+    transactional walk) is a separate, still-valid statement that may now
+    legitimately diverge from the Balance Engine for a traded licence --
+    checked explicitly below via its own `mismatched` flag, never asserted
+    equal to the engine (that was the PREVIOUS, now-superseded acceptance
+    criterion).
     """
 
     def _make_purchase_trade(self, company, item, cif_fc, invoice_number=None):
@@ -865,72 +931,121 @@ class BalanceEngineFinancialLedgerReconciliationTests(
         )
         return trade
 
-    def _assert_engine_matches_ledger(self, license_obj):
+    def _assert_engine_matches_customs_ledger(self, license_obj):
         from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
-        _, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+        _, customs_summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
         engine_balance = LicenseBalanceCalculator.calculate_balance(license_obj)
-        self.assertEqual(summary["computed_balance"], engine_balance)
-        self.assertEqual(summary["computed_balance"], summary["engine_balance"])
-        return summary
+        self.assertEqual(customs_summary["computed_balance"], engine_balance)
+        self.assertEqual(customs_summary["computed_balance"], customs_summary["engine_balance"])
+        return engine_balance
+
+    def test_no_transactions(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("10000.00"))
+        self.make_item(license_obj, 1)
+
+        engine_balance = self._assert_engine_matches_customs_ledger(license_obj)
+        self.assertEqual(engine_balance, Decimal("10000.00"))
 
     def test_purchase_only(self):
         company = self.make_company()
         license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("50000.00"))
         item = self.make_item(license_obj, 1)
-        self._make_purchase_trade(company, item, cif_fc=Decimal("50000.00"))
+        self._make_purchase_trade(company, item, cif_fc=Decimal("999999.00"))
 
-        summary = self._assert_engine_matches_ledger(license_obj)
-        self.assertEqual(summary["computed_balance"], Decimal("50000.00"))
+        engine_balance = self._assert_engine_matches_customs_ledger(license_obj)
+        self.assertEqual(engine_balance, Decimal("50000.00"))  # unaffected by the purchase
 
-    def test_sale_only_unmatched(self):
+        # Financial Ledger's own total tracks the purchase instead -- a
+        # different, expected divergence, not a bug.
+        _, fin_summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+        self.assertNotEqual(fin_summary["computed_balance"], engine_balance)
+        self.assertTrue(fin_summary["mismatched"])
+
+    def test_sale_only(self):
         company = self.make_company()
         license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("40000.00"))
         item = self.make_item(license_obj, 1)
-        trade = self.make_sale_trade(company, invoice_number="INV-UNMATCHED-2")
+        trade = self.make_sale_trade(company, invoice_number="INV-SALE-ONLY")
         self.make_trade_line(trade, item, cif_fc=Decimal("15000.00"))
 
-        summary = self._assert_engine_matches_ledger(license_obj)
-        # No Purchase credit at all -> floored at 0, not negative.
-        self.assertEqual(summary["computed_balance"], DEC_0)
+        engine_balance = self._assert_engine_matches_customs_ledger(license_obj)
+        self.assertEqual(engine_balance, Decimal("40000.00"))  # the sale never deducts
 
-    def test_sale_fully_allocated(self):
+    def test_purchase_and_sale(self):
         company = self.make_company()
         license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("60000.00"))
         item = self.make_item(license_obj, 1)
-        self._make_purchase_trade(company, item, cif_fc=Decimal("80000.00"))
-        boe = self.make_boe(company, number="8000001")
-        row = self.make_debit_row(boe, item, cif_fc=Decimal("30000.00"), qty=Decimal("300.000"))
-        trade = self.make_sale_trade(company, invoice_number="INV-FULL")
-        trade_line = self.make_trade_line(trade, item, cif_fc=Decimal("30000.00"), qty_kg=Decimal("300.0000"))
-        create_invoice_boe_allocation(trade_line, row, qty=row.qty, cif_fc=row.cif_fc, cif_inr=row.cif_inr, user=None)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("30000.00"))
+        trade = self.make_sale_trade(company, invoice_number="INV-PURCHASE-AND-SALE")
+        self.make_trade_line(trade, item, cif_fc=Decimal("20000.00"))
 
-        summary = self._assert_engine_matches_ledger(license_obj)
-        self.assertEqual(summary["computed_balance"], Decimal("50000.00"))  # 80000 - 30000
+        engine_balance = self._assert_engine_matches_customs_ledger(license_obj)
+        self.assertEqual(engine_balance, Decimal("60000.00"))  # neither purchase nor sale deduct
 
-    def test_sale_partially_allocated(self):
+    def test_boes_only(self):
         company = self.make_company()
         license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
         item = self.make_item(license_obj, 1)
-        self._make_purchase_trade(company, item, cif_fc=Decimal("80000.00"))
-        boe = self.make_boe(company, number="8000002")
-        row = self.make_debit_row(boe, item, cif_fc=Decimal("50000.00"), qty=Decimal("500.000"))
-        trade = self.make_sale_trade(company, invoice_number="INV-PARTIAL")
-        trade_line = self.make_trade_line(trade, item, cif_fc=Decimal("30000.00"), qty_kg=Decimal("300.0000"))
-        allocated_cif_inr = row.cif_inr * Decimal("30000.00") / Decimal("50000.00")
-        create_invoice_boe_allocation(
-            trade_line, row, qty=Decimal("300.000"), cif_fc=Decimal("30000.00"), cif_inr=allocated_cif_inr, user=None,
+        boe = self.make_boe(company, number="9100001")
+        self.make_debit_row(boe, item, cif_fc=Decimal("40000.00"), qty=Decimal("400.000"))
+
+        engine_balance = self._assert_engine_matches_customs_ledger(license_obj)
+        self.assertEqual(engine_balance, Decimal("60000.00"))  # 100000 - 40000
+
+    def test_outstanding_allotments(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("80000.00"))
+        item = self.make_item(license_obj, 1)
+        allotment = AllotmentModel.objects.create(company=company, item_name="Test Allotment")
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("15000.00"), cif_inr=Decimal("1267500.00"),
+            qty=Decimal("150.000"),
         )
 
-        summary = self._assert_engine_matches_ledger(license_obj)
-        # 80000 credit - 20000 (BOE unallocated remainder) - 30000 (full sale debit)
-        self.assertEqual(summary["computed_balance"], Decimal("30000.00"))
+        engine_balance = self._assert_engine_matches_customs_ledger(license_obj)
+        self.assertEqual(engine_balance, Decimal("65000.00"))  # 80000 - 15000
 
-    def test_mixed_boe_allotment_and_trade(self):
+    def test_linked_allotments_never_double_deducted(self):
+        """An allotment already linked to a BOE must be excluded entirely --
+        only the BOE's own debit counts, never both."""
         company = self.make_company()
         license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("90000.00"))
         item = self.make_item(license_obj, 1)
-        self._make_purchase_trade(company, item, cif_fc=Decimal("200000.00"))
+        boe = self.make_boe(company, number="9100002")
+        self.make_debit_row(boe, item, cif_fc=Decimal("20000.00"), qty=Decimal("200.000"))
+        allotment = AllotmentModel.objects.create(company=company, item_name="Linked Allotment")
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("20000.00"), cif_inr=Decimal("1690000.00"),
+            qty=Decimal("200.000"),
+        )
+        boe.allotment.add(allotment)
+
+        engine_balance = self._assert_engine_matches_customs_ledger(license_obj)
+        self.assertEqual(engine_balance, Decimal("70000.00"))  # 90000 - 20000 (BOE only)
+
+    def test_mixed_boe_allotment_and_trade_engine_ignores_trade(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("200000.00"))
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("999999.00"))
 
         boe = self.make_boe(company, number="8000003")
         self.make_debit_row(boe, item, cif_fc=Decimal("40000.00"), qty=Decimal("400.000"))
@@ -944,22 +1059,25 @@ class BalanceEngineFinancialLedgerReconciliationTests(
         trade = self.make_sale_trade(company, invoice_number="INV-MIXED")
         self.make_trade_line(trade, item, cif_fc=Decimal("25000.00"))
 
-        summary = self._assert_engine_matches_ledger(license_obj)
-        # 200000 - 40000 (BOE) - 15000 (allotment) - 25000 (sale)
-        self.assertEqual(summary["computed_balance"], Decimal("120000.00"))
+        engine_balance = self._assert_engine_matches_customs_ledger(license_obj)
+        # 200000 - 40000 (BOE) - 15000 (allotment); the Sale's 25000 and
+        # Purchase's 999999 never participate.
+        self.assertEqual(engine_balance, Decimal("145000.00"))
 
-    def test_sale_linked_to_mismatched_boe_no_duplicate_row_and_engine_matches(self):
+    def test_sale_linked_to_mismatched_boe_still_counts_boe_debit_in_full(self):
         """
-        Real-bug regression (BOE 2557728 / invoice LGL/2026-27/0044): a BOE
-        tagged to a sale trade via `.boes` but whose CIF mismatches the
-        trade line beyond tolerance must show up ONCE -- as the "Licence
-        Trade (Sold)" row, carrying the linked BOE number and a
-        `mismatch_warning` -- never as a separate "BOE Utilisation
-        (Pending Invoice)" row, and the Balance Engine must still
-        reconcile exactly with the Financial Ledger's own running total.
+        Real-bug regression (BOE 2557728 / invoice LGL/2026-27/0044): even
+        though this BOE is tagged to a Sale trade via the legacy `.boes`
+        M2M, Balance CIF debits it at its full raw cif_fc unconditionally --
+        Purchase/Sale trades never adjust the BOE side of Balance CIF. The
+        Financial Ledger's OWN row display still folds this BOE into the
+        "trade" row (no duplicate row) with a `mismatch_warning` -- that
+        display behavior is unchanged, it just no longer feeds Balance CIF.
         """
         company = self.make_company()
         license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("80000.00"))
         item = self.make_item(license_obj, 1)
         self._make_purchase_trade(company, item, cif_fc=Decimal("80000.00"))
         boe = self.make_boe(company, number="2557728")
@@ -967,19 +1085,13 @@ class BalanceEngineFinancialLedgerReconciliationTests(
         trade = self.make_sale_trade(company, invoice_number="LGL/2026-27/0044", boes=[boe])
         self.make_trade_line(trade, item, cif_fc=Decimal("5031.07"), qty_kg=Decimal("50.0000"))
 
-        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+        engine_balance = self._assert_engine_matches_customs_ledger(license_obj)
+        self.assertEqual(engine_balance, Decimal("74963.64"))  # 80000 - 5036.36 (full, raw BOE debit)
 
+        rows, fin_summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
         self.assertEqual([r["row_kind"] for r in rows], ["trade_purchase", "trade", "final"])
         trade_row = rows[1]
         self.assertEqual(trade_row["boe_number"], "2557728")
-        self.assertEqual(trade_row["debit"], Decimal("5031.07"))
         warning = trade_row["mismatch_warning"]
         self.assertIsNotNone(warning)
         self.assertEqual(warning["status"], "mismatch")
-        self.assertEqual(warning["boe_cif"], Decimal("5036.36"))
-        self.assertEqual(warning["invoice_cif"], Decimal("5031.07"))
-        self.assertEqual(warning["difference"], Decimal("5.29"))
-
-        from apps.license.services.balance_calculator import LicenseBalanceCalculator
-        self.assertEqual(summary["computed_balance"], LicenseBalanceCalculator.calculate_balance(license_obj))
-        self.assertEqual(summary["computed_balance"], Decimal("74968.93"))  # 80000 - 5031.07

@@ -26,10 +26,10 @@ from apps.reconciliation.tests.test_reconciliation import ReconciliationFixtureM
 
 from .test_balance_ledger_views import LicenseBalanceLedgerFixtureMixin
 
-# A minimal license (no BOEs, allotments, or trades) has NO Purchase/Sale
-# activity, so the Financial Ledger sheet is omitted entirely — see
-# `has_trading_activity` in `build_financial_ledger`'s docstring.
-EXPECTED_SHEET_NAMES_NO_TRADING = ["Customs Ledger", "Timeline", "Reconciliation", "Audit Log"]
+# A minimal license (no BOEs, allotments, or trades) has no Purchase, so
+# the Financial Ledger sheet is still present — an Opening-Balance-only
+# statement — see `has_purchase` in `build_financial_ledger`'s docstring.
+EXPECTED_SHEET_NAMES_NO_TRADING = ["Financial Ledger", "Customs Ledger", "Timeline", "Reconciliation", "Audit Log"]
 
 
 class BalanceExcelStructureTests(LicenseBalanceLedgerFixtureMixin, TestCase):
@@ -56,8 +56,9 @@ class BalanceExcelStructureTests(LicenseBalanceLedgerFixtureMixin, TestCase):
 
         wb = self._load_workbook(license_obj)
 
-        # Financial Ledger sheet is entirely absent (no trading activity).
-        self.assertNotIn("Financial Ledger", wb.sheetnames)
+        # Financial Ledger sheet: Opening Balance + Current Balance rows only.
+        self.assertIn("Financial Ledger", wb.sheetnames)
+        self.assertGreaterEqual(wb["Financial Ledger"].max_row, 2)
         # Customs Ledger: Customs Summary block + header + at least opening/final rows.
         self.assertGreaterEqual(wb["Customs Ledger"].max_row, 10)
         # Reconciliation: license info row + reconciliation block + BOE/Allotment summary + plan utilization.

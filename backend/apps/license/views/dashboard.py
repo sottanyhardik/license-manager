@@ -17,6 +17,7 @@ from apps.bill_of_entry.models import BillOfEntryModel
 from apps.core.cache_utils import CACHE_TIMEOUT_MEDIUM
 from apps.core.utils.exceptions import api_error
 from apps.license.models import LicenseDetailsModel
+from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
 
 class DashboardDataView(APIView):
@@ -189,6 +190,10 @@ class DashboardDataView(APIView):
             'export_license__norm_class'
         ).order_by('license_expiry_date')[:5]
 
+        live_balance_map = LicenseBalanceCalculator.calculate_balance_for_licenses(
+            [license_obj.id for license_obj in licenses]
+        )
+
         licenses_data = []
         for license_obj in licenses:
             # Calculate days to expiry
@@ -204,7 +209,7 @@ class DashboardDataView(APIView):
             licenses_data.append({
                 'license_number': license_obj.license_number,
                 'license_expiry_date': license_obj.license_expiry_date,
-                'balance_cif': float(license_obj.balance_cif or 0),
+                'balance_cif': float(live_balance_map.get(license_obj.id) or 0),
                 'sion_norms': sion_norms,
                 'days_to_expiry': days_to_expiry,
             })

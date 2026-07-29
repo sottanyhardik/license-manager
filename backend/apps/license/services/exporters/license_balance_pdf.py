@@ -154,14 +154,6 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
     ext_map = boe_external_invoice_map(license_obj)
     ledger_rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj, alloc_map, ext_map)
 
-    if not summary['has_trading_activity']:
-        # No Purchase or Sale trade at all — this section adds nothing over
-        # the (unmodified) Customs Ledger below, so it's omitted from the
-        # PDF entirely, matching the UI. `summary` is still returned in
-        # full so `_build_final_reconciliation_elements` (called by the
-        # caller with this exact return value) keeps working unchanged.
-        return [], summary
-
     header_row = [
         'Sr', 'Txn Date', 'Txn Type', 'Doc Number', 'BOE Number', 'BOE Date',
         'Company (Importer)', 'Item Name', 'Invoice(s)', 'Qty',
@@ -856,7 +848,7 @@ def build_balance_pdf_response(license_obj, request):
                 f"{float(item.debited_quantity or 0):.2f}",
                 f"{float(item.available_quantity or 0):.2f}",
                 f"{float(item.cif_fc or 0):.2f}",
-                f"{float(item.balance_cif_fc or 0):.2f}"
+                f"{float(item.available_value or 0):.2f}"
             ]]
 
             item_table = Table(item_data, colWidths=[12*mm, 25*mm, 60*mm, 50*mm, 23*mm, 21*mm, 21*mm, 21*mm, 21*mm, 21*mm])

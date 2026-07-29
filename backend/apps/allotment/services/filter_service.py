@@ -174,6 +174,23 @@ class LicenseFilterService:
             
         Returns:
             Filtered QuerySet
+
+        NOTE (currently unreachable, verified 2026-07-29): `balance_cif_fc`
+        is a Python `@property` on `LicenseImportItemsModel` (delegates to
+        `available_value_calculated`), not a DB column, so `.filter(
+        balance_cif_fc__gte=...)` / `__lte=...` would raise
+        `django.core.exceptions.FieldError` at query time if ever hit with a
+        real min/max value -- and the `except (ValueError, TypeError)` below
+        would NOT catch that. This is currently harmless only because
+        `LicenseFilterService`/`filter_available_items` (and therefore this
+        method) has zero callers anywhere in the codebase (no view,
+        management command, or other service imports `LicenseFilterService`
+        beyond its own re-export in `apps/allotment/services/__init__.py`).
+        If this service is ever wired up to a real endpoint, this must
+        first be rewritten to filter in Python after evaluating the
+        queryset (since `balance_cif_fc`/`available_value_calculated` isn't
+        annotatable without a much larger SQL-level effort) rather than via
+        `.filter()` on a non-existent DB field.
         """
         if min_value:
             try:

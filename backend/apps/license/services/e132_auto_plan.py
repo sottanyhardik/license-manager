@@ -68,8 +68,9 @@ def compute_e132_auto_plan(license_obj) -> tuple[list[dict], float]:
         .order_by('serial_number')
     )
 
+    _live_balance_cif = license_obj.get_balance_cif
     balance_cif = float(
-        license_obj.get_balance_cif or license_obj.balance_cif or 0
+        _live_balance_cif if _live_balance_cif is not None else (license_obj.balance_cif or 0)
     )
 
     # ── Build records for the E132 classifier ────────────────────────────────

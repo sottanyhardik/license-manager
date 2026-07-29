@@ -684,17 +684,6 @@ class ItemPivotReportView(APIView):
             condition_pools = compute_condition_pools(license_obj)
         # condition_pools = {"2%": Decimal(...), "3%": Decimal(...), ...}
 
-        # (Legacy restriction_groups kept ONLY for backward compatibility with
-        # callers that still read it; unused for the cell-level value now.)
-        restriction_groups = defaultdict(lambda: {
-            'total_cif': Decimal('0.00'),
-            'debited_cif': Decimal('0.00'),
-            'available_cif': Decimal('0.00'),
-            'restriction_percentage': None,
-            'sion_norm_class': None,
-            'item_ids': []
-        })
-
         for import_item in license_obj.import_license.all():
             # Plan totals are now sourced per plan-line item_name via
             # `item_plan_totals` (see the item-columns loop below); the old
@@ -730,18 +719,6 @@ class ItemPivotReportView(APIView):
                     item_quantities[item.id]['sion_norm_class'] = sion_norm
                     item_quantities[item.id]['restriction_percentage'] = restriction_pct
 
-                    # Group by (sion_norm_class, restriction_percentage) for shared restriction calculation
-                    # Items in same SION norm with same restriction % share the restriction limit
-                    restriction_key = f"{sion_norm}_{restriction_pct}"
-                    restriction_groups[restriction_key]['sion_norm_class'] = sion_norm
-                    restriction_groups[restriction_key]['restriction_percentage'] = restriction_pct
-                    # Convert to Decimal to handle potential float values from database
-                    restriction_groups[restriction_key]['total_cif'] += Decimal(str(import_item.cif_fc)) if import_item.cif_fc is not None else DEC_0
-                    restriction_groups[restriction_key]['debited_cif'] += Decimal(str(import_item.debited_value)) if import_item.debited_value is not None else DEC_0
-                    if item.id not in restriction_groups[restriction_key]['item_ids']:
-                        restriction_groups[restriction_key]['item_ids'].append(item.id)
-
-        # Calculate available CIF within restriction for each group.
         # `balance_cif` is pre-computed LIVE by `generate_report` in a single
         # batched `calculate_balance_for_licenses` call (the same shared
         # Balance Engine used everywhere else) and passed in here — never
@@ -753,17 +730,6 @@ class ItemPivotReportView(APIView):
         if balance_cif is None:
             from apps.license.services.balance_calculator import LicenseBalanceCalculator
             balance_cif = LicenseBalanceCalculator.calculate_balance(license_obj)
-        for group_name, group_data in restriction_groups.items():
-            if group_data['restriction_percentage'] and total_cif > 0:
-                # Convert restriction_percentage to Decimal to avoid float * Decimal error
-                restriction_pct_decimal = Decimal(str(group_data['restriction_percentage']))
-                # Maximum allowed CIF for this restriction group
-                max_allowed_cif = (total_cif * restriction_pct_decimal) / Decimal('100')
-                # Available CIF = max_allowed - debited
-                available_cif = max_allowed_cif - group_data['debited_cif']
-                # Cap at balance_cif - restriction cannot exceed available balance
-                available_cif = min(available_cif, balance_cif)
-                group_data['available_cif'] = max(available_cif, Decimal('0'))
 
         # Build row data
         # Handle blank/empty notification numbers

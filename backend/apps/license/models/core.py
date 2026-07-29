@@ -305,9 +305,9 @@ class LicenseDetailsModel(AuditModel):
         return LicenseBalanceCalculator.calculate_credit(self)
 
     def _calculate_license_debit(self) -> Decimal:
-        """Calculate total debit using centralized service"""
+        """Calculate total debit using centralized service (raw, unconditional BOE debit — matches Balance CIF)."""
         from apps.license.services.balance_calculator import LicenseBalanceCalculator
-        return LicenseBalanceCalculator.calculate_debit(self)
+        return LicenseBalanceCalculator.calculate_boe_debit_total(self)
 
     def _calculate_license_allotment(self) -> Decimal:
         """Calculate total allotment using centralized service"""
@@ -979,28 +979,16 @@ class LicenseImportItemsModel(models.Model):
     @property
     def balance_cif_fc(self) -> Decimal:
         """
-        Row-level balance under the new condition_type model.
-
-        - condition_type ending in "%": pool-based shared limit (delegated to
-          `condition_pool.remaining_for_condition`), capped at the licence
-          balance.
-        - condition_type "AU" or empty: tracks the licence balance.
-
-        Always calculated fresh from database (no caching) — see
-        `available_value_calculated` for the same logic used by the cached
-        `available_value` field. Prefer the stored field when reading in bulk.
+        Alias for `available_value_calculated` — the single implementation
+        of row-level Balance CIF under the condition_type model. Kept as a
+        separate property only because several call sites (legacy reports,
+        PDF/Excel exporters, sync commands) already read `.balance_cif_fc`;
+        it used to duplicate `available_value_calculated`'s formula minus
+        the 0.01-CIF-marker special case, which let the two disagree for
+        marker items. Delegating removes that gap without touching every
+        caller individually.
         """
-        if not self.license:
-            return DEC_0
-        license_balance = self.license.balance_cif or DEC_0
-        cond = (self.condition_type or "").strip()
-        if cond.endswith("%"):
-            from apps.license.services.condition_pool import remaining_for_condition
-            remaining = remaining_for_condition(self.license, cond)
-            if remaining is None:
-                return license_balance
-            return min(remaining, license_balance)
-        return license_balance
+        return self.available_value_calculated
 
     @property
     def available_value_calculated(self) -> Decimal:
@@ -1109,16 +1097,6 @@ class LicenseImportItemsModel(models.Model):
     def total_debited_qty(self) -> Decimal:
         return _to_decimal(self.item_details.filter(transaction_type=DEBIT).aggregate(
             total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"], DEC_000)
-
-    @cached_property
-    def total_debited_cif_fc(self) -> Decimal:
-        debited = _to_decimal(self.item_details.filter(transaction_type=DEBIT).aggregate(
-            total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
-        alloted = _to_decimal(self.allotment_details.filter(allotment__bill_of_entry__isnull=True,
-                                                            allotment__type=ARO).aggregate(
-            total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
-        total = debited + alloted
-        return total.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
     @cached_property
     def total_debited_cif_inr(self) -> Decimal:

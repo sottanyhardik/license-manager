@@ -211,7 +211,17 @@ class LicenseBalanceCalculator:
     @staticmethod
     def calculate_debit(license_obj) -> Decimal:
         """
-        Calculate total debit (BOE transactions) for license.
+        Allocation-netted BOE debit -- how much of this licence's BOE
+        utilisation is still UNMATCHED to a Sale invoice.
+
+        NOT part of the Balance CIF formula (see `calculate_balance`'s
+        docstring -- that now uses the raw, unconditional
+        `calculate_boe_debit_total` instead, matching the Customs Ledger).
+        This method remains for `build_financial_ledger()`'s own Purchase/
+        Sale/BOE-pending transactional narrative and for the reconciliation
+        app's tests that verify invoice-BOE allocation nets out correctly --
+        a genuinely different concern ("how reconciled is this licence
+        financially") from "what is its Balance CIF."
 
         Business rule: One physical import may generate multiple documents,
         but it must produce exactly one licence debit.
@@ -250,6 +260,55 @@ class LicenseBalanceCalculator:
             )["total"],
             DEC_0,
         )
+
+    @staticmethod
+    def calculate_boe_debit_total(license_obj) -> Decimal:
+        """
+        Total BOE debit at FULL raw `cif_fc`, unconditionally -- every
+        DEBIT `RowDetails` row against this licence, regardless of any
+        invoice/Sale allocation. This is the Customs Ledger's own
+        `total_boe_cif` formula (see `build_customs_ledger`) and is now the
+        sole BOE debit component of Balance CIF (`calculate_balance`) --
+        deliberately NOT netted the way `calculate_debit()` is, since that
+        netting exists for the Financial Ledger's Purchase/Sale
+        transactional view, not for Balance CIF.
+
+        Uses the exact same base rows `get_debit_rows()` (and therefore
+        `build_customs_ledger()`) already query -- only the aggregate
+        column differs (`cif_fc` here vs. `contributed` in `calculate_debit`).
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            Total raw BOE debit CIF as Decimal
+        """
+        rows = LicenseBalanceCalculator.get_debit_rows(license_obj)
+        return to_decimal(
+            rows.aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+            )["total"],
+            DEC_0,
+        )
+
+    @staticmethod
+    def calculate_boe_debit_total_for_licenses(license_ids) -> dict:
+        """
+        Batched sibling of `calculate_boe_debit_total` -- raw, unconditional
+        BOE debit total for MANY licenses in one query, grouped by license
+        id. No allocation/linked-BOE annotations needed (unlike
+        `calculate_debit_for_licenses`) since nothing here is netted.
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        rows = (
+            RowDetails.objects
+            .filter(sr_number__license_id__in=ids, transaction_type=DEBIT)
+            .values("sr_number__license_id")
+            .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+        )
+        return {row["sr_number__license_id"]: to_decimal(row["total"], DEC_0) for row in rows}
 
     @staticmethod
     def calculate_credit_for_licenses(license_ids) -> dict:
@@ -612,6 +671,11 @@ class LicenseBalanceCalculator:
 
         NOTE: Only SALE trades debit the license. PURCHASE trades add to the license (already counted in allotments).
 
+        NOT part of the Balance CIF formula (see `calculate_balance`'s
+        docstring — Customs Ledger's formula, the sole source of truth, has
+        no trade term at all). Stays in use for `build_financial_ledger()`'s
+        own Purchase/Sale transactional narrative/summary stats.
+
         Args:
             license_obj: LicenseDetailsModel instance
 
@@ -629,13 +693,16 @@ class LicenseBalanceCalculator:
     def calculate_purchase_credit(license_obj) -> Decimal:
         """
         Sum of every PURCHASE trade line's cif_fc for this licence — the
-        credit-side counterpart to `calculate_trade()` (SALE debit), used
-        ONLY by `calculate_balance()`'s trading-licence branch (see that
-        method's docstring). Mirrors `get_purchase_trade_rows()`'s own
-        "display-only" note: this is the one place that note no longer
-        applies, now that a trading licence's Balance Engine anchors on its
-        actual trading history instead of the original export-item CIF,
-        exactly like `build_financial_ledger()`'s `running` already does.
+        credit-side counterpart to `calculate_trade()` (SALE debit).
+
+        NOT part of the Balance CIF formula (see `calculate_balance`'s
+        docstring — the old anchor-switch that used this as an alternate
+        credit anchor for "traded" licences produced wrong results whenever
+        a licence had real BOE-debited face value AND incidental trading,
+        e.g. licence 5211016017: a $38,272.50 Purchase/Sale pair discarded
+        $3.31M of real credit, giving $0 instead of the correct $243,034.85
+        Customs Ledger figure). Stays in use for `build_financial_ledger()`'s
+        own Purchase/Sale transactional narrative/summary stats.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -653,17 +720,18 @@ class LicenseBalanceCalculator:
     @staticmethod
     def has_trading_activity(license_obj) -> bool:
         """
-        True when this licence has ANY Purchase or Sale trade line at all —
-        the SAME condition `build_financial_ledger()` uses to decide whether
-        to anchor on the original export-item CIF or on real trading
-        history (see that method's docstring). Shared here so
-        `calculate_balance()` and the Financial Ledger can never independently
-        drift on which licences get which formula.
+        True when this licence has ANY Purchase or Sale trade line at all.
+
+        NOT used by `calculate_balance()` any more (see that method's
+        docstring — Balance CIF no longer branches on trading activity at
+        all, matching the Customs Ledger). Kept for
+        `build_financial_ledger()`'s own summary/gating (its
+        `has_trading_activity`/`missing_purchase_warning` fields) and for
+        anything reporting "has this licence ever been traded" as a fact,
+        independent of Balance CIF.
 
         ONE combined `.exists()` query (not two) — same direction set as
-        `get_purchase_trade_rows()` + `get_trade_rows()` OR'd together,
-        rather than checking each separately, since `calculate_balance()`
-        runs this on every call (list views, bulk recompute tasks).
+        `get_purchase_trade_rows()` + `get_trade_rows()` OR'd together.
         """
         from apps.trade.models import LicenseTrade, LicenseTradeLine
 
@@ -822,17 +890,15 @@ class LicenseBalanceCalculator:
     def calculate_balance_for_licenses(cls, license_ids) -> dict:
         """
         Batched sibling of `calculate_balance` — final balance for MANY
-        licenses in a fixed 6 queries total (not 6×N), by composing
-        `calculate_credit_for_licenses`, `calculate_debit_for_licenses`,
-        `calculate_allotment_for_licenses`, `calculate_trade_for_licenses`,
-        `calculate_purchase_credit_for_licenses`, `has_trading_activity_for_licenses`.
+        licenses in a fixed 3 queries total (not 3×N), by composing
+        `calculate_credit_for_licenses`, `calculate_boe_debit_total_for_licenses`,
+        `calculate_allotment_for_licenses`.
 
         Same formula/rounding/floor-at-0 as `calculate_balance` (see that
-        method's docstring for the trading-licence branch): every id in
-        `license_ids` gets an entry here — missing components simply
-        contribute `DEC_0`, matching what a per-license
-        `calculate_balance(license_obj)` call would have computed for a
-        license with no rows in some component.
+        method's docstring): every id in `license_ids` gets an entry here —
+        missing components simply contribute `DEC_0`, matching what a
+        per-license `calculate_balance(license_obj)` call would have
+        computed for a license with no rows in some component.
 
         Args:
             license_ids: iterable of license pks.
@@ -844,18 +910,12 @@ class LicenseBalanceCalculator:
         if not ids:
             return {}
         credit = cls.calculate_credit_for_licenses(ids)
-        debit = cls.calculate_debit_for_licenses(ids)
+        boe_debit = cls.calculate_boe_debit_total_for_licenses(ids)
         allotment = cls.calculate_allotment_for_licenses(ids)
-        trade = cls.calculate_trade_for_licenses(ids)
-        purchase_credit = cls.calculate_purchase_credit_for_licenses(ids)
-        trading = cls.has_trading_activity_for_licenses(ids)
 
         result = {}
         for lid in ids:
-            anchor = purchase_credit.get(lid, DEC_0) if trading.get(lid, False) else credit.get(lid, DEC_0)
-            balance = anchor - (
-                debit.get(lid, DEC_0) + allotment.get(lid, DEC_0) + trade.get(lid, DEC_0)
-            )
+            balance = credit.get(lid, DEC_0) - (boe_debit.get(lid, DEC_0) + allotment.get(lid, DEC_0))
             balance = quantize_2dp(balance)
             result[lid] = balance if balance >= DEC_0 else DEC_0
         return result
@@ -864,25 +924,40 @@ class LicenseBalanceCalculator:
     def calculate_balance(cls, license_obj) -> Decimal:
         """
         Calculate final balance for license — the single "Balance Engine"
-        value shown everywhere (List/Detail, Overview, PDF/Excel, Customs
-        Ledger's anchor row) and the one `build_financial_ledger()`'s own
-        running total must always reconcile with exactly (never merely
-        within tolerance).
+        value shown everywhere (List/Detail, Overview, Item Summary,
+        Dashboard, PDF/Excel, APIs, Serializers) and the one the Customs
+        Ledger's own running total (`build_customs_ledger`) must always
+        reconcile with exactly (never merely within tolerance) — the
+        Customs Ledger's formula IS this formula, both implementations of
+        the same computation.
 
-        Formula:
-        - No Purchase/Sale trading activity at all: `Credit - (Debit +
-          Allotment + Trade)` (unchanged; `Trade` is always 0 here since it
-          requires a SALE line).
-        - ANY Purchase/Sale trading activity: `PurchaseCredit - (Debit +
-          Allotment + Trade)` — the SAME `has_trading_activity` condition and
-          the SAME switch from the original export-item CIF to real trading
-          history that `build_financial_ledger()`'s `running` already makes
-          (see that method's docstring: a traded licence's ledger is no
-          longer anchored on a fabricated Opening Balance). `Debit`/`Trade`
-          already correctly net out matched vs. unmatched BOE/invoice amounts
-          (see `calculate_debit`/`calculate_trade`'s own docstrings) — this
-          branch is the only piece that was missing for the two to always
-          agree exactly.
+        Formula: `Credit - (BOE Debit + Allotment)`:
+        - `Credit` = `calculate_credit()` — Total Licence CIF (sum of
+          export-item cif_fc), Coalesced to 0.
+        - `BOE Debit` = `calculate_boe_debit_total()` — every DEBIT
+          `RowDetails` row's FULL raw `cif_fc`, unconditionally. No
+          invoice-allocation netting, no Purchase/Sale participation.
+        - `Allotment` = `calculate_allotment()` — outstanding (BOE-unlinked)
+          allotted CIF only; allotments already linked to a BOE are never
+          deducted (unchanged).
+
+        Previously this branched on `has_trading_activity()`, swapping
+        `Credit` for `calculate_purchase_credit()` and adding
+        `calculate_trade()` the instant ANY Purchase/Sale trade existed —
+        intended to make a traded licence's balance track its trading
+        history. That broke for a licence with real BOE-debited face value
+        PLUS incidental trading: licence 5211016017 has $3.31M Credit and
+        $3.07M of direct BOE debit, but also one small $38,272.50
+        Purchase/Sale pair — the old formula discarded the $3.31M Credit
+        entirely and anchored on just $38,272.50, giving $0.00 instead of
+        the correct $243,034.85 (`Credit - BOE Debit - Allotment`, exactly
+        what the Customs Ledger already computed). Purchase/Sale trades no
+        longer participate in Balance CIF at all; `calculate_trade`/
+        `calculate_purchase_credit`/`has_trading_activity`/`calculate_debit`
+        remain available for `build_financial_ledger()`'s own Purchase/Sale
+        transactional narrative, which may now legitimately diverge from
+        this value for a traded licence — surfaced via that ledger's own
+        `mismatched` flag, never silently forced to match.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -890,48 +965,39 @@ class LicenseBalanceCalculator:
         Returns:
             Final balance as Decimal (minimum 0), quantized to 2 decimal places
         """
-        debit = cls.calculate_debit(license_obj)
+        credit = cls.calculate_credit(license_obj)
+        boe_debit = cls.calculate_boe_debit_total(license_obj)
         allotment = cls.calculate_allotment(license_obj)
-        trade = cls.calculate_trade(license_obj)
-        anchor = (
-            cls.calculate_purchase_credit(license_obj)
-            if cls.has_trading_activity(license_obj)
-            else cls.calculate_credit(license_obj)
-        )
 
-        balance = anchor - (debit + allotment + trade)
+        balance = credit - (boe_debit + allotment)
         balance = quantize_2dp(balance)
         return balance if balance >= DEC_0 else DEC_0
 
     @classmethod
     def calculate_all_components(cls, license_obj) -> dict[str, Decimal]:
         """
-        Calculate all balance components at once.
-
-        `credit` always stays "original export-item CIF" (used for display
-        elsewhere as e.g. "Original CIF") regardless of trading activity —
-        only `balance` itself switches to the purchase-credit-anchored
-        formula for a traded licence; see `calculate_balance`'s docstring.
+        Calculate all balance components at once — same formula as
+        `calculate_balance` (see its docstring), returned alongside the
+        components themselves for display (e.g. License Overview's
+        Total/Debited/Allotted/Balance CIF cards, which sum to each other
+        exactly by construction: `credit - debit - allotment == balance`).
 
         Args:
             license_obj: LicenseDetailsModel instance
 
         Returns:
-            Dictionary with credit, debit, allotment, trade, and balance (all quantized to 2dp)
+            Dictionary with credit, debit, allotment, and balance (all quantized to 2dp)
         """
         credit = cls.calculate_credit(license_obj)
-        debit = cls.calculate_debit(license_obj)
+        debit = cls.calculate_boe_debit_total(license_obj)
         allotment = cls.calculate_allotment(license_obj)
-        trade = cls.calculate_trade(license_obj)
-        anchor = cls.calculate_purchase_credit(license_obj) if cls.has_trading_activity(license_obj) else credit
-        balance = anchor - (debit + allotment + trade)
+        balance = credit - (debit + allotment)
         balance = quantize_2dp(balance)
 
         return {
             'credit': quantize_2dp(credit),
             'debit': quantize_2dp(debit),
             'allotment': quantize_2dp(allotment),
-            'trade': quantize_2dp(trade),
             'balance': balance if balance >= DEC_0 else DEC_0,
         }
 

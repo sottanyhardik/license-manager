@@ -27,8 +27,13 @@ from apps.license.services.license_balance_ledger_builder import (
     LicenseBalanceLedgerBuilder,
     build_invoice_allocation_groups,
 )
-from apps.reconciliation.models import BOEAllotmentAllocation, ExternalInvoiceLink, ReconciliationLog
-from apps.reconciliation.services.allocation_service import create_boe_allotment_allocation, create_invoice_boe_allocation
+from apps.reconciliation.models import BOEAllotmentAllocation, ReconciliationLog
+from apps.reconciliation.services.allocation_service import (
+    create_boe_allotment_allocation,
+    create_invoice_boe_allocation,
+    remaining_for_row_details_allotment_side,
+    remaining_for_row_details_invoice_side,
+)
 from apps.reconciliation.tests.test_reconciliation import ReconciliationFixtureMixin
 
 User = get_user_model()
@@ -111,8 +116,7 @@ class BalanceLedgerGetTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         data = resp.data
         self.assertEqual(set(data.keys()), {
-            "license", "financial_ledger", "customs_ledger", "invoice_boe", "boe_allotment",
-            "boe_invoice_candidates", "allotment_candidates", "reconciliation", "warnings", "timeline",
+            "license", "financial_ledger", "customs_ledger", "reconciliation", "warnings", "timeline",
         })
         self.assertEqual(data["license"]["license_number"], license_obj.license_number)
         self.assertGreaterEqual(len(data["financial_ledger"]["rows"]), 2)  # opening + final at minimum
@@ -132,12 +136,13 @@ class BoeCandidateDimensionRegressionTests(LicenseBalanceLedgerFixtureMixin, Tes
     """
     Regression test for a reported production bug: the "Find BOE" drawer
     (Invoice<->BOE allocation) was sourcing candidate remaining-capacity
-    from `build_boe_allotment_relationships` (the ALLOTMENT-side track),
-    which caused a false "over allocation" error whenever a BOE's
-    allotment-side and invoice-side remaining diverged. Proves
-    `build_boe_invoice_candidates` reports the INVOICE-side remaining
-    (full, untouched) independently of the ALLOTMENT-side remaining being
-    partially consumed on the very same row.
+    from the ALLOTMENT-side track instead of the INVOICE-side track, which
+    caused a false "over allocation" error whenever a BOE's allotment-side
+    and invoice-side remaining diverged. Proves
+    `remaining_for_row_details_invoice_side` reports the INVOICE-side
+    remaining (full, untouched) independently of
+    `remaining_for_row_details_allotment_side` being partially consumed on
+    the very same row.
     """
 
     def make_allotment(self, company):
@@ -166,17 +171,14 @@ class BoeCandidateDimensionRegressionTests(LicenseBalanceLedgerFixtureMixin, Tes
             user=None,
         )
 
-        invoice_candidates = LicenseBalanceLedgerBuilder.build_boe_invoice_candidates(license_obj)
-        allotment_relationships = LicenseBalanceLedgerBuilder.build_boe_allotment_relationships(license_obj)
-
-        invoice_side = next(c for c in invoice_candidates if c["row_details_id"] == row.id)
-        allotment_side = next(b for b in allotment_relationships if b["row_details_id"] == row.id)
+        _, invoice_remaining_cif_fc, _ = remaining_for_row_details_invoice_side(row)
+        _, allotment_remaining_cif_fc, _ = remaining_for_row_details_allotment_side(row)
 
         # The bug: these two numbers were being conflated. They must now
         # correctly diverge -- invoice side untouched, allotment side halved.
-        self.assertEqual(invoice_side["remaining_cif"], Decimal("56020.35"))
-        self.assertEqual(allotment_side["remaining_cif"], Decimal("28010.17"))
-        self.assertNotEqual(invoice_side["remaining_cif"], allotment_side["remaining_cif"])
+        self.assertEqual(invoice_remaining_cif_fc, Decimal("56020.35"))
+        self.assertEqual(allotment_remaining_cif_fc, Decimal("28010.17"))
+        self.assertNotEqual(invoice_remaining_cif_fc, allotment_remaining_cif_fc)
 
     def test_denies_anonymous_user(self):
         company = self.make_company()
@@ -186,149 +188,6 @@ class BoeCandidateDimensionRegressionTests(LicenseBalanceLedgerFixtureMixin, Tes
         resp = client.get(f"/api/licenses/{license_obj.id}/balance-ledger/")
 
         self.assertEqual(resp.status_code, 403)
-
-
-class MarkExternalInvoiceViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
-    def setUp(self):
-        self.user = self.make_superuser()
-        self.client = APIClient()
-        self.client.force_authenticate(user=self.user)
-
-    def test_mark_creates_link_and_audit_log(self):
-        company = self.make_company()
-        license_obj = self.make_license(company)
-        item = self.make_item(license_obj, 1)
-        boe = self.make_boe(company)
-        row = self.make_debit_row(boe, item, cif_fc=Decimal("500.00"))
-
-        resp = self.client.post(
-            f"/api/licenses/{license_obj.id}/mark-external-invoice/",
-            {"row_details_id": row.id, "invoice_number": "OTH-001245", "qty": 0, "cif_fc": "500.00", "cif_inr": "42250.00"},
-            format="json",
-        )
-
-        self.assertEqual(resp.status_code, 201, resp.data)
-        link = ExternalInvoiceLink.objects.get(pk=resp.data["link_id"])
-        self.assertEqual(link.invoice_number, "OTH-001245")
-        self.assertEqual(link.status, ExternalInvoiceLink.STATUS_ACTIVE)
-        self.assertEqual(link.created_by_id, self.user.id)
-
-        log = ReconciliationLog.objects.filter(action=ReconciliationLog.ACTION_MARK_EXTERNAL_INVOICE).first()
-        self.assertIsNotNone(log)
-        self.assertEqual(log.user_id, self.user.id)
-
-    def test_over_allocation_returns_400(self):
-        company = self.make_company()
-        license_obj = self.make_license(company)
-        item = self.make_item(license_obj, 1)
-        boe = self.make_boe(company)
-        row = self.make_debit_row(boe, item, cif_fc=Decimal("500.00"))
-
-        resp = self.client.post(
-            f"/api/licenses/{license_obj.id}/mark-external-invoice/",
-            {"row_details_id": row.id, "invoice_number": "OTH-001245", "qty": 0, "cif_fc": "999999.00", "cif_inr": "1.00"},
-            format="json",
-        )
-
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("error", resp.data)
-
-    def test_blank_invoice_number_returns_400(self):
-        company = self.make_company()
-        license_obj = self.make_license(company)
-        item = self.make_item(license_obj, 1)
-        boe = self.make_boe(company)
-        row = self.make_debit_row(boe, item, cif_fc=Decimal("500.00"))
-
-        resp = self.client.post(
-            f"/api/licenses/{license_obj.id}/mark-external-invoice/",
-            {"row_details_id": row.id, "invoice_number": "   ", "qty": 0, "cif_fc": "10.00", "cif_inr": "1.00"},
-            format="json",
-        )
-
-        self.assertEqual(resp.status_code, 400)
-
-    def test_row_details_from_another_license_rejected(self):
-        company = self.make_company()
-        license_a = self.make_license(company)
-        license_b = self.make_license(company)
-        item_b = self.make_item(license_b, 1)
-        boe = self.make_boe(company)
-        row_b = self.make_debit_row(boe, item_b, cif_fc=Decimal("500.00"))
-
-        resp = self.client.post(
-            f"/api/licenses/{license_a.id}/mark-external-invoice/",
-            {"row_details_id": row_b.id, "invoice_number": "OTH-001245", "qty": 0, "cif_fc": "10.00", "cif_inr": "1.00"},
-            format="json",
-        )
-
-        self.assertEqual(resp.status_code, 400)
-
-    def test_denied_without_boe_manager_role(self):
-        client = APIClient()
-        client.force_authenticate(user=self.make_plain_user())
-        company = self.make_company()
-        license_obj = self.make_license(company)
-        item = self.make_item(license_obj, 1)
-        boe = self.make_boe(company)
-        row = self.make_debit_row(boe, item, cif_fc=Decimal("500.00"))
-
-        resp = client.post(
-            f"/api/licenses/{license_obj.id}/mark-external-invoice/",
-            {"row_details_id": row.id, "invoice_number": "OTH-001245", "qty": 0, "cif_fc": "10.00", "cif_inr": "1.00"},
-            format="json",
-        )
-
-        self.assertEqual(resp.status_code, 403)
-
-
-class ReverseExternalInvoiceViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
-    def setUp(self):
-        self.user = self.make_superuser()
-        self.client = APIClient()
-        self.client.force_authenticate(user=self.user)
-
-    def test_reverse_requires_reason(self):
-        company = self.make_company()
-        license_obj = self.make_license(company)
-        item = self.make_item(license_obj, 1)
-        boe = self.make_boe(company)
-        row = self.make_debit_row(boe, item, cif_fc=Decimal("500.00"))
-        link = ExternalInvoiceLink.objects.create(
-            row_details=row, invoice_number="OTH-001245",
-            qty=Decimal("0"), cif_fc=Decimal("500.00"), cif_inr=Decimal("42250.00"),
-            created_by=self.user,
-        )
-
-        resp = self.client.post(
-            f"/api/licenses/{license_obj.id}/reverse-external-invoice/",
-            {"link_id": link.id},
-            format="json",
-        )
-        self.assertEqual(resp.status_code, 400)
-
-    def test_reverse_succeeds_with_reason(self):
-        company = self.make_company()
-        license_obj = self.make_license(company)
-        item = self.make_item(license_obj, 1)
-        boe = self.make_boe(company)
-        row = self.make_debit_row(boe, item, cif_fc=Decimal("500.00"))
-        link = ExternalInvoiceLink.objects.create(
-            row_details=row, invoice_number="OTH-001245",
-            qty=Decimal("0"), cif_fc=Decimal("500.00"), cif_inr=Decimal("42250.00"),
-            created_by=self.user,
-        )
-
-        resp = self.client.post(
-            f"/api/licenses/{license_obj.id}/reverse-external-invoice/",
-            {"link_id": link.id, "reason": "wrong BOE"},
-            format="json",
-        )
-
-        self.assertEqual(resp.status_code, 200)
-        link.refresh_from_db()
-        self.assertEqual(link.status, ExternalInvoiceLink.STATUS_REVERSED)
-        self.assertFalse(link.is_current)
 
 
 class RecalculateViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):

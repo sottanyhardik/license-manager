@@ -117,28 +117,6 @@ export function integrityScoreBadgeVariant(score: number): "success" | "warning"
     return "destructive";
 }
 
-// ─── Status badge variants for Invoice<->BOE / BOE<->Allotment tables ─────
-const INVOICE_BOE_STATUS_VARIANT: Record<string, "success" | "warning" | "destructive" | "info"> = {
-    FULLY_MATCHED: "success",
-    PARTIALLY_MATCHED: "warning",
-    UNMATCHED: "destructive",
-    EXTERNAL: "info",
-};
-
-const BOE_ALLOTMENT_STATUS_VARIANT: Record<string, "success" | "warning" | "destructive"> = {
-    FULLY_SOURCED: "success",
-    PARTIALLY_SOURCED: "warning",
-    UNSOURCED: "destructive",
-};
-
-export function invoiceBoeStatusVariant(status: string) {
-    return INVOICE_BOE_STATUS_VARIANT[status] ?? "secondary";
-}
-
-export function boeAllotmentStatusVariant(status: string) {
-    return BOE_ALLOTMENT_STATUS_VARIANT[status] ?? "secondary";
-}
-
 /** Pull the most useful error string out of an axios error response — same shape as `utils/errorUtils.js`. */
 export function extractApiError(error: unknown, fallback = "Request failed"): string {
     const err = error as { response?: { data?: { detail?: string; message?: string; error?: string } }; message?: string };

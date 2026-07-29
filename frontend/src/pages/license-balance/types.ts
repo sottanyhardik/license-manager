@@ -155,100 +155,6 @@ export interface CustomsLedgerSummary {
     tolerance: number;
 }
 
-export interface LinkedBoe {
-    allocation_id?: number;
-    link_id?: number;
-    row_details_id: number;
-    bill_of_entry_number: string;
-    allocated_qty: number;
-    allocated_cif_fc: number;
-}
-
-export type InvoiceBoeStatus = "FULLY_MATCHED" | "PARTIALLY_MATCHED" | "UNMATCHED" | "EXTERNAL";
-
-export interface InvoiceBoeEntry {
-    kind: "system" | "external";
-    trade_line_id?: number;
-    invoice_number: string;
-    supplier: string | null;
-    purchase_date: string | null;
-    invoice_qty: number;
-    invoice_cif: number;
-    matched_qty: number;
-    matched_cif: number;
-    remaining_qty: number;
-    remaining_cif: number;
-    status: InvoiceBoeStatus;
-    linked_boes: LinkedBoe[];
-}
-
-export interface LinkedAllotment {
-    allocation_id: number;
-    allotment_item_id: number;
-    allotment_number: string;
-    allocated_qty: number;
-    allocated_cif_fc: number;
-}
-
-export type BoeAllotmentStatus = "FULLY_SOURCED" | "PARTIALLY_SOURCED" | "UNSOURCED";
-
-export interface BoeAllotmentEntry {
-    row_details_id: number;
-    bill_of_entry_number: string;
-    bill_of_entry_date: string | null;
-    company: string | null;
-    boe_qty: number;
-    boe_cif: number;
-    matched_qty: number;
-    matched_cif: number;
-    remaining_qty: number;
-    remaining_cif: number;
-    status: BoeAllotmentStatus;
-    linked_allotments: LinkedAllotment[];
-}
-
-/**
- * One BOE debit row on this licence with its INVOICE-SIDE remaining capacity
- * (`remaining_for_row_details_invoice_side`) — the correct candidate source
- * for the "Find BOE" drawer (Invoice ↔ BOE, `InvoiceBoeSection.tsx`). This is
- * a distinct consumption track from `BoeAllotmentEntry.remaining_*` (the
- * ALLOTMENT-side remaining) — the two only coincidentally match when neither
- * track has any allocations yet, which is why they must never be conflated.
- */
-export interface BoeInvoiceCandidate {
-    row_details_id: number;
-    bill_of_entry_number: string;
-    bill_of_entry_date: string | null;
-    company: string | null;
-    item_name: string | null;
-    boe_qty: number;
-    boe_cif: number;
-    boe_cif_inr: number;
-    remaining_qty: number;
-    remaining_cif: number;
-    remaining_cif_inr: number;
-}
-
-/**
- * One `AllotmentItems` row on this licence with remaining capacity to be
- * sourced BY a BOE (`remaining_for_allotment_item`) — the correct candidate
- * source for the "Find Allotment" drawer (BOE ↔ Allotment,
- * `BoeAllotmentSection.tsx`). Already filtered server-side to items with
- * some remaining qty or CIF.
- */
-export interface AllotmentCandidate {
-    allotment_item_id: number;
-    allotment_number: string;
-    company: string | null;
-    item_name: string | null;
-    estimated_arrival_date: string | null;
-    allotment_qty: number;
-    allotment_cif: number;
-    remaining_qty: number;
-    remaining_cif: number;
-    remaining_cif_inr: number;
-}
-
 export interface ReconciliationSummary {
     financial_ledger_balance: number;
     customs_ledger_balance: number;
@@ -318,10 +224,6 @@ export interface LicenseBalanceLedgerData {
         rows: CustomsLedgerRow[];
         summary: CustomsLedgerSummary;
     };
-    invoice_boe: InvoiceBoeEntry[];
-    boe_allotment: BoeAllotmentEntry[];
-    boe_invoice_candidates: BoeInvoiceCandidate[];
-    allotment_candidates: AllotmentCandidate[];
     reconciliation: ReconciliationSummary;
     warnings: LicenseBalanceWarning[];
     timeline: TimelineEvent[];

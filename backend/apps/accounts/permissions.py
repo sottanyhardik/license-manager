@@ -218,14 +218,6 @@ class LicenseBalanceLedgerPermission(permissions.BasePermission):
     # lists must each be satisfied (AND-of-ORs); a single list means ANY
     # role in it is sufficient.
     write_action_roles = {
-        'allocate_invoice_boe': (['TRADE_MANAGER'], ['BOE_MANAGER']),
-        'edit_invoice_boe_allocation': (['TRADE_MANAGER'], ['BOE_MANAGER']),
-        'reverse_invoice_boe_allocation': (['TRADE_MANAGER'], ['BOE_MANAGER']),
-        'allocate_boe_allotment': (['BOE_MANAGER'], ['ALLOTMENT_MANAGER']),
-        'edit_boe_allotment_allocation': (['BOE_MANAGER'], ['ALLOTMENT_MANAGER']),
-        'reverse_boe_allotment_allocation': (['BOE_MANAGER'], ['ALLOTMENT_MANAGER']),
-        'mark_external_invoice': (['BOE_MANAGER'],),
-        'reverse_external_invoice': (['BOE_MANAGER'],),
         'recalculate': (['LICENSE_MANAGER'],),
         # Ignoring/restoring a warning is pure workflow bookkeeping (never
         # touches allocations/invoices/BOEs/allotments/balances — see

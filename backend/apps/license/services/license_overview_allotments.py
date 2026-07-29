@@ -18,8 +18,7 @@ sums. Two separate grouped queries side-step it entirely.)
 
 Allotment Number is synthesized as `f"ALT-{allotment.id}"`, matching the
 exact convention already used in
-`license_balance_ledger_builder.py` (`build_allotment_candidates` /
-`build_boe_allotment_relationships`).
+`license_balance_ledger_builder.py::build_boe_allotment_relationships`.
 """
 from __future__ import annotations
 

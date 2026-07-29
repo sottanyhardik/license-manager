@@ -202,10 +202,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     # since several of them require BOE/TRADE/ALLOTMENT write roles, not
     # just LICENSE_MANAGER. See LicenseBalanceLedgerPermission's docstring.
     _BALANCE_LEDGER_ACTIONS = {
-        'balance_ledger', 'allocate_invoice_boe', 'edit_invoice_boe_allocation',
-        'reverse_invoice_boe_allocation', 'allocate_boe_allotment',
-        'edit_boe_allotment_allocation', 'reverse_boe_allotment_allocation',
-        'mark_external_invoice', 'reverse_external_invoice', 'recalculate',
+        'balance_ledger', 'recalculate',
         'ignore_warning', 'restore_warning',
         # License Overview dashboard actions (add_license_overview_actions) —
         # all read-only (GET), so they only ever hit LicenseBalanceLedgerPermission's

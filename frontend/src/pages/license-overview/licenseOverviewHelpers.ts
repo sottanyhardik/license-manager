@@ -1,7 +1,7 @@
 // Re-export the shared formatters/error-extractor from `pages/license-balance/`
-// rather than duplicating them — per the brief, `licenseBalanceHelpers.ts`
-// itself stays put (imported directly by `BoeAllocationDrawer.tsx`), but
-// nothing stops this new module from importing and re-using its formatters.
+// rather than duplicating them — `licenseBalanceHelpers.ts` itself stays put
+// (still imported by other license-balance/license-overview consumers), but
+// nothing stops this module from importing and re-using its formatters.
 export { fmtNum, fmtDate, extractApiError } from "@/pages/license-balance/licenseBalanceHelpers";
 import type {
     InvoiceLedgerStatus,

@@ -775,90 +775,6 @@ class LicenseBalanceLedgerBuilder:
         return invoices
 
     # ------------------------------------------------------------------
-    # Candidate lists for the allocation drawers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def build_boe_invoice_candidates(license_obj):
-        """
-        One entry per BOE debit row on this licence, with its INVOICE-SIDE
-        remaining capacity (`remaining_for_row_details_invoice_side`) — the
-        correct candidate list for the "Find BOE" drawer when allocating an
-        INVOICE against BOEs.
-
-        Deliberately NOT the same list as `build_boe_allotment_relationships`
-        (which exposes the ALLOTMENT-side remaining — an independent
-        consumption track). Reusing that list here was the root cause of a
-        reported false "over allocation" validation error: a BOE's
-        allotment-side remaining and invoice-side remaining are two
-        different numbers that are only coincidentally equal when neither
-        track has any allocations yet on that row.
-        """
-        from apps.reconciliation.services.allocation_service import remaining_for_row_details_invoice_side
-        from apps.license.services.balance_calculator import LicenseBalanceCalculator
-
-        candidates = []
-        rows = (
-            LicenseBalanceCalculator.get_debit_rows(license_obj)
-            .select_related('bill_of_entry__company', 'bill_of_entry__port', 'sr_number')
-            .prefetch_related('sr_number__items')
-        )
-        for row in rows:
-            boe = row.bill_of_entry
-            remaining_qty, remaining_cif_fc, remaining_cif_inr = remaining_for_row_details_invoice_side(row)
-            candidates.append({
-                'row_details_id': row.id,
-                'bill_of_entry_number': boe.bill_of_entry_number if boe else '-',
-                'bill_of_entry_date': boe.bill_of_entry_date if boe else None,
-                'company': boe.company.name if (boe and boe.company) else '-',
-                'item_name': item_display_name(row.sr_number, fallback=(boe.product_name if boe else '')),
-                'boe_qty': row.qty,
-                'boe_cif': row.cif_fc,
-                'boe_cif_inr': row.cif_inr,
-                'remaining_qty': remaining_qty,
-                'remaining_cif': remaining_cif_fc,
-                'remaining_cif_inr': remaining_cif_inr,
-            })
-        return candidates
-
-    @staticmethod
-    def build_allotment_candidates(license_obj):
-        """
-        One entry per `AllotmentItems` row on this licence with remaining
-        capacity to be sourced BY a BOE (`remaining_for_allotment_item`) —
-        the correct candidate list for the "Find Allotment" drawer. Filters
-        out allotment items with zero remaining qty AND CIF (fully
-        consumed already).
-        """
-        from apps.allotment.models import AllotmentItems
-        from apps.reconciliation.services.allocation_service import remaining_for_allotment_item
-
-        candidates = []
-        items = (
-            AllotmentItems.objects.filter(item__license=license_obj)
-            .select_related('allotment__company', 'item')
-            .prefetch_related('item__items')
-        )
-        for allotment_item in items:
-            remaining_qty, remaining_cif_fc, remaining_cif_inr = remaining_for_allotment_item(allotment_item)
-            if remaining_qty <= DEC_0 and remaining_cif_fc <= DEC_0:
-                continue
-            allotment = allotment_item.allotment
-            candidates.append({
-                'allotment_item_id': allotment_item.id,
-                'allotment_number': f"ALT-{allotment.id}" if allotment else '-',
-                'company': allotment.company.name if (allotment and allotment.company) else '-',
-                'item_name': item_display_name(allotment_item.item, fallback=(allotment.item_name if allotment else '')),
-                'estimated_arrival_date': allotment.estimated_arrival_date if allotment else None,
-                'allotment_qty': allotment_item.qty,
-                'allotment_cif': allotment_item.cif_fc,
-                'remaining_qty': remaining_qty,
-                'remaining_cif': remaining_cif_fc,
-                'remaining_cif_inr': remaining_cif_inr,
-            })
-        return candidates
-
-    # ------------------------------------------------------------------
     # BOE <-> Allotment relationships
     # ------------------------------------------------------------------
 
@@ -1276,10 +1192,12 @@ class LicenseBalanceLedgerBuilder:
 
         financial_rows, financial_summary = cls.build_financial_ledger(license_obj, alloc_map, ext_map)
         customs_rows, customs_summary = cls.build_customs_ledger(license_obj)
+        # `invoice_boe`/`boe_allotment` are no longer exposed as top-level
+        # response keys (their consuming UI sections were removed), but
+        # `build_warnings()` still needs them as inputs to compute the
+        # UNMATCHED_INVOICE/UNSOURCED_BOE warnings below.
         invoice_boe = cls.build_invoice_boe_relationships(license_obj)
         boe_allotment = cls.build_boe_allotment_relationships(license_obj)
-        boe_invoice_candidates = cls.build_boe_invoice_candidates(license_obj)
-        allotment_candidates = cls.build_allotment_candidates(license_obj)
         reconciliation = cls.build_reconciliation_summary(license_obj, financial_summary, customs_summary)
         warnings = cls.build_warnings(license_obj, financial_summary, reconciliation, invoice_boe, boe_allotment)
         timeline = cls.build_timeline(license_obj)
@@ -1313,10 +1231,6 @@ class LicenseBalanceLedgerBuilder:
             },
             'financial_ledger': {'rows': financial_rows, 'summary': financial_summary},
             'customs_ledger': {'rows': customs_rows, 'summary': customs_summary},
-            'invoice_boe': invoice_boe,
-            'boe_allotment': boe_allotment,
-            'boe_invoice_candidates': boe_invoice_candidates,
-            'allotment_candidates': allotment_candidates,
             'reconciliation': reconciliation,
             'warnings': warnings,
             'timeline': timeline,

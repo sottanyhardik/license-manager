@@ -14,8 +14,6 @@ import { useLicenseBalanceLedger, licenseBalanceKeys } from "@/pages/license-bal
 import { useLicenseOverviewSummary, licenseOverviewKeys } from "./useLicenseOverviewSummary";
 import { extractApiError, fmtDate, fmtNum, licenseOverviewStatusVariant } from "./licenseOverviewHelpers";
 import SummaryCard from "./SummaryCard";
-import InvoiceBoeSection from "./InvoiceBoeSection";
-import BoeAllotmentSection from "./BoeAllotmentSection";
 import CustomsLedgerSection from "./CustomsLedgerSection";
 import CustomsLedgerTable from "./CustomsLedgerTable";
 import FinancialLedgerTable from "./FinancialLedgerTable";
@@ -130,28 +128,6 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
 
             {ledgerQuery.data && (
                 <>
-                    <Card>
-                        <CardContent className="pt-4">
-                            <InvoiceBoeSection
-                                licenseId={licenseId ?? ""}
-                                invoices={ledgerQuery.data.invoice_boe}
-                                boeInvoiceCandidates={ledgerQuery.data.boe_invoice_candidates}
-                            />
-                        </CardContent>
-                    </Card>
-
-                    {ledgerQuery.data.allotment_candidates.length > 0 && (
-                        <Card>
-                            <CardContent className="pt-4">
-                                <BoeAllotmentSection
-                                    licenseId={licenseId ?? ""}
-                                    boeAllotment={ledgerQuery.data.boe_allotment}
-                                    allotmentCandidates={ledgerQuery.data.allotment_candidates}
-                                />
-                            </CardContent>
-                        </Card>
-                    )}
-
                     <Card>
                         <CardHeader>
                             <CardTitle>Financial Ledger</CardTitle>

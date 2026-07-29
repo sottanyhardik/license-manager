@@ -1012,6 +1012,17 @@ class LicenseImportItemsModel(models.Model):
         `condition_pool.compute_condition_pools(license)` once and reuse the
         returned dict, rather than calling this property per-item — see
         `_update_all_import_items_available_value` in license.signals.
+
+        For BULK contexts spanning MANY licences (e.g. a paginated list
+        response mixing items from different licences, such as the
+        Allotment "available-items" action) use
+        `condition_pool.available_value_bulk_map(items)` instead — it
+        composes `LicenseBalanceCalculator.calculate_balance_for_licenses`
+        and `condition_pool.compute_condition_pools_bulk` to stay a fixed
+        number of queries regardless of batch size. Its branching is kept
+        in lock-step with this property's (see
+        `condition_pool._resolve_available_value`'s docstring) — never let
+        the two drift apart.
         """
         if not self.license:
             return DEC_0

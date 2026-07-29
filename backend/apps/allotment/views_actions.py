@@ -254,8 +254,21 @@ class AllotmentActionViewSet(ViewSet):
         # Get total count - use a faster approximate count for large result sets
         total_count = queryset.count()
 
+        # Batch this page's live available_value/balance_cif_fc ONCE across
+        # every licence represented on the page (not once per item) — same
+        # technique as `live_balance_map` for Balance CIF list views. Without
+        # this, `LicenseImportItemSerializer.get_available_value` would fall
+        # back to the per-item live property, re-running a licence's full
+        # Balance CIF aggregate once per import item on that licence (a page
+        # of 100 items across 100 different licences would multiply badly).
+        from apps.license.services.condition_pool import available_value_bulk_map
+        available_value_map = available_value_bulk_map(paginated_items)
+
         # Serialize the data
-        license_serializer = LicenseImportItemSerializer(paginated_items, many=True, context={'request': request})
+        license_serializer = LicenseImportItemSerializer(
+            paginated_items, many=True,
+            context={'request': request, 'available_value_map': available_value_map}
+        )
         allotment_serializer = AllotmentSerializer(allotment, context={'request': request})
 
         # Add $20 buffer to required value to handle rounding issues

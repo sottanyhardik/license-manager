@@ -547,7 +547,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         license_obj = self.get_object()
 
         import_items = list(license_obj.import_license.all())
-        import_data = LicenseImportItemSerializer(import_items, many=True, context={'request': request}).data
+        # Batch the live available_value/balance_cif_fc for this licence's
+        # items in one shot instead of falling back to the per-item live
+        # property N times — see `available_value_bulk_map`'s docstring.
+        from apps.license.services.condition_pool import available_value_bulk_map
+        available_value_map = available_value_bulk_map(import_items)
+        import_data = LicenseImportItemSerializer(
+            import_items, many=True,
+            context={'request': request, 'available_value_map': available_value_map}
+        ).data
 
         # Attach each item's utilization-plan status (Original/Used/Remaining)
         # — the SAME `plan_status_for` the Allotment screen's Max-allotment

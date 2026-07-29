@@ -241,3 +241,79 @@ def remaining_for_condition(license_obj, condition_type: str) -> Decimal | None:
         return None
     pools = compute_condition_pools(license_obj)
     return pools.get(condition_type, license_obj._calculate_license_credit() * pct / Decimal("100"))
+
+
+def _resolve_available_value(item, balance_map: dict, pools_map: dict) -> Decimal:
+    """
+    Per-item resolver shared by `available_value_bulk_map` — mirrors
+    `LicenseImportItemsModel.available_value_calculated`'s branches EXACTLY
+    (see that property's docstring in `apps/license/models/core.py`), just
+    reading from pre-computed batch maps instead of running per-item
+    queries. Keep these two in lock-step; if one branches, the other must.
+    """
+    # Special marker value — identical check to `available_value_calculated`.
+    if item.cif_inr == Decimal("0.01") or item.cif_fc == Decimal("0.01"):
+        return Decimal("0.01")
+
+    if not item.license_id:
+        return DEC_0
+
+    license_balance = balance_map.get(item.license_id, DEC_0)
+    cond = (item.condition_type or "").strip()
+
+    if cond.endswith("%"):
+        pct = _parse_pct(cond)
+        if pct is None or pct <= DEC_0:
+            return license_balance
+        pools = pools_map.get(item.license_id) or {}
+        if cond in pools:
+            remaining = pools[cond]
+        else:
+            # Defensive fallback — should be unreachable in practice, since
+            # `compute_condition_pools_bulk` derives its groups from a fresh
+            # query over the same licence/condition_type, so an item with a
+            # valid "%" condition always lands in its licence's pool map.
+            # Mirrors `remaining_for_condition`'s own miss-path (full pool,
+            # no usage subtracted) for a licence this defensive branch has
+            # no batched credit for.
+            remaining = item.license._calculate_license_credit() * pct / Decimal("100")
+        return min(remaining, license_balance)
+
+    # "AU" or open: track licence balance directly.
+    return license_balance
+
+
+def available_value_bulk_map(items) -> dict[int, Decimal]:
+    """
+    Batched equivalent of `LicenseImportItemsModel.available_value_calculated`
+    for MANY items, possibly spanning MANY different licences — byte-
+    identical to calling `.available_value_calculated` per item, but in a
+    small fixed number of queries regardless of batch size instead of
+    O(items) balance-aggregate + condition-pool queries.
+
+    Used by list-style reads of `LicenseImportItemSerializer` (e.g. the
+    Allotment "available-items" action) to avoid re-running a licence's
+    full Balance CIF aggregate once per import item on that licence.
+
+    Composes:
+      - `LicenseBalanceCalculator.calculate_balance_for_licenses` for the
+        `license_balance` component (same formula `available_value_calculated`
+        reaches via the licence's balance — see that property's docstring).
+      - `compute_condition_pools_bulk` for the "%"-condition shared-pool
+        component.
+
+    Returns `{item_id: Decimal}`. Keep in lock-step with
+    `available_value_calculated` / `_resolve_available_value` — never
+    duplicate the branching logic elsewhere.
+    """
+    items = list(items)
+    if not items:
+        return {}
+
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+    license_ids = list({item.license_id for item in items if item.license_id})
+    balance_map = LicenseBalanceCalculator.calculate_balance_for_licenses(license_ids) if license_ids else {}
+    pools_map = compute_condition_pools_bulk(license_ids) if license_ids else {}
+
+    return {item.id: _resolve_available_value(item, balance_map, pools_map) for item in items}

@@ -215,14 +215,27 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
     def get_available_value(self, obj):
         """
-        Return calculated available value based on restriction logic.
+        Return the LIVE available value (same formula as
+        `LicenseImportItemsModel.available_value_calculated` — see that
+        property's docstring), not the stored `available_value` column.
 
-        Reads the stored `available_value` field rather than re-computing the
-        pool model on every read — the pool is recalculated on every save by
-        `_update_all_import_items_available_value`, so the stored field is
-        authoritative. Avoids O(N) compute_condition_pools calls per list view.
+        The stored column is only refreshed by `_update_all_import_items_
+        available_value` on a save of this licence/BOE/allotment/item, so it
+        can go stale between saves (e.g. after a licence's Balance CIF
+        formula itself changes) — this is exactly the "Balance CIF is
+        wrong on the Allotment License Selection screen" bug class this
+        fixes. List callers should batch a `{item_id: Decimal}` map once via
+        `condition_pool.available_value_bulk_map` and pass it in as
+        `self.context['available_value_map']` — mirrors the `plan_map`
+        pattern in `get_planned_quantity` above. Falls back to the live
+        per-item property when no batch map is supplied (standalone usage),
+        never to the stale stored column.
         """
-        return float(obj.available_value or 0)
+        value_map = self.context.get('available_value_map')
+        if value_map is not None:
+            value = value_map.get(obj.id)
+            return float(value) if value is not None else 0.0
+        return float(obj.available_value_calculated or 0)
 
     # All balance read-outs use the stored fields (kept in sync by
     # update_balance_values + the bulk serializer flow). Reading from the
@@ -288,10 +301,16 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     def get_balance_cif_fc(self, obj):
         """
         ITEM-LEVEL available CIF FC. Under the new condition_type model the
-        per-item balance is the same value we store in `available_value` —
-        return the stored field to keep this O(1).
+        per-item balance is the same value as `available_value` — see
+        `get_available_value`'s docstring for why this reads the LIVE value
+        (via the same batched `available_value_map` context key) rather than
+        the stale-prone stored `available_value` column.
         """
-        return float(obj.available_value or 0)
+        value_map = self.context.get('available_value_map')
+        if value_map is not None:
+            value = value_map.get(obj.id)
+            return float(value) if value is not None else 0.0
+        return float(obj.available_value_calculated or 0)
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -711,6 +730,14 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             from apps.license.services.plan_reporting import plan_map_for_import_items
             item_ids = [item.id for item in instance.import_license.all()]
             self.context['plan_map'] = plan_map_for_import_items(item_ids) if item_ids else {}
+
+        # Same batching for the nested import items' live available_value /
+        # balance_cif_fc (see `LicenseImportItemSerializer.get_available_value`)
+        # — one shot for this licence's items instead of one live property
+        # call per item.
+        if not is_list_view and 'available_value_map' not in self.context:
+            from apps.license.services.condition_pool import available_value_bulk_map
+            self.context['available_value_map'] = available_value_bulk_map(instance.import_license.all())
 
         rep = super().to_representation(instance)
 

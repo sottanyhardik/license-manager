@@ -986,9 +986,29 @@ class LicenseBalanceLedgerBuilder:
         and remaining qty/CIF still to be allocated. Plus one synthetic
         group per distinct external invoice number (BOEs marked via
         `mark_boe_as_external_invoice` with no system trade line).
+
+        Invoice Linkage Rule (BOE-level, display/grouping ONLY — see
+        `total_boes`/`invoiced_boes`/`pending_boes`/`fully_invoiced`
+        below): once ANY `RowDetails` row of a physical BOE has an active
+        `InvoiceBOEAllocation`, that WHOLE BOE is considered "Invoiced" for
+        this grouping — a BOE is never shown as partially invoiced. This
+        is DELIBERATELY separate from `calculate_debit()`/`get_debit_rows`
+        (the actual Financial Balance math), which stays exactly per-row/
+        per-allocation — see that annotation's own docstring for why: a
+        BOE debiting two licence items, one matched and one not, must
+        still charge the real, unmatched item's CIF against the balance;
+        nothing here changes that. `total_boes`/`invoiced_boes`/
+        `pending_boes` count DISTINCT physical BOEs (by `bill_of_entry_id`)
+        seen across `linked_boes` (already-allocated) and `pending_boes_
+        detail` (legacy-tagged candidates with remaining invoice-side
+        capacity, from `find_boe_allocation_candidates` — the same
+        candidate lookup `reconcile_trade_boe_links` itself trusts) —
+        a BOE appearing in BOTH (one row allocated, a sibling row still a
+        candidate) counts as Invoiced only, per the rule above.
         """
         from apps.reconciliation.models import ExternalInvoiceLink, InvoiceBOEAllocation
         from apps.reconciliation.services.allocation_service import remaining_for_trade_line
+        from apps.reconciliation.services.boe_link_reconciler import find_boe_allocation_candidates
         from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
         invoices = []
@@ -1004,6 +1024,32 @@ class LicenseBalanceLedgerBuilder:
                 ).select_related('row_details__bill_of_entry')
             )
             remaining_qty, remaining_cif_fc, remaining_cif_inr = remaining_for_trade_line(line)
+
+            # BOE-level Invoice Linkage Rule (display/grouping only — see
+            # this method's docstring). `invoiced_boe_ids` wins over
+            # `candidate` status whenever a BOE appears in both.
+            invoiced_boe_ids = {
+                alloc.row_details.bill_of_entry_id
+                for alloc in allocations
+                if alloc.row_details.bill_of_entry_id
+            }
+            candidate_rows = find_boe_allocation_candidates(line)
+            pending_boes_detail = []
+            pending_boe_ids = set()
+            for candidate in candidate_rows:
+                boe_id = candidate.bill_of_entry_id
+                if not boe_id or boe_id in invoiced_boe_ids or boe_id in pending_boe_ids:
+                    continue
+                pending_boe_ids.add(boe_id)
+                pending_boes_detail.append({
+                    'row_details_id': candidate.id,
+                    'bill_of_entry_id': boe_id,
+                    'bill_of_entry_number': (
+                        candidate.bill_of_entry.bill_of_entry_number if candidate.bill_of_entry else '-'
+                    ),
+                })
+            total_boe_ids = invoiced_boe_ids | pending_boe_ids
+
             invoices.append({
                 'kind': 'system',
                 'trade_line_id': line.id,
@@ -1023,6 +1069,7 @@ class LicenseBalanceLedgerBuilder:
                     {
                         'allocation_id': alloc.id,
                         'row_details_id': alloc.row_details_id,
+                        'bill_of_entry_id': alloc.row_details.bill_of_entry_id,
                         'bill_of_entry_number': (
                             alloc.row_details.bill_of_entry.bill_of_entry_number
                             if alloc.row_details.bill_of_entry else '-'
@@ -1032,6 +1079,12 @@ class LicenseBalanceLedgerBuilder:
                     }
                     for alloc in allocations
                 ],
+                # Licence Trade Group Rule — see this method's docstring.
+                'total_boes': len(total_boe_ids),
+                'invoiced_boes': len(invoiced_boe_ids),
+                'pending_boes': len(pending_boe_ids),
+                'fully_invoiced': len(pending_boe_ids) == 0 and len(total_boe_ids) > 0,
+                'pending_boes_detail': pending_boes_detail,
             })
 
         # External invoices: group ACTIVE, current links by invoice_number.
@@ -1063,6 +1116,7 @@ class LicenseBalanceLedgerBuilder:
             group['linked_boes'].append({
                 'link_id': link.id,
                 'row_details_id': link.row_details_id,
+                'bill_of_entry_id': link.row_details.bill_of_entry_id,
                 'bill_of_entry_number': (
                     link.row_details.bill_of_entry.bill_of_entry_number
                     if link.row_details.bill_of_entry else '-'
@@ -1070,6 +1124,20 @@ class LicenseBalanceLedgerBuilder:
                 'allocated_qty': link.qty,
                 'allocated_cif_fc': link.cif_fc,
             })
+
+        # External invoices are, by definition, already fully resolved
+        # (a human explicitly marked each linked BOE as invoiced) — so
+        # every distinct BOE in `linked_boes` counts as Invoiced, none
+        # Pending. Same field shape as the system-invoice groups above,
+        # for a uniform Licence Trade Group Rule across both kinds.
+        for group in ext_groups.values():
+            distinct_boe_ids = {b['bill_of_entry_id'] for b in group['linked_boes'] if b['bill_of_entry_id']}
+            group['total_boes'] = len(distinct_boe_ids)
+            group['invoiced_boes'] = len(distinct_boe_ids)
+            group['pending_boes'] = 0
+            group['fully_invoiced'] = len(distinct_boe_ids) > 0
+            group['pending_boes_detail'] = []
+
         invoices.extend(ext_groups.values())
         return invoices
 
@@ -1520,11 +1588,16 @@ class LicenseBalanceLedgerBuilder:
 
         financial_rows, financial_summary = cls.build_financial_ledger(license_obj, alloc_map, ext_map)
         customs_rows, customs_summary = cls.build_customs_ledger(license_obj, show_hidden=show_hidden)
-        # `invoice_boe`/`boe_allotment` are no longer exposed as top-level
-        # response keys (their consuming UI sections were removed), but
-        # `build_warnings()` still needs them as inputs to compute the
-        # UNMATCHED_INVOICE/UNSOURCED_BOE warnings below.
+        # `boe_allotment` is not exposed as a top-level response key (its
+        # consuming UI section was removed) but `build_warnings()` still
+        # needs it to compute the UNSOURCED_BOE warning below. `invoice_boe`
+        # IS re-exposed, filtered to `pending_invoice_groups` below — see
+        # the Licence Trade Group Rule in `build_invoice_boe_relationships`'
+        # docstring: a group with `pending_boes == 0` is fully invoiced and
+        # must disappear from the Pending Invoice workflow entirely, never
+        # shown as an empty/zero-pending group.
         invoice_boe = cls.build_invoice_boe_relationships(license_obj)
+        pending_invoice_groups = [group for group in invoice_boe if group['pending_boes'] > 0]
         boe_allotment = cls.build_boe_allotment_relationships(license_obj)
         reconciliation = cls.build_reconciliation_summary(license_obj, financial_summary, customs_summary)
         warnings = cls.build_warnings(license_obj, financial_summary, reconciliation, invoice_boe, boe_allotment)
@@ -1560,6 +1633,12 @@ class LicenseBalanceLedgerBuilder:
             'financial_ledger': {'rows': financial_rows, 'summary': financial_summary},
             'customs_ledger': {'rows': customs_rows, 'summary': customs_summary},
             'reconciliation': reconciliation,
+            # Licence Trade Group Rule (see `build_invoice_boe_
+            # relationships`'s docstring): only groups with >=1 BOE still
+            # pending invoice linkage — a fully-invoiced group is entirely
+            # absent, never shown at zero. Purely a display/workflow
+            # grouping; never affects any balance figure above.
+            'pending_invoice_groups': pending_invoice_groups,
             'warnings': warnings,
             'timeline': timeline,
         }

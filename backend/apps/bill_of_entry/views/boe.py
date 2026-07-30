@@ -149,31 +149,24 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
 
         # Check if filtering for available BOEs for trade
         available_for_trade = self.request.query_params.get('available_for_trade')
-        current_boe = self.request.query_params.get('current_boe')
-        current_invoice = self.request.query_params.get('current_invoice')
 
         if available_for_trade == 'true':
-            # Build filter conditions
-            filter_conditions = Q(invoice_no__isnull=True) | Q(invoice_no='')
-
-            # Include currently-linked BOE(s) if provided (comma-separated list of ids,
-            # or a single bare id for backward compatibility)
-            if current_boe:
-                current_boe_ids = [
-                    boe_id.strip() for boe_id in current_boe.split(',') if boe_id.strip()
-                ]
-                if current_boe_ids:
-                    filter_conditions |= Q(id__in=current_boe_ids)
-
-            # Include BOEs with current invoice number if provided
-            if current_invoice:
-                filter_conditions |= Q(invoice_no=current_invoice)
-
+            # A single physical BOE can legitimately be linked to MANY
+            # invoices (many `LicenseTrade`s each covering a different
+            # licence/item debited by the same customs document) — see the
+            # Financial Ledger's BOE Invoice Status Consistency rule,
+            # which already treats `trade.boes` (M2M, many-to-many by
+            # construction) as the source of truth for "is this BOE
+            # invoiced," never the single `invoice_no` CharField. This view
+            # previously excluded any BOE that already had an `invoice_no`
+            # stamped by an EARLIER trade, incorrectly treating it as a
+            # single-owner field and blocking a second, equally valid
+            # trade from picking the same BOE. `invoice_no` is now purely
+            # informational/display here.
+            #
             # Pending BOE rule: a previous-owner BOE (invoice_no=="OTH")
-            # must NEVER appear as an invoice-matching suggestion, even if
-            # `current_boe`/`current_invoice` above would otherwise pull
-            # it back in via their OR conditions.
-            queryset = queryset.filter(filter_conditions).exclude(invoice_no=OTH_INVOICE_MARKER)
+            # must NEVER appear as an invoice-matching suggestion.
+            queryset = queryset.exclude(invoice_no=OTH_INVOICE_MARKER)
 
         return queryset
 
@@ -280,6 +273,16 @@ def custom_get_queryset_with_defaults(self):
     # Don't apply default invoice filter for retrieve/update/partial_update actions
     # This allows fetching/updating single BOE by ID regardless of invoice status
     if self.action in ['retrieve', 'update', 'partial_update']:
+        return qs
+
+    # `available_for_trade=true` (the trade-form/reconciliation BOE picker)
+    # already applied its OWN, deliberately invoice-status-agnostic
+    # availability rule above (excluding only OTH-marked BOEs — see
+    # `BillOfEntryViewSet.get_queryset`'s docstring: a BOE can legitimately
+    # be linked to many invoices). The default `is_invoice=False` filter
+    # below must not re-apply on top of it, or it silently re-hides every
+    # already-invoiced BOE the picker just decided to allow.
+    if params.get('available_for_trade') == 'true':
         return qs
 
     # Handle is_invoice filter (custom logic, not a model field)

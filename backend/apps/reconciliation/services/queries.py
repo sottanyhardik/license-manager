@@ -117,9 +117,14 @@ def missing_boe() -> list[dict]:
 
 def missing_invoice() -> list[dict]:
     """
-    BOEs with no invoice number stamped — the exact `invoice_no` condition
-    `bill_of_entry/views/boe.py`'s `available_for_trade=true` handling uses
-    (~line 157): `Q(invoice_no__isnull=True) | Q(invoice_no='')`.
+    BOEs with no invoice number stamped — "has this BOE ever been invoiced
+    at all," a data-quality/reconciliation question. NO LONGER the same
+    predicate `bill_of_entry/views/boe.py`'s `available_for_trade=true`
+    uses: that picker now allows selecting an already-invoiced BOE for a
+    SECOND trade too (a single physical BOE can legitimately be linked to
+    many invoices — see that view's docstring), so it only excludes
+    OTH-marked BOEs. This report's "never invoiced" question is orthogonal
+    and intentionally unchanged.
 
     Excludes BOEs that have been explicitly resolved via the Licence Balance
     Workspace's "mark as external invoice" action (an active

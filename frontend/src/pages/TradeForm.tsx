@@ -1139,28 +1139,13 @@ export default function TradeForm() {
                             <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">BOE (optional)</label>
                             <div className="space-y-2">
                                 {(formData.boes || []).map((boe, index) => {
-                                    const endpoint = (() => {
-                                        // In create mode: only show BOEs without invoice
-                                        if (!isEdit) {
-                                            return "/bill-of-entries/?invoice_no__isnull=true";
-                                        }
-                                        // In edit mode: show BOEs without invoice OR already-selected
-                                        // BOEs (excluding this row's own, kept visible via current_invoice)
-                                        // OR BOEs with current invoice number
-                                        const otherBoeIds = (formData.boes || [])
-                                            .map((b, i) => (i === index ? null : getEntityId(b)))
-                                            .filter(Boolean);
-                                        const currentInvoice = formData.invoice_number ? encodeURIComponent(formData.invoice_number) : null;
-
-                                        let ep = "/bill-of-entries/?available_for_trade=true";
-                                        if (otherBoeIds.length > 0) {
-                                            ep += `&current_boe=${otherBoeIds.join(',')}`;
-                                        }
-                                        if (currentInvoice) {
-                                            ep += `&current_invoice=${currentInvoice}`;
-                                        }
-                                        return ep;
-                                    })();
+                                    // A single physical BOE can legitimately be linked to
+                                    // many invoices (many trades, e.g. one customs
+                                    // document debiting several licences/items) — see the
+                                    // Financial Ledger's BOE Invoice Status Consistency
+                                    // rule, so the picker is never restricted to BOEs
+                                    // without an invoice, in create or edit mode.
+                                    const endpoint = "/bill-of-entries/?available_for_trade=true";
 
                                     return (
                                         <div key={index} className="flex items-center gap-2">
@@ -1173,7 +1158,7 @@ export default function TradeForm() {
                                                     value={boe}
                                                     onChange={(val) => handleBoeChange(index, val)}
                                                     isClearable={true}
-                                                    placeholder="Search and select BOE (without invoice)..."
+                                                    placeholder="Search and select BOE..."
                                                 />
                                             </div>
                                             <button

@@ -317,12 +317,24 @@ class LicenseDetailsModel(AuditModel):
     @property
     def get_balance_cif(self) -> Decimal:
         """
-        Authoritative live balance at license level using centralized service.
-        SUM(Export.cif_fc) - (SUM(BOE debit cif_fc for license) + SUM(allotments cif_fc (unattached BOE))).
-        All sums returned as Decimal.
+        Authoritative live "Balance CIF" for this licence — the single
+        figure every consumer (list views, dashboard cards, the cached
+        `LicenseBalance.balance_cif` field via `update_license_flags`,
+        item-level restricted-allocation helpers below, exports/reports)
+        reads as "the" business balance. Backed by the Financial Ledger
+        formula (`calculate_financial_balance` — Opening Balance/Previous
+        Owner Utilisation + Purchase - Sale - Our BOEs - Outstanding
+        Allotments), NOT the raw Customs formula (`calculate_balance`).
+
+        `calculate_balance` ("Customs Balance") still exists and is called
+        directly wherever the Customs Ledger / three-way reconciliation
+        panel deliberately needs that separate, literal figure to compare
+        against — this property is the ONLY thing that changed; the two
+        engines still intentionally diverge for licences with hidden BOEs,
+        that comparison just no longer flows through this property.
         """
         from apps.license.services.balance_calculator import LicenseBalanceCalculator
-        return LicenseBalanceCalculator.calculate_balance(self)
+        return LicenseBalanceCalculator.calculate_financial_balance(self)
 
     def get_restriction_balances(self) -> Dict[str, Decimal]:
         """

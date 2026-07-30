@@ -205,11 +205,18 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
 
     result = {}
     for lid in ids:
-        balance_cif = balance_map.get(lid, DEC_0)
+        customs_balance = balance_map.get(lid, DEC_0)
         financial_balance = financial_map.get(lid, DEC_0)
         opening_balance = opening_map.get(lid, DEC_0)
         result[lid] = {
-            "balance_cif": balance_cif,
+            # `balance_cif` is THE business "Balance CIF" every consumer
+            # reads — the Financial Ledger figure, matching
+            # `LicenseDetailsModel.get_balance_cif`'s own definition (see
+            # that property's docstring). NOT `calculate_balance_for_
+            # licenses`'s raw Customs figure — that lives separately under
+            # `customs_balance` below, for the reconciliation-only
+            # consumers that deliberately need the two to stay distinct.
+            "balance_cif": financial_balance,
             "total_licence_cif": credit_map.get(lid, DEC_0),
             "debited_cif": debit_map.get(lid, DEC_0),
             "outstanding_allotted_cif": allotment_map.get(lid, DEC_0),
@@ -219,8 +226,8 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
             "opening_balance": opening_balance,
             "remaining_tradable_licence": opening_balance,
             "financial_balance": financial_balance,
-            "customs_balance": balance_cif,
-            "balance_difference": financial_balance - balance_cif,
+            "customs_balance": customs_balance,
+            "balance_difference": financial_balance - customs_balance,
             "items": items_by_license.get(lid, {}),
         }
     return result

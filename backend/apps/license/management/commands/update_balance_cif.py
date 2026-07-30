@@ -124,7 +124,12 @@ class Command(BaseCommand):
         Update balance_cif for a single license.
         Writes the LicenseBalance sub-table without saving the parent license.
         """
-        balance = LicenseBalanceCalculator.calculate_balance(license_obj)
+        # Financial Ledger formula — same source as `LicenseDetailsModel.
+        # get_balance_cif` (see that property's docstring). Kept in
+        # lock-step so this bulk-refresh command and the live property/
+        # signal path can never write divergent values into the same
+        # `LicenseBalance.balance_cif` field.
+        balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
 
         if dry_run:
             return balance

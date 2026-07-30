@@ -63,7 +63,7 @@ def get_overview_counts(license_obj) -> Dict[str, Any]:
         "credit": quantize_2dp(snapshot["total_licence_cif"]),
         "debit": quantize_2dp(snapshot["debited_cif"]),
         "allotment": quantize_2dp(snapshot["outstanding_allotted_cif"]),
-        "balance": snapshot["balance_cif"],  # already quantized by calculate_balance_for_licenses
+        "balance": snapshot["balance_cif"],  # Financial Ledger figure; already quantized by calculate_financial_balance
     }
 
     # NOTE: `.values("bill_of_entry").distinct().count()` looks correct but

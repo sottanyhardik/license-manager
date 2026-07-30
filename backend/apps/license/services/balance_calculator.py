@@ -20,7 +20,7 @@ from apps.core.utils.decimal_utils import to_decimal
 # Module-level imports so tests can patch via
 # patch("apps.license.services.balance_calculator.LicenseExportItemModel") etc.
 from apps.license.models import LicenseExportItemModel
-from apps.bill_of_entry.models import RowDetails
+from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
 from apps.allotment.models import AllotmentItems
 
 DECIMAL_CENT = Decimal("0.01")
@@ -41,15 +41,18 @@ def quantize_2dp(value: Decimal) -> Decimal:
 
 def exclude_hidden(qs):
     """
-    Exclude previous-owner "hidden" BOE debit rows (`RowDetails.is_hidden`)
-    from a queryset. Applied at every site that builds a DEBIT `RowDetails`
-    queryset for a live balance/report calculation — see
-    `LicenseBalanceCalculator.get_debit_rows`'s `include_hidden` param for
-    the one deliberate exception (the Customs Ledger's `show_hidden` audit
-    view). A single, shared definition so every consumer's exclusion can
-    never silently diverge.
+    Exclude previous-owner "hidden" BOE debit rows from a `RowDetails`
+    queryset — a BOE is hidden when `BillOfEntryModel.invoice_no ==
+    OTH_INVOICE_MARKER` (see that constant's docstring: reuses the
+    existing `invoice_no` field, BOE-level, no new column). Applied at
+    every site that builds a DEBIT `RowDetails` queryset for a live
+    balance/report calculation — see `LicenseBalanceCalculator.
+    get_debit_rows`'s `include_hidden` param for the one deliberate
+    exception (the Customs Ledger's `show_hidden` audit view). A single,
+    shared definition so every consumer's exclusion can never silently
+    diverge.
     """
-    return qs.exclude(is_hidden=True)
+    return qs.exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER)
 
 
 class LicenseBalanceCalculator:
@@ -374,7 +377,7 @@ class LicenseBalanceCalculator:
             RowDetails.objects.filter(
                 sr_number__license=license_obj,
                 transaction_type=DEBIT,
-                is_hidden=True,
+                bill_of_entry__invoice_no=OTH_INVOICE_MARKER,
             ).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
             )["total"],
@@ -399,7 +402,7 @@ class LicenseBalanceCalculator:
             RowDetails.objects.filter(
                 sr_number__license_id__in=ids,
                 transaction_type=DEBIT,
-                is_hidden=True,
+                bill_of_entry__invoice_no=OTH_INVOICE_MARKER,
             )
             .values("sr_number__license_id")
             .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
@@ -1142,19 +1145,23 @@ class LicenseBalanceCalculator:
     @classmethod
     def calculate_balance(cls, license_obj) -> Decimal:
         """
-        Calculate final balance for license — the single "Balance Engine"
-        value shown everywhere (List/Detail, Overview, Item Summary,
-        Dashboard, PDF/Excel, APIs, Serializers) and the one the Customs
-        Ledger's own running total (`build_customs_ledger`) must always
-        reconcile with exactly (never merely within tolerance) — the
-        Customs Ledger's formula IS this formula, both implementations of
-        the same computation.
+        `Credit - (non-hidden BOE Debit + Allotment)` — NOT the "Balance
+        Engine"/business figure any more (see `LicenseDetailsModel.
+        get_balance_cif`, which now calls `calculate_financial_balance`
+        instead). This function excludes hidden (previous-owner) BOE rows
+        the same way every other live calculation does, via `calculate_
+        boe_debit_total()` -> `get_debit_rows()`'s default `include_hidden
+        =False` — it therefore does NOT reconcile with `build_customs_
+        ledger()`'s own running total for a licence with hidden BOEs (that
+        ledger deliberately includes hidden rows unconditionally; see its
+        docstring). Use `calculate_customs_balance()` for the figure that
+        DOES always match the Customs Ledger exactly, hidden or not.
 
         Formula: `Credit - (BOE Debit + Allotment)`:
         - `Credit` = `calculate_credit()` — Total Licence CIF (sum of
           export-item cif_fc), Coalesced to 0.
-        - `BOE Debit` = `calculate_boe_debit_total()` — every DEBIT
-          `RowDetails` row's FULL raw `cif_fc`, unconditionally. No
+        - `BOE Debit` = `calculate_boe_debit_total()` — every non-hidden
+          DEBIT `RowDetails` row's FULL raw `cif_fc`, unconditionally. No
           invoice-allocation netting, no Purchase/Sale participation.
         - `Allotment` = `calculate_allotment()` — outstanding (BOE-unlinked)
           allotted CIF only; allotments already linked to a BOE are never
@@ -1191,6 +1198,58 @@ class LicenseBalanceCalculator:
         balance = credit - (boe_debit + allotment)
         balance = quantize_2dp(balance)
         return balance if balance >= DEC_0 else DEC_0
+
+    @classmethod
+    def calculate_customs_balance(cls, license_obj) -> Decimal:
+        """
+        "Customs Available Balance" — `Credit - (ALL BOE Debit, hidden +
+        visible + Allotment)`. The literal, unconditional Customs Ledger
+        figure (`build_customs_ledger`'s own running total uses exactly
+        this formula) — the ONE figure guaranteed to always reconcile with
+        that ledger exactly, regardless of hidden BOEs. Distinct from
+        `calculate_balance()` (excludes hidden rows) and `calculate_
+        financial_balance()` (the Financial/business figure, ALSO
+        hidden-aware but via the Opening Balance/Previous Owner Utilisation
+        route, not a flat subtraction) — see both docstrings.
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            Customs Available Balance as Decimal (minimum 0), quantized to
+            2 decimal places.
+        """
+        credit = cls.calculate_credit(license_obj)
+        boe_debit = cls.calculate_boe_debit_total(license_obj) + cls.calculate_hidden_boe_debit_total(license_obj)
+        allotment = cls.calculate_allotment(license_obj)
+
+        balance = credit - (boe_debit + allotment)
+        balance = quantize_2dp(balance)
+        return balance if balance >= DEC_0 else DEC_0
+
+    @classmethod
+    def calculate_customs_balance_for_licenses(cls, license_ids) -> dict:
+        """
+        Batched sibling of `calculate_customs_balance` — same formula, for
+        MANY licenses in a fixed, small number of queries. See `calculate_
+        credit_for_licenses` for the return-shape/zero-default contract.
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+        credit_map = cls.calculate_credit_for_licenses(ids)
+        boe_debit_map = cls.calculate_boe_debit_total_for_licenses(ids)
+        hidden_map = cls.calculate_hidden_boe_debit_total_for_licenses(ids)
+        allotment_map = cls.calculate_allotment_for_licenses(ids)
+
+        result = {}
+        for lid in ids:
+            balance = credit_map.get(lid, DEC_0) - (
+                boe_debit_map.get(lid, DEC_0) + hidden_map.get(lid, DEC_0) + allotment_map.get(lid, DEC_0)
+            )
+            balance = quantize_2dp(balance)
+            result[lid] = balance if balance >= DEC_0 else DEC_0
+        return result
 
     @classmethod
     def calculate_all_components(cls, license_obj) -> dict[str, Decimal]:

@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.permissions import BillOfEntryPermission
-from apps.bill_of_entry.models import BillOfEntryModel
+from apps.bill_of_entry.models import BillOfEntryModel, OTH_INVOICE_MARKER
 from apps.bill_of_entry.serializers import BillOfEntrySerializer
 from apps.bill_of_entry.services import boe_service
 from apps.bill_of_entry.views_export import add_grouped_export_action
@@ -169,7 +169,11 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
             if current_invoice:
                 filter_conditions |= Q(invoice_no=current_invoice)
 
-            queryset = queryset.filter(filter_conditions)
+            # Pending BOE rule: a previous-owner BOE (invoice_no=="OTH")
+            # must NEVER appear as an invoice-matching suggestion, even if
+            # `current_boe`/`current_invoice` above would otherwise pull
+            # it back in via their OR conditions.
+            queryset = queryset.filter(filter_conditions).exclude(invoice_no=OTH_INVOICE_MARKER)
 
         return queryset
 

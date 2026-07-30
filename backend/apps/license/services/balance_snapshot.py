@@ -46,6 +46,13 @@ def _empty_snapshot() -> Dict[str, Any]:
         "financial_balance": DEC_0,
         "customs_balance": DEC_0,
         "balance_difference": DEC_0,
+        # Exact-named fields per the "LicenseBalanceService.get_snapshot()"
+        # spec — see `get_snapshot_bulk`'s docstring.
+        "financial_available_balance": DEC_0,
+        "customs_available_balance": DEC_0,
+        "previous_owner_utilisation": DEC_0,
+        "pending_allotments": DEC_0,
+        "difference": DEC_0,
         "items": {},
     }
 
@@ -156,6 +163,13 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
     hidden_map = LicenseBalanceCalculator.calculate_hidden_boe_debit_total_for_licenses(ids)
     opening_map = LicenseBalanceCalculator.calculate_opening_balance_for_licenses(ids)
     financial_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(ids)
+    purchase_credit_map = LicenseBalanceCalculator.calculate_purchase_credit_for_licenses(ids)
+    # The literal, hidden-inclusive Customs figure — the ONE that always
+    # matches `build_customs_ledger`'s own running total exactly (see
+    # `calculate_customs_balance`'s docstring). NOT `balance_map` above
+    # (`calculate_balance_for_licenses`, excludes hidden rows) — that one
+    # stays only as the `customs_balance`/back-compat alias key below.
+    customs_available_map = LicenseBalanceCalculator.calculate_customs_balance_for_licenses(ids)
 
     # One query for every import item across all requested licenses.
     items = list(LicenseImportItemsModel.objects.filter(license_id__in=ids))
@@ -208,6 +222,16 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
         customs_balance = balance_map.get(lid, DEC_0)
         financial_balance = financial_map.get(lid, DEC_0)
         opening_balance = opening_map.get(lid, DEC_0)
+        hidden_total = hidden_map.get(lid, DEC_0)
+        customs_available_balance = customs_available_map.get(lid, DEC_0)
+        # Same value `build_financial_ledger`'s "Previous Owner
+        # Utilisation" row shows — Hidden BOEs + Purchased CIF, zero when
+        # there are no hidden BOEs. Informational, never part of any
+        # "difference"/reconciliation check (see `build_reconciliation_
+        # summary`'s docstring).
+        previous_owner_utilisation = (
+            (hidden_total + purchase_credit_map.get(lid, DEC_0)) if hidden_total > DEC_0 else DEC_0
+        )
         result[lid] = {
             # `balance_cif` is THE business "Balance CIF" every consumer
             # reads — the Financial Ledger figure, matching
@@ -222,12 +246,26 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
             "outstanding_allotted_cif": allotment_map.get(lid, DEC_0),
             # "Two engines" fields — see this function's docstring.
             "original_licence_cif": credit_map.get(lid, DEC_0),
-            "hidden_boe_total": hidden_map.get(lid, DEC_0),
+            "hidden_boe_total": hidden_total,
             "opening_balance": opening_balance,
             "remaining_tradable_licence": opening_balance,
             "financial_balance": financial_balance,
             "customs_balance": customs_balance,
             "balance_difference": financial_balance - customs_balance,
+            # Exact-named fields per the "LicenseBalanceService.
+            # get_snapshot()" spec. `difference` here is 0 by definition:
+            # `financial_available_balance` IS `financial_balance` (same
+            # number, business-vocabulary alias) — a real inconsistency
+            # can only be detected by comparing against an INDEPENDENT
+            # recomputation, which is exactly what `build_financial_
+            # ledger`'s own `mismatched` self-check does (see `build_
+            # reconciliation_summary`); this snapshot doesn't build ledger
+            # rows, so it has no second computation to diff against.
+            "financial_available_balance": financial_balance,
+            "customs_available_balance": customs_available_balance,
+            "previous_owner_utilisation": previous_owner_utilisation,
+            "pending_allotments": allotment_map.get(lid, DEC_0),
+            "difference": DEC_0,
             "items": items_by_license.get(lid, {}),
         }
     return result

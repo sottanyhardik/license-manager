@@ -652,7 +652,16 @@ class LicenseBalanceLedgerBuilder:
             rows.append(entry)
             sr += 1
 
-        engine_balance = LicenseBalanceCalculator.calculate_balance(license_obj)
+        # The Financial Ledger's OWN row-by-row `running` must agree with
+        # the standalone `calculate_financial_balance` pure function — the
+        # SAME formula computed two independent ways (see that method's
+        # docstring, verified 0 mismatches across the full portfolio). NOT
+        # `calculate_balance()`/`calculate_customs_balance()` (Customs) —
+        # those are DELIBERATELY expected to diverge for a hidden-BOE
+        # licence and are surfaced separately (see `build_reconciliation_
+        # summary`'s `customs_ledger_balance`/`previous_owner_utilisation`,
+        # never folded into THIS mismatch check).
+        engine_balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
         computed_balance = quantize_2dp(running)
         computed_balance = computed_balance if computed_balance >= DEC_0 else DEC_0
 
@@ -765,6 +774,7 @@ class LicenseBalanceLedgerBuilder:
         the live `engine_balance` regardless of `show_hidden`.
         """
         from apps.license.services.balance_calculator import LicenseBalanceCalculator, quantize_2dp
+        from apps.bill_of_entry.models import OTH_INVOICE_MARKER
         from apps.reconciliation.models import InvoiceBOEAllocation
 
         opening_balance = license_obj.opening_balance
@@ -809,6 +819,14 @@ class LicenseBalanceLedgerBuilder:
             total_boe_cif += debit
             running -= debit
             matched = row.id in matched_row_ids
+            # Hidden = `invoice_no == "OTH"` on the BOE itself (see
+            # `OTH_INVOICE_MARKER`'s docstring) — only ever True when
+            # show_hidden=True (get_debit_rows excludes hidden rows
+            # entirely otherwise) — lets the UI visually distinguish
+            # previous-owner rows when the toggle is on. No stored
+            # "reason" field any more (no new columns) — a fixed
+            # descriptive string instead.
+            is_hidden = bool(boe and boe.invoice_no == OTH_INVOICE_MARKER)
 
             rows.append({
                 'sr': sr,
@@ -825,17 +843,20 @@ class LicenseBalanceLedgerBuilder:
                 'status': 'Matched' if matched else 'Unmatched',
                 'remarks': 'Matched to Invoice' if matched else '-',
                 'row_kind': 'customs_boe', 'row_details_id': row.id,
-                # Only ever True when show_hidden=True (get_debit_rows excludes
-                # hidden rows entirely otherwise) — lets the UI visually
-                # distinguish previous-owner rows when the toggle is on.
-                'is_hidden': row.is_hidden,
-                'hidden_reason': row.hidden_reason,
+                'is_hidden': is_hidden,
+                'hidden_reason': 'Previous Owner (invoice_no=OTH)' if is_hidden else '',
                 # The actual BillOfEntryModel PK — needed by the frontend's
                 # hide-boe/restore-boe actions (those endpoints take `boe_id`,
                 # NOT `row_details_id`/`boe_number`, since a BOE number alone
                 # isn't globally unique and row_details_id is a different
                 # model's PK). `boe` is already null-guarded above.
                 'bill_of_entry_id': boe.id if boe else None,
+                # Raw `invoice_no` — the frontend needs this BEFORE calling
+                # hide-boe to decide which of the 3 cases applies (blank ->
+                # single-click, already "OTH" -> single-click, anything
+                # else -> confirm first). Never `OTH_INVOICE_MARKER` unless
+                # `is_hidden` is also True, by construction.
+                'boe_invoice_no': boe.invoice_no if boe else None,
             })
             sr += 1
 
@@ -879,7 +900,13 @@ class LicenseBalanceLedgerBuilder:
             })
             sr += 1
 
-        engine_balance = LicenseBalanceCalculator.calculate_balance(license_obj)
+        # Customs Ledger's own `running` must always equal `calculate_
+        # customs_balance()` exactly — the SAME "every BOE debits FULL
+        # cif_fc, hidden or not" formula computed two independent ways
+        # (see that method's docstring). NOT `calculate_balance()`, which
+        # excludes hidden rows and would falsely "mismatch" here now that
+        # this ledger's own total always includes them.
+        engine_balance = LicenseBalanceCalculator.calculate_customs_balance(license_obj)
         computed_balance = quantize_2dp(running)
         computed_balance = computed_balance if computed_balance >= DEC_0 else DEC_0
 
@@ -1086,33 +1113,54 @@ class LicenseBalanceLedgerBuilder:
     @staticmethod
     def build_reconciliation_summary(license_obj, financial_summary, customs_summary=None):
         """
-        Three-way comparison: Financial Ledger balance vs. Customs Ledger
-        balance vs. the live Balance Engine.
+        Financial Ledger vs. the live Balance Engine — NOT a three-way
+        comparison against the Customs Ledger any more. Financial Ledger
+        and Customs Ledger represent different business concepts (Our
+        Business Balance vs. the Customs Regulatory Balance) and are
+        EXPECTED to diverge for a licence with hidden BOEs — comparing
+        them as if they should match was the bug this method used to have.
+        `balance_engine` is now `calculate_financial_balance` (the SAME
+        formula `financial_ledger_balance` is built from, computed
+        independently — see `build_financial_ledger`'s `engine_balance`
+        docstring), so `difference`/`matched` reports a genuine internal
+        calculation inconsistency ONLY, never the deliberate Financial-vs-
+        Customs gap. `customs_ledger_balance`, `previous_owner_
+        utilisation`, `hidden_boe_total`, and `pending_allotments` are
+        surfaced separately, purely informational — never folded into
+        `difference`.
 
         `customs_summary` is `build_customs_ledger()`'s own summary dict —
         when omitted (back-compat for callers that only need the financial
-        side), falls back to the denormalized `license_obj.balance_cif`,
-        which also catches a stale denormalized value specifically.
+        side), falls back to `calculate_customs_balance()` (a live
+        recomputation, not the denormalized `license_obj.balance_cif`,
+        which is the Financial figure since `LicenseDetailsModel.
+        get_balance_cif`'s redirect and would misrepresent "Customs" here).
         """
         financial_balance = financial_summary['computed_balance']
         engine_balance = financial_summary['engine_balance']
         tolerance = financial_summary['tolerance']
         if customs_summary is not None:
             customs_balance = customs_summary['computed_balance']
+            pending_allotments = customs_summary['total_pending_allotment_cif']
         else:
-            customs_balance = Decimal(str(license_obj.balance_cif or 0)).quantize(Decimal('0.01'))
+            from apps.license.services.balance_calculator import LicenseBalanceCalculator
+            customs_balance = LicenseBalanceCalculator.calculate_customs_balance(license_obj)
+            pending_allotments = LicenseBalanceCalculator.calculate_allotment(license_obj)
 
-        diff_financial = abs(financial_balance - engine_balance)
-        diff_customs = abs(customs_balance - engine_balance)
-        worst_diff = max(diff_financial, diff_customs)
+        difference = abs(financial_balance - engine_balance)
+        matched = difference <= tolerance
 
         return {
             'financial_ledger_balance': financial_balance,
             'customs_ledger_balance': customs_balance,
             'balance_engine': engine_balance,
-            'difference': worst_diff,
+            # Informational — never part of `difference`/`matched` above.
+            'previous_owner_utilisation': financial_summary.get('previous_owner_utilisation', DEC_0),
+            'hidden_boe_total': financial_summary.get('hidden_boe_total', DEC_0),
+            'pending_allotments': pending_allotments,
+            'difference': difference,
             'tolerance': tolerance,
-            'matched': worst_diff <= tolerance,
+            'matched': matched,
         }
 
     # ------------------------------------------------------------------
@@ -1386,19 +1434,21 @@ class LicenseBalanceLedgerBuilder:
                 'message': message, 'ignored': False, 'ignored_by': None, 'ignored_at': None, 'reason': '',
             })
 
+        # `financial_summary['mismatched']` and `reconciliation_summary
+        # ['matched']` are now the SAME check (Financial Ledger's own
+        # `computed_balance` vs the independently-recomputed `calculate_
+        # financial_balance` — see `build_reconciliation_summary`'s
+        # docstring: no more Customs-vs-Balance-Engine comparison, that gap
+        # is deliberate and surfaced separately via `customs_ledger_
+        # balance`/`previous_owner_utilisation`, never a warning). ONE
+        # warning, not two, for what is now one underlying condition.
         if financial_summary['mismatched']:
             add(
                 'FINANCIAL_MISMATCH', 'LICENSE', license_obj.id,
                 f"Financial Ledger balance (${financial_summary['computed_balance']:,.2f}) differs from the "
                 f"Balance Engine (${financial_summary['engine_balance']:,.2f}) by more than the "
-                f"${financial_summary['tolerance']:,.2f} tolerance.",
-            )
-        if not reconciliation_summary['matched']:
-            add(
-                'CUSTOMS_MISMATCH', 'LICENSE', license_obj.id,
-                f"Customs Ledger balance (${reconciliation_summary['customs_ledger_balance']:,.2f}) differs from "
-                f"the Balance Engine by ${reconciliation_summary['difference']:,.2f} — the stored balance_cif may "
-                "be stale; recalculate this licence.",
+                f"${financial_summary['tolerance']:,.2f} tolerance — a genuine calculation inconsistency, "
+                "not the expected Financial-vs-Customs gap for a licence with hidden BOEs.",
             )
         for inv in invoice_boe:
             if inv['status'] == 'UNMATCHED':

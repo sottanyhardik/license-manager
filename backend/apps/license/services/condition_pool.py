@@ -54,7 +54,7 @@ def compute_condition_pools(license_obj) -> dict[str, Decimal]:
     could be 2000+ for 38 items.
     """
     from apps.license.models import LicenseImportItemsModel
-    from apps.bill_of_entry.models import RowDetails
+    from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
     from apps.allotment.models import AllotmentItems
 
     distinct_conds: Iterable[str] = (
@@ -97,7 +97,7 @@ def compute_condition_pools(license_obj) -> dict[str, Decimal]:
 
         debited = RowDetails.objects.filter(
             sr_number_id__in=item_ids, transaction_type="D"
-        ).exclude(is_hidden=True).aggregate(
+        ).exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER).aggregate(
             t=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
         )["t"] or DEC_0
 
@@ -143,7 +143,7 @@ def compute_condition_pools_bulk(license_ids) -> dict[int, dict[str, Decimal]]:
     from collections import defaultdict
 
     from apps.license.models import LicenseImportItemsModel, LicenseExportItemModel
-    from apps.bill_of_entry.models import RowDetails
+    from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
     from apps.allotment.models import AllotmentItems
 
     license_ids = list(license_ids)
@@ -189,7 +189,7 @@ def compute_condition_pools_bulk(license_ids) -> dict[int, dict[str, Decimal]]:
         debited_map = _per_item(
             RowDetails.objects.filter(
                 sr_number_id__in=all_item_ids, transaction_type="D"
-            ).exclude(is_hidden=True),
+            ).exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER),
             "sr_number_id",
         )
         allotted_map = _per_item(

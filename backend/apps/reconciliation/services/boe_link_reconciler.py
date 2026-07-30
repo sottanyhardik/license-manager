@@ -24,11 +24,15 @@ reconciliation tolerances) — anything else is left untouched and reported so
 a human decides, never guessed.
 
 NOTE (Hidden BOEs / previous-owner utilisation, see
-`apps.bill_of_entry.models.RowDetails.is_hidden`): `find_boe_allocation_
-candidates` below deliberately does NOT exclude hidden rows. Hiding a BOE
-only removes it from THIS licence's balance/financial figures — it is
-still a real document that can legitimately be linked to a trade/invoice
-for reconciliation purposes. Do NOT "fix" this in a future PR.
+`apps.bill_of_entry.models.OTH_INVOICE_MARKER`): `find_boe_allocation_
+candidates` below EXCLUDES hidden BOEs (`invoice_no == OTH_INVOICE_MARKER`)
+— the Pending BOE rule: a BOE marked as belonging to a previous owner must
+never surface as an invoice-matching candidate/suggestion, matching entry
+elsewhere. This is a deliberate reversal of this module's earlier
+position (when hiding was RowDetails-row-scoped, a hidden row could still
+legitimately be a real document eligible for linking) — hiding is now
+BOE-level, so a hidden BOE is a previous-owner document end to end, never
+eligible for matching against OUR trades.
 """
 from __future__ import annotations
 
@@ -48,7 +52,7 @@ def find_boe_allocation_candidates(trade_line):
     a single candidate; more than one means the match is ambiguous and must
     not be auto-resolved.
     """
-    from apps.bill_of_entry.models import RowDetails
+    from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
     from apps.reconciliation.services.allocation_service import remaining_for_row_details_invoice_side
 
     rows = (
@@ -57,6 +61,9 @@ def find_boe_allocation_candidates(trade_line):
             sr_number_id=trade_line.sr_number_id,
             transaction_type=DEBIT,
         )
+        # Pending BOE rule: previous-owner BOEs are never eligible
+        # candidates for invoice matching — see module docstring.
+        .exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER)
         .select_related("bill_of_entry")
     )
     return [row for row in rows if remaining_for_row_details_invoice_side(row)[1] > DEC_0]

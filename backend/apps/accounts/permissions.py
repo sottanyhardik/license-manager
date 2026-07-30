@@ -203,12 +203,13 @@ class LicenseBalanceLedgerPermission(permissions.BasePermission):
         touches the BOE side — requires BOE_MANAGER alone.
       - recalculation is licence-level — requires LICENSE_MANAGER.
       - hiding/restoring a BOE (previous-owner utilisation, see
-        `RowDetails.is_hidden`) is a REAL financial mutation — unlike
+        `OTH_INVOICE_MARKER`) is a REAL financial mutation — unlike
         ignore/restore-warning, it changes what counts toward Balance CIF
-        — so it follows the "require the write role for BOTH sides"
-        convention above: touches a `RowDetails` (BOE) AND recomputes the
-        licence's own `LicenseBalance`/item caches (`update_license_flags`)
-        — requires BOE_MANAGER *and* LICENSE_MANAGER.
+        for every licence the BOE touches — so it follows the "require the
+        write role for BOTH sides" convention above: touches the BOE
+        itself AND recomputes every affected licence's own `LicenseBalance`
+        /item caches (`update_license_flags`) — requires BOE_MANAGER *and*
+        LICENSE_MANAGER.
 
     Backend enforcement is authoritative regardless of what the frontend
     hides — every `has_permission` check below runs independent of UI state.

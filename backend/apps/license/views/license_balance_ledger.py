@@ -150,15 +150,18 @@ def add_license_balance_ledger_actions(viewset_class):
     def hide_boe(self, request, pk=None):
         """
         Body: {boe_id, reason?}. Marks a BOE (previous-owner utilisation)
-        as hidden — excluded from every balance/financial calculation for
-        THIS licence only (a BOE spanning multiple licences is untouched
-        for any other licence — see `boe_service.hide_boe_for_license`'s
-        docstring). Idempotent.
+        as hidden by setting `invoice_no = OTH_INVOICE_MARKER` — BOE-level,
+        not scoped to this licence (see `boe_service.hide_boe`'s
+        docstring: a BOE spanning multiple licences affects all of them,
+        which is why that function refuses when it detects one). `pk` is
+        only used to confirm the requesting licence can see this BOE
+        before mutating it; the actual mutation and cache refresh apply to
+        every licence the BOE touches. Idempotent.
         """
         from apps.bill_of_entry.models import BillOfEntryModel
-        from apps.bill_of_entry.services.boe_service import hide_boe_for_license
+        from apps.bill_of_entry.services.boe_service import hide_boe as hide_boe_service, CrossLicenseBoeError
 
-        license_obj = self.get_object()
+        self.get_object()  # 404s if this licence can't see the requested pk
         boe_id = request.data.get('boe_id')
         if not boe_id:
             return Response({'error': 'boe_id is required.'}, status=400)
@@ -167,19 +170,20 @@ def add_license_balance_ledger_actions(viewset_class):
         except BillOfEntryModel.DoesNotExist:
             return Response({'error': 'No BOE matches that id.'}, status=404)
 
-        result = hide_boe_for_license(
-            boe, license_obj, user=request.user, reason=request.data.get('reason', ''),
-        )
+        try:
+            result = hide_boe_service(boe, user=request.user, reason=request.data.get('reason', ''))
+        except (CrossLicenseBoeError, ValueError) as exc:
+            return Response({'error': str(exc)}, status=409)
         return Response(result, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='restore-boe')
     def restore_boe(self, request, pk=None):
-        """Body: {boe_id, reason?}. Un-hides a previously-hidden BOE for
-        this licence — see `boe_service.restore_boe_for_license`."""
+        """Body: {boe_id, reason?}. Un-hides a previously-hidden BOE (clears
+        `invoice_no`) — see `boe_service.restore_boe`."""
         from apps.bill_of_entry.models import BillOfEntryModel
-        from apps.bill_of_entry.services.boe_service import restore_boe_for_license
+        from apps.bill_of_entry.services.boe_service import restore_boe as restore_boe_service
 
-        license_obj = self.get_object()
+        self.get_object()  # 404s if this licence can't see the requested pk
         boe_id = request.data.get('boe_id')
         if not boe_id:
             return Response({'error': 'boe_id is required.'}, status=400)
@@ -188,9 +192,7 @@ def add_license_balance_ledger_actions(viewset_class):
         except BillOfEntryModel.DoesNotExist:
             return Response({'error': 'No BOE matches that id.'}, status=404)
 
-        result = restore_boe_for_license(
-            boe, license_obj, user=request.user, reason=request.data.get('reason', ''),
-        )
+        result = restore_boe_service(boe, user=request.user, reason=request.data.get('reason', ''))
         return Response(result)
 
     for method in (

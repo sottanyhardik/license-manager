@@ -12,14 +12,17 @@ source-of-truth data here, only detection of where the rule above is
 currently violated or unlinked.
 
 NOTE (Hidden BOEs / previous-owner utilisation, see
-`apps.bill_of_entry.models.RowDetails.is_hidden`): the `RowDetails`
-queries in this module deliberately do NOT exclude hidden rows. A hidden
-BOE is still a real, physical BOE that was genuinely filed — hiding it
-only means "exclude from THIS licence's balance/financial figures", never
-"pretend it doesn't exist." Reconciliation matching/audit here is
-concerned with whether a document trail is internally consistent, not
-with whose balance it counts toward, so hidden BOEs must keep
-participating in it exactly as before. Do NOT "fix" this in a future PR.
+`apps.bill_of_entry.models.OTH_INVOICE_MARKER`): `missing_invoice()`
+below already naturally excludes a hidden BOE (`invoice_no == "OTH"` is
+neither null nor `""`) — the Pending BOE rule (a previous-owner BOE must
+never surface as needing an invoice / an invoice-matching candidate).
+The pure document/data-integrity checks (`duplicate_debits`,
+`duplicate_boes`, `cif_comparison`, `qty_comparison`, `multi_boe_per_
+invoice`, `multi_invoice_per_boe`) deliberately still do NOT exclude
+hidden BOEs — a hidden BOE is still a real, physical document that was
+genuinely filed, and these checks ask "is the document trail internally
+consistent," not "should this be tradeable/matchable," so they keep
+seeing hidden BOEs exactly as before. Do NOT "fix" that in a future PR.
 """
 
 from __future__ import annotations
@@ -123,6 +126,11 @@ def missing_invoice() -> list[dict]:
     `ExternalInvoiceLink` on any of the BOE's debit rows) — those have a
     real, user-confirmed invoice reference even though it isn't a system
     `LicenseTradeLine`, so they shouldn't keep showing up as unresolved.
+
+    Also naturally excludes hidden (previous-owner) BOEs — `invoice_no ==
+    OTH_INVOICE_MARKER` is neither null nor `""`, so the filter below
+    already treats a hidden BOE as "has an invoice", satisfying the
+    Pending BOE rule without a separate exclusion.
     """
     from apps.reconciliation.models import ExternalInvoiceLink
 

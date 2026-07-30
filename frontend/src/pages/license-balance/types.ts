@@ -202,6 +202,11 @@ export interface CustomsLedgerRow {
      * missing this field rather than guessing an id from `boe_number`
      * (not globally unique — see `BillOfEntryModel.Meta.unique_together`). */
     bill_of_entry_id?: number;
+    /** Raw `BillOfEntryModel.invoice_no` — needed BEFORE calling hide-boe
+     * to pick which of the 3 hide-button cases applies (blank -> instant,
+     * already "OTH" -> instant, anything else -> confirm first, since
+     * hiding will temporarily overwrite it). */
+    boe_invoice_no?: string | null;
 }
 
 export interface CustomsLedgerSummary {

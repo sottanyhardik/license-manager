@@ -43,6 +43,18 @@ def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
 # -----------------------------
 # Bill of Entry Model
 # -----------------------------
+
+# Sentinel `invoice_no` value marking a BOE as belonging to a previous
+# licence owner ("Hidden BOE") — see `apps.bill_of_entry.services.
+# boe_service.hide_boe`/`restore_boe` and `apps.license.services.
+# balance_calculator.exclude_hidden`. Deliberately reuses the existing
+# `invoice_no` field rather than a new column: no schema addition, and
+# the marker is BOE-level (every RowDetails row on this BOE, across every
+# licence it touches, is excluded uniformly) — see `hide_boe`'s docstring
+# for the cross-licence scoping this implies.
+OTH_INVOICE_MARKER = "OTH"
+
+
 class BillOfEntryModel(AuditModel):
     company = models.ForeignKey(
         CompanyModel,
@@ -277,45 +289,6 @@ class RowDetails(AuditModel):
         help_text="Flagged when this BOE row is missing from the latest ledger upload. Shown in red for manual review.",
     )
 
-    # ---------------------------------------------------------------------
-    # Hidden BOE (previous-owner utilisation) — see
-    # `apps.license.services.balance_calculator.exclude_hidden` and
-    # `apps.bill_of_entry.services.boe_service.hide_boe_for_license`.
-    #
-    # Lives at RowDetails (not BillOfEntryModel) granularity because a
-    # single physical BOE can span multiple licences
-    # (`BillOfEntryModel.get_licenses`) — hiding it for one licence must
-    # never affect its debit against an unrelated licence. Non-nullable,
-    # indexed boolean; permanently retained (never deleted) for audit —
-    # visible in the Customs History view behind a "Show Hidden" toggle,
-    # excluded from every other balance/financial calculation.
-    # ---------------------------------------------------------------------
-    is_hidden = models.BooleanField(
-        default=False,
-        help_text=(
-            "Marks this DEBIT row as belonging to a previous licence owner — "
-            "excluded from every balance/financial calculation but retained "
-            "and visible in the Customs History audit view."
-        ),
-    )
-    hidden_reason = models.CharField(max_length=255, blank=True, default="")
-    hidden_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="+",
-    )
-    hidden_at = models.DateTimeField(null=True, blank=True)
-    restored_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="+",
-    )
-    restored_at = models.DateTimeField(null=True, blank=True)
-
     admin_search_fields = (
         "sr_number__license__license_number",
         "bill_of_entry__bill_of_entry_number",
@@ -326,9 +299,6 @@ class RowDetails(AuditModel):
         unique_together = ("bill_of_entry", "sr_number", "transaction_type")
         verbose_name = "Item Detail"
         verbose_name_plural = "Item Details"
-        indexes = [
-            models.Index(fields=["is_hidden"]),
-        ]
 
     def save(self, *args, **kwargs):
         # Frozen rows can only be modified by the ledger upload (which uses bulk_create/bulk_update).

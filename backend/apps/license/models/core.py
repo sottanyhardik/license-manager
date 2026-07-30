@@ -17,7 +17,7 @@ from django.urls import reverse
 from django.utils.functional import cached_property
 
 from apps.allotment.models import AllotmentItems
-from apps.bill_of_entry.models import RowDetails
+from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
 # Removed: from bill_of_entry.tasks import update_balance_values_task
 # Now using direct synchronous balance updates for better performance
 from apps.core.constants import (
@@ -476,12 +476,12 @@ class LicenseDetailsModel(AuditModel):
             from django.conf import settings
             biscuit_company_id = settings.BISCUIT_COMPANY_ID
             borax_quantity = (total_quantity / _to_decimal("0.62")) * _to_decimal("0.1")
-            # Previous-owner "hidden" rows (see `RowDetails.is_hidden`) are
+            # Previous-owner "hidden" rows (see `OTH_INVOICE_MARKER`) are
             # excluded — feeds the borax/rutile split report (`tables.py`),
             # a balance/report figure like any other DEBIT sum.
             debit = _to_decimal(
                 RowDetails.objects.filter(sr_number__license=self, bill_of_entry__company=biscuit_company_id, transaction_type=DEBIT)
-                .exclude(is_hidden=True)
+                .exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER)
                 .aggregate(total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"],
                 DEC_000,
             )
@@ -977,12 +977,13 @@ class LicenseImportItemsModel(models.Model):
     def _calculate_item_debit(self) -> Decimal:
         """Calculate total debit for this specific import item.
 
-        Excludes previous-owner "hidden" rows (see `RowDetails.is_hidden`)
+        Excludes previous-owner "hidden" rows (see `OTH_INVOICE_MARKER`)
         — a debit total by definition, and no consumer of this figure
         should ever silently include previous-owner utilisation.
         """
         return _to_decimal(
-            RowDetails.objects.filter(sr_number=self, transaction_type=DEBIT).exclude(is_hidden=True).aggregate(
+            RowDetails.objects.filter(sr_number=self, transaction_type=DEBIT)
+            .exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
             DEC_0,
         )

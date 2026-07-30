@@ -146,15 +146,11 @@ class DashboardDataView(APIView):
     def _get_boe_stats(self):
         """Get BOE statistics"""
         # NOTE (Hidden BOEs / previous-owner utilisation, see
-        # `apps.bill_of_entry.models.RowDetails.is_hidden`): deliberately
-        # NOT filtered here. `is_hidden` is scoped per (BOE, licence) pair
-        # at RowDetails granularity — a single BOE can be hidden for one
-        # licence and still live/current for another (see
-        # `BillOfEntryModel.get_licenses`). This dashboard counts BOE
-        # records system-wide, with no licence context to resolve that
-        # ambiguity against, and is a raw activity/record count, not a
-        # licence balance or financial figure — the one thing hidden BOEs
-        # are defined to affect. Out of scope by design; left unfiltered.
+        # `apps.bill_of_entry.models.OTH_INVOICE_MARKER`): deliberately NOT
+        # filtered here. This dashboard counts BOE records system-wide — a
+        # raw activity/record count, not a licence balance or financial
+        # figure, which is the one thing hidden BOEs are defined to affect.
+        # Out of scope by design; left unfiltered.
         # Total BOE (all records - both with and without invoices)
         total_count = BillOfEntryModel.objects.count()
 

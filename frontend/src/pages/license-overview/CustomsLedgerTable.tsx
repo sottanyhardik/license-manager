@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ArrowRight, EyeOff, RotateCcw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -5,6 +6,7 @@ import { toast } from "sonner";
 import api from "@/api/axios";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -86,30 +88,39 @@ function FlowStep({
  * where the hook lives); when on, `rows` includes `is_hidden` BOE debits with
  * `hidden_reason` set, rendered muted/struck-through with a "Hidden" badge.
  * The per-row Hide/Restore action posts to `licenses/<id>/hide-boe/` /
- * `restore-boe/` (mirrors `pages/reconciliation/MissingBoeTab.tsx`'s
- * `handleNote`: `window.prompt` for a reason, plain `api.post`, then a
- * manual `queryClient.invalidateQueries` — no `useMutation`, matching this
- * workspace's established convention per `useLicenseBalanceLedger.ts`'s own
- * docstring). Gated on `row.bill_of_entry_id` — NOT yet returned by
- * `LicenseBalanceLedgerBuilder.build_customs_ledger` for `"customs_boe"`
- * rows (only `is_hidden`/`hidden_reason` are), so the action stays hidden
- * until the backend adds that field rather than guessing an id from
- * `boe_number` (not globally unique on its own).
+ * `restore-boe/` (plain `api.post`, then a manual `queryClient.
+ * invalidateQueries` — no `useMutation`, matching this workspace's
+ * established convention per `useLicenseBalanceLedger.ts`'s own docstring).
+ * Gated on `row.bill_of_entry_id`.
+ *
+ * Hide is a 3-case dispatch on the BOE's CURRENT `boe_invoice_no` (mirrors
+ * the backend `hide_boe` service's own 3 cases exactly): blank/null or
+ * already `"OTH"` hides instantly with no confirmation; any other real
+ * value opens the confirmation `Dialog` below first (hiding will
+ * temporarily overwrite that invoice number — restored automatically on
+ * unhide, per the backend's preserve-on-hide/restore-on-unhide contract).
  */
+/** Sentinel `invoice_no` marking a BOE as previous-owner utilisation — see
+ * `apps.bill_of_entry.models.OTH_INVOICE_MARKER` (backend source of truth;
+ * duplicated here as a literal since the frontend has no shared constants
+ * module for backend enum values). */
+const OTH_INVOICE_MARKER = "OTH";
+
 export default function CustomsLedgerTable({ rows, summary, licenseId, showHidden, onShowHiddenChange }: CustomsLedgerTableProps) {
     const queryClient = useQueryClient();
+    // Row pending confirmation for Case 3 (invoice_no holds a real value) —
+    // null means no dialog is open. See `handleHide`'s 3-case dispatch.
+    const [confirmRow, setConfirmRow] = useState<CustomsLedgerRow | null>(null);
 
     const invalidate = () => {
         if (licenseId === undefined || licenseId === null || licenseId === "") return;
         queryClient.invalidateQueries({ queryKey: licenseBalanceKeys.ledger(licenseId) });
     };
 
-    const handleHide = async (row: CustomsLedgerRow) => {
+    const doHide = async (row: CustomsLedgerRow) => {
         if (!licenseId || !row.bill_of_entry_id) return;
-        const reason = window.prompt("Reason for hiding this BOE as a previous owner's utilisation:");
-        if (reason === null) return;
         try {
-            await api.post(`licenses/${licenseId}/hide-boe/`, { boe_id: row.bill_of_entry_id, reason });
+            await api.post(`licenses/${licenseId}/hide-boe/`, { boe_id: row.bill_of_entry_id });
             toast.success("BOE hidden.");
             invalidate();
         } catch (err) {
@@ -117,12 +128,27 @@ export default function CustomsLedgerTable({ rows, summary, licenseId, showHidde
         }
     };
 
+    /**
+     * 3-case dispatch by the BOE's CURRENT `invoice_no` (see the backend
+     * `hide_boe` service docstring for the same 3 cases):
+     *   1. blank/null -> hide immediately, no confirmation.
+     *   2. already "OTH" -> already hidden; idempotent, no confirmation.
+     *   3. any other real value -> confirm first (hiding will temporarily
+     *      overwrite it; the original is restored automatically on unhide).
+     */
+    const handleHide = (row: CustomsLedgerRow) => {
+        const invoiceNo = row.boe_invoice_no;
+        if (!invoiceNo || invoiceNo === OTH_INVOICE_MARKER) {
+            void doHide(row);
+            return;
+        }
+        setConfirmRow(row);
+    };
+
     const handleRestore = async (row: CustomsLedgerRow) => {
         if (!licenseId || !row.bill_of_entry_id) return;
-        const reason = window.prompt("Reason for restoring this BOE:");
-        if (reason === null) return;
         try {
-            await api.post(`licenses/${licenseId}/restore-boe/`, { boe_id: row.bill_of_entry_id, reason });
+            await api.post(`licenses/${licenseId}/restore-boe/`, { boe_id: row.bill_of_entry_id });
             toast.success("BOE restored.");
             invalidate();
         } catch (err) {
@@ -270,6 +296,35 @@ export default function CustomsLedgerTable({ rows, summary, licenseId, showHidde
                     </tbody>
                 </table>
             </div>
+
+            <Dialog open={confirmRow !== null} onOpenChange={(open) => !open && setConfirmRow(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Hide BOE</DialogTitle>
+                        <DialogDescription>
+                            This BOE is currently linked to Invoice "{confirmRow?.boe_invoice_no}". Hiding this BOE
+                            will temporarily replace the invoice number with "OTH" and remove it from invoice
+                            matching and pending invoice workflows. The original invoice number will be restored
+                            automatically when the BOE is unhidden. Do you want to continue?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmRow(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => {
+                                const row = confirmRow;
+                                setConfirmRow(null);
+                                if (row) void doHide(row);
+                            }}
+                        >
+                            Hide BOE
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

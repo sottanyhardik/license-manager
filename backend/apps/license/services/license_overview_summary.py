@@ -21,7 +21,7 @@ from django.db.models import Count, DecimalField, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.allotment.models import AllotmentItems
-from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
+from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
 from apps.core.constants import DEC_0
 from apps.license.services import balance_snapshot
 from apps.license.services.balance_calculator import quantize_2dp
@@ -76,11 +76,13 @@ def get_overview_counts(license_obj) -> Dict[str, Any]:
     # licenses: the buggy form over-counted by exactly 1 in every case
     # checked, `Count(distinct=True)` matched the BOEs tab's actual row
     # count exactly).
-    # Previous-owner "hidden" BOEs (see `OTH_INVOICE_MARKER`) are excluded
-    # — they no longer count toward this licence's utilisation in ANY
-    # balance/financial figure, and the overview card is no exception.
-    total_boes = RowDetails.objects.filter(sr_number__license=license_obj).exclude(
-        bill_of_entry__invoice_no=OTH_INVOICE_MARKER
+    # Previous-owner "hidden" BOEs (genuinely hidden per audit trail, see
+    # `annotate_and_exclude_hidden`) are excluded — they no longer count
+    # toward this licence's utilisation in ANY balance/financial figure,
+    # and the overview card is no exception.
+    total_boes = annotate_and_exclude_hidden(
+        RowDetails.objects.filter(sr_number__license=license_obj),
+        boe_field="bill_of_entry",
     ).aggregate(
         n=Count("bill_of_entry", distinct=True)
     )["n"]

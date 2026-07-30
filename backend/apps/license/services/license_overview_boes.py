@@ -32,7 +32,7 @@ from django.contrib.postgres.aggregates import BoolOr
 from django.db.models import DecimalField, F, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce, Greatest
 
-from apps.bill_of_entry.models import BillOfEntryModel, RowDetails, OTH_INVOICE_MARKER
+from apps.bill_of_entry.models import BillOfEntryModel, RowDetails, annotate_and_exclude_hidden
 from apps.core.constants import DEC_0, DEC_000
 
 _ALLOC_FIELD = DecimalField(max_digits=20, decimal_places=3)
@@ -54,14 +54,16 @@ def list_boe_rows(license_obj) -> List[Dict[str, Any]]:
     )
 
     grouped = (
-        RowDetails.objects.filter(sr_number__license=license_obj)
-        # Previous-owner "hidden" BOEs (see `OTH_INVOICE_MARKER`) are
-        # excluded entirely from this BOEs-tab summary — the marker is
-        # BOE-level (every row on that physical BOE, regardless of
-        # transaction_type), so a hidden BOE simply never appears as a
-        # tab entry, matching the Pending BOE rule (previous-owner BOEs
-        # must never surface in this workflow).
-        .exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER)
+        annotate_and_exclude_hidden(
+            RowDetails.objects.filter(sr_number__license=license_obj),
+            # Previous-owner "hidden" BOEs (genuinely hidden per audit
+            # trail) are excluded entirely from this BOEs-tab summary —
+            # the marker is BOE-level (every row on that physical BOE,
+            # regardless of transaction_type), so a hidden BOE simply
+            # never appears as a tab entry, matching the Pending BOE rule
+            # (previous-owner BOEs must never surface in this workflow).
+            boe_field="bill_of_entry",
+        )
         .annotate(
             allocated=Coalesce(
                 Subquery(allocated_subquery, output_field=_ALLOC_FIELD),

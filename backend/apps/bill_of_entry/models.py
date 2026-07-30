@@ -55,6 +55,133 @@ def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
 OTH_INVOICE_MARKER = "OTH"
 
 
+def annotate_and_exclude_hidden(queryset, boe_field="", hidden_only=False):
+    """
+    Exclude rows whose BOE is GENUINELY hidden — i.e. `invoice_no ==
+    OTH_INVOICE_MARKER` AND the BOE's own most recent HIDE_BOE/RESTORE_BOE
+    `ReconciliationLog` entry is a HIDE_BOE. Pass `hidden_only=True` to
+    invert this and get ONLY the genuinely-hidden rows instead (e.g. to
+    sum up "how much CIF is hidden" rather than excluding it).
+
+    `invoice_no == "OTH"` alone is NOT reliable as a hidden-BOE signal:
+    real production data has ~35-40% of ALL bills of entry already
+    carrying "OTH" as ordinary, unrelated free-text invoice data that
+    predates this feature entirely (confirmed against the dev DB: 309 of
+    788 real BOEs). Treating every such BOE as hidden would silently drop
+    a huge fraction of real debits from every balance/financial
+    calculation. The audit trail `hide_boe`/`restore_boe` (via
+    `_apply_hide`/`_apply_restore` in `apps.bill_of_entry.services.
+    boe_service`) already writes on every genuine hide/restore is the one
+    thing that can tell a real hide apart from a coincidental string
+    match — a BOE is only "currently hidden" if its LATEST such log entry
+    is a HIDE_BOE (a later RESTORE_BOE, or no log at all, means the "OTH"
+    value is unrelated legacy data and the BOE must stay fully visible).
+
+    This is a `Subquery`-backed exclusion, not a Python-side filter, so it
+    composes into any queryset the exact same way the old bare
+    `.exclude(invoice_no=OTH_INVOICE_MARKER)` did — one extra correlated
+    subquery per row, no N+1, no second query round-trip.
+
+    Args:
+        queryset: a queryset of `BillOfEntryModel` (or anything with a FK
+            path to it).
+        boe_field: the field path to `BillOfEntryModel` on `queryset`'s
+            model — `""` when `queryset` IS `BillOfEntryModel` itself
+            (e.g. `apps.bill_of_entry.views.boe`'s `available_for_trade`
+            filter), or e.g. `"bill_of_entry"` when it's a related model
+            (e.g. `RowDetails`, whose FK is `bill_of_entry`).
+        hidden_only: return only genuinely-hidden rows instead of
+            excluding them.
+
+    Returns:
+        `queryset` with genuinely-hidden rows excluded (or, if
+        `hidden_only=True`, containing ONLY genuinely-hidden rows).
+    """
+    from django.db.models import BooleanField, Case, OuterRef, Q, Subquery, Value, When
+
+    from apps.reconciliation.models import ReconciliationLog
+
+    prefix = f"{boe_field}__" if boe_field else ""
+    boe_id_field = f"{boe_field}_id" if boe_field else "id"
+    invoice_no_field = f"{prefix}invoice_no"
+
+    latest_hide_restore = (
+        ReconciliationLog.objects
+        .filter(
+            bill_of_entry_id=OuterRef(boe_id_field),
+            action__in=[ReconciliationLog.ACTION_HIDE_BOE, ReconciliationLog.ACTION_RESTORE_BOE],
+        )
+        .order_by("-created_on")
+        .values("action")[:1]
+    )
+    # `_latest_hide_restore` is NULL for any BOE with no matching log at
+    # all (the common case — most BOEs were never hidden). Comparing NULL
+    # to a value in SQL yields NULL/UNKNOWN, not False — so negating that
+    # comparison directly in `.exclude(is_hidden_q)` would ALSO evaluate
+    # to NULL/UNKNOWN for those rows, and Django's `.exclude()` (`WHERE
+    # NOT (...)`) then silently drops them from the result too, the exact
+    # opposite of "not hidden, so keep it". Wrapping the whole hidden
+    # check in `Case`/`When` with an explicit `default=False` collapses
+    # NULL to a real, definite boolean BEFORE any negation happens, so
+    # `.filter(_is_genuinely_hidden=False)` (used for both directions
+    # below, never `.exclude()`) is unambiguous either way.
+    is_hidden_case = Case(
+        When(
+            Q(**{invoice_no_field: OTH_INVOICE_MARKER}) & Q(_latest_hide_restore=ReconciliationLog.ACTION_HIDE_BOE),
+            then=Value(True),
+        ),
+        default=Value(False),
+        output_field=BooleanField(),
+    )
+    annotated = (
+        queryset
+        .annotate(_latest_hide_restore=Subquery(latest_hide_restore))
+        .annotate(_is_genuinely_hidden=is_hidden_case)
+    )
+    return annotated.filter(_is_genuinely_hidden=hidden_only)
+
+
+def genuinely_hidden_boe_ids(boe_ids=None) -> set:
+    """
+    Python-side sibling of `annotate_and_exclude_hidden` for call sites
+    that need a plain `set` of hidden BOE ids rather than a queryset
+    filter (e.g. row-level "is this BOE hidden" checks after the rows are
+    already fetched). See that function's docstring for the OTH-collision
+    rationale — identical logic, just returning ids instead of filtering.
+
+    Args:
+        boe_ids: optional iterable to scope the check to (avoids scanning
+            every OTH-marked BOE in the database when the caller already
+            knows which ones it cares about).
+
+    Returns:
+        `set` of `BillOfEntryModel` ids that are currently, genuinely
+        hidden.
+    """
+    from apps.reconciliation.models import ReconciliationLog
+
+    qs = BillOfEntryModel.objects.filter(invoice_no=OTH_INVOICE_MARKER)
+    if boe_ids is not None:
+        qs = qs.filter(id__in=list(boe_ids))
+    candidate_ids = list(qs.values_list("id", flat=True))
+    if not candidate_ids:
+        return set()
+
+    logs = (
+        ReconciliationLog.objects
+        .filter(
+            bill_of_entry_id__in=candidate_ids,
+            action__in=[ReconciliationLog.ACTION_HIDE_BOE, ReconciliationLog.ACTION_RESTORE_BOE],
+        )
+        .order_by("bill_of_entry_id", "-created_on")
+        .values_list("bill_of_entry_id", "action")
+    )
+    latest_action: dict = {}
+    for boe_id, action in logs:
+        latest_action.setdefault(boe_id, action)
+    return {boe_id for boe_id, action in latest_action.items() if action == ReconciliationLog.ACTION_HIDE_BOE}
+
+
 class BillOfEntryModel(AuditModel):
     company = models.ForeignKey(
         CompanyModel,

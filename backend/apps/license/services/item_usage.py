@@ -28,16 +28,18 @@ def get_item_usage(import_item):
         queryset, open/no-BOE rows for this item, select_related for
         company) — both lazy querysets, not yet evaluated.
     """
-    from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
+    from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
     from apps.allotment.models import AllotmentItems
 
     boes = (
-        RowDetails.objects.filter(sr_number=import_item, transaction_type=DEBIT)
-        # Previous-owner "hidden" BOEs (see `OTH_INVOICE_MARKER`) are
-        # excluded — this usage query feeds live balance/report figures
-        # (Item Summary drawer, Excel exporters), never the Customs History
-        # audit view.
-        .exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER)
+        annotate_and_exclude_hidden(
+            RowDetails.objects.filter(sr_number=import_item, transaction_type=DEBIT),
+            # Previous-owner "hidden" BOEs (genuinely hidden per audit
+            # trail) are excluded — this usage query feeds live
+            # balance/report figures (Item Summary drawer, Excel
+            # exporters), never the Customs History audit view.
+            boe_field="bill_of_entry",
+        )
         .select_related('bill_of_entry__company', 'bill_of_entry__port')
     )
     allotments = (
@@ -61,7 +63,7 @@ def get_item_usage_for_items(item_ids):
     """
     from collections import defaultdict
 
-    from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
+    from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
     from apps.allotment.models import AllotmentItems
 
     ids = list(item_ids)
@@ -71,8 +73,10 @@ def get_item_usage_for_items(item_ids):
 
     boes_by_item = defaultdict(list)
     for row in (
-        RowDetails.objects.filter(sr_number_id__in=ids, transaction_type=DEBIT)
-        .exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER)
+        annotate_and_exclude_hidden(
+            RowDetails.objects.filter(sr_number_id__in=ids, transaction_type=DEBIT),
+            boe_field="bill_of_entry",
+        )
         .select_related('bill_of_entry__company', 'bill_of_entry__port')
     ):
         boes_by_item[row.sr_number_id].append(row)

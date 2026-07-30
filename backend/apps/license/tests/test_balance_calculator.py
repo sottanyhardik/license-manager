@@ -84,6 +84,15 @@ class TestLicenseBalanceCalculator(TestCase):
         # loop it back to the same mock so the pre-wired `.annotate(...)`
         # chain below is still what gets called.
         mock_queryset.exclude.return_value = mock_queryset
+        # `exclude_hidden()` now also `.annotate(_latest_hide_restore=...)`
+        # before excluding (audit-trail-backed OTH detection) — loop that
+        # back to the mock too so the chain still resolves the same way.
+        mock_queryset.annotate.return_value = mock_queryset
+        # `annotate_and_exclude_hidden` filters on a definite (never-NULL)
+        # boolean annotation via `.filter(...)`, not `.exclude(...)` (a
+        # NULL-safety fix — see that function's docstring) — loop `.filter`
+        # back too so the chain still resolves the same way.
+        mock_queryset.filter.return_value = mock_queryset
         annotated = (
             mock_queryset.annotate.return_value.annotate.return_value
             .annotate.return_value.annotate.return_value
@@ -116,6 +125,15 @@ class TestLicenseBalanceCalculator(TestCase):
         # back to the same mock so `get_debit_rows`' default-exclusion
         # chain still reaches the pre-wired `.annotate(...)` chain below.
         mock_queryset.exclude.return_value = mock_queryset
+        # `exclude_hidden()` now also `.annotate(_latest_hide_restore=...)`
+        # before excluding (audit-trail-backed OTH detection) — loop that
+        # back to the mock too so the chain still resolves the same way.
+        mock_queryset.annotate.return_value = mock_queryset
+        # `annotate_and_exclude_hidden` filters on a definite (never-NULL)
+        # boolean annotation via `.filter(...)`, not `.exclude(...)` (a
+        # NULL-safety fix — see that function's docstring) — loop `.filter`
+        # back too so the chain still resolves the same way.
+        mock_queryset.filter.return_value = mock_queryset
         annotated = (
             mock_queryset.annotate.return_value.annotate.return_value
             .annotate.return_value.annotate.return_value
@@ -288,6 +306,15 @@ class TestItemBalanceCalculator(TestCase):
         # filtered queryset before `.aggregate(...)` — loop it back so the
         # pre-wired aggregate result below is still what's returned.
         mock_debit_qs.exclude.return_value = mock_debit_qs
+        # `exclude_hidden()` now also `.annotate(_latest_hide_restore=...)`
+        # before excluding (audit-trail-backed OTH detection) — loop that
+        # back to the mock too so the chain still resolves the same way.
+        mock_debit_qs.annotate.return_value = mock_debit_qs
+        # `annotate_and_exclude_hidden` filters on a definite (never-NULL)
+        # boolean annotation via `.filter(...)`, not `.exclude(...)` (a
+        # NULL-safety fix — see that function's docstring) — loop `.filter`
+        # back too so the chain still resolves the same way.
+        mock_debit_qs.filter.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'cif_fc__sum': Decimal('100.00')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -322,6 +349,15 @@ class TestItemBalanceCalculator(TestCase):
         # Mock debit query
         mock_debit_qs = Mock()
         mock_debit_qs.exclude.return_value = mock_debit_qs
+        # `exclude_hidden()` now also `.annotate(_latest_hide_restore=...)`
+        # before excluding (audit-trail-backed OTH detection) — loop that
+        # back to the mock too so the chain still resolves the same way.
+        mock_debit_qs.annotate.return_value = mock_debit_qs
+        # `annotate_and_exclude_hidden` filters on a definite (never-NULL)
+        # boolean annotation via `.filter(...)`, not `.exclude(...)` (a
+        # NULL-safety fix — see that function's docstring) — loop `.filter`
+        # back too so the chain still resolves the same way.
+        mock_debit_qs.filter.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'cif_fc__sum': Decimal('300.00')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -347,6 +383,15 @@ class TestItemBalanceCalculator(TestCase):
         # Mock debit query
         mock_debit_qs = Mock()
         mock_debit_qs.exclude.return_value = mock_debit_qs
+        # `exclude_hidden()` now also `.annotate(_latest_hide_restore=...)`
+        # before excluding (audit-trail-backed OTH detection) — loop that
+        # back to the mock too so the chain still resolves the same way.
+        mock_debit_qs.annotate.return_value = mock_debit_qs
+        # `annotate_and_exclude_hidden` filters on a definite (never-NULL)
+        # boolean annotation via `.filter(...)`, not `.exclude(...)` (a
+        # NULL-safety fix — see that function's docstring) — loop `.filter`
+        # back too so the chain still resolves the same way.
+        mock_debit_qs.filter.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'cif_fc__sum': None}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -397,6 +442,15 @@ class TestItemBalanceCalculator(TestCase):
         # Mock debited quantity
         mock_debit_qs = Mock()
         mock_debit_qs.exclude.return_value = mock_debit_qs
+        # `exclude_hidden()` now also `.annotate(_latest_hide_restore=...)`
+        # before excluding (audit-trail-backed OTH detection) — loop that
+        # back to the mock too so the chain still resolves the same way.
+        mock_debit_qs.annotate.return_value = mock_debit_qs
+        # `annotate_and_exclude_hidden` filters on a definite (never-NULL)
+        # boolean annotation via `.filter(...)`, not `.exclude(...)` (a
+        # NULL-safety fix — see that function's docstring) — loop `.filter`
+        # back too so the chain still resolves the same way.
+        mock_debit_qs.filter.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'qty__sum': Decimal('300')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -424,6 +478,15 @@ class TestItemBalanceCalculator(TestCase):
         # Mock debited quantity
         mock_debit_qs = Mock()
         mock_debit_qs.exclude.return_value = mock_debit_qs
+        # `exclude_hidden()` now also `.annotate(_latest_hide_restore=...)`
+        # before excluding (audit-trail-backed OTH detection) — loop that
+        # back to the mock too so the chain still resolves the same way.
+        mock_debit_qs.annotate.return_value = mock_debit_qs
+        # `annotate_and_exclude_hidden` filters on a definite (never-NULL)
+        # boolean annotation via `.filter(...)`, not `.exclude(...)` (a
+        # NULL-safety fix — see that function's docstring) — loop `.filter`
+        # back too so the chain still resolves the same way.
+        mock_debit_qs.filter.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'qty__sum': Decimal('600')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -1181,13 +1244,30 @@ class TestHiddenBoeExclusion(DjangoTestCase):
         )
 
     def _make_boe(self, company, invoice_no=""):
-        return BillOfEntryModel.objects.create(
+        boe = BillOfEntryModel.objects.create(
             company=company,
             bill_of_entry_number=str(uuid.uuid4().int)[:9],
             bill_of_entry_date=datetime.now().date(),
             exchange_rate=Decimal("84.50"),
             invoice_no=invoice_no,
         )
+        if invoice_no == OTH_INVOICE_MARKER:
+            # A BOE only counts as GENUINELY hidden if its audit trail
+            # confirms a real hide (see `annotate_and_exclude_hidden`'s
+            # docstring) — raw `invoice_no == "OTH"` alone collides with
+            # ~35-40% of real BOEs carrying it as unrelated legacy
+            # free-text data. Every fixture in this class means a REAL
+            # hide, so it must create the same `ReconciliationLog` entry
+            # `hide_boe`/`_apply_hide` would.
+            from apps.reconciliation.models import ReconciliationLog
+
+            ReconciliationLog.objects.create(
+                action=ReconciliationLog.ACTION_HIDE_BOE,
+                bill_of_entry=boe,
+                before={"is_hidden": False, "invoice_no": ""},
+                after={"is_hidden": True, "bill_of_entry_number": boe.bill_of_entry_number},
+            )
+        return boe
 
     def _make_rows(self, license_obj, item, company):
         """One hidden + one visible DEBIT row on the same item. Returns
@@ -1215,6 +1295,41 @@ class TestHiddenBoeExclusion(DjangoTestCase):
         total = LicenseBalanceCalculator.calculate_boe_debit_total(license_obj)
 
         assert total == Decimal("500.00")
+
+    def test_oth_collision_without_audit_trail_is_not_treated_as_hidden(self):
+        """
+        THE regression test for the OTH-collision fix: a BOE whose
+        `invoice_no` happens to be the literal string "OTH" for reasons
+        that predate/are unrelated to the Hidden BOE feature (e.g. real
+        free-text invoice data, confirmed at ~35-40% of all real BOEs)
+        must NOT be excluded from balance calculations just because the
+        string matches — only a BOE with a genuine `HIDE_BOE`
+        `ReconciliationLog` entry (no later `RESTORE_BOE`) counts as
+        hidden. Deliberately bypasses `_make_boe` (which auto-creates that
+        log for every OTH-marked BOE in this test class) to construct the
+        exact "coincidental string match, no audit trail" scenario.
+        """
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        legacy_oth_boe = BillOfEntryModel.objects.create(
+            company=company,
+            bill_of_entry_number=str(uuid.uuid4().int)[:9],
+            bill_of_entry_date=datetime.now().date(),
+            exchange_rate=Decimal("84.50"),
+            invoice_no=OTH_INVOICE_MARKER,
+        )
+        RowDetails.objects.create(
+            bill_of_entry=legacy_oth_boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=Decimal("1000.00"), cif_inr=Decimal("1000.00") * Decimal("84.5"),
+            qty=Decimal("100.000"),
+        )
+
+        # No ReconciliationLog exists for this BOE, so it must be counted
+        # in full everywhere — the opposite of the hidden-row tests above.
+        assert LicenseBalanceCalculator.calculate_boe_debit_total(license_obj) == Decimal("1000.00")
+        assert LicenseBalanceCalculator.calculate_hidden_boe_debit_total(license_obj) == DEC_0
+        assert ItemBalanceCalculator.calculate_debited_quantity_for_items([item.id]) == {item.id: Decimal("100.000")}
 
     def test_calculate_boe_debit_total_for_licenses_excludes_hidden_row(self):
         company = self._make_company()

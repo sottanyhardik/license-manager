@@ -775,7 +775,7 @@ class LicenseBalanceLedgerBuilder:
         """
         from django.db.models import Count
         from apps.license.services.balance_calculator import LicenseBalanceCalculator, quantize_2dp
-        from apps.bill_of_entry.models import OTH_INVOICE_MARKER, RowDetails
+        from apps.bill_of_entry.models import RowDetails, genuinely_hidden_boe_ids
 
         opening_balance = license_obj.opening_balance
         rows = []
@@ -827,6 +827,12 @@ class LicenseBalanceLedgerBuilder:
                 .annotate(n=Count('sr_number__license_id', distinct=True))
             )
         } if boe_ids_on_page else {}
+        # Genuinely-hidden BOEs on this page, per audit trail — see
+        # `annotate_and_exclude_hidden`'s docstring: a bare `invoice_no ==
+        # "OTH"` match alone isn't reliable (collides with ~35-40% of real
+        # BOEs carrying "OTH" as unrelated legacy free-text data). One
+        # bulk query for the whole page, not one per row.
+        hidden_boe_ids_on_page = genuinely_hidden_boe_ids(boe_ids_on_page)
 
         total_boe_cif = DEC_0
         for row in boe_rows:
@@ -835,14 +841,14 @@ class LicenseBalanceLedgerBuilder:
             total_boe_cif += debit
             running -= debit
             matched = bool(boe and boe.id in matched_boe_ids)
-            # Hidden = `invoice_no == "OTH"` on the BOE itself (see
-            # `OTH_INVOICE_MARKER`'s docstring) — only ever True when
-            # show_hidden=True (get_debit_rows excludes hidden rows
-            # entirely otherwise) — lets the UI visually distinguish
-            # previous-owner rows when the toggle is on. No stored
-            # "reason" field any more (no new columns) — a fixed
-            # descriptive string instead.
-            is_hidden = bool(boe and boe.invoice_no == OTH_INVOICE_MARKER)
+            # Hidden = genuinely hidden per `hidden_boe_ids_on_page` (BOE-
+            # level, audit-trail-backed — see that variable's comment) —
+            # only ever True when show_hidden=True (get_debit_rows
+            # excludes hidden rows entirely otherwise) — lets the UI
+            # visually distinguish previous-owner rows when the toggle is
+            # on. No stored "reason" field any more (no new columns) — a
+            # fixed descriptive string instead.
+            is_hidden = bool(boe and boe.id in hidden_boe_ids_on_page)
 
             rows.append({
                 'sr': sr,

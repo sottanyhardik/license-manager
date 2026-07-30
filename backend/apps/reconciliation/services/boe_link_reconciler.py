@@ -52,20 +52,19 @@ def find_boe_allocation_candidates(trade_line):
     a single candidate; more than one means the match is ambiguous and must
     not be auto-resolved.
     """
-    from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
+    from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
     from apps.reconciliation.services.allocation_service import remaining_for_row_details_invoice_side
 
-    rows = (
+    rows = annotate_and_exclude_hidden(
         RowDetails.objects.filter(
             bill_of_entry__in=trade_line.trade.boes.all(),
             sr_number_id=trade_line.sr_number_id,
             transaction_type=DEBIT,
-        )
+        ),
         # Pending BOE rule: previous-owner BOEs are never eligible
         # candidates for invoice matching — see module docstring.
-        .exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER)
-        .select_related("bill_of_entry")
-    )
+        boe_field="bill_of_entry",
+    ).select_related("bill_of_entry")
     return [row for row in rows if remaining_for_row_details_invoice_side(row)[1] > DEC_0]
 
 

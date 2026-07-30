@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.permissions import BillOfEntryPermission
-from apps.bill_of_entry.models import BillOfEntryModel, OTH_INVOICE_MARKER
+from apps.bill_of_entry.models import BillOfEntryModel, annotate_and_exclude_hidden
 from apps.bill_of_entry.serializers import BillOfEntrySerializer
 from apps.bill_of_entry.services import boe_service
 from apps.bill_of_entry.views_export import add_grouped_export_action
@@ -164,9 +164,12 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
             # trade from picking the same BOE. `invoice_no` is now purely
             # informational/display here.
             #
-            # Pending BOE rule: a previous-owner BOE (invoice_no=="OTH")
-            # must NEVER appear as an invoice-matching suggestion.
-            queryset = queryset.exclude(invoice_no=OTH_INVOICE_MARKER)
+            # Pending BOE rule: a previous-owner BOE (invoice_no=="OTH",
+            # genuinely hidden per its audit trail — see
+            # `annotate_and_exclude_hidden`'s docstring for why a bare
+            # invoice_no=="OTH" match isn't reliable on its own) must
+            # NEVER appear as an invoice-matching suggestion.
+            queryset = annotate_and_exclude_hidden(queryset)
 
         return queryset
 

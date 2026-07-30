@@ -20,7 +20,7 @@ from apps.core.utils.decimal_utils import to_decimal
 # Module-level imports so tests can patch via
 # patch("apps.license.services.balance_calculator.LicenseExportItemModel") etc.
 from apps.license.models import LicenseExportItemModel
-from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
+from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER, annotate_and_exclude_hidden
 from apps.allotment.models import AllotmentItems
 
 DECIMAL_CENT = Decimal("0.01")
@@ -43,16 +43,18 @@ def exclude_hidden(qs):
     """
     Exclude previous-owner "hidden" BOE debit rows from a `RowDetails`
     queryset — a BOE is hidden when `BillOfEntryModel.invoice_no ==
-    OTH_INVOICE_MARKER` (see that constant's docstring: reuses the
-    existing `invoice_no` field, BOE-level, no new column). Applied at
-    every site that builds a DEBIT `RowDetails` queryset for a live
+    OTH_INVOICE_MARKER` AND its audit trail confirms a genuine hide (see
+    `apps.bill_of_entry.models.annotate_and_exclude_hidden`'s docstring:
+    the raw string match alone collides with ~35-40% of real BOEs that
+    carry "OTH" as unrelated legacy free-text data). Applied at every
+    site that builds a DEBIT `RowDetails` queryset for a live
     balance/report calculation — see `LicenseBalanceCalculator.
     get_debit_rows`'s `include_hidden` param for the one deliberate
     exception (the Customs Ledger's `show_hidden` audit view). A single,
     shared definition so every consumer's exclusion can never silently
     diverge.
     """
-    return qs.exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER)
+    return annotate_and_exclude_hidden(qs, boe_field="bill_of_entry")
 
 
 class LicenseBalanceCalculator:
@@ -142,12 +144,10 @@ class LicenseBalanceCalculator:
         Returns `boe_ids_by_license`: `{license_id: {bill_of_entry_id,
         ...}}` grouped by the trade LINE's own licence.
         """
-        from apps.bill_of_entry.models import OTH_INVOICE_MARKER
-
         boe_ids_by_license: dict = {}
         for trade in trades_queryset.prefetch_related("lines__sr_number", "boes"):
             tagged_boe_ids = set(
-                trade.boes.exclude(invoice_no=OTH_INVOICE_MARKER).values_list("id", flat=True)
+                annotate_and_exclude_hidden(trade.boes).values_list("id", flat=True)
             )
             if not tagged_boe_ids:
                 continue
@@ -526,10 +526,10 @@ class LicenseBalanceCalculator:
             Total hidden BOE debit CIF as Decimal
         """
         return to_decimal(
-            RowDetails.objects.filter(
-                sr_number__license=license_obj,
-                transaction_type=DEBIT,
-                bill_of_entry__invoice_no=OTH_INVOICE_MARKER,
+            annotate_and_exclude_hidden(
+                RowDetails.objects.filter(sr_number__license=license_obj, transaction_type=DEBIT),
+                boe_field="bill_of_entry",
+                hidden_only=True,
             ).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
             )["total"],
@@ -551,10 +551,10 @@ class LicenseBalanceCalculator:
         if not ids:
             return {}
         rows = (
-            RowDetails.objects.filter(
-                sr_number__license_id__in=ids,
-                transaction_type=DEBIT,
-                bill_of_entry__invoice_no=OTH_INVOICE_MARKER,
+            annotate_and_exclude_hidden(
+                RowDetails.objects.filter(sr_number__license_id__in=ids, transaction_type=DEBIT),
+                boe_field="bill_of_entry",
+                hidden_only=True,
             )
             .values("sr_number__license_id")
             .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))

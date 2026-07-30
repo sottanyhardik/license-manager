@@ -66,13 +66,28 @@ class LicenseBalanceLedgerFixtureMixin:
         )
 
     def make_boe(self, company, number=None, invoice_no=""):
-        return BillOfEntryModel.objects.create(
+        boe = BillOfEntryModel.objects.create(
             company=company,
             bill_of_entry_number=number or str(uuid.uuid4().int)[:9],
             bill_of_entry_date=datetime.now().date(),
             exchange_rate=Decimal("84.50"),
             invoice_no=invoice_no,
         )
+        if invoice_no == OTH_INVOICE_MARKER:
+            # A BOE only counts as GENUINELY hidden if its audit trail
+            # confirms a real hide (see `annotate_and_exclude_hidden`'s
+            # docstring) — raw `invoice_no == "OTH"` alone collides with
+            # ~35-40% of real BOEs carrying it as unrelated legacy
+            # free-text data. Every caller passing this marker means a
+            # REAL hide, so create the same `ReconciliationLog` entry
+            # `hide_boe`/`_apply_hide` would.
+            ReconciliationLog.objects.create(
+                action=ReconciliationLog.ACTION_HIDE_BOE,
+                bill_of_entry=boe,
+                before={"is_hidden": False, "invoice_no": ""},
+                after={"is_hidden": True, "bill_of_entry_number": boe.bill_of_entry_number},
+            )
+        return boe
 
     def make_debit_row(self, boe, item, cif_fc, qty=Decimal("100.000")):
         return RowDetails.objects.create(

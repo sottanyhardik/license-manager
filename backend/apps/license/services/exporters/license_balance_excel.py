@@ -128,7 +128,7 @@ def build_balance_excel_unused(license_obj):
 
     # Import Items Section
     if license_obj.import_license.exists():
-        from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
+        from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
         from apps.allotment.models import AllotmentItems
 
         # Section header
@@ -179,13 +179,13 @@ def build_balance_excel_unused(license_obj):
             current_row += 1
 
             # BOE Details
-            # Previous-owner "hidden" BOEs (see `OTH_INVOICE_MARKER`) are
-            # excluded — this report is a balance/financial figure, not the
-            # Customs History audit view.
-            boes = RowDetails.objects.filter(
-                sr_number_id=item.id,
-                transaction_type='D'
-            ).exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+            # Previous-owner "hidden" BOEs (genuinely hidden per audit
+            # trail) are excluded — this report is a balance/financial
+            # figure, not the Customs History audit view.
+            boes = annotate_and_exclude_hidden(
+                RowDetails.objects.filter(sr_number_id=item.id, transaction_type='D'),
+                boe_field="bill_of_entry",
+            ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
             if boes.exists():
                 current_row += 1
                 ws.merge_cells(f'A{current_row}:G{current_row}')
@@ -1218,7 +1218,7 @@ def build_bulk_balance_excel(request):
     from io import BytesIO
     from decimal import Decimal as _Dec
     from collections import defaultdict
-    from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER
+    from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
     from apps.allotment.models import AllotmentItems
     from rest_framework.response import Response
     from apps.license.models import LicenseDetailsModel
@@ -1291,12 +1291,13 @@ def build_bulk_balance_excel(request):
         for item in license_obj.import_license.all():
             item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
 
-            # Previous-owner "hidden" BOEs (see `OTH_INVOICE_MARKER`) are
-            # excluded — this bulk export is a balance/financial figure,
-            # not the Customs History audit view.
-            boes = RowDetails.objects.filter(
-                sr_number_id=item.id, transaction_type='D'
-            ).exclude(bill_of_entry__invoice_no=OTH_INVOICE_MARKER).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+            # Previous-owner "hidden" BOEs (genuinely hidden per audit
+            # trail) are excluded — this bulk export is a balance/
+            # financial figure, not the Customs History audit view.
+            boes = annotate_and_exclude_hidden(
+                RowDetails.objects.filter(sr_number_id=item.id, transaction_type='D'),
+                boe_field="bill_of_entry",
+            ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
 
             for rd in boes:
                 qty  = float(rd.qty or 0)

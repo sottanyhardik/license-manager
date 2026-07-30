@@ -7,6 +7,7 @@ import { generatePDF, generateExcel } from '../utils/ledgerExport';
 import AsyncSelectField from '../components/AsyncSelectField';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
+import DateRangeFilter from '@/components/DateRangeFilter';
 import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,10 +16,17 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import DebouncedSearchInput from '../components/DebouncedSearchInput';
 import {
+    getFinancialYearRange, getCurrentFinancialYearRange, getPreviousFinancialYearRange,
+} from '../utils/dateRangePresets';
+import {
     ArrowDownCircle, ArrowUpCircle, BadgeCheck, BookOpen, Building2, Calendar,
-    CalendarCheck, CalendarRange, CalendarX, FileSpreadsheet, FileText,
+    CalendarCheck, CalendarRange, FileSpreadsheet, FileText,
     Filter, Globe, Inbox, Loader2, Trophy, XCircle,
 } from "lucide-react";
+
+// Re-exported for backward compatibility — moved to `utils/dateRangePresets`
+// so `<DateRangeFilter>` and every other filter panel can share it too.
+export { getFinancialYearRange };
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -110,17 +118,6 @@ function normalizeId(value: unknown, fallback: string | number): string | number
     if (typeof value === 'string') return normalizeText(value, String(fallback));
     if (typeof value === 'number' && Number.isFinite(value)) return value;
     return fallback;
-}
-
-export function getFinancialYearRange(date = new Date(), offset = 0) {
-    const currentYear = date.getFullYear();
-    const currentMonth = date.getMonth();
-    const currentFyStartYear = currentMonth <= 2 ? currentYear - 1 : currentYear;
-    const fyStartYear = currentFyStartYear + offset;
-    return {
-        fyStart: `${fyStartYear}-04-01`,
-        fyEnd: `${fyStartYear + 1}-03-31`,
-    };
 }
 
 export function normalizeMinBalance(value: unknown): string {
@@ -436,14 +433,6 @@ export default function LicenseLedger() {
     const handleFilterChange = (field: keyof LedgerFilters, value: LedgerFilters[keyof LedgerFilters]) =>
         setFilters(prev => ({ ...prev, [field]: value }));
 
-    const setCurrentFinancialYear = () => {
-        const { fyStart, fyEnd } = getFinancialYearRange();
-        setFilters(prev => ({ ...prev, purchase_date_from: fyStart, purchase_date_to: fyEnd }));
-    };
-    const setPreviousFinancialYear = () => {
-        const { fyStart, fyEnd } = getFinancialYearRange(undefined, -1);
-        setFilters(prev => ({ ...prev, purchase_date_from: fyStart, purchase_date_to: fyEnd }));
-    };
     const clearDateFilter = () =>
         setFilters(prev => ({ ...prev, purchase_date_from: '', purchase_date_to: '' }));
 
@@ -785,43 +774,22 @@ export default function LicenseLedger() {
 
                     {/* Purchase date range */}
                     <div className="mt-3 border-t border-border/60 pt-3">
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-[12px] font-semibold text-muted-foreground">
-                                <CalendarRange className="size-4" aria-hidden="true" />
-                                Purchase Date Range
-                                <span className="text-[11.5px] font-normal">(Defaults to current FY: Apr-Mar)</span>
-                            </div>
-                            <div className="flex gap-1">
-                                <Button size="sm" variant="outline" onClick={setCurrentFinancialYear}>
-                                    <CalendarCheck className="size-4" aria-hidden="true" />Current FY
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={setPreviousFinancialYear}>
-                                    <Calendar className="size-4" aria-hidden="true" />Previous FY
-                                </Button>
-                                <Button
-                                    size="sm" variant="outline"
-                                    className="text-destructive hover:bg-destructive/10"
-                                    onClick={clearDateFilter}
-                                    disabled={!filters.purchase_date_from && !filters.purchase_date_to}
-                                >
-                                    <XCircle className="size-4" aria-hidden="true" />Clear
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                            <div>
-                                <label htmlFor="ledger-purchase-from" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">
-                                    <CalendarCheck className="size-4" aria-hidden="true" /> From Date
-                                </label>
-                                <Input id="ledger-purchase-from" type="date" value={filters.purchase_date_from} onChange={(e) => handleFilterChange('purchase_date_from', e.target.value)} />
-                            </div>
-                            <div>
-                                <label htmlFor="ledger-purchase-to" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">
-                                    <CalendarX className="size-4" aria-hidden="true" /> To Date
-                                </label>
-                                <Input id="ledger-purchase-to" type="date" value={filters.purchase_date_to} onChange={(e) => handleFilterChange('purchase_date_to', e.target.value)} />
-                            </div>
-                        </div>
+                        <DateRangeFilter
+                            label="Purchase Date Range"
+                            icon={CalendarRange}
+                            hint="(Defaults to current FY: Apr-Mar)"
+                            fromId="ledger-purchase-from"
+                            toId="ledger-purchase-to"
+                            fromValue={filters.purchase_date_from}
+                            toValue={filters.purchase_date_to}
+                            onFromChange={(v) => handleFilterChange('purchase_date_from', v)}
+                            onToChange={(v) => handleFilterChange('purchase_date_to', v)}
+                            onClear={clearDateFilter}
+                            presets={[
+                                { label: 'Current FY', icon: CalendarCheck, range: getCurrentFinancialYearRange },
+                                { label: 'Previous FY', icon: Calendar, range: getPreviousFinancialYearRange },
+                            ]}
+                        />
                     </div>
                 </CardContent>
             </Card>

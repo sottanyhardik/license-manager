@@ -1,6 +1,7 @@
 import { useId } from "react";
 import Select from "react-select";
 import AsyncSelectField from "../../components/AsyncSelectField";
+import DateRangeFilter from "../../components/DateRangeFilter";
 import { Building2, CalendarCheck, CalendarRange, DollarSign, Filter, MinusCircle, ShoppingCart, SlidersHorizontal, XCircle } from "lucide-react";
 
 type SelectOption = {
@@ -138,31 +139,17 @@ export default function ItemPivotFilters({
                         />
                     </div>
 
-                    <div>
-                        <label className="form-label mb-2 flex items-center gap-2 font-bold" htmlFor={expiryDateFromId}>
-                            <CalendarRange className="size-4" aria-hidden="true" />
-                            Expiry Date From
-                        </label>
-                        <input
-                            id={expiryDateFromId}
-                            type="date"
-                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
-                            value={expiryDateFrom}
-                            onChange={(e) => setExpiryDateFrom(e.target.value)}
-                        />
-                    </div>
-
-                    <div>
-                        <label className="form-label mb-2 flex items-center gap-2 font-bold" htmlFor={expiryDateToId}>
-                            <CalendarRange className="size-4" aria-hidden="true" />
-                            Expiry Date To
-                        </label>
-                        <input
-                            id={expiryDateToId}
-                            type="date"
-                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
-                            value={expiryDateTo}
-                            onChange={(e) => setExpiryDateTo(e.target.value)}
+                    <div className="sm:col-span-2">
+                        <DateRangeFilter
+                            label="Expiry Date"
+                            icon={CalendarRange}
+                            fromId={expiryDateFromId}
+                            toId={expiryDateToId}
+                            fromValue={expiryDateFrom}
+                            toValue={expiryDateTo}
+                            onFromChange={setExpiryDateFrom}
+                            onToChange={setExpiryDateTo}
+                            onClear={() => { setExpiryDateFrom(""); setExpiryDateTo(""); }}
                         />
                     </div>
 

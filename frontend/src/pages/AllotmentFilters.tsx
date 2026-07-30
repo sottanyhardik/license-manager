@@ -1,5 +1,6 @@
 import Select from "react-select";
 import HybridSelect from "../components/HybridSelect";
+import DateRangeFilter from "../components/DateRangeFilter";
 import { Filter, XCircle } from "lucide-react";
 
 interface AllotmentFiltersProps {
@@ -217,22 +218,14 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                             <option value="expiring_soon">Expiring Soon</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label className="form-label">Expiry Date From</label>
-                                        <input
-                                            type="date"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
-                                            value={filters.expiry_date_from}
-                                            onChange={(e) => setFilters({...filters, expiry_date_from: e.target.value})}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="form-label">Expiry Date To</label>
-                                        <input
-                                            type="date"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
-                                            value={filters.expiry_date_to}
-                                            onChange={(e) => setFilters({...filters, expiry_date_to: e.target.value})}
+                                    <div className="sm:col-span-2">
+                                        <DateRangeFilter
+                                            label="Expiry Date"
+                                            fromValue={filters.expiry_date_from}
+                                            toValue={filters.expiry_date_to}
+                                            onFromChange={(v) => setFilters({...filters, expiry_date_from: v})}
+                                            onToChange={(v) => setFilters({...filters, expiry_date_to: v})}
+                                            onClear={() => setFilters({...filters, expiry_date_from: "", expiry_date_to: ""})}
                                         />
                                     </div>
                                 </div>

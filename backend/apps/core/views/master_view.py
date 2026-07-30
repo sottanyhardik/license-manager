@@ -674,6 +674,55 @@ class MasterViewSet(viewsets.ModelViewSet):
                 else:
                     return HttpResponse("Invalid export format. Use 'xlsx' or 'pdf'.", status=400)
 
+            def _resolve_export_column(self, obj, col, serialized_holder):
+                """
+                Resolve one `list_display` column's export value for `obj`.
+
+                Prefers the viewset's own `serializer_class` when `col` is a
+                field the developer EXPLICITLY declared on that serializer
+                (e.g. `LicenseTradeSerializer.from_company_label =
+                CharField(source='from_company.name')`, or
+                `incentive_license = SerializerMethodField()`) — these have
+                no corresponding raw model attribute at all (`from_company_
+                label`), or worse, the raw attribute means something
+                completely different from what the serializer computes
+                (`incentive_license`: the model's own FK vs. the
+                serializer's comma-joined "every DFIA/Incentive licence
+                this trade touches" string). Naively resolving these via
+                `getattr(obj, col)` — which is all this export ever did
+                before — silently exported blanks or the wrong value.
+
+                `serialized_holder` is a single-element list used as an
+                in/out cache so the (potentially query-heavy)
+                `to_representation()` call only happens once per row, on
+                first need, not once per declared-field column.
+
+                Falls through to the original raw attribute/relation-path
+                walk for every other column — every plain model field/FK
+                across the rest of the app that already exports correctly
+                today keeps doing exactly that; this only changes
+                behaviour for columns that were never resolvable that way
+                in the first place.
+                """
+                declared_fields = getattr(self.get_serializer_class(), "_declared_fields", {})
+                if col in declared_fields:
+                    if serialized_holder[0] is None:
+                        serialized_holder[0] = self.get_serializer(obj).data
+                    return serialized_holder[0].get(col)
+
+                if "__" in col:
+                    alias = col.replace("__", "_")
+                    value = getattr(obj, alias, None)
+                    if value is None:
+                        parts = col.split("__")
+                        value = obj
+                        for part in parts:
+                            if value is None:
+                                break
+                            value = getattr(value, part, None)
+                    return value
+                return getattr(obj, col, None)
+
             def _export_xlsx(self, queryset, columns, model_name):
                 """Export to Excel format"""
                 if not OPENPYXL_AVAILABLE:
@@ -699,22 +748,9 @@ class MasterViewSet(viewsets.ModelViewSet):
                 # Data rows
                 for obj in queryset:
                     row = []
+                    serialized_holder = [None]
                     for col in columns:
-                        if "__" in col:
-                            # Try annotated field first
-                            alias = col.replace("__", "_")
-                            value = getattr(obj, alias, None)
-
-                            # If annotated field doesn't exist, traverse the relation
-                            if value is None:
-                                parts = col.split("__")
-                                value = obj
-                                for part in parts:
-                                    if value is None:
-                                        break
-                                    value = getattr(value, part, None)
-                        else:
-                            value = getattr(obj, col, None)
+                        value = self._resolve_export_column(obj, col, serialized_holder)
 
                         # Format value
                         if value is None:
@@ -778,12 +814,9 @@ class MasterViewSet(viewsets.ModelViewSet):
 
                 for obj in queryset:
                     row = []
+                    serialized_holder = [None]
                     for col in columns:
-                        if "__" in col:
-                            alias = col.replace("__", "_")
-                            value = getattr(obj, alias, None)
-                        else:
-                            value = getattr(obj, col, None)
+                        value = self._resolve_export_column(obj, col, serialized_holder)
 
                         # Format value
                         if value is None:

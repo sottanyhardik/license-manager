@@ -94,8 +94,10 @@ describe("ItemPivotFilters", () => {
 
         fireEvent.change(screen.getByLabelText("Minimum Balance (CIF)"), { target: { value: "500" } });
         fireEvent.change(screen.getByLabelText("License Status"), { target: { value: "expired" } });
-        fireEvent.change(screen.getByLabelText("Expiry Date From"), { target: { value: "2026-01-01" } });
-        fireEvent.change(screen.getByLabelText("Expiry Date To"), { target: { value: "2026-12-31" } });
+        // Expiry Date From/To now render under the shared `<DateRangeFilter>`
+        // (group label "Expiry Date", inputs individually labelled "From"/"To").
+        fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-01-01" } });
+        fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-12-31" } });
 
         expect(props.setMinBalance).toHaveBeenCalledWith(500);
         expect(props.setLicenseStatus).toHaveBeenCalledWith("expired");

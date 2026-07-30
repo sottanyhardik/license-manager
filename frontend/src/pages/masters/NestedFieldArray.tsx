@@ -314,10 +314,9 @@ export default function NestedFieldArray({
         if (field.type === "date" || field.name.includes("date") || field.name.includes("_at") || field.name.includes("_on")) {
             return (
                 <div className="w-full">
-                    {/* @ts-expect-error DatePicker onChange type mismatch */}
                     <DatePicker
                         selected={parseDate(fieldValue)}
-                        onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}
+                        onChange={(date: Date | null) => handleChange(index, field.name, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         wrapperClassName="w-full block"

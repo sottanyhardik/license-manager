@@ -478,11 +478,10 @@ export default function MasterForm({
         if (fieldMeta.type === "date" || fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
             return (
                 <div className="w-full">
-                    {/* @ts-expect-error DatePicker onChange type mismatch */}
                     <DatePicker
                         id={fieldId}
                         selected={parseDate(value)}
-                        onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
+                        onChange={(date: Date | null) => handleChange(fieldName, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
                         className={cn("flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring aria-invalid:border-destructive", errorClass)}
                         wrapperClassName="w-full block"

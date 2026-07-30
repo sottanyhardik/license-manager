@@ -1069,10 +1069,9 @@ export default function TradeForm() {
                     </div>
                     <div>
                         <label className="mb-1.5 block text-sm font-medium">Invoice Date</label>
-                        {/* @ts-expect-error DatePicker onChange type mismatch */}
                     <DatePicker
                             selected={formData.invoice_date instanceof Date ? formData.invoice_date : parseDate(formData.invoice_date)}
-                            onChange={(date) => setFormData(prev => ({ ...prev, invoice_date: date }))}
+                            onChange={(date: Date | null) => setFormData(prev => ({ ...prev, invoice_date: date }))}
                             dateFormat="dd-MM-yyyy"
                             className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                         />

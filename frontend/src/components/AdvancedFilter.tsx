@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import DateRangeFilter from "./DateRangeFilter";
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
@@ -101,17 +102,13 @@ export default function AdvancedFilter({
                 const toValue = filterValues[`${fieldName}_to`] || "";
                 return (
                     <Col key={fieldName} wide>
-                        <Label className="mb-1.5">{label} Range</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <div>
-                                <Input type="date" value={fromValue} onChange={(e) => handleFilterChange(`${fieldName}_from`, e.target.value)} />
-                                <p className="mt-0.5 text-[11px] text-muted-foreground">From</p>
-                            </div>
-                            <div>
-                                <Input type="date" value={toValue} onChange={(e) => handleFilterChange(`${fieldName}_to`, e.target.value)} />
-                                <p className="mt-0.5 text-[11px] text-muted-foreground">To</p>
-                            </div>
-                        </div>
+                        <DateRangeFilter
+                            label={`${label} Range`}
+                            fromValue={fromValue}
+                            toValue={toValue}
+                            onFromChange={(v) => handleFilterChange(`${fieldName}_from`, v)}
+                            onToChange={(v) => handleFilterChange(`${fieldName}_to`, v)}
+                        />
                     </Col>
                 );
             }

@@ -10,6 +10,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { getErrorMessage } from "../../utils/errorUtils";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import DateRangeFilter from "@/components/DateRangeFilter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { getTodayRange, getLastNDaysRange, getThisMonthRange } from "@/utils/dateRangePresets";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,24 +168,22 @@ export default function ActivityLog() {
                             onChange={e => handleFilter("module", e.target.value)}
                         />
                     </div>
-                    <div>
-                        <Label className="mb-1 text-xs" htmlFor="f-from">From</Label>
-                        <Input
-                            id="f-from"
-                            type="date"
-                            className="h-8"
-                            value={filters.date_from}
-                            onChange={e => handleFilter("date_from", e.target.value)}
-                        />
-                    </div>
-                    <div>
-                        <Label className="mb-1 text-xs" htmlFor="f-to">To</Label>
-                        <Input
-                            id="f-to"
-                            type="date"
-                            className="h-8"
-                            value={filters.date_to}
-                            onChange={e => handleFilter("date_to", e.target.value)}
+                    <div className="col-span-2">
+                        <DateRangeFilter
+                            label="Date"
+                            fromId="f-from"
+                            toId="f-to"
+                            fromValue={filters.date_from}
+                            toValue={filters.date_to}
+                            onFromChange={(v) => handleFilter("date_from", v)}
+                            onToChange={(v) => handleFilter("date_to", v)}
+                            onClear={() => setFilters(prev => ({ ...prev, date_from: "", date_to: "" }))}
+                            presets={[
+                                { label: "Today", range: getTodayRange },
+                                { label: "Last 7 Days", range: () => getLastNDaysRange(7) },
+                                { label: "Last 30 Days", range: () => getLastNDaysRange(30) },
+                                { label: "This Month", range: getThisMonthRange },
+                            ]}
                         />
                     </div>
                     <div>

@@ -51,6 +51,8 @@ def _empty_snapshot() -> Dict[str, Any]:
         "financial_available_balance": DEC_0,
         "customs_available_balance": DEC_0,
         "previous_owner_utilisation": DEC_0,
+        "purchased_licence_cif": DEC_0,
+        "sold_licence_cif": DEC_0,
         "pending_allotments": DEC_0,
         "difference": DEC_0,
         "items": {},
@@ -164,6 +166,7 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
     opening_map = LicenseBalanceCalculator.calculate_opening_balance_for_licenses(ids)
     financial_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(ids)
     purchase_credit_map = LicenseBalanceCalculator.calculate_purchase_credit_for_licenses(ids)
+    sale_debit_map = LicenseBalanceCalculator.calculate_trade_for_licenses(ids)
     # The literal, hidden-inclusive Customs figure — the ONE that always
     # matches `build_customs_ledger`'s own running total exactly (see
     # `calculate_customs_balance`'s docstring). NOT `balance_map` above
@@ -224,14 +227,6 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
         opening_balance = opening_map.get(lid, DEC_0)
         hidden_total = hidden_map.get(lid, DEC_0)
         customs_available_balance = customs_available_map.get(lid, DEC_0)
-        # Same value `build_financial_ledger`'s "Previous Owner
-        # Utilisation" row shows — Hidden BOEs + Purchased CIF, zero when
-        # there are no hidden BOEs. Informational, never part of any
-        # "difference"/reconciliation check (see `build_reconciliation_
-        # summary`'s docstring).
-        previous_owner_utilisation = (
-            (hidden_total + purchase_credit_map.get(lid, DEC_0)) if hidden_total > DEC_0 else DEC_0
-        )
         result[lid] = {
             # `balance_cif` is THE business "Balance CIF" every consumer
             # reads — the Financial Ledger figure, matching
@@ -263,7 +258,13 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
             # rows, so it has no second computation to diff against.
             "financial_available_balance": financial_balance,
             "customs_available_balance": customs_available_balance,
-            "previous_owner_utilisation": previous_owner_utilisation,
+            # Hidden BOEs ONLY — see `build_financial_ledger`'s "Previous
+            # Owner Utilisation" row. Licence Purchase/Sale are separate,
+            # independent financial events, never folded in here — exposed
+            # as their own fields below.
+            "previous_owner_utilisation": hidden_total,
+            "purchased_licence_cif": purchase_credit_map.get(lid, DEC_0),
+            "sold_licence_cif": sale_debit_map.get(lid, DEC_0),
             "pending_allotments": allotment_map.get(lid, DEC_0),
             "difference": DEC_0,
             "items": items_by_license.get(lid, {}),

@@ -1282,24 +1282,18 @@ class LicenseBalanceCalculator:
     @classmethod
     def calculate_opening_balance(cls, license_obj) -> Decimal:
         """
-        The hidden-BOE-aware Opening Balance ("Remaining Tradable Licence")
-        — the SAME 3-way gate `build_financial_ledger` uses for its own
-        Opening Balance / Previous Owner Utilisation rows, as a plain
-        number rather than ledger rows. The sole anchor `calculate_
-        financial_balance` starts from. Checked in this order:
+        The hidden-BOE-aware Opening Balance — the SAME 3-way gate
+        `build_financial_ledger` uses for its own Opening Balance /
+        Previous Owner Utilisation rows, as a plain number rather than
+        ledger rows. The sole anchor `calculate_financial_balance` starts
+        from. Checked in this order:
           1. `hidden_total = calculate_hidden_boe_debit_total()` > 0 ->
-             `calculate_credit()` (Original Licence CIF) - `hidden_total` -
-             `calculate_purchase_credit()`, regardless of Purchase history.
-             The purchase-credit subtraction mirrors `build_financial_
-             ledger`'s "Previous Owner Utilisation" debit row (Hidden BOEs +
-             Purchased CIF) EXACTLY — CIF this company has already
-             purchased is no longer "available to purchase" either, so it
-             leaves the opening pool here too. This is NOT a double
-             deduction: `calculate_financial_balance` still adds `+
-             purchase_credit` back in its own formula below, so the net
-             effect is 0 when a Purchase is fully offset by a matching Sale,
-             and `+purchase_credit` when it isn't (still-owned, unsold
-             stock correctly counts toward the final balance).
+             `calculate_credit()` (Original Licence CIF) - `hidden_total`
+             ONLY, regardless of Purchase history. Previous Owner
+             Utilisation is Hidden BOEs alone — Licence Purchase is a
+             SEPARATE, independent financial event (its own "Licence
+             Trade (Purchased)" credit row/term, never netted in here; see
+             `calculate_financial_balance`'s `+ purchase_credit` term).
           2. else `has_purchase` (`get_purchase_trade_rows().exists()`) ->
              0 (a purchased licence tells its story from that trading
              history, not the original DGFT-issued face value).
@@ -1318,7 +1312,7 @@ class LicenseBalanceCalculator:
         credit = cls.calculate_credit(license_obj)
         hidden_total = cls.calculate_hidden_boe_debit_total(license_obj)
         if hidden_total > DEC_0:
-            return credit - hidden_total - cls.calculate_purchase_credit(license_obj)
+            return credit - hidden_total
         if cls.get_purchase_trade_rows(license_obj).exists():
             return DEC_0
         return credit
@@ -1329,9 +1323,8 @@ class LicenseBalanceCalculator:
         Batched sibling of `calculate_opening_balance` — same 3-way gate,
         for MANY licenses in a fixed, small number of queries, composed
         from `calculate_credit_for_licenses`, `calculate_hidden_boe_debit_
-        total_for_licenses`, `has_purchase_for_licenses`, `calculate_
-        purchase_credit_for_licenses`. See `calculate_credit_for_licenses`
-        for the return-shape/zero-default contract.
+        total_for_licenses`, `has_purchase_for_licenses`. See `calculate_
+        credit_for_licenses` for the return-shape/zero-default contract.
         """
         ids = list(license_ids)
         if not ids:
@@ -1339,14 +1332,13 @@ class LicenseBalanceCalculator:
         credit_map = cls.calculate_credit_for_licenses(ids)
         hidden_map = cls.calculate_hidden_boe_debit_total_for_licenses(ids)
         has_purchase_map = cls.has_purchase_for_licenses(ids)
-        purchase_credit_map = cls.calculate_purchase_credit_for_licenses(ids)
 
         result = {}
         for lid in ids:
             credit = credit_map.get(lid, DEC_0)
             hidden_total = hidden_map.get(lid, DEC_0)
             if hidden_total > DEC_0:
-                result[lid] = credit - hidden_total - purchase_credit_map.get(lid, DEC_0)
+                result[lid] = credit - hidden_total
             elif has_purchase_map.get(lid, False):
                 result[lid] = DEC_0
             else:
@@ -1373,18 +1365,12 @@ class LicenseBalanceCalculator:
             = Financial Available Balance
 
         `Opening Balance` is `calculate_opening_balance()` — see that
-        method's docstring for the hidden-BOE-aware 3-way gate.
-
-        The `+ Purchase Invoice CIF` term is SKIPPED whenever hidden BOEs
-        exist (`calculate_hidden_boe_debit_total() > 0`): in that regime,
-        `calculate_opening_balance()` has already subtracted the purchase
-        credit as part of its "Previous Owner Utilisation" netting (see
-        that method's docstring), and `build_financial_ledger` deliberately
-        never renders a separate "Licence Trade (Purchased)" row for the
-        same licence — a purchase's ledger effect must land exactly once,
-        not be subtracted in Opening AND added back here. For every licence
-        with zero hidden BOEs (the vast majority), this term is unchanged
-        (added as before) — this is purely additive/backward-compatible.
+        method's docstring for the hidden-BOE-aware 3-way gate (Hidden
+        BOEs ONLY, never netted with Purchase — Licence Purchase is a
+        separate, independent financial event, always represented by this
+        `+ Purchase Invoice CIF` term / `build_financial_ledger`'s own
+        "Licence Trade (Purchased)" row, unconditionally, regardless of
+        hidden BOEs).
 
         IMPORTANT — the BOE term here is `calculate_debit()` (allocation-
         and legacy-candidate-driven, per-row exclusion; see `get_debit_
@@ -1414,8 +1400,7 @@ class LicenseBalanceCalculator:
             `calculate_balance`.
         """
         opening = cls.calculate_opening_balance(license_obj)
-        hidden_total = cls.calculate_hidden_boe_debit_total(license_obj)
-        purchase_credit = DEC_0 if hidden_total > DEC_0 else cls.calculate_purchase_credit(license_obj)
+        purchase_credit = cls.calculate_purchase_credit(license_obj)
         sale_debit = cls.calculate_trade(license_obj)
         boe_debit = cls.calculate_debit(license_obj)
         allotment = cls.calculate_allotment(license_obj)
@@ -1450,7 +1435,6 @@ class LicenseBalanceCalculator:
             return {}
 
         opening_map = cls.calculate_opening_balance_for_licenses(ids)
-        hidden_map = cls.calculate_hidden_boe_debit_total_for_licenses(ids)
         purchase_credit_map = cls.calculate_purchase_credit_for_licenses(ids)
         sale_debit_map = cls.calculate_trade_for_licenses(ids)
         boe_debit_map = cls.calculate_debit_for_licenses(ids)
@@ -1458,14 +1442,9 @@ class LicenseBalanceCalculator:
 
         result = {}
         for lid in ids:
-            # Same skip as the single-license method: a licence with hidden
-            # BOEs already had its purchase credit netted into `opening_map`
-            # (see `calculate_opening_balance_for_licenses`) — adding it
-            # again here would double it back in.
-            purchase_credit = DEC_0 if hidden_map.get(lid, DEC_0) > DEC_0 else purchase_credit_map.get(lid, DEC_0)
             balance = (
                 opening_map.get(lid, DEC_0)
-                + purchase_credit
+                + purchase_credit_map.get(lid, DEC_0)
                 - sale_debit_map.get(lid, DEC_0)
                 - boe_debit_map.get(lid, DEC_0)
                 - allotment_map.get(lid, DEC_0)

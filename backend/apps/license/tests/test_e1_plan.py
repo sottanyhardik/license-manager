@@ -23,7 +23,9 @@ def _qty(**kwargs) -> dict[str, float]:
 
 
 def _planned_sum(planned: dict[str, float]) -> float:
-    return sum(planned.values())
+    # DWP/SWP are folded into MILK PRODUCTS for the bucket-level total, so
+    # summing everything would double-count them. Sum only the buckets.
+    return sum(v for k, v in planned.items() if k in E1_CATS)
 
 
 class TestClassifyE1Item(TestCase):
@@ -32,8 +34,16 @@ class TestClassifyE1Item(TestCase):
         assert classify_e1_item('OTHER CONFECTIONERY INGREDIENTS - E1', '', '') == \
             'OTHER CONFECTIONERY INGREDIENTS'
 
-    def test_wpc_item_name(self):
-        assert classify_e1_item('WPC - E1', '', '') == 'WPC'
+    def test_milk_products_by_hsn_0404(self):
+        assert classify_e1_item('ANY NAME', '04041000', '') == 'MILK PRODUCTS'
+
+    def test_wpc_item_name_no_longer_classifies_on_its_own(self):
+        # The old item-name-based 'wpc' rule is gone — WPC-named items with
+        # no 0404/3502 HSN now fall through unclassified.
+        assert classify_e1_item('WPC - E1', '', '') is None
+
+    def test_egg_albumin_wpc_by_hsn_3502(self):
+        assert classify_e1_item('ANY NAME', '35021100', '') == 'EGG ALBUMIN / WPC'
 
     def test_fruit_juice_item_name(self):
         assert classify_e1_item('FRUIT JUICE - E1', '', '') == 'FRUIT JUICE'
@@ -68,6 +78,19 @@ class TestClassifyE1Item(TestCase):
         # If only 3901 + paper code: paper rule says exclude → returns None.
         assert classify_e1_item('MIXED', '39014801', '') is None
 
+    def test_priority_0404_beats_fruit_juice_item_name(self):
+        # Rule 2 (HSN 0404) is checked before rule 4 (item-name fruit juice).
+        assert classify_e1_item('FRUIT JUICE BLEND', '04041000', '') == 'MILK PRODUCTS'
+
+    def test_priority_other_confectionery_beats_0404(self):
+        # Rule 1 (item-name) is checked before rule 2 (HSN 0404).
+        assert classify_e1_item('OTHER CONFECTIONERY INGREDIENTS - E1', '04041000', '') == \
+            'OTHER CONFECTIONERY INGREDIENTS'
+
+    def test_milk_products_hsn_only_not_description(self):
+        # Spec: rule 2 checks HSN only, not description.
+        assert classify_e1_item('ANY NAME', '', 'contains 0404 in description') is None
+
     def test_unclassified(self):
         assert classify_e1_item('SUGAR', '17019990', 'Refined Cane Sugar') is None
 
@@ -89,14 +112,14 @@ class TestSplitDisplayUtilQty(TestCase):
         assert d['OTHER CONFECTIONERY INGREDIENTS'] == 300.0
         assert u['OTHER CONFECTIONERY INGREDIENTS'] == 250.0
 
-    def test_au_excluded_from_wpc_util(self):
+    def test_milk_products_no_exclusion(self):
         rows = [
-            {'category': 'WPC', 'qty': 200, 'condition_type': ''},
-            {'category': 'WPC', 'qty': 100, 'condition_type': 'AU'},
+            {'category': 'MILK PRODUCTS', 'qty': 200, 'condition_type': ''},
+            {'category': 'MILK PRODUCTS', 'qty': 100, 'condition_type': 'AU'},
         ]
         d, u = split_display_util_qty(rows)
-        assert d['WPC'] == 300.0
-        assert u['WPC'] == 200.0
+        assert d['MILK PRODUCTS'] == 300.0
+        assert u['MILK PRODUCTS'] == 300.0  # no exclusions configured for this bucket
 
     def test_au_excluded_from_fruit_juice_util(self):
         rows = [
@@ -107,15 +130,15 @@ class TestSplitDisplayUtilQty(TestCase):
         assert d['FRUIT JUICE'] == 100.0
         assert u['FRUIT JUICE'] == 20.0
 
-    def test_2_percent_NOT_excluded_from_wpc(self):
-        # 2% only excludes OTHER CONFECTIONERY INGREDIENTS — for WPC it should
-        # still count toward util qty.
+    def test_2_percent_NOT_excluded_from_egg_albumin_wpc(self):
+        # 2% only excludes OTHER CONFECTIONERY INGREDIENTS — for EGG ALBUMIN
+        # / WPC it should still count toward util qty.
         rows = [
-            {'category': 'WPC', 'qty': 100, 'condition_type': '2%'},
+            {'category': 'EGG ALBUMIN / WPC', 'qty': 100, 'condition_type': '2%'},
         ]
         d, u = split_display_util_qty(rows)
-        assert d['WPC'] == 100.0
-        assert u['WPC'] == 100.0
+        assert d['EGG ALBUMIN / WPC'] == 100.0
+        assert u['EGG ALBUMIN / WPC'] == 100.0
 
     def test_aluminium_paper_polypropylene_no_exclusion(self):
         rows = [
@@ -136,14 +159,16 @@ class TestComputeE1Plan(TestCase):
 
     def test_invalid_util_quantities_and_negative_balance_plan_zero(self):
         planned, rate = compute_e1_plan(
-            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 10.0, 'WPC': 10.0}),
-            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 'bad', 'WPC': None}),
+            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 10.0, 'EGG ALBUMIN / WPC': 10.0}),
+            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 'bad', 'EGG ALBUMIN / WPC': None}),
             Decimal('-1'),
         )
 
         assert _planned_sum(planned) == 0.0
         assert rate['OTHER CONFECTIONERY INGREDIENTS'] == 2.7
-        assert rate['WPC'] == 22.0
+        assert rate['EGG ALBUMIN / WPC'] == 25.0
+        assert rate['DWP'] == 5.0
+        assert rate['SWP'] == 1.5
 
     def test_other_confectionery_at_max_price(self):
         # 100 kg × 2.7 = 270 ≤ balance.
@@ -155,13 +180,45 @@ class TestComputeE1Plan(TestCase):
         assert planned['OTHER CONFECTIONERY INGREDIENTS'] == 270.0
         assert rate['OTHER CONFECTIONERY INGREDIENTS'] == 2.7
 
-    def test_wpc_max_price_22(self):
-        # qty 50 × 22 = 1100 ≤ balance.
+    def test_milk_products_dwp_then_swp_share_same_utilization_qty(self):
+        # 50 kg of Milk Products. DWP: 50 × 5 = 250 ≤ 5000 balance → uses max.
+        # SWP then reads the SAME 50 kg (not split) against the remaining
+        # balance: 50 × 1.5 = 75 ≤ (5000 - 250) → uses max.
         planned, rate = compute_e1_plan(
-            _qty(WPC=50.0), _qty(WPC=50.0), Decimal('5000'),
+            _qty(**{'MILK PRODUCTS': 50.0}),
+            _qty(**{'MILK PRODUCTS': 50.0}),
+            Decimal('5000'),
         )
-        assert planned['WPC'] == 1100.0
-        assert rate['WPC'] == 22.0
+        assert planned['DWP'] == 250.0
+        assert rate['DWP'] == 5.0
+        assert planned['SWP'] == 75.0
+        assert rate['SWP'] == 1.5
+        # MILK PRODUCTS bucket aggregates both sub-steps.
+        assert planned['MILK PRODUCTS'] == 325.0
+        assert rate['MILK PRODUCTS'] == 6.5
+
+    def test_milk_products_dwp_caps_balance_and_swp_gets_zero(self):
+        # DWP alone consumes the entire remaining balance, so SWP — even
+        # though it reads the same 50 kg utilization qty — gets nothing.
+        planned, rate = compute_e1_plan(
+            _qty(**{'MILK PRODUCTS': 50.0}),
+            _qty(**{'MILK PRODUCTS': 50.0}),
+            Decimal('100'),  # 50 * 5 = 250 > 100 -> DWP caps at 100
+        )
+        assert planned['DWP'] == 100.0
+        assert abs(rate['DWP'] - 2.0) < 1e-6  # 100 / 50
+        assert planned['SWP'] == 0.0
+        assert rate['SWP'] == 1.5  # default max price fallback when balance is exhausted
+        assert planned['MILK PRODUCTS'] == 100.0
+
+    def test_egg_albumin_wpc_max_price_25(self):
+        planned, rate = compute_e1_plan(
+            _qty(**{'EGG ALBUMIN / WPC': 10.0}),
+            _qty(**{'EGG ALBUMIN / WPC': 10.0}),
+            Decimal('5000'),
+        )
+        assert planned['EGG ALBUMIN / WPC'] == 250.0
+        assert rate['EGG ALBUMIN / WPC'] == 25.0
 
     def test_fruit_juice_max_price_3(self):
         planned, rate = compute_e1_plan(
@@ -209,39 +266,35 @@ class TestComputeE1Plan(TestCase):
         assert abs(rate['OTHER CONFECTIONERY INGREDIENTS'] - 0.5) < 1e-4
 
     def test_sequential_deduction(self):
-        # Step 1 eats 270; step 2 should see balance 730. WPC 30 × 22 = 660 fits.
+        # Step 1 eats 270; balance left 730. EGG ALBUMIN/WPC 10 × 25 = 250 fits.
         planned, _ = compute_e1_plan(
-            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 100.0, 'WPC': 30.0}),
-            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 100.0, 'WPC': 30.0}),
+            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 100.0, 'EGG ALBUMIN / WPC': 10.0}),
+            _qty(**{'OTHER CONFECTIONERY INGREDIENTS': 100.0, 'EGG ALBUMIN / WPC': 10.0}),
             Decimal('1000'),
         )
         assert planned['OTHER CONFECTIONERY INGREDIENTS'] == 270.0
-        assert planned['WPC'] == 660.0
+        assert planned['EGG ALBUMIN / WPC'] == 250.0
 
     def test_later_steps_get_zero_when_balance_exhausted(self):
         # Step 1 absorbs the whole balance — every later step gets 0.
-        planned, _ = compute_e1_plan(
-            _qty(**{
-                'OTHER CONFECTIONERY INGREDIENTS': 10000.0,
-                'WPC': 50.0,
-                'FRUIT JUICE': 100.0,
-                'ALUMINIUM FOIL': 100.0,
-                'POLYPROPYLENE': 100.0,
-                'PAPER': 100.0,
-            }),
-            _qty(**{
-                'OTHER CONFECTIONERY INGREDIENTS': 10000.0,
-                'WPC': 50.0,
-                'FRUIT JUICE': 100.0,
-                'ALUMINIUM FOIL': 100.0,
-                'POLYPROPYLENE': 100.0,
-                'PAPER': 100.0,
-            }),
-            Decimal('1000'),
-        )
+        full = {
+            'OTHER CONFECTIONERY INGREDIENTS': 10000.0,
+            'MILK PRODUCTS': 50.0,
+            'EGG ALBUMIN / WPC': 50.0,
+            'FRUIT JUICE': 100.0,
+            'ALUMINIUM FOIL': 100.0,
+            'POLYPROPYLENE': 100.0,
+            'PAPER': 100.0,
+        }
+        planned, rate = compute_e1_plan(_qty(**full), _qty(**full), Decimal('1000'))
         assert planned['OTHER CONFECTIONERY INGREDIENTS'] == 1000.0
-        for cat in ('WPC', 'FRUIT JUICE', 'ALUMINIUM FOIL', 'POLYPROPYLENE', 'PAPER'):
-            assert planned[cat] == 0.0
+        for key in ('DWP', 'SWP', 'MILK PRODUCTS', 'EGG ALBUMIN / WPC',
+                    'FRUIT JUICE', 'ALUMINIUM FOIL', 'POLYPROPYLENE', 'PAPER'):
+            assert planned[key] == 0.0
+        # Zero-utilization steps still report their default max price.
+        assert rate['DWP'] == 5.0
+        assert rate['SWP'] == 1.5
+        assert rate['EGG ALBUMIN / WPC'] == 25.0
 
     def test_planned_never_exceeds_balance(self):
         planned, _ = compute_e1_plan(
@@ -272,9 +325,10 @@ class TestComputeE1Plan(TestCase):
         assert abs(planned['OTHER CONFECTIONERY INGREDIENTS'] - 500.0) < 1e-3
 
     def test_excluded_conditions_table(self):
-        # Sanity-check the per-step exclusion sets match the spec.
+        # Sanity-check the per-bucket exclusion sets match the spec.
         assert E1_EXCLUDED_CONDITIONS['OTHER CONFECTIONERY INGREDIENTS'] == frozenset({'2%'})
-        assert E1_EXCLUDED_CONDITIONS['WPC'] == frozenset({'AU'})
+        assert E1_EXCLUDED_CONDITIONS['MILK PRODUCTS'] == frozenset()
+        assert E1_EXCLUDED_CONDITIONS['EGG ALBUMIN / WPC'] == frozenset()
         assert E1_EXCLUDED_CONDITIONS['FRUIT JUICE'] == frozenset({'AU'})
         assert E1_EXCLUDED_CONDITIONS['ALUMINIUM FOIL'] == frozenset()
         assert E1_EXCLUDED_CONDITIONS['POLYPROPYLENE'] == frozenset()
@@ -282,7 +336,9 @@ class TestComputeE1Plan(TestCase):
 
     def test_max_prices_table(self):
         assert E1_MAX_PRICES['OTHER CONFECTIONERY INGREDIENTS'] == Decimal('2.7')
-        assert E1_MAX_PRICES['WPC'] == Decimal('22')
+        assert E1_MAX_PRICES['DWP'] == Decimal('5')
+        assert E1_MAX_PRICES['SWP'] == Decimal('1.5')
+        assert E1_MAX_PRICES['EGG ALBUMIN / WPC'] == Decimal('25')
         assert E1_MAX_PRICES['FRUIT JUICE'] == Decimal('3')
         assert E1_MAX_PRICES['ALUMINIUM FOIL'] == Decimal('4.5')
         assert E1_MAX_PRICES['POLYPROPYLENE'] == Decimal('0.9')

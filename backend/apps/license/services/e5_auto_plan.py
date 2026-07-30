@@ -8,11 +8,18 @@ Processing sequence — Normal Flow:
             Case 2.1  Palm Kernel Oil  @ $1.80  (HSN 1513 or desc "Vegetable Oil")
             Case 2.2  RBD Palmolein   @ $1.20  (HSN 15119020 / RBD category)
             Case 2.3  Olive Oil        @ $5.00  (all other oils)
-  Rule 3  Milk & Milk avg-price split
+  Rule 3 .a Milk & Milk avg-price split if hsn code contains "0404" and "3502"
             avg < 1.50            → SWP-E5 @ 1.50
             1.50 ≤ avg < 5.00     → SWP-E5 @ 1.50 + DWP-E5 @ 5.00
             5.00 ≤ avg < 20.00    → DWP-E5 @ 5.00 + WPC-E5 @ 20.00
             avg ≥ 20.00           → WPC-E5 (full qty + full remaining CIF)
+Rule 3 .b Milk & Milk avg-price split if hsn code contains "0404" only
+    split in DWP-E5 @ 5$ and SWP-E1 so that max $ and max qty is utilize dont want to waste any
+        Rule 3 .c Milk & Milk avg-price split if hsn code contains "3502" only
+        use full quantity in WPC-e5 with max unit price 25$
+
+
+
 
 Special Validation (executed AFTER Rule 1):
   If remaining_cif < (milk_total_qty × 1.50):

@@ -115,6 +115,15 @@ def get_overview_counts(license_obj) -> Dict[str, Any]:
         "license_expiry_date": license_obj.license_expiry_date,
         "importer": importer,
         "status": status,
+        # Purchase Status (`core.PurchaseStatus` FK, e.g. GE/MI/IP/SM/CO) —
+        # editable in the UI via the existing generic `PATCH
+        # /licenses/{id}/` endpoint (already a writable field on
+        # `LicenseDetailsSerializer`, gated by the same `LICENSE_MANAGER`
+        # write role as every other license field); this endpoint only
+        # surfaces the current value for display, it never writes it.
+        "purchase_status_id": license_obj.purchase_status_id,
+        "purchase_status_code": license_obj.purchase_status.code if license_obj.purchase_status_id else None,
+        "purchase_status_label": license_obj.purchase_status.label if license_obj.purchase_status_id else None,
         "summary": {
             "total_boes": total_boes,
             "total_allotments": total_allotments,

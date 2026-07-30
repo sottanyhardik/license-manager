@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import DebouncedSearchInput from '../components/DebouncedSearchInput';
 import {
-    ArrowDownCircle, ArrowUpCircle, BookOpen, Building2, Calendar,
+    ArrowDownCircle, ArrowUpCircle, BadgeCheck, BookOpen, Building2, Calendar,
     CalendarCheck, CalendarRange, CalendarX, FileSpreadsheet, FileText,
     Filter, Globe, Inbox, Loader2, Trophy, XCircle,
 } from "lucide-react";
@@ -23,6 +23,11 @@ import {
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 type CompanyFilter = { value: string | number; label?: string } | string | null;
+
+type NormFilter = { value: string; label?: string } | string | null;
+/** Same shape as `NormFilter` — `core.PurchaseStatus.code` (GE/MI/OT/LM/LG,
+ * etc.), a separate DFIA-only master list. */
+type PurchaseStatusFilter = NormFilter;
 
 type LedgerFilters = {
     license_type: string;
@@ -34,6 +39,13 @@ type LedgerFilters = {
     purchase_date_from: string;
     purchase_date_to: string;
     no_purchases?: boolean;
+    /** SION norm class code (E1/E5/E132/PP/A3627, etc.) — a DFIA-only
+     * concept, so setting this drops every Incentive license from the
+     * results (see `ledger_service.py`'s `_get_norm_param`). */
+    norm: NormFilter;
+    /** `core.PurchaseStatus.code` — also DFIA-only, drops every Incentive
+     * license once set (see `ledger_service.py`'s `_get_purchase_status_param`). */
+    purchase_status: PurchaseStatusFilter;
 };
 
 type LedgerTransaction = {
@@ -125,18 +137,34 @@ export function getCompanyFilterValue(company: CompanyFilter): string {
     return normalizeText(company);
 }
 
+export function getNormFilterValue(norm: NormFilter): string {
+    if (!norm) return '';
+    if (typeof norm === 'object') return normalizeText(norm.value);
+    return normalizeText(norm);
+}
+
+export function getPurchaseStatusFilterValue(purchaseStatus: PurchaseStatusFilter): string {
+    if (!purchaseStatus) return '';
+    if (typeof purchaseStatus === 'object') return normalizeText(purchaseStatus.value);
+    return normalizeText(purchaseStatus);
+}
+
 export function buildLedgerFilterParams(filters: LedgerFilters, additionalFilters: Partial<LedgerFilters> = {}) {
     const currentFilters = { ...filters, ...additionalFilters };
     const params = new URLSearchParams();
     const licenseType = VALID_LICENSE_TYPES.has(currentFilters.license_type) ? currentFilters.license_type : 'ALL';
     const minBalance = normalizeMinBalance(currentFilters.min_balance);
     const company = getCompanyFilterValue(currentFilters.company);
+    const norm = getNormFilterValue(currentFilters.norm);
+    const purchaseStatus = getPurchaseStatusFilterValue(currentFilters.purchase_status);
     const ordering = VALID_ORDERING.has(currentFilters.ordering) ? currentFilters.ordering : '-license_date';
 
     params.append('license_type', licenseType);
     if (minBalance) params.append('min_balance', minBalance);
     if (currentFilters.search.trim()) params.append('search', currentFilters.search.trim());
     if (company) params.append('company', company);
+    if (norm) params.append('norm', norm);
+    if (purchaseStatus) params.append('purchase_status', purchaseStatus);
     params.append('ordering', ordering);
     if (currentFilters.purchase_date_from) params.append('purchase_date_from', currentFilters.purchase_date_from);
     if (currentFilters.purchase_date_to) params.append('purchase_date_to', currentFilters.purchase_date_to);
@@ -351,7 +379,7 @@ export default function LicenseLedger() {
     const { fyStart: currentFYStart, fyEnd: currentFYEnd } = getFinancialYearRange();
 
     const [filters, setFilters] = useState<LedgerFilters>({
-        license_type: 'ALL', min_balance: '', search: '', company: null,
+        license_type: 'ALL', min_balance: '', search: '', company: null, norm: null, purchase_status: null,
         active_only: true, ordering: '-license_date',
         purchase_date_from: currentFYStart, purchase_date_to: currentFYEnd,
     });
@@ -373,6 +401,8 @@ export default function LicenseLedger() {
         filters.min_balance,
         filters.search,
         filters.company,
+        filters.norm,
+        filters.purchase_status,
         filters.active_only,
         filters.ordering,
         filters.purchase_date_from,
@@ -424,6 +454,8 @@ export default function LicenseLedger() {
             min_balance: '',
             search: '',
             company: null,
+            norm: null,
+            purchase_status: null,
             active_only: true,
             ordering: '-license_date',
             purchase_date_from: fyStart,
@@ -505,6 +537,16 @@ export default function LicenseLedger() {
         filters.company && typeof filters.company === 'object'
             ? filters.company.label ?? filters.company.value
             : filters.company,
+    );
+    const normLabel = normalizeText(
+        filters.norm && typeof filters.norm === 'object'
+            ? filters.norm.label ?? filters.norm.value
+            : filters.norm,
+    );
+    const purchaseStatusLabel = normalizeText(
+        filters.purchase_status && typeof filters.purchase_status === 'object'
+            ? filters.purchase_status.label ?? filters.purchase_status.value
+            : filters.purchase_status,
     );
 
     return (
@@ -608,11 +650,33 @@ export default function LicenseLedger() {
                                     {companyLabel}
                                 </Badge>
                             )}
+                            {filters.norm && (
+                                <Badge variant="info" className="ml-1 text-[11px]">
+                                    <BookOpen className="size-3" aria-hidden="true" />
+                                    {normLabel}
+                                </Badge>
+                            )}
+                            {filters.purchase_status && (
+                                <Badge variant="info" className="ml-1 text-[11px]">
+                                    <BadgeCheck className="size-3" aria-hidden="true" />
+                                    {purchaseStatusLabel}
+                                </Badge>
+                            )}
                         </div>
                         <div className="flex gap-2">
                             {filters.company && (
                                 <Button size="sm" variant="outline" onClick={() => handleFilterChange('company', null)}>
                                     <XCircle className="size-3.5" aria-hidden="true" />Clear Company
+                                </Button>
+                            )}
+                            {filters.norm && (
+                                <Button size="sm" variant="outline" onClick={() => handleFilterChange('norm', null)}>
+                                    <XCircle className="size-3.5" aria-hidden="true" />Clear Norm
+                                </Button>
+                            )}
+                            {filters.purchase_status && (
+                                <Button size="sm" variant="outline" onClick={() => handleFilterChange('purchase_status', null)}>
+                                    <XCircle className="size-3.5" aria-hidden="true" />Clear Purchase Status
                                 </Button>
                             )}
                             <Button size="sm" variant="outline" onClick={clearAllFilters}>
@@ -690,6 +754,32 @@ export default function LicenseLedger() {
                                 <Switch id="activeOnly" checked={filters.active_only} onCheckedChange={(v) => handleFilterChange('active_only', v)} />
                                 <span className="text-xs font-semibold text-muted-foreground">Active Only</span>
                             </label>
+                        </div>
+                        <div>
+                            <label id="norm-filter-label" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">
+                                <BookOpen className="size-4" aria-hidden="true" /> Norm
+                            </label>
+                            <AsyncSelectField
+                                endpoint="masters/sion-classes/?is_active=true" labelField="label" valueField="norm_class"
+                                value={filters.norm}
+                                onChange={(value) => handleFilterChange('norm', value)}
+                                isMulti={false} placeholder="All norms..."
+                                loadOnMount={false} aria-labelledby="norm-filter-label"
+                            />
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">DFIA only — hides Incentive licenses</p>
+                        </div>
+                        <div>
+                            <label id="purchase-status-filter-label" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">
+                                <BadgeCheck className="size-4" aria-hidden="true" /> Purchase Status
+                            </label>
+                            <AsyncSelectField
+                                endpoint="masters/purchase-statuses/?is_active=true" labelField="label" valueField="code"
+                                value={filters.purchase_status}
+                                onChange={(value) => handleFilterChange('purchase_status', value)}
+                                isMulti={false} placeholder="All statuses..."
+                                loadOnMount={false} aria-labelledby="purchase-status-filter-label"
+                            />
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">DFIA only — hides Incentive licenses</p>
                         </div>
                     </div>
 

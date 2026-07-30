@@ -67,12 +67,19 @@ export default function AsyncSelectField({
             const idStr = typeof id === 'number' ? String(id) : String(id);
             const isNumericId = /^\d+$/.test(idStr);
 
-            // Slugs that contain a "/" cannot ride in a URL path segment —
-            // the dev server (and Django's URL resolver) decode "%2F" before
-            // pattern matching, so `[^/]+` lookup regexes never match. Fall
+            // Any non-numeric value can't safely ride a raw detail-URL
+            // lookup: slugs containing "/" get mangled by URL decoding
+            // before Django's `[^/]+` lookup regex ever sees them, and a
+            // short code/slug (e.g. "E5", "LG" — a `value_field` other than
+            // the default numeric `id`) simply isn't the model's PK, so the
+            // naive `{baseEndpoint}{idStr}/` GET 404s. Either way, fall
             // back to the list endpoint with a search filter and pick the
-            // exact match by labelField.
-            if (!isNumericId && idStr.includes('/')) {
+            // exact match by valueField (never labelField — the two only
+            // happen to coincide for the handful of existing `value_field:
+            // "code"` configs, e.g. notification_number/scheme_code; for
+            // anything where they differ, matching by labelField would
+            // silently return the wrong row).
+            if (!isNumericId) {
                 const params = new URLSearchParams(existingParams);
                 params.set('search', idStr);
                 params.set('page_size', '10');
@@ -82,7 +89,7 @@ export default function AsyncSelectField({
                 }
                 const {data} = await api.get(listUrl);
                 const results = data.results || data || [];
-                const exact = results.find(r => String(r[labelField] ?? '') === idStr);
+                const exact = results.find(r => String(r[valueField] ?? '') === idStr);
                 const match = exact || results[0];
                 if (!match) return null;
                 _fkDetailCache.set(listUrl, match);

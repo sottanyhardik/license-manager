@@ -99,6 +99,12 @@ def test_get_sold_status_handles_nullish_totals():
 def test_prepare_incentive_data_accepts_plain_model_lists(incentive_license):
     data = prepare_incentive_data([incentive_license])
 
+    # `balance_value` is the license's own authoritative `balance_value`
+    # field (`license_value - sold_value` = 1250.00 - 0, maintained by the
+    # model's own save()/recompute_totals — see that field's docstring),
+    # NOT a trade-sum re-derivation: this fixture has zero trades, so a
+    # trade-only calc would wrongly show 0.0 (and wrongly read as "fully
+    # sold" via `sold_status`) even though nothing has been sold at all.
     assert data == [
         {
             "id": incentive_license.id,
@@ -110,7 +116,7 @@ def test_prepare_incentive_data_accepts_plain_model_lists(incentive_license):
             "exporter_id": incentive_license.exporter.id,
             "port_name": incentive_license.port_code.name,
             "total_value": 0.0,
-            "balance_value": 0.0,
+            "balance_value": 1250.0,
             "sold_value": 0.0,
             "purchase_amount": 0.0,
             "sale_amount": 0.0,
@@ -118,7 +124,7 @@ def test_prepare_incentive_data_accepts_plain_model_lists(incentive_license):
             "currency": "INR",
             "is_expired": False,
             "is_active": True,
-            "sold_status": "YES",
+            "sold_status": "NO",
         }
     ]
 

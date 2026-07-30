@@ -7,6 +7,8 @@ import LicenseLedger, {
     buildLedgerFilterParams,
     getCompanyFilterValue,
     getFinancialYearRange,
+    getNormFilterValue,
+    getPurchaseStatusFilterValue,
     getTodayStamp,
     normalizeLicenseWiseData,
     normalizeMinBalance,
@@ -62,6 +64,8 @@ describe("LicenseLedger helpers", () => {
             min_balance: "-5",
             search: " LIC 1 ",
             company: { value: " 42 ", label: "Acme" },
+            norm: { value: "E1", label: "E1 - Something" },
+            purchase_status: { value: "LM", label: "LM Purchase" },
             active_only: true,
             ordering: "bad",
             purchase_date_from: "2026-04-01",
@@ -73,13 +77,37 @@ describe("LicenseLedger helpers", () => {
         expect(params.has("min_balance")).toBe(false);
         expect(params.get("search")).toBe("LIC 1");
         expect(params.get("company")).toBe("42");
+        expect(params.get("norm")).toBe("E1");
+        expect(params.get("purchase_status")).toBe("LM");
         expect(params.get("ordering")).toBe("-license_date");
         expect(params.get("no_purchases")).toBe("true");
     });
 
-    it("normalizes company and numeric filter edge cases", () => {
+    it("omits norm and purchase_status from params when not set", () => {
+        const params = buildLedgerFilterParams({
+            license_type: "ALL",
+            min_balance: "",
+            search: "",
+            company: null,
+            norm: null,
+            purchase_status: null,
+            active_only: true,
+            ordering: "-license_date",
+            purchase_date_from: "",
+            purchase_date_to: "",
+        });
+
+        expect(params.has("norm")).toBe(false);
+        expect(params.has("purchase_status")).toBe(false);
+    });
+
+    it("normalizes company/norm/purchase-status and numeric filter edge cases", () => {
         expect(getCompanyFilterValue(null)).toBe("");
         expect(getCompanyFilterValue({ value: " 7 " })).toBe("7");
+        expect(getNormFilterValue(null)).toBe("");
+        expect(getNormFilterValue({ value: " E1 " })).toBe("E1");
+        expect(getPurchaseStatusFilterValue(null)).toBe("");
+        expect(getPurchaseStatusFilterValue({ value: " LM " })).toBe("LM");
         expect(normalizeMinBalance("100.50")).toBe("100.5");
         expect(normalizeMinBalance("bad")).toBe("");
     });

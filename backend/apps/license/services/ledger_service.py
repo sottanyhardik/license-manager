@@ -39,6 +39,33 @@ def _get_license_type(query_params) -> str:
     return license_type if license_type in ALL_LICENSE_TYPES else "ALL"
 
 
+def _get_norm_param(query_params) -> str:
+    """
+    Raw SION norm class code (e.g. 'E1', 'E5', 'E132', 'PP', 'A3627' — see
+    `core.SionNormClassModel.norm_class`), same value the `/masters/sion-
+    classes/` picker and `item_pivot_report.py`'s `sion_norm` filter both
+    use (`export_license__norm_class__norm_class`) — no separate norm
+    vocabulary invented here. A norm is a DFIA (export-item) concept only:
+    Incentive licenses carry no norm class, so every caller below drops
+    Incentive results entirely once a norm filter is active, rather than
+    leaving them in unfiltered.
+    """
+    return _get_text_param(query_params, "norm")
+
+
+def _get_purchase_status_param(query_params) -> str:
+    """
+    Raw `core.PurchaseStatus.code` (e.g. 'GE', 'MI', 'OT', 'LM', 'LG' — see
+    that model), same vocabulary `item_report.py`/`planned_report.py`/
+    `item_pivot_report.py`/`allotment/views_actions.py` already filter by
+    (`purchase_status__code[__in]=...`). A DFIA-only concept — `Incentive
+    License` carries no `purchase_status` field — so every caller below
+    drops Incentive results entirely once this filter is active, exactly
+    like `_get_norm_param`.
+    """
+    return _get_text_param(query_params, "purchase_status")
+
+
 def _get_bool_param(query_params, name: str, *, default: bool = False) -> bool:
     value = query_params.get(name)
     if value is None:
@@ -108,6 +135,7 @@ def prepare_dfia_data(queryset) -> list:
     Annotate a DFIA queryset with trade aggregates and return a list of dicts.
     Uses 2 batched group-by queries instead of 4N individual queries.
     """
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
     from apps.trade.models import LicenseTrade
 
     # Accept either a QuerySet or a plain list of model instances.
@@ -132,6 +160,12 @@ def prepare_dfia_data(queryset) -> list:
 
     purchase_map = {r['lines__sr_number__license_id']: r for r in purchase_totals}
     sale_map = {r['lines__sr_number__license_id']: r for r in sale_totals}
+    # `balance_value` must be the SAME shared Balance Engine figure every
+    # other module shows — NOT `purchase CIF - sale CIF` (a trade-only sum
+    # that ignores BOE debits/allotments/opening balance and silently
+    # shows $0 for any license with few/no internal purchase trades, the
+    # common case). See `build_dfia_ledger_detail`'s identical fix.
+    balance_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids)
 
     data = []
     for license in licenses:
@@ -144,7 +178,7 @@ def prepare_dfia_data(queryset) -> list:
         sale_amount_usd = float(sal_row.get('total_usd') or 0)
 
         profit_loss = sale_amount_inr - purchase_amount_inr
-        balance_usd = purchase_amount_usd - sale_amount_usd
+        balance_usd = float(balance_map.get(license.id, DECIMAL_ZERO))
 
         data.append({
             'id': license.id,
@@ -217,7 +251,12 @@ def prepare_incentive_data(queryset) -> list:
         sale_value_inr = float(sal_row.get('total_value') or 0)
 
         profit_loss = sale_amount_inr - purchase_amount_inr
-        balance_inr = purchase_value_inr - sale_value_inr
+        # `balance_value` is the authoritative, signal-maintained
+        # `IncentiveLicense.balance_value` field (`license_value -
+        # sold_value`, kept in sync by `recompute_totals` on every trade
+        # change) — NOT re-derived from trade sums here, so this can never
+        # drift from what the license's own model already reports.
+        balance_inr = float(license.balance_value or 0)
 
         data.append({
             'id': license.id,
@@ -287,6 +326,8 @@ def build_license_queryset(query_params) -> list:
     is_active_only = _get_bool_param(query_params, 'active_only', default=True)
     purchase_date_from = _parse_iso_date(_get_text_param(query_params, 'purchase_date_from'))
     purchase_date_to = _parse_iso_date(_get_text_param(query_params, 'purchase_date_to'))
+    norm = _get_norm_param(query_params)
+    purchase_status = _get_purchase_status_param(query_params)
 
     dfia_qs = LicenseDetailsModel.objects.select_related('exporter', 'port').all()
     incentive_qs = IncentiveLicense.objects.select_related('exporter', 'port_code').all()
@@ -304,6 +345,14 @@ def build_license_queryset(query_params) -> list:
     if min_balance is not None:
         dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_balance)
         incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
+
+    if norm:
+        dfia_qs = dfia_qs.filter(export_license__norm_class__norm_class=norm).distinct()
+        incentive_qs = incentive_qs.none()
+
+    if purchase_status:
+        dfia_qs = dfia_qs.filter(purchase_status__code=purchase_status)
+        incentive_qs = incentive_qs.none()
 
     if purchase_date_from or purchase_date_to:
         dfia_pf: dict = {}
@@ -375,6 +424,8 @@ def get_ledger_summary(query_params) -> dict:
     min_balance = _parse_decimal(_get_text_param(query_params, 'min_balance'))
     purchase_date_from = _parse_iso_date(_get_text_param(query_params, 'purchase_date_from'))
     purchase_date_to = _parse_iso_date(_get_text_param(query_params, 'purchase_date_to'))
+    norm = _get_norm_param(query_params)
+    purchase_status = _get_purchase_status_param(query_params)
 
     # Base querysets
     if is_active_only:
@@ -389,6 +440,14 @@ def get_ledger_summary(query_params) -> dict:
     if min_balance is not None:
         dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_balance)
         incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
+
+    if norm:
+        dfia_qs = dfia_qs.filter(export_license__norm_class__norm_class=norm).distinct()
+        incentive_qs = IncentiveLicense.objects.none()
+
+    if purchase_status:
+        dfia_qs = dfia_qs.filter(purchase_status__code=purchase_status)
+        incentive_qs = IncentiveLicense.objects.none()
 
     # Date-range filter on license IDs via trade dates
     if purchase_date_from or purchase_date_to:
@@ -674,6 +733,8 @@ def get_license_wise_trades(query_params) -> dict:
     company_id = _parse_int(_get_text_param(query_params, 'company'))
     is_active_only = _get_bool_param(query_params, 'active_only', default=True)
     min_balance = _parse_decimal(_get_text_param(query_params, 'min_balance'))
+    norm = _get_norm_param(query_params)
+    purchase_status = _get_purchase_status_param(query_params)
     ordering = _get_text_param(query_params, 'ordering', '-license_date')
 
     # Pre-compute allowed license IDs (license number OR exporter name) to avoid JOIN fan-out
@@ -839,6 +900,30 @@ def get_license_wise_trades(query_params) -> dict:
             lid: ld for lid, ld in licenses_dict.items()
             if (ld['license_type'] == DFIA_LICENSE_TYPE and lid in dfia_ids_above)
             or (ld['license_type'] != DFIA_LICENSE_TYPE and lid in inc_ids_above)
+        }
+
+    # Post-filter: norm (DFIA/export-item concept only — every Incentive
+    # license is dropped once a norm filter is active, see `_get_norm_param`).
+    if norm and licenses_dict:
+        dfia_ids_with_norm = set(
+            LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class=norm)
+            .values_list('id', flat=True)
+        )
+        licenses_dict = {
+            lid: ld for lid, ld in licenses_dict.items()
+            if ld['license_type'] == DFIA_LICENSE_TYPE and lid in dfia_ids_with_norm
+        }
+
+    # Post-filter: purchase_status (DFIA-only concept — every Incentive
+    # license is dropped once active, see `_get_purchase_status_param`).
+    if purchase_status and licenses_dict:
+        dfia_ids_with_status = set(
+            LicenseDetailsModel.objects.filter(purchase_status__code=purchase_status)
+            .values_list('id', flat=True)
+        )
+        licenses_dict = {
+            lid: ld for lid, ld in licenses_dict.items()
+            if ld['license_type'] == DFIA_LICENSE_TYPE and lid in dfia_ids_with_status
         }
 
     # Ordering

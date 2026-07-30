@@ -1,7 +1,7 @@
 import { useContext, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Loader2, Pencil, RefreshCw, X } from "lucide-react";
 
 import api from "@/api/axios";
 import { AuthContext } from "@/context/AuthContext";
@@ -9,6 +9,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import HybridSelect from "@/components/HybridSelect";
+import { cn } from "@/lib/utils";
 
 import { useLicenseBalanceLedger, licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
 import { useLicenseOverviewSummary, licenseOverviewKeys } from "./useLicenseOverviewSummary";
@@ -40,11 +42,33 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
     const queryClient = useQueryClient();
     const [recalculating, setRecalculating] = useState(false);
     const [showHiddenBoe, setShowHiddenBoe] = useState(false);
+    const [updatingPurchaseStatus, setUpdatingPurchaseStatus] = useState(false);
+    const [editingPurchaseStatus, setEditingPurchaseStatus] = useState(false);
 
     const summaryQuery = useLicenseOverviewSummary(licenseId, isActive);
     const ledgerQuery = useLicenseBalanceLedger(isActive ? licenseId : undefined, showHiddenBoe);
 
     const canRecalculate = hasRole("LICENSE_MANAGER");
+    // Purchase Status is a plain `LicenseDetailsModel` field (like any other
+    // license field), so it's editable by the same role that can edit the
+    // license itself, via the existing generic `PATCH licenses/{id}/`
+    // endpoint — no new write endpoint needed.
+    const canEditPurchaseStatus = hasRole("LICENSE_MANAGER");
+
+    const handlePurchaseStatusChange = async (value: unknown) => {
+        if (!licenseId) return;
+        setUpdatingPurchaseStatus(true);
+        try {
+            await api.patch(`licenses/${licenseId}/`, { purchase_status: value ?? null });
+            toast.success("Purchase status updated");
+            queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.summary(licenseId) });
+        } catch (err) {
+            toast.error(extractApiError(err, "Failed to update purchase status"));
+        } finally {
+            setUpdatingPurchaseStatus(false);
+            setEditingPurchaseStatus(false);
+        }
+    };
 
     const handleRecalculate = async () => {
         if (!licenseId) return;
@@ -86,13 +110,60 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
             {summary && (
                 <>
                     <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border/70 bg-card px-4 py-3">
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-6">
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 lg:grid-cols-7">
                             <HeaderField label="License Number" value={summary.license_number ?? "—"} />
                             <HeaderField label="Authorisation Number" value={summary.authorisation_number ?? "—"} />
                             <HeaderField label="File Number" value={summary.file_number ?? "—"} />
                             <HeaderField label="License Date" value={fmtDate(summary.license_date)} />
                             <HeaderField label="Expiry Date" value={fmtDate(summary.license_expiry_date)} />
                             <HeaderField label="Importer" value={summary.importer ?? "—"} />
+                            <div className="col-span-2 sm:col-span-2 lg:col-span-1">
+                                <div className="text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+                                    Purchase Status
+                                </div>
+                                {canEditPurchaseStatus && editingPurchaseStatus ? (
+                                    <div className="mt-0.5 flex w-full items-center gap-1.5">
+                                        <div className="w-full">
+                                            <HybridSelect
+                                                fieldMeta={{
+                                                    endpoint: "/masters/purchase-statuses/",
+                                                    label_field: "label",
+                                                }}
+                                                value={summary.purchase_status_id}
+                                                onChange={handlePurchaseStatusChange}
+                                                isClearable={true}
+                                                isDisabled={updatingPurchaseStatus}
+                                                placeholder="Set status…"
+                                                className="w-full"
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="shrink-0 text-muted-foreground hover:text-foreground"
+                                            onClick={() => setEditingPurchaseStatus(false)}
+                                            disabled={updatingPurchaseStatus}
+                                            aria-label="Cancel editing purchase status"
+                                        >
+                                            <X className="size-4" aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            "mt-0.5 flex w-full items-center gap-1.5 truncate text-left text-sm font-medium text-foreground",
+                                            canEditPurchaseStatus && "cursor-pointer hover:text-primary"
+                                        )}
+                                        onClick={() => canEditPurchaseStatus && setEditingPurchaseStatus(true)}
+                                        disabled={!canEditPurchaseStatus}
+                                    >
+                                        <span className="truncate">{summary.purchase_status_label ?? "—"}</span>
+                                        {canEditPurchaseStatus && (
+                                            <Pencil className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                        )}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                             <Badge variant={licenseOverviewStatusVariant(summary.status)}>{summary.status}</Badge>

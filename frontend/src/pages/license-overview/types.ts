@@ -36,6 +36,12 @@ export interface LicenseOverviewSummary {
     license_expiry_date: string | null;
     importer: string | null;
     status: LicenseOverviewStatus;
+    /** `core.PurchaseStatus` FK (GE/MI/IP/SM/CO, etc.) — editable via the
+     * generic `PATCH licenses/{id}/` endpoint, same field the main license
+     * form already writes. `null` when never set. */
+    purchase_status_id: number | null;
+    purchase_status_code: string | null;
+    purchase_status_label: string | null;
     summary: LicenseOverviewSummaryCounts;
 }
 

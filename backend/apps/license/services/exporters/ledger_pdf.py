@@ -1246,6 +1246,18 @@ def build_dfia_ledger_detail(license, company_id=None):
                     'trade_id': trans_obj.id,
                 })
 
+    # `available_balance` used to be `running_balance` — a from-scratch
+    # replay of this license's PURCHASE/SALE trades only, ignoring BOE
+    # debits, allotments, and opening balance entirely. For any license
+    # with few/no trades (the common case — most licenses are debited
+    # directly via customs BOEs, not internally "purchased") this silently
+    # showed $0 while the license's real balance was in the hundreds of
+    # thousands. `license.balance_cif` (exposed here as `db_balance`) is
+    # the SAME shared `LicenseBalanceCalculator.calculate_financial_
+    # balance()` figure every other module (License Overview, license
+    # list, reports, dashboard) already shows — the two fields must never
+    # diverge, so both now read from the one authoritative source.
+    real_balance = float(license.balance_cif or 0)
     return {
         'license_id': license.id,
         'license_type': 'DFIA',
@@ -1255,8 +1267,8 @@ def build_dfia_ledger_detail(license, company_id=None):
         'exporter': license.exporter.name if license.exporter else '',
         'port': license.port.name if license.port else '',
         'total_value': total_purchase_cif,
-        'available_balance': round(running_balance, 2),
-        'db_balance': float(license.balance_cif or 0),
+        'available_balance': real_balance,
+        'db_balance': real_balance,
         'transactions': transactions,
     }
 
@@ -1418,6 +1430,12 @@ def build_incentive_ledger_detail(license, company_id=None):
                 })
             is_first_transaction = False
 
+    # See `build_dfia_ledger_detail`'s identical fix: `available_balance`
+    # used to be a from-scratch trade-only replay (`running_balance`),
+    # diverging from the authoritative, signal-maintained `balance_value`
+    # field whenever a license had few/no trades. Both fields now read
+    # from the one authoritative source.
+    real_balance = float(license.balance_value or 0)
     return {
         'license_id': license.id,
         'license_type': license.license_type,
@@ -1427,7 +1445,7 @@ def build_incentive_ledger_detail(license, company_id=None):
         'exporter': license.exporter.name if license.exporter else '',
         'port': license.port_code.name if license.port_code else '',
         'total_value': total_purchase_value,
-        'available_balance': round(running_balance, 2),
-        'db_balance': float(license.balance_value or 0),
+        'available_balance': real_balance,
+        'db_balance': real_balance,
         'transactions': transactions,
     }

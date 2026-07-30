@@ -128,34 +128,6 @@ function fmtCur(v, currency = 'INR') {
 
 // ─── PDF ────────────────────────────────────────────────────────────────────
 
-function computeBalanceMap(license) {
-    const isDFIA = license.license_type === 'DFIA';
-    const balMap = new Map();
-
-    // Group by company so each company gets its own running balance
-    const byCompany = {};
-    (license.transactions || []).forEach(txn => {
-        const key = txn.company_id != null ? String(txn.company_id) : 'unknown';
-        if (!byCompany[key]) byCompany[key] = [];
-        byCompany[key].push(txn);
-    });
-
-    Object.values(byCompany).forEach(companyTxns => {
-        const sorted = sortTxns(companyTxns);
-        let running = 0;
-        for (const txn of sorted) {
-            if (txn.type === 'PURCHASE' || txn.type === 'OPENING') {
-                running += isDFIA ? (txn.debit_cif || 0) : (txn.debit_license_value || 0);
-            } else if (txn.type === 'SALE') {
-                running -= isDFIA ? (txn.credit_cif || 0) : (txn.credit_license_value || 0);
-            }
-            balMap.set(txn, running);
-        }
-    });
-
-    return balMap;
-}
-
 function buildPdfBody(license, companiesGrouped) {
     const isDFIA = license.license_type === 'DFIA';
     const colCount = isDFIA ? 10 : 9;
@@ -697,7 +669,6 @@ export async function generateExcel(licensesData, filename) {
 
         // ── Data rows grouped by company
         const companiesGrouped = groupByCompany(license.transactions);
-        const balMap = computeBalanceMap(license);
 
         for (const company of companiesGrouped) {
             const txns = sortTxns(company.transactions);
@@ -714,11 +685,25 @@ export async function generateExcel(licensesData, filename) {
             });
             ws.getRow(rowNum).height = 22;
 
-            // Transaction rows
+            // Transaction rows — running CIF-$ (DFIA) or license-value
+            // (Incentive) balance computed inline, matching `buildPdfBody`'s
+            // PDF logic exactly. NOT `computeBalanceMap`/a Map keyed by
+            // transaction object reference: `groupByCompany` re-runs
+            // `normalizeTransaction` internally, producing brand-new object
+            // references for `txns` here — a reference-keyed Map never
+            // matches, every lookup misses, and the Balance column always
+            // silently rendered as 0/'-' (see the PDF path's identical fix).
+            let running = 0;
             for (const txn of txns) {
                 rowNum = ws.rowCount + 1;
                 const isPurchase = txn.type === 'PURCHASE' || txn.type === 'OPENING';
                 const isSale = txn.type === 'SALE';
+
+                if (isPurchase) {
+                    running += isDFIA ? (txn.debit_cif || 0) : (txn.debit_license_value || 0);
+                } else if (isSale) {
+                    running -= isDFIA ? (txn.credit_cif || 0) : (txn.credit_license_value || 0);
+                }
 
                 const row = [
                     fmtDate(txn.date),
@@ -730,7 +715,7 @@ export async function generateExcel(licensesData, filename) {
                     fmtNum(txn.rate),
                     txn.debit_amount ? fmtNum(txn.debit_amount) : '-',
                     txn.credit_amount ? fmtNum(txn.credit_amount) : '-',
-                    fmtNum(balMap.get(txn) ?? 0),
+                    fmtNum(running),
                     isSale && txn.profit_loss != null ? fmtNum(Math.abs(txn.profit_loss)) : '-',
                 );
 
@@ -753,7 +738,7 @@ export async function generateExcel(licensesData, filename) {
             const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
             // Bottom-line P/L = all credits (sales) − all debits (purchases/costs).
             const companyPL = totalCredit - totalDebit;
-            const lastBal = txns.length > 0 ? (balMap.get(txns[txns.length - 1]) ?? 0) : 0;
+            const lastBal = running;
 
             const labelMergeCols = isDFIA ? 6 : 5; // 1-indexed: merge cols 1..labelMergeCols
             const totalRowData = new Array(numCols).fill('');

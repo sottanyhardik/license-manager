@@ -776,7 +776,6 @@ class LicenseBalanceLedgerBuilder:
         from django.db.models import Count
         from apps.license.services.balance_calculator import LicenseBalanceCalculator, quantize_2dp
         from apps.bill_of_entry.models import OTH_INVOICE_MARKER, RowDetails
-        from apps.reconciliation.models import InvoiceBOEAllocation
 
         opening_balance = license_obj.opening_balance
         rows = []
@@ -793,16 +792,17 @@ class LicenseBalanceLedgerBuilder:
         })
         sr += 1
 
-        # Any BOE with >=1 active InvoiceBOEAllocation is "Matched" here —
-        # unlike the Financial Ledger, partial vs full match doesn't change
-        # what's debited (always the full cif_fc), only the displayed status.
-        matched_row_ids = set(
-            InvoiceBOEAllocation.objects.filter(
-                row_details__sr_number__license=license_obj,
-                status=InvoiceBOEAllocation.STATUS_ACTIVE,
-                is_current=True,
-            ).values_list('row_details_id', flat=True)
-        )
+        # BOE Invoice Status Consistency rule: "Matched" here is BOE-level,
+        # the SAME `resolve_boes_represented_by_invoice` set `calculate_
+        # debit()`/`get_debit_rows` use to exclude a represented BOE's
+        # rows — every row on a represented BOE shows "Matched" here,
+        # regardless of which licence item it belongs to, so the Customs
+        # Ledger's status label can never say "Unmatched" for a row the
+        # Financial Ledger has already excluded as invoiced (and vice
+        # versa). Unlike the Financial Ledger, partial vs full match
+        # doesn't change what's debited here (always the full cif_fc,
+        # unconditionally) — only the displayed status.
+        matched_boe_ids = LicenseBalanceCalculator.resolve_boes_represented_by_invoice(license_obj)
 
         boe_rows = list(
             # Always includes hidden rows regardless of `show_hidden` — see
@@ -834,7 +834,7 @@ class LicenseBalanceLedgerBuilder:
             debit = row.cif_fc  # FULL amount — unconditional, see docstring.
             total_boe_cif += debit
             running -= debit
-            matched = row.id in matched_row_ids
+            matched = bool(boe and boe.id in matched_boe_ids)
             # Hidden = `invoice_no == "OTH"` on the BOE itself (see
             # `OTH_INVOICE_MARKER`'s docstring) — only ever True when
             # show_hidden=True (get_debit_rows excludes hidden rows

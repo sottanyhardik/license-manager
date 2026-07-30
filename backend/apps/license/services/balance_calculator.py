@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import Case, DecimalField, Exists, F, OuterRef, Subquery, Sum, Value, When
+from django.db.models import Case, DecimalField, Exists, F, OuterRef, Q, Subquery, Sum, Value, When
 from django.db.models.functions import Coalesce, Least, Greatest
 
 from apps.core.constants import DEC_0, DEBIT
@@ -88,80 +88,214 @@ class LicenseBalanceCalculator:
         )
 
     @staticmethod
-    def _compute_linked_boe_row_ids(trades_queryset):
+    def _sale_trades_with_boes_for(*, license_obj=None, license_ids=None):
         """
-        Given a queryset of SALE `LicenseTrade` rows that have at least one
-        legacy `.boes` attachment, returns `{row_details_id: Decimal}` of
-        the FULL `cif_fc` of every `RowDetails` row that
-        `find_boe_allocation_candidates` (see `apps.reconciliation.services.
-        boe_link_reconciler` — the SAME candidate lookup `reconcile_trade_
-        boe_links` itself uses) identifies as belonging to a SALE trade
-        line, for exclusion from `calculate_debit()`.
-
-        A linked BOE is excluded in FULL regardless of whether its CIF
-        matches the trade line's own CIF within tolerance — i.e. this
-        covers `"auto_migrated"`, `"mismatch"`, AND `"ambiguous"` candidates
-        alike (only `"no_match"` contributes nothing, since no candidate
-        exists to find). This is a deliberate design choice: the Financial
-        Ledger is an accounting ledger, not a reconciliation report — once a
-        BOE is linked to an invoice, that invoice is its sole financial
-        representation from then on, and a CIF discrepancy is a data-quality
-        signal surfaced separately (see `build_financial_ledger`'s
-        `mismatch_warning`), never a second debit. Reuses the exact same
-        candidate-finding logic the reconciliation panel/backfill command
-        already trust, so a licence's Balance CIF is correct even before
-        anyone creates a formal `InvoiceBOEAllocation` for real.
-
-        Keyed on the exact `row_details_id` (not `bill_of_entry_id`) —
-        deliberately: a single physical BOE can debit multiple licence
-        items/licences, and excluding by BOE id alone would zero out an
-        UNRELATED item's real, unmatched debit just because a sibling item
-        on the same physical BOE happens to be invoice-matched (with
-        nothing on the credit side to compensate). See
-        `TestCalculateDebitLineLevelExclusion.
-        test_debit_not_wrongly_excluded_for_unrelated_item_on_same_boe`.
-        """
-        from apps.reconciliation.services.boe_link_reconciler import find_boe_allocation_candidates
-
-        by_row_details: dict = {}
-        for trade in trades_queryset.prefetch_related("lines", "boes"):
-            for line in trade.lines.all():
-                for candidate in find_boe_allocation_candidates(line):
-                    by_row_details[candidate.id] = to_decimal(candidate.cif_fc, DEC_0)
-        return by_row_details
-
-    @staticmethod
-    def _linked_boe_debit_exclusion_case(*, license_obj=None, license_ids=None):
-        """
-        A `Case`/`When` SQL expression that yields the full CIF of each
-        `RowDetails` primary key found by `_compute_linked_boe_row_ids`,
-        else 0 — built for either a single license (`get_debit_rows`) or a
-        batch of them (`calculate_debit_for_licenses`), sharing the exact
-        same underlying computation either way. Exactly one of
-        `license_obj`/`license_ids` must be given.
-
-        Matches by exact `RowDetails` pk (never `bill_of_entry_id`), so the
-        `license_ids` batch branch is inherently cross-license-safe — a
-        row's own pk unambiguously belongs to exactly one licence, unlike a
-        `bill_of_entry_id` which a single physical BOE can share across
-        multiple licences' debit rows.
+        Shared trades-queryset builder for the legacy-tag scan
+        (`_scan_linked_boe_candidates`): every SALE `LicenseTrade` carrying
+        >=1 legacy `.boes` attachment and >=1 line for the given license(s).
+        Exactly one of `license_obj`/`license_ids` must be given.
         """
         from apps.trade.models import LicenseTrade
 
         trades = LicenseTrade.objects.filter(direction=LicenseTrade.DIR_SALE, boes__isnull=False).distinct()
         if license_obj is not None:
-            trades = trades.filter(lines__sr_number__license=license_obj)
-        else:
-            trades = trades.filter(lines__sr_number__license_id__in=list(license_ids))
+            return trades.filter(lines__sr_number__license=license_obj)
+        return trades.filter(lines__sr_number__license_id__in=list(license_ids))
 
-        by_row_details = LicenseBalanceCalculator._compute_linked_boe_row_ids(trades)
-        if not by_row_details:
-            return Value(DEC_0, output_field=_ALLOCATION_DECIMAL_FIELD)
-        return Case(
-            *[When(pk=row_id, then=Value(amount)) for row_id, amount in by_row_details.items()],
-            default=Value(DEC_0),
-            output_field=_ALLOCATION_DECIMAL_FIELD,
+    @staticmethod
+    def _scan_linked_boe_candidates(trades_queryset):
+        """
+        THE single shared scan over `trades_queryset` (SALE trades carrying
+        a legacy `.boes` tag) that calls `find_boe_allocation_candidates`
+        (see `apps.reconciliation.services.boe_link_reconciler` — the SAME
+        candidate lookup `reconcile_trade_boe_links` itself uses) once per
+        SALE trade line. Every consumer of this candidate data MUST go
+        through this one loop — never a second, independent copy of it.
+
+        A linked BOE is treated as matched regardless of whether its CIF
+        matches the trade line's own CIF within tolerance ("auto_migrated",
+        "mismatch", AND "ambiguous" candidates alike — only "no_match"
+        contributes nothing). Deliberate: the Financial Ledger is an
+        accounting ledger, not a reconciliation report — once a BOE is
+        linked to an invoice, that invoice is its sole financial
+        representation from then on; a CIF discrepancy is a data-quality
+        signal surfaced separately (`build_financial_ledger`'s
+        `mismatch_warning`), never a second debit.
+
+        Returns `boe_ids_by_license`: `{license_id: {bill_of_entry_id,
+        ...}}` grouped by the trade LINE's own licence.
+        """
+        from apps.reconciliation.services.boe_link_reconciler import find_boe_allocation_candidates
+
+        boe_ids_by_license: dict = {}
+        for trade in trades_queryset.prefetch_related("lines__sr_number", "boes"):
+            for line in trade.lines.all():
+                candidates = find_boe_allocation_candidates(line)
+                if not candidates:
+                    continue
+                license_id = line.sr_number.license_id
+                for candidate in candidates:
+                    boe_ids_by_license.setdefault(license_id, set()).add(candidate.bill_of_entry_id)
+        return boe_ids_by_license
+
+    @staticmethod
+    def resolve_boes_represented_by_invoice(license_obj) -> set:
+        """
+        Set of `BillOfEntryModel` ids "represented by an invoice" for this
+        licence — invoice linkage is determined at the BOE level, NEVER
+        per licence item/row (explicit business rule): once EITHER
+        mechanism below matches ANY debit row of a physical BOE, the WHOLE
+        BOE is "represented" and every debit row on it — regardless of
+        which licence item it belongs to — is treated as invoiced. This is
+        the ONE place that answers "has this physical BOE already been
+        accounted for by a Sale invoice," so `_linked_boe_debit_exclusion_
+        case`/`get_debit_rows`/`build_financial_ledger`'s Pending-row
+        suppression AND `build_customs_ledger`'s Matched/Unmatched status
+        label never answer it independently — see both call sites.
+
+        Combines BOTH:
+          (a) any BOE with >=1 ACTIVE, current `InvoiceBOEAllocation` on ANY
+              of its debit rows for this licence (regardless of item), and
+          (b) any BOE `find_boe_allocation_candidates` identifies (via
+              `_scan_linked_boe_candidates`) as linked to a SALE trade line
+              through the legacy `trade.boes` M2M.
+
+        KNOWN, ACCEPTED TRADE-OFF: a BOE can debit multiple licence items
+        via multiple `RowDetails` rows (a single physical Customs document
+        covering several items on the same licence). Once this BOE is
+        represented, EVERY such row is excluded from `calculate_debit()`
+        in full, even an item with no relationship to the matched invoice
+        beyond sharing the same physical document — that item's own debit
+        no longer reduces the Financial Balance. This is a deliberate
+        product decision (confirmed against the concrete counter-example
+        of BOE 7836435 debiting two different licence items, only one of
+        which had an invoice), not an oversight — see the Financial Ledger
+        BOE Invoice Status Consistency spec.
+
+        Returns a (possibly empty) `set` of `bill_of_entry_id`s.
+        """
+        return LicenseBalanceCalculator.resolve_boes_represented_by_invoice_for_licenses(
+            [license_obj.id]
+        ).get(license_obj.id, set())
+
+    @staticmethod
+    def resolve_boes_represented_by_invoice_for_licenses(license_ids) -> dict:
+        """
+        Bulk sibling of `resolve_boes_represented_by_invoice` —
+        `{license_id: {bill_of_entry_id, ...}}` for MANY licenses in a
+        fixed, small number of queries (not one per license). See that
+        method's docstring for the BOE-level "whole BOE represented"
+        business rule. Every id in `license_ids` is present in the result
+        (empty set when nothing represents any of that licence's BOEs).
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+
+        from apps.reconciliation.models import InvoiceBOEAllocation
+
+        result: dict = {lid: set() for lid in ids}
+
+        # (a) Formal, active InvoiceBOEAllocation — any BOE with >=1 such
+        # allocation on any of its debit rows, per license. One fixed query
+        # regardless of how many licenses/BOEs are in play.
+        formal_rows = (
+            InvoiceBOEAllocation.objects.filter(
+                row_details__sr_number__license_id__in=ids,
+                status=InvoiceBOEAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+            .values_list("row_details__sr_number__license_id", "row_details__bill_of_entry_id")
+            .distinct()
         )
+        for license_id, boe_id in formal_rows:
+            if boe_id is not None:
+                result.setdefault(license_id, set()).add(boe_id)
+
+        # (b) Legacy-tag/candidate match — the ONE shared trade-line-
+        # scanning loop, `_scan_linked_boe_candidates` (never a second,
+        # independent copy of it).
+        trades = LicenseBalanceCalculator._sale_trades_with_boes_for(license_ids=ids)
+        boe_ids_by_license = LicenseBalanceCalculator._scan_linked_boe_candidates(trades)
+        for license_id, boe_ids in boe_ids_by_license.items():
+            result.setdefault(license_id, set()).update(boe_ids)
+
+        return result
+
+    @staticmethod
+    def _linked_boe_debit_exclusion_case(*, license_obj=None, license_ids=None):
+        """
+        A `Case`/`When` SQL expression that yields the full CIF of every
+        `RowDetails` row whose `bill_of_entry_id` is in the BOE-id set
+        returned by `resolve_boes_represented_by_invoice[_for_licenses]`
+        AND which has NO active formal allocation of its OWN (`allocated ==
+        0`) — else 0. Built for either a single license (`get_debit_rows`)
+        or a batch of them (`calculate_debit_for_licenses`), sharing the
+        exact same underlying resolver either way. Exactly one of
+        `license_obj`/`license_ids` must be given.
+
+        PRECONDITION: the caller's queryset must already carry an
+        `allocated` annotation (the per-row ACTIVE/current
+        `InvoiceBOEAllocation` sum) BEFORE this expression is added as
+        `linked_excluded` — `F("allocated")`/`Q(allocated=...)` below
+        resolve against that annotation at query-compile time.
+
+        Keyed on `bill_of_entry_id`, NOT `row_details_id` — see `resolve_
+        boes_represented_by_invoice`'s docstring: once ANY debit row of a
+        BOE is represented, every OTHER debit row of that same physical
+        BOE that has no allocation of its own also gets its FULL `cif_fc`
+        excluded (the explicit BOE-level Invoice Status Consistency rule).
+
+        The `allocated == 0` guard is deliberate and NOT part of a naive
+        "exclude the whole BOE unconditionally" reading: a row that already
+        carries its own PARTIAL formal allocation (e.g. 300 of a 1000 CIF
+        row) must keep leaving its unmatched remainder (700) visible to
+        `calculate_debit()`/the Financial Ledger's Pending row — see
+        `apps.reconciliation.tests.test_allocation_service.
+        InvoiceBOEAllocationTests.test_partial_allocation_leaves_correct_
+        unmatched_remainder` — pre-existing, deliberately-tested Phase-A
+        partial-allocation-ledger behavior this must not regress. Only a
+        row with NO allocation of its own (a sibling row, or a legacy-
+        candidate match that never became a formal allocation) falls
+        through to the BOE-level "represented" exclusion.
+
+        The `license_ids` (batch) branch scopes the exclusion PER LICENSE
+        (one `When` per license id with a non-empty represented set,
+        additionally gated on `Q(sr_number__license_id=lid)`) rather than
+        flattening every license's represented BOE ids into one global set
+        — a single shared multi-license SALE trade can legitimately
+        attribute a candidate BOE to OTHER licenses beyond the ones
+        requested (see `_scan_linked_boe_candidates`); flattening would
+        incorrectly exclude a same-`bill_of_entry_id` debit row belonging
+        to a DIFFERENT, unrelated license in the same batch, one for which
+        that BOE was never actually "represented" at all.
+        """
+        if license_obj is not None:
+            represented = LicenseBalanceCalculator.resolve_boes_represented_by_invoice(license_obj)
+            if not represented:
+                return Value(DEC_0, output_field=_ALLOCATION_DECIMAL_FIELD)
+            return Case(
+                When(
+                    Q(bill_of_entry_id__in=represented) & Q(allocated=DEC_0),
+                    then=F("cif_fc"),
+                ),
+                default=Value(DEC_0),
+                output_field=_ALLOCATION_DECIMAL_FIELD,
+            )
+
+        by_license = LicenseBalanceCalculator.resolve_boes_represented_by_invoice_for_licenses(
+            list(license_ids)
+        )
+        whens = [
+            When(
+                Q(sr_number__license_id=lid) & Q(bill_of_entry_id__in=boe_ids) & Q(allocated=DEC_0),
+                then=F("cif_fc"),
+            )
+            for lid, boe_ids in by_license.items() if boe_ids
+        ]
+        if not whens:
+            return Value(DEC_0, output_field=_ALLOCATION_DECIMAL_FIELD)
+        return Case(*whens, default=Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD)
 
     @staticmethod
     def get_debit_rows(license_obj, include_hidden=False):

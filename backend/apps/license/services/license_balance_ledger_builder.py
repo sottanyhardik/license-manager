@@ -295,6 +295,14 @@ class LicenseBalanceLedgerBuilder:
         # backward-compatible (see this method's docstring).
         hidden_total = LicenseBalanceCalculator.calculate_hidden_boe_debit_total(license_obj)
         has_hidden = hidden_total > DEC_0
+        # Needed for the Previous Owner Utilisation debit below whenever
+        # has_hidden — computed unconditionally (cheap) so it's available
+        # before the "Licence Trade (Purchased)" row loop further down,
+        # which ALSO still renders its own row unconditionally (see that
+        # loop — Purchase is never suppressed, even though this same CIF
+        # is also subtracted here; see the docstring immediately below for
+        # why both are correct at once).
+        previous_owner_purchase_component = LicenseBalanceCalculator.calculate_purchase_credit(license_obj)
         rows = []
         sr = 1
 
@@ -303,13 +311,20 @@ class LicenseBalanceLedgerBuilder:
         #      the full Original Licence CIF, credited at face value, shown
         #      regardless of has_purchase), followed immediately by a
         #      separate "Previous Owner Utilisation" DEBIT row = hidden_total
-        #      ONLY. Hidden-BOE utilisation and Licence Purchase are two
-        #      INDEPENDENT financial events and must never be combined into
-        #      one transaction: Purchase gets its own "Licence Trade
-        #      (Purchased)" credit row below, unconditionally, exactly like
-        #      any other licence (see `LicenseBalanceCalculator.
-        #      calculate_opening_balance`'s docstring for the same formula,
-        #      kept in lock-step so the two never diverge).
+        #      + previous_owner_purchase_component. This row answers "how
+        #      much of the original licence was no longer available before
+        #      we became the owner" — Hidden BOEs (never ours) AND Purchased
+        #      CIF (already bought from the previous owner, so no longer
+        #      "available" from them either) both left that original pool.
+        #      Licence Purchase is STILL a separate, independent financial
+        #      event that answers a DIFFERENT question ("how much did OUR
+        #      company acquire") — it re-enters the ledger unconditionally
+        #      as its own "Licence Trade (Purchased)" credit row below,
+        #      giving Purchase a net-zero effect on the running balance
+        #      unless something else (typically a matching Sale) also
+        #      touches the same CIF. See `LicenseBalanceCalculator.
+        #      calculate_opening_balance`'s docstring for the identical
+        #      formula, kept in lock-step so the two never diverge.
         #   2. else has_purchase -> unchanged: `running` starts at 0, no row
         #      (a licence with a Purchase trade tells its story from that
         #      trading history, not the original DGFT-issued face value).
@@ -327,14 +342,16 @@ class LicenseBalanceLedgerBuilder:
             })
             sr += 1
 
-            running = running - hidden_total
+            previous_owner_utilisation = hidden_total + previous_owner_purchase_component
+            running = running - previous_owner_utilisation
             rows.append({
                 'sr': sr, 'date': license_obj.license_date, 'type': 'Previous Owner Utilisation',
                 'document_number': license_obj.license_number or '-',
                 'boe_number': None, 'boe_date': None, 'company': None, 'item_name': None,
                 'invoice_numbers': [], 'qty': None, 'cif_usd': None, 'cif_inr': None,
-                'credit': DEC_0, 'debit': hidden_total, 'running_balance': running,
-                'remarks': 'Hidden BOE Utilisation', 'row_kind': 'previous_owner_utilisation',
+                'credit': DEC_0, 'debit': previous_owner_utilisation, 'running_balance': running,
+                'remarks': 'Previous Owner Utilisation (Hidden BOEs + Licence Trade Purchased)',
+                'row_kind': 'previous_owner_utilisation',
             })
             sr += 1
         elif has_purchase:
@@ -385,7 +402,7 @@ class LicenseBalanceLedgerBuilder:
                 'qty': p_row.qty_kg if p_row.mode == p_row.MODE_QTY else None,
                 'cif_usd': None, 'cif_inr': None,
                 'credit': credit, 'debit': DEC_0,
-                'remarks': 'Licence Trade Purchased', 'row_kind': 'trade_purchase',
+                'remarks': 'Licence Purchased', 'row_kind': 'trade_purchase',
             }))
 
         # ---- BOE Utilisation (Pending Invoice) — unallocated remainder ----
@@ -661,11 +678,13 @@ class LicenseBalanceLedgerBuilder:
         summary = {
             'opening_balance': opening_balance,
             'hidden_boe_total': hidden_total,
-            # Hidden BOEs ONLY — the exact debit rendered as the "Previous
-            # Owner Utilisation" row above (0 when there are none). Licence
-            # Purchase is a separate, independent event and is never
-            # folded in here — see `total_purchase_credit` below.
-            'previous_owner_utilisation': hidden_total,
+            # `hidden_total + previous_owner_purchase_component` when
+            # has_hidden, else 0 — the exact debit rendered as the
+            # "Previous Owner Utilisation" row above. Licence Purchase
+            # ALSO still appears separately as its own credit (see
+            # `total_purchase_credit` below) — see the opening-balance
+            # gate's docstring for why both are correct simultaneously.
+            'previous_owner_utilisation': (hidden_total + previous_owner_purchase_component) if has_hidden else DEC_0,
             'total_boe_debit': total_boe_debit,
             'total_invoice_allocation_debit': total_invoice_allocation_debit,
             'total_allotment_debit': total_allotment_debit,

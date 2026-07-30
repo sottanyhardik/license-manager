@@ -258,11 +258,17 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
             # rows, so it has no second computation to diff against.
             "financial_available_balance": financial_balance,
             "customs_available_balance": customs_available_balance,
-            # Hidden BOEs ONLY — see `build_financial_ledger`'s "Previous
-            # Owner Utilisation" row. Licence Purchase/Sale are separate,
-            # independent financial events, never folded in here — exposed
-            # as their own fields below.
-            "previous_owner_utilisation": hidden_total,
+            # Hidden BOEs + Purchased CIF when hidden BOEs exist, else 0 —
+            # matches `build_financial_ledger`'s "Previous Owner
+            # Utilisation" row exactly (everything that left the original
+            # licence's pool before it became ours). Licence Purchase is
+            # ALSO still exposed separately below (`purchased_licence_cif`)
+            # — it's a distinct financial event that answers a different
+            # question ("how much did OUR company acquire"), not a
+            # duplicate of this figure.
+            "previous_owner_utilisation": (
+                (hidden_total + purchase_credit_map.get(lid, DEC_0)) if hidden_total > DEC_0 else DEC_0
+            ),
             "purchased_licence_cif": purchase_credit_map.get(lid, DEC_0),
             "sold_licence_cif": sale_debit_map.get(lid, DEC_0),
             "pending_allotments": allotment_map.get(lid, DEC_0),

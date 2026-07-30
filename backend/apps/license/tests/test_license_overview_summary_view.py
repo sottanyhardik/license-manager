@@ -38,11 +38,19 @@ class LicenseOverviewSummaryViewTests(LicenseBalanceLedgerFixtureMixin, TestCase
         boe = self.make_boe(company)
         self.make_debit_row(boe, license_obj.import_license.first(), cif_fc=Decimal("400.00"), qty=Decimal("40.000"))
 
-        # `calculate_all_components()` now composes just `calculate_credit`,
-        # `calculate_boe_debit_total` (raw, unconditional — no Purchase/Sale
-        # trade queries at all), and `calculate_allotment` — see
-        # `calculate_balance`'s docstring. Still O(1), not per-row.
-        with self.assertNumQueries(9):
+        # Redirected to `balance_snapshot.get_snapshot()` (the shared
+        # Balance-CIF snapshot every consumer now composes from) instead of
+        # calling `calculate_all_components` directly. The snapshot always
+        # computes its per-item map too (available_value/planned/quantity
+        # bulk lookups) even though this view only surfaces the license-
+        # level totals, which is why the query count is higher than the old
+        # license-only `calculate_all_components` path (9). Still O(1) /
+        # fixed regardless of item count (every added query is a single
+        # grouped aggregate, never per-row) — not O(items). Bumped to 48
+        # after the Financial Balance Engine + BOE-level invoice-status
+        # resolver additions (each adds a handful more fixed, non-per-row
+        # aggregate queries to the same snapshot composition).
+        with self.assertNumQueries(48):
             resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
 
         self.assertEqual(resp.status_code, 200, resp.data)

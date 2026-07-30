@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 
 from rest_framework.test import APIClient
@@ -22,7 +23,8 @@ from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.core.constants import DEBIT, DEC_0
 from apps.core.models import CompanyModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
-from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.bill_of_entry.models import BillOfEntryModel, OTH_INVOICE_MARKER, RowDetails
+from apps.license.services.balance_calculator import LicenseBalanceCalculator
 from apps.license.services.license_balance_ledger_builder import (
     LicenseBalanceLedgerBuilder,
     build_invoice_allocation_groups,
@@ -117,6 +119,7 @@ class BalanceLedgerGetTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         data = resp.data
         self.assertEqual(set(data.keys()), {
             "license", "financial_ledger", "customs_ledger", "reconciliation", "warnings", "timeline",
+            "pending_invoice_groups",
         })
         self.assertEqual(data["license"]["license_number"], license_obj.license_number)
         self.assertGreaterEqual(len(data["financial_ledger"]["rows"]), 2)  # opening + final at minimum
@@ -679,6 +682,295 @@ class FinancialLedgerOpeningBalanceGateTests(LicenseBalanceLedgerFixtureMixin, R
         self.assertEqual(summary["computed_balance"], Decimal("60000.00"))
 
 
+class HiddenBoeOpeningBalanceGateTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase):
+    """
+    New 3-way Opening Balance gate: `hidden_total > 0` -> ALWAYS show the
+    Opening Balance row (even when `has_purchase` is True), with
+    `credit=opening_balance, debit=hidden_total,
+    running_balance=opening_balance-hidden_total` -- see
+    `build_financial_ledger`'s docstring / the design doc's "Remaining
+    Tradable Licence" rule. Checked BEFORE the has_purchase/no-purchase
+    branches exercised by `FinancialLedgerOpeningBalanceGateTests` above
+    (which have zero hidden BOEs and must stay byte-identical).
+    """
+
+    def _make_purchase_trade(self, company, item, cif_fc):
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        trade = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_PURCHASE,
+            to_company=company,
+            invoice_number=f"PUR-{uuid.uuid4().int % 999999:06d}",
+            invoice_date=datetime.now().date(),
+        )
+        LicenseTradeLine.objects.create(
+            trade=trade, sr_number=item, description=item.description or "Test Item",
+            mode=LicenseTradeLine.MODE_CIF_INR, cif_fc=cif_fc, cif_inr=cif_fc * Decimal("84.5"),
+        )
+        return trade
+
+    def _make_hidden_and_visible_rows(self, company, item, hidden_cif, visible_cif=None):
+        hidden_boe = self.make_boe(
+            company, number=f"HID-{uuid.uuid4().int % 999999:06d}", invoice_no=OTH_INVOICE_MARKER,
+        )
+        hidden_row = RowDetails.objects.create(
+            bill_of_entry=hidden_boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=hidden_cif, cif_inr=hidden_cif * Decimal("84.5"), qty=Decimal("100.000"),
+        )
+        visible_row = None
+        if visible_cif is not None:
+            visible_boe = self.make_boe(company, number=f"VIS-{uuid.uuid4().int % 999999:06d}")
+            visible_row = RowDetails.objects.create(
+                bill_of_entry=visible_boe, sr_number=item, transaction_type=DEBIT,
+                cif_fc=visible_cif, cif_inr=visible_cif * Decimal("84.5"), qty=Decimal("50.000"),
+            )
+        return hidden_row, visible_row
+
+    def test_hidden_total_shows_opening_row_without_purchase(self):
+        """UPDATED: the Opening Balance row is NEVER reduced any more (it
+        stays the full Original Licence CIF) -- the hidden total is instead
+        debited on its OWN "Previous Owner Utilisation" row immediately
+        after it (see `build_financial_ledger`'s 3-way Opening Balance gate
+        docstring). The previous version of this test pinned a
+        single-combined-row shape that no longer exists."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item = self.make_item(license_obj, 1)
+        self._make_hidden_and_visible_rows(company, item, hidden_cif=Decimal("40000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertFalse(summary["has_purchase"])
+        self.assertEqual(summary["hidden_boe_total"], Decimal("40000.00"))
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "previous_owner_utilisation", "final"])
+
+        opening_row = rows[0]
+        self.assertEqual(opening_row["credit"], Decimal("100000.00"))
+        self.assertEqual(opening_row["debit"], DEC_0)  # never reduced
+        self.assertEqual(opening_row["running_balance"], Decimal("100000.00"))
+
+        utilisation_row = rows[1]
+        self.assertEqual(utilisation_row["debit"], Decimal("40000.00"))  # hidden(40000) + purchase(0)
+        self.assertEqual(utilisation_row["running_balance"], Decimal("60000.00"))
+        self.assertEqual(summary["previous_owner_utilisation"], Decimal("40000.00"))
+        self.assertEqual(summary["computed_balance"], Decimal("60000.00"))
+        self.assertEqual(summary["engine_balance"], summary["computed_balance"])
+        self.assertFalse(summary["mismatched"])
+
+    def test_hidden_total_shows_opening_row_even_with_purchase(self):
+        """The hidden_total>0 branch takes priority over has_purchase --
+        the Opening Balance row must still appear (unlike the plain
+        has_purchase case in `FinancialLedgerOpeningBalanceGateTests.
+        test_purchase_exists_no_opening_balance_row`, which has zero
+        hidden BOEs and correctly shows NO opening row). UPDATED: Opening
+        Balance itself is never reduced -- Previous Owner Utilisation now
+        carries hidden + purchase CIF as its OWN row, and Purchase still
+        re-enters as its own unconditional "Licence Trade (Purchased)"
+        credit row further down (net-zero effect on the final balance,
+        see that row-kind's docstring)."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item = self.make_item(license_obj, 1)
+        self._make_hidden_and_visible_rows(company, item, hidden_cif=Decimal("40000.00"))
+        self._make_purchase_trade(company, item, cif_fc=Decimal("10000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertTrue(summary["has_purchase"])
+        self.assertEqual(
+            [r["row_kind"] for r in rows],
+            ["opening", "previous_owner_utilisation", "trade_purchase", "final"],
+        )
+        self.assertEqual(rows[0]["credit"], Decimal("100000.00"))
+        self.assertEqual(rows[0]["debit"], DEC_0)
+        self.assertEqual(rows[0]["running_balance"], Decimal("100000.00"))
+
+        self.assertEqual(rows[1]["debit"], Decimal("50000.00"))  # 40000 hidden + 10000 purchase
+        self.assertEqual(rows[1]["running_balance"], Decimal("50000.00"))
+
+        self.assertEqual(rows[2]["credit"], Decimal("10000.00"))  # Purchase re-enters, unconditionally
+        self.assertEqual(rows[2]["running_balance"], Decimal("60000.00"))
+
+        self.assertEqual(summary["computed_balance"], Decimal("60000.00"))
+        self.assertEqual(summary["engine_balance"], summary["computed_balance"])
+        self.assertFalse(summary["mismatched"])
+
+    def test_no_hidden_boes_regression_unaffected(self):
+        """`hidden_boe_total` is exposed on the summary for every licence,
+        but is exactly zero (and the existing has_purchase/no-purchase
+        branches fire unchanged) when there are no hidden rows at all --
+        the additive/backward-compatible guarantee this feature relies on."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("50000.00"))
+        self.make_item(license_obj, 1)
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(summary["hidden_boe_total"], DEC_0)
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "final"])
+
+    def test_financial_ledger_self_check_never_mismatches_on_hidden_boes(self):
+        """
+        UPDATED (previous version of this test pinned SUPERSEDED behaviour):
+        `build_financial_ledger`'s own `engine_balance` is now
+        `calculate_financial_balance()` -- a pure-function formalization of
+        this SAME ledger's row-by-row `running`, not the older, unrelated
+        `calculate_balance()`. So `computed_balance == engine_balance`
+        (`mismatched is False`) is a FINANCIAL-vs-FINANCIAL self-check that
+        must ALWAYS hold for a hidden-BOE licence -- it is no longer a
+        "known gap." See `calculate_financial_balance`'s docstring.
+        """
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("5000.00"))
+        item = self.make_item(license_obj, 1)
+        self._make_hidden_and_visible_rows(company, item, hidden_cif=Decimal("1000.00"), visible_cif=Decimal("800.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(summary["computed_balance"], Decimal("3200.00"))  # (5000-1000) - 800
+        self.assertEqual(summary["engine_balance"], summary["computed_balance"])
+        self.assertFalse(summary["mismatched"])
+
+    def test_financial_vs_customs_balance_expected_divergence_by_sale_debit(self):
+        """
+        Financial and Customs ARE still expected to genuinely diverge for a
+        hidden-BOE licence -- just via `calculate_financial_balance()` vs
+        `calculate_customs_balance()` (compared explicitly here), never via
+        `build_financial_ledger`'s own internal `mismatched` flag (that one
+        is a same-formula self-check, see the test above). Adding a SALE
+        trade line with no BOE/invoice link demonstrates a real, non-hidden
+        source of divergence: Financial subtracts the Sale debit (its own
+        transactional narrative); Customs has no Sale term at all (it is
+        the literal "what physically came through customs" figure) -- so
+        the two differ by EXACTLY the Sale debit amount.
+        """
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("5000.00"))
+        item = self.make_item(license_obj, 1)
+        self._make_hidden_and_visible_rows(company, item, hidden_cif=Decimal("1000.00"), visible_cif=Decimal("800.00"))
+
+        sale_trade = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_SALE, from_company=company,
+            invoice_number="SALE-DIVERGE-1", invoice_date=datetime.now().date(),
+        )
+        LicenseTradeLine.objects.create(
+            trade=sale_trade, sr_number=item, description=item.description or "Test Item",
+            mode=LicenseTradeLine.MODE_CIF_INR, cif_fc=Decimal("500.00"), cif_inr=Decimal("500.00") * Decimal("84.5"),
+        )
+
+        financial_balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
+        customs_balance = LicenseBalanceCalculator.calculate_customs_balance(license_obj)
+
+        self.assertEqual(financial_balance, Decimal("2700.00"))  # (5000-1000) - 500 (sale) - 800 (boe)
+        self.assertEqual(customs_balance, Decimal("3200.00"))  # 5000 - (800 + 1000 hidden), no sale term
+        self.assertEqual(customs_balance - financial_balance, Decimal("500.00"))  # exactly the Sale debit
+
+
+class CustomsLedgerShowHiddenTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase):
+    """`build_customs_ledger(..., show_hidden=...)` -- the ONE deliberate
+    place hidden rows can be rendered again, for the audit-view toggle.
+
+    UPDATED: hidden is now BOE-level (`BillOfEntryModel.invoice_no ==
+    OTH_INVOICE_MARKER`), not a `RowDetails.is_hidden` column. Also
+    UPDATED: `show_hidden` affects ONLY which rows are returned -- every
+    total (`total_boe_cif`, `computed_balance`) ALWAYS includes hidden BOEs
+    regardless of the toggle (`get_debit_rows(..., include_hidden=True)` is
+    called unconditionally -- see `build_customs_ledger`'s docstring). The
+    previous version of this test wrongly expected `computed_balance` to
+    shrink when hidden rows were excluded from display; that was never how
+    this ledger works -- it is deliberately the LITERAL customs figure, and
+    the toggle is display-only."""
+
+    def _make_hidden_and_visible_rows(self, company, item, hidden_cif, visible_cif):
+        hidden_boe = self.make_boe(
+            company, number=f"HID-{uuid.uuid4().int % 999999:06d}", invoice_no=OTH_INVOICE_MARKER,
+        )
+        hidden_row = RowDetails.objects.create(
+            bill_of_entry=hidden_boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=hidden_cif, cif_inr=hidden_cif * Decimal("84.5"), qty=Decimal("100.000"),
+        )
+        visible_boe = self.make_boe(company, number=f"VIS-{uuid.uuid4().int % 999999:06d}")
+        visible_row = RowDetails.objects.create(
+            bill_of_entry=visible_boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=visible_cif, cif_inr=visible_cif * Decimal("84.5"), qty=Decimal("50.000"),
+        )
+        return hidden_row, visible_row
+
+    def test_show_hidden_false_hides_row_but_totals_still_include_it(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item = self.make_item(license_obj, 1)
+        self._make_hidden_and_visible_rows(company, item, hidden_cif=Decimal("40000.00"), visible_cif=Decimal("15000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj, show_hidden=False)
+
+        boe_rows = [r for r in rows if r["row_kind"] == "customs_boe"]
+        self.assertEqual(len(boe_rows), 1)  # hidden row dropped from the returned list only
+        self.assertEqual(boe_rows[0]["debit"], Decimal("15000.00"))
+        # Totals ALWAYS include the hidden BOE, regardless of show_hidden.
+        self.assertEqual(summary["total_boe_cif"], Decimal("55000.00"))
+        self.assertEqual(summary["computed_balance"], Decimal("45000.00"))  # 100000 - 55000
+        self.assertEqual(summary["engine_balance"], summary["computed_balance"])
+        self.assertFalse(summary["mismatched"])
+
+    def test_show_hidden_true_includes_hidden_row_and_flags_it(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item = self.make_item(license_obj, 1)
+        self._make_hidden_and_visible_rows(company, item, hidden_cif=Decimal("40000.00"), visible_cif=Decimal("15000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj, show_hidden=True)
+
+        boe_rows = [r for r in rows if r["row_kind"] == "customs_boe"]
+        self.assertEqual(len(boe_rows), 2)
+        self.assertEqual(summary["total_boe_cif"], Decimal("55000.00"))
+        # Totals are IDENTICAL to the show_hidden=False case above -- only
+        # which rows are returned changed, never any number in `summary`.
+        self.assertEqual(summary["computed_balance"], Decimal("45000.00"))
+
+        hidden_boe_row = next(r for r in boe_rows if r["debit"] == Decimal("40000.00"))
+        visible_boe_row = next(r for r in boe_rows if r["debit"] == Decimal("15000.00"))
+        self.assertTrue(hidden_boe_row["is_hidden"])
+        self.assertEqual(hidden_boe_row["hidden_reason"], "Previous Owner (invoice_no=OTH)")
+        self.assertFalse(visible_boe_row["is_hidden"])
+        self.assertEqual(visible_boe_row["hidden_reason"], "")
+        self.assertEqual(hidden_boe_row["status"], "Unmatched")  # never invoice-matched in this fixture
+
+    def test_show_hidden_default_is_false(self):
+        """`build_customs_ledger(license_obj)` with no explicit `show_hidden`
+        kwarg must behave exactly like `show_hidden=False` -- the default
+        stays backward compatible for every existing caller."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item = self.make_item(license_obj, 1)
+        self._make_hidden_and_visible_rows(company, item, hidden_cif=Decimal("40000.00"), visible_cif=Decimal("15000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
+
+        boe_rows = [r for r in rows if r["row_kind"] == "customs_boe"]
+        self.assertEqual(len(boe_rows), 1)
+        self.assertEqual(summary["total_boe_cif"], Decimal("55000.00"))
+
+
 class TimelineTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase):
     """`build_timeline` must reflect ONLY real persisted records — never a
     fabricated/inferred event — and must present them in chronological
@@ -962,10 +1254,16 @@ class BalanceEngineCustomsLedgerReconciliationTests(
         self.assertEqual(engine_balance, Decimal("50000.00"))  # unaffected by the purchase
 
         # Financial Ledger's own total tracks the purchase instead -- a
-        # different, expected divergence, not a bug.
+        # different, expected divergence from the CUSTOMS engine_balance
+        # above, not a bug. `fin_summary["mismatched"]` is a SEPARATE,
+        # Financial-vs-Financial self-check (its own `computed_balance`
+        # vs. the standalone `calculate_financial_balance()` -- see
+        # `build_financial_ledger`'s docstring) and must be False: the two
+        # Financial figures always agree, only Financial vs. Customs is
+        # expected to diverge.
         _, fin_summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
         self.assertNotEqual(fin_summary["computed_balance"], engine_balance)
-        self.assertTrue(fin_summary["mismatched"])
+        self.assertFalse(fin_summary["mismatched"])
 
     def test_sale_only(self):
         company = self.make_company()
@@ -1095,3 +1393,509 @@ class BalanceEngineCustomsLedgerReconciliationTests(
         warning = trade_row["mismatch_warning"]
         self.assertIsNotNone(warning)
         self.assertEqual(warning["status"], "mismatch")
+
+
+class HideBoeRestoreBoeViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
+    """View-level tests for `POST licenses/{id}/hide-boe/` and
+    `.../restore-boe/` -- the write actions built on top of
+    `apps.bill_of_entry.services.boe_service.hide_boe` / `restore_boe`
+    (BOE-level, not licence-scoped -- see that module's docstring),
+    exercised through the real HTTP/permission
+    layer (`LicenseBalanceLedgerPermission`'s `hide_boe`/`restore_boe`
+    AND-of-two role gate)."""
+
+    def make_user_with_roles(self, *roles):
+        user = User.objects.create_user(
+            username=f"hide-boe-{uuid.uuid4().hex[:8]}",
+            email=f"{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123!",
+        )
+        for role in roles:
+            group, _ = Group.objects.get_or_create(name=role)
+            user.groups.add(group)
+        return user
+
+    def setUp(self):
+        self.user = self.make_superuser()
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_hide_boe_happy_path(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("10000.00"))
+        item = self.make_item(license_obj, 1)
+        boe = self.make_boe(company, number="9500001")
+        self.make_debit_row(boe, item, cif_fc=Decimal("4000.00"), qty=Decimal("40.000"))
+
+        resp = self.client.post(
+            f"/api/licenses/{license_obj.id}/hide-boe/",
+            {"boe_id": boe.id, "reason": "Previous owner utilisation"},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data["is_hidden"], True)
+        self.assertEqual(resp.data["invoice_no"], OTH_INVOICE_MARKER)
+        self.assertEqual(resp.data["previous_invoice_no"], "")  # BOE had a blank invoice_no beforehand
+        self.assertEqual(resp.data["hidden_by"], self.user.username)
+        self.assertIsNotNone(resp.data["hidden_at"])
+
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, OTH_INVOICE_MARKER)
+
+        log = ReconciliationLog.objects.filter(action=ReconciliationLog.ACTION_HIDE_BOE).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.bill_of_entry_id, boe.id)
+        self.assertEqual(log.user_id, self.user.id)
+        self.assertEqual(log.reason, "Previous owner utilisation")
+
+        # No Purchase trade on this licence -- hiding relabels the debit as
+        # Previous Owner Utilisation but does not change the Balance CIF
+        # (see `HideBoeBalanceImmediacyTests.test_hide_with_no_purchase_
+        # leaves_balance_unchanged` in `apps.bill_of_entry.tests.
+        # test_boe_hide_service` for the same invariant, pinned there).
+        license_obj.refresh_from_db()
+        self.assertEqual(license_obj.balance_cif, Decimal("6000.00"))  # 10000 - 4000, unchanged by hiding
+
+    def test_restore_boe_happy_path(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        boe = self.make_boe(company, number="9500002", invoice_no="GE")
+        self.make_debit_row(boe, item, cif_fc=Decimal("4000.00"), qty=Decimal("40.000"))
+
+        hide_resp = self.client.post(
+            f"/api/licenses/{license_obj.id}/hide-boe/",
+            {"boe_id": boe.id, "reason": "Previous owner"},
+            format="json",
+        )
+        self.assertEqual(hide_resp.status_code, 201, hide_resp.data)
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, OTH_INVOICE_MARKER)
+
+        resp = self.client.post(
+            f"/api/licenses/{license_obj.id}/restore-boe/",
+            {"boe_id": boe.id, "reason": "Restored in error"},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["is_hidden"], False)
+        # Restored back to the REAL invoice_no it had before hiding, read
+        # back from the HIDE_BOE log's preserved `before['invoice_no']`.
+        self.assertEqual(resp.data["invoice_no"], "GE")
+        self.assertIsNotNone(resp.data["restored_at"])
+
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, "GE")
+
+        log = ReconciliationLog.objects.filter(action=ReconciliationLog.ACTION_RESTORE_BOE).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.bill_of_entry_id, boe.id)
+        self.assertEqual(log.user_id, self.user.id)
+
+    def test_hide_boe_missing_boe_id_returns_400(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+
+        resp = self.client.post(f"/api/licenses/{license_obj.id}/hide-boe/", {}, format="json")
+
+        self.assertEqual(resp.status_code, 400)
+
+    def test_hide_boe_nonexistent_boe_returns_404(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+
+        resp = self.client.post(
+            f"/api/licenses/{license_obj.id}/hide-boe/", {"boe_id": 999999999}, format="json",
+        )
+
+        self.assertEqual(resp.status_code, 404)
+
+    def test_hide_boe_denied_without_any_role(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        boe = self.make_boe(company)
+
+        client = APIClient()
+        client.force_authenticate(user=self.make_plain_user())
+        resp = client.post(f"/api/licenses/{license_obj.id}/hide-boe/", {"boe_id": boe.id}, format="json")
+
+        self.assertEqual(resp.status_code, 403)
+
+    def test_hide_boe_denied_with_boe_manager_only(self):
+        """The AND-of-two gate (`BOE_MANAGER` *and* `LICENSE_MANAGER`) means
+        holding only ONE of the two required roles must still be denied --
+        this is the real financial-mutation gate, stricter than the
+        any-of-four `ignore_warning`/`restore_warning` actions."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        boe = self.make_boe(company)
+
+        client = APIClient()
+        client.force_authenticate(user=self.make_user_with_roles("BOE_MANAGER"))
+        resp = client.post(f"/api/licenses/{license_obj.id}/hide-boe/", {"boe_id": boe.id}, format="json")
+
+        self.assertEqual(resp.status_code, 403)
+
+    def test_hide_boe_denied_with_license_manager_only(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        boe = self.make_boe(company)
+
+        client = APIClient()
+        client.force_authenticate(user=self.make_user_with_roles("LICENSE_MANAGER"))
+        resp = client.post(f"/api/licenses/{license_obj.id}/hide-boe/", {"boe_id": boe.id}, format="json")
+
+        self.assertEqual(resp.status_code, 403)
+
+    def test_hide_boe_allowed_with_both_roles(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        boe = self.make_boe(company, number="9500003")
+        self.make_debit_row(boe, item, cif_fc=Decimal("1000.00"), qty=Decimal("10.000"))
+
+        client = APIClient()
+        client.force_authenticate(user=self.make_user_with_roles("BOE_MANAGER", "LICENSE_MANAGER"))
+        resp = client.post(f"/api/licenses/{license_obj.id}/hide-boe/", {"boe_id": boe.id}, format="json")
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+    def test_restore_boe_denied_with_boe_manager_only(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        boe = self.make_boe(company)
+
+        client = APIClient()
+        client.force_authenticate(user=self.make_user_with_roles("BOE_MANAGER"))
+        resp = client.post(f"/api/licenses/{license_obj.id}/restore-boe/", {"boe_id": boe.id}, format="json")
+
+        self.assertEqual(resp.status_code, 403)
+
+
+class LicenseLifecycleScenarioTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase):
+    """Broad characterization coverage across the common real-world licence
+    lifecycles the Balance Engine/Financial Ledger must handle correctly:
+    Purchase/Sale combinations, multiple invoices, BOEs, allotments, and the
+    hidden-BOE round trip -- each cross-checked against `calculate_
+    financial_balance` (the same identity `build_financial_ledger`'s own
+    `mismatched` flag polices) rather than trusting the ledger's own numbers
+    in isolation."""
+
+    def _make_purchase_trade(self, company, item, cif_fc, invoice_number=None):
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        trade = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_PURCHASE, to_company=company,
+            invoice_number=invoice_number or f"PUR-{uuid.uuid4().int % 999999:06d}",
+            invoice_date=datetime.now().date(),
+        )
+        LicenseTradeLine.objects.create(
+            trade=trade, sr_number=item, description=item.description or "Test Item",
+            mode=LicenseTradeLine.MODE_CIF_INR, cif_fc=cif_fc, cif_inr=cif_fc * Decimal("84.5"),
+        )
+        return trade
+
+    # -- Purchase / Sale combinations -----------------------------------
+
+    def test_full_purchase_full_sale(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("100000.00"))
+        trade = self.make_sale_trade(company, invoice_number="INV-FULL-FULL")
+        self.make_trade_line(trade, item, cif_fc=Decimal("100000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(summary["total_purchase_credit"], Decimal("100000.00"))
+        self.assertEqual(summary["total_trade_debit"], Decimal("100000.00"))
+        self.assertEqual(summary["computed_balance"], DEC_0)
+        self.assertEqual(summary["engine_balance"], DEC_0)
+        self.assertFalse(summary["mismatched"])
+        self.assertEqual(LicenseBalanceCalculator.calculate_financial_balance(license_obj), DEC_0)
+
+    def test_full_purchase_partial_sale(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("100000.00"))
+        trade = self.make_sale_trade(company, invoice_number="INV-FULL-PARTIAL")
+        self.make_trade_line(trade, item, cif_fc=Decimal("40000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        expected = Decimal("60000.00")
+        self.assertEqual(summary["computed_balance"], expected)
+        self.assertEqual(summary["engine_balance"], expected)
+        self.assertFalse(summary["mismatched"])
+
+    def test_partial_purchase_partial_sale(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("60000.00"))
+        trade = self.make_sale_trade(company, invoice_number="INV-PARTIAL-PARTIAL")
+        self.make_trade_line(trade, item, cif_fc=Decimal("30000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        expected = Decimal("30000.00")
+        self.assertEqual(summary["computed_balance"], expected)
+        self.assertEqual(summary["engine_balance"], expected)
+        self.assertFalse(summary["mismatched"])
+
+    def test_partial_purchase_full_sale(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("60000.00"))
+        trade = self.make_sale_trade(company, invoice_number="INV-PARTIAL-FULL")
+        self.make_trade_line(trade, item, cif_fc=Decimal("60000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(summary["computed_balance"], DEC_0)
+        self.assertEqual(summary["engine_balance"], DEC_0)
+        self.assertFalse(summary["mismatched"])
+
+    def test_multiple_purchase_invoices_sum_correctly(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("30000.00"), invoice_number="PUR-A")
+        self._make_purchase_trade(company, item, cif_fc=Decimal("20000.00"), invoice_number="PUR-B")
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(summary["total_purchase_credit"], Decimal("50000.00"))
+        self.assertEqual(
+            [r["row_kind"] for r in rows if r["row_kind"] == "trade_purchase"], ["trade_purchase", "trade_purchase"],
+        )
+        self.assertEqual(summary["computed_balance"], Decimal("50000.00"))
+        self.assertEqual(summary["engine_balance"], Decimal("50000.00"))
+
+    def test_multiple_sale_invoices_sum_correctly(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("100000.00"))
+        trade_a = self.make_sale_trade(company, invoice_number="SALE-A")
+        self.make_trade_line(trade_a, item, cif_fc=Decimal("20000.00"))
+        trade_b = self.make_sale_trade(company, invoice_number="SALE-B")
+        self.make_trade_line(trade_b, item, cif_fc=Decimal("15000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(summary["total_trade_debit"], Decimal("35000.00"))
+        expected = Decimal("65000.00")  # 100000 - 35000
+        self.assertEqual(summary["computed_balance"], expected)
+        self.assertEqual(summary["engine_balance"], expected)
+
+    def test_purchased_license_with_no_sale_at_all(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("70000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertTrue(summary["has_purchase"])
+        self.assertFalse(summary["has_sale"])
+        self.assertFalse(summary["missing_purchase_warning"]["show_warning"])
+        self.assertEqual([r["row_kind"] for r in rows], ["trade_purchase", "final"])
+        self.assertEqual(summary["computed_balance"], Decimal("70000.00"))
+        self.assertEqual(summary["engine_balance"], Decimal("70000.00"))
+
+    # -- Allotments -------------------------------------------------------
+
+    def test_sale_with_no_allotments(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("100000.00"))
+        trade = self.make_sale_trade(company, invoice_number="INV-NO-ALLOT")
+        self.make_trade_line(trade, item, cif_fc=Decimal("40000.00"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(summary["total_allotment_debit"], DEC_0)
+        self.assertEqual(summary["computed_balance"], Decimal("60000.00"))
+
+    def test_sale_with_allotments(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("100000.00"))
+        trade = self.make_sale_trade(company, invoice_number="INV-WITH-ALLOT")
+        self.make_trade_line(trade, item, cif_fc=Decimal("40000.00"))
+
+        allotment = AllotmentModel.objects.create(company=company, item_name="Outstanding Allotment")
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("10000.00"),
+            cif_inr=Decimal("10000.00") * Decimal("84.5"), qty=Decimal("100.000"),
+        )
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(summary["total_allotment_debit"], Decimal("10000.00"))
+        expected = Decimal("50000.00")  # 100000 - 40000 - 10000
+        self.assertEqual(summary["computed_balance"], expected)
+        self.assertEqual(summary["engine_balance"], expected)
+
+    def test_multiple_allotments_net_final_balance(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item = self.make_item(license_obj, 1)
+
+        allotment_1 = AllotmentModel.objects.create(company=company, item_name="Allotment 1")
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment_1, cif_fc=Decimal("5000.00"),
+            cif_inr=Decimal("5000.00") * Decimal("84.5"), qty=Decimal("50.000"),
+        )
+        allotment_2 = AllotmentModel.objects.create(company=company, item_name="Allotment 2")
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment_2, cif_fc=Decimal("3000.00"),
+            cif_inr=Decimal("3000.00") * Decimal("84.5"), qty=Decimal("30.000"),
+        )
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(summary["total_allotment_debit"], Decimal("8000.00"))
+        expected = Decimal("92000.00")  # 100000 - 5000 - 3000
+        self.assertEqual(summary["computed_balance"], expected)
+        self.assertEqual(summary["engine_balance"], expected)
+        self.assertFalse(summary["mismatched"])
+
+    # -- BOEs ---------------------------------------------------------------
+
+    def test_single_boe(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item = self.make_item(license_obj, 1)
+        boe = self.make_boe(company, number="SINGLE-BOE-1")
+        self.make_debit_row(boe, item, cif_fc=Decimal("4000.00"), qty=Decimal("40.000"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual([r["row_kind"] for r in rows], ["opening", "boe", "final"])
+        self.assertEqual(summary["total_boe_debit"], Decimal("4000.00"))
+        expected = Decimal("96000.00")
+        self.assertEqual(summary["computed_balance"], expected)
+        self.assertEqual(summary["engine_balance"], expected)
+
+    def test_multiple_boes(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item = self.make_item(license_obj, 1)
+        boe_1 = self.make_boe(company, number="MULTI-BOE-1")
+        boe_2 = self.make_boe(company, number="MULTI-BOE-2")
+        boe_3 = self.make_boe(company, number="MULTI-BOE-3")
+        self.make_debit_row(boe_1, item, cif_fc=Decimal("4000.00"), qty=Decimal("40.000"))
+        self.make_debit_row(boe_2, item, cif_fc=Decimal("3000.00"), qty=Decimal("30.000"))
+        self.make_debit_row(boe_3, item, cif_fc=Decimal("2000.00"), qty=Decimal("20.000"))
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        boe_rows = [r for r in rows if r["row_kind"] == "boe"]
+        self.assertEqual(len(boe_rows), 3)
+        self.assertEqual(summary["total_boe_debit"], Decimal("9000.00"))
+        expected = Decimal("91000.00")
+        self.assertEqual(summary["computed_balance"], expected)
+        self.assertEqual(summary["engine_balance"], expected)
+
+    # -- Hidden BOE round trip at the ledger level ---------------------------
+
+    def test_hidden_boe_then_restored_boe_round_trip(self):
+        """Complements the service-level round-trip pinned in
+        `apps.bill_of_entry.tests.test_boe_hide_service` -- here checked
+        against the full `build_financial_ledger` row set/summary, with a
+        Purchase in play so hiding actually shifts the balance (see that
+        module's docstring for why a no-purchase licence would not)."""
+        from apps.bill_of_entry.services.boe_service import hide_boe, restore_boe
+        from apps.license.signals import update_license_flags
+
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item = self.make_item(license_obj, 1)
+        self._make_purchase_trade(company, item, cif_fc=Decimal("20000.00"))
+        boe = self.make_boe(company, number="HIDE-ROUNDTRIP-1")
+        self.make_debit_row(boe, item, cif_fc=Decimal("5000.00"), qty=Decimal("50.000"))
+
+        rows_before, summary_before = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+        balance_before = summary_before["computed_balance"]
+        self.assertEqual(balance_before, Decimal("15000.00"))  # 0 (opening) + 20000 - 5000
+
+        hide_boe(boe, user=None, reason="Previous owner")
+        update_license_flags(license_obj)
+
+        rows_hidden, summary_hidden = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+        self.assertEqual([r["row_kind"] for r in rows_hidden], ["opening", "previous_owner_utilisation", "trade_purchase", "final"])
+        self.assertEqual(summary_hidden["hidden_boe_total"], Decimal("5000.00"))
+        expected_hidden = Decimal("95000.00")  # (100000-5000-20000) + 20000
+        self.assertEqual(summary_hidden["computed_balance"], expected_hidden)
+        self.assertEqual(summary_hidden["engine_balance"], expected_hidden)
+        self.assertFalse(summary_hidden["mismatched"])
+
+        restore_boe(boe, user=None, reason="Restored in error")
+        update_license_flags(license_obj)
+
+        rows_after, summary_after = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+        self.assertEqual(summary_after["hidden_boe_total"], DEC_0)
+        self.assertEqual(summary_after["computed_balance"], balance_before)
+        self.assertEqual(
+            [r["row_kind"] for r in rows_after], [r["row_kind"] for r in rows_before],
+        )
+
+    # -- BOE-level invoice matching spanning multiple items ------------------
+
+    def test_boe_spanning_two_items_only_one_invoice_matched_excludes_both(self):
+        """The BOE Invoice Status Consistency rule: once ANY row of a
+        physical BOE is invoice-matched, the WHOLE BOE is "represented" --
+        every debit row on it is excluded from `calculate_debit()`/
+        `get_debit_rows()`'s `contributed`, regardless of which licence item
+        it belongs to. Here item_2's row has NO allocation of its own, yet
+        must still be excluded because it shares a physical BOE with
+        item_1's now-matched row."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+        item_1 = self.make_item(license_obj, 1)
+        item_2 = self.make_item(license_obj, 2)
+        boe = self.make_boe(company, number="SPAN-ITEMS-1")
+        row_1 = self.make_debit_row(boe, item_1, cif_fc=Decimal("3000.00"), qty=Decimal("30.000"))
+        row_2 = self.make_debit_row(boe, item_2, cif_fc=Decimal("2000.00"), qty=Decimal("20.000"))
+
+        trade = self.make_sale_trade(company, invoice_number="INV-SPAN-ITEMS")
+        trade_line = self.make_trade_line(trade, item_1, cif_fc=Decimal("3000.00"), qty_kg=Decimal("30.0000"))
+        create_invoice_boe_allocation(
+            trade_line, row_1, qty=row_1.qty, cif_fc=row_1.cif_fc, cif_inr=row_1.cif_inr, user=None,
+        )
+
+        represented = LicenseBalanceCalculator.resolve_boes_represented_by_invoice(license_obj)
+        self.assertIn(boe.id, represented)
+
+        debit_rows = {
+            row.id: row.contributed
+            for row in LicenseBalanceCalculator.get_debit_rows(license_obj)
+        }
+        self.assertEqual(debit_rows[row_1.id], DEC_0)  # netted by its own allocation
+        self.assertEqual(debit_rows[row_2.id], DEC_0)  # excluded too -- same represented BOE, no allocation of its own
+
+        self.assertEqual(LicenseBalanceCalculator.calculate_debit(license_obj), DEC_0)
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+        self.assertEqual(summary["total_boe_debit"], DEC_0)  # neither row shown as "BOE Utilisation (Pending Invoice)"
+        self.assertNotIn("boe", [r["row_kind"] for r in rows])

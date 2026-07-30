@@ -12,7 +12,7 @@ from django.test import TestCase as DjangoTestCase
 from apps.core.constants import DEC_0, DEBIT
 from apps.core.models import CompanyModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
-from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.bill_of_entry.models import BillOfEntryModel, OTH_INVOICE_MARKER, RowDetails
 from apps.trade.models import LicenseTrade, LicenseTradeLine
 from apps.license.services.balance_calculator import (
     LicenseBalanceCalculator,
@@ -54,9 +54,10 @@ class TestLicenseBalanceCalculator(TestCase):
         # Assert
         assert result == DEC_0
 
+    @patch('apps.reconciliation.models.InvoiceBOEAllocation')
     @patch('apps.trade.models.LicenseTrade')
     @patch('apps.license.services.balance_calculator.RowDetails')
-    def test_calculate_debit_with_boe(self, mock_row_details, mock_license_trade):
+    def test_calculate_debit_with_boe(self, mock_row_details, mock_license_trade, mock_invoice_boe_allocation):
         """
         Should calculate total BOE debits via the allocation-driven
         annotation chain (Phase A): `.filter(...).annotate(allocated=...)
@@ -65,16 +66,24 @@ class TestLicenseBalanceCalculator(TestCase):
         `~Exists(linked_sale_line)` binary exclusion.
 
         `LicenseTrade` is mocked to report zero SALE trades with a legacy
-        `.boes` link (the common case) so `_virtual_boe_debit_exclusion_case`
-        short-circuits to a constant 0 without touching the real ORM on a
+        `.boes` link (the common case) and `InvoiceBOEAllocation` is mocked
+        to report zero formal allocations, so `resolve_boes_represented_by_
+        invoice` (via `_linked_boe_debit_exclusion_case`) short-circuits to
+        an empty represented-BOE set without touching the real ORM on a
         Mock `license_obj` — see `TestCalculateDebitLineLevelExclusion` for
-        real-DB coverage of the virtual-match behavior itself.
+        real-DB coverage of the represented-BOE behavior itself.
         """
         # Setup mock
         mock_license_trade.objects.filter.return_value.distinct.return_value.filter.return_value \
             .prefetch_related.return_value = []
+        mock_invoice_boe_allocation.objects.filter.return_value.values_list.return_value.distinct.return_value = []
         mock_license = Mock()
         mock_queryset = Mock()
+        # `get_debit_rows` now chains `.exclude(is_hidden=True)` (default
+        # `include_hidden=False`) between `.filter()` and `.annotate()` —
+        # loop it back to the same mock so the pre-wired `.annotate(...)`
+        # chain below is still what gets called.
+        mock_queryset.exclude.return_value = mock_queryset
         annotated = (
             mock_queryset.annotate.return_value.annotate.return_value
             .annotate.return_value.annotate.return_value
@@ -92,15 +101,21 @@ class TestLicenseBalanceCalculator(TestCase):
             transaction_type=DEBIT,
         )
 
+    @patch('apps.reconciliation.models.InvoiceBOEAllocation')
     @patch('apps.trade.models.LicenseTrade')
     @patch('apps.license.services.balance_calculator.RowDetails')
-    def test_calculate_debit_no_boe(self, mock_row_details, mock_license_trade):
+    def test_calculate_debit_no_boe(self, mock_row_details, mock_license_trade, mock_invoice_boe_allocation):
         """Should return zero when no BOE"""
         # Setup mock
         mock_license_trade.objects.filter.return_value.distinct.return_value.filter.return_value \
             .prefetch_related.return_value = []
+        mock_invoice_boe_allocation.objects.filter.return_value.values_list.return_value.distinct.return_value = []
         mock_license = Mock()
         mock_queryset = Mock()
+        # See test_calculate_debit_with_boe's comment: loop `.exclude()`
+        # back to the same mock so `get_debit_rows`' default-exclusion
+        # chain still reaches the pre-wired `.annotate(...)` chain below.
+        mock_queryset.exclude.return_value = mock_queryset
         annotated = (
             mock_queryset.annotate.return_value.annotate.return_value
             .annotate.return_value.annotate.return_value
@@ -269,6 +284,10 @@ class TestItemBalanceCalculator(TestCase):
 
         # Mock debit query
         mock_debit_qs = Mock()
+        # `exclude_hidden()` chains `.exclude(is_hidden=True)` onto the
+        # filtered queryset before `.aggregate(...)` — loop it back so the
+        # pre-wired aggregate result below is still what's returned.
+        mock_debit_qs.exclude.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'cif_fc__sum': Decimal('100.00')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -302,6 +321,7 @@ class TestItemBalanceCalculator(TestCase):
 
         # Mock debit query
         mock_debit_qs = Mock()
+        mock_debit_qs.exclude.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'cif_fc__sum': Decimal('300.00')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -326,6 +346,7 @@ class TestItemBalanceCalculator(TestCase):
 
         # Mock debit query
         mock_debit_qs = Mock()
+        mock_debit_qs.exclude.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'cif_fc__sum': None}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -375,6 +396,7 @@ class TestItemBalanceCalculator(TestCase):
 
         # Mock debited quantity
         mock_debit_qs = Mock()
+        mock_debit_qs.exclude.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'qty__sum': Decimal('300')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -401,6 +423,7 @@ class TestItemBalanceCalculator(TestCase):
 
         # Mock debited quantity
         mock_debit_qs = Mock()
+        mock_debit_qs.exclude.return_value = mock_debit_qs
         mock_debit_qs.aggregate.return_value = {'qty__sum': Decimal('600')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
@@ -760,15 +783,22 @@ class TestCalculateDebitLineLevelExclusion(DjangoTestCase):
         assert debit == Decimal("1000.00")
         assert trade_total == Decimal("1000.00")
 
-    def test_debit_not_wrongly_excluded_for_unrelated_item_on_same_boe(self):
+    def test_debit_excluded_for_whole_boe_once_any_item_is_invoice_matched(self):
         """
-        (3) The actual bug scenario the original fix targeted, restated for
-        the allocation-driven mechanism: a single BOE debits sr_number A
-        AND sr_number B. A SALE trade line debits ONLY sr_number B, and an
-        explicit InvoiceBOEAllocation fully allocates B's RowDetails row
-        against that line. The exclusion must apply ONLY to B's row --
-        sr_number A's debit must still count in full, since no allocation
-        was ever created against A's row.
+        (3) Superseded by `resolve_boes_represented_by_invoice` (see
+        `apps.license.tests.test_boe_invoice_representation` for the full
+        suite): a single BOE debits sr_number A AND sr_number B. A SALE
+        trade line debits ONLY sr_number B, and an explicit
+        InvoiceBOEAllocation fully allocates B's RowDetails row against
+        that line.
+
+        PREVIOUS (row-level) behavior excluded ONLY B's row, leaving A's
+        debit -- and the Financial Ledger's matching "BOE Utilisation
+        (Pending Invoice)" row for A -- wrongly outstanding even though the
+        same physical BOE is already represented by the invoice. The fix:
+        once ANY debit row of a BOE is matched to an invoice, the WHOLE BOE
+        is "represented" and every one of its debit rows (A's included) is
+        excluded, not just the one that matched.
         """
         company = self._make_company()
         license_obj = self._make_license(company)
@@ -784,9 +814,10 @@ class TestCalculateDebitLineLevelExclusion(DjangoTestCase):
         debit = LicenseBalanceCalculator.calculate_debit(license_obj)
         trade_total = LicenseBalanceCalculator.calculate_trade(license_obj)
 
-        assert debit == Decimal("400.00"), (
-            "sr_number A's BOE debit must NOT be excluded just because "
-            "sr_number B's row on the same BOE has an active allocation"
+        assert debit == DEC_0, (
+            "sr_number A's BOE debit must ALSO be excluded once sr_number "
+            "B's row on the SAME physical BOE has an active allocation -- "
+            "the whole BOE is represented by the invoice, not just B's row"
         )
         assert trade_total == Decimal("600.00")
 
@@ -794,7 +825,7 @@ class TestCalculateDebitLineLevelExclusion(DjangoTestCase):
         batched_debit = LicenseBalanceCalculator.calculate_debit_for_licenses(
             [license_obj.id]
         )
-        assert batched_debit.get(license_obj.id, DEC_0) == Decimal("400.00")
+        assert batched_debit.get(license_obj.id, DEC_0) == DEC_0
 
     def test_debit_excluded_when_linked_boe_cif_mismatches_trade_line(self):
         """
@@ -807,7 +838,7 @@ class TestCalculateDebitLineLevelExclusion(DjangoTestCase):
         deliberately does not auto-migrate it).
 
         Per the Financial Ledger's accounting-vs-reconciliation separation
-        (see `_compute_linked_boe_row_ids`'s docstring), a linked BOE is
+        (see `_scan_linked_boe_candidates`'s docstring), a linked BOE is
         now excluded in FULL regardless of the mismatch -- the invoice
         supersedes it. The mismatch itself is surfaced as a warning on the
         Financial Ledger's "Licence Trade (Sold)" row, never as a second
@@ -1106,3 +1137,288 @@ class TestOutstandingAllotmentQuantityExclusion(DjangoTestCase):
 
         assert qty == Decimal("40.000")  # 100 - 60 allocated
         assert cif == Decimal("200.00")  # 500 - 300 allocated
+
+
+class TestHiddenBoeExclusion(DjangoTestCase):
+    """
+    Real-DB regression tests for the "Hidden BOEs" (previous-owner
+    utilisation) feature: a DEBIT `RowDetails` row whose BOE is marked
+    hidden (`BillOfEntryModel.invoice_no == OTH_INVOICE_MARKER` — see that
+    constant's docstring; BOE-level, no `is_hidden` column any more) must be
+    excluded from every live balance/quantity calculation this class
+    exercises, while an ordinary (non-hidden) row on the SAME licence must
+    still be counted in full — proving the exclusion is applied, not just
+    that it never breaks the non-hidden path.
+
+    Every fixture uses ONE hidden row (cif_fc=1000.00 / qty=100.000, on a
+    BOE with `invoice_no="OTH"`) and ONE visible row (cif_fc=500.00 /
+    qty=50.000) on the same item, so an assertion of the VISIBLE-only total
+    also proves the hidden row's amount was actually dropped, not merely
+    double-counted into a coincidentally matching sum.
+    """
+
+    def _make_company(self):
+        return CompanyModel.objects.create(
+            iec=str(uuid.uuid4().int)[:10],
+            name="Hidden BOE Exporter",
+        )
+
+    def _make_license(self, company):
+        return LicenseDetailsModel.objects.create(
+            license_number="03" + str(uuid.uuid4().int)[:8],
+            license_date=datetime.now().date(),
+            license_expiry_date=datetime.now().date() + timedelta(days=365),
+            exporter=company,
+        )
+
+    def _make_item(self, license_obj):
+        return LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=1,
+            description="Hidden BOE Item",
+            quantity=Decimal("1000.000"),
+            available_quantity=Decimal("1000.000"),
+        )
+
+    def _make_boe(self, company, invoice_no=""):
+        return BillOfEntryModel.objects.create(
+            company=company,
+            bill_of_entry_number=str(uuid.uuid4().int)[:9],
+            bill_of_entry_date=datetime.now().date(),
+            exchange_rate=Decimal("84.50"),
+            invoice_no=invoice_no,
+        )
+
+    def _make_rows(self, license_obj, item, company):
+        """One hidden + one visible DEBIT row on the same item. Returns
+        (hidden_row, visible_row)."""
+        hidden_boe = self._make_boe(company, invoice_no=OTH_INVOICE_MARKER)
+        visible_boe = self._make_boe(company)
+        hidden_row = RowDetails.objects.create(
+            bill_of_entry=hidden_boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=Decimal("1000.00"), cif_inr=Decimal("1000.00") * Decimal("84.5"),
+            qty=Decimal("100.000"),
+        )
+        visible_row = RowDetails.objects.create(
+            bill_of_entry=visible_boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=Decimal("500.00"), cif_inr=Decimal("500.00") * Decimal("84.5"),
+            qty=Decimal("50.000"),
+        )
+        return hidden_row, visible_row
+
+    def test_calculate_boe_debit_total_excludes_hidden_row(self):
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        self._make_rows(license_obj, item, company)
+
+        total = LicenseBalanceCalculator.calculate_boe_debit_total(license_obj)
+
+        assert total == Decimal("500.00")
+
+    def test_calculate_boe_debit_total_for_licenses_excludes_hidden_row(self):
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        self._make_rows(license_obj, item, company)
+
+        totals = LicenseBalanceCalculator.calculate_boe_debit_total_for_licenses([license_obj.id])
+
+        assert totals == {license_obj.id: Decimal("500.00")}
+
+    def test_calculate_debit_for_licenses_excludes_hidden_row(self):
+        """No allocations exist, so `calculate_debit_for_licenses` (the
+        allocation-driven Financial Ledger variant) reduces to the same
+        raw visible-only sum as `calculate_boe_debit_total_for_licenses`."""
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        self._make_rows(license_obj, item, company)
+
+        totals = LicenseBalanceCalculator.calculate_debit_for_licenses([license_obj.id])
+
+        assert totals == {license_obj.id: Decimal("500.00")}
+
+    def test_calculate_available_quantity_excludes_hidden_row(self):
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        self._make_rows(license_obj, item, company)
+
+        available = ItemBalanceCalculator.calculate_available_quantity(item)
+
+        # 1000 (quantity) - 50 (visible debited qty only) - 0 (allotted) = 950
+        assert available == Decimal("950.000")
+
+    def test_calculate_available_quantity_for_items_excludes_hidden_row(self):
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        self._make_rows(license_obj, item, company)
+
+        result = ItemBalanceCalculator.calculate_available_quantity_for_items([item])
+
+        assert result == {item.id: Decimal("950.000")}
+        # Must agree exactly with the single-item method it batches.
+        assert result[item.id] == ItemBalanceCalculator.calculate_available_quantity(item)
+
+    def test_calculate_debited_quantity_for_items_excludes_hidden_row(self):
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        self._make_rows(license_obj, item, company)
+
+        result = ItemBalanceCalculator.calculate_debited_quantity_for_items([item.id])
+
+        assert result == {item.id: Decimal("50.000")}
+
+    def test_hidden_only_item_reports_zero_debited_and_full_available(self):
+        """An item whose ONLY debit row is hidden must behave exactly like
+        an item with no debits at all -- zero debited quantity, full
+        available quantity, zero BOE debit CIF."""
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        boe = self._make_boe(company, invoice_no=OTH_INVOICE_MARKER)
+        RowDetails.objects.create(
+            bill_of_entry=boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=Decimal("1000.00"), cif_inr=Decimal("1000.00") * Decimal("84.5"),
+            qty=Decimal("100.000"),
+        )
+
+        assert LicenseBalanceCalculator.calculate_boe_debit_total(license_obj) == DEC_0
+        assert ItemBalanceCalculator.calculate_debited_quantity_for_items([item.id]) == {}
+        assert ItemBalanceCalculator.calculate_available_quantity(item) == Decimal("1000.000")
+
+    def test_calculate_hidden_boe_debit_total(self):
+        """The complement of `calculate_boe_debit_total`: sums ONLY the
+        hidden row's raw cif_fc, the subtrahend in the Financial Ledger's
+        Opening Balance rule."""
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        self._make_rows(license_obj, item, company)
+
+        hidden_total = LicenseBalanceCalculator.calculate_hidden_boe_debit_total(license_obj)
+        visible_total = LicenseBalanceCalculator.calculate_boe_debit_total(license_obj)
+
+        assert hidden_total == Decimal("1000.00")
+        # Symmetric complement: hidden + visible == total raw debit across
+        # every row regardless of hidden status (see this method's
+        # docstring).
+        assert hidden_total + visible_total == Decimal("1500.00")
+
+    def test_license_5211016017_repro_case(self):
+        """
+        Named regression test for the production anomaly explicitly cited
+        in this feature's design doc: a licence whose Original CIF is
+        dominated by a PREVIOUS OWNER's historical BOE usage, with real
+        current-owner activity (Purchase, Sale, a still-open BOE, and an
+        outstanding Allotment) layered on top -- the full lifecycle the
+        real licence 5211016017 exhibits. Uses synthetic numbers (the
+        production licence's exact figures aren't needed to pin the shape
+        of the fix) but preserves that shape: Original CIF, Hidden BOEs,
+        Purchase, Sale, Allotments.
+
+        Verifies BOTH the Financial Ledger's documented row sequence for a
+        hidden-BOE licence (Opening -> Previous Owner Utilisation ->
+        Licence Trade Purchased -> BOE Utilisation Pending Invoice ->
+        Active Allotment -> Licence Trade Sold -> Current Balance -- see
+        `LicenseBalanceLedgerBuilder.build_financial_ledger`'s docstring for
+        the Purchase(0)/BOE(1)/Allotment(2)/Sale(3) same-day tie-break) AND
+        the resulting balance, cross-checked against `calculate_financial_
+        balance()` / `LicenseDetailsModel.get_balance_cif` directly -- the
+        Balance Engine identity that must always hold for a hidden-BOE
+        licence.
+        """
+        from apps.allotment.models import AllotmentItems, AllotmentModel
+        from apps.license.models import LicenseExportItemModel
+        from apps.license.services.license_balance_ledger_builder import LicenseBalanceLedgerBuilder
+        from apps.license.signals import update_license_flags
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        today = datetime.now().date()
+
+        company = self._make_company()
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+
+        # Hidden BOE -- previous owner's historical usage, never ours.
+        hidden_boe = self._make_boe(company, invoice_no=OTH_INVOICE_MARKER)
+        hidden_boe.bill_of_entry_date = today
+        hidden_boe.save(update_fields=["bill_of_entry_date"])
+        RowDetails.objects.create(
+            bill_of_entry=hidden_boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=Decimal("30000.00"), cif_inr=Decimal("30000.00") * Decimal("84.5"),
+            qty=Decimal("300.000"),
+        )
+
+        # Purchase -- we bought this licence from the previous owner.
+        purchase_trade = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_PURCHASE, to_company=company,
+            invoice_number="PUR-5211016017", invoice_date=today,
+        )
+        LicenseTradeLine.objects.create(
+            trade=purchase_trade, sr_number=item, description=item.description,
+            mode=LicenseTradeLine.MODE_CIF_INR,
+            cif_fc=Decimal("20000.00"), cif_inr=Decimal("20000.00") * Decimal("84.5"),
+        )
+
+        # Our own, still-unmatched BOE usage (no invoice allocation).
+        visible_boe = self._make_boe(company)
+        visible_boe.bill_of_entry_date = today
+        visible_boe.save(update_fields=["bill_of_entry_date"])
+        RowDetails.objects.create(
+            bill_of_entry=visible_boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=Decimal("5000.00"), cif_inr=Decimal("5000.00") * Decimal("84.5"),
+            qty=Decimal("50.000"),
+        )
+
+        # An outstanding (BOE-unlinked) allotment.
+        allotment = AllotmentModel.objects.create(
+            company=company, item_name="Test Allotment", estimated_arrival_date=today,
+        )
+        AllotmentItems.objects.create(
+            item=item, allotment=allotment, cif_fc=Decimal("2000.00"),
+            cif_inr=Decimal("2000.00") * Decimal("84.5"), qty=Decimal("20.000"),
+        )
+
+        # Sale to a downstream buyer.
+        sale_trade = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_SALE, from_company=company,
+            invoice_number="SALE-5211016017", invoice_date=today,
+        )
+        LicenseTradeLine.objects.create(
+            trade=sale_trade, sr_number=item, description=item.description,
+            mode=LicenseTradeLine.MODE_CIF_INR,
+            cif_fc=Decimal("15000.00"), cif_inr=Decimal("15000.00") * Decimal("84.5"),
+        )
+
+        rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj)
+
+        self.assertEqual(
+            [r["row_kind"] for r in rows],
+            ["opening", "previous_owner_utilisation", "trade_purchase", "boe", "allotment", "trade", "final"],
+        )
+        self.assertEqual(summary["hidden_boe_total"], Decimal("30000.00"))
+        self.assertEqual(summary["previous_owner_utilisation"], Decimal("50000.00"))  # 30000 hidden + 20000 purchase
+        self.assertEqual(summary["total_purchase_credit"], Decimal("20000.00"))
+        self.assertEqual(summary["total_boe_debit"], Decimal("5000.00"))
+        self.assertEqual(summary["total_allotment_debit"], Decimal("2000.00"))
+        self.assertEqual(summary["total_trade_debit"], Decimal("15000.00"))
+
+        # 100000 (Opening) - 50000 (Previous Owner Utilisation) + 20000
+        # (Purchase) - 5000 (BOE) - 2000 (Allotment) - 15000 (Sale) = 48000
+        expected_balance = Decimal("48000.00")
+        self.assertEqual(summary["computed_balance"], expected_balance)
+        self.assertEqual(summary["engine_balance"], expected_balance)
+        self.assertFalse(summary["mismatched"])
+
+        # The Balance Engine identity that must always hold across every
+        # entry point (see this feature's design doc "Verification" note).
+        self.assertEqual(LicenseBalanceCalculator.calculate_financial_balance(license_obj), expected_balance)
+        update_license_flags(license_obj)
+        license_obj.refresh_from_db()
+        self.assertEqual(license_obj.balance_cif, expected_balance)
+        self.assertEqual(license_obj.get_balance_cif, expected_balance)

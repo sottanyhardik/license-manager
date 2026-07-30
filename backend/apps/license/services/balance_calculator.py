@@ -106,36 +106,54 @@ class LicenseBalanceCalculator:
     def _scan_linked_boe_candidates(trades_queryset):
         """
         THE single shared scan over `trades_queryset` (SALE trades carrying
-        a legacy `.boes` tag) that calls `find_boe_allocation_candidates`
-        (see `apps.reconciliation.services.boe_link_reconciler` — the SAME
-        candidate lookup `reconcile_trade_boe_links` itself uses) once per
-        SALE trade line. Every consumer of this candidate data MUST go
-        through this one loop — never a second, independent copy of it.
+        a legacy `.boes` tag) that decides which BOEs are "represented by
+        an invoice" for `resolve_boes_represented_by_invoice[_for_licenses]`.
 
-        A linked BOE is treated as matched regardless of whether its CIF
-        matches the trade line's own CIF within tolerance ("auto_migrated",
-        "mismatch", AND "ambiguous" candidates alike — only "no_match"
-        contributes nothing). Deliberate: the Financial Ledger is an
-        accounting ledger, not a reconciliation report — once a BOE is
-        linked to an invoice, that invoice is its sole financial
-        representation from then on; a CIF discrepancy is a data-quality
-        signal surfaced separately (`build_financial_ledger`'s
-        `mismatch_warning`), never a second debit.
+        Any BOE tagged to a SALE trade via `trade.boes` is treated as
+        represented for EVERY licence that trade has a line for —
+        regardless of which licence ITEM (`sr_number`) the BOE's own debit
+        row(s) actually sit on. This is the explicit, user-confirmed BOE
+        Invoice Status Consistency rule: "invoice linkage is determined by
+        the BOE," not by item — see `resolve_boes_represented_by_invoice`'s
+        docstring. Excludes OTH-marked (hidden/previous-owner) BOEs per the
+        Pending BOE rule.
+
+        Deliberately does NOT filter through `find_boe_allocation_
+        candidates` (`apps.reconciliation.services.boe_link_reconciler`) —
+        that helper additionally requires an EXACT `sr_number_id` match
+        plus remaining invoice-side capacity, which is the right, narrower
+        test for "should `reconcile_trade_boe_links` auto-CREATE a formal
+        `InvoiceBOEAllocation` on this specific row" but the wrong test for
+        "has this physical BOE already been invoiced" — a BOE spanning two
+        items of the SAME licence must count as represented on both once
+        the trade references it, even though only one item's row is the
+        literal allocation candidate (concrete case: BOE 6756437, trade
+        LML/2025-26/0097, tagged to licence 2433 but its own debit row on
+        that licence sits on a different item than the trade line's item —
+        it must still stop generating a "BOE Utilisation (Pending
+        Invoice)" row).
+
+        Once ANY BOE on a trade is treated as represented, it stays
+        represented regardless of whether its CIF matches the trade
+        line's own CIF within tolerance — a CIF discrepancy is a
+        data-quality signal surfaced separately (`build_financial_
+        ledger`'s `mismatch_warning`), never a second debit.
 
         Returns `boe_ids_by_license`: `{license_id: {bill_of_entry_id,
         ...}}` grouped by the trade LINE's own licence.
         """
-        from apps.reconciliation.services.boe_link_reconciler import find_boe_allocation_candidates
+        from apps.bill_of_entry.models import OTH_INVOICE_MARKER
 
         boe_ids_by_license: dict = {}
         for trade in trades_queryset.prefetch_related("lines__sr_number", "boes"):
+            tagged_boe_ids = set(
+                trade.boes.exclude(invoice_no=OTH_INVOICE_MARKER).values_list("id", flat=True)
+            )
+            if not tagged_boe_ids:
+                continue
             for line in trade.lines.all():
-                candidates = find_boe_allocation_candidates(line)
-                if not candidates:
-                    continue
                 license_id = line.sr_number.license_id
-                for candidate in candidates:
-                    boe_ids_by_license.setdefault(license_id, set()).add(candidate.bill_of_entry_id)
+                boe_ids_by_license.setdefault(license_id, set()).update(tagged_boe_ids)
         return boe_ids_by_license
 
     @staticmethod

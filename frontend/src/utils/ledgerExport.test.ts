@@ -174,4 +174,54 @@ describe("ledgerExport helpers", () => {
         expect(saleRow?.split("|")[1]).toBe("400.00");
         expect(totalRow?.split("|")[1]).toBe("400.00");
     });
+
+    it("shows the earliest purchase date and deduped SION norms on the LICENSE LEDGER SUMMARY sheet", async () => {
+        await generateExcel(
+            [
+                {
+                    license_id: 1,
+                    license_number: "LIC-1",
+                    license_type: "DFIA",
+                    exporter: "Exporter",
+                    available_balance: 400,
+                    transactions: [
+                        {
+                            id: 1, type: "PURCHASE", particular: "Purchase", company_id: 7, company_name: "Acme",
+                            date: "2026-03-01", debit_amount: 1000, sion_norms: "E1",
+                        },
+                        // Earlier purchase, different invoice — the summary must
+                        // report THIS date, not the first one encountered.
+                        {
+                            id: 2, type: "PURCHASE", particular: "Purchase", company_id: 7, company_name: "Acme",
+                            date: "2026-01-15", debit_amount: 500, sion_norms: "E1, E5",
+                        },
+                        {
+                            id: 3, type: "SALE", particular: "Sale", company_id: 7, company_name: "Acme",
+                            date: "2026-04-01", credit_amount: 200, sion_norms: "E1",
+                        },
+                    ],
+                },
+            ],
+            "test.xlsx",
+        );
+
+        expect(capturedBuffer).not.toBeNull();
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(capturedBuffer as ArrayBuffer);
+        const summary = wb.getWorksheet("Summary");
+        expect(summary).toBeDefined();
+
+        const headerRow = summary!.getRow(3).values as unknown[];
+        expect(headerRow).toContain("1st Purchase Date");
+        expect(headerRow).toContain("SION Norms");
+
+        let licenseRow: import("exceljs").Row | null = null;
+        summary!.eachRow((row) => {
+            if (row.getCell(1).text === "LIC-1") licenseRow = row;
+        });
+        expect(licenseRow).not.toBeNull();
+        // Columns: License Number(1), Type(2), Date(3), 1st Purchase Date(4), SION Norms(5), ...
+        expect(licenseRow!.getCell(4).text).toBe("15-01-2026");
+        expect(licenseRow!.getCell(5).text).toBe("E1, E5");
+    });
 });

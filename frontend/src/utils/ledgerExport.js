@@ -126,6 +126,34 @@ function fmtCur(v, currency = 'INR') {
     return `${sym}${formatIndianNumber(toFiniteNumber(v), 2)}`;
 }
 
+// The earliest PURCHASE transaction's date for this license (across every
+// company, not just the one a given summary row happens to be grouped
+// under — license-invariant, same as License Number/Type/Date). Deliberately
+// excludes the synthetic 'OPENING' row (a placeholder for "no real purchase
+// trade exists") and 'COMMISSION'/'SALE' rows.
+function getFirstPurchaseDate(license) {
+    const purchaseDates = (license.transactions || [])
+        .filter((t) => t.type === 'PURCHASE' && t.date)
+        .map((t) => t.date);
+    if (!purchaseDates.length) return null;
+    return purchaseDates.reduce((min, d) => (d < min ? d : min), purchaseDates[0]);
+}
+
+// This license's distinct SION norm classes (e.g. "E1", "E5, E132") — a
+// DFIA-only concept (Incentive licenses carry no norm class). Sourced from
+// each transaction's own `sion_norms` field (comma-separated, already
+// resolved server-side in `build_dfia_ledger_detail`), deduped across every
+// transaction on the license.
+function getLicenseSionNorms(license) {
+    if (license.license_type !== 'DFIA') return null;
+    const norms = new Set();
+    (license.transactions || []).forEach((t) => {
+        if (!t.sion_norms) return;
+        String(t.sion_norms).split(',').map((s) => s.trim()).filter(Boolean).forEach((n) => norms.add(n));
+    });
+    return norms.size ? Array.from(norms).join(', ') : null;
+}
+
 // ─── PDF ────────────────────────────────────────────────────────────────────
 
 function buildPdfBody(license, companiesGrouped) {
@@ -300,7 +328,7 @@ function writeSummaryPageToPdf(doc, licensesData) {
     doc.line(14, 20, pageWidth - 14, 20);
 
     // Build table body
-    const summaryHeaders = [['License Number', 'Type', 'Date', 'Balance ($)', 'Purchase (Rs)', 'Sale (Rs)', 'P/L (Rs)']];
+    const summaryHeaders = [['License Number', 'Type', 'Date', '1st Purchase Date', 'SION Norms', 'Balance ($)', 'Purchase (Rs)', 'Sale (Rs)', 'P/L (Rs)']];
     const summaryBody = [];
     const companyHeaderIdxs = new Set();
     const totalRowIdxs = new Set();
@@ -308,7 +336,7 @@ function writeSummaryPageToPdf(doc, licensesData) {
 
     for (const [companyName, entries] of companyMap) {
         companyHeaderIdxs.add(summaryBody.length);
-        summaryBody.push([{ content: companyName, colSpan: 7, styles: { fillColor: [30, 58, 95], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'left', cellPadding: { top: 4, bottom: 4, left: 8, right: 4 } } }]);
+        summaryBody.push([{ content: companyName, colSpan: 9, styles: { fillColor: [30, 58, 95], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'left', cellPadding: { top: 4, bottom: 4, left: 8, right: 4 } } }]);
 
         let companyPurchase = 0, companySale = 0, companyPL = 0;
         for (const { license, totalPurchase, totalSale, pl } of entries) {
@@ -319,6 +347,8 @@ function writeSummaryPageToPdf(doc, licensesData) {
                 license.license_number,
                 license.license_type,
                 fmtDate(license.license_date),
+                fmtDate(getFirstPurchaseDate(license)),
+                getLicenseSionNorms(license) ?? '-',
                 `$${formatIndianNumber(license.available_balance ?? 0, 2)}`,
                 fmtNum(totalPurchase),
                 fmtNum(totalSale),
@@ -329,7 +359,7 @@ function writeSummaryPageToPdf(doc, licensesData) {
 
         totalRowIdxs.add(summaryBody.length);
         summaryBody.push([
-            { content: `Total — ${companyName}`, colSpan: 4, styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+            { content: `Total — ${companyName}`, colSpan: 6, styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
             { content: fmtNum(companyPurchase), styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
             { content: fmtNum(companySale), styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
             { content: companyPL < 0 ? `(L) ${fmtNum(Math.abs(companyPL))}` : companyPL > 0 ? `(P) ${fmtNum(companyPL)}` : '-', styles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
@@ -343,13 +373,15 @@ function writeSummaryPageToPdf(doc, licensesData) {
         styles: { fontSize: 8, cellPadding: 3, lineColor: [224, 224, 224], lineWidth: 0.2, halign: 'right', font: 'helvetica', textColor: [44, 62, 80] },
         headStyles: { fillColor: [52, 73, 94], fontStyle: 'bold', textColor: [255, 255, 255], halign: 'center', fontSize: 8.5, cellPadding: 4 },
         columnStyles: {
-            0: { halign: 'left', cellWidth: 60 },
-            1: { halign: 'center', cellWidth: 20 },
-            2: { halign: 'center', cellWidth: 24 },
-            3: { halign: 'right', cellWidth: 28 },
-            4: { halign: 'right', cellWidth: 34 },
-            5: { halign: 'right', cellWidth: 34 },
+            0: { halign: 'left', cellWidth: 48 },
+            1: { halign: 'center', cellWidth: 16 },
+            2: { halign: 'center', cellWidth: 20 },
+            3: { halign: 'center', cellWidth: 24 },
+            4: { halign: 'left', cellWidth: 26 },
+            5: { halign: 'right', cellWidth: 26 },
             6: { halign: 'right', cellWidth: 30 },
+            7: { halign: 'right', cellWidth: 30 },
+            8: { halign: 'right', cellWidth: 26 },
         },
         alternateRowStyles: { fillColor: [250, 251, 253] },
         margin: { left: 14, right: 14 },
@@ -459,7 +491,7 @@ export function generatePDF(licensesData, filename) {
 
 function buildSummarySheet(wb, licensesData) {
     const ws = wb.addWorksheet('Summary');
-    const COLS = 7;
+    const COLS = 9;
     const thinBorder = (argb = 'FF000000') => ({ style: 'thin', color: { argb } });
     const allThin = (argb = 'FFDDDDDD') => ({
         top: thinBorder(argb), bottom: thinBorder(argb),
@@ -496,14 +528,14 @@ function buildSummarySheet(wb, licensesData) {
     ws.addRow([]);
 
     // Column header row
-    const headers = ['License Number', 'Type', 'Date', 'Balance ($)', 'Purchase (Rs)', 'Sale (Rs)', 'P/L (Rs)'];
+    const headers = ['License Number', 'Type', 'Date', '1st Purchase Date', 'SION Norms', 'Balance ($)', 'Purchase (Rs)', 'Sale (Rs)', 'P/L (Rs)'];
     ws.addRow(headers);
     const hdrRowNum = ws.rowCount;
     for (let col = 1; col <= COLS; col++) {
         Object.assign(ws.getCell(hdrRowNum, col), {
             font: { bold: true, color: { argb: 'FFFFFFFF' } },
             fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF34495E' } },
-            alignment: { horizontal: col <= 3 ? 'left' : 'right', vertical: 'middle' },
+            alignment: { horizontal: col <= 5 ? 'left' : 'right', vertical: 'middle' },
             border: allThin('FF34495E'),
         });
     }
@@ -533,6 +565,8 @@ function buildSummarySheet(wb, licensesData) {
                 license.license_number,
                 license.license_type,
                 fmtDate(license.license_date),
+                fmtDate(getFirstPurchaseDate(license)),
+                getLicenseSionNorms(license) ?? '-',
                 `$${formatIndianNumber(balance, 2)}`,
                 fmtNum(totalPurchase),
                 fmtNum(totalSale),
@@ -553,10 +587,10 @@ function buildSummarySheet(wb, licensesData) {
             const plPositive = pl >= 0;
             for (let col = 1; col <= COLS; col++) {
                 const cell = ws.getCell(rowNum, col);
-                if (col !== 1) cell.font = { color: { argb: col === 7 ? (plPositive ? 'FF065F46' : 'FF991B1B') : 'FF111827' } };
+                if (col !== 1) cell.font = { color: { argb: col === 9 ? (plPositive ? 'FF065F46' : 'FF991B1B') : 'FF111827' } };
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
                 cell.border = allThin();
-                cell.alignment = { horizontal: col <= 3 ? 'left' : 'right', vertical: 'middle' };
+                cell.alignment = { horizontal: col <= 5 ? 'left' : 'right', vertical: 'middle' };
             }
             ws.getRow(rowNum).height = 18;
 
@@ -565,13 +599,13 @@ function buildSummarySheet(wb, licensesData) {
             companyPL += pl;
         }
 
-        // Company total row — merge cols 1-4 for label
+        // Company total row — merge cols 1-6 for label
         const trRowNum = ws.rowCount + 1;
-        ws.addRow([`Total — ${companyName}`, '', '', '', fmtNum(companyPurchase), fmtNum(companySale), companyPL !== 0 ? fmtNum(Math.abs(companyPL)) : '-']);
-        ws.mergeCells(trRowNum, 1, trRowNum, 4);
+        ws.addRow([`Total — ${companyName}`, '', '', '', '', '', fmtNum(companyPurchase), fmtNum(companySale), companyPL !== 0 ? fmtNum(Math.abs(companyPL)) : '-']);
+        ws.mergeCells(trRowNum, 1, trRowNum, 6);
         for (let col = 1; col <= COLS; col++) {
             const cell = ws.getCell(trRowNum, col);
-            cell.font = { bold: true, color: { argb: col === 7 ? (companyPL >= 0 ? 'FF6EE7B7' : 'FFFCA5A5') : 'FFFFFFFF' } };
+            cell.font = { bold: true, color: { argb: col === 9 ? (companyPL >= 0 ? 'FF6EE7B7' : 'FFFCA5A5') : 'FFFFFFFF' } };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } };
             cell.border = { top: { style: 'medium', color: { argb: 'FF2C3E50' } }, bottom: { style: 'medium', color: { argb: 'FF2C3E50' } }, left: thinBorder(), right: thinBorder() };
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
@@ -581,7 +615,7 @@ function buildSummarySheet(wb, licensesData) {
     }
 
     // Column widths
-    [30, 12, 14, 16, 18, 18, 16].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    [30, 12, 14, 18, 20, 16, 18, 18, 16].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 }
 
 // ─── Excel ──────────────────────────────────────────────────────────────────

@@ -151,15 +151,15 @@ def add_license_balance_ledger_actions(viewset_class):
         """
         Body: {boe_id, reason?}. Marks a BOE (previous-owner utilisation)
         as hidden by setting `invoice_no = OTH_INVOICE_MARKER` — BOE-level,
-        not scoped to this licence (see `boe_service.hide_boe`'s
-        docstring: a BOE spanning multiple licences affects all of them,
-        which is why that function refuses when it detects one). `pk` is
-        only used to confirm the requesting licence can see this BOE
-        before mutating it; the actual mutation and cache refresh apply to
-        every licence the BOE touches. Idempotent.
+        not scoped to this licence: a BOE spanning multiple licences is
+        hidden for ALL of them, by design (see `boe_service.hide_boe`'s
+        module docstring — there is no validation anywhere that blocks
+        this). `pk` is only used to confirm the requesting licence can see
+        this BOE before mutating it; the actual mutation and cache refresh
+        apply to every licence the BOE touches. Idempotent.
         """
         from apps.bill_of_entry.models import BillOfEntryModel
-        from apps.bill_of_entry.services.boe_service import hide_boe as hide_boe_service, CrossLicenseBoeError
+        from apps.bill_of_entry.services.boe_service import hide_boe as hide_boe_service
 
         self.get_object()  # 404s if this licence can't see the requested pk
         boe_id = request.data.get('boe_id')
@@ -170,10 +170,7 @@ def add_license_balance_ledger_actions(viewset_class):
         except BillOfEntryModel.DoesNotExist:
             return Response({'error': 'No BOE matches that id.'}, status=404)
 
-        try:
-            result = hide_boe_service(boe, user=request.user, reason=request.data.get('reason', ''))
-        except (CrossLicenseBoeError, ValueError) as exc:
-            return Response({'error': str(exc)}, status=409)
+        result = hide_boe_service(boe, user=request.user, reason=request.data.get('reason', ''))
         return Response(result, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='restore-boe')

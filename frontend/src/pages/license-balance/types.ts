@@ -207,6 +207,12 @@ export interface CustomsLedgerRow {
      * already "OTH" -> instant, anything else -> confirm first, since
      * hiding will temporarily overwrite it). */
     boe_invoice_no?: string | null;
+    /** How many DISTINCT licences this BOE touches in total (not just this
+     * ledger's licence) — purely informational, shown as an optional note
+     * on the Hide confirmation dialog when > 1. Never blocks the action;
+     * a BOE may legitimately belong to many licences. Defaults to 1 when
+     * absent (single-licence, the overwhelmingly common case). */
+    licenses_count?: number;
 }
 
 export interface CustomsLedgerSummary {

@@ -322,20 +322,11 @@ def update_invoice_no(boe, invoice_no: str) -> dict[str, Any]:
 # (`build_customs_ledger`'s `show_hidden` param). Reuses the existing
 # `invoice_no` field rather than a new column — deliberately BOE-level, not
 # scoped to a licence: hiding a BOE marks it hidden for EVERY licence it
-# touches.
-#
-# `CrossLicenseBoeError` is a safety guard, not part of the product spec: a
-# single physical BOE can span multiple licences (`BillOfEntryModel.
-# get_licenses`) — 161 such BOEs exist in this app's data, one spanning 13
-# licences. Hiding one for a "previous owner" reason on licence A would
-# silently zero out its debit against unrelated licences B, C, D... too,
-# with no compensating credit. Hiding is refused when this would happen;
-# remove this guard if that blast radius is actually intended.
-
-
-class CrossLicenseBoeError(ValueError):
-    """Raised when hide/restore would affect a BOE that spans more than
-    one licence — see the module-level note above `hide_boe`."""
+# touches, by design — a BOE legitimately belonging to multiple licences
+# is expected, and hide/restore always applies uniformly across all of
+# them (every touched licence is recomputed — see `_refresh_licenses`).
+# There is deliberately NO validation anywhere in this module that refuses
+# or blocks hide/restore based on how many licences a BOE spans.
 
 
 def _username(user) -> str | None:
@@ -363,8 +354,9 @@ def _apply_hide(boe, user, reason: str) -> tuple[list[int], str | None]:
     `hide_boes_bulk`'s docstring). Does NOT call `update_license_flags`
     itself; the caller is responsible for that.
 
-    Raises `CrossLicenseBoeError` if this BOE spans more than one licence
-    — see module docstring.
+    Applies regardless of how many licences this BOE spans (see module
+    docstring) — every one of them ends up in the returned `license_ids`
+    and gets recomputed by the caller.
 
     Returns `(license_ids, previous_invoice_no)`.
     """
@@ -374,11 +366,6 @@ def _apply_hide(boe, user, reason: str) -> tuple[list[int], str | None]:
     from apps.reconciliation.models import ReconciliationLog
 
     license_ids = _licenses_touched_by(boe)
-    if len(license_ids) > 1:
-        raise CrossLicenseBoeError(
-            f"BOE {boe.bill_of_entry_number} spans {len(license_ids)} licences — "
-            "hiding it would affect all of them. Refused."
-        )
 
     previous_invoice_no = boe.invoice_no
     was_hidden = previous_invoice_no == OTH_INVOICE_MARKER
@@ -486,8 +473,9 @@ def hide_boe(boe, user, reason: str = "") -> dict[str, Any]:
          preserves it (see `_apply_hide`) so `restore_boe` can put it back
          exactly.
 
-    Refuses (raises `CrossLicenseBoeError`) if this BOE's `RowDetails` span
-    more than one licence — see module docstring.
+    Applies uniformly no matter how many licences this BOE's `RowDetails`
+    span — see module docstring; there is no validation here that blocks
+    or refuses based on that count.
 
     Args:
         boe: BillOfEntryModel instance.
@@ -563,12 +551,12 @@ def restore_boe(boe, user, reason: str = "") -> dict[str, Any]:
 def hide_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
     """
     Bulk sibling of `hide_boe` — processes every id in `boe_ids`
-    independently (one bad BOE, e.g. a `CrossLicenseBoeError`, does not
-    roll back the others; see module docstring for that guard), but
-    recomputes each AFFECTED LICENCE only ONCE at the end regardless of
-    how many selected BOEs touch it — a genuine batch, not N sequential
-    calls to `hide_boe` (which would call `update_license_flags` once per
-    BOE per licence).
+    independently (an unknown id doesn't block the rest — see `failed`
+    below), but recomputes each AFFECTED LICENCE only ONCE at the end
+    regardless of how many selected BOEs touch it — a genuine batch, not N
+    sequential calls to `hide_boe` (which would call `update_license_flags`
+    once per BOE per licence). No BOE is ever skipped or refused for
+    spanning multiple licences — see module docstring.
 
     Args:
         boe_ids: iterable of `BillOfEntryModel` pks.
@@ -577,8 +565,9 @@ def hide_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
 
     Returns:
         dict with: hidden (list of per-BOE result dicts, same shape as
-        `hide_boe`'s return), failed (list of `{id, error}`),
-        licenses_refreshed (list of licence ids recomputed once).
+        `hide_boe`'s return), failed (list of `{id, error}` — only for ids
+        that don't resolve to a real BOE), licenses_refreshed (list of
+        licence ids recomputed once).
     """
     from django.utils import timezone
 
@@ -597,11 +586,7 @@ def hide_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
         if boe is None:
             failed.append({"id": boe_id, "error": "No BOE matches that id."})
             continue
-        try:
-            license_ids, previous_invoice_no = _apply_hide(boe, user, reason)
-        except CrossLicenseBoeError as exc:
-            failed.append({"id": boe_id, "error": str(exc)})
-            continue
+        license_ids, previous_invoice_no = _apply_hide(boe, user, reason)
         all_license_ids.update(license_ids)
         hidden.append({
             "id": boe.id, "is_hidden": True, "invoice_no": boe.invoice_no,

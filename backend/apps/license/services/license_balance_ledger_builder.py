@@ -773,8 +773,9 @@ class LicenseBalanceLedgerBuilder:
         "Current Balance" row's `running_balance` still always anchors on
         the live `engine_balance` regardless of `show_hidden`.
         """
+        from django.db.models import Count
         from apps.license.services.balance_calculator import LicenseBalanceCalculator, quantize_2dp
-        from apps.bill_of_entry.models import OTH_INVOICE_MARKER
+        from apps.bill_of_entry.models import OTH_INVOICE_MARKER, RowDetails
         from apps.reconciliation.models import InvoiceBOEAllocation
 
         opening_balance = license_obj.opening_balance
@@ -803,7 +804,7 @@ class LicenseBalanceLedgerBuilder:
             ).values_list('row_details_id', flat=True)
         )
 
-        boe_rows = (
+        boe_rows = list(
             # Always includes hidden rows regardless of `show_hidden` — see
             # this method's docstring: totals must never change with the
             # toggle, only which rows are returned (filtered below).
@@ -812,6 +813,21 @@ class LicenseBalanceLedgerBuilder:
             .prefetch_related('sr_number__items')
             .order_by('bill_of_entry__bill_of_entry_date', 'bill_of_entry__bill_of_entry_number')
         )
+        # How many DISTINCT licences each BOE on this page touches (across
+        # ALL its RowDetails rows, not just this licence's) — purely
+        # informational, for the frontend's optional "this BOE affects N
+        # licences" note on the Hide confirmation dialog. ONE extra grouped
+        # query for the whole page, not one per BOE.
+        boe_ids_on_page = {row.bill_of_entry_id for row in boe_rows if row.bill_of_entry_id}
+        licenses_per_boe = {
+            r['bill_of_entry_id']: r['n']
+            for r in (
+                RowDetails.objects.filter(bill_of_entry_id__in=boe_ids_on_page)
+                .values('bill_of_entry_id')
+                .annotate(n=Count('sr_number__license_id', distinct=True))
+            )
+        } if boe_ids_on_page else {}
+
         total_boe_cif = DEC_0
         for row in boe_rows:
             boe = row.bill_of_entry
@@ -857,6 +873,13 @@ class LicenseBalanceLedgerBuilder:
                 # else -> confirm first). Never `OTH_INVOICE_MARKER` unless
                 # `is_hidden` is also True, by construction.
                 'boe_invoice_no': boe.invoice_no if boe else None,
+                # How many DISTINCT licences this BOE touches in total
+                # (never just "on this ledger") — purely informational, for
+                # the frontend's optional "this BOE affects N licences"
+                # note before Hide. Never blocks or refuses anything (see
+                # `apps.bill_of_entry.services.boe_service`'s module
+                # docstring).
+                'licenses_count': licenses_per_boe.get(boe.id, 1) if boe else 1,
             })
             sr += 1
 

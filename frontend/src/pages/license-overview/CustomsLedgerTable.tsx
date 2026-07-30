@@ -469,6 +469,7 @@ export default function CustomsLedgerTable({ rows, summary, licenseId, showHidde
                                 (() => {
                                     const blankCount = pendingHideRows.filter((r) => !r.boe_invoice_no).length;
                                     const realCount = pendingHideRows.length - blankCount;
+                                    const multiLicenceCount = pendingHideRows.filter((r) => (r.licenses_count ?? 1) > 1).length;
                                     return (
                                         <>
                                             {blankCount > 0 && <>{blankCount} BOE{blankCount === 1 ? "" : "s"} have no invoice.<br /></>}
@@ -476,6 +477,13 @@ export default function CustomsLedgerTable({ rows, summary, licenseId, showHidde
                                             temporarily replaced with "OTH".
                                             <br />
                                             All affected licences will be recalculated.
+                                            {multiLicenceCount > 0 && (
+                                                <>
+                                                    <br />
+                                                    {multiLicenceCount} of the selected BOE{multiLicenceCount === 1 ? "" : "s"} {multiLicenceCount === 1 ? "is" : "are"} linked
+                                                    to more than one licence — continuing will update all affected licences.
+                                                </>
+                                            )}
                                         </>
                                     );
                                 })()
@@ -484,7 +492,14 @@ export default function CustomsLedgerTable({ rows, summary, licenseId, showHidde
                                     This BOE is currently linked to Invoice "{pendingHideRows?.[0]?.boe_invoice_no}". Hiding this
                                     BOE will temporarily replace the invoice number with "OTH" and remove it from invoice matching
                                     and pending invoice workflows. The original invoice number will be restored automatically when
-                                    the BOE is unhidden. Do you want to continue?
+                                    the BOE is unhidden.
+                                    {(pendingHideRows?.[0]?.licenses_count ?? 1) > 1 && (
+                                        <>
+                                            {" "}This BOE is linked to {pendingHideRows?.[0]?.licenses_count} licences. Continuing will
+                                            update all affected licences.
+                                        </>
+                                    )}
+                                    {" "}Do you want to continue?
                                 </>
                             )}
                         </DialogDescription>

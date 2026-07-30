@@ -354,57 +354,24 @@ def _licenses_touched_by(boe) -> list[int]:
     )
 
 
-def hide_boe(boe, user, reason: str = "") -> dict[str, Any]:
+def _apply_hide(boe, user, reason: str) -> tuple[list[int], str | None]:
     """
-    Marks `boe` as belonging to a previous licence owner by setting
-    `invoice_no = OTH_INVOICE_MARKER` — BOE-level, not licence-scoped (see
-    module docstring). The 3-case business rule (by `boe.invoice_no`'s
-    CURRENT value, checked by the caller — see `restore_boe` for the
-    inverse):
-      1. blank/null -> single-click, no confirmation needed. Nothing to
-         preserve.
-      2. already `OTH_INVOICE_MARKER` -> idempotent no-op (still logs the
-         repeated action); no confirmation needed either.
-      3. any other real value -> the CALLER (the view/frontend) is
-         responsible for confirming with the user first ("this will
-         replace Invoice X with OTH, restored automatically on unhide");
-         this function itself never blocks on that value — it always
-         preserves it in the `ReconciliationLog.before` JSON (no new
-         column) so `restore_boe` can put it back exactly.
+    The actual mutation + audit log for hiding ONE BOE — factored out of
+    `hide_boe` so `hide_boes_bulk` can call it per-item and defer
+    `update_license_flags` until every item in a batch has been mutated
+    (one recompute per affected licence, not one per BOE — see
+    `hide_boes_bulk`'s docstring). Does NOT call `update_license_flags`
+    itself; the caller is responsible for that.
 
-    Refuses (raises `CrossLicenseBoeError`) if this BOE's `RowDetails` span
-    more than one licence — see module docstring. This guard is
-    independent of the invoice_no cases above and still applies to all of
-    them.
+    Raises `CrossLicenseBoeError` if this BOE spans more than one licence
+    — see module docstring.
 
-    CRITICAL: `boe.save()` does NOT touch `RowDetails`, so the `post_save`/
-    `post_delete` signals that refresh the denormalized `LicenseBalance.
-    balance_cif` / item `available_value`/`debited_value` caches never fire
-    for this change — exactly the `AllotmentModel.is_boe`-staleness
-    anti-pattern this codebase's own comments elsewhere warn against.
-    `update_license_flags` is therefore called explicitly, inside the same
-    transaction, for every licence this BOE's rows belong to.
-
-    Args:
-        boe: BillOfEntryModel instance.
-        user: acting User for the audit fields (may be None).
-        reason: free-text reason, stored on the `ReconciliationLog` entry.
-
-    Returns:
-        dict with: id (boe id), is_hidden (True), invoice_no,
-        previous_invoice_no (what was preserved, if anything), hidden_by
-        (username or None), hidden_at (ISO datetime string).
+    Returns `(license_ids, previous_invoice_no)`.
     """
     from django.db import transaction
-    from django.utils import timezone
 
     from apps.bill_of_entry.models import OTH_INVOICE_MARKER
-    from apps.license.models import LicenseDetailsModel
-    from apps.license.signals import update_license_flags
     from apps.reconciliation.models import ReconciliationLog
-
-    reason = (reason or "").strip()
-    now = timezone.now()
 
     license_ids = _licenses_touched_by(boe)
     if len(license_ids) > 1:
@@ -420,11 +387,6 @@ def hide_boe(boe, user, reason: str = "") -> dict[str, Any]:
         boe.invoice_no = OTH_INVOICE_MARKER
         boe.save(update_fields=["invoice_no"])
 
-        for license_id in license_ids:
-            touched_license = LicenseDetailsModel.objects.filter(pk=license_id).first()
-            if touched_license:
-                update_license_flags(touched_license)
-
         ReconciliationLog.objects.create(
             action=ReconciliationLog.ACTION_HIDE_BOE,
             bill_of_entry=boe,
@@ -432,60 +394,33 @@ def hide_boe(boe, user, reason: str = "") -> dict[str, Any]:
             reason=reason,
             user=user,
             # `invoice_no` here is the ONLY place the pre-hide value is
-            # preserved (no dedicated column) — `restore_boe` reads it back
-            # from the most recent HIDE_BOE log row for this BOE.
+            # preserved (no dedicated column) — `restore_boe`/`_apply_
+            # restore` read it back from the most recent HIDE_BOE log row
+            # for this BOE.
             before={"is_hidden": was_hidden, "invoice_no": previous_invoice_no},
             after={"is_hidden": True, "bill_of_entry_number": boe.bill_of_entry_number},
         )
 
-    return {
-        "id": boe.id,
-        "is_hidden": True,
-        "invoice_no": boe.invoice_no,
-        "previous_invoice_no": previous_invoice_no,
-        "hidden_by": _username(user),
-        "hidden_at": now.isoformat(),
-    }
+    return license_ids, previous_invoice_no
 
 
-def restore_boe(boe, user, reason: str = "") -> dict[str, Any]:
+def _apply_restore(boe, user, reason: str) -> tuple[list[int], str | None] | None:
     """
-    Un-hides `boe`: only acts when `invoice_no` currently equals
-    `OTH_INVOICE_MARKER` (an already-visible BOE is left untouched).
-    Restores `invoice_no` to whatever it was immediately before the most
-    recent `hide_boe` call (looked up from that action's `ReconciliationLog
-    .before['invoice_no']` — see `hide_boe`'s docstring for where it's
-    preserved), falling back to blank/`None` if no such log row exists
-    (e.g. a BOE hidden before this preserve-on-hide behaviour existed).
-    Same `update_license_flags` recompute-on-toggle requirement as
-    `hide_boe` — see that function's docstring.
+    The actual mutation + audit log for restoring ONE BOE — factored out
+    of `restore_boe` so `restore_boes_bulk` can call it per-item and defer
+    `update_license_flags` (see `_apply_hide`'s docstring for the same
+    reasoning). Returns `None` (no-op) if `boe.invoice_no` isn't currently
+    `OTH_INVOICE_MARKER`. Does NOT call `update_license_flags` itself.
 
-    Args:
-        boe: BillOfEntryModel instance.
-        user: acting User for the audit fields (may be None).
-        reason: free-text reason, stored on the `ReconciliationLog` entry.
-
-    Returns:
-        dict with: id (boe id), is_hidden (False), invoice_no (the
-        restored value), restored_by (username or None), restored_at (ISO
-        datetime string, or None if the BOE was not hidden to begin with).
+    Returns `(license_ids, restored_invoice_no)` or `None`.
     """
     from django.db import transaction
-    from django.utils import timezone
 
     from apps.bill_of_entry.models import OTH_INVOICE_MARKER
-    from apps.license.models import LicenseDetailsModel
-    from apps.license.signals import update_license_flags
     from apps.reconciliation.models import ReconciliationLog
 
-    reason = (reason or "").strip()
-    now = timezone.now()
-
     if boe.invoice_no != OTH_INVOICE_MARKER:
-        return {
-            "id": boe.id, "is_hidden": False, "invoice_no": boe.invoice_no,
-            "restored_by": _username(user), "restored_at": None,
-        }
+        return None
 
     license_ids = _licenses_touched_by(boe)
 
@@ -505,11 +440,6 @@ def restore_boe(boe, user, reason: str = "") -> dict[str, Any]:
         boe.invoice_no = restored_invoice_no
         boe.save(update_fields=["invoice_no"])
 
-        for license_id in license_ids:
-            touched_license = LicenseDetailsModel.objects.filter(pk=license_id).first()
-            if touched_license:
-                update_license_flags(touched_license)
-
         ReconciliationLog.objects.create(
             action=ReconciliationLog.ACTION_RESTORE_BOE,
             bill_of_entry=boe,
@@ -524,10 +454,209 @@ def restore_boe(boe, user, reason: str = "") -> dict[str, Any]:
             },
         )
 
+    return license_ids, restored_invoice_no
+
+
+def _refresh_licenses(license_ids) -> None:
+    """Calls `update_license_flags` once per id — shared by the single-item
+    and bulk hide/restore paths so the recompute-on-toggle requirement
+    (see `_apply_hide`'s docstring) is expressed in exactly one place."""
+    from apps.license.models import LicenseDetailsModel
+    from apps.license.signals import update_license_flags
+
+    for touched_license in LicenseDetailsModel.objects.filter(pk__in=license_ids):
+        update_license_flags(touched_license)
+
+
+def hide_boe(boe, user, reason: str = "") -> dict[str, Any]:
+    """
+    Marks `boe` as belonging to a previous licence owner by setting
+    `invoice_no = OTH_INVOICE_MARKER` — BOE-level, not licence-scoped (see
+    module docstring). The 3-case business rule (by `boe.invoice_no`'s
+    CURRENT value, checked by the caller — see `restore_boe` for the
+    inverse):
+      1. blank/null -> single-click, no confirmation needed. Nothing to
+         preserve.
+      2. already `OTH_INVOICE_MARKER` -> idempotent no-op (still logs the
+         repeated action); no confirmation needed either.
+      3. any other real value -> the CALLER (the view/frontend) is
+         responsible for confirming with the user first ("this will
+         replace Invoice X with OTH, restored automatically on unhide");
+         this function itself never blocks on that value — it always
+         preserves it (see `_apply_hide`) so `restore_boe` can put it back
+         exactly.
+
+    Refuses (raises `CrossLicenseBoeError`) if this BOE's `RowDetails` span
+    more than one licence — see module docstring.
+
+    Args:
+        boe: BillOfEntryModel instance.
+        user: acting User for the audit fields (may be None).
+        reason: free-text reason, stored on the `ReconciliationLog` entry.
+
+    Returns:
+        dict with: id (boe id), is_hidden (True), invoice_no,
+        previous_invoice_no (what was preserved, if anything), hidden_by
+        (username or None), hidden_at (ISO datetime string).
+    """
+    from django.utils import timezone
+
+    reason = (reason or "").strip()
+    now = timezone.now()
+
+    license_ids, previous_invoice_no = _apply_hide(boe, user, reason)
+    _refresh_licenses(license_ids)
+
+    return {
+        "id": boe.id,
+        "is_hidden": True,
+        "invoice_no": boe.invoice_no,
+        "previous_invoice_no": previous_invoice_no,
+        "hidden_by": _username(user),
+        "hidden_at": now.isoformat(),
+    }
+
+
+def restore_boe(boe, user, reason: str = "") -> dict[str, Any]:
+    """
+    Un-hides `boe`: only acts when `invoice_no` currently equals
+    `OTH_INVOICE_MARKER` (an already-visible BOE is left untouched).
+    Restores `invoice_no` to whatever it was immediately before the most
+    recent `hide_boe` call — see `_apply_restore`'s docstring for where
+    that's read back from, falling back to blank/`None` if no such log row
+    exists (e.g. a BOE hidden before this preserve-on-hide behaviour
+    existed).
+
+    Args:
+        boe: BillOfEntryModel instance.
+        user: acting User for the audit fields (may be None).
+        reason: free-text reason, stored on the `ReconciliationLog` entry.
+
+    Returns:
+        dict with: id (boe id), is_hidden (False), invoice_no (the
+        restored value), restored_by (username or None), restored_at (ISO
+        datetime string, or None if the BOE was not hidden to begin with).
+    """
+    from django.utils import timezone
+
+    reason = (reason or "").strip()
+    now = timezone.now()
+
+    result = _apply_restore(boe, user, reason)
+    if result is None:
+        return {
+            "id": boe.id, "is_hidden": False, "invoice_no": boe.invoice_no,
+            "restored_by": _username(user), "restored_at": None,
+        }
+    license_ids, restored_invoice_no = result
+    _refresh_licenses(license_ids)
+
     return {
         "id": boe.id,
         "is_hidden": False,
         "invoice_no": restored_invoice_no,
+        "restored_by": _username(user),
+        "restored_at": now.isoformat(),
+    }
+
+
+def hide_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
+    """
+    Bulk sibling of `hide_boe` — processes every id in `boe_ids`
+    independently (one bad BOE, e.g. a `CrossLicenseBoeError`, does not
+    roll back the others; see module docstring for that guard), but
+    recomputes each AFFECTED LICENCE only ONCE at the end regardless of
+    how many selected BOEs touch it — a genuine batch, not N sequential
+    calls to `hide_boe` (which would call `update_license_flags` once per
+    BOE per licence).
+
+    Args:
+        boe_ids: iterable of `BillOfEntryModel` pks.
+        user: acting User for the audit fields (may be None).
+        reason: free-text reason, stored on every affected `ReconciliationLog` entry.
+
+    Returns:
+        dict with: hidden (list of per-BOE result dicts, same shape as
+        `hide_boe`'s return), failed (list of `{id, error}`),
+        licenses_refreshed (list of licence ids recomputed once).
+    """
+    from django.utils import timezone
+
+    from apps.bill_of_entry.models import BillOfEntryModel
+
+    reason = (reason or "").strip()
+    now = timezone.now()
+
+    boes = {boe.id: boe for boe in BillOfEntryModel.objects.filter(pk__in=list(boe_ids))}
+    hidden: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    all_license_ids: set[int] = set()
+
+    for boe_id in boe_ids:
+        boe = boes.get(boe_id)
+        if boe is None:
+            failed.append({"id": boe_id, "error": "No BOE matches that id."})
+            continue
+        try:
+            license_ids, previous_invoice_no = _apply_hide(boe, user, reason)
+        except CrossLicenseBoeError as exc:
+            failed.append({"id": boe_id, "error": str(exc)})
+            continue
+        all_license_ids.update(license_ids)
+        hidden.append({
+            "id": boe.id, "is_hidden": True, "invoice_no": boe.invoice_no,
+            "previous_invoice_no": previous_invoice_no,
+        })
+
+    _refresh_licenses(all_license_ids)
+
+    return {
+        "hidden": hidden,
+        "failed": failed,
+        "licenses_refreshed": sorted(all_license_ids),
+        "hidden_by": _username(user),
+        "hidden_at": now.isoformat(),
+    }
+
+
+def restore_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
+    """Bulk sibling of `restore_boe` — same per-item processing / once-per-
+    licence-recompute shape as `hide_boes_bulk`. A BOE that isn't currently
+    hidden is simply skipped (not an error, same as `restore_boe`'s own
+    no-op case)."""
+    from django.utils import timezone
+
+    from apps.bill_of_entry.models import BillOfEntryModel
+
+    reason = (reason or "").strip()
+    now = timezone.now()
+
+    boes = {boe.id: boe for boe in BillOfEntryModel.objects.filter(pk__in=list(boe_ids))}
+    restored: list[dict[str, Any]] = []
+    skipped: list[int] = []
+    failed: list[dict[str, Any]] = []
+    all_license_ids: set[int] = set()
+
+    for boe_id in boe_ids:
+        boe = boes.get(boe_id)
+        if boe is None:
+            failed.append({"id": boe_id, "error": "No BOE matches that id."})
+            continue
+        result = _apply_restore(boe, user, reason)
+        if result is None:
+            skipped.append(boe_id)
+            continue
+        license_ids, restored_invoice_no = result
+        all_license_ids.update(license_ids)
+        restored.append({"id": boe.id, "is_hidden": False, "invoice_no": restored_invoice_no})
+
+    _refresh_licenses(all_license_ids)
+
+    return {
+        "restored": restored,
+        "skipped": skipped,
+        "failed": failed,
+        "licenses_refreshed": sorted(all_license_ids),
         "restored_by": _username(user),
         "restored_at": now.isoformat(),
     }

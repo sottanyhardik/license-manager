@@ -241,6 +241,8 @@ class LicenseBalanceLedgerPermission(permissions.BasePermission):
         # allocation actions.
         'hide_boe': (['BOE_MANAGER'], ['LICENSE_MANAGER']),
         'restore_boe': (['BOE_MANAGER'], ['LICENSE_MANAGER']),
+        'hide_boe_bulk': (['BOE_MANAGER'], ['LICENSE_MANAGER']),
+        'restore_boe_bulk': (['BOE_MANAGER'], ['LICENSE_MANAGER']),
     }
 
     def has_permission(self, request, view):

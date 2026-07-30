@@ -67,7 +67,10 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
 
     return (
         <div className="space-y-5">
-            {summaryLoading && (
+            {/* `!summary` guard — same reasoning as the ledger spinner
+                below: never swap already-rendered summary cards out for a
+                spinner during a background refetch. */}
+            {summaryLoading && !summary && (
                 <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" /> Loading overview…
                 </div>
@@ -114,7 +117,16 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
                 </>
             )}
 
-            {ledgerQuery.isLoading && (
+            {/* `!ledgerQuery.data` guard: once the ledger has loaded once,
+                a later invalidateQueries()-triggered refetch (e.g. after a
+                hide/restore BOE action) must never swap this spinner back
+                in over already-rendered content — doing so would unmount
+                the whole card section and reflow the page height, which is
+                what caused the reported "confirmation jumps to top" bug
+                (the browser clamps scroll to the new, shorter height, then
+                jumps back once data reloads). Stale content stays visible
+                while `isFetching` refetches it in the background. */}
+            {ledgerQuery.isLoading && !ledgerQuery.data && (
                 <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" /> Loading warnings &amp; ledgers…
                 </div>

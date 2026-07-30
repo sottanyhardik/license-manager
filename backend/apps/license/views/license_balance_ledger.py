@@ -195,10 +195,45 @@ def add_license_balance_ledger_actions(viewset_class):
         result = restore_boe_service(boe, user=request.user, reason=request.data.get('reason', ''))
         return Response(result)
 
+    @action(detail=True, methods=['post'], url_path='hide-boe-bulk')
+    def hide_boe_bulk(self, request, pk=None):
+        """
+        Body: {boe_ids: [...], reason?}. Bulk sibling of `hide_boe` — see
+        `boe_service.hide_boes_bulk`'s docstring: processes every id
+        independently (one bad BOE doesn't block the rest) but recomputes
+        each affected licence only once, not once per BOE. `pk` only
+        confirms the requesting licence is visible; BOEs need not all
+        belong to it.
+        """
+        from apps.bill_of_entry.services.boe_service import hide_boes_bulk
+
+        self.get_object()
+        boe_ids = request.data.get('boe_ids') or []
+        if not boe_ids:
+            return Response({'error': 'boe_ids is required.'}, status=400)
+
+        result = hide_boes_bulk(boe_ids, user=request.user, reason=request.data.get('reason', ''))
+        return Response(result, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='restore-boe-bulk')
+    def restore_boe_bulk(self, request, pk=None):
+        """Body: {boe_ids: [...], reason?}. Bulk sibling of `restore_boe` —
+        see `boe_service.restore_boes_bulk`."""
+        from apps.bill_of_entry.services.boe_service import restore_boes_bulk
+
+        self.get_object()
+        boe_ids = request.data.get('boe_ids') or []
+        if not boe_ids:
+            return Response({'error': 'boe_ids is required.'}, status=400)
+
+        result = restore_boes_bulk(boe_ids, user=request.user, reason=request.data.get('reason', ''))
+        return Response(result)
+
     for method in (
         balance_ledger, recalculate,
         ignore_warning, restore_warning,
         hide_boe, restore_boe,
+        hide_boe_bulk, restore_boe_bulk,
     ):
         setattr(viewset_class, method.__name__, method)
 

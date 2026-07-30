@@ -25,7 +25,14 @@ export interface LicenseBalanceLicense {
     difference: number;
 }
 
-export type FinancialLedgerRowKind = "opening" | "boe" | "allotment" | "trade_purchase" | "trade" | "final";
+export type FinancialLedgerRowKind =
+    | "opening"
+    | "previous_owner_utilisation"
+    | "boe"
+    | "allotment"
+    | "trade_purchase"
+    | "trade"
+    | "final";
 
 /**
  * A child row nested under a "trade" (Licence Trade Sold) parent row — one

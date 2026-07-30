@@ -38,6 +38,11 @@ export function fmtInvoiceNumbers(values: string[] | null | undefined): string {
 // utilities, with mismatched rows always rendered red regardless of kind.
 const ROW_KIND_CLASSES: Record<FinancialLedgerRowKind, string> = {
     opening: "bg-info/10",
+    /** Debit netting Hidden BOEs + already-Purchased CIF out of the Opening
+     * Balance — rendered right after "opening", visually distinct so the
+     * "original - previous-owner-utilisation = remaining tradable" chain
+     * reads clearly. */
+    previous_owner_utilisation: "bg-warning/10",
     boe: "bg-success/10",
     allotment: "bg-warning/10",
     /** A credit entry, like Opening Balance — kept visually distinct from

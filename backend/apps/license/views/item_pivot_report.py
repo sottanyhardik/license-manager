@@ -462,7 +462,10 @@ class ItemPivotReportView(APIView):
         # (e.g. right after a Balance Engine formula change, or any edit
         # that doesn't happen to fire a recalculation signal).
         from apps.license.services.balance_calculator import LicenseBalanceCalculator
-        live_balance_by_license = LicenseBalanceCalculator.calculate_balance_for_licenses(_license_ids)
+        # Financial Ledger formula -- see `LicenseDetailsModel.
+        # get_balance_cif`'s docstring; must match every other "Balance
+        # CIF" in the app.
+        live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(_license_ids)
 
         # Build license data with item columns, grouped by norm first, then notification
         # (defaultdict is imported at module level).
@@ -720,16 +723,18 @@ class ItemPivotReportView(APIView):
                     item_quantities[item.id]['restriction_percentage'] = restriction_pct
 
         # `balance_cif` is pre-computed LIVE by `generate_report` in a single
-        # batched `calculate_balance_for_licenses` call (the same shared
-        # Balance Engine used everywhere else) and passed in here — never
-        # the denormalized `license_obj.balance_cif` column directly, which
-        # is only refreshed by a background task/manual trigger and can go
-        # stale. Standalone callers (balance_cif=None) fall back to a live
+        # batched `calculate_financial_balance_for_licenses` call (the
+        # Financial Ledger formula, same shared Balance Engine used
+        # everywhere else — see `LicenseDetailsModel.get_balance_cif`'s
+        # docstring) and passed in here — never the denormalized
+        # `license_obj.balance_cif` column directly, which is only
+        # refreshed by a background task/manual trigger and can go stale.
+        # Standalone callers (balance_cif=None) fall back to a live
         # per-licence calculation so behaviour is unchanged outside the main
         # report path — see `alloted_cif`'s identical fallback above.
         if balance_cif is None:
             from apps.license.services.balance_calculator import LicenseBalanceCalculator
-            balance_cif = LicenseBalanceCalculator.calculate_balance(license_obj)
+            balance_cif = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
 
         # Build row data
         # Handle blank/empty notification numbers

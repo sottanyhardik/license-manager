@@ -87,7 +87,12 @@ def update_all_license_balances(self, license_status='all'):
         for i, license_obj in enumerate(licenses.iterator(chunk_size=batch_size)):
             try:
                 # Calculate balance using centralized service
-                balance = LicenseBalanceCalculator.calculate_balance(license_obj)
+                # Financial Ledger formula -- same source as `LicenseDetailsModel.
+                # get_balance_cif` (see that property's docstring). This task
+                # writes the same cached `balance_cif` field that property
+                # feeds; using a different formula here would silently
+                # overwrite the correct value on every scheduled run.
+                balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
 
                 # Determine flags
                 is_expired = license_obj.license_expiry_date < today if license_obj.license_expiry_date else False
@@ -515,7 +520,12 @@ def identify_licenses_needing_update():
         for license_obj in licenses.iterator(chunk_size=200):
             try:
                 # Calculate what the values should be
-                balance = LicenseBalanceCalculator.calculate_balance(license_obj)
+                # Financial Ledger formula -- same source as `LicenseDetailsModel.
+                # get_balance_cif` (see that property's docstring). This task
+                # writes the same cached `balance_cif` field that property
+                # feeds; using a different formula here would silently
+                # overwrite the correct value on every scheduled run.
+                balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
                 is_expired = license_obj.license_expiry_date < today if license_obj.license_expiry_date else False
                 is_null = balance < Decimal('500')
                 is_active = not is_expired
@@ -621,7 +631,12 @@ def update_identified_licenses(license_ids):
         for i, license_obj in enumerate(licenses.iterator(chunk_size=batch_size)):
             try:
                 # Calculate balance
-                balance = LicenseBalanceCalculator.calculate_balance(license_obj)
+                # Financial Ledger formula -- same source as `LicenseDetailsModel.
+                # get_balance_cif` (see that property's docstring). This task
+                # writes the same cached `balance_cif` field that property
+                # feeds; using a different formula here would silently
+                # overwrite the correct value on every scheduled run.
+                balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
 
                 # Determine flags
                 is_expired = license_obj.license_expiry_date < today if license_obj.license_expiry_date else False

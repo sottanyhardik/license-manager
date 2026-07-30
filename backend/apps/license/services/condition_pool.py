@@ -298,9 +298,10 @@ def available_value_bulk_map(items) -> dict[int, Decimal]:
     full Balance CIF aggregate once per import item on that licence.
 
     Composes:
-      - `LicenseBalanceCalculator.calculate_balance_for_licenses` for the
-        `license_balance` component (same formula `available_value_calculated`
-        reaches via the licence's balance — see that property's docstring).
+      - `LicenseBalanceCalculator.calculate_financial_balance_for_licenses`
+        for the `license_balance` component (same formula `available_value_
+        calculated` reaches via the licence's `get_balance_cif` — see that
+        property's docstring).
       - `compute_condition_pools_bulk` for the "%"-condition shared-pool
         component.
 
@@ -315,7 +316,10 @@ def available_value_bulk_map(items) -> dict[int, Decimal]:
     from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
     license_ids = list({item.license_id for item in items if item.license_id})
-    balance_map = LicenseBalanceCalculator.calculate_balance_for_licenses(license_ids) if license_ids else {}
+    # Financial Ledger formula — must match `available_value_calculated`'s
+    # own `get_balance_cif` exactly (see this function's docstring: "keep
+    # in lock-step... never duplicate the branching logic elsewhere").
+    balance_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids) if license_ids else {}
     pools_map = compute_condition_pools_bulk(license_ids) if license_ids else {}
 
     return {item.id: _resolve_available_value(item, balance_map, pools_map) for item in items}

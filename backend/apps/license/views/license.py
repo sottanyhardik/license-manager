@@ -248,7 +248,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         page_ids = getattr(self, '_live_balance_page_ids', None)
         if page_ids:
             from apps.license.services.balance_calculator import LicenseBalanceCalculator
-            context['live_balance_map'] = LicenseBalanceCalculator.calculate_balance_for_licenses(page_ids)
+            # Financial Ledger formula -- see `LicenseDetailsModel.
+            # get_balance_cif`'s docstring; the list view must show the
+            # SAME "Balance CIF" as everywhere else in the app.
+            context['live_balance_map'] = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(page_ids)
         return context
 
     def list(self, request, *args, **kwargs):

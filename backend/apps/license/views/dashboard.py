@@ -200,7 +200,10 @@ class DashboardDataView(APIView):
             'export_license__norm_class'
         ).order_by('license_expiry_date')[:5]
 
-        live_balance_map = LicenseBalanceCalculator.calculate_balance_for_licenses(
+        # Financial Ledger formula -- see `LicenseDetailsModel.
+        # get_balance_cif`'s docstring; every "Balance CIF" the dashboard
+        # shows must match the rest of the app.
+        live_balance_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
             [license_obj.id for license_obj in licenses]
         )
 

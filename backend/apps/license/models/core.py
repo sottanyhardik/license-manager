@@ -1038,7 +1038,7 @@ class LicenseImportItemsModel(models.Model):
         response mixing items from different licences, such as the
         Allotment "available-items" action) use
         `condition_pool.available_value_bulk_map(items)` instead — it
-        composes `LicenseBalanceCalculator.calculate_balance_for_licenses`
+        composes `LicenseBalanceCalculator.calculate_financial_balance_for_licenses`
         and `condition_pool.compute_condition_pools_bulk` to stay a fixed
         number of queries regardless of batch size. Its branching is kept
         in lock-step with this property's (see

@@ -1,6 +1,6 @@
 # allotment/views_actions.py
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 
 from django.conf import settings
@@ -150,27 +150,52 @@ class AllotmentActionViewSet(ViewSet):
         if available_quantity_gte:
             try:
                 queryset = queryset.filter(available_quantity__gte=Decimal(available_quantity_gte))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, InvalidOperation):
                 pass
 
         if available_quantity_lte:
             try:
                 queryset = queryset.filter(available_quantity__lte=Decimal(available_quantity_lte))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, InvalidOperation):
                 pass
 
-        # Apply available value filters
-        if available_value_gte:
-            try:
-                queryset = queryset.filter(available_value__gte=Decimal(available_value_gte))
-            except (ValueError, TypeError):
-                pass
+        # Apply available value filters — against the LIVE computed value
+        # (available_value_calculated, via the batched available_value_
+        # bulk_map — same source LicenseImportItemSerializer.get_available_
+        # value uses for display), never the stored `available_value`
+        # column. That column is only refreshed on certain saves and can go
+        # stale (e.g. after a licence's Balance CIF formula itself changes),
+        # which silently excluded licenses whose displayed value clearly
+        # satisfied the filter. Not annotatable in SQL (available_value_
+        # calculated is a Python property), so this filters in Python after
+        # every other (SQL) filter has narrowed the candidate set, then
+        # narrows the queryset by id to keep pagination/ordering unchanged.
+        if available_value_gte or available_value_lte:
+            min_value = None
+            max_value = None
+            if available_value_gte:
+                try:
+                    min_value = Decimal(available_value_gte)
+                except (ValueError, TypeError, InvalidOperation):
+                    min_value = None
 
-        if available_value_lte:
-            try:
-                queryset = queryset.filter(available_value__lte=Decimal(available_value_lte))
-            except (ValueError, TypeError):
-                pass
+            if available_value_lte:
+                try:
+                    max_value = Decimal(available_value_lte)
+                except (ValueError, TypeError, InvalidOperation):
+                    max_value = None
+
+            if min_value is not None or max_value is not None:
+                from apps.license.services.condition_pool import available_value_bulk_map
+
+                candidates = list(queryset)
+                value_map = available_value_bulk_map(candidates)
+                matching_ids = [
+                    item.id for item in candidates
+                    if (min_value is None or value_map.get(item.id, Decimal('0')) >= min_value)
+                    and (max_value is None or value_map.get(item.id, Decimal('0')) <= max_value)
+                ]
+                queryset = queryset.filter(id__in=matching_ids)
 
         # Apply notification number filter
         if notification_number:
@@ -368,56 +393,25 @@ class AllotmentActionViewSet(ViewSet):
                     })
                     continue
 
-                # Check if available CIF FC is sufficient
-                # PRIORITY 1: Check is_restricted flag
-                # If is_restricted=False (not restricted), always use license-level balance (balance_cif_fc)
-                # If is_restricted=True AND has restriction percentage, use restricted balance logic
-
-                # Get calculated balance
-                balance_cif_fc = Decimal(str(license_item.balance_cif_fc or 0))
-
-                # PRIORITY 1: Check is_restricted flag
-                if not license_item.is_restricted:
-                    # Non-restricted item: always use balance_cif_fc from property
-                    available_cif = balance_cif_fc
-                else:
-                    # is_restricted=True: check if item has restriction percentage
-                    # Check if license is exception (098/2009 or Conversion)
-                    notif_code = (
-                        license_item.license.notification_number.code
-                        if license_item.license and license_item.license.notification_number_id
-                        else None
-                    )
-                    is_exception = (
-                        license_item.license and (
-                            notif_code == "098/2009" or
-                            (license_item.license.purchase_status and license_item.license.purchase_status.code == "CO")
-                        )
-                    )
-
-                    # Check if item has restrictions
-                    has_restriction = license_item.items.filter(
-                        sion_norm_class__isnull=False,
-                        restriction_percentage__gt=0
-                    ).exists()
-
-                    # Determine which value to use
-                    if has_restriction and not is_exception:
-                        # Restricted item, non-exception license: use stored available_value
-                        stored_available = Decimal(str(license_item.available_value or 0))
-                        # If available_value is not set (0 or NULL), fall back to balance_cif_fc
-                        if stored_available > 0:
-                            available_cif = stored_available
-                        else:
-                            # Not yet processed by update_restriction_balances, use calculated
-                            available_cif = balance_cif_fc
-                    else:
-                        # Exception license or no restriction percentage: use calculated balance_cif_fc
-                        available_cif = balance_cif_fc
-
-                # CRITICAL: available_cif can NEVER exceed balance_cif_fc
-                if available_cif > balance_cif_fc:
-                    available_cif = balance_cif_fc
+                # Check if available CIF FC is sufficient — always against the
+                # LIVE, centralized value (`available_value_calculated`, aka
+                # `balance_cif_fc`), the same one the Available Value column
+                # and the Allotment "available-licenses" filter use. That
+                # property already branches on `condition_type` (%/AU/open)
+                # via `condition_pool` to apply restriction pooling — it does
+                # NOT need a separate is_restricted / ItemNameModel.
+                # restriction_percentage / "exception license" check here.
+                # That older signal set predates the condition_type model and
+                # is stale by design elsewhere (see the "is_restricted is no
+                # longer set from ItemNameModel.restriction_percentage"
+                # comments in license/signals.py, license/tasks.py, and
+                # license/utils/item_matcher.py) — it was simply never
+                # migrated in this one call site. Worse, it trusted the
+                # stored `available_value` column outright whenever it was
+                # merely non-zero (treating "non-zero" as "freshly
+                # processed"), which let genuinely stale values through
+                # un-checked and wrongly rejected valid allocations.
+                available_cif = Decimal(str(license_item.available_value_calculated or 0))
 
                 if available_cif < cif_fc:
                     errors.append({

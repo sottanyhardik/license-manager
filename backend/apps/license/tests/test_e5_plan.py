@@ -1,34 +1,28 @@
-"""Unit tests for the E5 utilization-planning waterfall."""
+"""Unit tests for the E5 utilization-planning engine (``plan_e5_items``)."""
 from decimal import Decimal
 from unittest import TestCase
 
 from apps.license.services.e5_plan import (
-    BALANCE_CIF_USD,
-    E5_CATS,
     E5_UNIT_PRICES,
+    E5Item,
+    E5PlanLine,
     classify_e5_hsn,
     classify_e5_item,
-    compute_e5_plan,
     is_wheat_flour,
+    plan_e5_items,
 )
-from apps.license.services.milk_planner import MILK_CONFIG_E5
 
 
-def _totals(**kwargs) -> dict[str, float]:
-    """Build a complete E5 totals dict, defaulting missing categories to 0."""
-    base = {cat: 0.0 for cat in E5_CATS}
-    base.update(kwargs)
-    return base
+def _lines_by_step(result, step) -> list[E5PlanLine]:
+    return [ln for ln in result.lines if ln.step == step]
 
 
-def _planned_sum(planned: dict[str, float]) -> float:
-    # DWP/SWP are folded into MILK PRODUCTS / EGG ALBUMIN for the bucket
-    # total, so summing everything would double-count them.
-    return sum(v for k, v in planned.items() if k in E5_CATS)
+def _cif(result, step) -> Decimal:
+    return sum((ln.planned_cif for ln in _lines_by_step(result, step)), Decimal('0'))
 
 
 class TestClassifyE5Item(TestCase):
-    """Item / HSN / description bucketing."""
+    """Item / HSN / description bucketing — unchanged by the engine rewrite."""
 
     def test_dietary_fibre_item_routes_to_dietary_fibre(self):
         assert classify_e5_item('DIETARY FIBRE - E5, WALNUT - E5', '08029900', '') == 'DIETARY FIBRE'
@@ -50,15 +44,10 @@ class TestClassifyE5Item(TestCase):
         assert classify_e5_item('SOMETHING', '35021100', '') == 'EGG ALBUMIN / WPC'
 
     def test_swp_wpc_item_names_no_longer_classify_on_their_own(self):
-        # The old item-name-based SWP/WPC rules are gone — an item literally
-        # named "SWP" or "WPC" with no 0404/3502 HSN now falls unclassified.
         assert classify_e5_item('SWP', '', '') is None
         assert classify_e5_item('WPC', '', '') is None
 
     def test_wheat_flour_item_beats_milk_hsn(self):
-        # Legacy full-name rule is checked BEFORE the new 0404/3502 rules —
-        # preserves old precedence exactly (no real item should ever hit
-        # this, but the rule ordering itself must not change).
         assert classify_e5_item('Wheat Flour', '04041000', '') == 'WHEAT FLOUR'
 
     def test_wheat_flour_item_matches(self):
@@ -68,13 +57,9 @@ class TestClassifyE5Item(TestCase):
         assert classify_e5_item('OTHER', '11010000', '') == 'WHEAT FLOUR'
 
     def test_olive_oil_item_beats_palm_kernel_hsn(self):
-        # Preserved precedence: an item explicitly named "Olive Oil" still
-        # routes to Remaining Oils even with an HSN in the 1513 range.
         assert classify_e5_item('Olive Oil', '15132110', '') == 'REMAINING OILS'
 
     def test_milk_hsn_beats_olive_oil_item_name(self):
-        # New spec priority: Milk Products (rule 2) is checked before the
-        # legacy Olive-Oil-by-name rule — milk wins even on an oddly-named row.
         assert classify_e5_item('Olive Oil', '04041000', '') == 'MILK PRODUCTS'
 
     def test_palm_kernel_oil_by_hsn_1513(self):
@@ -119,226 +104,268 @@ class TestClassifyE5Item(TestCase):
         assert is_wheat_flour('0404') is False
 
 
-class TestComputeE5PlanFixedSteps(TestCase):
-    """Rule 1 + Rule 2 fixed-rate steps."""
+class TestFixedRateSteps(TestCase):
+    """Dietary Fibre + Edible Oils — unchanged fixed rates."""
 
     def test_dietary_fibre_allocation(self):
-        totals = _totals(**{'DIETARY FIBRE': 1000.0})
-        planned, _ = compute_e5_plan(totals, license_balance=BALANCE_CIF_USD)
-        assert planned['DIETARY FIBRE'] == 3000.0   # 1000 * 3.00
+        items = [E5Item(key='a', category='DIETARY FIBRE', qty=Decimal('1000'))]
+        result = plan_e5_items(items, Decimal('69046.90'))
+        assert _cif(result, 'DIETARY FIBRE') == Decimal('3000.0000')
 
     def test_palm_kernel_oil_allocation(self):
-        totals = _totals(**{'PALM KERNEL OIL': 1000.0})
-        planned, _ = compute_e5_plan(totals, license_balance=Decimal('5000'))
-        assert planned['PALM KERNEL OIL'] == 1800.0   # 1000 * 1.8
+        items = [E5Item(key='a', category='PALM KERNEL OIL', qty=Decimal('1000'))]
+        result = plan_e5_items(items, Decimal('5000'))
+        assert _cif(result, 'PALM KERNEL OIL') == Decimal('1800.0000')
 
     def test_rbd_palmolein_allocation(self):
-        totals = _totals(**{'RBD PALMOLEIN': 1000.0})
-        planned, _ = compute_e5_plan(totals, license_balance=Decimal('5000'))
-        assert planned['RBD PALMOLEIN'] == 1200.0   # 1000 * 1.2
+        items = [E5Item(key='a', category='RBD PALMOLEIN', qty=Decimal('1000'))]
+        result = plan_e5_items(items, Decimal('5000'))
+        assert _cif(result, 'RBD PALMOLEIN') == Decimal('1200.0000')
 
     def test_remaining_oils_allocation(self):
-        totals = _totals(**{'REMAINING OILS': 100.0})
-        planned, _ = compute_e5_plan(totals, license_balance=Decimal('5000'))
-        assert planned['REMAINING OILS'] == 500.0   # 100 * 5.00
-
-
-class TestSpecialValidation(TestCase):
-    """Milk-priority gate executed immediately after Rule 1."""
-
-    def test_triggers_when_balance_cannot_cover_milk_at_swp_price(self):
-        # milk_total=1000, threshold = 1000*1.5 = 1500 > remaining(1000) → fires.
-        totals = _totals(**{'MILK PRODUCTS': 1000.0, 'PALM KERNEL OIL': 500.0})
-        planned, rate = compute_e5_plan(totals, license_balance=Decimal('1000'))
-        # All milk planned as a flat, balance-capped SWP allocation.
-        assert planned['SWP'] == 1000.0
-        assert rate['SWP'] == 1.0   # 1000 balance / 1000 qty
-        assert planned['MILK PRODUCTS'] == 1000.0
-        assert planned['DWP'] == 0.0   # Rule 3 (normal milk optimisation) skipped
-        # Oils run AFTER milk, with whatever balance remains (0 here).
-        assert planned['PALM KERNEL OIL'] == 0.0
-
-    def test_not_triggered_runs_oils_before_milk(self):
-        # milk_total=50, threshold=75; balance is plentiful → not triggered.
-        totals = _totals(**{'MILK PRODUCTS': 50.0, 'PALM KERNEL OIL': 100.0})
-        planned, _ = compute_e5_plan(totals, license_balance=Decimal('5000'))
-        assert planned['PALM KERNEL OIL'] == 180.0   # 100 * 1.8, ran normally
-        assert planned['DWP'] == 250.0   # 50 * 5 — Rule 3 ran (not skipped)
-
-    def test_not_triggered_when_no_milk_present(self):
-        totals = _totals(**{'PALM KERNEL OIL': 100.0})
-        planned, _ = compute_e5_plan(totals, license_balance=Decimal('1'))
-        # milk_total == 0 → special validation never fires; nothing to skip.
-        assert planned['SWP'] == 0.0
-        assert planned['DWP'] == 0.0
-
-
-class TestMilkRule3(TestCase):
-    """Rule 3 — delegated to the shared milk_planner (MILK_CONFIG_E5)."""
-
-    def test_0404_only_dwp_then_swp_share_same_utilization_qty(self):
-        totals = _totals(**{'MILK PRODUCTS': 50.0})
-        planned, rate = compute_e5_plan(totals, license_balance=Decimal('5000'))
-        assert planned['DWP'] == 250.0     # 50 * 5
-        assert planned['SWP'] == 75.0      # 50 * 1.5 (same 50 units, not split)
-        assert planned['MILK PRODUCTS'] == 325.0
-        assert rate['MILK PRODUCTS'] == 6.5
-
-    def test_3502_only_full_qty_to_wpc_at_25(self):
-        totals = _totals(**{'EGG ALBUMIN / WPC': 10.0})
-        planned, rate = compute_e5_plan(totals, license_balance=Decimal('5000'))
-        assert planned['EGG ALBUMIN / WPC'] == 250.0   # 10 * 25
-        assert rate['EGG ALBUMIN / WPC'] == 25.0
-        assert planned['DWP'] == 0.0
-        assert planned['SWP'] == 0.0
-
-    def test_mixed_avg_price_band_b_swp_then_dwp_residual(self):
-        # total_qty=100, remaining=300 → avg=3.0 (band 1.50<=avg<5.00).
-        # q_swp = floor((5*100-300)/3.5) = floor(57.14) = 57 → cif=85.5
-        # cif_dwp = 300 - 85.5 = 214.5 (exact residual, balance -> 0).
-        totals = _totals(**{'MILK PRODUCTS': 50.0, 'EGG ALBUMIN / WPC': 50.0})
-        planned, _ = compute_e5_plan(totals, license_balance=Decimal('300'))
-        assert abs(planned['SWP'] - 85.5) < 1e-4
-        assert abs(planned['DWP'] - 214.5) < 1e-4
-        # Split 50/50 between the two buckets by qty share.
-        assert abs(planned['MILK PRODUCTS'] - 150.0) < 1e-4
-        assert abs(planned['EGG ALBUMIN / WPC'] - 150.0) < 1e-4
-
-    def test_mixed_avg_below_1_50_is_unreachable_special_validation_wins(self):
-        # avg = remaining/total_qty < 1.50 is EXACTLY Special Validation's own
-        # trigger condition (remaining < milk_total * 1.50) — so Rule 3A's
-        # Case A can never actually fire through compute_e5_plan; Special
-        # Validation always intercepts first and plans milk with the
-        # standard (balance-capped) dynamic rate instead of the fixed 1.50.
-        # See TestMilkPlanner for Case A exercised directly on the shared engine.
-        totals = _totals(**{'MILK PRODUCTS': 500.0, 'EGG ALBUMIN / WPC': 500.0})
-        planned, rate = compute_e5_plan(totals, license_balance=Decimal('1000'))
-        assert planned['SWP'] == 1000.0
-        assert planned['DWP'] == 0.0
-        assert rate['SWP'] == 1.0   # 1000 balance / 1000 qty, capped — not the fixed 1.5
-
-    def test_mixed_avg_at_or_above_20_full_qty_to_wpc_surplus_flows_back(self):
-        # total_qty=20, remaining=500 → avg=25 (>= 20) → WPC takes 20*20=400,
-        # the 100 surplus flows back to the caller (here: Wheat Flour mop-up).
-        totals = _totals(
-            **{'MILK PRODUCTS': 10.0, 'EGG ALBUMIN / WPC': 10.0, 'WHEAT FLOUR': 1000.0},
-        )
-        planned, rate = compute_e5_plan(totals, license_balance=Decimal('500'))
-        assert planned['MILK PRODUCTS'] + planned['EGG ALBUMIN / WPC'] == 400.0
-        assert rate['WHEAT FLOUR'] == 0.1   # 100 surplus / 1000 qty
-
-
-class TestWheatFlourMopUp(TestCase):
-    """Legacy final step — preserved unchanged."""
-
-    def test_wheat_flour_consumes_remaining_balance(self):
-        totals = _totals(**{'WHEAT FLOUR': 10000.0})
-        planned, rate = compute_e5_plan(totals, license_balance=Decimal('1000'))
-        assert planned['WHEAT FLOUR'] == 1000.0
-        assert rate['WHEAT FLOUR'] == 0.1
-
-    def test_wheat_flour_skipped_when_no_qty(self):
-        totals = _totals(**{'DIETARY FIBRE': 100.0})
-        planned, _ = compute_e5_plan(totals, license_balance=Decimal('1000'))
-        assert planned['WHEAT FLOUR'] == 0.0
-
-    def test_legacy_wf_qty_override_still_works(self):
-        totals = _totals(**{'DIETARY FIBRE': 100.0})
-        planned, _ = compute_e5_plan(totals, wf_qty=10000.0, license_balance=Decimal('1000'))
-        # 100*3.00 = 300 → remaining 700 → wheat flour consumes it.
-        assert planned['WHEAT FLOUR'] == 700.0
-
-
-class TestFullWaterfall(TestCase):
-    """End-to-end checks across the full pipeline."""
-
-    def test_balance_never_exceeded(self):
-        totals = _totals(**{cat: 1_000_000.0 for cat in E5_CATS})
-        planned, _ = compute_e5_plan(totals, license_balance=BALANCE_CIF_USD)
-        assert _planned_sum(planned) <= float(BALANCE_CIF_USD) + 1e-4
-
-    def test_zero_quantities_leave_balance_intact(self):
-        planned, _ = compute_e5_plan(_totals(), license_balance=BALANCE_CIF_USD)
-        assert _planned_sum(planned) == 0.0
-
-    def test_invalid_quantities_and_negative_balance_plan_zero(self):
-        totals = _totals(**{'DIETARY FIBRE': 'bad', 'MILK PRODUCTS': None, 'EGG ALBUMIN / WPC': '100'})
-        planned, rate = compute_e5_plan(totals, license_balance=Decimal('-1'))
-        assert _planned_sum(planned) == 0.0
-        assert rate['EGG ALBUMIN / WPC'] == 25.0
-
-    def test_sequential_deduction_order(self):
-        # Balance so small only Rule 1 can run.
-        totals = _totals(**{cat: 10.0 for cat in E5_CATS})
-        planned, _ = compute_e5_plan(totals, license_balance=Decimal('20'))
-        # Dietary Fibre eats 10*3.00=30 → clamped at 20.
-        assert planned['DIETARY FIBRE'] == 20.0
-        for cat in ('PALM KERNEL OIL', 'RBD PALMOLEIN', 'REMAINING OILS', 'WHEAT FLOUR'):
-            assert planned[cat] == 0.0
-        assert planned['MILK PRODUCTS'] == 0.0
-        assert planned['EGG ALBUMIN / WPC'] == 0.0
-
-    def test_step_caps_when_dietary_fibre_overshoots(self):
-        totals = _totals(
-            **{
-                'DIETARY FIBRE': 30000.0,
-                'MILK PRODUCTS': 50.0,
-                'EGG ALBUMIN / WPC': 10.0,
-                'PALM KERNEL OIL': 3000.0,
-                'RBD PALMOLEIN': 4000.0,
-                'REMAINING OILS': 1000.0,
-                'WHEAT FLOUR': 1000.0,
-            }
-        )
-        planned, _ = compute_e5_plan(totals, license_balance=BALANCE_CIF_USD)
-        assert planned['DIETARY FIBRE'] == float(BALANCE_CIF_USD)
-        for cat in ('MILK PRODUCTS', 'EGG ALBUMIN / WPC', 'PALM KERNEL OIL',
-                    'RBD PALMOLEIN', 'REMAINING OILS', 'WHEAT FLOUR'):
-            assert planned[cat] == 0.0
-
-    def test_full_waterfall_with_wheat_flour_finishing_at_zero(self):
-        totals = _totals(
-            **{
-                'DIETARY FIBRE': 1000.0,
-                'PALM KERNEL OIL': 3000.0,
-                'RBD PALMOLEIN': 4000.0,
-                'REMAINING OILS': 1000.0,
-                'EGG ALBUMIN / WPC': 100.0,
-                'WHEAT FLOUR': 5000.0,
-            }
-        )
-        planned, rate = compute_e5_plan(totals, license_balance=BALANCE_CIF_USD)
-
-        # 1000*3.00 + 3000*1.80 + 4000*1.20 + 1000*5.00 = 3000+5400+4800+5000 = 18200
-        # Remaining after Rule 2 = 69046.90 - 18200 = 50846.90
-        # Rule 3: no 0404 → straight to WPC, 100*25 = 2500 fits comfortably.
-        # Remaining after WPC = 50846.90 - 2500 = 48346.90 → all to Wheat Flour.
-        assert planned['DIETARY FIBRE'] == 3000.0
-        assert planned['PALM KERNEL OIL'] == 5400.0
-        assert planned['RBD PALMOLEIN'] == 4800.0
-        assert planned['REMAINING OILS'] == 5000.0
-        assert planned['EGG ALBUMIN / WPC'] == 2500.0
-        assert rate['EGG ALBUMIN / WPC'] == 25.0
-        assert abs(planned['WHEAT FLOUR'] - 48346.90) < 1e-4
-        assert abs(_planned_sum(planned) - float(BALANCE_CIF_USD)) < 1e-4
-
-    def test_default_balance_uses_spec_constant(self):
-        totals = _totals(**{'DIETARY FIBRE': 10.0})
-        planned, _ = compute_e5_plan(totals)  # license_balance omitted
-        assert planned['DIETARY FIBRE'] == 30.0
-
-
-class TestMilkConfigE5Constants(TestCase):
-
-    def test_prices_match_spec(self):
-        assert MILK_CONFIG_E5.dwp_price == Decimal('5')
-        assert MILK_CONFIG_E5.swp_price == Decimal('1.5')
-        assert MILK_CONFIG_E5.wpc_price == Decimal('25')
-        assert MILK_CONFIG_E5.mixed_wpc_price == Decimal('20')
-        assert MILK_CONFIG_E5.average_split is True
+        items = [E5Item(key='a', category='REMAINING OILS', qty=Decimal('100'))]
+        result = plan_e5_items(items, Decimal('5000'))
+        assert _cif(result, 'REMAINING OILS') == Decimal('500.0000')
 
     def test_e5_unit_prices_table(self):
         assert E5_UNIT_PRICES['DIETARY FIBRE'] == Decimal('3.00')
         assert E5_UNIT_PRICES['PALM KERNEL OIL'] == Decimal('1.80')
         assert E5_UNIT_PRICES['RBD PALMOLEIN'] == Decimal('1.20')
         assert E5_UNIT_PRICES['REMAINING OILS'] == Decimal('5.00')
+
+
+class TestSpecialValidation(TestCase):
+    """Milk-priority gate executed immediately after Dietary Fibre."""
+
+    def test_triggers_when_balance_cannot_cover_milk_at_swp_price(self):
+        # milk_total=1000, threshold = 1000*1.5 = 1500 > remaining(1000) → fires.
+        items = [
+            E5Item(key='milk', category='MILK PRODUCTS', qty=Decimal('1000')),
+            E5Item(key='oil', category='PALM KERNEL OIL', qty=Decimal('500')),
+        ]
+        result = plan_e5_items(items, Decimal('1000'))
+        assert result.special_validation_triggered is True
+        swp_lines = _lines_by_step(result, 'SWP')
+        assert len(swp_lines) == 1
+        assert swp_lines[0].key == 'milk'
+        assert swp_lines[0].planned_cif == Decimal('1000.0000')
+        assert swp_lines[0].unit_price == Decimal('1.0000')   # balance-capped, not 1.5
+        assert _lines_by_step(result, 'DWP') == []            # normal milk skipped
+        assert _lines_by_step(result, 'PALM KERNEL OIL') == []  # no balance left for oils
+
+    def test_not_triggered_runs_oils_before_milk(self):
+        # milk_total=50, threshold=75; balance is plentiful → not triggered.
+        items = [
+            E5Item(key='milk', category='MILK PRODUCTS', qty=Decimal('50')),
+            E5Item(key='oil', category='PALM KERNEL OIL', qty=Decimal('100')),
+        ]
+        result = plan_e5_items(items, Decimal('5000'))
+        assert result.special_validation_triggered is False
+        assert _cif(result, 'PALM KERNEL OIL') == Decimal('180.0000')
+        assert _cif(result, 'DWP') == Decimal('250.0000')
+
+    def test_not_triggered_when_no_milk_present(self):
+        items = [E5Item(key='oil', category='PALM KERNEL OIL', qty=Decimal('100'))]
+        result = plan_e5_items(items, Decimal('1'))
+        assert result.special_validation_triggered is False
+        assert _lines_by_step(result, 'SWP') == []
+        assert _lines_by_step(result, 'DWP') == []
+
+    def test_special_validation_covers_3502_items_too(self):
+        items = [E5Item(key='wpc', category='EGG ALBUMIN / WPC', qty=Decimal('1000'))]
+        result = plan_e5_items(items, Decimal('1000'))
+        assert result.special_validation_triggered is True
+        swp_lines = _lines_by_step(result, 'SWP')
+        assert len(swp_lines) == 1
+        assert swp_lines[0].key == 'wpc'
+        assert _lines_by_step(result, 'WPC') == []
+
+    def test_uses_unfiltered_milk_total_even_below_min_plan_qty(self):
+        # A single milk item below the Auto-Plan min-plan-qty threshold still
+        # counts toward the Special Validation trigger check (matches the
+        # historic Auto-Plan behaviour: the check runs before the threshold
+        # skip), even though it won't itself get a plan line.
+        items = [E5Item(key='tiny', category='MILK PRODUCTS', qty=Decimal('10'))]
+        result = plan_e5_items(items, Decimal('1'), min_plan_qty=Decimal('50'), floor_qty=True)
+        assert result.special_validation_triggered is True
+        assert result.lines == []   # below threshold — nothing actually planned
+
+
+class TestMilkPerItemNoAveraging(TestCase):
+    """0404 and 3502 are classified and priced per item — never averaged,
+    even when both appear on the same licence (the removed Mixed-Milk
+    average-price-banding rule)."""
+
+    def test_0404_only_dwp_then_swp_share_same_item_qty(self):
+        items = [E5Item(key='m', category='MILK PRODUCTS', qty=Decimal('50'))]
+        result = plan_e5_items(items, Decimal('5000'))
+        dwp = _lines_by_step(result, 'DWP')[0]
+        swp = _lines_by_step(result, 'SWP')[0]
+        assert dwp.planned_qty == swp.planned_qty == Decimal('50')  # not split
+        assert dwp.planned_cif == Decimal('250.0000')   # 50*5
+        assert swp.planned_cif == Decimal('75.0000')    # 50*1.5
+
+    def test_3502_only_full_qty_to_wpc_capped_at_25(self):
+        items = [E5Item(key='e', category='EGG ALBUMIN / WPC', qty=Decimal('10'))]
+        result = plan_e5_items(items, Decimal('5000'))
+        wpc = _lines_by_step(result, 'WPC')[0]
+        assert wpc.planned_cif == Decimal('250.0000')  # 10*25
+        assert wpc.unit_price == Decimal('25.0000')
+
+    def test_3502_rate_capped_when_balance_would_imply_more_than_25(self):
+        items = [E5Item(key='e', category='EGG ALBUMIN / WPC', qty=Decimal('10'))]
+        result = plan_e5_items(items, Decimal('400'))   # implied rate 40 > 25 cap
+        wpc = _lines_by_step(result, 'WPC')[0]
+        assert wpc.unit_price == Decimal('25.0000')
+        assert wpc.planned_cif == Decimal('250.0000')
+        assert result.remaining_cif == Decimal('150')  # surplus flows onward
+
+    def test_mixed_licence_items_never_blended_into_one_rate(self):
+        items = [
+            E5Item(key='m', category='MILK PRODUCTS', qty=Decimal('50')),
+            E5Item(key='e', category='EGG ALBUMIN / WPC', qty=Decimal('50')),
+        ]
+        result = plan_e5_items(items, Decimal('300'))
+        dwp = _lines_by_step(result, 'DWP')
+        swp = _lines_by_step(result, 'SWP')
+        wpc = _lines_by_step(result, 'WPC')
+        # The 0404 item is processed first against the full $300: DWP takes
+        # 50*5=250, SWP takes whatever balance is left (50) at a
+        # balance-capped rate — entirely independent of the 3502 item, which
+        # only sees the leftover balance (0) afterwards. No averaged rate.
+        assert dwp and dwp[0].key == 'm' and dwp[0].planned_cif == Decimal('250.0000')
+        assert swp and swp[0].key == 'm' and swp[0].planned_cif == Decimal('50.0000')
+        assert swp[0].unit_price == Decimal('1.0000')
+        assert wpc == []
+        assert result.remaining_cif == Decimal('0')
+
+    def test_all_0404_items_processed_before_any_3502_item(self):
+        items = [
+            E5Item(key='e', category='EGG ALBUMIN / WPC', qty=Decimal('10')),
+            E5Item(key='m', category='MILK PRODUCTS', qty=Decimal('10')),
+        ]
+        result = plan_e5_items(items, Decimal('1000'))
+        milk_steps = [ln.step for ln in result.lines if ln.category in ('MILK PRODUCTS', 'EGG ALBUMIN / WPC')]
+        assert milk_steps == ['DWP', 'SWP', 'WPC']
+
+    def test_multiple_0404_items_planned_independently_in_input_order(self):
+        items = [
+            E5Item(key='m1', category='MILK PRODUCTS', qty=Decimal('50')),
+            E5Item(key='m2', category='MILK PRODUCTS', qty=Decimal('50')),
+        ]
+        result = plan_e5_items(items, Decimal('300'))
+        m1_steps = {ln.step for ln in result.lines if ln.key == 'm1'}
+        m2_lines = [ln for ln in result.lines if ln.key == 'm2']
+        assert m1_steps == {'DWP', 'SWP'}
+        assert m2_lines == []   # balance exhausted by m1
+        assert result.remaining_cif == Decimal('0')
+
+
+class TestWheatFlourMopUp(TestCase):
+    def test_wheat_flour_consumes_remaining_balance(self):
+        items = [E5Item(key='wf', category='WHEAT FLOUR', qty=Decimal('10000'))]
+        result = plan_e5_items(items, Decimal('1000'))
+        wf = _lines_by_step(result, 'WHEAT FLOUR')[0]
+        assert wf.planned_cif == Decimal('1000.0000')
+        assert wf.unit_price == Decimal('0.1000')
+        assert result.remaining_cif == Decimal('0')
+
+    def test_wheat_flour_skipped_when_no_qty(self):
+        items = [E5Item(key='d', category='DIETARY FIBRE', qty=Decimal('100'))]
+        result = plan_e5_items(items, Decimal('1000'))
+        assert _lines_by_step(result, 'WHEAT FLOUR') == []
+
+
+class TestBalanceRecalculation(TestCase):
+    """Every debit must recalculate the balance before the next line runs —
+    no step may reuse a stale, pre-debit balance."""
+
+    def test_remaining_cif_decrements_after_every_line(self):
+        items = [
+            E5Item(key='d', category='DIETARY FIBRE', qty=Decimal('10')),
+            E5Item(key='m', category='MILK PRODUCTS', qty=Decimal('10')),
+            E5Item(key='wf', category='WHEAT FLOUR', qty=Decimal('1000')),
+        ]
+        result = plan_e5_items(items, Decimal('100'))
+        running = Decimal('100')
+        for line in result.lines:
+            assert line.planned_cif <= running
+            running -= line.planned_cif
+        assert running == result.remaining_cif
+
+    def test_full_waterfall_balance_never_exceeded(self):
+        items = [
+            E5Item(key='d', category='DIETARY FIBRE', qty=Decimal('1000')),
+            E5Item(key='pko', category='PALM KERNEL OIL', qty=Decimal('3000')),
+            E5Item(key='rbd', category='RBD PALMOLEIN', qty=Decimal('4000')),
+            E5Item(key='oil', category='REMAINING OILS', qty=Decimal('1000')),
+            E5Item(key='e', category='EGG ALBUMIN / WPC', qty=Decimal('100')),
+            E5Item(key='wf', category='WHEAT FLOUR', qty=Decimal('5000')),
+        ]
+        balance = Decimal('69046.90')
+        result = plan_e5_items(items, balance)
+        total = sum((ln.planned_cif for ln in result.lines), Decimal('0'))
+        assert total <= balance
+        assert total + result.remaining_cif == balance
+
+    def test_zero_quantities_leave_balance_intact(self):
+        items = [E5Item(key='d', category='DIETARY FIBRE', qty=Decimal('0'))]
+        result = plan_e5_items(items, Decimal('69046.90'))
+        assert result.lines == []
+        assert result.remaining_cif == Decimal('69046.90')
+
+    def test_negative_balance_plans_nothing(self):
+        items = [E5Item(key='d', category='DIETARY FIBRE', qty=Decimal('100'))]
+        result = plan_e5_items(items, Decimal('-1'))
+        assert result.lines == []
+
+    def test_sequential_deduction_order(self):
+        # Balance so small only Dietary Fibre can run.
+        items = [
+            E5Item(key='d', category='DIETARY FIBRE', qty=Decimal('10')),
+            E5Item(key='m', category='MILK PRODUCTS', qty=Decimal('10')),
+            E5Item(key='e', category='EGG ALBUMIN / WPC', qty=Decimal('10')),
+            E5Item(key='pko', category='PALM KERNEL OIL', qty=Decimal('10')),
+        ]
+        result = plan_e5_items(items, Decimal('20'))
+        df = _lines_by_step(result, 'DIETARY FIBRE')[0]
+        assert df.planned_cif == Decimal('20.0000')   # 10*3=30 clamped to 20
+        assert result.remaining_cif == Decimal('0')
+        for step in ('DWP', 'SWP', 'WPC', 'PALM KERNEL OIL', 'WHEAT FLOUR'):
+            assert _lines_by_step(result, step) == []
+
+
+class TestAutoPlanFloorAndThreshold(TestCase):
+    """``floor_qty`` / ``min_plan_qty`` — the Auto-Plan-specific options."""
+
+    def test_floor_qty_reduces_quantity_at_a_fixed_rate(self):
+        # 1000 balance / 3.00 rate = 333.33 -> floored to 333, CIF re-derived.
+        items = [E5Item(key='d', category='DIETARY FIBRE', qty=Decimal('1000'))]
+        result = plan_e5_items(items, Decimal('1000'), floor_qty=True)
+        df = _lines_by_step(result, 'DIETARY FIBRE')[0]
+        assert df.planned_qty == Decimal('333')
+        assert df.planned_cif == Decimal('999.0000')
+        assert df.unit_price == Decimal('3.0000')   # rate itself never drops
+        assert result.remaining_cif == Decimal('1')
+
+    def test_below_min_plan_qty_is_skipped_entirely(self):
+        items = [E5Item(key='d', category='DIETARY FIBRE', qty=Decimal('49'))]
+        result = plan_e5_items(items, Decimal('1000'), min_plan_qty=Decimal('50'), floor_qty=True)
+        assert result.lines == []
+        assert result.remaining_cif == Decimal('1000')
+
+    def test_at_min_plan_qty_is_included(self):
+        items = [E5Item(key='d', category='DIETARY FIBRE', qty=Decimal('50'))]
+        result = plan_e5_items(items, Decimal('1000'), min_plan_qty=Decimal('50'), floor_qty=True)
+        assert len(result.lines) == 1
+
+    def test_wheat_flour_mopup_rate_uses_only_qualifying_items(self):
+        items = [
+            E5Item(key='small', category='WHEAT FLOUR', qty=Decimal('10')),   # below threshold
+            E5Item(key='big', category='WHEAT FLOUR', qty=Decimal('100')),
+        ]
+        result = plan_e5_items(items, Decimal('1000'), min_plan_qty=Decimal('50'), floor_qty=True)
+        wf_lines = _lines_by_step(result, 'WHEAT FLOUR')
+        assert len(wf_lines) == 1
+        assert wf_lines[0].key == 'big'
+        assert wf_lines[0].unit_price == Decimal('10.0000')  # 1000 / 100, not / 110

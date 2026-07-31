@@ -826,21 +826,14 @@ class ItemPivotReportView(APIView):
 
         # `item_plan_data[item_name]` → {'planned_cif': float, 'unit_price': float}
         item_plan_data: Dict[str, Dict[str, float]] = {}
-        if primary_norm in ('E1', 'E5'):
-            if primary_norm == 'E1':
-                from apps.license.services.e1_plan import (
-                    E1_CATS as _CATS, E1_EXCLUDED_CONDITIONS as _EXCL,
-                    classify_e1_item as _classify, compute_e1_plan as _compute,
-                )
-            else:
-                from apps.license.services.e5_plan import (
-                    E5_CATS as _CATS, classify_e5_item as _classify,
-                    compute_e5_plan as _compute,
-                )
-                _EXCL = None
+        if primary_norm == 'E1':
+            from apps.license.services.e1_plan import (
+                E1_CATS as _CATS, E1_EXCLUDED_CONDITIONS as _EXCL,
+                classify_e1_item as _classify, compute_e1_plan as _compute,
+            )
 
             # Fix #3: reuse the already-prefetched import items instead of issuing
-            # a second SELECT per E1/E5 licence. Inactive items are included because
+            # a second SELECT per E1 licence. Inactive items are included because
             # the prefetch query (import_items_qs) has no is_active filter.
             # Note: use ii.items.all() not .values_list() — .values_list() bypasses
             # the prefetch cache and would re-query; .all() reads from it for free.
@@ -860,11 +853,8 @@ class ItemPivotReportView(APIView):
                 avail = float(ii.available_quantity or 0)
                 display_qty[cat] += avail
                 cond = (ii.condition_type or '').strip()
-                if _EXCL is not None:
-                    excluded = _EXCL.get(cat, frozenset())
-                    util_inc = 0.0 if cond in excluded else avail
-                else:
-                    util_inc = avail
+                excluded = _EXCL.get(cat, frozenset())
+                util_inc = 0.0 if cond in excluded else avail
                 util_qty[cat] += util_inc
                 # Attribute this row's util qty to every linked item-name so
                 # the pivot's per-item planner share lines up with the table.
@@ -878,10 +868,7 @@ class ItemPivotReportView(APIView):
                     per_item_util[nm] = per_item_util.get(nm, 0.0) + util_inc
                     per_item_category[nm] = cat
 
-            if primary_norm == 'E1':
-                planned, rates = _compute(display_qty, util_qty, float(balance_cif))
-            else:
-                planned, rates = _compute(display_qty, None, float(balance_cif), None)
+            planned, rates = _compute(display_qty, util_qty, float(balance_cif))
 
             # Allocate per-item planned CIF as the item's PROPORTIONAL share
             # of its category's planned CIF — keeps the math equal to the
@@ -892,6 +879,55 @@ class ItemPivotReportView(APIView):
                 cat_uq = util_qty.get(cat, 0.0)
                 cat_plan = planned.get(cat, 0.0)
                 item_plan = (uq / cat_uq) * cat_plan if cat_uq else 0.0
+                item_plan_data[nm] = {
+                    'unit_price': round(item_plan / uq, 2) if uq else 0.0,
+                    'planned_cif': round(item_plan, 2),
+                }
+        elif primary_norm == 'E5':
+            from decimal import Decimal as _Decimal
+
+            from apps.license.services.e5_plan import (
+                E5Item as _E5Item, classify_e5_item as _classify, plan_e5_items as _plan_e5_items,
+            )
+
+            # Fix #3: reuse the already-prefetched import items (see E1 note above).
+            import_items = license_obj.import_license.all()
+            item_qty_by_id: Dict[int, _Decimal] = {}
+            item_names_by_id: Dict[int, list] = {}
+            e5_items: list = []
+            for ii in import_items:
+                names = [n.name for n in ii.items.all()]
+                key = ', '.join(sorted(names)) if names else (ii.description or '-')
+                hs = ii.hs_code.hs_code if ii.hs_code else ''
+                cat = _classify(key, hs, ii.description)
+                if not cat:
+                    continue
+                avail = _Decimal(str(ii.available_quantity or 0))
+                item_qty_by_id[ii.id] = avail
+                item_names_by_id[ii.id] = names or [ii.description or '-']
+                e5_items.append(_E5Item(key=ii.id, category=cat, qty=avail))
+
+            # Run the shared per-item engine — the same rules Auto-Plan and
+            # norm_plan.py use, so this table (and its Excel export) never
+            # drifts from what Auto-Plan would actually commit.
+            plan_result = _plan_e5_items(e5_items, _Decimal(str(balance_cif)))
+            cif_by_item: Dict[int, _Decimal] = {}
+            for line in plan_result.lines:
+                cif_by_item[line.key] = cif_by_item.get(line.key, _Decimal('0')) + line.planned_cif
+
+            # Attribute each import item's own EXACT planned CIF (no
+            # proportional-share approximation needed — the engine already
+            # computed it per item) to every linked item-name.
+            per_item_util: Dict[str, float] = {}
+            per_item_cif: Dict[str, float] = {}
+            for iid, avail in item_qty_by_id.items():
+                item_cif = cif_by_item.get(iid, _Decimal('0'))
+                for nm in item_names_by_id[iid]:
+                    per_item_util[nm] = per_item_util.get(nm, 0.0) + float(avail)
+                    per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(item_cif)
+
+            for nm, uq in per_item_util.items():
+                item_plan = per_item_cif.get(nm, 0.0)
                 item_plan_data[nm] = {
                     'unit_price': round(item_plan / uq, 2) if uq else 0.0,
                     'planned_cif': round(item_plan, 2),

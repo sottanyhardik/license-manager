@@ -845,8 +845,7 @@ export default function ItemPivotReport() {
                                                             const isRutile = item.name === 'RUTILE - A3627';
                                                             const colSpan = 8
                                                                 + (item.has_restriction ? 2 : 0)
-                                                                + (isRutile ? 1 : 0)
-                                                                + 2;
+                                                                + (isRutile ? 1 : 0);
                                                             return (
                                                                 <th scope="col" key={`${item.id}-qty`} colSpan={colSpan}
                                                                     className="text-center"

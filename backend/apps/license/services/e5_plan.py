@@ -1,45 +1,62 @@
 """
-E5 (biscuits) utilization-planning waterfall.
+E5 (biscuits) utilization-planning engine — the single source of truth for
+E5 business rules. Every consumer (Auto-Plan, Item Pivot Report + its Excel
+export, `norm_plan.py` / License Overview Planning tab + Balance Excel)
+calls :func:`plan_e5_items`; none of them may re-implement these rules.
 
-Processing order (each rule draws down the same running balance):
+Processing order (each step draws down the same running balance, threaded
+through every individual item — the balance is recalculated after every
+single planned debit, never reused from before that debit):
 
-    Rule 1  DIETARY FIBRE          @ 3.00
-    ── Special Validation ── (immediately after Rule 1) ──────────────────
-        milk_total = Milk Products (0404) + Egg Albumin/WPC (3502) util qty.
-        If remaining < milk_total × 1.50: plan the ENTIRE milk quantity as
-        SWP-E5 @ 1.50 right here, then run Rule 2, and SKIP Rule 3 below.
-    Rule 2  EDIBLE OILS WATERFALL
-        Case 2.1  PALM KERNEL OIL   @ 1.80  (HSN 1513 / desc "Vegetable Oil")
-        Case 2.2  RBD PALMOLEIN     @ 1.20  (HSN 15119020 / "RBD")
-        Case 2.3  REMAINING OILS    @ 5.00  (all other edible oils)
-    Rule 3  MILK & MILK PRODUCTS  (only when Special Validation did NOT fire)
-        Delegated to the shared milk-planning engine
-        (``services/milk_planner.py``, configured via ``MILK_CONFIG_E5``):
-          * 0404 only  → DWP-E5 @ 5.00, then SWP-E5 @ 1.50 (full qty, not split)
-          * 3502 only  → WPC-E5, full qty @ 25.00
-          * both       → average-price banded split across SWP/DWP/WPC(@20)
-    Final   WHEAT FLOUR mop-up     dynamic  (legacy step, preserved — absorbs
-                                              any balance left after Rule 3)
+    1. DIETARY FIBRE                @ 3.00
+    ── Special Validation ── (immediately after step 1) ───────────────────
+        milk_total = every Milk Products (0404) + Egg Albumin/WPC (3502)
+        item's qty, summed. If remaining < milk_total × 1.50: every milk
+        item (0404 AND 3502 alike) is planned right here at a flat SWP
+        @ 1.50, individually, then step 3 (Oils) still runs, and step 4
+        (Milk) below is skipped entirely.
+    2. (reserved — Special Validation sits here in the sequence)
+    3. EDIBLE OILS, per item, in this order:
+         PALM KERNEL OIL   @ 1.80  (HSN 1513 / desc "Vegetable Oil")
+         RBD PALMOLEIN     @ 1.20  (HSN 15119020 / "RBD")
+         REMAINING OILS    @ 5.00  (all other edible oils)
+    4. MILK — only when Special Validation did NOT fire. Every item is
+       classified and priced independently; 0404 and 3502 quantities are
+       NEVER averaged together, even when both appear on the same licence:
+         all MILK PRODUCTS (0404) items, in input order — each one gets two
+           independent dynamic-price passes over its OWN full quantity
+           (not split between the two): DWP-E5 @ 5.00 first, then
+           SWP-E5 @ 1.50 against whatever balance DWP left behind.
+         then all EGG ALBUMIN / WPC (3502) items, in input order — each
+           one gets WPC-E5 at a dynamic rate capped at 25.00
+           (min(implied balance rate, 25.00)).
+    5. WHEAT FLOUR mop-up — one dynamic rate (remaining ÷ total wheat-flour
+       qty), applied per item.
 
 All calculations use Decimal. Every step's utilization is capped at the
-remaining balance — if a step would exceed it, only the portion that fits
-is allocated (dynamic rate = balance / util_qty), and later steps see zero.
+remaining balance.
 """
 from __future__ import annotations
 
-from decimal import Decimal
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_FLOOR
 
-from apps.license.services.milk_planner import MILK_CONFIG_E5, plan_milk
-from apps.license.services.planning_allocation import (
-    allocate_step,
-    d as _d,
-    quantize_money as _quantize_money,
-)
+from apps.license.services.planning_allocation import allocate_step, d as _d
+
+_MONEY_4DP = Decimal('0.0001')
 
 
-# Classification buckets, in the new spec's priority order (Wheat Flour is a
-# preserved legacy bucket, not part of the new spec, appended at the end —
-# real licences still carry wheat-flour import items that must stay planned).
+def _quantize(value: Decimal) -> Decimal:
+    """4-dp quantization for display + comparison stability, staying Decimal
+    (unlike ``planning_allocation.quantize_money``, which returns a float —
+    not suitable here since callers do further Decimal arithmetic on
+    ``E5PlanLine.planned_cif``)."""
+    return value.quantize(_MONEY_4DP)
+
+
+# Classification buckets. Wheat Flour is a preserved legacy bucket, not part
+# of the milk-rule spec, appended at the end — real licences still carry
+# wheat-flour import items that must stay planned.
 E5_CATS: tuple[str, ...] = (
     'DIETARY FIBRE',
     'MILK PRODUCTS',
@@ -49,11 +66,10 @@ E5_CATS: tuple[str, ...] = (
     'REMAINING OILS',
     'WHEAT FLOUR',
 )
-E5_PLAN_CATS: tuple[str, ...] = E5_CATS
 
-# Fixed unit prices for the plain fixed-rate steps. Milk Products / Egg
-# Albumin-WPC prices live in MILK_CONFIG_E5 (shared with the Auto-Plan /
-# E1 engines); Wheat Flour is a dynamic mop-up so it has no fixed price.
+# Fixed unit prices for the plain fixed-rate steps. Milk/Egg-Albumin prices
+# are the DWP_PRICE/SWP_PRICE/WPC_PRICE constants below; Wheat Flour is a
+# dynamic mop-up so it has no fixed price.
 E5_UNIT_PRICES: dict[str, Decimal] = {
     'DIETARY FIBRE':    Decimal('3.00'),
     'PALM KERNEL OIL':  Decimal('1.80'),
@@ -61,9 +77,9 @@ E5_UNIT_PRICES: dict[str, Decimal] = {
     'REMAINING OILS':   Decimal('5.00'),
 }
 
-# Hard-coded reference balance used in the original spec for hand-calculations
-# and unit tests. Production callers pass the per-licence balance in instead.
-BALANCE_CIF_USD: Decimal = Decimal('69046.90')
+DWP_PRICE: Decimal = Decimal('5.00')
+SWP_PRICE: Decimal = Decimal('1.50')
+WPC_PRICE: Decimal = Decimal('25.00')
 
 
 def _norm(value) -> str:
@@ -139,109 +155,207 @@ def is_wheat_flour(hs_code: str | None) -> bool:
     return '11010000' in _norm(hs_code)
 
 
-def compute_e5_plan(
-    e5_totals: dict[str, float],
-    wf_qty=None,
-    license_balance=None,
-    pool_10pct=None,       # noqa: ARG001 — legacy signature, unused
-) -> tuple[dict[str, float], dict[str, float]]:
-    """Run the E5 waterfall and return ``(planned_per_cat, rate_per_cat)``.
+@dataclass(frozen=True)
+class E5Item:
+    """One planning input: a raw import item (or a description-group
+    representative), already classified into an :data:`E5_CATS` bucket."""
+    key: str
+    category: str
+    qty: Decimal
 
-    ``e5_totals`` maps each category in :data:`E5_CATS` to its aggregated
-    utilization quantity (E5 has no exclusion rules, so display == util).
-    Missing keys default to zero. ``license_balance`` is the starting
-    balance the waterfall draws down from — when omitted the spec's
-    reference balance :data:`BALANCE_CIF_USD` is used.
 
-    ``wf_qty`` is a legacy override for the WHEAT FLOUR quantity (kept for
-    old call sites that passed it separately); it wins over any
-    ``e5_totals['WHEAT FLOUR']`` value. ``pool_10pct`` is unused (legacy
-    signature compatibility).
+@dataclass(frozen=True)
+class E5PlanLine:
+    """One planned allocation against a single :class:`E5Item`.
 
-    Returns planned/rate keyed by every entry in E5_CATS (for per-item
-    proration by classification bucket) plus the individual DWP / SWP
-    milk sub-step breakdown. MILK PRODUCTS' / EGG ALBUMIN's planned CIF are
-    each the milk engine's total, attributed back proportionally by
-    utilization-quantity share (the two buckets are indistinguishable once
-    a mixed 0404+3502 group has been average-price-banded together).
+    ``step`` is the specific rate bucket actually applied — finer-grained
+    than ``category`` for MILK PRODUCTS / EGG ALBUMIN items, which each
+    produce a 'DWP' and/or 'SWP' and/or 'WPC' step, or a 'SWP' override line
+    when Special Validation fires.
     """
-    remaining = _d(license_balance) if license_balance is not None else BALANCE_CIF_USD
+    key: str
+    category: str
+    step: str
+    planned_qty: Decimal
+    unit_price: Decimal
+    planned_cif: Decimal
 
-    qty = {cat: _d(e5_totals.get(cat)) for cat in E5_CATS}
-    if wf_qty is not None:
-        qty['WHEAT FLOUR'] = _d(wf_qty)
 
-    result_keys = list(E5_CATS) + ['DWP', 'SWP']
-    planned: dict[str, Decimal] = {k: Decimal('0') for k in result_keys}
-    rate: dict[str, Decimal] = {k: Decimal('0') for k in result_keys}
-    for cat, price in E5_UNIT_PRICES.items():
-        rate[cat] = price
-    rate['DWP'] = MILK_CONFIG_E5.dwp_price
-    rate['SWP'] = MILK_CONFIG_E5.swp_price
-    rate['EGG ALBUMIN / WPC'] = MILK_CONFIG_E5.wpc_price
+@dataclass(frozen=True)
+class E5PlanResult:
+    lines: list[E5PlanLine]
+    remaining_cif: Decimal
+    special_validation_triggered: bool
 
-    # Rule 1 — Dietary Fibre.
-    used, r = allocate_step(qty['DIETARY FIBRE'], E5_UNIT_PRICES['DIETARY FIBRE'], remaining)
-    planned['DIETARY FIBRE'] = used
-    rate['DIETARY FIBRE'] = r
-    remaining -= used
+
+def _fixed_rate_line(
+    qty: Decimal,
+    rate: Decimal,
+    remaining: Decimal,
+    floor_qty: bool,
+) -> tuple[Decimal, Decimal, Decimal]:
+    """One fixed-rate-step allocation for a single item.
+
+    ``floor_qty=False`` (reporting): dynamic-rate model — the item's full
+    quantity is considered "used"; if the balance can't cover it at ``rate``,
+    the effective rate drops to whatever the balance implies (matches
+    :func:`allocate_step`).
+
+    ``floor_qty=True`` (Auto-Plan): fixed-rate model — the rate never moves;
+    instead the quantity is floored to a whole number so
+    ``planned_qty * rate`` never exceeds the balance (matches the historic
+    ``_simple_line_e5`` behaviour).
+
+    Returns ``(planned_qty, effective_rate, planned_cif)`` — ``planned_cif``
+    is 0 when nothing could be planned.
+    """
+    if qty <= 0 or rate <= 0 or remaining <= 0:
+        return Decimal('0'), rate, Decimal('0')
+    if not floor_qty:
+        used_cif, eff_rate = allocate_step(qty, rate, remaining)
+        if used_cif <= 0:
+            return Decimal('0'), rate, Decimal('0')
+        return qty, eff_rate, used_cif
+    raw_cif = qty * rate
+    capped_cif = raw_cif if raw_cif <= remaining else remaining
+    planned_qty = (capped_cif / rate).to_integral_value(rounding=ROUND_FLOOR)
+    planned_cif = planned_qty * rate
+    if planned_qty <= 0 or planned_cif <= 0:
+        return Decimal('0'), rate, Decimal('0')
+    return planned_qty, rate, planned_cif
+
+
+def plan_e5_items(
+    items: list[E5Item],
+    balance_cif,
+    *,
+    min_plan_qty: Decimal = Decimal('0'),
+    floor_qty: bool = False,
+) -> E5PlanResult:
+    """Run the full E5 waterfall over a list of already-classified items.
+
+    Args:
+        items: one :class:`E5Item` per import item (or description-group
+            representative) — ``category`` must already be one of
+            :data:`E5_CATS`; entries with an unrecognised category are
+            ignored. Items are processed within each category **in the
+            order given** — that order is business-significant whenever the
+            balance runs out mid-category.
+        balance_cif: the licence's starting balance for this run.
+        min_plan_qty: items with ``qty`` below this are skipped entirely
+            (no balance consumed) — pass 50 for Auto-Plan's minimum
+            plannable quantity, 0 (default) for reporting.
+        floor_qty: True for Auto-Plan (integer quantities, fixed rates —
+            see :func:`_fixed_rate_line`); False for reporting (continuous
+            decimals, dynamic rates). Milk sub-steps (DWP/SWP/WPC) always
+            use the dynamic-rate model regardless of this flag — Auto-Plan
+            never floored those (they were previously computed by
+            ``optimal_milk_split``'s own 3-dp rounding, which this replaces).
+
+    Returns:
+        :class:`E5PlanResult` — ``lines`` in processing order, the final
+        ``remaining_cif``, and whether Special Validation fired.
+    """
+    remaining = _d(balance_cif)
+    min_qty = _d(min_plan_qty)
+
+    all_by_cat: dict[str, list[E5Item]] = {cat: [] for cat in E5_CATS}
+    by_cat: dict[str, list[E5Item]] = {cat: [] for cat in E5_CATS}
+    for it in items:
+        if it.category not in all_by_cat:
+            continue
+        q = _d(it.qty)
+        item = E5Item(key=it.key, category=it.category, qty=q)
+        all_by_cat[it.category].append(item)
+        if q >= min_qty:
+            by_cat[it.category].append(item)
+
+    lines: list[E5PlanLine] = []
+
+    def _emit(item: E5Item, step: str, planned_qty: Decimal, rate: Decimal, cif: Decimal) -> None:
+        if cif <= 0:
+            return
+        lines.append(E5PlanLine(
+            key=item.key,
+            category=item.category,
+            step=step,
+            planned_qty=planned_qty,
+            unit_price=_quantize(rate),
+            planned_cif=_quantize(cif),
+        ))
+
+    # Step 1 — Dietary Fibre.
+    for item in by_cat['DIETARY FIBRE']:
+        pq, rate, cif = _fixed_rate_line(item.qty, E5_UNIT_PRICES['DIETARY FIBRE'], remaining, floor_qty)
+        _emit(item, 'DIETARY FIBRE', pq, rate, cif)
+        remaining -= cif
+
+    # Special Validation — uses the UNFILTERED milk total (matches the
+    # historic Auto-Plan behaviour of checking before any threshold skip).
+    milk_total_qty = sum(
+        (i.qty for i in all_by_cat['MILK PRODUCTS'] + all_by_cat['EGG ALBUMIN / WPC']),
+        Decimal('0'),
+    )
+    special_triggered = (
+        milk_total_qty > 0
+        and remaining > 0
+        and remaining < milk_total_qty * SWP_PRICE
+    )
 
     def _run_oils() -> None:
         nonlocal remaining
-        for cat in ('PALM KERNEL OIL', 'RBD PALMOLEIN', 'REMAINING OILS'):
-            used_, r_ = allocate_step(qty[cat], E5_UNIT_PRICES[cat], remaining)
-            planned[cat] = used_
-            rate[cat] = r_
-            remaining -= used_
-
-    def _attribute_milk(total_cif: Decimal, qty_0404: Decimal, qty_3502: Decimal) -> None:
-        milk_total = qty_0404 + qty_3502
-        if milk_total > 0:
-            planned['MILK PRODUCTS'] = total_cif * (qty_0404 / milk_total)
-            planned['EGG ALBUMIN / WPC'] = total_cif * (qty_3502 / milk_total)
-
-    # Special Validation — immediately after Rule 1.
-    qty_0404 = qty['MILK PRODUCTS']
-    qty_3502 = qty['EGG ALBUMIN / WPC']
-    milk_total = qty_0404 + qty_3502
-    special_triggered = (
-        milk_total > 0
-        and remaining > 0
-        and remaining < milk_total * MILK_CONFIG_E5.swp_price
-    )
+        for cat, rate in (
+            ('PALM KERNEL OIL', E5_UNIT_PRICES['PALM KERNEL OIL']),
+            ('RBD PALMOLEIN', E5_UNIT_PRICES['RBD PALMOLEIN']),
+            ('REMAINING OILS', E5_UNIT_PRICES['REMAINING OILS']),
+        ):
+            for item in by_cat[cat]:
+                pq, r, cif = _fixed_rate_line(item.qty, rate, remaining, floor_qty)
+                _emit(item, cat, pq, r, cif)
+                remaining -= cif
 
     if special_triggered:
-        used, r = allocate_step(milk_total, MILK_CONFIG_E5.swp_price, remaining)
-        planned['SWP'] = used
-        rate['SWP'] = r
-        remaining -= used
-        _attribute_milk(used, qty_0404, qty_3502)
-        if qty_0404 > 0:
-            rate['MILK PRODUCTS'] = r
-        if qty_3502 > 0:
-            rate['EGG ALBUMIN / WPC'] = r
+        for item in by_cat['MILK PRODUCTS'] + by_cat['EGG ALBUMIN / WPC']:
+            pq, r, cif = _fixed_rate_line(item.qty, SWP_PRICE, remaining, floor_qty)
+            _emit(item, 'SWP', pq, r, cif)
+            remaining -= cif
         _run_oils()
-        # Rule 3 (normal milk optimisation) is skipped — already planned above.
+        # Step 4 (normal milk classification) is skipped — already planned above.
     else:
         _run_oils()
-        milk_planned, milk_rate, remaining = plan_milk(qty_0404, qty_3502, remaining, MILK_CONFIG_E5)
-        planned['DWP'] = milk_planned['DWP']
-        rate['DWP'] = milk_rate['DWP']
-        planned['SWP'] = milk_planned['SWP']
-        rate['SWP'] = milk_rate['SWP']
-        rate['EGG ALBUMIN / WPC'] = milk_rate['WPC']
-        total_milk_cif = milk_planned['DWP'] + milk_planned['SWP'] + milk_planned['WPC']
-        _attribute_milk(total_milk_cif, qty_0404, qty_3502)
-        if qty_0404 > 0:
-            rate['MILK PRODUCTS'] = rate['DWP'] + rate['SWP']
+        # 0404 items — DWP then SWP, both against this item's own full
+        # quantity (not split between the two steps), never averaged with
+        # any 3502 item on the same licence.
+        for item in by_cat['MILK PRODUCTS']:
+            dwp_cif, dwp_rate = allocate_step(item.qty, DWP_PRICE, remaining)
+            if dwp_cif > 0:
+                _emit(item, 'DWP', item.qty, dwp_rate, dwp_cif)
+                remaining -= dwp_cif
+            swp_cif, swp_rate = allocate_step(item.qty, SWP_PRICE, remaining)
+            if swp_cif > 0:
+                _emit(item, 'SWP', item.qty, swp_rate, swp_cif)
+                remaining -= swp_cif
+        # 3502 items — WPC, dynamic rate capped at $25, processed after
+        # every 0404 item.
+        for item in by_cat['EGG ALBUMIN / WPC']:
+            wpc_cif, wpc_rate = allocate_step(item.qty, WPC_PRICE, remaining)
+            if wpc_cif > 0:
+                _emit(item, 'WPC', item.qty, wpc_rate, wpc_cif)
+                remaining -= wpc_cif
 
-    # Final — Wheat Flour mop-up (legacy step, preserved unchanged): absorbs
-    # any balance left after Rule 3, at a dynamic rate = balance / qty.
-    if remaining > 0 and qty['WHEAT FLOUR'] > 0:
-        planned['WHEAT FLOUR'] = remaining
-        rate['WHEAT FLOUR'] = remaining / qty['WHEAT FLOUR']
-        remaining = Decimal('0')
+    # Step 5 — Wheat Flour mop-up: one dynamic rate across every qualifying
+    # item's total quantity, then applied per item.
+    wf_items = by_cat['WHEAT FLOUR']
+    wf_total_qty = sum((i.qty for i in wf_items), Decimal('0'))
+    if remaining > 0 and wf_total_qty > 0:
+        wf_rate = remaining / wf_total_qty
+        for item in wf_items:
+            pq, r, cif = _fixed_rate_line(item.qty, wf_rate, remaining, floor_qty)
+            _emit(item, 'WHEAT FLOUR', pq, r, cif)
+            remaining -= cif
 
-    planned_f = {k: _quantize_money(v) for k, v in planned.items()}
-    rate_f = {k: _quantize_money(v) for k, v in rate.items()}
-    return planned_f, rate_f
+    return E5PlanResult(
+        lines=lines,
+        remaining_cif=remaining,
+        special_validation_triggered=special_triggered,
+    )

@@ -1,47 +1,36 @@
 """
-E5 Auto-Plan service — 3-rule waterfall with special milk-priority validation.
+E5 Auto-Plan service — writes DB plan lines for the biscuits norm.
 
-Processing sequence — Normal Flow:
-  Rule 1  Dietary Fibre         @ $3.00   (classify_e5_item → DIETARY FIBRE)
-  ─── Special Validation ───────────────────────────────────────────────────────
-  Rule 2  Edible Oils (waterfall)
-            Case 2.1  Palm Kernel Oil  @ $1.80  (HSN 1513 or desc "Vegetable Oil")
-            Case 2.2  RBD Palmolein   @ $1.20  (HSN 15119020 / RBD category)
-            Case 2.3  Olive Oil        @ $5.00  (all other oils)
-  Rule 3 .a Milk & Milk avg-price split if hsn code contains "0404" and "3502"
-            avg < 1.50            → SWP-E5 @ 1.50
-            1.50 ≤ avg < 5.00     → SWP-E5 @ 1.50 + DWP-E5 @ 5.00
-            5.00 ≤ avg < 20.00    → DWP-E5 @ 5.00 + WPC-E5 @ 20.00
-            avg ≥ 20.00           → WPC-E5 (full qty + full remaining CIF)
-Rule 3 .b Milk & Milk avg-price split if hsn code contains "0404" only
-    split in DWP-E5 @ 5$ and SWP-E1 so that max $ and max qty is utilize dont want to waste any
-        Rule 3 .c Milk & Milk avg-price split if hsn code contains "3502" only
-        use full quantity in WPC-e5 with max unit price 25$
+All business rules (rates, processing order, Special Validation, per-item
+0404/3502 classification with no averaging, Balance CIF recalculation) live
+in the shared engine ``services/e5_plan.py`` (:func:`plan_e5_items`). This
+module only handles what's specific to writing persisted plan lines:
 
-
-
-
-Special Validation (executed AFTER Rule 1):
-  If remaining_cif < (milk_total_qty × 1.50):
-    → Plan ALL milk @ $1.50 as SWP-E5 FIRST
-    → Then execute Rule 2 (Edible Oils) with whatever CIF remains
-    → SKIP the normal Rule 3 (milk already planned)
-
-Minimum plannable qty: MIN_PLAN_QTY = 50 (shared constant)
-Quantities: FLOOR to 0 decimal places.
+  * bucketing raw import items into groups (one plan line per description
+    group, saved on the group's lowest-serial representative — matching how
+    the Plan Tab groups them in the UI);
+  * a keyword-based fallback for classifying milk/dairy items whose HSN is
+    missing or unreliable (``_is_milk_group``) — a data-quality workaround,
+    independent of the shared engine's rules;
+  * mapping the engine's per-item results to ``LicenseItemPlan``-shaped
+    line dicts (``import_item``, ``item_name``, ``planned_quantity``,
+    ``unit_price``, ``planned_cif_fc``, ``note``);
+  * the persistence-layer conventions the engine's ``min_plan_qty=50`` /
+    ``floor_qty=True`` options implement: import items below 50 units are
+    never planned, and fixed-rate steps floor to whole-number quantities.
 """
 from __future__ import annotations
 
-import math
+from decimal import Decimal
 from typing import Optional
 
 from apps.license.services.auto_plan_shared import (
     ensure_plan_item_names as _ensure_names,
     group_by_desc as _group_by_desc,
-    optimal_milk_split as _optimal_milk_split,
 )
+from apps.license.services.e5_plan import E5Item, classify_e5_item, plan_e5_items
 
-MIN_PLAN_QTY: float = 50.0
+MIN_PLAN_QTY = Decimal('50')
 
 # Each entry: (item_name, norm_code).  ensure_plan_item_names creates any
 # missing rows so Auto Plan never fails because a name is absent from the DB.
@@ -57,22 +46,36 @@ _RULE_NAMES_E5: tuple[tuple[str, str], ...] = (
     ('WHEAT FLOUR - E5',      'E5'),   # final mop-up
 )
 
-# Keywords that identify milk/dairy import items (lowercase).
+# Maps the engine's E5PlanLine.step to the DB item-name string.
+_STEP_ITEM_NAME: dict[str, str] = {
+    'DIETARY FIBRE':   'DIETARY FIBRE - E5',
+    'PALM KERNEL OIL': 'PALM KERNEL OIL - E5',
+    'RBD PALMOLEIN':   'RBD PALMOLEIN OIL - E5',
+    'REMAINING OILS':  'OLIVE OIL - E5',
+    'DWP':             'DWP - E5',
+    'SWP':             'SWP - E5',
+    'WPC':             'WPC - E5',
+    'WHEAT FLOUR':     'WHEAT FLOUR - E5',
+}
+
+_STEP_LABEL: dict[str, str] = {
+    'DIETARY FIBRE':   'Rule 1 – Dietary Fibre',
+    'PALM KERNEL OIL': 'Rule 2.1 – Palm Kernel Oil',
+    'RBD PALMOLEIN':   'Rule 2.2 – RBD Palmolein',
+    'REMAINING OILS':  'Rule 2.3 – Olive Oil',
+    'DWP':             'Rule 4 — DWP - E5',
+    'SWP':             'Rule 4 — SWP - E5',
+    'WPC':             'Rule 4 — WPC - E5',
+    'WHEAT FLOUR':     'Final – Wheat Flour mop-up',
+}
+
+# Keywords that identify milk/dairy import items (lowercase) — fallback for
+# items whose HSN is missing/unreliable; `classify_e5_item` is tried first.
 _MILK_KW = frozenset({
     'swp', 'dwp', 'wpc', 'whey', 'milk', 'skimmed', 'lactose',
     'casein', 'permeate', 'butter', 'cream',
 })
-
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def _r2(x: float) -> float:
-    return round(x, 2)
-
-
-def _floor_qty(x: float) -> float:
-    """Floor to whole-number quantity."""
-    return float(math.floor(x))
+_WPC_KW = frozenset({'wpc', 'egg', 'albumin'})
 
 
 def _is_milk_group(item_name_list: list[str], e5_cat: Optional[str]) -> bool:
@@ -85,68 +88,33 @@ def _is_milk_group(item_name_list: list[str], e5_cat: Optional[str]) -> bool:
     return False
 
 
+def _milk_category(item_name_list: list[str], e5_cat: Optional[str]) -> str:
+    """Which shared-engine milk bucket a milk-classified item belongs to.
 
-def _simple_line_e5(
-    ii,
-    avail: float,
-    remaining_cif: float,
-    unit_price: float,
-    item_name_id: Optional[int],
-    rule_label: str,
-) -> tuple[Optional[dict], float]:
+    `classify_e5_item`'s own HSN-based category wins when available; items
+    only caught by `_is_milk_group`'s keyword fallback (no reliable HSN) are
+    routed to EGG ALBUMIN / WPC when their name suggests egg/WPC, else to
+    the far more common MILK PRODUCTS (0404, DWP/SWP) bucket.
     """
-    Build one fixed-price plan line.
-
-    Steps:
-      1. Cap raw CIF at min(avail × rate, remaining_cif).
-      2. Floor the quantity: planned_qty = FLOOR(raw_cif ÷ rate).
-      3. Recalculate CIF from the floored qty: planned_cif = planned_qty × rate.
-         Ensures planned_cif = planned_qty × unit_price exactly.
-         Example: FLOOR(28326.80 ÷ 1.50) = 18884 → CIF = 18884 × 1.50 = 28326.00
-      4. Return None when planned_qty is 0 (callers must guard with `if line:`).
-
-    Returns (line_dict | None, new_remaining_cif).
-    """
-    if unit_price <= 0:
-        return None, remaining_cif                        # guard: zero rate → skip
-    raw_cif     = min(avail * unit_price, remaining_cif)
-    planned_qty = _floor_qty(raw_cif / unit_price)
-    planned_cif = _r2(planned_qty * unit_price)          # re-derive from floored qty
-    if planned_qty <= 0 or planned_cif <= 0:
-        return None, remaining_cif                        # nothing plannable
-    line = {
-        'import_item':      ii.id,
-        'item_name':        item_name_id,
-        'planned_quantity': planned_qty,
-        'unit_price':       unit_price,
-        'planned_cif_fc':   planned_cif,
-        'note':             f'Auto-planned (E5 {rule_label})',
-    }
-    return line, _r2(remaining_cif - planned_cif)
+    if e5_cat in ('MILK PRODUCTS', 'EGG ALBUMIN / WPC'):
+        return e5_cat
+    for name in item_name_list:
+        if any(kw in name.lower() for kw in _WPC_KW):
+            return 'EGG ALBUMIN / WPC'
+    return 'MILK PRODUCTS'
 
 
-# ─── Main entry point ──────────────────────────────────────────────────────────
+# ─── Main entry point ──────────────────────────────────────────────────────
 
 def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
-    """
-    Run the full E5 Auto Plan waterfall.
-
-    Normal flow:
-      1 → Dietary Fibre  2 → Edible Oils  3 → Milk & Milk
-
-    Special flow (triggered when remaining CIF after Rule 1 is less than
-    milk_total_qty × $1.50):
-      1 → Dietary Fibre  2 → Milk (full qty @ $1.50 as SWP-E5)
-      3 → Edible Oils    [Rule 3 skipped]
+    """Run the full E5 Auto Plan waterfall via the shared engine.
 
     Returns (lines, remaining_cif).
     """
-    from apps.license.services.e5_plan import classify_e5_item
-
     # ── Get-or-create all planned item names (§2: never fail on missing) ────
     name_ids = _ensure_names(list(_RULE_NAMES_E5))
 
-    # ── Load import items ─────────────────────────────────────────────────────
+    # ── Load import items ────────────────────────────────────────────────
     import_items = (
         license_obj.import_license.all()
         .select_related('hs_code')
@@ -155,30 +123,33 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
     )
 
     _live_balance_cif = license_obj.get_balance_cif
-    balance_cif   = float(_live_balance_cif if _live_balance_cif is not None else (license_obj.balance_cif or 0))
-    remaining_cif = balance_cif
+    balance_cif = Decimal(str(_live_balance_cif if _live_balance_cif is not None else (license_obj.balance_cif or 0)))
 
-    # ── Bucket import items (hierarchical: first-match wins) ──────────────────
+    # ── Bucket import items (hierarchical: first-match wins) ────────────────
     dietary_fibre: list = []
-    milk:          list = []
-    palm_kernel:   list = []   # Case 2.1 — PKO  @ $1.80
-    rbd:           list = []   # Case 2.2 — RBD  @ $1.20
-    olive_oil:     list = []   # Case 2.3 — Olive @ $5.00
-    wheat_flour:   list = []   # Final mop-up — dynamic rate, absorbs all remaining CIF
+    milk_0404: list = []
+    milk_3502: list = []
+    palm_kernel: list = []   # Case 2.1 — PKO  @ $1.80
+    rbd: list = []           # Case 2.2 — RBD  @ $1.20
+    olive_oil: list = []     # Case 2.3 — Olive @ $5.00
+    wheat_flour: list = []   # Final mop-up — dynamic rate, absorbs all remaining CIF
 
     for ii in import_items:
         item_names = [n.name for n in ii.items.all()]
-        key        = ', '.join(sorted(item_names)) if item_names else (ii.description or '-')
-        hs         = (ii.hs_code.hs_code if ii.hs_code else '') or ''
-        desc       = (ii.description or '')
-        hs_l       = hs.lower().replace(' ', '').replace('-', '')
-        desc_l     = desc.lower()
-        cat        = classify_e5_item(key, hs, desc)
+        key = ', '.join(sorted(item_names)) if item_names else (ii.description or '-')
+        hs = (ii.hs_code.hs_code if ii.hs_code else '') or ''
+        desc = (ii.description or '')
+        hs_l = hs.lower().replace(' ', '').replace('-', '')
+        desc_l = desc.lower()
+        cat = classify_e5_item(key, hs, desc)
 
         if cat == 'DIETARY FIBRE':
             dietary_fibre.append(ii)
         elif _is_milk_group(item_names, cat):
-            milk.append(ii)
+            if _milk_category(item_names, cat) == 'EGG ALBUMIN / WPC':
+                milk_3502.append(ii)
+            else:
+                milk_0404.append(ii)
         # Case 2.1: HSN starts with 1513 OR description contains "Vegetable Oil"
         elif hs_l.startswith('1513') or 'vegetable oil' in desc_l or cat == 'PALM KERNEL OIL':
             palm_kernel.append(ii)
@@ -205,175 +176,41 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
             wheat_flour.append(ii)
         # else: unclassified — left unplanned
 
-    # Total milk quantity (needed for special validation)
-    milk_total_qty = sum(float(ii.available_quantity or 0) for ii in milk)
-    min_milk_cif   = _r2(milk_total_qty * 1.50)
+    # ── Group each bucket by description; one E5Item per group, keyed on
+    # the group's lowest-serial representative (matches how the Plan Tab
+    # groups items and how manual plans are anchored). ──────────────────
+    rep_by_key: dict = {}
+    items: list[E5Item] = []
+
+    def _add_group(bucket: list, category: str) -> None:
+        for rep, group_avail in _group_by_desc(bucket):
+            rep_by_key[rep.id] = rep
+            items.append(E5Item(key=rep.id, category=category, qty=Decimal(str(group_avail))))
+
+    _add_group(dietary_fibre, 'DIETARY FIBRE')
+    _add_group(milk_0404, 'MILK PRODUCTS')
+    _add_group(milk_3502, 'EGG ALBUMIN / WPC')
+    _add_group(palm_kernel, 'PALM KERNEL OIL')
+    _add_group(rbd, 'RBD PALMOLEIN')
+    _add_group(olive_oil, 'REMAINING OILS')
+    _add_group(wheat_flour, 'WHEAT FLOUR')
+
+    result = plan_e5_items(items, balance_cif, min_plan_qty=MIN_PLAN_QTY, floor_qty=True)
 
     lines: list[dict] = []
+    for line in result.lines:
+        rep = rep_by_key[line.key]
+        if line.step == 'SWP' and result.special_validation_triggered:
+            label = 'Rule Special — SWP - E5'
+        else:
+            label = _STEP_LABEL[line.step]
+        lines.append({
+            'import_item':      rep.id,
+            'item_name':        name_ids.get(_STEP_ITEM_NAME[line.step]),
+            'planned_quantity': float(line.planned_qty),
+            'unit_price':       float(line.unit_price),
+            'planned_cif_fc':   float(line.planned_cif),
+            'note':             f'Auto-planned (E5 {label})',
+        })
 
-    # ── Rule 1: Dietary Fibre @ $3.00 ────────────────────────────────────────
-    # One plan line PER DESCRIPTION GROUP, saved on the group's lowest-serial
-    # representative — matching the Plan Tab anchor so the group shows Planned.
-    for rep, group_avail in _group_by_desc(dietary_fibre):
-        if remaining_cif <= 0:
-            break
-        if group_avail < MIN_PLAN_QTY:
-            continue
-        line, remaining_cif = _simple_line_e5(
-            rep, group_avail, remaining_cif, 3.00,
-            name_ids.get('DIETARY FIBRE - E5'),
-            'Rule 1 – Dietary Fibre',
-        )
-        if line:
-            lines.append(line)
-
-    # ── Special Validation ────────────────────────────────────────────────────
-    # If remaining CIF is less than what milk needs @ $1.50/unit,
-    # milk gets priority BEFORE Edible Oils.
-    special_milk_triggered = (
-        milk_total_qty > 0
-        and remaining_cif < min_milk_cif
-        and remaining_cif > 0
-    )
-
-    def _plan_oils():
-        """Inner helper: execute edible-oil rules (group-based) against remaining_cif."""
-        nonlocal remaining_cif
-
-        # Case 2.1: Palm Kernel Oil @ $1.80
-        for rep, group_avail in _group_by_desc(palm_kernel):
-            if remaining_cif <= 0:
-                break
-            if group_avail < MIN_PLAN_QTY:
-                continue
-            line, remaining_cif = _simple_line_e5(
-                rep, group_avail, remaining_cif, 1.80,
-                name_ids.get('PALM KERNEL OIL - E5'),
-                'Rule 2.1 – Palm Kernel Oil',
-            )
-            if line:
-                lines.append(line)
-
-        # Case 2.2: RBD Palmolein Oil @ $1.20
-        for rep, group_avail in _group_by_desc(rbd):
-            if remaining_cif <= 0:
-                break
-            if group_avail < MIN_PLAN_QTY:
-                continue
-            line, remaining_cif = _simple_line_e5(
-                rep, group_avail, remaining_cif, 1.20,
-                name_ids.get('RBD PALMOLEIN OIL - E5'),
-                'Rule 2.2 – RBD Palmolein',
-            )
-            if line:
-                lines.append(line)
-
-        # Case 2.3: Olive Oil @ $5.00
-        for rep, group_avail in _group_by_desc(olive_oil):
-            if remaining_cif <= 0:
-                break
-            if group_avail < MIN_PLAN_QTY:
-                continue
-            line, remaining_cif = _simple_line_e5(
-                rep, group_avail, remaining_cif, 5.00,
-                name_ids.get('OLIVE OIL - E5'),
-                'Rule 2.3 – Olive Oil',
-            )
-            if line:
-                lines.append(line)
-
-    # ── Group milk items by description ──────────────────────────────────────
-    # Import items for the same product (e.g. "Milk & Milk Products") appear on
-    # multiple serial numbers. Plan each description-group as ONE unit so the
-    # optimizer sees the full available quantity and produces the best split.
-    # The plan lines are all assigned to the group's representative import item
-    # (lowest serial number), matching how PlanTab groups them in the UI.
-    from collections import defaultdict as _dd
-    milk_by_desc: dict = _dd(list)
-    for ii in milk:
-        key = (ii.description or '').strip().upper()
-        milk_by_desc[key].append(ii)
-
-    def _plan_milk_groups(use_optimal: bool) -> None:
-        """
-        Plan all milk description-groups.
-
-        use_optimal=True  → full SWP→DWP→WPC greedy optimization (Rule 3).
-        use_optimal=False → all qty as SWP @ $1.50 (special validation path).
-        """
-        nonlocal remaining_cif
-        for _desc, group in milk_by_desc.items():
-            if remaining_cif <= 0:
-                break
-            group_qty = sum(float(ii.available_quantity or 0) for ii in group)
-            if group_qty < MIN_PLAN_QTY:
-                continue
-            # Representative = lowest serial number in the group
-            rep = min(group, key=lambda x: x.serial_number)
-
-            if use_optimal:
-                q_swp, q_dwp, q_wpc = _optimal_milk_split(group_qty, remaining_cif)
-                prod_rows = [
-                    ('SWP - E5', q_swp, 1.50, 'Rule 3'),
-                    ('DWP - E5', q_dwp, 5.00, 'Rule 3'),
-                    ('WPC - E5', q_wpc, 20.00, 'Rule 3'),
-                ]
-            else:
-                # Special validation: all qty @ $1.50 as SWP-E5
-                q_swp = int(math.floor(
-                    min(remaining_cif, group_qty * 1.50) / 1.50
-                ))
-                prod_rows = [('SWP - E5', q_swp, 1.50, 'Rule Special')]
-
-            for prod, qty, price, rule_label in prod_rows:
-                if qty <= 0 or remaining_cif <= 0:
-                    continue
-                cif = _r2(qty * price)
-                if cif <= 0:
-                    continue
-                lines.append({
-                    'import_item':      rep.id,
-                    'item_name':        name_ids.get(prod),
-                    'planned_quantity': float(qty),
-                    'unit_price':       price,
-                    'planned_cif_fc':   cif,
-                    'note': f'Auto-planned (E5 {rule_label} — {prod})',
-                })
-                remaining_cif = _r2(remaining_cif - cif)
-
-    if special_milk_triggered:
-        # Special flow: milk CIF priority — all milk @ $1.50 (SWP-E5) first.
-        _plan_milk_groups(use_optimal=False)
-        _plan_oils()
-        # Rule 3 (normal milk optimization) is SKIPPED — already planned above.
-
-    else:
-        # Normal flow: oils first, then full milk optimization.
-        _plan_oils()
-        # ── Rule 3: Milk & Milk — greedy SWP→DWP→WPC optimizer ──────────────
-        _plan_milk_groups(use_optimal=True)
-
-    # ── Final mop-up: Wheat Flour absorbs ALL remaining balance CIF ─────────
-    # Group-based: one plan line per description group, on the lowest-serial
-    # representative. Dynamic unit price = remaining_cif ÷ total group qty.
-    if remaining_cif > 0 and wheat_flour:
-        wf_groups = _group_by_desc(wheat_flour)
-        wf_plannable_qty = sum(ga for _, ga in wf_groups if ga >= MIN_PLAN_QTY)
-        if wf_plannable_qty > 0:
-            wf_unit_price = _r2(remaining_cif / wf_plannable_qty)
-            if wf_unit_price <= 0:
-                wf_plannable_qty = 0  # rate rounds to $0 → skip to avoid division-by-zero
-            for rep, group_avail in wf_groups:
-                if remaining_cif <= 0:
-                    break
-                if group_avail < MIN_PLAN_QTY:
-                    continue
-                line, remaining_cif = _simple_line_e5(
-                    rep, group_avail, remaining_cif, wf_unit_price,
-                    name_ids.get('WHEAT FLOUR - E5'),
-                    'Final – Wheat Flour mop-up',
-                )
-                if line:
-                    lines.append(line)
-
-    return lines, remaining_cif
+    return lines, float(result.remaining_cif)

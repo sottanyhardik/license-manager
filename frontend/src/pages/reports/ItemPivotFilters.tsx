@@ -132,6 +132,7 @@ export default function ItemPivotFilters({
                             classNamePrefix="select"
                             menuPortalTarget={menuPortalTarget}
                             menuPosition="fixed"
+                            closeMenuOnScroll
                             styles={{
                                 menuPortal: (base) => ({ ...base, zIndex: 9999 }),
                                 control: (base) => ({ ...base, minHeight: "38px" }),

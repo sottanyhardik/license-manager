@@ -1,15 +1,17 @@
-"""Standalone verifier for the E5 utilization-planning waterfall.
+"""Standalone verifier for the E5 utilization-planning engine.
 
 Usage:
     cd backend && ../.venv/bin/python scripts/verify_e5_plan.py 0311052707 0311054202
 
-Replays the classifier + compute_e5_plan exactly as views/license.py does,
-prints aggregated quantities per category, every step of the waterfall, and
-the final balance.
+Replays the classifier + plan_e5_items exactly as norm_plan.py /
+item_pivot_report.py do, prints aggregated quantities per category, every
+planned line in processing order (per item — 0404 and 3502 are never
+averaged together), and the final balance.
 """
 import os
 import sys
 from collections import defaultdict
+from decimal import Decimal
 
 # `backend/` (parent of this script's dir) must be on sys.path so the
 # `lmanagement` settings package is importable when run as a standalone
@@ -24,9 +26,9 @@ django.setup()
 from apps.license.models import LicenseDetailsModel  # noqa: E402
 from apps.license.services.e5_plan import (  # noqa: E402
     E5_CATS,
-    E5_PLAN_CATS,
+    E5Item,
     classify_e5_item,
-    compute_e5_plan,
+    plan_e5_items,
 )
 
 
@@ -64,7 +66,7 @@ def verify(license_number: str):
     print('=' * 78)
 
     lic = LicenseDetailsModel.objects.get(license_number=license_number)
-    balance_cif = float(lic.balance_cif or 0)
+    balance_cif = Decimal(str(lic.balance_cif or 0))
     norm_classes = list(lic.export_license.values_list('norm_class__norm_class', flat=True))
     is_e5 = any(n and str(n).strip() == 'E5' for n in norm_classes)
     print(f'  id={lic.id}')
@@ -74,10 +76,11 @@ def verify(license_number: str):
 
     bal_agg = build_bal_agg(lic)
 
-    # Classification pass — exactly as views/license.py does.
-    totals = {c: 0.0 for c in E5_PLAN_CATS}
+    # Classification pass — exactly as norm_plan.py / item_pivot_report.py do.
+    totals = {c: 0.0 for c in E5_CATS}
     first_desc = {}
     unclassified = []
+    items: list[E5Item] = []
     for ik in bal_agg:
         bq = bal_agg[ik]['qty']
         hs = bal_agg[ik]['hs_code'] or ''
@@ -87,6 +90,7 @@ def verify(license_number: str):
             totals[cat] += bq
             if not first_desc.get(cat):
                 first_desc[cat] = de
+            items.append(E5Item(key=ik, category=cat, qty=Decimal(str(bq))))
         else:
             unclassified.append((ik, hs, de, bq))
 
@@ -104,35 +108,28 @@ def verify(license_number: str):
         for ik, hs, de, bq in unclassified:
             print(f'    {ik[:40]:<40} HSN={hs:<12} qty={bq:>10,.2f}  desc={de}')
 
-    # Run the waterfall. `pool_10pct` is accepted by compute_e5_plan for
-    # legacy signature compatibility but no longer consumed.
-    planned, rate = compute_e5_plan(totals, None, balance_cif)
+    # Run the shared engine — reporting mode (no floor/threshold).
+    result = plan_e5_items(items, balance_cif)
 
-    # Informational only — mirrors the Special Validation predicate in
-    # `compute_e5_plan` so the report shows whether it would have fired,
-    # without re-implementing the actual allocation math here.
-    milk_total = totals.get('MILK PRODUCTS', 0.0) + totals.get('EGG ALBUMIN / WPC', 0.0)
-    special_triggered = milk_total > 0 and 0 < balance_cif < milk_total * 1.5
     print('\n  Special Validation:')
+    milk_total = totals.get('MILK PRODUCTS', 0.0) + totals.get('EGG ALBUMIN / WPC', 0.0)
     print(f'    milk_total_qty = {milk_total:>12,.2f}   threshold (×1.50) = {milk_total * 1.5:>12,.2f}')
-    print(f'    triggered      = {special_triggered}  (balance_cif = {balance_cif:,.2f})')
+    print(f'    triggered      = {result.special_validation_triggered}  (balance_cif = {balance_cif:,.2f})')
 
-    # Final dump — every category compute_e5_plan returns, plus the DWP/SWP
-    # sub-step breakdown (DWP/SWP/WPC rates all live on MILK_CONFIG_E5).
-    print('\n  Final planned-CIF per category:')
-    print(f'    {"Category":<20}{"Qty":>14}{"Unit Price":>14}{"Planned CIF":>16}')
-    total_planned = 0.0
-    for cat in E5_CATS:
-        q = totals.get(cat, 0)
-        pc = planned[cat]
-        up = round(pc / q, 2) if q else 0.0
-        total_planned += pc
-        print(f'    {cat:<20}{q:>14,.2f}{up:>14,.2f}{pc:>16,.2f}')
-    print('    ── milk sub-steps (DWP / SWP; WPC is folded into EGG ALBUMIN / WPC above) ──')
-    for step in ('DWP', 'SWP'):
-        print(f'    {step:<20}{"":>14}{rate[step]:>14,.2f}{planned[step]:>16,.2f}')
-    print(f'    {"TOTAL PLANNED":<20}{"":>14}{"":>14}{total_planned:>16,.2f}')
-    print(f'    {"FINAL BALANCE":<20}{"":>14}{"":>14}{(balance_cif - total_planned):>16,.2f}')
+    # Per-item lines in processing order — 0404 and 3502 items are always
+    # priced independently now, never averaged into one shared rate even
+    # when both appear on this licence.
+    print('\n  Planned lines (processing order):')
+    print(f'    {"Item":<32}{"Category":<20}{"Step":<10}{"Qty":>12}{"Rate":>10}{"CIF":>14}')
+    total_planned = Decimal('0')
+    for line in result.lines:
+        total_planned += line.planned_cif
+        print(
+            f'    {str(line.key)[:32]:<32}{line.category:<20}{line.step:<10}'
+            f'{line.planned_qty:>12,.2f}{line.unit_price:>10,.2f}{line.planned_cif:>14,.2f}'
+        )
+    print(f'\n    {"TOTAL PLANNED":<62}{total_planned:>14,.2f}')
+    print(f'    {"FINAL BALANCE":<62}{result.remaining_cif:>14,.2f}')
 
 
 if __name__ == '__main__':

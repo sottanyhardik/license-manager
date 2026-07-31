@@ -10,7 +10,6 @@ the final balance.
 import os
 import sys
 from collections import defaultdict
-from decimal import Decimal
 
 # `backend/` (parent of this script's dir) must be on sys.path so the
 # `lmanagement` settings package is importable when run as a standalone
@@ -23,13 +22,9 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lmanagement.settings')
 django.setup()
 
 from apps.license.models import LicenseDetailsModel  # noqa: E402
-from apps.license.services.condition_pool import compute_condition_pools  # noqa: E402
 from apps.license.services.e5_plan import (  # noqa: E402
     E5_CATS,
     E5_PLAN_CATS,
-    E5_UNIT_PRICES,
-    WPC_MAX_PRICE,
-    WPC_MIN_PRICE,
     classify_e5_item,
     compute_e5_plan,
 )
@@ -109,69 +104,21 @@ def verify(license_number: str):
         for ik, hs, de, bq in unclassified:
             print(f'    {ik[:40]:<40} HSN={hs:<12} qty={bq:>10,.2f}  desc={de}')
 
-    # Run the waterfall.
-    cond_pools = compute_condition_pools(lic)
-    pool_10 = cond_pools.get('10%', Decimal('0'))
-    planned, rate = compute_e5_plan(totals, None, balance_cif, pool_10)
+    # Run the waterfall. `pool_10pct` is accepted by compute_e5_plan for
+    # legacy signature compatibility but no longer consumed.
+    planned, rate = compute_e5_plan(totals, None, balance_cif)
 
-    # Replay the deduction sequence so we can print the running balance at
-    # each step exactly as the spec describes it.
-    print('\n  Waterfall (step-by-step):')
-    print(f'    Initial Balance CIF                       = {balance_cif:>12,.2f}')
-    remaining = balance_cif
-    fixed_steps = ('DIETARY FIBRE', 'SWP', 'PKO', 'RBD', 'OLIVE OIL')
-    for step in fixed_steps:
-        used = planned[step]
-        # For SWP we'll subtract only the *fixed-rate* portion here; the
-        # SWP recalc fold comes next so it's a separate line.
-        if step == 'SWP':
-            fixed_swp = float(E5_UNIT_PRICES['SWP']) * totals['SWP']
-            used = min(fixed_swp, remaining) if totals['SWP'] > 0 else 0.0
-        remaining -= used
-        unit_price = round(used / totals[step], 2) if totals.get(step) else 0.0
-        print(f'    {step:<32} qty {totals[step]:>10,.2f} '
-              f'× rate {float(E5_UNIT_PRICES[step]):>5.2f} '
-              f'→ used {used:>12,.2f}  '
-              f'(unit_price {unit_price:>7.2f}, '
-              f'remaining {remaining:>12,.2f})')
+    # Informational only — mirrors the Special Validation predicate in
+    # `compute_e5_plan` so the report shows whether it would have fired,
+    # without re-implementing the actual allocation math here.
+    milk_total = totals.get('MILK PRODUCTS', 0.0) + totals.get('EGG ALBUMIN / WPC', 0.0)
+    special_triggered = milk_total > 0 and 0 < balance_cif < milk_total * 1.5
+    print('\n  Special Validation:')
+    print(f'    milk_total_qty = {milk_total:>12,.2f}   threshold (×1.50) = {milk_total * 1.5:>12,.2f}')
+    print(f'    triggered      = {special_triggered}  (balance_cif = {balance_cif:,.2f})')
 
-    # SWP recalc — the difference between `planned['SWP']` (final) and the
-    # fixed-rate slice we subtracted above is the recalc amount.
-    fixed_swp_used = min(float(E5_UNIT_PRICES['SWP']) * totals['SWP'], balance_cif) \
-        if totals['SWP'] > 0 else 0.0
-    swp_recalc_extra = planned['SWP'] - fixed_swp_used
-    if swp_recalc_extra > 0.0001:
-        print(f'    SWP RECALC fold                           '
-              f'+= {swp_recalc_extra:>12,.2f}  (new SWP rate {rate["SWP"]:.4f})')
-        remaining -= swp_recalc_extra
-    else:
-        print('    SWP RECALC fold                            (skipped — '
-              'no remaining balance or SWP qty = 0)')
-
-    # WPC step (dynamic price).
-    if planned['WPC'] > 0:
-        print(f'    WPC                              qty {totals["WPC"]:>10,.2f} '
-              f'× rate {rate["WPC"]:>5.2f} → used {planned["WPC"]:>12,.2f}')
-    else:
-        print(f'    WPC                              qty {totals["WPC"]:>10,.2f} '
-              f'→ used 0.00  (skipped: no balance or zero qty)')
-    remaining -= planned['WPC']
-    print(f'                                                                       '
-          f'remaining {remaining:>12,.2f}')
-
-    # Wheat-flour mop-up.
-    if planned['WHEAT FLOUR'] > 0:
-        print(f'    WHEAT FLOUR mop-up               qty {totals["WHEAT FLOUR"]:>10,.2f} '
-              f'→ used {planned["WHEAT FLOUR"]:>12,.2f}  '
-              f'(dyn unit_price {rate["WHEAT FLOUR"]:.4f})')
-        remaining -= planned['WHEAT FLOUR']
-    else:
-        print(f'    WHEAT FLOUR mop-up               qty {totals["WHEAT FLOUR"]:>10,.2f} '
-              f'→ used 0.00  (skipped)')
-
-    print(f'\n    FINAL remaining balance CIF              = {remaining:>12,.2f}')
-
-    # Final dump.
+    # Final dump — every category compute_e5_plan returns, plus the DWP/SWP
+    # sub-step breakdown (DWP/SWP/WPC rates all live on MILK_CONFIG_E5).
     print('\n  Final planned-CIF per category:')
     print(f'    {"Category":<20}{"Qty":>14}{"Unit Price":>14}{"Planned CIF":>16}')
     total_planned = 0.0
@@ -181,6 +128,9 @@ def verify(license_number: str):
         up = round(pc / q, 2) if q else 0.0
         total_planned += pc
         print(f'    {cat:<20}{q:>14,.2f}{up:>14,.2f}{pc:>16,.2f}')
+    print('    ── milk sub-steps (DWP / SWP; WPC is folded into EGG ALBUMIN / WPC above) ──')
+    for step in ('DWP', 'SWP'):
+        print(f'    {step:<20}{"":>14}{rate[step]:>14,.2f}{planned[step]:>16,.2f}')
     print(f'    {"TOTAL PLANNED":<20}{"":>14}{"":>14}{total_planned:>16,.2f}')
     print(f'    {"FINAL BALANCE":<20}{"":>14}{"":>14}{(balance_cif - total_planned):>16,.2f}')
 

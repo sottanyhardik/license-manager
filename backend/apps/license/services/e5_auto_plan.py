@@ -77,7 +77,7 @@ def _floor_qty(x: float) -> float:
 
 def _is_milk_group(item_name_list: list[str], e5_cat: Optional[str]) -> bool:
     """True when this import item is a milk/dairy product under E5."""
-    if e5_cat == 'SWP':   # E5 SWP category covers milk-protein products (HSN 0404)
+    if e5_cat in ('MILK PRODUCTS', 'EGG ALBUMIN / WPC'):   # HSN 0404 / 3502
         return True
     for name in item_name_list:
         if any(kw in name.lower() for kw in _MILK_KW):
@@ -180,16 +180,16 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
         elif _is_milk_group(item_names, cat):
             milk.append(ii)
         # Case 2.1: HSN starts with 1513 OR description contains "Vegetable Oil"
-        elif hs_l.startswith('1513') or 'vegetable oil' in desc_l or cat == 'PKO':
+        elif hs_l.startswith('1513') or 'vegetable oil' in desc_l or cat == 'PALM KERNEL OIL':
             palm_kernel.append(ii)
         # Case 2.2: HSN 15119020 (RBD Palmolein) — only if Case 2.1 not applicable
-        elif hs_l.startswith('15119') or cat == 'RBD':
+        elif hs_l.startswith('15119') or cat == 'RBD PALMOLEIN':
             rbd.append(ii)
         # Case 2.3: Olive oil — edible-oil items NOT covered by palm kernel (1513)
         # or RBD (1511). Use HSN chapter 15 (fats/oils) or explicit phrases;
         # DO NOT use bare 'oil' substring — 'aluminium foil' contains 'oil' and
         # would wrongly match packing materials with HSN 39xx.
-        elif cat == 'OLIVE OIL' or (
+        elif cat == 'REMAINING OILS' or (
             (
                 hs_l.startswith('15')               # HSN chapter 15 = fats & oils
                 and not hs_l.startswith('1513')     # already in palm_kernel

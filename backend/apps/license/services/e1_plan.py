@@ -23,9 +23,11 @@ Waterfall order (run sequentially against the same running balance):
     Step 6   POLYPROPYLENE                    @ 0-0.9 (3902 AND NOT 7607)
     Step 7   PAPER                            @ 0-0.6 (4801/4810/4802 AND NOT 7607/3902/3901)
 
-DWP and SWP both draw on the *same* Milk Products utilization quantity — it
-is not split between them. They are two independent dynamic-pricing
-allocations, run back-to-back against the same running balance.
+Steps 2A/2B are delegated to the shared milk-planning engine
+(``services/milk_planner.py``, configured via ``MILK_CONFIG_E1``) so E1 and
+E5 never carry two independent implementations of the same DWP/SWP/WPC
+dynamic-pricing rules. DWP and SWP both draw on the *same* Milk Products
+utilization quantity — it is not split between them.
 
 Each step's utilization is capped at the remaining balance — if the
 requested ``util_qty × max_price`` would exceed the balance, the rate drops
@@ -34,7 +36,14 @@ later steps see zero.
 """
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
+
+from apps.license.services.milk_planner import MILK_CONFIG_E1, plan_milk
+from apps.license.services.planning_allocation import (
+    allocate_step,
+    d as _d,
+    quantize_money as _quantize_money,
+)
 
 
 # Classification buckets. Every import item is classified into at most one
@@ -55,12 +64,13 @@ E1_PLAN_CATS: tuple[str, ...] = E1_CATS
 # Sequential waterfall steps: (step_key, source_bucket, max_unit_price).
 # `source_bucket` is the E1_CATS entry the step draws its utilization
 # quantity from. MILK PRODUCTS expands into two steps (DWP, SWP) that both
-# read the *same* bucket's quantity rather than splitting it.
+# read the *same* bucket's quantity rather than splitting it — their prices
+# come from MILK_CONFIG_E1, the single source of truth shared with E5.
 E1_WATERFALL_STEPS: tuple[tuple[str, str, Decimal], ...] = (
     ('OTHER CONFECTIONERY INGREDIENTS', 'OTHER CONFECTIONERY INGREDIENTS', Decimal('2.7')),
-    ('DWP',                             'MILK PRODUCTS',                   Decimal('5')),
-    ('SWP',                             'MILK PRODUCTS',                   Decimal('1.5')),
-    ('EGG ALBUMIN / WPC',               'EGG ALBUMIN / WPC',               Decimal('25')),
+    ('DWP',                             'MILK PRODUCTS',                   MILK_CONFIG_E1.dwp_price),
+    ('SWP',                             'MILK PRODUCTS',                   MILK_CONFIG_E1.swp_price),
+    ('EGG ALBUMIN / WPC',               'EGG ALBUMIN / WPC',               MILK_CONFIG_E1.wpc_price),
     ('FRUIT JUICE',                     'FRUIT JUICE',                     Decimal('3')),
     ('ALUMINIUM FOIL',                  'ALUMINIUM FOIL',                  Decimal('4.5')),
     ('POLYPROPYLENE',                   'POLYPROPYLENE',                  Decimal('0.9')),
@@ -135,39 +145,6 @@ def classify_e1_item(
     return None
 
 
-def _d(value) -> Decimal:
-    if value is None:
-        return Decimal('0')
-    if isinstance(value, Decimal):
-        return value
-    try:
-        return Decimal(str(value))
-    except Exception:
-        return Decimal('0')
-
-
-def _quantize_money(value: Decimal) -> float:
-    return float(value.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP))
-
-
-def _allocate_step(util_qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[Decimal, Decimal]:
-    """Allocate one waterfall step at a dynamic price in ``[0, max_price]``.
-
-    Returns ``(utilization, unit_price)``:
-
-      * if balance can cover ``util_qty × max_price`` → use max_price
-      * else                                          → use ``balance / util_qty``
-      * util_qty == 0 or balance == 0                 → utilization is 0
-    """
-    if util_qty <= 0 or balance <= 0 or max_price <= 0:
-        return Decimal('0'), max_price
-    requested = util_qty * max_price
-    if requested <= balance:
-        return requested, max_price
-    # Cap at remaining balance; effective rate drops below max.
-    return balance, balance / util_qty
-
-
 def compute_e1_plan(
     display_qty: dict[str, float],
     util_qty: dict[str, float],
@@ -196,20 +173,34 @@ def compute_e1_plan(
     planned: dict[str, Decimal] = {k: Decimal('0') for k in result_keys}
     rate: dict[str, Decimal] = {k: Decimal('0') for k in result_keys}
 
-    milk_planned = Decimal('0')
-    milk_rate = Decimal('0')
-    for step, source, max_price in E1_WATERFALL_STEPS:
-        uq = _d(util_qty.get(source, 0))
-        used, r = _allocate_step(uq, max_price, remaining)
-        planned[step] = used
-        rate[step] = r
-        remaining -= used
-        if source == 'MILK PRODUCTS':
-            milk_planned += used
-            milk_rate += r
+    # Step 1.
+    uq = _d(util_qty.get('OTHER CONFECTIONERY INGREDIENTS', 0))
+    used, r = allocate_step(uq, E1_MAX_PRICES['OTHER CONFECTIONERY INGREDIENTS'], remaining)
+    planned['OTHER CONFECTIONERY INGREDIENTS'] = used
+    rate['OTHER CONFECTIONERY INGREDIENTS'] = r
+    remaining -= used
 
-    planned['MILK PRODUCTS'] = milk_planned
-    rate['MILK PRODUCTS'] = milk_rate
+    # Steps 2A/2B/3 — shared milk-planning engine (DWP → SWP over the Milk
+    # Products bucket, then WPC over the Egg Albumin / WPC bucket).
+    qty_0404 = _d(util_qty.get('MILK PRODUCTS', 0))
+    qty_3502 = _d(util_qty.get('EGG ALBUMIN / WPC', 0))
+    milk_planned, milk_rate, remaining = plan_milk(qty_0404, qty_3502, remaining, MILK_CONFIG_E1)
+    planned['DWP'] = milk_planned['DWP']
+    rate['DWP'] = milk_rate['DWP']
+    planned['SWP'] = milk_planned['SWP']
+    rate['SWP'] = milk_rate['SWP']
+    planned['EGG ALBUMIN / WPC'] = milk_planned['WPC']
+    rate['EGG ALBUMIN / WPC'] = milk_rate['WPC']
+    planned['MILK PRODUCTS'] = planned['DWP'] + planned['SWP']
+    rate['MILK PRODUCTS'] = rate['DWP'] + rate['SWP']
+
+    # Steps 4-7 — unchanged fixed-bucket dynamic pricing.
+    for cat in ('FRUIT JUICE', 'ALUMINIUM FOIL', 'POLYPROPYLENE', 'PAPER'):
+        uq = _d(util_qty.get(cat, 0))
+        used, r = allocate_step(uq, E1_MAX_PRICES[cat], remaining)
+        planned[cat] = used
+        rate[cat] = r
+        remaining -= used
 
     planned_f = {k: _quantize_money(v) for k, v in planned.items()}
     rate_f = {k: _quantize_money(v) for k, v in rate.items()}

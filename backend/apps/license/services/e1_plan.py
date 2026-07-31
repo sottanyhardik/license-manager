@@ -24,10 +24,11 @@ Waterfall order (run sequentially against the same running balance):
     Step 7   PAPER                            @ 0-0.6 (4801/4810/4802 AND NOT 7607/3902/3901)
 
 Steps 2A/2B are delegated to the shared milk-planning engine
-(``services/milk_planner.py``, configured via ``MILK_CONFIG_E1``) so E1 and
+(``services/milk_planner.py``, configured via ``MILK_CONFIG``) so E1 and
 E5 never carry two independent implementations of the same DWP/SWP/WPC
-dynamic-pricing rules. DWP and SWP both draw on the *same* Milk Products
-utilization quantity — it is not split between them.
+pricing rules. The Milk Products utilization quantity is partitioned
+between DWP and SWP (see ``milk_planner.split_milk_0404``), not shared
+between them.
 
 Each step's utilization is capped at the remaining balance — if the
 requested ``util_qty × max_price`` would exceed the balance, the rate drops
@@ -38,7 +39,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from apps.license.services.milk_planner import MILK_CONFIG_E1, plan_milk
+from apps.license.services.milk_planner import MILK_CONFIG, plan_milk
 from apps.license.services.planning_allocation import (
     allocate_step,
     d as _d,
@@ -63,14 +64,14 @@ E1_PLAN_CATS: tuple[str, ...] = E1_CATS
 
 # Sequential waterfall steps: (step_key, source_bucket, max_unit_price).
 # `source_bucket` is the E1_CATS entry the step draws its utilization
-# quantity from. MILK PRODUCTS expands into two steps (DWP, SWP) that both
-# read the *same* bucket's quantity rather than splitting it — their prices
-# come from MILK_CONFIG_E1, the single source of truth shared with E5.
+# quantity from. MILK PRODUCTS expands into two steps (DWP, SWP) whose
+# combined quantity is partitioned from that bucket — their prices come
+# from MILK_CONFIG, the single source of truth shared with E5.
 E1_WATERFALL_STEPS: tuple[tuple[str, str, Decimal], ...] = (
     ('OTHER CONFECTIONERY INGREDIENTS', 'OTHER CONFECTIONERY INGREDIENTS', Decimal('2.7')),
-    ('DWP',                             'MILK PRODUCTS',                   MILK_CONFIG_E1.dwp_price),
-    ('SWP',                             'MILK PRODUCTS',                   MILK_CONFIG_E1.swp_price),
-    ('EGG ALBUMIN / WPC',               'EGG ALBUMIN / WPC',               MILK_CONFIG_E1.wpc_price),
+    ('DWP',                             'MILK PRODUCTS',                   MILK_CONFIG.dwp_price),
+    ('SWP',                             'MILK PRODUCTS',                   MILK_CONFIG.swp_price),
+    ('EGG ALBUMIN / WPC',               'EGG ALBUMIN / WPC',               MILK_CONFIG.wpc_price),
     ('FRUIT JUICE',                     'FRUIT JUICE',                     Decimal('3')),
     ('ALUMINIUM FOIL',                  'ALUMINIUM FOIL',                  Decimal('4.5')),
     ('POLYPROPYLENE',                   'POLYPROPYLENE',                  Decimal('0.9')),
@@ -157,8 +158,8 @@ def compute_e1_plan(
             Reporting only — not consumed here, kept for signature parity
             with callers that build both dicts together.
         util_qty:    per-bucket sum after removing excluded markings. The
-            MILK PRODUCTS entry is read by *both* the DWP and SWP steps
-            (same quantity, not split between them).
+            MILK PRODUCTS entry is partitioned between the DWP and SWP
+            steps (see ``milk_planner.split_milk_0404``).
         license_balance: starting balance the waterfall draws down from.
 
     Returns:
@@ -184,7 +185,7 @@ def compute_e1_plan(
     # Products bucket, then WPC over the Egg Albumin / WPC bucket).
     qty_0404 = _d(util_qty.get('MILK PRODUCTS', 0))
     qty_3502 = _d(util_qty.get('EGG ALBUMIN / WPC', 0))
-    milk_planned, milk_rate, remaining = plan_milk(qty_0404, qty_3502, remaining, MILK_CONFIG_E1)
+    milk_planned, milk_rate, remaining = plan_milk(qty_0404, qty_3502, remaining, MILK_CONFIG)
     planned['DWP'] = milk_planned['DWP']
     rate['DWP'] = milk_rate['DWP']
     planned['SWP'] = milk_planned['SWP']

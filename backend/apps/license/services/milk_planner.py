@@ -1,29 +1,21 @@
 """
-Shared Milk Products (HSN 0404) / Egg Albumin-WPC (HSN 3502) planning engine
-for E1's reporting waterfall (``e1_plan.py``).
-
-E5 has its own per-item milk rules in ``e5_plan.py`` (no averaging between
-0404 and 3502 — each item is classified and priced independently); this
-module is now E1-only.
+Single source of truth for Milk Products (HSN 0404) / Egg Albumin-WPC (HSN
+3502) planning, shared by E1's reporting waterfall (``e1_plan.py``) and E5's
+per-item milk rules (``e5_plan.py``). Both norms call :func:`split_milk_0404`
+for the DWP/SWP partition — neither maintains its own copy of that math.
 
 Callers own two decisions this module does NOT make:
 
   * WHICH import items are milk (classification into the 0404 / 3502
     buckets happens in each norm's own classifier).
-  * WHEN milk planning runs relative to the rest of that norm's waterfall.
+  * WHEN milk planning runs relative to the rest of that norm's waterfall,
+    and at what granularity (E1 hands it one aggregate 0404 quantity per
+    licence via :func:`plan_milk`; E5 calls :func:`split_milk_0404` once per
+    item, since 0404 and 3502 are never averaged together there).
 
 This module only decides HOW a milk quantity is split into SWP / DWP / WPC
-once the caller has handed it the 0404 quantity, the 3502 quantity, and the
+once the caller has handed it a 0404 quantity, a 3502 quantity, and the
 balance remaining to draw against — configured via :class:`MilkConfig`.
-
-Two cases:
-
-  * 0404 only  → the 0404 quantity is PARTITIONED between DWP and SWP (see
-    :func:`_split_milk_0404`) — the two no longer read the same
-    unpartitioned quantity.
-  * 3502 only  → the full quantity to WPC at ``config.wpc_price``.
-  * Both present → simply the 0404 branch followed by the 3502 branch — E1
-    has no average-price concept.
 """
 from __future__ import annotations
 
@@ -41,7 +33,7 @@ class MilkConfig:
     wpc_price: Decimal
 
 
-MILK_CONFIG_E1 = MilkConfig(
+MILK_CONFIG = MilkConfig(
     dwp_price=Decimal('5'),
     dwp_min_price=Decimal('4.40'),
     swp_price=Decimal('1.5'),
@@ -53,7 +45,7 @@ def _zero_result(config: MilkConfig) -> dict[str, Decimal]:
     return {'DWP': Decimal('0'), 'SWP': Decimal('0'), 'WPC': Decimal('0')}
 
 
-def _split_milk_0404(qty: Decimal, balance: Decimal, config: MilkConfig) -> tuple[Decimal, Decimal, Decimal]:
+def split_milk_0404(qty: Decimal, balance: Decimal, config: MilkConfig) -> tuple[Decimal, Decimal, Decimal]:
     """Partition a Milk Products (HSN 0404) quantity between DWP and SWP.
 
     DWP quantity is maximised subject to its rate staying within
@@ -101,7 +93,7 @@ def plan_milk(
         qty_0404: utilization quantity classified as Milk Products (HSN 0404).
         qty_3502: utilization quantity classified as Egg Albumin / WPC (HSN 3502).
         remaining_balance: balance available for milk planning to draw down.
-        config: :data:`MILK_CONFIG_E1`.
+        config: :data:`MILK_CONFIG`.
 
     Returns:
         (planned_cif, rate, remaining_balance) — `planned_cif` / `rate` are
@@ -116,7 +108,7 @@ def plan_milk(
     rate = {'DWP': config.dwp_price, 'SWP': config.swp_price, 'WPC': config.wpc_price}
 
     if qty_0404 > 0:
-        dwp_qty, dwp_rate, swp_qty = _split_milk_0404(qty_0404, remaining, config)
+        dwp_qty, dwp_rate, swp_qty = split_milk_0404(qty_0404, remaining, config)
         planned['DWP'] = dwp_qty * dwp_rate
         rate['DWP'] = dwp_rate
         planned['SWP'] = swp_qty * config.swp_price

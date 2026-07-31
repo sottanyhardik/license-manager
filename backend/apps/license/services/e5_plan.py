@@ -23,10 +23,11 @@ single planned debit, never reused from before that debit):
     4. MILK — only when Special Validation did NOT fire. Every item is
        classified and priced independently; 0404 and 3502 quantities are
        NEVER averaged together, even when both appear on the same licence:
-         all MILK PRODUCTS (0404) items, in input order — each one gets two
-           independent dynamic-price passes over its OWN full quantity
-           (not split between the two): DWP-E5 @ 5.00 first, then
-           SWP-E5 @ 1.50 against whatever balance DWP left behind.
+         all MILK PRODUCTS (0404) items, in input order — each item's OWN
+           quantity is partitioned between DWP and SWP by the shared HSN
+           0404 optimisation algorithm (``milk_planner.split_milk_0404``):
+           DWP is maximised subject to its rate staying within
+           [4.40, 5.00], SWP (fixed @ 1.50) absorbs the rest.
          then all EGG ALBUMIN / WPC (3502) items, in input order — each
            one gets WPC-E5 at a dynamic rate capped at 25.00
            (min(implied balance rate, 25.00)).
@@ -41,6 +42,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_FLOOR
 
+from apps.license.services.milk_planner import MILK_CONFIG, split_milk_0404
 from apps.license.services.planning_allocation import allocate_step, d as _d
 
 _MONEY_4DP = Decimal('0.0001')
@@ -77,9 +79,12 @@ E5_UNIT_PRICES: dict[str, Decimal] = {
     'REMAINING OILS':   Decimal('5.00'),
 }
 
-DWP_PRICE: Decimal = Decimal('5.00')
-SWP_PRICE: Decimal = Decimal('1.50')
-WPC_PRICE: Decimal = Decimal('25.00')
+# Milk/Egg-Albumin prices are the single source of truth in MILK_CONFIG
+# (shared with E1) — aliased here so the rest of this module reads the same
+# as before.
+DWP_PRICE: Decimal = MILK_CONFIG.dwp_price
+SWP_PRICE: Decimal = MILK_CONFIG.swp_price
+WPC_PRICE: Decimal = MILK_CONFIG.wpc_price
 
 
 def _norm(value) -> str:
@@ -323,17 +328,18 @@ def plan_e5_items(
         # Step 4 (normal milk classification) is skipped — already planned above.
     else:
         _run_oils()
-        # 0404 items — DWP then SWP, both against this item's own full
-        # quantity (not split between the two steps), never averaged with
-        # any 3502 item on the same licence.
+        # 0404 items — each item's own quantity is partitioned between DWP
+        # and SWP by the shared HSN 0404 algorithm (never averaged with any
+        # 3502 item on the same licence).
         for item in by_cat['MILK PRODUCTS']:
-            dwp_cif, dwp_rate = allocate_step(item.qty, DWP_PRICE, remaining)
-            if dwp_cif > 0:
-                _emit(item, 'DWP', item.qty, dwp_rate, dwp_cif)
+            dwp_qty, dwp_rate, swp_qty = split_milk_0404(item.qty, remaining, MILK_CONFIG)
+            if dwp_qty > 0:
+                dwp_cif = dwp_qty * dwp_rate
+                _emit(item, 'DWP', dwp_qty, dwp_rate, dwp_cif)
                 remaining -= dwp_cif
-            swp_cif, swp_rate = allocate_step(item.qty, SWP_PRICE, remaining)
-            if swp_cif > 0:
-                _emit(item, 'SWP', item.qty, swp_rate, swp_cif)
+            if swp_qty > 0:
+                swp_cif = swp_qty * SWP_PRICE
+                _emit(item, 'SWP', swp_qty, SWP_PRICE, swp_cif)
                 remaining -= swp_cif
         # 3502 items — WPC, dynamic rate capped at $25, processed after
         # every 0404 item.

@@ -180,10 +180,10 @@ class TestComputeE1Plan(TestCase):
         assert planned['OTHER CONFECTIONERY INGREDIENTS'] == 270.0
         assert rate['OTHER CONFECTIONERY INGREDIENTS'] == 2.7
 
-    def test_milk_products_dwp_then_swp_share_same_utilization_qty(self):
-        # 50 kg of Milk Products. DWP: 50 × 5 = 250 ≤ 5000 balance → uses max.
-        # SWP then reads the SAME 50 kg (not split) against the remaining
-        # balance: 50 × 1.5 = 75 ≤ (5000 - 250) → uses max.
+    def test_milk_products_0404_qty_is_partitioned_not_shared(self):
+        # 50 kg of Milk Products, avg = 5000/50 = 100 >= 5 -> DWP takes the
+        # full 50 kg at the 5.00 ceiling; nothing is left over for SWP (the
+        # qty is exhausted, not shared between the two steps anymore).
         planned, rate = compute_e1_plan(
             _qty(**{'MILK PRODUCTS': 50.0}),
             _qty(**{'MILK PRODUCTS': 50.0}),
@@ -191,25 +191,26 @@ class TestComputeE1Plan(TestCase):
         )
         assert planned['DWP'] == 250.0
         assert rate['DWP'] == 5.0
-        assert planned['SWP'] == 75.0
+        assert planned['SWP'] == 0.0
         assert rate['SWP'] == 1.5
         # MILK PRODUCTS bucket aggregates both sub-steps.
-        assert planned['MILK PRODUCTS'] == 325.0
+        assert planned['MILK PRODUCTS'] == 250.0
         assert rate['MILK PRODUCTS'] == 6.5
 
-    def test_milk_products_dwp_caps_balance_and_swp_gets_zero(self):
-        # DWP alone consumes the entire remaining balance, so SWP — even
-        # though it reads the same 50 kg utilization qty — gets nothing.
+    def test_milk_products_dwp_maximised_at_floor_rate_swp_takes_remainder(self):
+        # 50 kg of Milk Products, avg = 133/50 = 2.66 -> below the 4.40
+        # floor, so DWP can only take as much of the 50 kg as keeps its rate
+        # at exactly 4.40; the rest (30 kg) goes to SWP at the fixed 1.50.
         planned, rate = compute_e1_plan(
             _qty(**{'MILK PRODUCTS': 50.0}),
             _qty(**{'MILK PRODUCTS': 50.0}),
-            Decimal('100'),  # 50 * 5 = 250 > 100 -> DWP caps at 100
+            Decimal('133'),
         )
-        assert planned['DWP'] == 100.0
-        assert abs(rate['DWP'] - 2.0) < 1e-6  # 100 / 50
-        assert planned['SWP'] == 0.0
-        assert rate['SWP'] == 1.5  # default max price fallback when balance is exhausted
-        assert planned['MILK PRODUCTS'] == 100.0
+        assert planned['DWP'] == 88.0    # 20 kg * 4.40
+        assert rate['DWP'] == 4.4
+        assert planned['SWP'] == 45.0    # 30 kg * 1.50
+        assert rate['SWP'] == 1.5
+        assert planned['MILK PRODUCTS'] == 133.0
 
     def test_egg_albumin_wpc_max_price_25(self):
         planned, rate = compute_e1_plan(

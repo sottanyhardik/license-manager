@@ -18,9 +18,9 @@ balance remaining to draw against — configured via :class:`MilkConfig`.
 
 Two cases:
 
-  * 0404 only  → DWP first, then SWP — both read the FULL 0404 quantity
-    (not partitioned), each an independent dynamic-pricing allocation
-    against the shrinking balance (:func:`allocate_step`).
+  * 0404 only  → the 0404 quantity is PARTITIONED between DWP and SWP (see
+    :func:`_split_milk_0404`) — the two no longer read the same
+    unpartitioned quantity.
   * 3502 only  → the full quantity to WPC at ``config.wpc_price``.
   * Both present → simply the 0404 branch followed by the 3502 branch — E1
     has no average-price concept.
@@ -36,12 +36,14 @@ from apps.license.services.planning_allocation import allocate_step, d
 @dataclass(frozen=True)
 class MilkConfig:
     dwp_price: Decimal
+    dwp_min_price: Decimal
     swp_price: Decimal
     wpc_price: Decimal
 
 
 MILK_CONFIG_E1 = MilkConfig(
     dwp_price=Decimal('5'),
+    dwp_min_price=Decimal('4.40'),
     swp_price=Decimal('1.5'),
     wpc_price=Decimal('25'),
 )
@@ -49,6 +51,42 @@ MILK_CONFIG_E1 = MilkConfig(
 
 def _zero_result(config: MilkConfig) -> dict[str, Decimal]:
     return {'DWP': Decimal('0'), 'SWP': Decimal('0'), 'WPC': Decimal('0')}
+
+
+def _split_milk_0404(qty: Decimal, balance: Decimal, config: MilkConfig) -> tuple[Decimal, Decimal, Decimal]:
+    """Partition a Milk Products (HSN 0404) quantity between DWP and SWP.
+
+    DWP quantity is maximised subject to its rate staying within
+    ``[config.dwp_min_price, config.dwp_price]``; SWP (always priced at
+    ``config.swp_price``) absorbs whatever quantity DWP can't take. Since
+    raising DWP's share while holding total value at ``balance`` forces its
+    rate down, "maximise DWP quantity" and "minimise remaining balance"
+    converge on the same point: the largest DWP quantity whose rate hasn't
+    yet dropped below ``dwp_min_price``.
+
+    Returns ``(dwp_qty, dwp_rate, swp_qty)``. When even SWP can't cover the
+    full quantity, DWP is 0 and SWP is capped at what the balance affords —
+    `qty` is then only partially covered (mirrors :func:`allocate_step`'s
+    balance-insufficient case elsewhere in the codebase).
+    """
+    if qty <= 0 or balance <= 0:
+        return Decimal('0'), config.dwp_price, Decimal('0')
+
+    avg = balance / qty
+
+    if avg >= config.dwp_price:
+        return qty, config.dwp_price, Decimal('0')
+
+    if avg >= config.dwp_min_price:
+        return qty, avg, Decimal('0')
+
+    if avg >= config.swp_price:
+        spread = config.dwp_min_price - config.swp_price
+        dwp_qty = (balance - config.swp_price * qty) / spread
+        dwp_qty = min(max(dwp_qty, Decimal('0')), qty)
+        return dwp_qty, config.dwp_min_price, qty - dwp_qty
+
+    return Decimal('0'), config.dwp_price, balance / config.swp_price
 
 
 def plan_milk(
@@ -78,15 +116,11 @@ def plan_milk(
     rate = {'DWP': config.dwp_price, 'SWP': config.swp_price, 'WPC': config.wpc_price}
 
     if qty_0404 > 0:
-        dwp_used, dwp_rate = allocate_step(qty_0404, config.dwp_price, remaining)
-        planned['DWP'] = dwp_used
+        dwp_qty, dwp_rate, swp_qty = _split_milk_0404(qty_0404, remaining, config)
+        planned['DWP'] = dwp_qty * dwp_rate
         rate['DWP'] = dwp_rate
-        remaining -= dwp_used
-
-        swp_used, swp_rate = allocate_step(qty_0404, config.swp_price, remaining)
-        planned['SWP'] = swp_used
-        rate['SWP'] = swp_rate
-        remaining -= swp_used
+        planned['SWP'] = swp_qty * config.swp_price
+        remaining -= (planned['DWP'] + planned['SWP'])
 
     if qty_3502 > 0:
         wpc_used, wpc_rate = allocate_step(qty_3502, config.wpc_price, remaining)

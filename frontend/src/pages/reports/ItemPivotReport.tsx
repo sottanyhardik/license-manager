@@ -764,7 +764,7 @@ export default function ItemPivotReport() {
                                         <CardContent className="p-0">
                                             <div className="overflow-x-auto">
                                                 <table className="table table-hover table-sm table-bordered mb-0"
-                                                       style={{tableLayout: 'auto', minWidth: '860px'}}>
+                                                       style={{tableLayout: 'auto', minWidth: '960px'}}>
                                                     <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                                                     <tr className="table-light">
                                                         <th scope="col" className="text-center" style={{
@@ -826,6 +826,14 @@ export default function ItemPivotReport() {
                                                         <th scope="col" className="text-right" style={{
                                                             position: 'sticky',
                                                             left: '730px',
+                                                            zIndex: 11,
+                                                            backgroundColor: 'var(--tb-sunken)',
+                                                            minWidth: '100px'
+                                                        }}>Planned CIF
+                                                        </th>
+                                                        <th scope="col" className="text-right" style={{
+                                                            position: 'sticky',
+                                                            left: '830px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '110px',
@@ -902,6 +910,12 @@ export default function ItemPivotReport() {
                                                         <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '730px',
+                                                            zIndex: 11,
+                                                            backgroundColor: 'var(--tb-border)'
+                                                        }}></th>
+                                                        <th scope="col" style={{
+                                                            position: 'sticky',
+                                                            left: '830px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -1093,9 +1107,26 @@ export default function ItemPivotReport() {
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{(license.alloted_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-right font-semibold text-success" style={{
+                                                            <td className="text-right font-semibold text-secondary" style={{
                                                                 position: 'sticky',
                                                                 left: '730px',
+                                                                zIndex: 1,
+                                                                backgroundColor: 'var(--tb-card-bg)'
+                                                            }}>
+                                                                {/* Planned CIF for this license — sum across every item
+                                                                    column's own effective planned CIF (manual plan when
+                                                                    the product was manually planned, else norm-derived),
+                                                                    same per-item formula the "Planned CIF" cells and the
+                                                                    notification-level total below both use. */}
+                                                                {groupItems.reduce((sum, it) => {
+                                                                    const itData = license.items[it.name] || {};
+                                                                    const hasManual = (itData.plan_quantity || 0) > 0 || (itData.plan_cif || 0) > 0;
+                                                                    return sum + (hasManual ? (itData.plan_cif || 0) : (itData.planned_cif || 0));
+                                                                }, 0).toFixed(2)}
+                                                            </td>
+                                                            <td className="text-right font-semibold text-success" style={{
+                                                                position: 'sticky',
+                                                                left: '830px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)',
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -1109,13 +1140,18 @@ export default function ItemPivotReport() {
                                                                 const itemData = license.items[item.name] || {};
                                                                 const hasData = itemData.quantity > 0;
                                                                 // Verification data: the exact import item(s) behind this
-                                                                // cell's plan lines (see item_pivot_report.py). Normally
-                                                                // exactly one — the common case renders identically to
-                                                                // before via itemData.hs_code/description/*_quantity,
-                                                                // which the backend now sources from that ONE import item.
-                                                                // The rare case of several DISTINCT import items sharing
-                                                                // this item-name is never merged into one value; each is
-                                                                // listed separately below instead.
+                                                                // cell's plan lines (see item_pivot_report.py). The backend
+                                                                // already merges every import item that's the SAME physical
+                                                                // product (same HSN + normalized description) into one
+                                                                // `planned_import_items` entry before this ever reaches the
+                                                                // UI — so `plannedItems.length` is 1 in the overwhelming
+                                                                // common case, rendered identically to before via
+                                                                // `itemData.hs_code`/`description`/`*_quantity` (which
+                                                                // resolve to that one merged entry). More than one entry
+                                                                // here means genuinely DIFFERENT products share this
+                                                                // item-name column (different HSN or description) — that
+                                                                // is never merged into one value; each is listed
+                                                                // separately, one aligned line per column, below.
                                                                 const plannedItems = itemData.planned_import_items || [];
                                                                 const hasMultiplePlannedItems = plannedItems.length > 1;
                                                                 // Per-product: whether THIS product was manually planned
@@ -1131,11 +1167,15 @@ export default function ItemPivotReport() {
                                                                         <td style={{backgroundColor: itemBg}}>
                                                                             {hasMultiplePlannedItems ? (
                                                                                 <div className="d-flex flex-column gap-1">
-                                                                                    {plannedItems.map((pit) => (
-                                                                                        <span key={pit.import_item_id} className="text-nowrap">
-                                                                                            {pit.hs_code || '-'}
-                                                                                        </span>
-                                                                                    ))}
+                                                                                    <span
+                                                                                        className="chip chip-neutral text-nowrap"
+                                                                                        title={`${plannedItems.length} distinct products share this item — different HSN/description, so they couldn't be merged into one row`}
+                                                                                    >
+                                                                                        {plannedItems.length} items
+                                                                                    </span>
+                                                                                    <span className="text-nowrap">
+                                                                                        {plannedItems.map((pit) => pit.hs_code || '-').join(', ')}
+                                                                                    </span>
                                                                                 </div>
                                                                             ) : (itemData.hs_code || '-')}
                                                                             {itemData.condition_type && (
@@ -1145,53 +1185,30 @@ export default function ItemPivotReport() {
                                                                         <td className="text-truncate"
                                                                             style={{maxWidth: '180px', backgroundColor: itemBg}}
                                                                             title={hasMultiplePlannedItems
-                                                                                ? plannedItems.map((pit) => pit.description).join(' / ')
+                                                                                ? plannedItems.map((pit) => pit.description || '-').join(', ')
                                                                                 : (itemData.description || '')}>
-                                                                            {hasMultiplePlannedItems ? (
-                                                                                <div className="d-flex flex-column gap-1">
-                                                                                    {plannedItems.map((pit) => (
-                                                                                        <span key={pit.import_item_id} className="text-truncate d-block">
-                                                                                            {pit.description || '-'}
-                                                                                        </span>
-                                                                                    ))}
-                                                                                </div>
-                                                                            ) : (itemData.description || '-')}
+                                                                            {hasMultiplePlannedItems
+                                                                                ? plannedItems.map((pit) => pit.description || '-').join(', ')
+                                                                                : (itemData.description || '-')}
                                                                         </td>
+                                                                        {/* Quantity/Allotted/Debited/Available are already
+                                                                            summed across every distinct product sharing this
+                                                                            cell by the backend (see _build_license_row in
+                                                                            item_pivot_report.py) — unlike HSN/Description
+                                                                            (strings, never merged), these numeric totals are
+                                                                            unambiguous, so `itemData.*` is rendered as-is here
+                                                                            with no per-product branching. */}
                                                                         <td className="text-right" style={{backgroundColor: itemBg}}>
-                                                                            {hasMultiplePlannedItems ? (
-                                                                                <div className="d-flex flex-column gap-1">
-                                                                                    {plannedItems.map((pit) => (
-                                                                                        <span key={pit.import_item_id}>{pit.quantity.toFixed(3)}</span>
-                                                                                    ))}
-                                                                                </div>
-                                                                            ) : (itemData.quantity ? itemData.quantity.toFixed(3) : '-')}
+                                                                            {itemData.quantity ? itemData.quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         <td className={cn('text-right', hasData && 'font-semibold text-primary')} style={{backgroundColor: itemBg}}>
-                                                                            {hasMultiplePlannedItems ? (
-                                                                                <div className="d-flex flex-column gap-1">
-                                                                                    {plannedItems.map((pit) => (
-                                                                                        <span key={pit.import_item_id}>{pit.allotted_quantity.toFixed(3)}</span>
-                                                                                    ))}
-                                                                                </div>
-                                                                            ) : (itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-')}
+                                                                            {itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         <td className="text-right" style={{backgroundColor: itemBg, ...(hasData ? {color: 'var(--warning-color)'} : {})}}>
-                                                                            {hasMultiplePlannedItems ? (
-                                                                                <div className="d-flex flex-column gap-1">
-                                                                                    {plannedItems.map((pit) => (
-                                                                                        <span key={pit.import_item_id}>{pit.debited_quantity.toFixed(3)}</span>
-                                                                                    ))}
-                                                                                </div>
-                                                                            ) : (itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-')}
+                                                                            {itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         <td className={cn('text-right', hasData && 'text-success font-semibold')} style={{backgroundColor: itemBg}}>
-                                                                            {hasMultiplePlannedItems ? (
-                                                                                <div className="d-flex flex-column gap-1">
-                                                                                    {plannedItems.map((pit) => (
-                                                                                        <span key={pit.import_item_id}>{pit.available_quantity.toFixed(3)}</span>
-                                                                                    ))}
-                                                                                </div>
-                                                                            ) : (itemData.available_quantity ? itemData.available_quantity.toFixed(3) : '-')}
+                                                                            {itemData.available_quantity ? itemData.available_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         {item.has_restriction && (
                                                                             <>
@@ -1208,7 +1225,15 @@ export default function ItemPivotReport() {
                                                                         )}
                                                                         {/* Per-product plan: manual plan takes priority when
                                                                             this product was manually planned; fall back to
-                                                                            norm-derived values otherwise. */}
+                                                                            norm-derived values otherwise. `plan_quantity`/
+                                                                            `plan_cif`/`unit_price`/`planned_cif` are already
+                                                                            cell-level totals for the WHOLE item-name column
+                                                                            (see `row_data['items'][item_name]` in
+                                                                            item_pivot_report.py — sourced independently of
+                                                                            `planned_import_items`), so — exactly like the
+                                                                            Excel export's equivalent column — there is no
+                                                                            per-product branching here even when the cell
+                                                                            has several genuinely distinct merged products. */}
                                                                         <td className="text-right" style={{backgroundColor: itemBg}}>
                                                                             {(Number(itemData.plan_quantity || 0) > 0 || Number(itemData.plan_cif || 0) > 0)
                                                                                 ? Number(itemData.plan_quantity || 0).toFixed(3)
@@ -1270,9 +1295,21 @@ export default function ItemPivotReport() {
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + (lic.alloted_cif || 0), 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-right text-success" style={{
+                                                        <td className="text-right text-secondary" style={{
                                                             position: 'sticky',
                                                             left: '730px',
+                                                            zIndex: 1,
+                                                            backgroundColor: 'var(--warning-bg)'
+                                                        }}>
+                                                            {licenses.reduce((sum, lic) => sum + groupItems.reduce((s, it) => {
+                                                                const itData = lic.items[it.name] || {};
+                                                                const hasManual = (itData.plan_quantity || 0) > 0 || (itData.plan_cif || 0) > 0;
+                                                                return s + (hasManual ? (itData.plan_cif || 0) : (itData.planned_cif || 0));
+                                                            }, 0), 0).toFixed(2)}
+                                                        </td>
+                                                        <td className="text-right text-success" style={{
+                                                            position: 'sticky',
+                                                            left: '830px',
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',

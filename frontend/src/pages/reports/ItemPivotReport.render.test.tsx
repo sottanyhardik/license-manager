@@ -1,0 +1,251 @@
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import api from "../../api/axios";
+import ItemPivotReport from "./ItemPivotReport";
+
+vi.mock("react-router-dom", () => ({
+    useNavigate: () => vi.fn(),
+}));
+
+vi.mock("../../api/axios", () => ({
+    default: {
+        get: vi.fn(),
+    },
+}));
+
+vi.mock("sonner", () => ({
+    toast: {
+        dismiss: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        success: vi.fn(),
+    },
+}));
+
+const mockedApiGet = vi.mocked(api.get);
+
+// One license, one norm (E1), two item columns:
+//   - "FRUIT JUICE - E1": three real import items (same HSN + normalized
+//     description, just inconsistent slash-spacing) already merged by the
+//     backend into ONE `planned_import_items` entry — the common case.
+//   - "PP - E1": two GENUINELY different products (different description)
+//     sharing one item-name column — the backend leaves these unmerged, so
+//     the UI must render one aligned line per product across every column.
+const REPORT_DATA = {
+    items: [
+        { id: 1, name: "FRUIT JUICE - E1", has_restriction: false },
+        { id: 2, name: "PP - E1", has_restriction: false },
+    ],
+    licenses_by_norm_notification: {
+        E1: {
+            "Global Exim — NOTIF-1": [
+                {
+                    id: 100,
+                    license_number: "LIC-MERGE-TEST",
+                    license_date: "2026-01-01",
+                    license_expiry_date: "2026-12-31",
+                    ledger_date: null,
+                    exporter: "Test Exporter",
+                    port: "",
+                    notification_number: "NOTIF-1",
+                    purchase_status_code: "GE",
+                    purchase_status_label: "Global Exim",
+                    total_cif: 1000,
+                    debited_cif: 0,
+                    alloted_cif: 0,
+                    balance_cif: 1000,
+                    balance_report_notes: "",
+                    condition_sheet: "",
+                    latest_transfer: "",
+                    has_tl: false,
+                    has_copy: false,
+                    plan_source: "norm",
+                    items: {
+                        "FRUIT JUICE - E1": {
+                            hs_code: "20089991",
+                            description: "Fruit/Juice",
+                            quantity: 300,
+                            allotted_quantity: 0,
+                            debited_quantity: 0,
+                            available_quantity: 300,
+                            planned_import_items: [
+                                {
+                                    import_item_id: 1,
+                                    import_item_ids: [1, 2, 3],
+                                    hs_code: "20089991",
+                                    description: "Fruit/Juice",
+                                    quantity: 300,
+                                    allotted_quantity: 0,
+                                    debited_quantity: 0,
+                                    available_quantity: 300,
+                                    planned_quantity: 300,
+                                    planned_cif_fc: 750,
+                                    unit_price: 2.5,
+                                },
+                            ],
+                            restriction: null,
+                            restriction_value: 0,
+                            unit_price: 2.5,
+                            planned_cif: 750,
+                            plan_quantity: 0,
+                            plan_cif: 0,
+                            splits: [],
+                            condition_type: "",
+                        },
+                        "PP - E1": {
+                            hs_code: "",
+                            description: "",
+                            // HSN/Description are blank (strings can't be merged across
+                            // distinct products), but Quantity/Allotted/Debited/Available
+                            // ARE already summed across both products by the backend
+                            // (see _build_license_row in item_pivot_report.py) — these
+                            // match 111+222 / 11+22 / 1+2 / 120+230 from the two
+                            // `planned_import_items` entries below (available_quantity
+                            // deliberately doesn't total 300, to stay distinguishable
+                            // from the "FRUIT JUICE - E1" column's own 300s).
+                            quantity: 333,
+                            allotted_quantity: 33,
+                            debited_quantity: 3,
+                            available_quantity: 350,
+                            // planned_import_items is the verification breakdown only
+                            // (per-product HSN/Description) — Plan Qty/Planned CIF are
+                            // NOT read from here; they come from the cell-level
+                            // plan_quantity/plan_cif/unit_price/planned_cif fields
+                            // below, which the backend already totals across the whole
+                            // item-name column independent of how many distinct
+                            // products compose it (see row_data['items'][item_name] in
+                            // item_pivot_report.py).
+                            planned_import_items: [
+                                {
+                                    import_item_id: 10,
+                                    import_item_ids: [10],
+                                    hs_code: "39021000",
+                                    description: "Packing Material Batch A",
+                                    quantity: 111,
+                                    allotted_quantity: 11,
+                                    debited_quantity: 1,
+                                    available_quantity: 120,
+                                    planned_quantity: 90,
+                                    planned_cif_fc: 108,
+                                    unit_price: 1.2,
+                                },
+                                {
+                                    import_item_id: 11,
+                                    import_item_ids: [11],
+                                    hs_code: "39021000",
+                                    description: "Packing Material Batch B",
+                                    quantity: 222,
+                                    allotted_quantity: 22,
+                                    debited_quantity: 2,
+                                    available_quantity: 230,
+                                    planned_quantity: 180,
+                                    planned_cif_fc: 270,
+                                    unit_price: 1.5,
+                                },
+                            ],
+                            restriction: null,
+                            restriction_value: 0,
+                            unit_price: 1.35,
+                            planned_cif: 378,
+                            plan_quantity: 270,
+                            plan_cif: 378,
+                            splits: [],
+                            condition_type: "",
+                        },
+                    },
+                },
+            ],
+        },
+    },
+    norm_notes_conditions: { E1: { notes: [], conditions: [] } },
+    report_date: "2026-01-08",
+};
+
+function mockApi() {
+    mockedApiGet.mockImplementation((url: string) => {
+        if (url.startsWith("item-pivot/available-norms/")) {
+            return Promise.resolve({ data: [{ norm_class: "E1", description: "Confectionery" }] });
+        }
+        if (url.startsWith("masters/sion-classes/")) {
+            return Promise.resolve({ data: { results: [] } });
+        }
+        if (url.startsWith("masters/purchase-statuses/")) {
+            return Promise.resolve({ data: { results: [] } });
+        }
+        if (url.startsWith("reports/item-pivot/")) {
+            return Promise.resolve({ data: REPORT_DATA });
+        }
+        return Promise.resolve({ data: {} });
+    });
+}
+
+async function renderAndSelectNorm() {
+    render(<ItemPivotReport />);
+    const normButtons = await screen.findAllByRole("button", { name: /E1/ });
+    fireEvent.click(normButtons[0]);
+    return screen.findByText("LIC-MERGE-TEST");
+}
+
+describe("ItemPivotReport — merged vs. genuinely-distinct import items", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockApi();
+    });
+
+    it("renders an already-merged item (single planned_import_items entry) as one flat set of values, no stacking or badge", async () => {
+        await renderAndSelectNorm();
+        const row = screen.getByText("LIC-MERGE-TEST").closest("tr") as HTMLElement;
+
+        // The merged HSN/description/quantity appear once, plainly.
+        expect(within(row).getByText("20089991")).toBeInTheDocument();
+        expect(within(row).getByText("750.00")).toBeInTheDocument(); // Planned CIF
+
+        // The row also has a genuinely-ambiguous "PP - E1" column (asserted
+        // in the next test) — its merge-count badge must not leak onto the
+        // already-merged "FRUIT JUICE - E1" column: exactly one badge in the
+        // whole row, not two.
+        expect(within(row).getAllByText(/\d+ items/)).toHaveLength(1);
+    });
+
+    it("renders a license-level Planned CIF column after Alloted CIF, summing every item column's own planned CIF", async () => {
+        await renderAndSelectNorm();
+        const row = screen.getByText("LIC-MERGE-TEST").closest("tr") as HTMLElement;
+
+        // One "Planned CIF" header for the new license-level sticky column,
+        // plus one per item column (their own per-product "Planned CIF").
+        expect(screen.getAllByRole("columnheader", { name: "Planned CIF" }).length).toBeGreaterThanOrEqual(1);
+
+        // FRUIT JUICE - E1 (no manual plan) contributes its norm-derived
+        // planned_cif (750); PP - E1 (manually planned) contributes its
+        // plan_cif (378) instead of planned_cif — same per-item formula the
+        // "Planned CIF" item column and the notification-level total use.
+        expect(within(row).getByText("1128.00")).toBeInTheDocument();
+    });
+
+    it("renders genuinely distinct products sharing one column as a comma-separated HSN/description with summed totals", async () => {
+        await renderAndSelectNorm();
+        const row = screen.getByText("LIC-MERGE-TEST").closest("tr") as HTMLElement;
+
+        // Badge communicates why this cell couldn't be merged into one row.
+        expect(within(row).getByText("2 items")).toBeInTheDocument();
+
+        // HSN and Description are comma-separated, one per distinct product —
+        // never glued together with no separator.
+        expect(within(row).getByText("39021000, 39021000")).toBeInTheDocument();
+        expect(within(row).getByText("Packing Material Batch A, Packing Material Batch B")).toBeInTheDocument();
+
+        // Total / Allotted / Debited / Available show the backend's already-
+        // summed totals as ONE number, not a per-product breakdown.
+        expect(within(row).getByText("333.000")).toBeInTheDocument();
+        expect(within(row).getByText("33.000")).toBeInTheDocument();
+        expect(within(row).getByText("3.000")).toBeInTheDocument();
+        expect(within(row).getByText("350.000")).toBeInTheDocument();
+
+        // Plan Qty / Planned CIF are the cell-level totals (already summed by
+        // the backend across the whole item-name column), shown as ONE
+        // number — not read from the per-product planned_import_items list.
+        expect(within(row).getByText("270.000")).toBeInTheDocument();
+        expect(within(row).getByText("378.00")).toBeInTheDocument();
+    });
+});

@@ -36,6 +36,26 @@ class TestClassifyE1Item(TestCase):
         assert classify_e1_item('ANY', '', 'Other Confectionery blend') == \
             'OTHER CONFECTIONERY INGREDIENTS'
 
+    def test_food_flavour_never_classifies_as_other_confectionery_by_hsn(self):
+        # HSN 0802 alone would normally match step 1, but an item explicitly
+        # tagged Food Flavour must be excluded — it should fall through the
+        # rest of the waterfall (no match here) rather than land in Other
+        # Confectionery Ingredients.
+        assert classify_e1_item(
+            'FOOD FLAVOUR - E1, FRUIT FLAVOUR - E1', '08022200', 'Food Flavour - Fruit Flavour',
+        ) is None
+
+    def test_food_flavour_by_description_never_classifies_as_other_confectionery(self):
+        assert classify_e1_item('ANY', '08021100', 'Food Flavour blend') is None
+
+    def test_food_flavour_still_falls_through_to_later_categories(self):
+        # A Food Flavour item that ALSO genuinely matches a later category
+        # (e.g. Fruit Juice) is still planned under that category — the
+        # exclusion only blocks the Other Confectionery step, not the whole
+        # waterfall.
+        assert classify_e1_item('ANY', '08021100', 'Food Flavour - Fruit Juice concentrate') == \
+            'FRUIT JUICE'
+
     def test_cocoa_mass_by_hsn_1803(self):
         assert classify_e1_item('ANY', '18031000', '') == 'COCOA MASS'
 

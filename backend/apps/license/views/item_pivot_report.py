@@ -25,6 +25,10 @@ from apps.license.models import (
     LicenseDetailsModel, LicenseImportItemsModel,
     LicenseExportItemModel, LicenseTransferModel,
 )
+from apps.license.services.plan_grouping import (
+    merge_planned_import_items as _merge_planned_import_items,
+    merge_items_for_classification as _merge_items_for_classification,
+)
 from apps.license.views.item_report import _ExcelPassthroughRenderer
 
 def _safe_int(value, default):
@@ -458,22 +462,24 @@ class ItemPivotReportView(APIView):
                     _sp['item_name'] = _split_item_name_lookup.get(_nid) if _nid is not None else None
 
                 # planned_import_items: dict-of-dicts (keyed by import_item id,
-                # for O(1) accumulation above) -> plain list, Decimal -> float,
-                # sorted for stable output. This is the per-cell verification
-                # data: each entry is one ACTUAL import item a plan line
-                # referenced, never merged with any other import item.
+                # for O(1) accumulation above) -> plain list, Decimal -> float.
+                # This is the per-cell verification data: each entry is a real
+                # import item a plan line referenced. Distinct import items are
+                # then consolidated by `merge_planned_import_items` (HSN +
+                # normalized description) purely for readability — e.g. three
+                # "PP - E1" import items that are really one physical product
+                # split across serial numbers render as one row instead of
+                # three; import items that are genuinely different products
+                # (different HSN or description) are never merged.
                 _pit_map = _cell.get('planned_import_items')
                 if _pit_map:
-                    _cell['planned_import_items'] = sorted(
-                        (
-                            {
-                                **_pit,
-                                'planned_quantity': float(_pit['planned_quantity']),
-                                'planned_cif_fc': float(_pit['planned_cif_fc']),
-                            }
-                            for _pit in _pit_map.values()
-                        ),
-                        key=lambda _pit: _pit['import_item_id'],
+                    _cell['planned_import_items'] = _merge_planned_import_items(
+                        {
+                            **_pit,
+                            'planned_quantity': float(_pit['planned_quantity']),
+                            'planned_cif_fc': float(_pit['planned_cif_fc']),
+                        }
+                        for _pit in _pit_map.values()
                     )
                 else:
                     _cell['planned_import_items'] = []
@@ -903,24 +909,33 @@ class ItemPivotReportView(APIView):
             # the prefetch cache and would re-query; .all() reads from it for free.
             import_items = license_obj.import_license.all()
             item_ledger_by_id: Dict[int, dict] = {}
-            e1_items: list = []
             for ii in import_items:
-                names = [n.name for n in ii.items.all()]
-                key = ', '.join(sorted(names)) if names else (ii.description or '-')
-                hs = ii.hs_code.hs_code if ii.hs_code else ''
-                cat = _classify(key, hs, ii.description)
-                if not cat:
-                    continue
-                avail = _Decimal(str(ii.available_quantity or 0))
                 item_ledger_by_id[ii.id] = {
-                    'hs_code': hs,
+                    'hs_code': ii.hs_code.hs_code if ii.hs_code else '',
                     'description': ii.description or '',
                     'quantity': float(ii.quantity or 0),
                     'allotted_quantity': float(ii.allotted_quantity or 0),
                     'debited_quantity': float(ii.debited_quantity or 0),
-                    'available_quantity': float(avail),
+                    'available_quantity': float(_Decimal(str(ii.available_quantity or 0))),
                 }
-                e1_items.append(_E1Item(key=ii.id, category=cat, qty=avail))
+
+            # Classify and plan ONE merged group per physical product (same
+            # HSN + normalized description) instead of once per raw import
+            # item — see `merge_items_for_classification`'s docstring: a
+            # per-serial classify can split one physical product into two
+            # different categories/columns if its serials carry inconsistent
+            # master-data tags, which no amount of post-hoc output merging
+            # can undo (it only ever sees one category's bucket at a time).
+            groups = _merge_items_for_classification(import_items)
+            group_by_rep: Dict[int, dict] = {}
+            e1_items: list = []
+            for g in groups:
+                names_text = ', '.join(g['item_names']) if g['item_names'] else (g['description'] or '-')
+                cat = _classify(names_text, g['hs_code'], g['description'])
+                if not cat:
+                    continue
+                group_by_rep[g['representative_id']] = g
+                e1_items.append(_E1Item(key=g['representative_id'], category=cat, qty=g['available_quantity']))
 
             # Run the shared per-item engine — the same rules Auto-Plan and
             # norm_plan.py use, so this table (and its Excel export) never
@@ -948,31 +963,47 @@ class ItemPivotReportView(APIView):
                 per_item_util[nm] = per_item_util.get(nm, 0.0) + float(line.planned_qty)
                 per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(line.planned_cif)
                 _bucket = per_item_planned_items.setdefault(nm, {})
-                _iid = line.key
-                if _iid not in _bucket:
+                # `line.key` is the merged group's representative id — fan the
+                # group's single planned qty/CIF back across every raw member,
+                # proportional to each member's own available_quantity share
+                # (the category rate is uniform across the group, so the
+                # ratio cancels it out and every member ends up at the same
+                # unit rate). This keeps `_merge_planned_import_items` below
+                # working unchanged: every member of a physical-product group
+                # is now guaranteed to land in this SAME `nm` bucket, so it
+                # reliably collapses them into one display row with correct
+                # per-member ledger fields.
+                group = group_by_rep[line.key]
+                members = group['member_ids']
+                total_avail = float(group['available_quantity'])
+                for _iid in members:
                     _ledger = item_ledger_by_id.get(_iid) or {}
-                    _bucket[_iid] = {
-                        'import_item_id': _iid,
-                        'hs_code': _ledger.get('hs_code', ''),
-                        'description': _ledger.get('description', ''),
-                        'quantity': _ledger.get('quantity', 0.0),
-                        'allotted_quantity': _ledger.get('allotted_quantity', 0.0),
-                        'debited_quantity': _ledger.get('debited_quantity', 0.0),
-                        'available_quantity': _ledger.get('available_quantity', 0.0),
-                        'planned_quantity': 0.0,
-                        'planned_cif_fc': 0.0,
-                    }
-                _bucket[_iid]['planned_quantity'] += float(line.planned_qty)
-                _bucket[_iid]['planned_cif_fc'] += float(line.planned_cif)
+                    share = (
+                        _ledger.get('available_quantity', 0.0) / total_avail
+                        if total_avail else 1.0 / len(members)
+                    )
+                    if _iid not in _bucket:
+                        _bucket[_iid] = {
+                            'import_item_id': _iid,
+                            'hs_code': _ledger.get('hs_code', ''),
+                            'description': _ledger.get('description', ''),
+                            'quantity': _ledger.get('quantity', 0.0),
+                            'allotted_quantity': _ledger.get('allotted_quantity', 0.0),
+                            'debited_quantity': _ledger.get('debited_quantity', 0.0),
+                            'available_quantity': _ledger.get('available_quantity', 0.0),
+                            'planned_quantity': 0.0,
+                            'planned_cif_fc': 0.0,
+                        }
+                    _bucket[_iid]['planned_quantity'] += float(line.planned_qty) * share
+                    _bucket[_iid]['planned_cif_fc'] += float(line.planned_cif) * share
 
             for nm, uq in per_item_util.items():
                 item_plan = per_item_cif.get(nm, 0.0)
                 item_plan_data[nm] = {
                     'unit_price': round(item_plan / uq, 2) if uq else 0.0,
                     'planned_cif': round(item_plan, 2),
-                    'planned_import_items': sorted(
+                    'planned_import_items': _merge_planned_import_items(
                         per_item_planned_items.get(nm, {}).values(),
-                        key=lambda d: d['import_item_id'],
                     ),
                 }
         elif primary_norm == 'E5':
@@ -986,24 +1017,29 @@ class ItemPivotReportView(APIView):
             # Fix #3: reuse the already-prefetched import items (see E1 note above).
             import_items = license_obj.import_license.all()
             item_ledger_by_id: Dict[int, dict] = {}
-            e5_items: list = []
             for ii in import_items:
-                names = [n.name for n in ii.items.all()]
-                key = ', '.join(sorted(names)) if names else (ii.description or '-')
-                hs = ii.hs_code.hs_code if ii.hs_code else ''
-                cat = _classify(key, hs, ii.description)
-                if not cat:
-                    continue
-                avail = _Decimal(str(ii.available_quantity or 0))
                 item_ledger_by_id[ii.id] = {
-                    'hs_code': hs,
+                    'hs_code': ii.hs_code.hs_code if ii.hs_code else '',
                     'description': ii.description or '',
                     'quantity': float(ii.quantity or 0),
                     'allotted_quantity': float(ii.allotted_quantity or 0),
                     'debited_quantity': float(ii.debited_quantity or 0),
-                    'available_quantity': float(avail),
+                    'available_quantity': float(_Decimal(str(ii.available_quantity or 0))),
                 }
-                e5_items.append(_E5Item(key=ii.id, category=cat, qty=avail))
+
+            # Classify and plan ONE merged group per physical product — see
+            # the matching E1 note above for why a per-serial classify can
+            # split one product into two categories/columns.
+            groups = _merge_items_for_classification(import_items)
+            group_by_rep: Dict[int, dict] = {}
+            e5_items: list = []
+            for g in groups:
+                names_text = ', '.join(g['item_names']) if g['item_names'] else (g['description'] or '-')
+                cat = _classify(names_text, g['hs_code'], g['description'])
+                if not cat:
+                    continue
+                group_by_rep[g['representative_id']] = g
+                e5_items.append(_E5Item(key=g['representative_id'], category=cat, qty=g['available_quantity']))
 
             # Run the shared per-item engine — the same rules Auto-Plan and
             # norm_plan.py use, so this table (and its Excel export) never
@@ -1025,31 +1061,40 @@ class ItemPivotReportView(APIView):
                 per_item_util[nm] = per_item_util.get(nm, 0.0) + float(line.planned_qty)
                 per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(line.planned_cif)
                 _bucket = per_item_planned_items.setdefault(nm, {})
-                _iid = line.key
-                if _iid not in _bucket:
+                # See the matching E1 note above: fan the merged group's one
+                # planned line back across every raw member, proportional to
+                # each member's available_quantity share.
+                group = group_by_rep[line.key]
+                members = group['member_ids']
+                total_avail = float(group['available_quantity'])
+                for _iid in members:
                     _ledger = item_ledger_by_id.get(_iid) or {}
-                    _bucket[_iid] = {
-                        'import_item_id': _iid,
-                        'hs_code': _ledger.get('hs_code', ''),
-                        'description': _ledger.get('description', ''),
-                        'quantity': _ledger.get('quantity', 0.0),
-                        'allotted_quantity': _ledger.get('allotted_quantity', 0.0),
-                        'debited_quantity': _ledger.get('debited_quantity', 0.0),
-                        'available_quantity': _ledger.get('available_quantity', 0.0),
-                        'planned_quantity': 0.0,
-                        'planned_cif_fc': 0.0,
-                    }
-                _bucket[_iid]['planned_quantity'] += float(line.planned_qty)
-                _bucket[_iid]['planned_cif_fc'] += float(line.planned_cif)
+                    share = (
+                        _ledger.get('available_quantity', 0.0) / total_avail
+                        if total_avail else 1.0 / len(members)
+                    )
+                    if _iid not in _bucket:
+                        _bucket[_iid] = {
+                            'import_item_id': _iid,
+                            'hs_code': _ledger.get('hs_code', ''),
+                            'description': _ledger.get('description', ''),
+                            'quantity': _ledger.get('quantity', 0.0),
+                            'allotted_quantity': _ledger.get('allotted_quantity', 0.0),
+                            'debited_quantity': _ledger.get('debited_quantity', 0.0),
+                            'available_quantity': _ledger.get('available_quantity', 0.0),
+                            'planned_quantity': 0.0,
+                            'planned_cif_fc': 0.0,
+                        }
+                    _bucket[_iid]['planned_quantity'] += float(line.planned_qty) * share
+                    _bucket[_iid]['planned_cif_fc'] += float(line.planned_cif) * share
 
             for nm, uq in per_item_util.items():
                 item_plan = per_item_cif.get(nm, 0.0)
                 item_plan_data[nm] = {
                     'unit_price': round(item_plan / uq, 2) if uq else 0.0,
                     'planned_cif': round(item_plan, 2),
-                    'planned_import_items': sorted(
+                    'planned_import_items': _merge_planned_import_items(
                         per_item_planned_items.get(nm, {}).values(),
-                        key=lambda d: d['import_item_id'],
                     ),
                 }
 
@@ -1195,17 +1240,23 @@ class ItemPivotReportView(APIView):
                     _available_quantity = _pit['available_quantity']
                 elif len(_pit_list) > 1:
                     # Genuinely ambiguous — distinct import items were planned
-                    # under the same item-name. Leave the single-value cell
-                    # blank (0, matching every other "no single value" cell in
-                    # this report — Excel TOTAL-row summation depends on these
-                    # staying numeric) rather than merge/pick one; the
-                    # frontend renders each entry from `planned_import_items`.
+                    # under the same item-name. HSN/Description are STRINGS:
+                    # there is no correct single value, so they are left
+                    # blank rather than merged, glued, or picked arbitrarily;
+                    # the frontend renders each entry from
+                    # `planned_import_items` instead. Quantities are NOT
+                    # ambiguous the same way — summing them across the
+                    # distinct import items sharing this column is factually
+                    # correct (identical to the unplanned-cell aggregate
+                    # below) and keeps this report's own on-screen totals and
+                    # the Excel TOTAL row accurate; zeroing them out here
+                    # would silently under-count both.
                     _hs_code = ''
                     _description = ''
-                    _quantity = 0.0
-                    _allotted_quantity = 0.0
-                    _debited_quantity = 0.0
-                    _available_quantity = 0.0
+                    _quantity = sum((p['quantity'] for p in _pit_list), 0.0)
+                    _allotted_quantity = sum((p['allotted_quantity'] for p in _pit_list), 0.0)
+                    _debited_quantity = sum((p['debited_quantity'] for p in _pit_list), 0.0)
+                    _available_quantity = sum((p['available_quantity'] for p in _pit_list), 0.0)
                 else:
                     _hs_code = item_data['hs_code']
                     _description = item_data['description']
@@ -1720,13 +1771,34 @@ class ItemPivotReportView(APIView):
                             has_restriction = item.get('has_restriction', False)
                             item_data = lic['items'].get(item_name, {})
                             cond = item_data.get('condition_type') or ''
+                            # When this column is backed by more than one
+                            # distinct import item, `hs_code`/`description`
+                            # are blank (see _build_license_row — a string
+                            # can't be merged across items). Match the UI's
+                            # own handling instead of leaving the Excel cell
+                            # empty: list each import item's own HSN/
+                            # Description on its own line within the cell —
+                            # never joined without a separator, never one
+                            # value picked over another.
+                            _pits = item_data.get('planned_import_items') or []
+                            if len(_pits) > 1:
+                                _hsn_value = '\n'.join(p.get('hs_code') or '-' for p in _pits)
+                                _desc_value = '\n'.join(p.get('description') or '-' for p in _pits)
+                            else:
+                                _hsn_value = item_data.get('hs_code', '')
+                                _desc_value = item_data.get('description', '')
                             # Tint the HSN-code cell for this (licence, item)
                             # pair when a condition is set.
-                            hsn_cell = WriteOnlyCell(worksheet, value=item_data.get('hs_code', ''))
+                            hsn_cell = WriteOnlyCell(worksheet, value=_hsn_value)
                             _annotate_condition_cell(hsn_cell, cond)
+                            if len(_pits) > 1:
+                                hsn_cell.alignment = Alignment(wrap_text=True, vertical='top')
                             row_data.append(hsn_cell)
+                            desc_cell = WriteOnlyCell(worksheet, value=_desc_value)
+                            if len(_pits) > 1:
+                                desc_cell.alignment = Alignment(wrap_text=True, vertical='top')
+                            row_data.append(desc_cell)
                             row_data.extend([
-                                item_data.get('description', ''),
                                 item_data.get('quantity', 0),
                                 item_data.get('allotted_quantity', 0),
                                 item_data.get('debited_quantity', 0),

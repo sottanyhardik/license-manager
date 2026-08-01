@@ -58,10 +58,14 @@ def _allotment(company, *, row_type="AT"):
 
 @pytest.mark.django_db
 def test_merges_by_description_and_picks_lowest_serial_as_representative(license_obj):
+    # All three share the SAME HSN — grouping requires HSN + description to
+    # both match (see `plan_grouping.plan_group_key`); a blank/differing HSN
+    # on any one of these would keep it out of the group even with an
+    # identical description.
     hs = HSCodeModel.objects.create(hs_code="15119090")
     item_23 = _import_item(license_obj, 23, "Refined Cane Sugar", hs_code=hs)
-    item_3 = _import_item(license_obj, 3, "refined cane sugar")
-    item_13 = _import_item(license_obj, 13, " REFINED CANE SUGAR ")
+    item_3 = _import_item(license_obj, 3, "refined cane sugar", hs_code=hs)
+    item_13 = _import_item(license_obj, 13, " REFINED CANE SUGAR ", hs_code=hs)
     other = _import_item(license_obj, 5, "Raw Sugar")
 
     rows = plan_utilization_rows(license_obj)

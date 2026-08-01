@@ -94,8 +94,14 @@ def classify_e1_item(
 
     Precedence (high → low) — matches the 8-step waterfall order exactly:
 
+      0. item/description contains 'food flavour'            → excluded from
+         step 1 (see below); never classified as OTHER CONFECTIONERY
+         INGREDIENTS purely because it happens to carry an HSN under chapter
+         0802. Falls through to steps 2-8 like any other item, or None if
+         nothing else matches — it is NEVER given a fallback bucket.
       1. HSN starts with '0802', or item/description contains
-         'other confectionery'                               → OTHER CONFECTIONERY INGREDIENTS
+         'other confectionery' — UNLESS excluded by step 0 above
+                                                              → OTHER CONFECTIONERY INGREDIENTS
       2. HSN starts with '1803', or description contains '1803'  → COCOA MASS
       3. (HSN starts with '0404' OR description contains '0404')
          AND description contains 'milk'
@@ -115,7 +121,10 @@ def classify_e1_item(
     hs = _hsn_digits(hs_code)
     desc = _norm(description)
 
-    if hs.startswith('0802') or 'other confectionery' in item or 'other confectionery' in desc:
+    is_food_flavour = 'food flavour' in item or 'food flavour' in desc
+    if not is_food_flavour and (
+        hs.startswith('0802') or 'other confectionery' in item or 'other confectionery' in desc
+    ):
         return 'OTHER CONFECTIONERY INGREDIENTS'
 
     if hs.startswith('1803') or '1803' in desc:

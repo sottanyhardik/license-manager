@@ -48,6 +48,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
     autoPlan,
     bulkUpsertItemPlans,
+    deleteItemPlan,
     fetchItemPlans,
     fetchLicense,
     fetchNormPrefill,
@@ -418,6 +419,7 @@ export default function PlanningEditor({
 
     const [editingGroupId, setEditingGroupId]   = useState<number | null>(null);
     const [savingGroupId, setSavingGroupId]     = useState<number | null>(null);
+    const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
 
     // Per-group split-breakdown disclosure. Defaults to expanded (every
     // planning allocation's item name/price/qty/CIF should be visible without
@@ -622,6 +624,32 @@ export default function PlanningEditor({
             setSavingGroupId(null);
         }
     }, [groups, licenseId, load, onSaved]);
+
+    // ── Delete (per-row) ──────────────────────────────────────────────────────
+
+    const deleteGroup = useCallback(async (gId: number) => {
+        const g = groups.find((gr) => gr.id === gId);
+        if (!g) return;
+
+        const savedSplitIds = g.splits.map((sp) => sp.id).filter((id): id is number => id !== null);
+        if (savedSplitIds.length === 0) return;
+
+        const ok = window.confirm(`Delete the plan for "${g.description}"?\n\nThis removes every saved planning entry for this item and cannot be undone.`);
+        if (!ok) return;
+
+        setDeletingGroupId(gId);
+        try {
+            await Promise.all(savedSplitIds.map((id) => deleteItemPlan(id)));
+            toast.success(`Plan deleted — ${g.description}`);
+            if (editingGroupId === gId) setEditingGroupId(null);
+            await load();
+            onSaved?.();
+        } catch {
+            toast.error("Failed to delete plan");
+        } finally {
+            setDeletingGroupId(null);
+        }
+    }, [groups, editingGroupId, load, onSaved]);
 
     // ── Prefill (scoped to the open editor) ───────────────────────────────────
 
@@ -906,15 +934,31 @@ export default function PlanningEditor({
                                                 {isEditing ? (
                                                     <span className="text-[10.5px] font-medium text-primary">Editing ↓</span>
                                                 ) : (
-                                                    <Button
-                                                        variant="ghost" size="sm"
-                                                        onClick={() => openEditor(g.id)}
-                                                        disabled={savingGroupId !== null}
-                                                        className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                                                        aria-label={`Edit planning for ${g.description}`}
-                                                    >
-                                                        <Pencil className="size-3.5" />Edit
-                                                    </Button>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <Button
+                                                            variant="ghost" size="sm"
+                                                            onClick={() => openEditor(g.id)}
+                                                            disabled={savingGroupId !== null || deletingGroupId !== null}
+                                                            className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                                            aria-label={`Edit planning for ${g.description}`}
+                                                        >
+                                                            <Pencil className="size-3.5" />Edit
+                                                        </Button>
+                                                        {g.has_plan && (
+                                                            <Button
+                                                                variant="ghost" size="sm"
+                                                                onClick={() => deleteGroup(g.id)}
+                                                                disabled={savingGroupId !== null || deletingGroupId !== null}
+                                                                className="h-7 gap-1.5 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                                aria-label={`Delete plan for ${g.description}`}
+                                                            >
+                                                                {deletingGroupId === g.id
+                                                                    ? <Loader2 className="size-3.5 animate-spin" />
+                                                                    : <Trash2 className="size-3.5" />}
+                                                                Delete
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </td>
                                         </tr>

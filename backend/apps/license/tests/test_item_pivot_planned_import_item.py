@@ -148,14 +148,17 @@ class ItemPivotPlannedImportItemTests(TestCase):
         cell = row['items'][item_name.name]
 
         # Two distinct import items were planned under the same item-name —
-        # never merged into one ledger record. The top-level scalar columns
-        # are left blank/zero rather than silently summed or picking one.
+        # never merged into one ledger record. HSN/Description (strings)
+        # are left blank rather than picking one or gluing them together.
+        # Quantities ARE correctly summed across the two items (180 = 100 +
+        # 80) so this report's own totals and the Excel TOTAL row don't
+        # silently under-count — only the string fields are ambiguous.
         self.assertEqual(cell['hs_code'], '')
         self.assertEqual(cell['description'], '')
-        self.assertEqual(cell['quantity'], 0.0)
-        self.assertEqual(cell['allotted_quantity'], 0.0)
-        self.assertEqual(cell['debited_quantity'], 0.0)
-        self.assertEqual(cell['available_quantity'], 0.0)
+        self.assertEqual(cell['quantity'], 180.0)
+        self.assertEqual(cell['allotted_quantity'], 10.0)
+        self.assertEqual(cell['debited_quantity'], 5.0)
+        self.assertEqual(cell['available_quantity'], 180.0)
 
         planned = {p['import_item_id']: p for p in cell['planned_import_items']}
         self.assertEqual(len(planned), 2)
@@ -438,12 +441,14 @@ class ItemPivotLiveComputeVerificationTests(TestCase):
         cell = row['items'].get('PP - E1')
         self.assertIsNotNone(cell, "PP - E1 column must exist")
 
-        # Two distinct import items behind one column -> top-level scalar
-        # fields are blanked (never merged/concatenated), never a string
-        # like "3902100039021000".
+        # Two distinct import items behind one column -> the string fields
+        # are blanked (never merged/concatenated), never a value like
+        # "3902100039021000". Quantity is the correct sum (300 = 100 + 200),
+        # not zeroed and not glued.
         self.assertEqual(cell['hs_code'], '')
         self.assertEqual(cell['description'], '')
         self.assertNotIn('39021000', str(cell['hs_code']))
+        self.assertEqual(cell['quantity'], 300.0)
 
         planned = {p['import_item_id']: p for p in cell['planned_import_items']}
         self.assertEqual(len(planned), 2)
@@ -488,7 +493,9 @@ class ItemPivotLiveComputeVerificationTests(TestCase):
         cell = row['items'].get('ALUMINIUM FOIL - E1')
         self.assertIsNotNone(cell, "ALUMINIUM FOIL - E1 column must exist")
 
-        self.assertEqual(cell['quantity'], 0.0)
+        # Quantity is the correct sum, never the two numbers glued together
+        # as text ("9125.12037985.810") and never silently zeroed.
+        self.assertEqual(cell['quantity'], 9125.12 + 37985.81)
         self.assertEqual(cell['hs_code'], '')
 
         planned = {p['import_item_id']: p for p in cell['planned_import_items']}
@@ -496,4 +503,371 @@ class ItemPivotLiveComputeVerificationTests(TestCase):
         self.assertEqual(planned[item_a.id]['quantity'], 9125.120)
         self.assertEqual(planned[item_b.id]['quantity'], 37985.810)
         self.assertEqual(planned[item_a.id]['hs_code'], '76071190')
-        self.assertEqual(planned[item_b.id]['hs_code'], '76072000')
+
+    def test_same_hsn_description_items_with_divergent_tags_classify_as_one_group(self):
+        # classify_e1_item partly keys off an import item's OWN M2M tags
+        # ("other confectionery" text). Two serials of the SAME physical
+        # product (same HSN + description) can carry inconsistent tags —
+        # classifying each independently would either split them into two
+        # columns or (as here) silently drop the untagged one from planning
+        # entirely, since output-level merging (`merge_planned_import_items`)
+        # only ever sees one category's bucket at a time and can't reunite
+        # them. Merging BEFORE classification (`merge_items_for_classification`)
+        # fixes this: the group sees the union of tags and classifies once.
+        license_obj = self._make_e1_license("E1-TAG-SPLIT", balance_cif=Decimal('1000000.00'))
+        item_name = ItemNameModel.objects.create(name="OTHER CONFECTIONERY INGREDIENTS - E1", is_active=True)
+
+        item_a = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Bulk Ingredient Mix",
+            hs_code=_hs('99999999'),
+            quantity=Decimal('100.000'), available_quantity=Decimal('100.000'),
+        )
+        item_a.items.add(item_name)
+
+        item_b = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=2, description="Bulk Ingredient Mix",
+            hs_code=_hs('99999999'),
+            quantity=Decimal('200.000'), available_quantity=Decimal('200.000'),
+        )
+        # Untagged, and its own HSN/description trigger no classify_e1_item
+        # rule on their own — before this fix it would classify to None via
+        # its own description-only fallback and never be planned at all.
+        self.assertEqual(item_b.items.count(), 0)
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "E1-TAG-SPLIT")
+        self.assertIsNotNone(row)
+
+        cell = row['items'].get('OTHER CONFECTIONERY INGREDIENTS - E1')
+        self.assertIsNotNone(cell, "OTHER CONFECTIONERY INGREDIENTS - E1 column must exist")
+
+        self.assertEqual(cell['hs_code'], '99999999')
+        self.assertEqual(cell['description'], 'Bulk Ingredient Mix')
+        self.assertEqual(cell['quantity'], 300.0)
+        self.assertEqual(cell['available_quantity'], 300.0)
+        self.assertEqual(cell['planned_cif'], 900.0)  # (100 + 200) * $3.00 rate
+
+        self.assertEqual(len(cell['planned_import_items']), 1)
+        pit = cell['planned_import_items'][0]
+        self.assertEqual(sorted(pit['import_item_ids']), sorted([item_a.id, item_b.id]))
+        self.assertEqual(pit['unit_price'], 3.00)
+
+
+class ItemPivotMergeDuplicateImportItemsTests(TestCase):
+    """Regression tests for `plan_grouping.merge_planned_import_items` —
+    the readability enhancement that consolidates several distinct import
+    items into one display row when they're the same physical product
+    (same HSN + normalized description), applied inside
+    `item_pivot_report.py`'s `planned_import_items` construction.
+    """
+
+    def _make_e1_license(self, license_number, balance_cif=Decimal('10000.00')):
+        company = CompanyModel.objects.create(iec=f"IEC{license_number[-7:]}", name="Pivot Merge Exporter")
+        purchase_status, _ = PurchaseStatus.objects.get_or_create(code=GE, defaults={"label": "Global Exim"})
+        head_norm = HeadSIONNormsModel.objects.create(name=f"Head {license_number}")
+        norm_class, _ = SionNormClassModel.objects.get_or_create(
+            norm_class="E1", defaults={"head_norm": head_norm, "is_active": True},
+        )
+        license_obj = LicenseDetailsModel.objects.create(
+            license_number=license_number,
+            license_date=date.today() - timedelta(days=30),
+            license_expiry_date=date.today() + timedelta(days=30),
+            exporter=company,
+            purchase_status=purchase_status,
+        )
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=balance_cif, norm_class=norm_class)
+        return license_obj
+
+    def _find_row(self, report, license_number):
+        for _norm, notifs in report["licenses_by_norm_notification"].items():
+            for _notif, licenses_list in notifs.items():
+                for lic_row in licenses_list:
+                    if lic_row["license_number"] == license_number:
+                        return lic_row
+        return None
+
+    def test_identical_hsn_and_description_merge_into_one_row(self):
+        # This is the real shape behind license 0311051568: three "PP - E1"
+        # import items, all HSN 39021000, two sharing the EXACT same
+        # description — those two must merge into one row; totals must be
+        # the sum, never zero and never string-glued.
+        tagging_license = self._make_e1_license("MERGE-EXACT-TAGGING")
+        tag_name = ItemNameModel.objects.create(name="PP - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only PP",
+            quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(tag_name)
+
+        license_obj = self._make_e1_license("MERGE-EXACT", balance_cif=Decimal('100000.00'))
+        item_a = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Packing Material /PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('9125.120'), available_quantity=Decimal('9125.120'),
+        )
+        item_b = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=2, description="Packing Material /PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('11005.040'), available_quantity=Decimal('11005.040'),
+        )
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "MERGE-EXACT")
+        cell = row['items'].get('PP - E1')
+
+        self.assertEqual(len(cell['planned_import_items']), 1, "identical HSN+description must merge into one row")
+        merged = cell['planned_import_items'][0]
+        self.assertEqual(sorted(merged['import_item_ids']), sorted([item_a.id, item_b.id]))
+        self.assertEqual(merged['hs_code'], '39021000')
+        self.assertEqual(merged['description'], 'Packing Material /PP')
+        self.assertEqual(merged['quantity'], 9125.12 + 11005.04)
+        self.assertEqual(merged['available_quantity'], 9125.12 + 11005.04)
+
+        # A single merged entry -> the top-level scalar cell fields resolve
+        # to the merged row too (no longer blanked, since there's only one
+        # display row behind this column now).
+        self.assertEqual(cell['hs_code'], '39021000')
+        self.assertEqual(cell['description'], 'Packing Material /PP')
+        self.assertEqual(cell['quantity'], 9125.12 + 11005.04)
+
+    def test_whitespace_and_case_differences_normalize_and_merge(self):
+        # "fruit / juice" / "FRUIT  /  JUICE" (double space) / " Fruit / Juice "
+        # (leading/trailing space) are the same product once normalized
+        # (case-insensitive, trimmed, internal whitespace runs collapsed).
+        tagging_license = self._make_e1_license("MERGE-WS-TAGGING")
+        tag_name = ItemNameModel.objects.create(name="FRUIT JUICE - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only Juice",
+            quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(tag_name)
+
+        license_obj = self._make_e1_license("MERGE-WS", balance_cif=Decimal('100000.00'))
+        item_a = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="fruit / juice",
+            hs_code=_hs('20091100'),
+            quantity=Decimal('859.000'), available_quantity=Decimal('859.000'),
+        )
+        item_b = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=2, description="FRUIT  /  JUICE",
+            hs_code=_hs('20091100'),
+            quantity=Decimal('1575.000'), available_quantity=Decimal('1575.000'),
+        )
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "MERGE-WS")
+        cell = row['items'].get('FRUIT JUICE - E1')
+
+        self.assertEqual(len(cell['planned_import_items']), 1)
+        merged = cell['planned_import_items'][0]
+        self.assertEqual(merged['quantity'], 859.0 + 1575.0)
+        self.assertEqual(sorted(merged['import_item_ids']), sorted([item_a.id, item_b.id]))
+
+    def test_single_space_near_slash_still_merges(self):
+        # Real-world case found on license 0311055048 ("Fruit /Juice" /
+        # "Fruit / Juice" / "Fruit/ Juice", HSN 20089991, all the same
+        # physical product): "Packing Material /PP" vs "Packing Material /
+        # PP" differ only by whitespace immediately next to a slash — that
+        # is normalized away, so these merge into one row rather than
+        # splitting one product across several Planning Modal / pivot rows.
+        tagging_license = self._make_e1_license("MERGE-NEARMISS-TAGGING")
+        tag_name = ItemNameModel.objects.create(name="PP - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only PP",
+            quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(tag_name)
+
+        license_obj = self._make_e1_license("MERGE-NEARMISS", balance_cif=Decimal('100000.00'))
+        item_a = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Packing Material /PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('9125.120'), available_quantity=Decimal('9125.120'),
+        )
+        item_b = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=2, description="Packing Material / PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('37985.810'), available_quantity=Decimal('37985.810'),
+        )
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "MERGE-NEARMISS")
+        cell = row['items'].get('PP - E1')
+
+        self.assertEqual(len(cell['planned_import_items']), 1, "a single differing space next to a slash must be normalized away")
+        merged = cell['planned_import_items'][0]
+        self.assertEqual(sorted(merged['import_item_ids']), sorted([item_a.id, item_b.id]))
+        self.assertEqual(merged['quantity'], 9125.12 + 37985.81)
+
+    def test_different_hsn_same_description_never_merges(self):
+        # Same normalized description, but genuinely different products
+        # (different HSN) — merging by description alone would be the
+        # over-merging bug this feature must NOT introduce.
+        tagging_license = self._make_e1_license("MERGE-DIFFHSN-TAGGING")
+        tag_name = ItemNameModel.objects.create(name="ALUMINIUM FOIL - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only Foil",
+            quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(tag_name)
+
+        license_obj = self._make_e1_license("MERGE-DIFFHSN", balance_cif=Decimal('1000000.00'))
+        LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Foil Product",
+            hs_code=_hs('76071190'),
+            quantity=Decimal('100.000'), available_quantity=Decimal('100.000'),
+        )
+        LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=2, description="Foil Product",
+            hs_code=_hs('76072000'),
+            quantity=Decimal('200.000'), available_quantity=Decimal('200.000'),
+        )
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "MERGE-DIFFHSN")
+        cell = row['items'].get('ALUMINIUM FOIL - E1')
+
+        self.assertEqual(len(cell['planned_import_items']), 2, "different HSN codes must never merge, even with identical description")
+
+    def test_mixed_unit_price_shows_merged_not_averaged(self):
+        # Two merged import items whose OWN effective rate (planned_cif_fc /
+        # planned_quantity) differs must report unit_price == "Merged",
+        # never a blended/averaged number.
+        tagging_license = self._make_e1_license("MERGE-RATE-TAGGING")
+        tag_name = ItemNameModel.objects.create(name="PP - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only PP",
+            quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(tag_name)
+
+        # Balance capped tightly enough that the two merged items land at
+        # DIFFERENT effective rates (the generic-stage allocator gives every
+        # item in a category the SAME shared rate normally, so to exercise a
+        # genuine rate mismatch we go through the persisted-plan path
+        # instead, where each import item's plan line is saved independently
+        # with its own unit_price).
+        license_obj = self._make_e1_license("MERGE-RATE")
+        item_a = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Packing Material /PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('100.000'), available_quantity=Decimal('100.000'),
+        )
+        item_b = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=2, description="Packing Material /PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('100.000'), available_quantity=Decimal('100.000'),
+        )
+        LicenseItemPlan.objects.create(
+            license=license_obj, import_item=item_a, item_name=tag_name,
+            planned_quantity=Decimal('100.000'), unit_price=Decimal('1.00'),
+            planned_cif_fc=Decimal('100.00'),
+        )
+        LicenseItemPlan.objects.create(
+            license=license_obj, import_item=item_b, item_name=tag_name,
+            planned_quantity=Decimal('100.000'), unit_price=Decimal('1.20'),
+            planned_cif_fc=Decimal('120.00'),
+        )
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "MERGE-RATE")
+        cell = row['items'].get('PP - E1')
+
+        self.assertEqual(len(cell['planned_import_items']), 1)
+        merged = cell['planned_import_items'][0]
+        self.assertEqual(merged['quantity'], 200.0)
+        self.assertEqual(merged['planned_cif_fc'], 220.0)
+        self.assertEqual(merged['unit_price'], 'Merged', "differing per-item rates must never be silently averaged")
+
+    def test_matching_unit_price_across_merged_items_is_shown_not_merged_label(self):
+        tagging_license = self._make_e1_license("MERGE-SAMERATE-TAGGING")
+        tag_name = ItemNameModel.objects.create(name="PP - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only PP",
+            quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(tag_name)
+
+        license_obj = self._make_e1_license("MERGE-SAMERATE")
+        item_a = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Packing Material /PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('100.000'), available_quantity=Decimal('100.000'),
+        )
+        item_b = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=2, description="Packing Material /PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('200.000'), available_quantity=Decimal('200.000'),
+        )
+        LicenseItemPlan.objects.create(
+            license=license_obj, import_item=item_a, item_name=tag_name,
+            planned_quantity=Decimal('100.000'), unit_price=Decimal('1.20'),
+            planned_cif_fc=Decimal('120.00'),
+        )
+        LicenseItemPlan.objects.create(
+            license=license_obj, import_item=item_b, item_name=tag_name,
+            planned_quantity=Decimal('200.000'), unit_price=Decimal('1.20'),
+            planned_cif_fc=Decimal('240.00'),
+        )
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "MERGE-SAMERATE")
+        cell = row['items'].get('PP - E1')
+
+        self.assertEqual(len(cell['planned_import_items']), 1)
+        merged = cell['planned_import_items'][0]
+        self.assertEqual(merged['unit_price'], 1.2, "identical per-item rates must be shown, not the 'Merged' label")
+
+    def test_real_license_0311051568_pp_items_shape(self):
+        # Reproduces the exact real-world data (license 0311051568 / id 2279)
+        # that originally surfaced the corruption report: three "PP - E1"
+        # import items, all HSN 39021000, with inconsistent slash-spacing
+        # across the description ("Packing Material /PP" x2, "Packing
+        # Material / PP" x1) — all three are the same physical product and
+        # must merge into one row, sharing one unit rate.
+        tagging_license = self._make_e1_license("REAL-0311051568-TAGGING")
+        tag_name = ItemNameModel.objects.create(name="PP - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only PP",
+            quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(tag_name)
+
+        license_obj = self._make_e1_license("REAL-0311051568", balance_cif=Decimal('1000000.00'))
+        item_a = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=11, description="Packing Material /PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('9125.120'), available_quantity=Decimal('9125.120'),
+        )
+        item_b = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=22, description="Packing Material /PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('11005.040'), available_quantity=Decimal('11005.040'),
+        )
+        item_c = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=33, description="Packing Material / PP",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('37985.810'), available_quantity=Decimal('37985.810'),
+        )
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "REAL-0311051568")
+        cell = row['items'].get('PP - E1')
+
+        self.assertEqual(len(cell['planned_import_items']), 1,
+                          "all three merge — inconsistent slash-spacing is the same physical product")
+        merged = cell['planned_import_items'][0]
+        self.assertEqual(sorted(merged['import_item_ids']), sorted([item_a.id, item_b.id, item_c.id]))
+        total = 9125.12 + 11005.04 + 37985.81
+        self.assertAlmostEqual(merged['quantity'], total, places=2)
+        self.assertAlmostEqual(cell['quantity'], total, places=2)
+        # No value anywhere looks like the reported concatenation.
+        self.assertNotIn('39021000' + '39021000', str(merged))

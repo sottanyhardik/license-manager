@@ -754,7 +754,7 @@ export default function PlanningEditor({
                     onClick={handleAutoPlan}
                     disabled={loading || autoPlanning}
                     className="h-7 gap-1.5 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 text-xs font-semibold"
-                    title="Auto-compute and save plan using E1 classification rules (Rule 1: Confectionery @ $3, Rule 2: Milk SWP/DWP/WPC splits)"
+                    title="Auto-compute and save plan using E1 classification rules (8-step waterfall: Confectionery, Cocoa Mass, Milk DWP/SWP, WPC, Fruit Juice, Tartaric Acid, Aluminium Foil, Polypropylene)"
                 >
                     {autoPlanning
                         ? <Loader2 className="size-3.5 animate-spin" />

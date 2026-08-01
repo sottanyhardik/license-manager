@@ -1,103 +1,88 @@
 """
-E1 (confectionery) utilization-planning waterfall.
+E1 (confectionery) utilization-planning engine — the single source of truth
+for E1 business rules. Every consumer (Auto-Plan, Item Pivot Report + its
+Excel export, `norm_plan.py` / License Overview Planning tab + Balance Excel)
+calls :func:`plan_e1_items`; none of them may re-implement these rules.
 
-The E1 norm allocates the licence balance across seven classification
-buckets, executed as eight sequential steps (Milk Products splits into two
-sub-steps). Each step has:
+Processing order (each step draws down the same running balance; every
+import item is classified into exactly one bucket up front by
+:func:`classify_e1_item`, so no item is ever evaluated by more than one
+step):
 
-  * A **Display Quantity** — sum of every matching item (used for reporting).
-  * A **Utilization Quantity** — same sum but with certain License-Marked
-    items excluded so they don't drive CIF utilization.
-  * A **Max Unit Price** — the rate is dynamic in ``[0, max]``; the actual
-    rate is the largest value in band that keeps utilization within the
-    remaining balance.
+    1. OTHER CONFECTIONERY INGREDIENTS   @ 3.00
+    2. COCOA MASS                        @ 10.00
+    3. MILK PRODUCTS — delegated to the shared milk-planning engine
+       (``milk_planner.split_milk_0404``, configured via ``MILK_CONFIG``),
+       called once per item exactly as E5's own milk step calls it, so E1
+       and E5 never carry two independent implementations of the DWP/SWP
+       pricing rules.
+    4. EGG ALBUMIN                       @ MILK_CONFIG.wpc_price (25.00)
+    5. FRUIT JUICE                       @ 3.00
+    6. TARTARIC ACID                     @ 1.50
+    7. ALUMINIUM FOIL                    @ 4.50
+    8. POLYPROPYLENE                     @ 1.20
 
-Waterfall order (run sequentially against the same running balance):
-
-    Step 1   OTHER CONFECTIONERY INGREDIENTS  @ 2.70  excl 2%
-    Step 2A  DWP  (Milk Products, HSN 0404)   @ 5.00
-    Step 2B  SWP  (Milk Products, HSN 0404)   @ 1.50
-    Step 3   EGG ALBUMIN / WPC (HSN 3502)     @ 25.00
-    Step 4   FRUIT JUICE                      @ 0-3   excl AU
-    Step 5   ALUMINIUM FOIL                   @ 0-4.5 (HSN/desc contains 7607)
-    Step 6   POLYPROPYLENE                    @ 0-0.9 (3902 AND NOT 7607)
-    Step 7   PAPER                            @ 0-0.6 (4801/4810/4802 AND NOT 7607/3902/3901)
-
-Steps 2A/2B are delegated to the shared milk-planning engine
-(``services/milk_planner.py``, configured via ``MILK_CONFIG``) so E1 and
-E5 never carry two independent implementations of the same DWP/SWP/WPC
-pricing rules. The Milk Products utilization quantity is partitioned
-between DWP and SWP (see ``milk_planner.split_milk_0404``), not shared
-between them.
-
-Each step's utilization is capped at the remaining balance — if the
-requested ``util_qty × max_price`` would exceed the balance, the rate drops
-to ``balance / util_qty`` so the step consumes exactly the balance and
-later steps see zero.
+Steps 1, 2, 4-8 all share one routine (:func:`_generic_stage`) built on the
+existing :func:`~apps.license.services.planning_allocation.allocate_step`
+primitive: sum the category's quantity, allocate one shared rate for the
+whole category (max price if the balance covers the total, else
+``remaining / total_qty``), then give every item in the category that same
+rate at its own full quantity. Each step's utilization is capped at the
+remaining balance — if the requested ``qty × max_price`` would exceed the
+balance, the rate drops to ``balance / qty`` so the step consumes exactly
+the balance and later steps see zero.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 
-from apps.license.services.milk_planner import MILK_CONFIG, plan_milk
-from apps.license.services.planning_allocation import (
-    allocate_step,
-    d as _d,
-    quantize_money as _quantize_money,
-)
+from apps.license.services.milk_planner import MILK_CONFIG, split_milk_0404
+from apps.license.services.planning_allocation import allocate_step, d as _d
+
+_MONEY_4DP = Decimal('0.0001')
 
 
-# Classification buckets. Every import item is classified into at most one
-# of these; `display_qty` / `util_qty` dicts (built by callers) and the
-# planned/rate dicts returned by `compute_e1_plan` are always keyed by every
-# entry here, so callers can look up an item's bucket directly.
+def _quantize(value: Decimal) -> Decimal:
+    """4-dp quantization for display + comparison stability, staying Decimal."""
+    return value.quantize(_MONEY_4DP)
+
+
+# Classification buckets, in waterfall priority order.
 E1_CATS: tuple[str, ...] = (
     'OTHER CONFECTIONERY INGREDIENTS',
+    'COCOA MASS',
     'MILK PRODUCTS',
-    'EGG ALBUMIN / WPC',
+    'EGG ALBUMIN',
     'FRUIT JUICE',
+    'TARTARIC ACID',
     'ALUMINIUM FOIL',
     'POLYPROPYLENE',
-    'PAPER',
-)
-E1_PLAN_CATS: tuple[str, ...] = E1_CATS
-
-# Sequential waterfall steps: (step_key, source_bucket, max_unit_price).
-# `source_bucket` is the E1_CATS entry the step draws its utilization
-# quantity from. MILK PRODUCTS expands into two steps (DWP, SWP) whose
-# combined quantity is partitioned from that bucket — their prices come
-# from MILK_CONFIG, the single source of truth shared with E5.
-E1_WATERFALL_STEPS: tuple[tuple[str, str, Decimal], ...] = (
-    ('OTHER CONFECTIONERY INGREDIENTS', 'OTHER CONFECTIONERY INGREDIENTS', Decimal('2.7')),
-    ('DWP',                             'MILK PRODUCTS',                   MILK_CONFIG.dwp_price),
-    ('SWP',                             'MILK PRODUCTS',                   MILK_CONFIG.swp_price),
-    ('EGG ALBUMIN / WPC',               'EGG ALBUMIN / WPC',               MILK_CONFIG.wpc_price),
-    ('FRUIT JUICE',                     'FRUIT JUICE',                     Decimal('3')),
-    ('ALUMINIUM FOIL',                  'ALUMINIUM FOIL',                  Decimal('4.5')),
-    ('POLYPROPYLENE',                   'POLYPROPYLENE',                  Decimal('0.9')),
-    ('PAPER',                           'PAPER',                           Decimal('0.6')),
 )
 
-# Maximum dynamic unit price, keyed by waterfall step (not bucket — DWP/SWP
-# share the MILK PRODUCTS bucket but have distinct ceilings).
-E1_MAX_PRICES: dict[str, Decimal] = {step: price for step, _src, price in E1_WATERFALL_STEPS}
-
-# `condition_type` values EXCLUDED from the utilization quantity for each
-# classification bucket. Display quantity always includes everything. Empty
-# set means the bucket has no exclusions.
-E1_EXCLUDED_CONDITIONS: dict[str, frozenset[str]] = {
-    'OTHER CONFECTIONERY INGREDIENTS': frozenset({'2%'}),
-    'MILK PRODUCTS':                   frozenset(),
-    'EGG ALBUMIN / WPC':               frozenset(),
-    'FRUIT JUICE':                     frozenset({'AU'}),
-    'ALUMINIUM FOIL':                  frozenset(),
-    'POLYPROPYLENE':                   frozenset(),
-    'PAPER':                           frozenset(),
+# Fixed unit prices for the plain generic steps. Milk (DWP/SWP) and Egg
+# Albumin reuse MILK_CONFIG — the single source of truth shared with E5 —
+# rather than duplicating those literals here.
+E1_UNIT_PRICES: dict[str, Decimal] = {
+    'OTHER CONFECTIONERY INGREDIENTS': Decimal('3.00'),
+    'COCOA MASS':                      Decimal('10.00'),
+    'FRUIT JUICE':                     Decimal('3.00'),
+    'TARTARIC ACID':                   Decimal('1.50'),
+    'ALUMINIUM FOIL':                  Decimal('4.50'),
+    'POLYPROPYLENE':                   Decimal('1.20'),
 }
+
+EGG_ALBUMIN_PRICE: Decimal = MILK_CONFIG.wpc_price
 
 
 def _norm(value) -> str:
+    """Lower-case + strip for case-insensitive substring matching."""
     return (value or '').strip().lower()
+
+
+def _hsn_digits(hs_code) -> str:
+    """Digits-only HSN for prefix matching (ignores spaces/dashes/case)."""
+    return ''.join(c for c in _norm(hs_code) if c.isdigit())
 
 
 def classify_e1_item(
@@ -107,126 +92,221 @@ def classify_e1_item(
 ) -> str | None:
     """Return the E1 planner bucket for an item, or None if no rule matches.
 
-    Precedence (high → low):
+    Precedence (high → low) — matches the 8-step waterfall order exactly:
 
-      1. Item Name contains 'other confectionery ingredients' → OTHER CONFECTIONERY INGREDIENTS
-      2. HSN contains '0404'                                  → MILK PRODUCTS
-      3. HSN contains '3502'                                  → EGG ALBUMIN / WPC
-      4. Item Name contains 'fruit juice'                     → FRUIT JUICE
-      5. HSN or Description contains '7607'                                 → ALUMINIUM FOIL
-      6. HSN or Description contains '3902' AND not '7607'                  → POLYPROPYLENE
-      7. HSN or Description contains '4801'/'4802'/'4810' AND
-         not '7607'/'3902'/'3901'                                           → PAPER
+      1. HSN starts with '0802', or item/description contains
+         'other confectionery'                               → OTHER CONFECTIONERY INGREDIENTS
+      2. HSN starts with '1803', or description contains '1803'  → COCOA MASS
+      3. (HSN starts with '0404' OR description contains '0404')
+         AND description contains 'milk'
+         AND NOT (HSN starts with '1803' OR description contains '1803') → MILK PRODUCTS
+      4. (HSN starts with '3502' OR description contains '3502')
+         AND NOT 1803 AND NOT 0404                             → EGG ALBUMIN
+      5. HSN starts with '2009', or description contains 'juice' → FRUIT JUICE
+      6. HSN starts with '2918', or description contains '2918',
+         or item/description contains 'tartaric'               → TARTARIC ACID
+      7. HSN starts with '7607', or description contains '7607',
+         or item/description contains 'aluminium foil'         → ALUMINIUM FOIL
+      8. HSN starts with '3902', or description contains '3902',
+         or item/description contains 'pp'/'polypropylene'     → POLYPROPYLENE
     """
     item = _norm(item_key)
-    hs = _norm(hs_code)
+    hs = _hsn_digits(hs_code)
     desc = _norm(description)
 
-    if 'other confectionery ingredients' in item:
+    if hs.startswith('0802') or 'other confectionery' in item or 'other confectionery' in desc:
         return 'OTHER CONFECTIONERY INGREDIENTS'
-    if '0404' in hs:
+
+    if hs.startswith('1803') or '1803' in desc:
+        return 'COCOA MASS'
+
+    has_1803 = hs.startswith('1803') or '1803' in desc
+    has_0404 = hs.startswith('0404') or '0404' in desc
+    if has_0404 and 'milk' in desc and not has_1803:
         return 'MILK PRODUCTS'
-    if '3502' in hs:
-        return 'EGG ALBUMIN / WPC'
-    if 'fruit juice' in item:
+
+    has_3502 = hs.startswith('3502') or '3502' in desc
+    if has_3502 and not has_1803 and not has_0404:
+        return 'EGG ALBUMIN'
+
+    if hs.startswith('2009') or 'juice' in desc:
         return 'FRUIT JUICE'
 
-    has_7607 = '7607' in hs or '7607' in desc
-    has_3902 = '3902' in hs or '3902' in desc
-    has_3901 = '3901' in hs or '3901' in desc
-    has_paper = any(k in hs or k in desc for k in ('4801', '4810', '4802'))
+    if hs.startswith('2918') or '2918' in desc or 'tartaric' in item or 'tartaric' in desc:
+        return 'TARTARIC ACID'
 
-    if has_7607:
+    if hs.startswith('7607') or '7607' in desc or 'aluminium foil' in item or 'aluminium foil' in desc:
         return 'ALUMINIUM FOIL'
-    if has_3902 and not has_7607:
+
+    if (
+        hs.startswith('3902') or '3902' in desc
+        or 'polypropylene' in item or 'polypropylene' in desc
+        or 'pp' in item or 'pp' in desc
+    ):
         return 'POLYPROPYLENE'
-    if has_paper and not (has_7607 or has_3902 or has_3901):
-        return 'PAPER'
 
     return None
 
 
-def compute_e1_plan(
-    display_qty: dict[str, float],
-    util_qty: dict[str, float],
-    license_balance,
-) -> tuple[dict[str, float], dict[str, float]]:
-    """Run the E1 waterfall.
+@dataclass(frozen=True)
+class E1Item:
+    """One planning input: a raw import item (or a description-group
+    representative), already classified into an :data:`E1_CATS` bucket."""
+    key: str
+    category: str
+    qty: Decimal
+
+
+@dataclass(frozen=True)
+class E1PlanLine:
+    """One planned allocation against a single :class:`E1Item`.
+
+    ``step`` equals ``category`` for every generic step; MILK PRODUCTS
+    produces a 'DWP' and/or 'SWP' step per item (never both averaged).
+    """
+    key: str
+    category: str
+    step: str
+    planned_qty: Decimal
+    unit_price: Decimal
+    planned_cif: Decimal
+
+
+@dataclass(frozen=True)
+class E1PlanResult:
+    lines: list[E1PlanLine]
+    remaining_cif: Decimal
+
+
+def _generic_stage(
+    items: list[E1Item],
+    category: str,
+    max_rate: Decimal,
+    remaining: Decimal,
+) -> tuple[list[E1PlanLine], Decimal]:
+    """One generic-rule stage: a single shared rate for every item in the
+    category — sum the category's quantity, allocate one rate for the whole
+    category via :func:`allocate_step` (max_rate if the balance covers the
+    total, else ``remaining / total_qty``), then give each item that rate
+    at its own full quantity.
+
+    Returns ``(lines, used_cif)`` — ``used_cif`` is the aggregate amount to
+    subtract from ``remaining`` (not the sum of individually-rounded lines,
+    so no rounding drift accumulates across many items).
+    """
+    if not items or remaining <= 0:
+        return [], Decimal('0')
+    total_qty = sum((it.qty for it in items), Decimal('0'))
+    if total_qty <= 0:
+        return [], Decimal('0')
+    used_cif, rate = allocate_step(total_qty, max_rate, remaining)
+    if used_cif <= 0:
+        return [], Decimal('0')
+    lines = [
+        E1PlanLine(
+            key=it.key,
+            category=category,
+            step=category,
+            planned_qty=it.qty,
+            unit_price=_quantize(rate),
+            planned_cif=_quantize(it.qty * rate),
+        )
+        for it in items
+    ]
+    return lines, used_cif
+
+
+def plan_e1_items(
+    items: list[E1Item],
+    balance_cif,
+    *,
+    min_plan_qty: Decimal = Decimal('0'),
+) -> E1PlanResult:
+    """Run the full E1 waterfall over a list of already-classified items.
 
     Args:
-        display_qty: per-bucket sum of every matching item (incl. marked).
-            Reporting only — not consumed here, kept for signature parity
-            with callers that build both dicts together.
-        util_qty:    per-bucket sum after removing excluded markings. The
-            MILK PRODUCTS entry is partitioned between the DWP and SWP
-            steps (see ``milk_planner.split_milk_0404``).
-        license_balance: starting balance the waterfall draws down from.
+        items: one :class:`E1Item` per import item (or description-group
+            representative) — ``category`` must already be one of
+            :data:`E1_CATS`; entries with an unrecognised category are
+            ignored.
+        balance_cif: the licence's starting balance for this run.
+        min_plan_qty: items with ``qty`` below this are skipped entirely
+            (no balance consumed) — pass 50 for Auto-Plan's minimum
+            plannable quantity, 0 (default) for reporting.
 
     Returns:
-        (planned_per_key, rate_per_key) keyed by every entry in E1_CATS
-        (for per-item proration by classification bucket) plus the
-        individual DWP / SWP step breakdown. MILK PRODUCTS' planned/rate is
-        the DWP+SWP aggregate (sum of both steps' planned CIF / rates).
-        Rates fall back to the step's max price for empty / zero steps.
+        :class:`E1PlanResult` — ``lines`` in processing order and the final
+        ``remaining_cif``.
     """
-    remaining = _d(license_balance)
-    result_keys = [step for step, _src, _price in E1_WATERFALL_STEPS] + ['MILK PRODUCTS']
-    planned: dict[str, Decimal] = {k: Decimal('0') for k in result_keys}
-    rate: dict[str, Decimal] = {k: Decimal('0') for k in result_keys}
+    remaining = _d(balance_cif)
+    min_qty = _d(min_plan_qty)
 
-    # Step 1.
-    uq = _d(util_qty.get('OTHER CONFECTIONERY INGREDIENTS', 0))
-    used, r = allocate_step(uq, E1_MAX_PRICES['OTHER CONFECTIONERY INGREDIENTS'], remaining)
-    planned['OTHER CONFECTIONERY INGREDIENTS'] = used
-    rate['OTHER CONFECTIONERY INGREDIENTS'] = r
-    remaining -= used
-
-    # Steps 2A/2B/3 — shared milk-planning engine (DWP → SWP over the Milk
-    # Products bucket, then WPC over the Egg Albumin / WPC bucket).
-    qty_0404 = _d(util_qty.get('MILK PRODUCTS', 0))
-    qty_3502 = _d(util_qty.get('EGG ALBUMIN / WPC', 0))
-    milk_planned, milk_rate, remaining = plan_milk(qty_0404, qty_3502, remaining, MILK_CONFIG)
-    planned['DWP'] = milk_planned['DWP']
-    rate['DWP'] = milk_rate['DWP']
-    planned['SWP'] = milk_planned['SWP']
-    rate['SWP'] = milk_rate['SWP']
-    planned['EGG ALBUMIN / WPC'] = milk_planned['WPC']
-    rate['EGG ALBUMIN / WPC'] = milk_rate['WPC']
-    planned['MILK PRODUCTS'] = planned['DWP'] + planned['SWP']
-    rate['MILK PRODUCTS'] = rate['DWP'] + rate['SWP']
-
-    # Steps 4-7 — unchanged fixed-bucket dynamic pricing.
-    for cat in ('FRUIT JUICE', 'ALUMINIUM FOIL', 'POLYPROPYLENE', 'PAPER'):
-        uq = _d(util_qty.get(cat, 0))
-        used, r = allocate_step(uq, E1_MAX_PRICES[cat], remaining)
-        planned[cat] = used
-        rate[cat] = r
-        remaining -= used
-
-    planned_f = {k: _quantize_money(v) for k, v in planned.items()}
-    rate_f = {k: _quantize_money(v) for k, v in rate.items()}
-    return planned_f, rate_f
-
-
-def split_display_util_qty(
-    raw_rows: list[dict],
-) -> tuple[dict[str, float], dict[str, float]]:
-    """Helper: given a list of {'category', 'qty', 'condition_type'} rows,
-    aggregate into (display_qty, util_qty) per bucket honouring the
-    per-bucket exclusions in :data:`E1_EXCLUDED_CONDITIONS`.
-
-    Unknown categories are silently ignored (the caller should have
-    classified them beforehand).
-    """
-    display: dict[str, float] = {c: 0.0 for c in E1_CATS}
-    util: dict[str, float] = {c: 0.0 for c in E1_CATS}
-    for row in raw_rows:
-        cat = row.get('category')
-        if cat not in display:
+    by_cat: dict[str, list[E1Item]] = {cat: [] for cat in E1_CATS}
+    for it in items:
+        if it.category not in by_cat:
             continue
-        qty = float(row.get('qty') or 0)
-        cond = (row.get('condition_type') or '').strip()
-        display[cat] += qty
-        if cond not in E1_EXCLUDED_CONDITIONS[cat]:
-            util[cat] += qty
-    return display, util
+        q = _d(it.qty)
+        if q < min_qty:
+            continue
+        by_cat[it.category].append(E1Item(key=it.key, category=it.category, qty=q))
+
+    lines: list[E1PlanLine] = []
+
+    def _run_generic(category: str, max_rate: Decimal) -> None:
+        nonlocal remaining
+        if remaining <= 0:
+            return
+        cat_lines, used_cif = _generic_stage(by_cat[category], category, max_rate, remaining)
+        lines.extend(cat_lines)
+        remaining -= used_cif
+
+    # Step 1 — Other Confectionery Ingredients.
+    _run_generic('OTHER CONFECTIONERY INGREDIENTS', E1_UNIT_PRICES['OTHER CONFECTIONERY INGREDIENTS'])
+
+    # Step 2 — Cocoa Mass.
+    _run_generic('COCOA MASS', E1_UNIT_PRICES['COCOA MASS'])
+
+    # Step 3 — Milk Products. Delegates to the shared milk engine, called
+    # once per item exactly as e5_plan.py's own milk step does — E1 and E5
+    # never carry two independent implementations of this math. Not a
+    # generic stage: each item's own quantity gets its own DWP/SWP split
+    # against the balance remaining at that point (sequential, not averaged
+    # across items).
+    if remaining > 0:
+        for item in by_cat['MILK PRODUCTS']:
+            if remaining <= 0:
+                break
+            dwp_qty, dwp_rate, swp_qty = split_milk_0404(item.qty, remaining, MILK_CONFIG)
+            if dwp_qty > 0:
+                dwp_cif = dwp_qty * dwp_rate
+                lines.append(E1PlanLine(
+                    key=item.key, category='MILK PRODUCTS', step='DWP',
+                    planned_qty=dwp_qty, unit_price=_quantize(dwp_rate),
+                    planned_cif=_quantize(dwp_cif),
+                ))
+                remaining -= dwp_cif
+            if swp_qty > 0:
+                swp_cif = swp_qty * MILK_CONFIG.swp_price
+                lines.append(E1PlanLine(
+                    key=item.key, category='MILK PRODUCTS', step='SWP',
+                    planned_qty=swp_qty, unit_price=_quantize(MILK_CONFIG.swp_price),
+                    planned_cif=_quantize(swp_cif),
+                ))
+                remaining -= swp_cif
+
+    # Step 4 — Egg Albumin.
+    _run_generic('EGG ALBUMIN', EGG_ALBUMIN_PRICE)
+
+    # Step 5 — Fruit Juice.
+    _run_generic('FRUIT JUICE', E1_UNIT_PRICES['FRUIT JUICE'])
+
+    # Step 6 — Tartaric Acid.
+    _run_generic('TARTARIC ACID', E1_UNIT_PRICES['TARTARIC ACID'])
+
+    # Step 7 — Aluminium Foil.
+    _run_generic('ALUMINIUM FOIL', E1_UNIT_PRICES['ALUMINIUM FOIL'])
+
+    # Step 8 — Polypropylene.
+    _run_generic('POLYPROPYLENE', E1_UNIT_PRICES['POLYPROPYLENE'])
+
+    return E1PlanResult(lines=lines, remaining_cif=remaining)

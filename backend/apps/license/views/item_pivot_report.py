@@ -338,9 +338,23 @@ class ItemPivotReportView(APIView):
         # import_qty_by_import_item: LicenseImportItemsModel.id → quantity
         item_name_str_by_id = {}
         import_qty_by_import_item = {}
+        # import_item_ledger_by_id: LicenseImportItemsModel.id -> that ONE
+        # import item's own HSN/description/ledger quantities. Built from
+        # data already prefetched above (no extra queries) — this is the
+        # single source of truth a planned cell's HSN/Description/Total/
+        # Allotted/Debited/Balance must come from, never a cross-item merge.
+        import_item_ledger_by_id = {}
         for _lo in valid_licenses:
             for _ii in _lo.import_license.all():
                 import_qty_by_import_item[_ii.id] = _ii.quantity
+                import_item_ledger_by_id[_ii.id] = {
+                    'hs_code': _ii.hs_code.hs_code if _ii.hs_code else '',
+                    'description': _ii.description or '',
+                    'quantity': float(_ii.quantity or 0),
+                    'allotted_quantity': float(_ii.allotted_quantity or 0),
+                    'debited_quantity': float(_ii.debited_quantity or 0),
+                    'available_quantity': float(_ii.available_quantity or 0),
+                }
                 for _it in _ii.items.all():
                     if _it.id not in item_name_str_by_id:
                         item_name_str_by_id[_it.id] = _it.name
@@ -389,6 +403,33 @@ class ItemPivotReportView(APIView):
                     import_qty_by_import_item.get(_pl['import_item_id']) or 0
                 )
 
+            # Verification data: the EXACT import item(s) this cell's plan
+            # lines actually reference, keyed by import_item id so distinct
+            # import items sharing this item-name are never merged into one
+            # ledger record. Each entry's HSN/Description/ledger quantities
+            # come straight from that ONE import item (import_item_ledger_by_id
+            # above) — never summed or "first wins" across import items.
+            _iid = _pl['import_item_id']
+            _planned_items = _cell.setdefault('planned_import_items', {})
+            if _iid not in _planned_items:
+                _ledger = import_item_ledger_by_id.get(_iid, {})
+                _planned_items[_iid] = {
+                    'import_item_id': _iid,
+                    'hs_code': _ledger.get('hs_code', ''),
+                    'description': _ledger.get('description', ''),
+                    'quantity': _ledger.get('quantity', 0.0),
+                    'allotted_quantity': _ledger.get('allotted_quantity', 0.0),
+                    'debited_quantity': _ledger.get('debited_quantity', 0.0),
+                    'available_quantity': _ledger.get('available_quantity', 0.0),
+                    'planned_quantity': Decimal('0'),
+                    'planned_cif_fc': Decimal('0'),
+                }
+            # Multiple plan lines can reference the same import item (e.g. a
+            # milk item's DWP + SWP split) — sum ONLY the planned qty/CIF,
+            # never the ledger fields, which belong to the item itself.
+            _planned_items[_iid]['planned_quantity'] += _pl['planned_quantity'] or Decimal('0')
+            _planned_items[_iid]['planned_cif_fc'] += _pl['planned_cif_fc'] or Decimal('0')
+
         # A manually-planned item must appear as a column even if it is INACTIVE
         # in the master (is_active=False) — the user explicitly planned it, so it
         # would otherwise vanish (the column builder above skips inactive items).
@@ -415,6 +456,27 @@ class ItemPivotReportView(APIView):
                 for _sp in _cell.get('splits', []):
                     _nid = _sp.pop('_item_name_id', None)
                     _sp['item_name'] = _split_item_name_lookup.get(_nid) if _nid is not None else None
+
+                # planned_import_items: dict-of-dicts (keyed by import_item id,
+                # for O(1) accumulation above) -> plain list, Decimal -> float,
+                # sorted for stable output. This is the per-cell verification
+                # data: each entry is one ACTUAL import item a plan line
+                # referenced, never merged with any other import item.
+                _pit_map = _cell.get('planned_import_items')
+                if _pit_map:
+                    _cell['planned_import_items'] = sorted(
+                        (
+                            {
+                                **_pit,
+                                'planned_quantity': float(_pit['planned_quantity']),
+                                'planned_cif_fc': float(_pit['planned_cif_fc']),
+                            }
+                            for _pit in _pit_map.values()
+                        ),
+                        key=lambda _pit: _pit['import_item_id'],
+                    )
+                else:
+                    _cell['planned_import_items'] = []
 
         # Sort items by display_order first, then by name for consistent column order
         sorted_items = sorted(
@@ -827,9 +889,10 @@ class ItemPivotReportView(APIView):
         # `item_plan_data[item_name]` → {'planned_cif': float, 'unit_price': float}
         item_plan_data: Dict[str, Dict[str, float]] = {}
         if primary_norm == 'E1':
+            from decimal import Decimal as _Decimal
+
             from apps.license.services.e1_plan import (
-                E1_CATS as _CATS, E1_EXCLUDED_CONDITIONS as _EXCL,
-                classify_e1_item as _classify, compute_e1_plan as _compute,
+                E1Item as _E1Item, classify_e1_item as _classify, plan_e1_items as _plan_e1_items,
             )
 
             # Fix #3: reuse the already-prefetched import items instead of issuing
@@ -838,47 +901,42 @@ class ItemPivotReportView(APIView):
             # Note: use ii.items.all() not .values_list() — .values_list() bypasses
             # the prefetch cache and would re-query; .all() reads from it for free.
             import_items = license_obj.import_license.all()
-            display_qty = {c: 0.0 for c in _CATS}
-            util_qty    = {c: 0.0 for c in _CATS}
-            # Track per ITEM-NAME so we can attribute the right share back.
-            per_item_util: Dict[str, float] = {}
-            per_item_category: Dict[str, str] = {}
+            item_qty_by_id: Dict[int, _Decimal] = {}
+            item_names_by_id: Dict[int, list] = {}
+            e1_items: list = []
             for ii in import_items:
                 names = [n.name for n in ii.items.all()]
                 key = ', '.join(sorted(names)) if names else (ii.description or '-')
                 hs = ii.hs_code.hs_code if ii.hs_code else ''
                 cat = _classify(key, hs, ii.description)
-                if not cat or cat not in display_qty:
+                if not cat:
                     continue
-                avail = float(ii.available_quantity or 0)
-                display_qty[cat] += avail
-                cond = (ii.condition_type or '').strip()
-                excluded = _EXCL.get(cat, frozenset())
-                util_inc = 0.0 if cond in excluded else avail
-                util_qty[cat] += util_inc
-                # Attribute this row's util qty to every linked item-name so
-                # the pivot's per-item planner share lines up with the table.
-                if names:
-                    for nm in names:
-                        per_item_util[nm] = per_item_util.get(nm, 0.0) + util_inc
-                        per_item_category[nm] = cat
-                else:
-                    # No master items linked — attribute to description.
-                    nm = ii.description or '-'
-                    per_item_util[nm] = per_item_util.get(nm, 0.0) + util_inc
-                    per_item_category[nm] = cat
+                avail = _Decimal(str(ii.available_quantity or 0))
+                item_qty_by_id[ii.id] = avail
+                item_names_by_id[ii.id] = names or [ii.description or '-']
+                e1_items.append(_E1Item(key=ii.id, category=cat, qty=avail))
 
-            planned, rates = _compute(display_qty, util_qty, float(balance_cif))
+            # Run the shared per-item engine — the same rules Auto-Plan and
+            # norm_plan.py use, so this table (and its Excel export) never
+            # drifts from what Auto-Plan would actually commit.
+            plan_result = _plan_e1_items(e1_items, _Decimal(str(balance_cif)))
+            cif_by_item: Dict[int, _Decimal] = {}
+            for line in plan_result.lines:
+                cif_by_item[line.key] = cif_by_item.get(line.key, _Decimal('0')) + line.planned_cif
 
-            # Allocate per-item planned CIF as the item's PROPORTIONAL share
-            # of its category's planned CIF — keeps the math equal to the
-            # bulk Balance Excel (no rounding drift). Unit price is then
-            # planned/qty rounded for display.
+            # Attribute each import item's own EXACT planned CIF (no
+            # proportional-share approximation needed — the engine already
+            # computed it per item) to every linked item-name.
+            per_item_util: Dict[str, float] = {}
+            per_item_cif: Dict[str, float] = {}
+            for iid, avail in item_qty_by_id.items():
+                item_cif = cif_by_item.get(iid, _Decimal('0'))
+                for nm in item_names_by_id[iid]:
+                    per_item_util[nm] = per_item_util.get(nm, 0.0) + float(avail)
+                    per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(item_cif)
+
             for nm, uq in per_item_util.items():
-                cat = per_item_category[nm]
-                cat_uq = util_qty.get(cat, 0.0)
-                cat_plan = planned.get(cat, 0.0)
-                item_plan = (uq / cat_uq) * cat_plan if cat_uq else 0.0
+                item_plan = per_item_cif.get(nm, 0.0)
                 item_plan_data[nm] = {
                     'unit_price': round(item_plan / uq, 2) if uq else 0.0,
                     'planned_cif': round(item_plan, 2),
@@ -1033,13 +1091,63 @@ class ItemPivotReportView(APIView):
                     unit_price = planner.get('unit_price')
                     planned_cif = planner.get('planned_cif', 0.0)
 
+                # Verification data (Item Pivot Report enhancement): when this
+                # cell has actual LicenseItemPlan rows behind it, HSN/
+                # Description/ledger quantities must come from the EXACT
+                # import item(s) those plan lines reference — never the
+                # cross-item-name-merged `item_data` aggregate above. Exactly
+                # one planned import item (the overwhelming common case,
+                # since Auto-Plan/manual plans normally anchor on one
+                # representative item) is used directly; several distinct
+                # import items are never merged into one ledger record — the
+                # scalar columns are left blank and every one of them is
+                # exposed, unmerged, via `planned_import_items` instead.
+                # Cells with NO plan line (E132 auto-classification, or no
+                # planning context at all) keep the existing aggregate
+                # behaviour unchanged — this is a verification aid for
+                # planned items only, not a report redesign.
+                _pit_list = _item_plan.get('planned_import_items') or []
+                if len(_pit_list) == 1:
+                    _pit = _pit_list[0]
+                    _hs_code = _pit['hs_code']
+                    _description = _pit['description']
+                    _quantity = _pit['quantity']
+                    _allotted_quantity = _pit['allotted_quantity']
+                    _debited_quantity = _pit['debited_quantity']
+                    _available_quantity = _pit['available_quantity']
+                elif len(_pit_list) > 1:
+                    # Genuinely ambiguous — distinct import items were planned
+                    # under the same item-name. Leave the single-value cell
+                    # blank (0, matching every other "no single value" cell in
+                    # this report — Excel TOTAL-row summation depends on these
+                    # staying numeric) rather than merge/pick one; the
+                    # frontend renders each entry from `planned_import_items`.
+                    _hs_code = ''
+                    _description = ''
+                    _quantity = 0.0
+                    _allotted_quantity = 0.0
+                    _debited_quantity = 0.0
+                    _available_quantity = 0.0
+                else:
+                    _hs_code = item_data['hs_code']
+                    _description = item_data['description']
+                    _quantity = float(item_data['quantity'])
+                    _allotted_quantity = float(item_data['allotted_quantity'])
+                    _debited_quantity = float(item_data['debited_quantity'])
+                    _available_quantity = float(item_data['available_quantity'])
+
                 row_data['items'][item_name] = {
-                    'hs_code': item_data['hs_code'],
-                    'description': item_data['description'],
-                    'quantity': float(item_data['quantity']),
-                    'allotted_quantity': float(item_data['allotted_quantity']),
-                    'debited_quantity': float(item_data['debited_quantity']),
-                    'available_quantity': float(item_data['available_quantity']),
+                    'hs_code': _hs_code,
+                    'description': _description,
+                    'quantity': _quantity,
+                    'allotted_quantity': _allotted_quantity,
+                    'debited_quantity': _debited_quantity,
+                    'available_quantity': _available_quantity,
+                    # Verification list: the exact import item(s) behind this
+                    # cell's plan lines (empty when the cell has no plan).
+                    # Always the authoritative per-item source — HSN/
+                    # Description/ledger quantities never mixed across items.
+                    'planned_import_items': _pit_list,
                     'restriction': restriction_value,
                     'restriction_value': float(available_cif),
                     'unit_price': unit_price,
@@ -1079,6 +1187,7 @@ class ItemPivotReportView(APIView):
                     'allotted_quantity': 0,
                     'debited_quantity': 0,
                     'available_quantity': 0,
+                    'planned_import_items': [],
                     'restriction': None,
                     'restriction_value': 0,
                     'unit_price': None,

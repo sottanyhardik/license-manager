@@ -1108,6 +1108,16 @@ export default function ItemPivotReport() {
                                                             {groupItems.map((item, itemIdx) => {
                                                                 const itemData = license.items[item.name] || {};
                                                                 const hasData = itemData.quantity > 0;
+                                                                // Verification data: the exact import item(s) behind this
+                                                                // cell's plan lines (see item_pivot_report.py). Normally
+                                                                // exactly one — the common case renders identically to
+                                                                // before via itemData.hs_code/description/*_quantity,
+                                                                // which the backend now sources from that ONE import item.
+                                                                // The rare case of several DISTINCT import items sharing
+                                                                // this item-name is never merged into one value; each is
+                                                                // listed separately below instead.
+                                                                const plannedItems = itemData.planned_import_items || [];
+                                                                const hasMultiplePlannedItems = plannedItems.length > 1;
                                                                 // Per-product: whether THIS product was manually planned
                                                                 // (independent of every other product on this license).
                                                                 // A product was manually planned when its plan_quantity or
@@ -1119,27 +1129,69 @@ export default function ItemPivotReport() {
                                                                     <React.Fragment
                                                                         key={`${license.license_number}-${item.id}`}>
                                                                         <td style={{backgroundColor: itemBg}}>
-                                                                            {itemData.hs_code || '-'}
+                                                                            {hasMultiplePlannedItems ? (
+                                                                                <div className="d-flex flex-column gap-1">
+                                                                                    {plannedItems.map((pit) => (
+                                                                                        <span key={pit.import_item_id} className="text-nowrap">
+                                                                                            {pit.hs_code || '-'}
+                                                                                        </span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : (itemData.hs_code || '-')}
                                                                             {itemData.condition_type && (
                                                                                 <ConditionBadge type={itemData.condition_type} size="xs" />
                                                                             )}
                                                                         </td>
                                                                         <td className="text-truncate"
                                                                             style={{maxWidth: '180px', backgroundColor: itemBg}}
-                                                                            title={itemData.description || ''}>
-                                                                            {itemData.description || '-'}
+                                                                            title={hasMultiplePlannedItems
+                                                                                ? plannedItems.map((pit) => pit.description).join(' / ')
+                                                                                : (itemData.description || '')}>
+                                                                            {hasMultiplePlannedItems ? (
+                                                                                <div className="d-flex flex-column gap-1">
+                                                                                    {plannedItems.map((pit) => (
+                                                                                        <span key={pit.import_item_id} className="text-truncate d-block">
+                                                                                            {pit.description || '-'}
+                                                                                        </span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : (itemData.description || '-')}
                                                                         </td>
                                                                         <td className="text-right" style={{backgroundColor: itemBg}}>
-                                                                            {itemData.quantity ? itemData.quantity.toFixed(3) : '-'}
+                                                                            {hasMultiplePlannedItems ? (
+                                                                                <div className="d-flex flex-column gap-1">
+                                                                                    {plannedItems.map((pit) => (
+                                                                                        <span key={pit.import_item_id}>{pit.quantity.toFixed(3)}</span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : (itemData.quantity ? itemData.quantity.toFixed(3) : '-')}
                                                                         </td>
                                                                         <td className={cn('text-right', hasData && 'font-semibold text-primary')} style={{backgroundColor: itemBg}}>
-                                                                            {itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-'}
+                                                                            {hasMultiplePlannedItems ? (
+                                                                                <div className="d-flex flex-column gap-1">
+                                                                                    {plannedItems.map((pit) => (
+                                                                                        <span key={pit.import_item_id}>{pit.allotted_quantity.toFixed(3)}</span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : (itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-')}
                                                                         </td>
                                                                         <td className="text-right" style={{backgroundColor: itemBg, ...(hasData ? {color: 'var(--warning-color)'} : {})}}>
-                                                                            {itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-'}
+                                                                            {hasMultiplePlannedItems ? (
+                                                                                <div className="d-flex flex-column gap-1">
+                                                                                    {plannedItems.map((pit) => (
+                                                                                        <span key={pit.import_item_id}>{pit.debited_quantity.toFixed(3)}</span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : (itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-')}
                                                                         </td>
                                                                         <td className={cn('text-right', hasData && 'text-success font-semibold')} style={{backgroundColor: itemBg}}>
-                                                                            {itemData.available_quantity ? itemData.available_quantity.toFixed(3) : '-'}
+                                                                            {hasMultiplePlannedItems ? (
+                                                                                <div className="d-flex flex-column gap-1">
+                                                                                    {plannedItems.map((pit) => (
+                                                                                        <span key={pit.import_item_id}>{pit.available_quantity.toFixed(3)}</span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : (itemData.available_quantity ? itemData.available_quantity.toFixed(3) : '-')}
                                                                         </td>
                                                                         {item.has_restriction && (
                                                                             <>

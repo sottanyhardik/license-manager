@@ -213,7 +213,7 @@ export const fetchNormPrefill = async (licenseId) => {
 };
 
 /**
- * Compute AND save an E1 auto-plan for a license (Rule 1 + Rule 2 waterfall).
+ * Compute AND save an E1 auto-plan for a license (8-step waterfall).
  * Only valid for E1 licenses — returns an error for other norms.
  * Full-replace semantics: any existing manual plan is overwritten.
  * Returns { norm, planned, remaining_cif, lines }.

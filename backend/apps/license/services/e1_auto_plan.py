@@ -1,176 +1,86 @@
 """
-E1 Auto-Plan service — 6-rule waterfall.
+E1 Auto-Plan service — writes DB plan lines for the confectionery norm.
 
-Processing sequence (each rule draws down the shared balance):
+All business rules (categories, rates, processing order, milk DWP/SWP split,
+Remaining CIF drawdown) live in the shared engine ``services/e1_plan.py``
+(:func:`plan_e1_items`). This module only handles what's specific to writing
+persisted plan lines:
 
-  Rule 1 — OTHER CONFECTIONERY INGREDIENTS
-    unit_price = 3.0  ·  one line per matching import item.
-
-  Rule 2 — MILK & MILK (SWP / DWP / WPC / Skimmed Milk / Whey)
-    Avg Price = remaining CIF ÷ available qty, then:
-    Case 2.1  avg < 1.50       → SWP-E1 @ 1.50 (qty = FLOOR(CIF ÷ 1.50))
-    Case 2.2  1.50 ≤ avg < 5   → SWP @ 1.50 + DWP @ 5.00 (2 lines)
-    Case 2.3  5 ≤ avg < 20     → DWP @ 5.00 + WPC @ 20.00 (2 lines)
-    Case 2.4/5 avg ≥ 20        → WPC, full qty + full remaining CIF
-
-  Rule 3 — JUICE  (skipped when ANY milk item is present on the licence)
-    Ignores items whose description contains "Actual User".
-    item_name = "Juice - E1"  ·  unit_price = 2.50
-
-  Rule 4 — ALUMINIUM FOIL  (HSN starts with "7607" OR desc contains "7607")
-    item_name = "Aluminium Foil"  ·  unit_price = 4.50
-
-  Rule 5 — CITRIC / TARTARIC ACID  (desc contains "citric" or "tartaric")
-    item_name = "Citric / Tartaric"  ·  unit_price = 1.60
-
-  Rule 6 — PLASTIC PACKING MATERIAL  (HSN starts with "390", min qty 100 KG)
-    Only applied when Rule 4 generated NO lines.
-    item_name = "Plastic Packing Material"  ·  unit_price = 1.00
-
-Each import item matches the FIRST rule whose condition it satisfies (hierarchical
-priority mirrors the processing sequence). Balance CIF is drawn down after every
-line so no rule ever overruns the licence balance.
+  * bucketing raw import items into groups (one plan line per description
+    group, saved on the group's lowest-serial representative — matching how
+    the Plan Tab groups them in the UI);
+  * mapping the engine's per-item results to ``LicenseItemPlan``-shaped
+    line dicts (``import_item``, ``item_name``, ``planned_quantity``,
+    ``unit_price``, ``planned_cif_fc``, ``note``);
+  * the persistence-layer convention shared with E5/E132: import items below
+    50 units are never planned (``min_plan_qty=50``).
 """
 from __future__ import annotations
 
-import math
-from typing import Optional
+from decimal import Decimal
 
 from apps.license.services.auto_plan_shared import (
     ensure_plan_item_names as _ensure_names,
     group_by_desc as _group_by_desc,
-    optimal_milk_split as _optimal_milk_split,
 )
+from apps.license.services.e1_plan import E1Item, classify_e1_item, plan_e1_items
 
+MIN_PLAN_QTY = Decimal('50')
 
-# ─── Item-name labels (fixed per §2 — always get-or-create, never fail) ───────
-
-MILK_ITEM_NAMES: tuple[str, ...] = ('SWP - E1', 'DWP - E1', 'WPC - E1')
-
-# Each entry is (item_name, E1 norm code).  ensure_plan_item_names creates any
+# Each entry: (item_name, norm_code). ensure_plan_item_names creates any
 # missing rows so Auto Plan never fails because a name is absent from the DB.
 _RULE_NAMES_E1: tuple[tuple[str, str], ...] = (
-    ('SWP - E1',                              'E1'),
-    ('DWP - E1',                              'E1'),
-    ('WPC - E1',                              'E1'),
-    ('OTHER CONFECTIONERY INGREDIENTS - E1',  'E1'),  # Rule 1
-    ('FRUIT/COCOA - E1',                      'E1'),  # Rule 1.5 — Cocoa
-    ('FRUIT JUICE - E1',                            'E1'),  # Rule 3
-    ('ALUMINIUM FOIL - E1',                   'E1'),  # Rule 4
-    ('CITRIC ACID / TARTARIC ACID - E1',      'E1'),  # Rule 5
-    ('PP - E1',                               'E1'),  # Rule 6
+    ('OTHER CONFECTIONERY INGREDIENTS - E1',  'E1'),   # Step 1
+    ('FRUIT/COCOA - E1',                      'E1'),   # Step 2 — Cocoa Mass
+    ('DWP - E1',                              'E1'),   # Step 3 — Milk
+    ('SWP - E1',                              'E1'),   # Step 3 — Milk
+    ('WPC - E1',                              'E1'),   # Step 4
+    ('EGG ALBUMIN - E1',                      'E1'),   # legacy — no longer produced, kept for old plan rows
+    ('FRUIT JUICE - E1',                      'E1'),   # Step 5
+    ('CITRIC ACID / TARTARIC ACID - E1',      'E1'),   # Step 6 — Tartaric Acid
+    ('ALUMINIUM FOIL - E1',                   'E1'),   # Step 7
+    ('PP - E1',                               'E1'),   # Step 8 — Polypropylene
 )
 
 # Public set of every item name the E1 auto-planner can produce.
 # Used by the Item Pivot Report to filter import items that the planner
-# never generates (e.g. ESSENTIAL OIL - E1, SUGAR - E1) so they don't
-# appear as empty columns.  When a new rule is added to _RULE_NAMES_E1 the
-# report automatically picks it up — no separate list to maintain.
+# never generates so they don't appear as empty columns. When a new rule is
+# added to _RULE_NAMES_E1 the report automatically picks it up.
 E1_PLANNABLE_NAMES: frozenset[str] = frozenset(name for name, _ in _RULE_NAMES_E1)
 
-# Minimum available quantity required before an import item is planned.
-# Items below this threshold are silently skipped by every rule.
-MIN_PLAN_QTY: float = 50.0
+# Maps the engine's E1PlanLine.step to the DB item-name string.
+_STEP_ITEM_NAME: dict[str, str] = {
+    'OTHER CONFECTIONERY INGREDIENTS': 'OTHER CONFECTIONERY INGREDIENTS - E1',
+    'COCOA MASS':                      'FRUIT/COCOA - E1',
+    'DWP':                             'DWP - E1',
+    'SWP':                             'SWP - E1',
+    'EGG ALBUMIN':                     'WPC - E1',
+    'FRUIT JUICE':                     'FRUIT JUICE - E1',
+    'TARTARIC ACID':                   'CITRIC ACID / TARTARIC ACID - E1',
+    'ALUMINIUM FOIL':                  'ALUMINIUM FOIL - E1',
+    'POLYPROPYLENE':                   'PP - E1',
+}
 
-# Keywords that flag an import-item group as milk/dairy (lowercase).
-_MILK_KW = frozenset({
-    'swp', 'dwp', 'wpc', 'whey', 'milk', 'skimmed', 'lactose',
-    'casein', 'permeate', 'butter', 'cream',
-})
+_STEP_LABEL: dict[str, str] = {
+    'OTHER CONFECTIONERY INGREDIENTS': 'Step 1 – Other Confectionery',
+    'COCOA MASS':                      'Step 2 – Cocoa Mass',
+    'DWP':                             'Step 3 – Milk (DWP)',
+    'SWP':                             'Step 3 – Milk (SWP)',
+    'EGG ALBUMIN':                     'Step 4 – WPC',
+    'FRUIT JUICE':                     'Step 5 – Fruit Juice',
+    'TARTARIC ACID':                   'Step 6 – Tartaric Acid',
+    'ALUMINIUM FOIL':                  'Step 7 – Aluminium Foil',
+    'POLYPROPYLENE':                   'Step 8 – Polypropylene',
+}
 
-
-# ─── Pure helpers ─────────────────────────────────────────────────────────────
-
-def _r2(x: float) -> float:
-    return round(x, 2)
-
-
-def _floor_qty(x: float) -> float:
-    """Floor to whole number (0 decimal places) — quantities always round down."""
-    return float(math.floor(x))
-
-
-def _is_milk_group(item_name_list: list[str], e1_cat: Optional[str]) -> bool:
-    if e1_cat == 'WPC':
-        return True
-    for name in item_name_list:
-        if any(kw in name.lower() for kw in _MILK_KW):
-            return True
-    return False
-
-
-# _optimal_milk_split is imported from auto_plan_shared — single source of truth.
-
-# ─── Simple rule helper ───────────────────────────────────────────────────────
-
-def _simple_line(
-    ii,
-    avail: float,
-    remaining_cif: float,
-    unit_price: float,
-    item_name_id: Optional[int],
-    rule_label: str,
-) -> tuple[Optional[dict], float]:
-    """
-    Build one plan line for a fixed-price rule.
-
-    Steps:
-      1. Cap raw CIF at min(avail × rate, remaining_cif).
-      2. Floor the quantity: planned_qty = FLOOR(raw_cif ÷ rate).
-      3. Recalculate CIF from the floored qty: planned_cif = planned_qty × rate.
-         This ensures planned_cif = planned_qty × unit_price exactly, matching
-         the user-visible formula (e.g. 18,884 × 1.50 = 28,326.00, NOT 28,326.80).
-      4. Return None when planned_qty is 0 so callers skip the line safely.
-
-    Returns (line_dict | None, new_remaining_cif).
-    """
-    if unit_price <= 0:
-        return None, remaining_cif                        # guard: zero rate → skip
-    raw_cif     = min(avail * unit_price, remaining_cif)
-    planned_qty = _floor_qty(raw_cif / unit_price)
-    planned_cif = _r2(planned_qty * unit_price)          # re-derive from floored qty
-    if planned_qty <= 0 or planned_cif <= 0:
-        return None, remaining_cif                        # nothing plannable
-    line = {
-        'import_item':      ii.id,
-        'item_name':        item_name_id,
-        'planned_quantity': planned_qty,
-        'unit_price':       unit_price,
-        'planned_cif_fc':   planned_cif,
-        'note':             f'Auto-planned (E1 {rule_label})',
-    }
-    return line, _r2(remaining_cif - planned_cif)
-
-
-# ─── Main entry point ──────────────────────────────────────────────────────────
 
 def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
+    """Run the full E1 Auto Plan waterfall via the shared engine.
+
+    Returns (lines, remaining_cif).
     """
-    Run the full E1 Auto Plan waterfall over a licence's import items.
-
-    Processing order (each step draws down the shared balance CIF):
-      1. Other Confectionery Ingredients  @ $3.00
-      2. Milk & Milk  (SWP / DWP / WPC splits)
-      3. Juice  @ $2.50  — ONLY when no Milk & Milk items exist
-      4. Aluminium Foil (HSN/desc 7607)  @ $4.50
-      5. Citric / Tartaric Acid  @ $1.60
-      6. Plastic Packing (HSN 390, min 100 KG) @ $1.00
-         — ONLY when Aluminium Foil generated no lines
-
-    Each import item matches the first applicable rule (hierarchical priority).
-    Items in no recognised category are left unplanned.
-
-    Returns:
-        (lines, remaining_cif)
-        lines — ready-to-save dicts for LicenseItemPlan.
-        remaining_cif — balance CIF not consumed by the plan.
-    """
-    from apps.license.services.e1_plan import classify_e1_item
-
-    # ── 1. Get-or-create all planned item names (§2: never fail on missing) ────
     name_ids = _ensure_names(list(_RULE_NAMES_E1))
 
-    # ── 2. Load import items and bucket by rule ───────────────────────────────
     import_items = (
         license_obj.import_license.all()
         .select_related('hs_code')
@@ -179,178 +89,45 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
     )
 
     _live_balance_cif = license_obj.get_balance_cif
-    balance_cif   = float(_live_balance_cif if _live_balance_cif is not None else (license_obj.balance_cif or 0))
-    remaining_cif = balance_cif
+    balance_cif = Decimal(str(
+        _live_balance_cif if _live_balance_cif is not None else (license_obj.balance_cif or 0)
+    ))
 
-    # Buckets — each import item lands in exactly one bucket (first-match wins).
-    confectionery:    list = []          # Rule 1
-    cocoa:            list = []          # Rule 1.5  — Cocoa @ $5.00 (before Milk)
-    milk:             list = []          # Rule 2    [(ii, item_names), ...]
-    juice:            list = []          # Rule 3
-    aluminium_foil:   list = []          # Rule 4
-    citric_tartaric:  list = []          # Rule 5
-    plastic_packing:  list = []          # Rule 6
-
+    # ── Bucket import items by classification (single source of truth:
+    # classify_e1_item), then group each bucket by description — one
+    # E1Item per group, keyed on the group's lowest-serial representative
+    # (matches how the Plan Tab groups items and how manual plans are
+    # anchored). ─────────────────────────────────────────────────────────
+    buckets: dict[str, list] = {}
     for ii in import_items:
-        item_names  = [n.name for n in ii.items.all()]
-        key         = ', '.join(sorted(item_names)) if item_names else (ii.description or '-')
-        hs          = (ii.hs_code.hs_code if ii.hs_code else '') or ''
-        desc        = (ii.description or '')
-        # Normalised HSN: digits only, for prefix/contains matching.
-        hs_digits   = ''.join(c for c in hs if c.isdigit())
-        hs_l        = hs.lower()
-        desc_l      = desc.lower()
-        cat         = classify_e1_item(key, hs, desc)
-        avail       = float(ii.available_quantity or 0)
+        item_names = [n.name for n in ii.items.all()]
+        key = ', '.join(sorted(item_names)) if item_names else (ii.description or '-')
+        hs = (ii.hs_code.hs_code if ii.hs_code else '') or ''
+        desc = ii.description or ''
+        cat = classify_e1_item(key, hs, desc)
+        if not cat:
+            continue
+        buckets.setdefault(cat, []).append(ii)
 
-        # Priority order mirrors the processing sequence.
-        if cat == 'OTHER CONFECTIONERY INGREDIENTS':
-            confectionery.append(ii)
-        elif hs_digits.startswith('18031') and 'cocoa' in desc_l:
-            # Rule 1.5: Cocoa paste (HSN 18031000) — planned before Milk & Milk.
-            cocoa.append(ii)
-        elif _is_milk_group(item_names, cat):
-            milk.append((ii, item_names))
-        elif cat == 'FRUIT JUICE' and 'actual user' not in desc_l:
-            juice.append(ii)
-        elif '7607' in hs_l or '7607' in desc_l:
-            aluminium_foil.append(ii)
-        elif 'citric' in desc_l or 'tartaric' in desc_l:
-            citric_tartaric.append(ii)
-        elif hs_l.startswith('390') and avail >= 100:
-            plastic_packing.append(ii)
-        # else: unclassified — left unplanned
+    rep_by_key: dict = {}
+    items: list[E1Item] = []
+    for cat, bucket in buckets.items():
+        for rep, group_avail in _group_by_desc(bucket):
+            rep_by_key[rep.id] = rep
+            items.append(E1Item(key=rep.id, category=cat, qty=Decimal(str(group_avail))))
 
-    has_milk = len(milk) > 0
+    result = plan_e1_items(items, balance_cif, min_plan_qty=MIN_PLAN_QTY)
 
     lines: list[dict] = []
+    for line in result.lines:
+        rep = rep_by_key[line.key]
+        lines.append({
+            'import_item':      rep.id,
+            'item_name':        name_ids.get(_STEP_ITEM_NAME[line.step]),
+            'planned_quantity': float(line.planned_qty),
+            'unit_price':       float(line.unit_price),
+            'planned_cif_fc':   float(line.planned_cif),
+            'note':             f'Auto-planned (E1 {_STEP_LABEL[line.step]})',
+        })
 
-    # ── Rule 1: Other Confectionery Ingredients ── $3.00 ─────────────────────
-    for rep, group_avail in _group_by_desc(confectionery):
-        if remaining_cif <= 0:
-            break
-        if group_avail < MIN_PLAN_QTY:
-            continue
-        line, remaining_cif = _simple_line(
-            rep, group_avail, remaining_cif, 3.0,
-            name_ids.get('OTHER CONFECTIONERY INGREDIENTS - E1'),
-            'Rule 1 – Confectionery',
-        )
-        if line:
-            lines.append(line)
-
-    # ── Rule 1.5: Cocoa @ $5.00 (HSN 18031 + "Cocoa" in desc) ───────────────
-    # Runs before Milk & Milk so Cocoa CIF is drawn down from the balance first.
-    for rep, group_avail in _group_by_desc(cocoa):
-        if remaining_cif <= 0:
-            break
-        if group_avail < MIN_PLAN_QTY:
-            continue
-        line, remaining_cif = _simple_line(
-            rep, group_avail, remaining_cif, 10.0,
-            name_ids.get('FRUIT/COCOA - E1'),
-            'Rule 1.5 – Cocoa',
-        )
-        if line:
-            lines.append(line)
-
-    # ── Rule 2: Milk & Milk ── greedy SWP→DWP→WPC optimizer ─────────────────
-    # Group milk items by description so the same product across serial numbers
-    # is planned as one unit. Plan lines are assigned to the representative
-    # import item (lowest serial number), matching PlanTab grouping in the UI.
-    from collections import defaultdict as _dd
-    milk_by_desc: dict = _dd(list)
-    for ii, _ in milk:
-        key = (ii.description or '').strip().upper()
-        milk_by_desc[key].append(ii)
-
-    for _desc, group in milk_by_desc.items():
-        if remaining_cif <= 0:
-            break
-        group_qty = sum(float(ii.available_quantity or 0) for ii in group)
-        if group_qty < MIN_PLAN_QTY:
-            continue
-        rep = min(group, key=lambda x: x.serial_number)
-        q_swp, q_dwp, q_wpc = _optimal_milk_split(group_qty, remaining_cif)
-        for prod, qty, price in [
-            ('SWP - E1', q_swp, 1.50),
-            ('DWP - E1', q_dwp, 5.00),
-            ('WPC - E1', q_wpc, 20.00),
-        ]:
-            if qty <= 0 or remaining_cif <= 0:
-                continue
-            cif = _r2(qty * price)
-            if cif <= 0:
-                continue
-            lines.append({
-                'import_item':      rep.id,
-                'item_name':        name_ids.get(prod),
-                'planned_quantity': float(qty),
-                'unit_price':       price,
-                'planned_cif_fc':   cif,
-                'note':             f'Auto-planned (E1 Rule 2 — {prod})',
-            })
-            remaining_cif = _r2(remaining_cif - cif)
-
-    # ── Rule 3: Juice ── $2.50 (ONLY when no Milk & Milk items on licence) ────
-    if not has_milk:
-        for rep, group_avail in _group_by_desc(juice):
-            if remaining_cif <= 0:
-                break
-            if group_avail < MIN_PLAN_QTY:
-                continue
-            line, remaining_cif = _simple_line(
-                rep, group_avail, remaining_cif, 2.50,
-                name_ids.get('FRUIT JUICE - E1'),
-                'Rule 3 – Juice',
-            )
-            if line:
-                lines.append(line)
-
-    # ── Rule 4: Aluminium Foil ── $4.50 (HSN/desc contains 7607) ─────────────
-    aluminium_lines: list[dict] = []
-    for rep, group_avail in _group_by_desc(aluminium_foil):
-        if remaining_cif <= 0:
-            break
-        if group_avail < MIN_PLAN_QTY:
-            continue
-        line, remaining_cif = _simple_line(
-            rep, group_avail, remaining_cif, 4.50,
-            name_ids.get('ALUMINIUM FOIL - E1'),
-            'Rule 4 – Aluminium Foil',
-        )
-        if line:
-            aluminium_lines.append(line)
-    lines.extend(aluminium_lines)
-    aluminium_planned = len(aluminium_lines) > 0
-
-    # ── Rule 5: Citric / Tartaric Acid ── $1.60 ──────────────────────────────
-    for rep, group_avail in _group_by_desc(citric_tartaric):
-        if remaining_cif <= 0:
-            break
-        if group_avail < MIN_PLAN_QTY:
-            continue
-        line, remaining_cif = _simple_line(
-            rep, group_avail, remaining_cif, 1.60,
-            name_ids.get('CITRIC ACID / TARTARIC ACID - E1'),
-            'Rule 5 – Citric/Tartaric',
-        )
-        if line:
-            lines.append(line)
-
-    # ── Rule 6: Plastic Packing Material ── $1.00 (ONLY when no Alum. Foil) ──
-    if not aluminium_planned:
-        for rep, group_avail in _group_by_desc(plastic_packing):
-            if remaining_cif <= 0:
-                break
-            if group_avail < MIN_PLAN_QTY:
-                continue
-            line, remaining_cif = _simple_line(
-                rep, group_avail, remaining_cif, 1.00,
-                name_ids.get('PP - E1'),
-                'Rule 6 – Plastic Packing',
-            )
-            if line:
-                lines.append(line)
-
-    return lines, remaining_cif
+    return lines, float(result.remaining_cif)

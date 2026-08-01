@@ -130,43 +130,37 @@ def norm_plan_for_license(license_obj, *, balance_cif=None) -> dict:
     result: dict = {}
 
     if norm == "E1":
-        from apps.license.services.e1_plan import (
-            E1_CATS as CATS, E1_EXCLUDED_CONDITIONS as EXCL,
-            classify_e1_item as classify, compute_e1_plan as compute,
-        )
+        from decimal import Decimal
 
-        display_qty = {c: 0.0 for c in CATS}
-        util_qty = {c: 0.0 for c in CATS}
-        item_util: dict = {}      # import_item_id -> util qty contributed
-        item_cat: dict = {}       # import_item_id -> category
+        from apps.license.services.e1_plan import E1Item, classify_e1_item, plan_e1_items
 
+        item_qty: dict = {}       # import_item_id -> its own available qty
+        items: list[E1Item] = []
         for ii in import_items:
             names = list(ii.items.values_list("name", flat=True))
             key = ", ".join(sorted(names)) if names else (ii.description or "-")
             hs = ii.hs_code.hs_code if ii.hs_code else ""
-            cat = classify(key, hs, ii.description)
-            if not cat or cat not in display_qty:
+            cat = classify_e1_item(key, hs, ii.description)
+            if not cat:
                 continue
-            avail = float(ii.available_quantity or 0)
-            display_qty[cat] += avail
-            cond = (ii.condition_type or "").strip()
-            util_inc = 0.0 if cond in EXCL.get(cat, frozenset()) else avail
-            util_qty[cat] += util_inc
-            item_util[ii.id] = util_inc
-            item_cat[ii.id] = cat
+            avail = Decimal(str(ii.available_quantity or 0))
+            item_qty[ii.id] = avail
+            items.append(E1Item(key=ii.id, category=cat, qty=avail))
 
-        # Run the waterfall exactly as the pivot does.
-        planned, rates = compute(display_qty, util_qty, balance_cif)
+        # Run the shared per-item engine — every consumer (Auto-Plan, this
+        # function, Item Pivot Report) delegates to the same rules, so the
+        # figures pre-filled here always match what those show.
+        plan_result = plan_e1_items(items, Decimal(str(balance_cif)))
+        cif_by_item: dict = {}
+        for line in plan_result.lines:
+            cif_by_item[line.key] = cif_by_item.get(line.key, Decimal("0")) + line.planned_cif
 
-        for iid, uq in item_util.items():
-            cat = item_cat[iid]
-            cat_uq = util_qty.get(cat, 0.0)
-            cat_plan = planned.get(cat, 0.0)
-            item_plan = (uq / cat_uq) * cat_plan if cat_uq else 0.0
+        for iid, avail in item_qty.items():
+            item_cif = cif_by_item.get(iid, Decimal("0"))
             result[iid] = {
-                "planned_quantity": round(uq, 3),
-                "unit_price": round(item_plan / uq, 2) if uq else 0.0,
-                "planned_cif": round(item_plan, 2),
+                "planned_quantity": round(float(avail), 3),
+                "unit_price": round(float(item_cif / avail), 2) if avail else 0.0,
+                "planned_cif": round(float(item_cif), 2),
             }
 
     elif norm == "E5":

@@ -402,3 +402,98 @@ class ItemPivotLiveComputeVerificationTests(TestCase):
                 continue  # this licence's balance/qty may route entirely to one of DWP/SWP
             self.assertEqual(cell['hs_code'], '04041000')
             self.assertEqual(cell['description'], 'Skimmed Milk Powder')
+
+    def test_two_pp_items_with_duplicate_hsn_are_never_string_concatenated(self):
+        # Reported corruption pattern: two PP import items both under HSN
+        # 39021000 landing in one "PP - E1" column showed a glued-together
+        # HSN string ("3902100039021000") instead of two distinct records.
+        # Neither is M2M-tagged and neither has a persisted plan — this
+        # exercises the LIVE E1 waterfall attribution path exactly like the
+        # other classify-only items above.
+        tagging_license = self._make_e1_license("E1-DUP-HSN-TAGGING")
+        tag_name = ItemNameModel.objects.create(name="PP - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only PP",
+            quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(tag_name)
+
+        license_obj = self._make_e1_license("E1-DUP-HSN", balance_cif=Decimal('100000.00'))
+        item_a = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Polypropylene Granules Batch A",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('100.000'), available_quantity=Decimal('100.000'),
+        )
+        item_b = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=2, description="Polypropylene Granules Batch B",
+            hs_code=_hs('39021000'),
+            quantity=Decimal('200.000'), available_quantity=Decimal('200.000'),
+        )
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "E1-DUP-HSN")
+        self.assertIsNotNone(row)
+
+        cell = row['items'].get('PP - E1')
+        self.assertIsNotNone(cell, "PP - E1 column must exist")
+
+        # Two distinct import items behind one column -> top-level scalar
+        # fields are blanked (never merged/concatenated), never a string
+        # like "3902100039021000".
+        self.assertEqual(cell['hs_code'], '')
+        self.assertEqual(cell['description'], '')
+        self.assertNotIn('39021000', str(cell['hs_code']))
+
+        planned = {p['import_item_id']: p for p in cell['planned_import_items']}
+        self.assertEqual(len(planned), 2)
+        self.assertEqual(planned[item_a.id]['hs_code'], '39021000')
+        self.assertEqual(planned[item_b.id]['hs_code'], '39021000')
+        # Each item's own quantity stays an independent number, never glued
+        # to the other's (e.g. never "100.0200.0" / concatenated strings).
+        self.assertIsInstance(planned[item_a.id]['quantity'], float)
+        self.assertIsInstance(planned[item_b.id]['quantity'], float)
+        self.assertEqual(planned[item_a.id]['quantity'], 100.0)
+        self.assertEqual(planned[item_b.id]['quantity'], 200.0)
+
+    def test_two_aluminium_foil_items_with_different_quantities_are_never_concatenated(self):
+        # Reported corruption pattern: two Aluminium Foil import items with
+        # different quantities (e.g. 9125.120 and 37985.810) landing in one
+        # column showed "9125.12037985.810" instead of two distinct numbers.
+        tagging_license = self._make_e1_license("E1-DUP-QTY-TAGGING")
+        tag_name = ItemNameModel.objects.create(name="ALUMINIUM FOIL - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only Foil",
+            quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(tag_name)
+
+        license_obj = self._make_e1_license("E1-DUP-QTY", balance_cif=Decimal('1000000.00'))
+        item_a = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Aluminium Foil Batch A",
+            hs_code=_hs('76071190'),
+            quantity=Decimal('9125.120'), available_quantity=Decimal('9125.120'),
+        )
+        item_b = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=2, description="Aluminium Foil Batch B",
+            hs_code=_hs('76072000'),
+            quantity=Decimal('37985.810'), available_quantity=Decimal('37985.810'),
+        )
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "E1-DUP-QTY")
+        self.assertIsNotNone(row)
+
+        cell = row['items'].get('ALUMINIUM FOIL - E1')
+        self.assertIsNotNone(cell, "ALUMINIUM FOIL - E1 column must exist")
+
+        self.assertEqual(cell['quantity'], 0.0)
+        self.assertEqual(cell['hs_code'], '')
+
+        planned = {p['import_item_id']: p for p in cell['planned_import_items']}
+        self.assertEqual(len(planned), 2)
+        self.assertEqual(planned[item_a.id]['quantity'], 9125.120)
+        self.assertEqual(planned[item_b.id]['quantity'], 37985.810)
+        self.assertEqual(planned[item_a.id]['hs_code'], '76071190')
+        self.assertEqual(planned[item_b.id]['hs_code'], '76072000')

@@ -148,7 +148,7 @@ class TestUnitPricesTable(TestCase):
     def test_e1_unit_prices(self):
         assert E1_UNIT_PRICES['OTHER CONFECTIONERY INGREDIENTS'] == Decimal('3.00')
         assert E1_UNIT_PRICES['COCOA MASS'] == Decimal('10.00')
-        assert E1_UNIT_PRICES['FRUIT JUICE'] == Decimal('3.00')
+        assert E1_UNIT_PRICES['FRUIT JUICE'] == Decimal('2.50')
         assert E1_UNIT_PRICES['TARTARIC ACID'] == Decimal('1.50')
         assert E1_UNIT_PRICES['ALUMINIUM FOIL'] == Decimal('4.50')
         assert E1_UNIT_PRICES['POLYPROPYLENE'] == Decimal('1.20')
@@ -191,7 +191,18 @@ class TestGenericStages(TestCase):
     def test_fruit_juice_allocation(self):
         items = [E1Item(key='a', category='FRUIT JUICE', qty=Decimal('200'))]
         result = plan_e1_items(items, Decimal('5000'))
-        assert _cif(result, 'FRUIT JUICE') == Decimal('600.0000')
+        assert _cif(result, 'FRUIT JUICE') == Decimal('500.0000')  # 200 * $2.50
+        assert result.lines[0].unit_price == Decimal('2.5000')
+
+    def test_fruit_juice_partial_balance_reduces_rate_not_qty(self):
+        # 200 * 2.50 = 500 > remaining(300) -> rate = 300/200 = 1.50, full qty still planned.
+        items = [E1Item(key='a', category='FRUIT JUICE', qty=Decimal('200'))]
+        result = plan_e1_items(items, Decimal('300'))
+        line = result.lines[0]
+        assert line.planned_qty == Decimal('200')
+        assert line.unit_price == Decimal('1.5000')
+        assert line.planned_cif == Decimal('300.0000')
+        assert result.remaining_cif == Decimal('0')
 
     def test_tartaric_acid_allocation(self):
         items = [E1Item(key='a', category='TARTARIC ACID', qty=Decimal('100'))]

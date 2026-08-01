@@ -17,7 +17,7 @@ step):
        and E5 never carry two independent implementations of the DWP/SWP
        pricing rules.
     4. EGG ALBUMIN                       @ MILK_CONFIG.wpc_price (25.00)
-    5. FRUIT JUICE                       @ 3.00
+    5. FRUIT JUICE                       @ 2.50
     6. TARTARIC ACID                     @ 1.50
     7. ALUMINIUM FOIL                    @ 4.50
     8. POLYPROPYLENE                     @ 1.20
@@ -66,7 +66,7 @@ E1_CATS: tuple[str, ...] = (
 E1_UNIT_PRICES: dict[str, Decimal] = {
     'OTHER CONFECTIONERY INGREDIENTS': Decimal('3.00'),
     'COCOA MASS':                      Decimal('10.00'),
-    'FRUIT JUICE':                     Decimal('3.00'),
+    'FRUIT JUICE':                     Decimal('2.50'),
     'TARTARIC ACID':                   Decimal('1.50'),
     'ALUMINIUM FOIL':                  Decimal('4.50'),
     'POLYPROPYLENE':                   Decimal('1.20'),

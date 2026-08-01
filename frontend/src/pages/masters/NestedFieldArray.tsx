@@ -357,6 +357,14 @@ export default function NestedFieldArray({
                 return opt[labelField] || opt.name || opt.id;
             };
 
+            // Item Name rows get a muted subtitle line (group, else SION norm
+            // class) in the dropdown to help disambiguate similarly-named
+            // items — every other FK here (hs-code, ports, license-items,
+            // ...) keeps its exact single-line rendering.
+            const getOptionSubtitle = endpoint.includes("item-names")
+                ? (opt) => opt.group_name || opt.sion_norm_class_label || undefined
+                : undefined;
+
             return (
                 <div className={highlightClass ? `${highlightClass} rounded` : ""}>
                     <AsyncSelectField
@@ -365,6 +373,7 @@ export default function NestedFieldArray({
                         value={fieldValue}
                         onChange={(val) => handleChange(index, field.name, val)}
                         formatLabel={formatLabel}
+                        getOptionSubtitle={getOptionSubtitle}
                         placeholder={`Select ${field.label || field.name}`}
                         className="react-select-sm"
                         isMulti={isMulti}

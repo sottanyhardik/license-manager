@@ -1,7 +1,47 @@
-import {useState, useEffect} from "react";
+import {useCallback, useMemo, useState, useEffect} from "react";
 import AsyncSelect from "react-select/async";
 import api from "../api/axios";
 import { _fkDetailCache, _fkInFlight } from "./fkDetailCache";
+import { useDebouncedCallback } from "../hooks/useDebounce";
+
+// Recent-selections are cached per endpoint so re-opening the same field
+// (e.g. "Item Name" on another row) surfaces what you just picked instead of
+// an empty menu. Session-scoped only — never sent anywhere.
+const RECENTS_STORAGE_PREFIX = "asyncSelectField.recents:";
+const RECENTS_LIMIT = 5;
+
+// Escape regex-special characters so an inputValue like "1+1" or "a.b"
+// can't blow up the highlight regex.
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Wrap the substring of `label` that case-insensitively matches `query` in a
+// subtle highlight span. Returns `label` unchanged (any type) when there's
+// nothing to highlight, so non-string labels and empty queries are no-ops.
+const highlightMatch = (label, query) => {
+    if (!query || typeof label !== "string") return label;
+    const escaped = escapeRegExp(query);
+    if (!escaped) return label;
+
+    let parts;
+    try {
+        parts = label.split(new RegExp(`(${escaped})`, "gi"));
+    } catch {
+        return label;
+    }
+    if (parts.length <= 1) return label;
+
+    // `String.split` with one capturing group alternates
+    // [unmatched, matched, unmatched, matched, ...] — odd indices are matches.
+    return parts.map((part, i) =>
+        i % 2 === 1 ? (
+            <span key={i} className="rounded-sm bg-primary/20 px-0.5 text-inherit">
+                {part}
+            </span>
+        ) : (
+            part
+        )
+    );
+};
 
 /**
  * AsyncSelectField Component - Select2-like with API support
@@ -17,6 +57,15 @@ import { _fkDetailCache, _fkInFlight } from "./fkDetailCache";
  * - isClearable: allow clearing selection (default: true)
  * - isDisabled: disable the select
  * - formatLabel: custom function to format option label
+ * - debounceDelay: ms to debounce the search API call while typing (default: 300)
+ * - getOptionSubtitle: optional (item) => string | null — renders a second,
+ *   muted line under each dropdown option's label. Omit for today's exact
+ *   single-line rows.
+ * - ariaLabel: optional aria-label passed through to the underlying select
+ * - onMenuOpen / onMenuClose: optional pass-through to the underlying
+ *   react-select, for callers that need to know the dropdown's open state
+ *   (e.g. to disambiguate an Enter keypress that closes the menu from one
+ *   that should submit a surrounding form)
  */
 export default function AsyncSelectField({
     endpoint,
@@ -30,18 +79,62 @@ export default function AsyncSelectField({
     isDisabled = false,
     formatLabel = null,
     className = "",
-    loadOnMount = false  // NEW: Control whether to load options on mount
+    loadOnMount = false,  // NEW: Control whether to load options on mount
+    debounceDelay = 300,
+    getOptionSubtitle = undefined,
+    ariaLabel = undefined,
+    onMenuOpen = undefined,
+    onMenuClose = undefined,
 }) {
     // Strip /api/ prefix if it exists to avoid double /api/api/
     let cleanEndpoint = endpoint?.startsWith('/api/') ? endpoint.substring(5) : endpoint;
 
     // Parse endpoint to separate base URL and existing query params
     const [baseEndpoint, queryString] = cleanEndpoint?.split('?') || [cleanEndpoint, ''];
-    const existingParams = new URLSearchParams(queryString);
+    const existingParams = useMemo(() => new URLSearchParams(queryString), [queryString]);
 
     const [selectedOption, setSelectedOption] = useState(null);
+    const [isSearching, setIsSearching] = useState(false);
 
-    const formatOption = (item) => {
+    const recentsKey = `${RECENTS_STORAGE_PREFIX}${baseEndpoint || endpoint || ""}`;
+    const [recents, setRecents] = useState(() => {
+        try {
+            const raw = sessionStorage.getItem(recentsKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed.slice(0, RECENTS_LIMIT) : [];
+        } catch {
+            // sessionStorage unavailable (private mode, disabled, etc.) — no recents.
+            return [];
+        }
+    });
+
+    const writeRecents = useCallback((list) => {
+        try {
+            sessionStorage.setItem(recentsKey, JSON.stringify(list));
+        } catch {
+            // Degrade silently — recents are a nice-to-have, never load-bearing.
+        }
+    }, [recentsKey]);
+
+    const pushRecent = useCallback((option) => {
+        if (!option || option.value === null || option.value === undefined) return;
+        setRecents(prev => {
+            const deduped = prev.filter(r => r.value !== option.value);
+            const updated = [{ value: option.value, label: option.label }, ...deduped].slice(0, RECENTS_LIMIT);
+            writeRecents(updated);
+            return updated;
+        });
+    }, [writeRecents]);
+
+    // Recent options as react-select option objects. Only {value, label} is
+    // persisted, so `data` is empty here — getOptionSubtitle simply won't
+    // find anything to show for a recent row, which is an acceptable trade-off.
+    const recentOptions = useMemo(
+        () => recents.map(r => ({ value: r.value, label: r.label, data: {} })),
+        [recents]
+    );
+
+    const formatOption = useCallback((item) => {
         let label;
 
         if (formatLabel) {
@@ -55,7 +148,7 @@ export default function AsyncSelectField({
             label: label,
             data: item
         };
-    };
+    }, [formatLabel, labelField, valueField]);
 
     const fetchOptionById = async (id) => {
         try {
@@ -191,7 +284,9 @@ export default function AsyncSelectField({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value]);
 
-    const loadOptions = async (inputValue) => {
+    // The actual search request. Debounced below so fast typing doesn't
+    // spam the backend on every keystroke.
+    const fetchOptionsFromAPI = useCallback(async (inputValue) => {
         try {
             // Merge existing params with new params
             const params = new URLSearchParams(existingParams);
@@ -204,46 +299,124 @@ export default function AsyncSelectField({
             return results.map(item => formatOption(item));
         } catch (err) {
             return [];
+        } finally {
+            setIsSearching(false);
         }
+    }, [baseEndpoint, existingParams, formatOption]);
+
+    const debouncedFetch = useDebouncedCallback(fetchOptionsFromAPI, debounceDelay);
+
+    const loadOptions = (inputValue, callback) => {
+        setIsSearching(true);
+        debouncedFetch(inputValue)
+            .then(options => { if (callback) callback(options); })
+            .catch(() => { if (callback) callback([]); });
     };
 
     const handleChange = (selected) => {
+        const previous = selectedOption;
         setSelectedOption(selected);
 
         if (isMulti) {
+            const arr = Array.isArray(selected) ? selected : [];
+            const prevArr = Array.isArray(previous) ? previous : [];
+            const prevValues = new Set(prevArr.map(opt => opt.value));
+            arr.filter(opt => !prevValues.has(opt.value)).forEach(pushRecent);
+
             // Return array of values for API compatibility
-            const values = selected ? selected.map(opt => opt.value) : [];
+            const values = arr.map(opt => opt.value);
             onChange(values);
         } else {
+            if (selected) pushRecent(selected);
             // Return single value
             onChange(selected ? selected.value : null);
         }
     };
 
+    // Menu rows get optional match-highlighting + an optional subtitle line.
+    // The closed control's value display (context "value") always stays a
+    // plain single line, matching today's look exactly.
+    const formatOptionLabel = (option, { context, inputValue: currentInput }) => {
+        const highlighted = highlightMatch(option.label, currentInput);
+
+        if (context === "menu" && getOptionSubtitle) {
+            const subtitle = getOptionSubtitle((option.data || {}));
+            if (subtitle) {
+                return (
+                    <div className="flex flex-col leading-tight">
+                        <span>{highlighted}</span>
+                        <span className="text-xs text-muted-foreground">{subtitle}</span>
+                    </div>
+                );
+            }
+        }
+
+        return highlighted;
+    };
+
+    const noOptionsMessage = ({ inputValue }) =>
+        inputValue ? `No matches for "${inputValue}"` : "Type to search…";
+
+    const loadingMessage = () => "Searching…";
+
+    // If loadOnMount is set, keep the exact original behavior (react-select
+    // fetches the full first page once, on mount). Otherwise, fall back to
+    // showing recent selections (if any) instead of an empty menu when the
+    // field is opened with no query yet — still an empty menu when there's
+    // nothing recent, exactly like today.
+    const effectiveDefaultOptions = loadOnMount ? true : (recentOptions.length > 0 ? recentOptions : false);
+
     return (
-        <AsyncSelect
-            cacheOptions
-            defaultOptions={loadOnMount}  // If false, loads only when dropdown opens
-            loadOptions={loadOptions}
-            value={selectedOption}
-            onChange={handleChange}
-            isMulti={isMulti}
-            isClearable={isClearable}
-            isDisabled={isDisabled}
-            placeholder={placeholder}
-            className={className}
-            classNamePrefix="react-select"
-            styles={{
-                control: (base) => ({
-                    ...base,
-                    minHeight: "38px",
-                    borderColor: "var(--tb-border)"
-                }),
-                menu: (base) => ({
-                    ...base,
-                    zIndex: 9999
-                })
-            }}
-        />
+        <div className="relative">
+            <AsyncSelect
+                cacheOptions
+                defaultOptions={effectiveDefaultOptions}
+                loadOptions={loadOptions}
+                value={selectedOption}
+                onChange={handleChange}
+                isMulti={isMulti}
+                isClearable={isClearable}
+                isDisabled={isDisabled}
+                placeholder={placeholder}
+                className={className}
+                classNamePrefix="react-select"
+                formatOptionLabel={formatOptionLabel}
+                noOptionsMessage={noOptionsMessage}
+                loadingMessage={loadingMessage}
+                menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
+                onMenuOpen={onMenuOpen}
+                onMenuClose={onMenuClose}
+                aria-label={ariaLabel}
+                styles={{
+                    control: (base) => ({
+                        ...base,
+                        minHeight: "38px",
+                        borderColor: "var(--tb-border)"
+                    }),
+                    menu: (base) => ({
+                        ...base,
+                        zIndex: 9999
+                    }),
+                    menuPortal: (base) => ({
+                        ...base,
+                        zIndex: 9999
+                    })
+                }}
+            />
+
+            {/* Debounce-pending indicator — separate from react-select's own
+                isLoading (which covers the in-flight HTTP request itself). */}
+            {isSearching && (
+                <div
+                    className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2"
+                    style={{ zIndex: 10000 }}
+                >
+                    <span
+                        className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent text-primary"
+                        aria-hidden="true"
+                    />
+                </div>
+            )}
+        </div>
     );
 }

@@ -12,6 +12,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.allotment.models import AllotmentItems, AllotmentModel
+from apps.core.models import PortModel
 from apps.license.models import LicenseImportItemsModel, LicenseItemPlan
 from apps.license.tests.test_balance_ledger_views import LicenseBalanceLedgerFixtureMixin
 
@@ -59,6 +60,10 @@ class LicenseOverviewSummaryViewTests(LicenseBalanceLedgerFixtureMixin, TestCase
         self.assertEqual(data["authorisation_number"], license_obj.registration_number)
         self.assertEqual(data["importer"], company.name)
         self.assertEqual(data["status"], "Active")
+        # No port set on this fixture — both display-only fields are None,
+        # not omitted or defaulted to empty string.
+        self.assertIsNone(data["port_code"])
+        self.assertIsNone(data["port_name"])
 
         summary = data["summary"]
         self.assertEqual(set(summary.keys()), {
@@ -127,6 +132,19 @@ class LicenseOverviewSummaryViewTests(LicenseBalanceLedgerFixtureMixin, TestCase
 
         self.assertEqual(resp.status_code, 200, resp.data)
         self.assertEqual(resp.data["status"], "Expired")
+
+    def test_port_code_and_name_reflect_the_license_s_port(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        port = PortModel.objects.create(code="INNSA1", name="Nhava Sheva")
+        license_obj.port = port
+        license_obj.save(update_fields=["port"])
+
+        resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["port_code"], "INNSA1")
+        self.assertEqual(resp.data["port_name"], "Nhava Sheva")
 
     def test_denies_authenticated_user_with_no_roles(self):
         company = self.make_company()

@@ -42,6 +42,10 @@ export interface LicenseOverviewSummary {
     purchase_status_id: number | null;
     purchase_status_code: string | null;
     purchase_status_label: string | null;
+    /** `core.PortModel` FK — display-only, same additive convention as
+     * `purchase_status_*` above. `null` when the license has no port set. */
+    port_code: string | null;
+    port_name: string | null;
     summary: LicenseOverviewSummaryCounts;
 }
 

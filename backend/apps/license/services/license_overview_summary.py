@@ -126,6 +126,13 @@ def get_overview_counts(license_obj) -> Dict[str, Any]:
         "purchase_status_id": license_obj.purchase_status_id,
         "purchase_status_code": license_obj.purchase_status.code if license_obj.purchase_status_id else None,
         "purchase_status_label": license_obj.purchase_status.label if license_obj.purchase_status_id else None,
+        # `core.PortModel` FK — display-only, same additive/read-only
+        # convention as purchase_status above. `port` is already
+        # select_related() by `LicenseDetailsViewSet.get_queryset()`
+        # (unconditionally, not action-gated), so this costs zero extra
+        # queries.
+        "port_code": license_obj.port.code if license_obj.port_id else None,
+        "port_name": license_obj.port.name if license_obj.port_id else None,
         "summary": {
             "total_boes": total_boes,
             "total_allotments": total_allotments,

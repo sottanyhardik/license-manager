@@ -24,6 +24,20 @@ from apps.license.models import (
 )
 
 
+def _nested_item_id(item: Dict[str, Any]) -> Any:
+    """Best-effort int `id` from a nested `export_license`/`import_license`
+    row dict, or `None` if absent/blank/non-numeric. Used to tell an
+    existing child row (already validated when it was first created) apart
+    from a genuinely new one in `LicenseDetailsSerializer.validate()`."""
+    raw = item.get('id')
+    if raw in (None, ''):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _safe_iso(val: Any) -> Any:
     if isinstance(val, datetime):
         try:
@@ -566,25 +580,44 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             if data['license_expiry_date'] <= data['license_date']:
                 errors['license_expiry_date'] = ['License expiry date must be after license date']
 
-        # Validate export items
+        # Validate export items.
+        #
+        # Required-field checks below only apply to a row that is either
+        # brand new (no `id`, or an `id` not among the license's current
+        # export items) OR that is itself supplying the field being
+        # checked. A row that already exists and is being patched for an
+        # unrelated reason (e.g. the License Overview page's inline SION
+        # Norm editor, which sends existing rows as bare `{id}` plus one
+        # `{id, norm_class}` — see `LicenseWriteMixin.update()`, which
+        # already only `setattr`s keys actually present in each dict) must
+        # not be forced to re-supply every field just to change one of
+        # them. Same "only validate what's actually new/changing" idea
+        # already used for `license_documents` below.
+        existing_export_ids = set()
+        if self.instance is not None and 'export_license' in data:
+            existing_export_ids = set(self.instance.export_license.values_list('id', flat=True))
+
         if 'export_license' in data and data['export_license']:
             export_errors = []
             for index, item in enumerate(data['export_license']):
                 item_errors = {}
+                is_existing = _nested_item_id(item) in existing_export_ids
 
                 # HS Code is not required for export items (can be blank)
                 # Removed: if not item.get('hs_code'):
                 #     item_errors['hs_code'] = ['HS Code is required for export item']
 
-                if not item.get('description') or not item.get('description').strip():
-                    item_errors['description'] = ['Description is required for export item']
+                if 'description' in item or not is_existing:
+                    if not item.get('description') or not item.get('description').strip():
+                        item_errors['description'] = ['Description is required for export item']
 
                 # Net quantity can be 0 or greater (including 0)
-                net_qty = item.get('net_quantity')
-                if net_qty is None or net_qty == '':
-                    item_errors['net_quantity'] = ['Net quantity is required']
-                elif isinstance(net_qty, (int, float)) and net_qty < 0:
-                    item_errors['net_quantity'] = ['Net quantity cannot be negative']
+                if 'net_quantity' in item or not is_existing:
+                    net_qty = item.get('net_quantity')
+                    if net_qty is None or net_qty == '':
+                        item_errors['net_quantity'] = ['Net quantity is required']
+                    elif isinstance(net_qty, (int, float)) and net_qty < 0:
+                        item_errors['net_quantity'] = ['Net quantity cannot be negative']
 
                 # Unit is not required for export items (has default value 'kg' in model)
 
@@ -597,24 +630,33 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             if any(e for e in export_errors):
                 errors['export_license'] = export_errors
 
-        # Validate import items
+        # Validate import items — same existing-row exemption as export items above.
+        existing_import_ids = set()
+        if self.instance is not None and 'import_license' in data:
+            existing_import_ids = set(self.instance.import_license.values_list('id', flat=True))
+
         if 'import_license' in data and data['import_license']:
             import_errors = []
             for index, item in enumerate(data['import_license']):
                 item_errors = {}
+                is_existing = _nested_item_id(item) in existing_import_ids
 
-                if not item.get('hs_code'):
-                    item_errors['hs_code'] = ['HS Code is required for import item']
+                if 'hs_code' in item or not is_existing:
+                    if not item.get('hs_code'):
+                        item_errors['hs_code'] = ['HS Code is required for import item']
 
-                if not item.get('description') or not item.get('description').strip():
-                    item_errors['description'] = ['Description is required for import item']
+                if 'description' in item or not is_existing:
+                    if not item.get('description') or not item.get('description').strip():
+                        item_errors['description'] = ['Description is required for import item']
 
-                serial_number = item.get('serial_number')
-                if serial_number is None or serial_number == '':
-                    item_errors['serial_number'] = ['Serial number is required for import item']
+                if 'serial_number' in item or not is_existing:
+                    serial_number = item.get('serial_number')
+                    if serial_number is None or serial_number == '':
+                        item_errors['serial_number'] = ['Serial number is required for import item']
 
-                if not item.get('unit'):
-                    item_errors['unit'] = ['Unit is required for import item']
+                if 'unit' in item or not is_existing:
+                    if not item.get('unit'):
+                        item_errors['unit'] = ['Unit is required for import item']
 
                 if item_errors:
                     import_errors.append(item_errors)

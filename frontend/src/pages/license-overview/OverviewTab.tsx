@@ -1,26 +1,25 @@
 import { useContext, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, Pencil, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 import api from "@/api/axios";
 import { AuthContext } from "@/context/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import HybridSelect from "@/components/HybridSelect";
-import { cn } from "@/lib/utils";
 
 import { useLicenseBalanceLedger, licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
 import { useLicenseOverviewSummary, licenseOverviewKeys } from "./useLicenseOverviewSummary";
-import { extractApiError, fmtDate, fmtNum, licenseOverviewStatusVariant } from "./licenseOverviewHelpers";
-import SummaryCard from "./SummaryCard";
+import { extractApiError, fmtNum } from "./licenseOverviewHelpers";
+import LicenseDetailsHeader from "./LicenseDetailsHeader";
+import SionNormCard from "./SionNormCard";
+import LicenseMetricsGrid from "./LicenseMetricsGrid";
 import CustomsLedgerSection from "./CustomsLedgerSection";
 import CustomsLedgerTable from "./CustomsLedgerTable";
 import FinancialLedgerTable from "./FinancialLedgerTable";
 import FinancialSummarySection from "./FinancialSummarySection";
 import FinalReconciliationSection from "./FinalReconciliationSection";
+import NoTradeActivityBanner from "./NoTradeActivityBanner";
 
 interface OverviewTabProps {
     licenseId: string | number | undefined;
@@ -89,8 +88,19 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
 
     const { data: summary, isLoading: summaryLoading, isError: summaryError, error: summaryErrorObj } = summaryQuery;
 
+    // UI-only visibility rule for THIS page: only a real Purchase or Sale
+    // counts as "trade" for deciding whether to show the Financial Ledger/
+    // Summary/Reconciliation cards — BOE debits, allotments, and the
+    // opening/closing bookend rows do NOT count, even though they're still
+    // real ledger rows and still drive every calculation untouched here.
+    // Reuses the existing `has_trading_activity` flag (`= has_purchase or
+    // has_sale`, see `license_balance_ledger_builder.build_financial_ledger`)
+    // already returned by this page's ledger query — no new API, no backend
+    // change, no re-derivation from `rows`/`row_kind`.
+    const showFinancialSections = ledgerQuery.data?.financial_ledger.summary.has_trading_activity ?? false;
+
     return (
-        <div className="space-y-5">
+        <div>
             {/* `!summary` guard — same reasoning as the ledger spinner
                 below: never swap already-rendered summary cards out for a
                 spinner during a background refetch. */}
@@ -109,183 +119,126 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
 
             {summary && (
                 <>
-                    <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border/70 bg-card px-4 py-3">
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 lg:grid-cols-7">
-                            <HeaderField label="License Number" value={summary.license_number ?? "—"} />
-                            <HeaderField label="Authorisation Number" value={summary.authorisation_number ?? "—"} />
-                            <HeaderField label="File Number" value={summary.file_number ?? "—"} />
-                            <HeaderField label="License Date" value={fmtDate(summary.license_date)} />
-                            <HeaderField label="Expiry Date" value={fmtDate(summary.license_expiry_date)} />
-                            <HeaderField label="Importer" value={summary.importer ?? "—"} />
-                            <div className="col-span-2 sm:col-span-2 lg:col-span-1">
-                                <div className="text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground/70">
-                                    Purchase Status
-                                </div>
-                                {canEditPurchaseStatus && editingPurchaseStatus ? (
-                                    <div className="mt-0.5 flex w-full items-center gap-1.5">
-                                        <div className="w-full">
-                                            <HybridSelect
-                                                fieldMeta={{
-                                                    endpoint: "/masters/purchase-statuses/",
-                                                    label_field: "label",
-                                                }}
-                                                value={summary.purchase_status_id}
-                                                onChange={handlePurchaseStatusChange}
-                                                isClearable={true}
-                                                isDisabled={updatingPurchaseStatus}
-                                                placeholder="Set status…"
-                                                className="w-full"
-                                            />
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="shrink-0 text-muted-foreground hover:text-foreground"
-                                            onClick={() => setEditingPurchaseStatus(false)}
-                                            disabled={updatingPurchaseStatus}
-                                            aria-label="Cancel editing purchase status"
-                                        >
-                                            <X className="size-4" aria-hidden="true" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        className={cn(
-                                            "mt-0.5 flex w-full items-center gap-1.5 truncate text-left text-sm font-medium text-foreground",
-                                            canEditPurchaseStatus && "cursor-pointer hover:text-primary"
-                                        )}
-                                        onClick={() => canEditPurchaseStatus && setEditingPurchaseStatus(true)}
-                                        disabled={!canEditPurchaseStatus}
-                                    >
-                                        <span className="truncate">{summary.purchase_status_label ?? "—"}</span>
-                                        {canEditPurchaseStatus && (
-                                            <Pencil className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-                                        )}
-                                    </button>
-                                )}
+                    <LicenseDetailsHeader
+                        summary={summary}
+                        canRecalculate={canRecalculate}
+                        recalculating={recalculating}
+                        onRecalculate={handleRecalculate}
+                        canEditPurchaseStatus={canEditPurchaseStatus}
+                        editingPurchaseStatus={editingPurchaseStatus}
+                        setEditingPurchaseStatus={setEditingPurchaseStatus}
+                        updatingPurchaseStatus={updatingPurchaseStatus}
+                        onPurchaseStatusChange={handlePurchaseStatusChange}
+                    />
+
+                    <div className="mt-8">
+                        <SionNormCard licenseId={licenseId} isActive={isActive} />
+                    </div>
+
+                    <div className="mt-8">
+                        <LicenseMetricsGrid summary={summary.summary} />
+                    </div>
+                </>
+            )}
+
+            <div className="mt-10 space-y-5">
+                {/* `!ledgerQuery.data` guard: once the ledger has loaded once,
+                    a later invalidateQueries()-triggered refetch (e.g. after a
+                    hide/restore BOE action) must never swap this spinner back
+                    in over already-rendered content — doing so would unmount
+                    the whole card section and reflow the page height, which is
+                    what caused the reported "confirmation jumps to top" bug
+                    (the browser clamps scroll to the new, shorter height, then
+                    jumps back once data reloads). Stale content stays visible
+                    while `isFetching` refetches it in the background. */}
+                {ledgerQuery.isLoading && !ledgerQuery.data && (
+                    <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin" /> Loading warnings &amp; ledgers…
+                    </div>
+                )}
+
+                {ledgerQuery.isError && (
+                    <Alert variant="destructive">
+                        <AlertTriangle className="size-4" />
+                        <AlertDescription>{extractApiError(ledgerQuery.error, "Failed to load licence balance data.")}</AlertDescription>
+                    </Alert>
+                )}
+
+                {ledgerQuery.data && (
+                    <>
+                        {/* Always shown: a never-traded licence still gets a
+                            meaningful Opening-Balance-only statement (see
+                            `has_purchase` on the backend's opening-row gate). */}
+                        {ledgerQuery.data.financial_ledger.summary.missing_purchase_warning.show_warning && (
+                            <Alert variant="warning">
+                                <AlertTriangle className="size-4" />
+                                <AlertDescription>
+                                    {ledgerQuery.data.financial_ledger.summary.missing_purchase_warning.message}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {showFinancialSections ? (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Financial Ledger</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <FinancialLedgerTable rows={ledgerQuery.data.financial_ledger.rows} />
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <NoTradeActivityBanner />
+                        )}
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Customs Ledger — Running Balance</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <CustomsLedgerTable
+                                    rows={ledgerQuery.data.customs_ledger.rows}
+                                    summary={ledgerQuery.data.customs_ledger.summary}
+                                    licenseId={licenseId}
+                                    showHidden={showHiddenBoe}
+                                    onShowHiddenChange={setShowHiddenBoe}
+                                />
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Customs Ledger — Item Detail</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <CustomsLedgerSection licenseId={licenseId ?? ""} />
+                            </CardContent>
+                        </Card>
+
+                        {showFinancialSections && (
+                            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Financial Summary</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <FinancialSummarySection summary={ledgerQuery.data.financial_ledger.summary} />
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Final Reconciliation</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <FinalReconciliationSection reconciliation={ledgerQuery.data.reconciliation} />
+                                    </CardContent>
+                                </Card>
                             </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                            <Badge variant={licenseOverviewStatusVariant(summary.status)}>{summary.status}</Badge>
-                            {canRecalculate && (
-                                <Button size="sm" variant="outline" onClick={handleRecalculate} disabled={recalculating}>
-                                    {recalculating ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                                    Recalculate
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                        <SummaryCard label="Total BOEs" value={fmtNum(summary.summary.total_boes, 0)} />
-                        <SummaryCard label="Total Allotments" value={fmtNum(summary.summary.total_allotments, 0)} />
-                        <SummaryCard label="Planned CIF" value={fmtNum(summary.summary.total_planned_cif)} />
-                        <SummaryCard label="Total CIF" value={fmtNum(summary.summary.total_cif)} size="lg" />
-                        <SummaryCard label="Debited CIF" value={fmtNum(summary.summary.total_debited_cif)} />
-                        <SummaryCard label="Allotted CIF" value={fmtNum(summary.summary.total_allotted_cif)} />
-                        <SummaryCard label="Balance CIF" value={fmtNum(summary.summary.total_balance_cif)} variant="success" size="lg" />
-                    </div>
-                </>
-            )}
-
-            {/* `!ledgerQuery.data` guard: once the ledger has loaded once,
-                a later invalidateQueries()-triggered refetch (e.g. after a
-                hide/restore BOE action) must never swap this spinner back
-                in over already-rendered content — doing so would unmount
-                the whole card section and reflow the page height, which is
-                what caused the reported "confirmation jumps to top" bug
-                (the browser clamps scroll to the new, shorter height, then
-                jumps back once data reloads). Stale content stays visible
-                while `isFetching` refetches it in the background. */}
-            {ledgerQuery.isLoading && !ledgerQuery.data && (
-                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" /> Loading warnings &amp; ledgers…
-                </div>
-            )}
-
-            {ledgerQuery.isError && (
-                <Alert variant="destructive">
-                    <AlertTriangle className="size-4" />
-                    <AlertDescription>{extractApiError(ledgerQuery.error, "Failed to load licence balance data.")}</AlertDescription>
-                </Alert>
-            )}
-
-            {ledgerQuery.data && (
-                <>
-                    {/* Always shown: a never-traded licence still gets a
-                        meaningful Opening-Balance-only statement (see
-                        `has_purchase` on the backend's opening-row gate). */}
-                    {ledgerQuery.data.financial_ledger.summary.missing_purchase_warning.show_warning && (
-                        <Alert variant="warning">
-                            <AlertTriangle className="size-4" />
-                            <AlertDescription>
-                                {ledgerQuery.data.financial_ledger.summary.missing_purchase_warning.message}
-                            </AlertDescription>
-                        </Alert>
-                    )}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Financial Ledger</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <FinancialLedgerTable rows={ledgerQuery.data.financial_ledger.rows} />
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Customs Ledger — Running Balance</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <CustomsLedgerTable
-                                rows={ledgerQuery.data.customs_ledger.rows}
-                                summary={ledgerQuery.data.customs_ledger.summary}
-                                licenseId={licenseId}
-                                showHidden={showHiddenBoe}
-                                onShowHiddenChange={setShowHiddenBoe}
-                            />
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Customs Ledger — Item Detail</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <CustomsLedgerSection licenseId={licenseId ?? ""} />
-                        </CardContent>
-                    </Card>
-
-                    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Financial Summary</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <FinancialSummarySection summary={ledgerQuery.data.financial_ledger.summary} />
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Final Reconciliation</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <FinalReconciliationSection reconciliation={ledgerQuery.data.reconciliation} />
-                            </CardContent>
-                        </Card>
-                    </div>
-                </>
-            )}
-        </div>
-    );
-}
-
-function HeaderField({ label, value }: { label: string; value: string }) {
-    return (
-        <div>
-            <div className="text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground/70">{label}</div>
-            <div className="mt-0.5 truncate text-sm font-medium text-foreground">{value}</div>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 }

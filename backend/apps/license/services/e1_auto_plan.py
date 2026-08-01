@@ -48,8 +48,13 @@ _RULE_NAMES_E1: tuple[tuple[str, str], ...] = (
 # added to _RULE_NAMES_E1 the report automatically picks it up.
 E1_PLANNABLE_NAMES: frozenset[str] = frozenset(name for name, _ in _RULE_NAMES_E1)
 
-# Maps the engine's E1PlanLine.step to the DB item-name string.
-_STEP_ITEM_NAME: dict[str, str] = {
+# Maps the engine's E1PlanLine.step to the DB item-name string. Public
+# (not underscore-prefixed): `item_pivot_report.py` also imports this to
+# attribute a LIVE (never-persisted) waterfall recompute's planned CIF back
+# to the same item-name column Auto-Plan would save it under — the import
+# item's OWN master-data tags (`ii.items.all()`) are a different, unrelated
+# thing and must never be used for this attribution.
+STEP_ITEM_NAME: dict[str, str] = {
     'OTHER CONFECTIONERY INGREDIENTS': 'OTHER CONFECTIONERY INGREDIENTS - E1',
     'COCOA MASS':                      'FRUIT/COCOA - E1',
     'DWP':                             'DWP - E1',
@@ -123,7 +128,7 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
         rep = rep_by_key[line.key]
         lines.append({
             'import_item':      rep.id,
-            'item_name':        name_ids.get(_STEP_ITEM_NAME[line.step]),
+            'item_name':        name_ids.get(STEP_ITEM_NAME[line.step]),
             'planned_quantity': float(line.planned_qty),
             'unit_price':       float(line.unit_price),
             'planned_cif_fc':   float(line.planned_cif),

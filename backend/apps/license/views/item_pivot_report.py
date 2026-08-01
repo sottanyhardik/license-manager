@@ -891,6 +891,7 @@ class ItemPivotReportView(APIView):
         if primary_norm == 'E1':
             from decimal import Decimal as _Decimal
 
+            from apps.license.services.e1_auto_plan import STEP_ITEM_NAME as _E1_STEP_ITEM_NAME
             from apps.license.services.e1_plan import (
                 E1Item as _E1Item, classify_e1_item as _classify, plan_e1_items as _plan_e1_items,
             )
@@ -901,8 +902,7 @@ class ItemPivotReportView(APIView):
             # Note: use ii.items.all() not .values_list() — .values_list() bypasses
             # the prefetch cache and would re-query; .all() reads from it for free.
             import_items = license_obj.import_license.all()
-            item_qty_by_id: Dict[int, _Decimal] = {}
-            item_names_by_id: Dict[int, list] = {}
+            item_ledger_by_id: Dict[int, dict] = {}
             e1_items: list = []
             for ii in import_items:
                 names = [n.name for n in ii.items.all()]
@@ -912,46 +912,80 @@ class ItemPivotReportView(APIView):
                 if not cat:
                     continue
                 avail = _Decimal(str(ii.available_quantity or 0))
-                item_qty_by_id[ii.id] = avail
-                item_names_by_id[ii.id] = names or [ii.description or '-']
+                item_ledger_by_id[ii.id] = {
+                    'hs_code': hs,
+                    'description': ii.description or '',
+                    'quantity': float(ii.quantity or 0),
+                    'allotted_quantity': float(ii.allotted_quantity or 0),
+                    'debited_quantity': float(ii.debited_quantity or 0),
+                    'available_quantity': float(avail),
+                }
                 e1_items.append(_E1Item(key=ii.id, category=cat, qty=avail))
 
             # Run the shared per-item engine — the same rules Auto-Plan and
             # norm_plan.py use, so this table (and its Excel export) never
             # drifts from what Auto-Plan would actually commit.
             plan_result = _plan_e1_items(e1_items, _Decimal(str(balance_cif)))
-            cif_by_item: Dict[int, _Decimal] = {}
-            for line in plan_result.lines:
-                cif_by_item[line.key] = cif_by_item.get(line.key, _Decimal('0')) + line.planned_cif
 
-            # Attribute each import item's own EXACT planned CIF (no
-            # proportional-share approximation needed — the engine already
-            # computed it per item) to every linked item-name.
+            # Attribute each planned line to the SAME item-name column
+            # Auto-Plan would persist it under (STEP_ITEM_NAME) — NOT the
+            # import item's own master-data tags (`ii.items.all()`). Several
+            # E1 categories (e.g. "FRUIT/COCOA - E1", "EGG ALBUMIN"/"WPC - E1",
+            # "PP - E1") are pure planner-output labels that a real import
+            # item is rarely pre-tagged with in master data even when it WAS
+            # the item the engine selected — attributing by the import item's
+            # own tags left those columns' HSN/Description blank despite a
+            # real planned CIF. This covers every category the engine can
+            # produce (STEP_ITEM_NAME is keyed by all of them), not a
+            # per-category patch.
             per_item_util: Dict[str, float] = {}
             per_item_cif: Dict[str, float] = {}
-            for iid, avail in item_qty_by_id.items():
-                item_cif = cif_by_item.get(iid, _Decimal('0'))
-                for nm in item_names_by_id[iid]:
-                    per_item_util[nm] = per_item_util.get(nm, 0.0) + float(avail)
-                    per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(item_cif)
+            per_item_planned_items: Dict[str, Dict[int, dict]] = {}
+            for line in plan_result.lines:
+                nm = _E1_STEP_ITEM_NAME.get(line.step)
+                if not nm:
+                    continue
+                per_item_util[nm] = per_item_util.get(nm, 0.0) + float(line.planned_qty)
+                per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(line.planned_cif)
+                _bucket = per_item_planned_items.setdefault(nm, {})
+                _iid = line.key
+                if _iid not in _bucket:
+                    _ledger = item_ledger_by_id.get(_iid) or {}
+                    _bucket[_iid] = {
+                        'import_item_id': _iid,
+                        'hs_code': _ledger.get('hs_code', ''),
+                        'description': _ledger.get('description', ''),
+                        'quantity': _ledger.get('quantity', 0.0),
+                        'allotted_quantity': _ledger.get('allotted_quantity', 0.0),
+                        'debited_quantity': _ledger.get('debited_quantity', 0.0),
+                        'available_quantity': _ledger.get('available_quantity', 0.0),
+                        'planned_quantity': 0.0,
+                        'planned_cif_fc': 0.0,
+                    }
+                _bucket[_iid]['planned_quantity'] += float(line.planned_qty)
+                _bucket[_iid]['planned_cif_fc'] += float(line.planned_cif)
 
             for nm, uq in per_item_util.items():
                 item_plan = per_item_cif.get(nm, 0.0)
                 item_plan_data[nm] = {
                     'unit_price': round(item_plan / uq, 2) if uq else 0.0,
                     'planned_cif': round(item_plan, 2),
+                    'planned_import_items': sorted(
+                        per_item_planned_items.get(nm, {}).values(),
+                        key=lambda d: d['import_item_id'],
+                    ),
                 }
         elif primary_norm == 'E5':
             from decimal import Decimal as _Decimal
 
+            from apps.license.services.e5_auto_plan import STEP_ITEM_NAME as _E5_STEP_ITEM_NAME
             from apps.license.services.e5_plan import (
                 E5Item as _E5Item, classify_e5_item as _classify, plan_e5_items as _plan_e5_items,
             )
 
             # Fix #3: reuse the already-prefetched import items (see E1 note above).
             import_items = license_obj.import_license.all()
-            item_qty_by_id: Dict[int, _Decimal] = {}
-            item_names_by_id: Dict[int, list] = {}
+            item_ledger_by_id: Dict[int, dict] = {}
             e5_items: list = []
             for ii in import_items:
                 names = [n.name for n in ii.items.all()]
@@ -961,34 +995,62 @@ class ItemPivotReportView(APIView):
                 if not cat:
                     continue
                 avail = _Decimal(str(ii.available_quantity or 0))
-                item_qty_by_id[ii.id] = avail
-                item_names_by_id[ii.id] = names or [ii.description or '-']
+                item_ledger_by_id[ii.id] = {
+                    'hs_code': hs,
+                    'description': ii.description or '',
+                    'quantity': float(ii.quantity or 0),
+                    'allotted_quantity': float(ii.allotted_quantity or 0),
+                    'debited_quantity': float(ii.debited_quantity or 0),
+                    'available_quantity': float(avail),
+                }
                 e5_items.append(_E5Item(key=ii.id, category=cat, qty=avail))
 
             # Run the shared per-item engine — the same rules Auto-Plan and
             # norm_plan.py use, so this table (and its Excel export) never
             # drifts from what Auto-Plan would actually commit.
             plan_result = _plan_e5_items(e5_items, _Decimal(str(balance_cif)))
-            cif_by_item: Dict[int, _Decimal] = {}
-            for line in plan_result.lines:
-                cif_by_item[line.key] = cif_by_item.get(line.key, _Decimal('0')) + line.planned_cif
 
-            # Attribute each import item's own EXACT planned CIF (no
-            # proportional-share approximation needed — the engine already
-            # computed it per item) to every linked item-name.
+            # Attribute each planned line to the SAME item-name column
+            # Auto-Plan would persist it under (STEP_ITEM_NAME) — NOT the
+            # import item's own master-data tags. See the matching E1 note
+            # above for why this matters for every category, not just the
+            # ones already coincidentally pre-tagged in master data.
             per_item_util: Dict[str, float] = {}
             per_item_cif: Dict[str, float] = {}
-            for iid, avail in item_qty_by_id.items():
-                item_cif = cif_by_item.get(iid, _Decimal('0'))
-                for nm in item_names_by_id[iid]:
-                    per_item_util[nm] = per_item_util.get(nm, 0.0) + float(avail)
-                    per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(item_cif)
+            per_item_planned_items: Dict[str, Dict[int, dict]] = {}
+            for line in plan_result.lines:
+                nm = _E5_STEP_ITEM_NAME.get(line.step)
+                if not nm:
+                    continue
+                per_item_util[nm] = per_item_util.get(nm, 0.0) + float(line.planned_qty)
+                per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(line.planned_cif)
+                _bucket = per_item_planned_items.setdefault(nm, {})
+                _iid = line.key
+                if _iid not in _bucket:
+                    _ledger = item_ledger_by_id.get(_iid) or {}
+                    _bucket[_iid] = {
+                        'import_item_id': _iid,
+                        'hs_code': _ledger.get('hs_code', ''),
+                        'description': _ledger.get('description', ''),
+                        'quantity': _ledger.get('quantity', 0.0),
+                        'allotted_quantity': _ledger.get('allotted_quantity', 0.0),
+                        'debited_quantity': _ledger.get('debited_quantity', 0.0),
+                        'available_quantity': _ledger.get('available_quantity', 0.0),
+                        'planned_quantity': 0.0,
+                        'planned_cif_fc': 0.0,
+                    }
+                _bucket[_iid]['planned_quantity'] += float(line.planned_qty)
+                _bucket[_iid]['planned_cif_fc'] += float(line.planned_cif)
 
             for nm, uq in per_item_util.items():
                 item_plan = per_item_cif.get(nm, 0.0)
                 item_plan_data[nm] = {
                     'unit_price': round(item_plan / uq, 2) if uq else 0.0,
                     'planned_cif': round(item_plan, 2),
+                    'planned_import_items': sorted(
+                        per_item_planned_items.get(nm, {}).values(),
+                        key=lambda d: d['import_item_id'],
+                    ),
                 }
 
         # ── Per-item classification plan (E132) ────────────────────────────
@@ -1038,9 +1100,15 @@ class ItemPivotReportView(APIView):
             #    classifier placed into a planning item; require item_quantities
             #    presence because the classifier works off import data.
             #
-            # 3. No planning context → show all items that have import data.
+            # 3. No planning context → show all items that have import data,
+            #    OR that the LIVE norm waterfall (item_plan_data, E1/E5) just
+            #    planned a real CIF for — a purely planner-output item-name
+            #    (e.g. "FRUIT/COCOA - E1") has no M2M-linked import item on
+            #    this licence by construction, so `item_id in item_quantities`
+            #    alone would hide a genuinely-planned cell entirely.
             _has_manual = planned_item_ids is not None and item_id in planned_item_ids
             _has_e132   = bool(item_e132_data.get(item_name))
+            _has_live_plan = bool(item_plan_data.get(item_name))
 
             if item_plan_totals is not None:
                 # Priority 1 — manual plan: show only planned items, no quantity guard.
@@ -1049,8 +1117,9 @@ class ItemPivotReportView(APIView):
                 # Priority 2 — E132 auto-classification: show classified items only.
                 show_item = _has_e132 and item_id in item_quantities
             else:
-                # Priority 3 — no planning context: show items with import data.
-                show_item = item_id in item_quantities
+                # Priority 3 — no planning context: show items with import data
+                # or a real live-computed plan.
+                show_item = item_id in item_quantities or _has_live_plan
 
             if show_item:
                 item_data = item_quantities[item_id]
@@ -1106,7 +1175,16 @@ class ItemPivotReportView(APIView):
                 # planning context at all) keep the existing aggregate
                 # behaviour unchanged — this is a verification aid for
                 # planned items only, not a report redesign.
-                _pit_list = _item_plan.get('planned_import_items') or []
+                #
+                # Persisted `LicenseItemPlan` rows (`_item_plan`) take
+                # priority when present (exact DB rows). Licences that were
+                # never explicitly Auto-Plan-"saved" have no such rows, but
+                # still show a LIVE norm-waterfall recompute for CIF/rate
+                # (`planner`, built above from `item_plan_data`) — that path
+                # carries its own `planned_import_items` built the same way,
+                # so it must be checked too or a never-saved licence's cells
+                # fall back to the old cross-item-name-merged aggregate.
+                _pit_list = _item_plan.get('planned_import_items') or planner.get('planned_import_items') or []
                 if len(_pit_list) == 1:
                     _pit = _pit_list[0]
                     _hs_code = _pit['hs_code']

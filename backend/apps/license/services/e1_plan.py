@@ -105,10 +105,11 @@ def classify_e1_item(
       5. HSN starts with '2009', or description contains 'juice' → FRUIT JUICE
       6. HSN starts with '2918', or description contains '2918',
          or item/description contains 'tartaric'               → TARTARIC ACID
-      7. HSN starts with '7607', or description contains '7607',
-         or item/description contains 'aluminium foil'         → ALUMINIUM FOIL
-      8. HSN starts with '3902', or description contains '3902',
-         or item/description contains 'pp'/'polypropylene'     → POLYPROPYLENE
+      7. HSN starts with '7607', or item/description contains
+         '7607'                                                → ALUMINIUM FOIL
+      8. HSN starts with '3902' (checked only once step 7 has
+         ruled out any '7607' match — item/description text
+         like 'PP'/'Polypropylene' is never used)               → POLYPROPYLENE
     """
     item = _norm(item_key)
     hs = _hsn_digits(hs_code)
@@ -135,14 +136,10 @@ def classify_e1_item(
     if hs.startswith('2918') or '2918' in desc or 'tartaric' in item or 'tartaric' in desc:
         return 'TARTARIC ACID'
 
-    if hs.startswith('7607') or '7607' in desc or 'aluminium foil' in item or 'aluminium foil' in desc:
+    if hs.startswith('7607') or '7607' in item or '7607' in desc:
         return 'ALUMINIUM FOIL'
 
-    if (
-        hs.startswith('3902') or '3902' in desc
-        or 'polypropylene' in item or 'polypropylene' in desc
-        or 'pp' in item or 'pp' in desc
-    ):
+    if hs.startswith('3902'):
         return 'POLYPROPYLENE'
 
     return None

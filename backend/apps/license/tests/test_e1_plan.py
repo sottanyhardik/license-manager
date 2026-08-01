@@ -81,20 +81,38 @@ class TestClassifyE1Item(TestCase):
     def test_aluminium_foil_by_hsn_7607(self):
         assert classify_e1_item('ANY', '76071190', '') == 'ALUMINIUM FOIL'
 
-    def test_aluminium_foil_by_item_name(self):
-        assert classify_e1_item('Aluminium Foil', '', '') == 'ALUMINIUM FOIL'
+    def test_aluminium_foil_item_name_alone_does_not_classify(self):
+        # HSN-only rule now — the words "Aluminium Foil" alone (no HSN 7607,
+        # no literal "7607" text) must not classify.
+        assert classify_e1_item('Aluminium Foil', '', '') is None
 
-    def test_aluminium_foil_by_description(self):
-        assert classify_e1_item('ANY', '', 'Aluminium Foil 9 micron') == 'ALUMINIUM FOIL'
+    def test_aluminium_foil_description_words_alone_do_not_classify(self):
+        assert classify_e1_item('ANY', '', 'Aluminium Foil 9 micron') is None
+
+    def test_aluminium_foil_by_item_name_containing_7607(self):
+        assert classify_e1_item('Foil 7607', '', '') == 'ALUMINIUM FOIL'
+
+    def test_aluminium_foil_by_description_containing_7607(self):
+        assert classify_e1_item('ANY', '', 'Packing material 7607') == 'ALUMINIUM FOIL'
 
     def test_polypropylene_by_hsn_3902(self):
         assert classify_e1_item('ANY', '39021000', '') == 'POLYPROPYLENE'
 
-    def test_polypropylene_by_item_name_pp(self):
-        assert classify_e1_item('PP', '', '') == 'POLYPROPYLENE'
+    def test_polypropylene_by_item_name_pp_alone_does_not_classify(self):
+        # HSN-only rule now — the word "PP"/"Polypropylene" alone must not
+        # classify without a qualifying HSN 3902 code.
+        assert classify_e1_item('PP', '', '') is None
 
-    def test_polypropylene_by_item_name_full_word(self):
-        assert classify_e1_item('Polypropylene Granules', '', '') == 'POLYPROPYLENE'
+    def test_polypropylene_by_description_word_alone_does_not_classify(self):
+        assert classify_e1_item('Polypropylene Granules', '', '') is None
+
+    def test_polypropylene_excluded_when_hsn_is_7607(self):
+        assert classify_e1_item('ANY', '76071190', '') == 'ALUMINIUM FOIL'
+
+    def test_polypropylene_excluded_when_description_contains_7607(self):
+        # Even with a qualifying 3902 HSN, a 7607 mention in the description
+        # routes to Aluminium Foil, never PP.
+        assert classify_e1_item('ANY', '39021000', 'PP/Foil laminate 7607') == 'ALUMINIUM FOIL'
 
     def test_unclassified_returns_none(self):
         assert classify_e1_item('SUGAR', '17019990', 'Refined Cane Sugar') is None

@@ -21,7 +21,9 @@ from decimal import Decimal
 from django.test import TestCase
 
 from apps.core.constants import GE
-from apps.core.models import CompanyModel, HSCodeModel, ItemNameModel, PurchaseStatus
+from apps.core.models import (
+    CompanyModel, HeadSIONNormsModel, HSCodeModel, ItemNameModel, PurchaseStatus, SionNormClassModel,
+)
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan,
 )
@@ -240,3 +242,163 @@ class ItemPivotPlannedImportItemTests(TestCase):
         self.assertEqual(cell['quantity'], 250.0)
         self.assertEqual(cell['available_quantity'], 200.0)
         self.assertEqual(cell['planned_import_items'], [])
+
+
+class ItemPivotLiveComputeVerificationTests(TestCase):
+    """Regression tests for the LIVE norm-waterfall recompute path
+    (`item_plan_data`, built inline in `_build_license_row` for licences with
+    no — or a different — persisted `LicenseItemPlan`). Its bug was
+    attributing planned CIF to the import item's OWN `ItemNameModel` M2M tags
+    instead of the engine's step -> item-name mapping (`STEP_ITEM_NAME`).
+
+    A pivot column only exists at all when the report has SOME reason to
+    know about that item-name — either a real M2M-tagged import item
+    somewhere in the batch, or a persisted plan (`_missing_planned`). These
+    tests reproduce the realistic shape of the reported bug: the
+    "FRUIT/COCOA - E1" column is visible because ANOTHER licence in the same
+    batched report has an item tagged with it (a common real-world case,
+    since these reports are run across many licences at once) — the licence
+    under test has its OWN, untagged Cocoa Mass import item that the live
+    engine must still resolve correctly, not leave blank.
+    """
+
+    def _make_e1_license(self, license_number, balance_cif=Decimal('10000.00')):
+        company = CompanyModel.objects.create(iec=f"IEC{license_number[-7:]}", name="Pivot Live-Compute Exporter")
+        purchase_status, _ = PurchaseStatus.objects.get_or_create(code=GE, defaults={"label": "Global Exim"})
+        head_norm = HeadSIONNormsModel.objects.create(name=f"Head {license_number}")
+        norm_class, _ = SionNormClassModel.objects.get_or_create(
+            norm_class="E1", defaults={"head_norm": head_norm, "is_active": True},
+        )
+        license_obj = LicenseDetailsModel.objects.create(
+            license_number=license_number,
+            license_date=date.today() - timedelta(days=30),
+            license_expiry_date=date.today() + timedelta(days=30),
+            exporter=company,
+            purchase_status=purchase_status,
+        )
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=balance_cif, norm_class=norm_class)
+        return license_obj
+
+    def _find_row(self, report, license_number):
+        for _norm, notifs in report["licenses_by_norm_notification"].items():
+            for _notif, licenses_list in notifs.items():
+                for lic_row in licenses_list:
+                    if lic_row["license_number"] == license_number:
+                        return lic_row
+        return None
+
+    def test_cocoa_mass_column_resolves_the_real_import_item_with_no_persisted_plan(self):
+        # Another licence in the same batch has a Cocoa item DIRECTLY tagged
+        # with "FRUIT/COCOA - E1" — this is what makes the column exist in
+        # the report at all (mirrors real master-data setups).
+        tagging_license = self._make_e1_license("0311055574-TAGGED")
+        item_name = ItemNameModel.objects.create(name="FRUIT/COCOA - E1", is_active=True)
+        tagging_item = LicenseImportItemsModel.objects.create(
+            license=tagging_license, serial_number=1, description="Tagging-only Cocoa",
+            hs_code=_hs('18039999'), quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+        )
+        tagging_item.items.add(item_name)
+
+        # License under test: its OWN Cocoa Mass import item has NO M2M
+        # item-name links at all — exactly how a real Cocoa Mass row
+        # typically looks in master data, since "FRUIT/COCOA - E1" is a
+        # planner-output label, not something an operator pre-tags import
+        # items with. No LicenseItemPlan rows either — never Auto-Plan-saved.
+        license_obj = self._make_e1_license("0311055574")
+        cocoa_item = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, description="Cocoa Mass HSN 1803",
+            hs_code=_hs('18031000'),
+            quantity=Decimal('500.000'), available_quantity=Decimal('500.000'),
+        )
+        self.assertEqual(cocoa_item.items.count(), 0)
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "0311055574")
+        self.assertIsNotNone(row, "license must appear in the report output")
+
+        cell = row['items'].get('FRUIT/COCOA - E1')
+        self.assertIsNotNone(cell, "FRUIT/COCOA - E1 column must exist for an E1 licence with a Cocoa Mass item")
+
+        # The bug: these used to be blank ('' / 0) because attribution went
+        # through the import item's (empty) own M2M tags instead of the
+        # engine's step -> item-name mapping — and must resolve to THIS
+        # licence's own Cocoa item, never the unrelated tagging licence's.
+        self.assertEqual(cell['hs_code'], '18031000')
+        self.assertEqual(cell['description'], 'Cocoa Mass HSN 1803')
+        self.assertEqual(cell['quantity'], 500.0)
+        self.assertEqual(cell['available_quantity'], 500.0)
+        # And the planned CIF that was ALREADY correctly shown before the fix.
+        self.assertEqual(cell['planned_cif'], 5000.0)  # 500 * $10.00 Cocoa Mass rate
+
+        self.assertEqual(len(cell['planned_import_items']), 1)
+        pit = cell['planned_import_items'][0]
+        self.assertEqual(pit['import_item_id'], cocoa_item.id)
+        self.assertEqual(pit['hs_code'], '18031000')
+        self.assertEqual(pit['description'], 'Cocoa Mass HSN 1803')
+        self.assertEqual(pit['planned_quantity'], 500.0)
+        self.assertEqual(pit['planned_cif_fc'], 5000.0)
+
+    def test_every_e1_category_resolves_its_import_item_with_no_persisted_plan(self):
+        # Not a hardcoded single-category check — one item per category, none
+        # M2M-tagged with the planner's own output label, none saved via
+        # Auto-Plan. Every column must resolve to its OWN real import item.
+        tagging_license = self._make_e1_license("E1-LIVE-TAGGING")
+        tag_names = [
+            'OTHER CONFECTIONERY INGREDIENTS - E1', 'FRUIT/COCOA - E1', 'DWP - E1', 'SWP - E1',
+            'WPC - E1', 'FRUIT JUICE - E1', 'CITRIC ACID / TARTARIC ACID - E1',
+            'ALUMINIUM FOIL - E1', 'PP - E1',
+        ]
+        for idx, nm in enumerate(tag_names, start=1):
+            item_name = ItemNameModel.objects.create(name=nm, is_active=True)
+            tagging_item = LicenseImportItemsModel.objects.create(
+                license=tagging_license, serial_number=idx, description=f"Tagging-only {nm}",
+                quantity=Decimal('1.000'), available_quantity=Decimal('1.000'),
+            )
+            tagging_item.items.add(item_name)
+
+        license_obj = self._make_e1_license("E1-LIVE-ALL-CATS", balance_cif=Decimal('1000000.00'))
+
+        specs = [
+            ('Other Confectionery Ingredients', '08021100', 'OTHER CONFECTIONERY INGREDIENTS - E1'),
+            ('Cocoa Mass HSN 1803', '18031000', 'FRUIT/COCOA - E1'),
+            ('Skimmed Milk Powder', '04041000', None),  # milk -> DWP/SWP handled separately below
+            ('Egg Albumin', '35021100', 'WPC - E1'),
+            ('Fruit Juice Concentrate', '20091100', 'FRUIT JUICE - E1'),
+            ('Tartaric Acid', '29182000', 'CITRIC ACID / TARTARIC ACID - E1'),
+            ('Aluminium Foil', '76071190', 'ALUMINIUM FOIL - E1'),
+            ('Polypropylene Granules', '39021000', 'PP - E1'),
+        ]
+        created = {}
+        for idx, (desc, hsn, _expected_col) in enumerate(specs, start=1):
+            ii = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=idx, description=desc,
+                hs_code=_hs(hsn),
+                quantity=Decimal('100.000'), available_quantity=Decimal('100.000'),
+            )
+            self.assertEqual(ii.items.count(), 0)
+            created[desc] = ii
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=0, license_status='all')
+        row = self._find_row(report, "E1-LIVE-ALL-CATS")
+        self.assertIsNotNone(row)
+
+        for desc, hsn, expected_col in specs:
+            if expected_col is None:
+                continue
+            cell = row['items'].get(expected_col)
+            self.assertIsNotNone(cell, f"{expected_col} column must exist")
+            self.assertNotEqual(cell['hs_code'], '', f"{expected_col} HSN must not be blank")
+            self.assertNotEqual(cell['description'], '', f"{expected_col} Description must not be blank")
+            self.assertEqual(cell['hs_code'], hsn, f"{expected_col} HSN must match its actual import item")
+            self.assertEqual(cell['description'], desc, f"{expected_col} Description must match its actual import item")
+            self.assertGreater(cell['quantity'], 0, f"{expected_col} Total Qty must not be blank")
+
+        # Milk: 0404 item is priced via DWP/SWP — verify both resolve too.
+        for col in ('DWP - E1', 'SWP - E1'):
+            cell = row['items'].get(col)
+            if cell is None or not cell.get('planned_import_items'):
+                continue  # this licence's balance/qty may route entirely to one of DWP/SWP
+            self.assertEqual(cell['hs_code'], '04041000')
+            self.assertEqual(cell['description'], 'Skimmed Milk Powder')

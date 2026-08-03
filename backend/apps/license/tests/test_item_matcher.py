@@ -6,9 +6,10 @@ from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.license.signals import suspend_license_flag_recalc
 from apps.license.utils.item_matcher import (
     bulk_auto_link_license_items,
-    classify_pp_norm_item,
+    classify_packaging_item,
     extract_gsm_range,
     match_import_item_to_items,
+    SUPPORTED_PACKAGING_NORMS,
 )
 
 
@@ -77,83 +78,124 @@ def test_match_import_item_returns_empty_queryset_without_norms(monkeypatch):
     assert not matched.exists()
 
 
-# ─── PP-norm packaging pre-classification ──────────────────────────────────
+@pytest.mark.django_db
+def test_aluminium_foil_text_alone_no_longer_matches_without_hsn_7607(e_norms):
+    # Business rule: HSN 7607 is the only authority for ALUMINIUM FOIL —
+    # the literal description text must not drive a match on its own.
+    # Uses the REAL get_item_filters() (not monkeypatched).
+    ItemNameModel.objects.create(name="ALUMINIUM FOIL - E1", sion_norm_class=e_norms["E1"])
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-ALFOIL-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj,
+        serial_number=1,
+        description="Aluminium Foil wrap, decorative",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E1"])
+
+    assert not matched.exists()
 
 
-class TestClassifyPpNormItem:
+@pytest.mark.django_db
+def test_aluminium_foil_matches_via_hsn_7607(e_norms):
+    expected = ItemNameModel.objects.create(name="ALUMINIUM FOIL - E1", sion_norm_class=e_norms["E1"])
+    hs_code = HSCodeModel.objects.create(hs_code="76072090")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-ALFOIL-002")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj,
+        serial_number=1,
+        hs_code=hs_code,
+        description="Decorative wrap",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E1"])
+
+    assert list(matched) == [expected]
+
+
+@pytest.mark.django_db
+def test_aluminium_foil_matches_via_description_containing_7607(e_norms):
+    expected = ItemNameModel.objects.create(name="ALUMINIUM FOIL - E1", sion_norm_class=e_norms["E1"])
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-ALFOIL-003")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj,
+        serial_number=1,
+        description="Relevant Aluminium Foil HSN 7607",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E1"])
+
+    assert list(matched) == [expected]
+
+
+# ─── Packaging pre-classification (all norms) ──────────────────────────────
+
+
+class TestClassifyPackagingItem:
     def test_hsn_3902_is_pp(self):
-        assert classify_pp_norm_item('39023000', 'Polymer granules') == (
-            'PP - COMMON', 'PP_RULE_PP_COMMON',
-        )
+        assert classify_packaging_item('39023000', 'Polymer granules') == ('PP', 'RULE_PP')
 
     def test_hsn_3901_is_hdpe_regardless_of_description(self):
-        assert classify_pp_norm_item('39011010', 'Plain packing film') == (
-            'HDPE - COMMON', 'PP_RULE_HDPE_COMMON',
-        )
+        assert classify_packaging_item('39011010', 'Plain packing film') == ('HDPE', 'RULE_HDPE')
 
     def test_description_keyword_hdpe_without_hsn(self):
-        assert classify_pp_norm_item(None, 'HDPE granules') == (
-            'HDPE - COMMON', 'PP_RULE_HDPE_COMMON',
-        )
+        assert classify_packaging_item(None, 'HDPE granules') == ('HDPE', 'RULE_HDPE')
 
     def test_description_high_density_polyethylene_hyphenated(self):
-        assert classify_pp_norm_item(None, 'High-Density Polyethylene sheet') == (
-            'HDPE - COMMON', 'PP_RULE_HDPE_COMMON',
-        )
+        assert classify_packaging_item(None, 'High-Density Polyethylene sheet') == ('HDPE', 'RULE_HDPE')
 
     def test_description_keyword_ldpe(self):
-        assert classify_pp_norm_item(None, 'LDPE film') == (
-            'LDPE - COMMON', 'PP_RULE_LDPE_COMMON',
-        )
+        assert classify_packaging_item(None, 'LDPE film') == ('LDPE', 'RULE_LDPE')
 
     def test_description_low_density_polyethylene(self):
-        assert classify_pp_norm_item(None, 'Low Density Polyethylene granules') == (
-            'LDPE - COMMON', 'PP_RULE_LDPE_COMMON',
-        )
+        assert classify_packaging_item(None, 'Low Density Polyethylene granules') == ('LDPE', 'RULE_LDPE')
 
     def test_description_keyword_lldpe_tags_distinctly_but_maps_to_ldpe(self):
-        assert classify_pp_norm_item(None, 'LLDPE film') == (
-            'LDPE - COMMON', 'PP_RULE_LLDPE_COMMON',
-        )
+        assert classify_packaging_item(None, 'LLDPE film') == ('LDPE', 'RULE_LLDPE')
 
     def test_description_linear_low_density_polyethylene(self):
-        assert classify_pp_norm_item(None, 'Linear Low-Density Polyethylene resin') == (
-            'LDPE - COMMON', 'PP_RULE_LLDPE_COMMON',
-        )
+        assert classify_packaging_item(None, 'Linear Low-Density Polyethylene resin') == ('LDPE', 'RULE_LLDPE')
 
     def test_paper_with_gsm_in_common_range(self):
-        assert classify_pp_norm_item(None, 'Printing Paper 70 GSM') == (
-            'PAPER - COMMON', 'PP_RULE_PAPER_COMMON',
-        )
+        assert classify_packaging_item(None, 'Printing Paper 70 GSM') == ('PAPER', 'RULE_PAPER')
 
     def test_paper_with_gsm_range_upper_bound_is_used(self):
-        assert classify_pp_norm_item(None, 'Coated Paper 40-100 GSM') == (
-            'PAPER - COMMON', 'PP_RULE_PAPER_COMMON',
-        )
+        assert classify_packaging_item(None, 'Coated Paper 40-100 GSM') == ('PAPER', 'RULE_PAPER')
 
     def test_paper_with_high_gsm_is_paper_board(self):
-        assert classify_pp_norm_item(None, 'Duplex Paper 250 GSM') == (
-            'PAPER BOARD - COMMON', 'PP_RULE_PAPER_BOARD_COMMON',
-        )
+        assert classify_packaging_item(None, 'Duplex Paper 250 GSM') == ('PAPER BOARD', 'RULE_PAPER_BOARD')
 
     def test_paper_board_gsm_range_uses_max(self):
-        assert classify_pp_norm_item(None, 'Paper 80/300 GSM') == (
-            'PAPER BOARD - COMMON', 'PP_RULE_PAPER_BOARD_COMMON',
-        )
+        assert classify_packaging_item(None, 'Paper 80/300 GSM') == ('PAPER BOARD', 'RULE_PAPER_BOARD')
 
     def test_paper_below_minimum_gsm_does_not_match(self):
-        assert classify_pp_norm_item(None, 'Tissue Paper 20 GSM') is None
+        assert classify_packaging_item(None, 'Tissue Paper 20 GSM') is None
 
     def test_paper_without_gsm_does_not_match(self):
-        assert classify_pp_norm_item(None, 'Assorted Paper products') is None
+        assert classify_packaging_item(None, 'Assorted Paper products') is None
 
     def test_no_rule_matches_returns_none(self):
-        assert classify_pp_norm_item('84213900', 'Filter cartridge') is None
+        assert classify_packaging_item('84213900', 'Filter cartridge') is None
 
     def test_pp_hsn_takes_priority_over_hdpe_hsn(self):
         # 3902 and 3901 are mutually exclusive prefixes, but this pins the
         # documented waterfall order (PP checked before HDPE).
-        assert classify_pp_norm_item('39023000', 'HDPE blended masterbatch')[0] == 'PP - COMMON'
+        assert classify_packaging_item('39023000', 'HDPE blended masterbatch')[0] == 'PP'
+
+    def test_hsn_7607_is_never_classified_as_packaging(self):
+        # HSN 7607 (Aluminium Foil) is authoritative and exclusive — even
+        # when the description also contains an HDPE/LDPE/PAPER keyword,
+        # this must return None so ALUMINIUM FOIL (in get_item_filters())
+        # is the only rule that ever claims it.
+        assert classify_packaging_item('76071190', 'HDPE laminated aluminium foil') is None
+
+    def test_description_containing_7607_is_never_classified_as_packaging(self):
+        assert classify_packaging_item(None, 'Aluminium foil 7607 LDPE coated') is None
+
+    def test_7607_guard_takes_priority_over_every_other_rule(self):
+        # Even an unambiguous PP HSN must be overridden by a 7607 mention
+        # in the description — 7607 wins regardless of where it appears.
+        assert classify_packaging_item('39021000', 'Foil 7607 grade') is None
 
 
 class TestExtractGsmRange:
@@ -176,96 +218,142 @@ class TestExtractGsmRange:
 
 
 @pytest.fixture
-def pp_norm():
-    head_norm = HeadSIONNormsModel.objects.create(name="PP Norms")
-    return SionNormClassModel.objects.create(head_norm=head_norm, norm_class="PP")
+def make_norm():
+    head_norm = HeadSIONNormsModel.objects.create(name="Packaging Test Norms")
+
+    def _make(code):
+        return SionNormClassModel.objects.create(head_norm=head_norm, norm_class=code)
+
+    return _make
 
 
 @pytest.mark.django_db
-class TestMatchImportItemToItemsPpNorm:
-    def test_pp_norm_hsn_3902_creates_and_returns_pp_common(self, pp_norm):
-        hs_code = HSCodeModel.objects.create(hs_code="39023000")
-        license_obj = LicenseDetailsModel.objects.create(license_number="PP-LIC-001")
+class TestMatchImportItemToItemsPackaging:
+    @pytest.mark.parametrize('norm_code,description,expected_name', [
+        ('E1', '39021000 Polypropylene Resin', 'PP - E1'),
+        ('E5', 'HDPE Film Resin', 'HDPE - E5'),
+        ('E126', 'LDPE Resin', 'LDPE - E126'),
+        ('E132', 'Printing Paper 80 GSM', 'PAPER - E132'),
+        ('COMMON', 'Duplex Paper Board 230 GSM', 'PAPER BOARD - COMMON'),
+    ])
+    def test_packaging_rule_resolves_to_licence_norm(
+        self, make_norm, norm_code, description, expected_name,
+    ):
+        make_norm(norm_code)
+        hs_code = HSCodeModel.objects.create(hs_code="39021000") if norm_code == 'E1' else None
+        license_obj = LicenseDetailsModel.objects.create(license_number=f"MATCH-PKG-{norm_code}")
         import_item = LicenseImportItemsModel.objects.create(
             license=license_obj,
             serial_number=1,
             hs_code=hs_code,
-            description="Polypropylene granules",
+            description=description,
         )
 
-        matched = match_import_item_to_items(import_item, ["PP"])
+        matched = match_import_item_to_items(import_item, [norm_code])
 
-        assert list(matched.values_list("name", flat=True)) == ["PP - COMMON"]
-        assert ItemNameModel.objects.filter(name="PP - COMMON").count() == 1
+        assert list(matched.values_list("name", flat=True)) == [expected_name]
+        assert ItemNameModel.objects.filter(name=expected_name).count() == 1
 
-    def test_pp_norm_reuses_existing_item_name_case_insensitively(self, pp_norm):
-        existing = ItemNameModel.objects.create(name="hdpe - common", sion_norm_class=pp_norm)
-        license_obj = LicenseDetailsModel.objects.create(license_number="PP-LIC-002")
+    def test_reuses_existing_item_name_case_insensitively(self, make_norm):
+        e1_norm = make_norm('E1')
+        existing = ItemNameModel.objects.create(name="hdpe - e1", sion_norm_class=e1_norm)
+        license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-PKG-REUSE")
         import_item = LicenseImportItemsModel.objects.create(
             license=license_obj,
             serial_number=1,
             description="HDPE packing material",
         )
 
-        matched = match_import_item_to_items(import_item, ["PP"])
+        matched = match_import_item_to_items(import_item, ["E1"])
 
         assert list(matched) == [existing]
-        assert ItemNameModel.objects.filter(name__iexact="hdpe - common").count() == 1
+        assert ItemNameModel.objects.filter(name__iexact="hdpe - e1").count() == 1
 
-    def test_pp_norm_no_rule_match_falls_back_to_generic_matcher(self, monkeypatch, pp_norm):
+    def test_no_rule_match_falls_back_to_generic_matcher(self, monkeypatch, make_norm):
+        e1_norm = make_norm('E1')
         monkeypatch.setattr(
             "apps.license.utils.item_matcher.get_item_filters",
             lambda: [
                 {
                     "base_name": "FALLBACK ITEM",
-                    "norms": ["PP"],
+                    "norms": ["E1"],
                     "filters": [Q(description__icontains="fallback")],
                 }
             ],
         )
-        expected = ItemNameModel.objects.create(name="FALLBACK ITEM - PP", sion_norm_class=pp_norm)
-        license_obj = LicenseDetailsModel.objects.create(license_number="PP-LIC-003")
+        expected = ItemNameModel.objects.create(name="FALLBACK ITEM - E1", sion_norm_class=e1_norm)
+        license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-PKG-FALLBACK")
         import_item = LicenseImportItemsModel.objects.create(
             license=license_obj,
             serial_number=1,
             description="Fallback packaging item",
         )
 
-        matched = match_import_item_to_items(import_item, ["PP"])
+        matched = match_import_item_to_items(import_item, ["E1"])
 
         assert list(matched) == [expected]
 
-    def test_non_pp_norm_is_unaffected_by_pp_rules(self, monkeypatch, e_norms):
-        # A description that WOULD match the PP rules must be ignored
-        # entirely when 'PP' is not among the licence's norm classes.
-        monkeypatch.setattr(
-            "apps.license.utils.item_matcher.get_item_filters",
-            lambda: [
-                {
-                    "base_name": "DIETARY FIBRE",
-                    "norms": ["E5"],
-                    "filters": [Q(description__icontains="fibre")],
-                }
-            ],
-        )
-        license_obj = LicenseDetailsModel.objects.create(license_number="PP-LIC-004")
+    def test_uses_first_supported_norm_class_when_licence_has_several(self, make_norm):
+        make_norm('E1')
+        make_norm('E5')
+        license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-PKG-MULTI")
         import_item = LicenseImportItemsModel.objects.create(
             license=license_obj,
             serial_number=1,
-            description="HDPE packaging film",
+            description="HDPE granules",
         )
 
         matched = match_import_item_to_items(import_item, ["E1", "E5"])
 
+        assert list(matched.values_list("name", flat=True)) == ["HDPE - E1"]
+
+    def test_skips_an_unsupported_norm_ahead_of_a_supported_one(self, monkeypatch, make_norm):
+        # 'A3627' isn't in SUPPORTED_PACKAGING_NORMS — even though it's
+        # listed FIRST, the deterministic resolver must skip past it to the
+        # supported 'E1', never blindly take license_norm_classes[0].
+        assert 'A3627' not in SUPPORTED_PACKAGING_NORMS
+        make_norm('E1')
+        monkeypatch.setattr(
+            "apps.license.utils.item_matcher.get_item_filters", lambda: [],
+        )
+        license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-PKG-SKIP")
+        import_item = LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=1,
+            description="HDPE granules",
+        )
+
+        matched = match_import_item_to_items(import_item, ["A3627", "E1"])
+
+        assert list(matched.values_list("name", flat=True)) == ["HDPE - E1"]
+
+    def test_unsupported_norm_never_triggers_packaging_classification(self, monkeypatch):
+        # No SUPPORTED_PACKAGING_NORMS norm present at all -> packaging
+        # engine must not fire, and must not auto-create an ItemNameModel,
+        # even though the description would otherwise match the HDPE rule.
+        assert 'A3627' not in SUPPORTED_PACKAGING_NORMS
+        monkeypatch.setattr(
+            "apps.license.utils.item_matcher.get_item_filters", lambda: [],
+        )
+        license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-PKG-UNSUPPORTED")
+        import_item = LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=1,
+            description="HDPE granules",
+        )
+
+        matched = match_import_item_to_items(import_item, ["A3627"])
+
         assert not matched.exists()
-        assert not ItemNameModel.objects.filter(name="HDPE - COMMON").exists()
+        assert not ItemNameModel.objects.filter(name__icontains="HDPE").exists()
 
 
 @pytest.mark.django_db
-class TestBulkAutoLinkLicenseItemsPpNorm:
-    def test_pp_norm_items_linked_via_new_rules_and_excluded_from_generic_pass(
-        self, monkeypatch, pp_norm,
+class TestBulkAutoLinkLicenseItemsPackaging:
+    def test_packaging_items_linked_via_licence_norm_and_excluded_from_generic_pass(
+        self, monkeypatch, make_norm,
     ):
+        e1_norm = make_norm('E1')
         generic_calls = []
 
         def _tracking_filters():
@@ -276,10 +364,10 @@ class TestBulkAutoLinkLicenseItemsPpNorm:
             "apps.license.utils.item_matcher.get_item_filters", _tracking_filters,
         )
 
-        license_obj = LicenseDetailsModel.objects.create(license_number="PP-LIC-BULK-001")
-        license_obj.export_license.create(norm_class=pp_norm)
+        license_obj = LicenseDetailsModel.objects.create(license_number="BULK-PKG-001")
+        license_obj.export_license.create(norm_class=e1_norm)
         with suspend_license_flag_recalc():
-            pp_item = LicenseImportItemsModel.objects.create(
+            pkg_item = LicenseImportItemsModel.objects.create(
                 license=license_obj,
                 serial_number=1,
                 description="LLDPE film roll",
@@ -293,7 +381,65 @@ class TestBulkAutoLinkLicenseItemsPpNorm:
         linked_count = bulk_auto_link_license_items(license_obj)
 
         assert linked_count == 1
-        pp_item.refresh_from_db()
+        pkg_item.refresh_from_db()
         unrelated_item.refresh_from_db()
-        assert list(pp_item.items.values_list("name", flat=True)) == ["LDPE - COMMON"]
+        assert list(pkg_item.items.values_list("name", flat=True)) == ["LDPE - E1"]
         assert not unrelated_item.items.exists()
+
+    def test_bulk_link_resolves_paper_board_for_common_norm(self, make_norm):
+        common_norm = make_norm('COMMON')
+        license_obj = LicenseDetailsModel.objects.create(license_number="BULK-PKG-002")
+        license_obj.export_license.create(norm_class=common_norm)
+        with suspend_license_flag_recalc():
+            item = LicenseImportItemsModel.objects.create(
+                license=license_obj,
+                serial_number=1,
+                description="Duplex Paper Board 230 GSM",
+            )
+
+        linked_count = bulk_auto_link_license_items(license_obj)
+
+        assert linked_count == 1
+        item.refresh_from_db()
+        assert list(item.items.values_list("name", flat=True)) == ["PAPER BOARD - COMMON"]
+
+    def test_bulk_link_skips_an_unsupported_norm_ahead_of_a_supported_one(self, make_norm):
+        assert 'A3627' not in SUPPORTED_PACKAGING_NORMS
+        a3627_norm = make_norm('A3627')
+        e1_norm = make_norm('E1')
+        license_obj = LicenseDetailsModel.objects.create(license_number="BULK-PKG-003")
+        # Order matters here: A3627 is created first, so norm_classes[0]
+        # would have been 'A3627' under the old (unsafe) resolution.
+        license_obj.export_license.create(norm_class=a3627_norm)
+        license_obj.export_license.create(norm_class=e1_norm)
+        with suspend_license_flag_recalc():
+            item = LicenseImportItemsModel.objects.create(
+                license=license_obj,
+                serial_number=1,
+                description="HDPE granules",
+            )
+
+        linked_count = bulk_auto_link_license_items(license_obj)
+
+        assert linked_count == 1
+        item.refresh_from_db()
+        assert list(item.items.values_list("name", flat=True)) == ["HDPE - E1"]
+
+    def test_bulk_link_never_creates_packaging_names_for_an_unsupported_norm(self, make_norm):
+        assert 'A3627' not in SUPPORTED_PACKAGING_NORMS
+        a3627_norm = make_norm('A3627')
+        license_obj = LicenseDetailsModel.objects.create(license_number="BULK-PKG-004")
+        license_obj.export_license.create(norm_class=a3627_norm)
+        with suspend_license_flag_recalc():
+            item = LicenseImportItemsModel.objects.create(
+                license=license_obj,
+                serial_number=1,
+                description="HDPE granules",
+            )
+
+        linked_count = bulk_auto_link_license_items(license_obj)
+
+        assert linked_count == 0
+        item.refresh_from_db()
+        assert not item.items.exists()
+        assert not ItemNameModel.objects.filter(name__icontains="HDPE").exists()

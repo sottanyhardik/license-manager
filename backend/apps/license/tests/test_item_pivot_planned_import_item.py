@@ -379,7 +379,16 @@ class ItemPivotLiveComputeVerificationTests(TestCase):
                 hs_code=_hs(hsn),
                 quantity=Decimal('100.000'), available_quantity=Decimal('100.000'),
             )
-            self.assertEqual(ii.items.count(), 0)
+            if _expected_col == 'PP - E1':
+                # The item_matcher packaging pre-classifier (HSN 3902 -> PP)
+                # now auto-tags this one on creation, for every licence norm
+                # — see classify_packaging_item. It resolves to the SAME
+                # name the pivot report expects, so this doesn't weaken the
+                # "must resolve to its own real import item" check below;
+                # every other category here is still genuinely untagged.
+                self.assertEqual(ii.items.count(), 1)
+            else:
+                self.assertEqual(ii.items.count(), 0)
             created[desc] = ii
 
         view = ItemPivotReportView()

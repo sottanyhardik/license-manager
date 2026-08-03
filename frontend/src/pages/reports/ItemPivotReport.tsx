@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback, useRef} from "react";
+import React, {useEffect, useState, useCallback, useRef, useLayoutEffect} from "react";
 import {useNavigate} from "react-router-dom";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
@@ -38,38 +38,64 @@ const itemBgColor = (idx) => ITEM_BG_COLORS[idx % ITEM_BG_COLORS.length];
 
 // Compact Scroll Mode — while a pivot table is scrolled horizontally away
 // from its resting position, the mid-table columns (Exporter through
-// Planned CIF) collapse out of view so the frozen Sr No/DFIA No/Expiry
-// Dt/Balance CIF columns and the per-item pivot columns sit closer
-// together, needing far less scrolling to compare items across a wide
-// license. Purely a width/opacity transition on the existing cells (no
-// column is added/removed/reordered), so it can't disturb sticky-column
-// offsets, colSpan/rowSpan alignment, sorting, filters, or row selection —
-// and it reverses itself automatically since it's driven live off
-// `scrollLeft` rather than any persisted state.
-const HIDEABLE_COL_TRANSITION = 'max-width 200ms ease, opacity 200ms ease, padding 200ms ease';
-function hideableColStyle(isCompact: boolean, normalWidth: number, extra: Record<string, unknown> = {}) {
-    return isCompact
-        ? {
-            ...extra,
-            maxWidth: 0,
-            minWidth: 0,
-            opacity: 0,
-            paddingLeft: 0,
-            paddingRight: 0,
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            border: 'none',
-            transition: HIDEABLE_COL_TRANSITION,
-        }
-        : {
-            ...extra,
-            maxWidth: normalWidth,
-            minWidth: normalWidth,
-            opacity: 1,
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            transition: HIDEABLE_COL_TRANSITION,
-        };
+// Planned CIF) are removed from the rendered table entirely (not just
+// styled to zero width — `table-layout: auto` doesn't reliably treat
+// max-width as a hard clamp, so a CSS-only collapse can leave reserved
+// space) so the frozen Sr No/DFIA No/Expiry Dt/Balance CIF columns and the
+// per-item pivot columns sit directly adjacent, needing far less scrolling
+// to compare items across a wide license. Reverses itself automatically
+// since it's driven live off `scrollLeft` rather than any persisted state.
+//
+// The frozen columns' sticky `left` offsets are never hard-coded pixel
+// guesses — DFIA No/Expiry Dt/Balance CIF's cells genuinely vary in width
+// (e.g. the DFIA No cell carries a license-number link, a "Docs" button,
+// and stacked status badges), so a fixed px offset drifts out of alignment
+// with real content and either overlaps the next column or leaves a gap.
+// Instead each group's Sr No/DFIA No/Expiry Dt header cells are measured
+// via ref after layout (see `useFrozenColumnOffsets` below) and the
+// cumulative real widths are used as the `left` values.
+function useFrozenColumnOffsets(measureKeys: string[]) {
+    const cellRefs = useRef<Record<string, { srNo?: HTMLElement | null; dfia?: HTMLElement | null; expiry?: HTMLElement | null }>>({});
+    const [offsets, setOffsets] = useState<Record<string, { dfia: number; expiry: number; balance: number }>>({});
+
+    const makeRef = useCallback((groupKey: string, col: 'srNo' | 'dfia' | 'expiry') => (el: HTMLElement | null) => {
+        if (!cellRefs.current[groupKey]) cellRefs.current[groupKey] = {};
+        cellRefs.current[groupKey][col] = el;
+    }, []);
+
+    const measure = useCallback(() => {
+        setOffsets(prev => {
+            let changed = false;
+            const next = { ...prev };
+            for (const groupKey of measureKeys) {
+                const cells = cellRefs.current[groupKey];
+                if (!cells?.srNo || !cells?.dfia || !cells?.expiry) continue;
+                const srNoWidth = cells.srNo.getBoundingClientRect().width;
+                const dfiaWidth = cells.dfia.getBoundingClientRect().width;
+                const expiryWidth = cells.expiry.getBoundingClientRect().width;
+                const dfia = srNoWidth;
+                const expiry = srNoWidth + dfiaWidth;
+                const balance = srNoWidth + dfiaWidth + expiryWidth;
+                const prevForGroup = prev[groupKey];
+                if (!prevForGroup || prevForGroup.dfia !== dfia || prevForGroup.expiry !== expiry || prevForGroup.balance !== balance) {
+                    next[groupKey] = { dfia, expiry, balance };
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, [measureKeys]);
+
+    useLayoutEffect(() => {
+        measure();
+    });
+
+    useEffect(() => {
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+    }, [measure]);
+
+    return { makeRef, offsets };
 }
 
 type ItemPivotPathOptions = {
@@ -224,6 +250,8 @@ export default function ItemPivotReport() {
         const isScrolled = e.currentTarget.scrollLeft > 0;
         setCompactScrollGroups(prev => (prev[groupKey] === isScrolled ? prev : {...prev, [groupKey]: isScrolled}));
     }, []);
+    const pivotGroupKeys = Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {});
+    const { makeRef: makeFrozenColRef, offsets: frozenColOffsets } = useFrozenColumnOffsets(pivotGroupKeys);
 
     useEffect(() => {
         loadFilterOptions();
@@ -780,6 +808,13 @@ export default function ItemPivotReport() {
                                     });
                                 });
                                 const isCompact = !!compactScrollGroups[groupKey];
+                                // Fallback offsets (used only for the very first paint, before
+                                // the ref-measured real widths land) — approximate, never relied
+                                // on once `useFrozenColumnOffsets` has measured actual layout.
+                                const frozenOffsets = frozenColOffsets[groupKey] || {dfia: 60, expiry: 210, balance: 310};
+                                const dfiaLeft = `${frozenOffsets.dfia}px`;
+                                const expiryLeft = `${frozenOffsets.expiry}px`;
+                                const balanceLeft = `${frozenOffsets.balance}px`;
                                 return (
                                 <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
                                     <Card>
@@ -815,7 +850,7 @@ export default function ItemPivotReport() {
                                                        style={{tableLayout: 'auto', minWidth: '960px'}}>
                                                     <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                                                     <tr className="table-light">
-                                                        <th scope="col" className="text-center" style={{
+                                                        <th ref={makeFrozenColRef(groupKey, 'srNo')} scope="col" className="text-center" style={{
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 11,
@@ -823,35 +858,37 @@ export default function ItemPivotReport() {
                                                             minWidth: '60px'
                                                         }}>Sr No
                                                         </th>
-                                                        <th scope="col" style={{
+                                                        <th ref={makeFrozenColRef(groupKey, 'dfia')} scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '60px',
+                                                            left: dfiaLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '120px'
                                                         }}>DFIA No
                                                         </th>
-                                                        <th scope="col" style={{
+                                                        <th ref={makeFrozenColRef(groupKey, 'expiry')} scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '180px',
+                                                            left: expiryLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
                                                         }}>Expiry Dt
                                                         </th>
-                                                        <th scope="col" style={hideableColStyle(isCompact, 150)}>Exporter
+                                                        {!isCompact && (<>
+                                                        <th scope="col" style={{minWidth: '150px'}}>Exporter
                                                         </th>
-                                                        <th scope="col" className="text-right" style={hideableColStyle(isCompact, 100)}>Total CIF
+                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Total CIF
                                                         </th>
-                                                        <th scope="col" className="text-right" style={hideableColStyle(isCompact, 100)}>Debited CIF
+                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Debited CIF
                                                         </th>
-                                                        <th scope="col" className="text-right" style={hideableColStyle(isCompact, 100)}>Alloted CIF
+                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Alloted CIF
                                                         </th>
-                                                        <th scope="col" className="text-right" style={hideableColStyle(isCompact, 100)}>Planned CIF
+                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Planned CIF
                                                         </th>
+                                                        </>)}
                                                         <th scope="col" className="text-right" style={{
                                                             position: 'sticky',
-                                                            left: '280px',
+                                                            left: balanceLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '110px',
@@ -891,24 +928,26 @@ export default function ItemPivotReport() {
                                                         }}></th>
                                                         <th scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '60px',
+                                                            left: dfiaLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
                                                         <th scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '180px',
+                                                            left: expiryLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th scope="col" style={hideableColStyle(isCompact, 150, {backgroundColor: 'var(--tb-border)'})}></th>
-                                                        <th scope="col" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--tb-border)'})}></th>
-                                                        <th scope="col" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--tb-border)'})}></th>
-                                                        <th scope="col" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--tb-border)'})}></th>
-                                                        <th scope="col" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--tb-border)'})}></th>
+                                                        {!isCompact && (<>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        </>)}
                                                         <th scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '280px',
+                                                            left: balanceLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -985,7 +1024,7 @@ export default function ItemPivotReport() {
                                                             }}>{idx + 1}</td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
-                                                                left: '60px',
+                                                                left: dfiaLeft,
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>
@@ -1069,17 +1108,18 @@ export default function ItemPivotReport() {
                                                             </td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
-                                                                left: '180px',
+                                                                left: expiryLeft,
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{formatDate(license.license_expiry_date)}</td>
-                                                            <td className="text-truncate" style={hideableColStyle(isCompact, 150)} title={license.exporter}>
+                                                            {!isCompact && (<>
+                                                            <td className="text-truncate" style={{maxWidth: '150px'}} title={license.exporter}>
                                                                 {license.exporter}
                                                             </td>
-                                                            <td className="text-right font-semibold" style={hideableColStyle(isCompact, 100)}>{license.total_cif.toFixed(2)}</td>
-                                                            <td className="text-right font-semibold text-warning" style={hideableColStyle(isCompact, 100)}>{(license.debited_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-right font-semibold text-info" style={hideableColStyle(isCompact, 100)}>{(license.alloted_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-right font-semibold text-secondary" style={hideableColStyle(isCompact, 100)}>
+                                                            <td className="text-right font-semibold">{license.total_cif.toFixed(2)}</td>
+                                                            <td className="text-right font-semibold text-warning">{(license.debited_cif || 0).toFixed(2)}</td>
+                                                            <td className="text-right font-semibold text-info">{(license.alloted_cif || 0).toFixed(2)}</td>
+                                                            <td className="text-right font-semibold text-secondary">
                                                                 {/* Planned CIF for this license — sum across every item
                                                                     column's own effective planned CIF (manual plan when
                                                                     the product was manually planned, else norm-derived),
@@ -1091,9 +1131,10 @@ export default function ItemPivotReport() {
                                                                     return sum + (hasManual ? (itData.plan_cif || 0) : (itData.planned_cif || 0));
                                                                 }, 0).toFixed(2)}
                                                             </td>
+                                                            </>)}
                                                             <td className="text-right font-semibold text-success" style={{
                                                                 position: 'sticky',
-                                                                left: '280px',
+                                                                left: balanceLeft,
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)',
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -1238,26 +1279,28 @@ export default function ItemPivotReport() {
                                                             <Calculator className="size-4" aria-hidden="true" />
                                                             TOTAL
                                                         </td>
-                                                        <td style={hideableColStyle(isCompact, 150, {backgroundColor: 'var(--warning-bg)'})}></td>
-                                                        <td className="text-right text-primary" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--warning-bg)'})}>
+                                                        {!isCompact && (<>
+                                                        <td style={{backgroundColor: 'var(--warning-bg)'}}></td>
+                                                        <td className="text-right text-primary" style={{backgroundColor: 'var(--warning-bg)'}}>
                                                             {licenses.reduce((sum, lic) => sum + lic.total_cif, 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-right text-warning" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--warning-bg)'})}>
+                                                        <td className="text-right text-warning" style={{backgroundColor: 'var(--warning-bg)'}}>
                                                             {licenses.reduce((sum, lic) => sum + (lic.debited_cif || 0), 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-right text-info" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--warning-bg)'})}>
+                                                        <td className="text-right text-info" style={{backgroundColor: 'var(--warning-bg)'}}>
                                                             {licenses.reduce((sum, lic) => sum + (lic.alloted_cif || 0), 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-right text-secondary" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--warning-bg)'})}>
+                                                        <td className="text-right text-secondary" style={{backgroundColor: 'var(--warning-bg)'}}>
                                                             {licenses.reduce((sum, lic) => sum + groupItems.reduce((s, it) => {
                                                                 const itData = lic.items[it.name] || {};
                                                                 const hasManual = (itData.plan_quantity || 0) > 0 || (itData.plan_cif || 0) > 0;
                                                                 return s + (hasManual ? (itData.plan_cif || 0) : (itData.planned_cif || 0));
                                                             }, 0), 0).toFixed(2)}
                                                         </td>
+                                                        </>)}
                                                         <td className="text-right text-success" style={{
                                                             position: 'sticky',
-                                                            left: '280px',
+                                                            left: balanceLeft,
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',

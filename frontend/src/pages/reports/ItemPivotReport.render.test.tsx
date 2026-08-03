@@ -256,33 +256,54 @@ describe("ItemPivotReport — Compact Scroll Mode", () => {
         mockApi();
     });
 
-    it("collapses Exporter/Total/Debited/Alloted/Planned CIF while scrolled, and restores them once scrolled back to the left — without touching the frozen or item-panel columns", async () => {
+    it("removes Exporter/Total/Debited/Alloted/Planned CIF from the table entirely while scrolled (no reserved space), and restores them once scrolled back to the left — without touching the frozen or item-panel columns", async () => {
         await renderAndSelectNorm();
 
-        const exporterHeader = screen.getAllByRole("columnheader", { name: "Exporter" })[0];
-        const srNoHeader = screen.getAllByRole("columnheader", { name: "Sr No" })[0];
-        const balanceCifHeader = screen.getAllByRole("columnheader", { name: "Balance CIF" })[0];
-        const hsnHeader = screen.getAllByRole("columnheader", { name: "HSN Code" })[0];
         const scrollContainer = screen.getByTestId("pivot-scroll-container");
 
-        // Resting position (scrollLeft 0): every column is at full width.
-        expect(exporterHeader).toHaveStyle({ opacity: "1" });
+        // Resting position (scrollLeft 0): every column is rendered.
+        expect(screen.getAllByRole("columnheader", { name: "Exporter" }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole("columnheader", { name: "Total CIF" }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole("columnheader", { name: "Debited CIF" }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole("columnheader", { name: "Alloted CIF" }).length).toBeGreaterThan(0);
 
-        // User scrolls right — the mid-table columns collapse. The frozen
-        // columns (Sr No, Balance CIF) and the item-panel columns (HSN Code)
-        // are untouched either way, since they were never part of the
-        // hideable set.
+        // User scrolls right — the mid-table columns are removed from the
+        // table entirely (not styled to zero size — actually absent from
+        // the DOM, so they can't reserve layout space). The frozen columns
+        // (Sr No, Balance CIF) and the item-panel columns (HSN Code) are
+        // untouched either way, since they were never part of the hideable
+        // set.
         Object.defineProperty(scrollContainer, "scrollLeft", { value: 120, configurable: true });
         fireEvent.scroll(scrollContainer);
-        expect(exporterHeader).toHaveStyle({ opacity: "0", maxWidth: "0" });
-        expect(srNoHeader).not.toHaveStyle({ opacity: "0" });
-        expect(balanceCifHeader).not.toHaveStyle({ opacity: "0" });
-        expect(hsnHeader).not.toHaveStyle({ opacity: "0" });
+        expect(screen.queryByRole("columnheader", { name: "Exporter" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("columnheader", { name: "Total CIF" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("columnheader", { name: "Debited CIF" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("columnheader", { name: "Alloted CIF" })).not.toBeInTheDocument();
+        expect(screen.getAllByRole("columnheader", { name: "Sr No" }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole("columnheader", { name: "Balance CIF" }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole("columnheader", { name: "HSN Code" }).length).toBeGreaterThan(0);
 
         // User scrolls back to the resting position — automatic restore,
         // no refresh, no lingering state.
         Object.defineProperty(scrollContainer, "scrollLeft", { value: 0, configurable: true });
         fireEvent.scroll(scrollContainer);
-        expect(exporterHeader).toHaveStyle({ opacity: "1", maxWidth: "150px" });
+        expect(screen.getAllByRole("columnheader", { name: "Exporter" }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole("columnheader", { name: "Total CIF" }).length).toBeGreaterThan(0);
+    });
+
+    it("gives DFIA No, Expiry Dt, and Balance CIF a non-negative, numeric sticky `left` derived from measured widths rather than a hard-coded guess", async () => {
+        await renderAndSelectNorm();
+
+        const dfiaHeader = screen.getAllByRole("columnheader", { name: "DFIA No" })[0];
+        const expiryHeader = screen.getAllByRole("columnheader", { name: "Expiry Dt" })[0];
+        const balanceHeader = screen.getAllByRole("columnheader", { name: "Balance CIF" })[0];
+
+        for (const el of [dfiaHeader, expiryHeader, balanceHeader]) {
+            expect(el.style.position).toBe("sticky");
+            // Left is a computed pixel value (possibly "0px" in jsdom, which
+            // never lays out real content) — never left unset, and never a
+            // literal leftover like "NaNpx".
+            expect(el.style.left).toMatch(/^-?\d+(\.\d+)?px$/);
+        }
     });
 });

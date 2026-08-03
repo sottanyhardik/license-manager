@@ -249,3 +249,40 @@ describe("ItemPivotReport — merged vs. genuinely-distinct import items", () =>
         expect(within(row).getByText("378.00")).toBeInTheDocument();
     });
 });
+
+describe("ItemPivotReport — Compact Scroll Mode", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockApi();
+    });
+
+    it("collapses Exporter/Total/Debited/Alloted/Planned CIF while scrolled, and restores them once scrolled back to the left — without touching the frozen or item-panel columns", async () => {
+        await renderAndSelectNorm();
+
+        const exporterHeader = screen.getAllByRole("columnheader", { name: "Exporter" })[0];
+        const srNoHeader = screen.getAllByRole("columnheader", { name: "Sr No" })[0];
+        const balanceCifHeader = screen.getAllByRole("columnheader", { name: "Balance CIF" })[0];
+        const hsnHeader = screen.getAllByRole("columnheader", { name: "HSN Code" })[0];
+        const scrollContainer = screen.getByTestId("pivot-scroll-container");
+
+        // Resting position (scrollLeft 0): every column is at full width.
+        expect(exporterHeader).toHaveStyle({ opacity: "1" });
+
+        // User scrolls right — the mid-table columns collapse. The frozen
+        // columns (Sr No, Balance CIF) and the item-panel columns (HSN Code)
+        // are untouched either way, since they were never part of the
+        // hideable set.
+        Object.defineProperty(scrollContainer, "scrollLeft", { value: 120, configurable: true });
+        fireEvent.scroll(scrollContainer);
+        expect(exporterHeader).toHaveStyle({ opacity: "0", maxWidth: "0" });
+        expect(srNoHeader).not.toHaveStyle({ opacity: "0" });
+        expect(balanceCifHeader).not.toHaveStyle({ opacity: "0" });
+        expect(hsnHeader).not.toHaveStyle({ opacity: "0" });
+
+        // User scrolls back to the resting position — automatic restore,
+        // no refresh, no lingering state.
+        Object.defineProperty(scrollContainer, "scrollLeft", { value: 0, configurable: true });
+        fireEvent.scroll(scrollContainer);
+        expect(exporterHeader).toHaveStyle({ opacity: "1", maxWidth: "150px" });
+    });
+});

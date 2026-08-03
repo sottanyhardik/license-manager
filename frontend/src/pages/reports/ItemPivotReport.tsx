@@ -36,6 +36,42 @@ const ITEM_BG_COLORS = [
 ];
 const itemBgColor = (idx) => ITEM_BG_COLORS[idx % ITEM_BG_COLORS.length];
 
+// Compact Scroll Mode — while a pivot table is scrolled horizontally away
+// from its resting position, the mid-table columns (Exporter through
+// Planned CIF) collapse out of view so the frozen Sr No/DFIA No/Expiry
+// Dt/Balance CIF columns and the per-item pivot columns sit closer
+// together, needing far less scrolling to compare items across a wide
+// license. Purely a width/opacity transition on the existing cells (no
+// column is added/removed/reordered), so it can't disturb sticky-column
+// offsets, colSpan/rowSpan alignment, sorting, filters, or row selection —
+// and it reverses itself automatically since it's driven live off
+// `scrollLeft` rather than any persisted state.
+const HIDEABLE_COL_TRANSITION = 'max-width 200ms ease, opacity 200ms ease, padding 200ms ease';
+function hideableColStyle(isCompact: boolean, normalWidth: number, extra: Record<string, unknown> = {}) {
+    return isCompact
+        ? {
+            ...extra,
+            maxWidth: 0,
+            minWidth: 0,
+            opacity: 0,
+            paddingLeft: 0,
+            paddingRight: 0,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            border: 'none',
+            transition: HIDEABLE_COL_TRANSITION,
+        }
+        : {
+            ...extra,
+            maxWidth: normalWidth,
+            minWidth: normalWidth,
+            opacity: 1,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            transition: HIDEABLE_COL_TRANSITION,
+        };
+}
+
 type ItemPivotPathOptions = {
     format: "json" | "excel";
     normClass?: unknown;
@@ -177,6 +213,17 @@ export default function ItemPivotReport() {
     // AbortController ref — cancels the previous in-flight loadReport request
     // when a new one starts, preventing stale responses from overwriting fresh data.
     const reportAbortRef = useRef<AbortController | null>(null);
+
+    // Compact Scroll Mode — one flag per notification-group table (each group
+    // renders its own independently-scrollable pivot table), keyed by that
+    // group's key. Derived live from each table's scrollLeft — never written
+    // anywhere else, so it always reflects the table's actual scroll position
+    // and needs no reset/cleanup of its own.
+    const [compactScrollGroups, setCompactScrollGroups] = useState<Record<string, boolean>>({});
+    const handlePivotTableScroll = useCallback((groupKey: string) => (e: React.UIEvent<HTMLDivElement>) => {
+        const isScrolled = e.currentTarget.scrollLeft > 0;
+        setCompactScrollGroups(prev => (prev[groupKey] === isScrolled ? prev : {...prev, [groupKey]: isScrolled}));
+    }, []);
 
     useEffect(() => {
         loadFilterOptions();
@@ -732,6 +779,7 @@ export default function ItemPivotReport() {
                                         );
                                     });
                                 });
+                                const isCompact = !!compactScrollGroups[groupKey];
                                 return (
                                 <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
                                     <Card>
@@ -762,7 +810,7 @@ export default function ItemPivotReport() {
                                             <span className="chip chip-neutral">{licenses.length}</span>
                                         </CardHeader>
                                         <CardContent className="p-0">
-                                            <div className="overflow-x-auto">
+                                            <div className="overflow-x-auto" onScroll={handlePivotTableScroll(groupKey)} data-testid="pivot-scroll-container">
                                                 <table className="table table-hover table-sm table-bordered mb-0"
                                                        style={{tableLayout: 'auto', minWidth: '960px'}}>
                                                     <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
@@ -791,49 +839,19 @@ export default function ItemPivotReport() {
                                                             minWidth: '100px'
                                                         }}>Expiry Dt
                                                         </th>
-                                                        <th scope="col" style={{
+                                                        <th scope="col" style={hideableColStyle(isCompact, 150)}>Exporter
+                                                        </th>
+                                                        <th scope="col" className="text-right" style={hideableColStyle(isCompact, 100)}>Total CIF
+                                                        </th>
+                                                        <th scope="col" className="text-right" style={hideableColStyle(isCompact, 100)}>Debited CIF
+                                                        </th>
+                                                        <th scope="col" className="text-right" style={hideableColStyle(isCompact, 100)}>Alloted CIF
+                                                        </th>
+                                                        <th scope="col" className="text-right" style={hideableColStyle(isCompact, 100)}>Planned CIF
+                                                        </th>
+                                                        <th scope="col" className="text-right" style={{
                                                             position: 'sticky',
                                                             left: '280px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '150px'
-                                                        }}>Exporter
-                                                        </th>
-                                                        <th scope="col" className="text-right" style={{
-                                                            position: 'sticky',
-                                                            left: '430px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '100px'
-                                                        }}>Total CIF
-                                                        </th>
-                                                        <th scope="col" className="text-right" style={{
-                                                            position: 'sticky',
-                                                            left: '530px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '100px'
-                                                        }}>Debited CIF
-                                                        </th>
-                                                        <th scope="col" className="text-right" style={{
-                                                            position: 'sticky',
-                                                            left: '630px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '100px'
-                                                        }}>Alloted CIF
-                                                        </th>
-                                                        <th scope="col" className="text-right" style={{
-                                                            position: 'sticky',
-                                                            left: '730px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '100px'
-                                                        }}>Planned CIF
-                                                        </th>
-                                                        <th scope="col" className="text-right" style={{
-                                                            position: 'sticky',
-                                                            left: '830px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '110px',
@@ -883,39 +901,14 @@ export default function ItemPivotReport() {
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
+                                                        <th scope="col" style={hideableColStyle(isCompact, 150, {backgroundColor: 'var(--tb-border)'})}></th>
+                                                        <th scope="col" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--tb-border)'})}></th>
+                                                        <th scope="col" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--tb-border)'})}></th>
+                                                        <th scope="col" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--tb-border)'})}></th>
+                                                        <th scope="col" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--tb-border)'})}></th>
                                                         <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: '280px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th scope="col" style={{
-                                                            position: 'sticky',
-                                                            left: '430px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th scope="col" style={{
-                                                            position: 'sticky',
-                                                            left: '530px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th scope="col" style={{
-                                                            position: 'sticky',
-                                                            left: '630px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th scope="col" style={{
-                                                            position: 'sticky',
-                                                            left: '730px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th scope="col" style={{
-                                                            position: 'sticky',
-                                                            left: '830px',
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -1080,39 +1073,13 @@ export default function ItemPivotReport() {
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{formatDate(license.license_expiry_date)}</td>
-                                                            <td className="text-truncate" style={{
-                                                                position: 'sticky',
-                                                                left: '280px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)',
-                                                                maxWidth: '150px'
-                                                            }} title={license.exporter}>
+                                                            <td className="text-truncate" style={hideableColStyle(isCompact, 150)} title={license.exporter}>
                                                                 {license.exporter}
                                                             </td>
-                                                            <td className="text-right font-semibold" style={{
-                                                                position: 'sticky',
-                                                                left: '430px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)'
-                                                            }}>{license.total_cif.toFixed(2)}</td>
-                                                            <td className="text-right font-semibold text-warning" style={{
-                                                                position: 'sticky',
-                                                                left: '530px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)'
-                                                            }}>{(license.debited_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-right font-semibold text-info" style={{
-                                                                position: 'sticky',
-                                                                left: '630px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)'
-                                                            }}>{(license.alloted_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-right font-semibold text-secondary" style={{
-                                                                position: 'sticky',
-                                                                left: '730px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)'
-                                                            }}>
+                                                            <td className="text-right font-semibold" style={hideableColStyle(isCompact, 100)}>{license.total_cif.toFixed(2)}</td>
+                                                            <td className="text-right font-semibold text-warning" style={hideableColStyle(isCompact, 100)}>{(license.debited_cif || 0).toFixed(2)}</td>
+                                                            <td className="text-right font-semibold text-info" style={hideableColStyle(isCompact, 100)}>{(license.alloted_cif || 0).toFixed(2)}</td>
+                                                            <td className="text-right font-semibold text-secondary" style={hideableColStyle(isCompact, 100)}>
                                                                 {/* Planned CIF for this license — sum across every item
                                                                     column's own effective planned CIF (manual plan when
                                                                     the product was manually planned, else norm-derived),
@@ -1126,7 +1093,7 @@ export default function ItemPivotReport() {
                                                             </td>
                                                             <td className="text-right font-semibold text-success" style={{
                                                                 position: 'sticky',
-                                                                left: '830px',
+                                                                left: '280px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)',
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -1267,40 +1234,21 @@ export default function ItemPivotReport() {
                                                             left: 0,
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)'
-                                                        }} colSpan={4}>
+                                                        }} colSpan={3}>
                                                             <Calculator className="size-4" aria-hidden="true" />
                                                             TOTAL
                                                         </td>
-                                                        <td className="text-right text-primary" style={{
-                                                            position: 'sticky',
-                                                            left: '430px',
-                                                            zIndex: 1,
-                                                            backgroundColor: 'var(--warning-bg)'
-                                                        }}>
+                                                        <td style={hideableColStyle(isCompact, 150, {backgroundColor: 'var(--warning-bg)'})}></td>
+                                                        <td className="text-right text-primary" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--warning-bg)'})}>
                                                             {licenses.reduce((sum, lic) => sum + lic.total_cif, 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-right text-warning" style={{
-                                                            position: 'sticky',
-                                                            left: '530px',
-                                                            zIndex: 1,
-                                                            backgroundColor: 'var(--warning-bg)'
-                                                        }}>
+                                                        <td className="text-right text-warning" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--warning-bg)'})}>
                                                             {licenses.reduce((sum, lic) => sum + (lic.debited_cif || 0), 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-right text-info" style={{
-                                                            position: 'sticky',
-                                                            left: '630px',
-                                                            zIndex: 1,
-                                                            backgroundColor: 'var(--warning-bg)'
-                                                        }}>
+                                                        <td className="text-right text-info" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--warning-bg)'})}>
                                                             {licenses.reduce((sum, lic) => sum + (lic.alloted_cif || 0), 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-right text-secondary" style={{
-                                                            position: 'sticky',
-                                                            left: '730px',
-                                                            zIndex: 1,
-                                                            backgroundColor: 'var(--warning-bg)'
-                                                        }}>
+                                                        <td className="text-right text-secondary" style={hideableColStyle(isCompact, 100, {backgroundColor: 'var(--warning-bg)'})}>
                                                             {licenses.reduce((sum, lic) => sum + groupItems.reduce((s, it) => {
                                                                 const itData = lic.items[it.name] || {};
                                                                 const hasManual = (itData.plan_quantity || 0) > 0 || (itData.plan_cif || 0) > 0;
@@ -1309,7 +1257,7 @@ export default function ItemPivotReport() {
                                                         </td>
                                                         <td className="text-right text-success" style={{
                                                             position: 'sticky',
-                                                            left: '830px',
+                                                            left: '280px',
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',

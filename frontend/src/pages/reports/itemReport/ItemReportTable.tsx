@@ -70,22 +70,14 @@ export default function ItemReportTable({
                                 minWidth: '150px'
                             }}>License No
                             </th>
+                            <th scope="col" style={{minWidth: '120px'}}>License Date
+                            </th>
                             <th scope="col" style={{
                                 position: 'sticky',
                                 left: '210px',
                                 zIndex: 11,
                                 backgroundColor: 'var(--tb-sunken)',
-                                minWidth: '120px'
-                            }}>License Date
-                            </th>
-                            <th scope="col" style={{
-                                position: 'sticky',
-                                left: '330px',
-                                zIndex: 11,
-                                backgroundColor: 'var(--tb-sunken)',
-                                minWidth: '140px',
-                                boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
-                                borderRight: '2px solid var(--tb-border)'
+                                minWidth: '140px'
                             }}>Expiry Date
                             </th>
                             <th scope="col" style={{minWidth: '200px'}}>Exporter Name</th>
@@ -97,7 +89,15 @@ export default function ItemReportTable({
                             <th scope="col" className="text-right" style={{minWidth: '120px'}}>Plan Qty</th>
                             <th scope="col" className="text-right" style={{minWidth: '120px'}}>Plan CIF</th>
                             <th scope="col" className="text-right" style={{minWidth: '140px'}}>Avail Bal</th>
-                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Balance CIF</th>
+                            <th scope="col" className="text-right" style={{
+                                position: 'sticky',
+                                left: '350px',
+                                zIndex: 11,
+                                backgroundColor: 'var(--tb-sunken)',
+                                minWidth: '140px',
+                                boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
+                                borderRight: '2px solid var(--tb-border)'
+                            }}>Balance CIF</th>
                             <th scope="col" className="text-center" style={{minWidth: '120px'}}>Is Restricted</th>
                             <th scope="col" style={{minWidth: '200px'}}>Notes</th>
                             <th scope="col" style={{minWidth: '200px'}}>Condition Sheet</th>
@@ -156,20 +156,15 @@ export default function ItemReportTable({
                                                     </div>
                                                 </td>
                                                 <td rowSpan={rowSpan} style={{
-                                                    position: 'sticky',
-                                                    left: '210px',
-                                                    zIndex: 9,
                                                     verticalAlign: 'middle',
                                                     backgroundColor: 'var(--tb-sunken)'
                                                 }}>{formatDate(firstItem.license_date)}</td>
                                                 <td rowSpan={rowSpan} style={{
                                                     position: 'sticky',
-                                                    left: '330px',
+                                                    left: '210px',
                                                     zIndex: 9,
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)',
-                                                    boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
-                                                    borderRight: '2px solid var(--tb-border)'
+                                                    backgroundColor: 'var(--tb-sunken)'
                                                 }}>{formatDate(firstItem.license_expiry_date)}</td>
                                                 <td rowSpan={rowSpan} style={{
                                                     verticalAlign: 'middle',
@@ -225,8 +220,13 @@ export default function ItemReportTable({
                                                 }}>{Number(firstItem.available_balance || 0).toFixed(2)}</td>
                                                 <td className="text-right text-primary font-semibold"
                                                     rowSpan={rowSpan} style={{
+                                                    position: 'sticky',
+                                                    left: '350px',
+                                                    zIndex: 9,
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)'
+                                                    backgroundColor: 'var(--tb-sunken)',
+                                                    boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
+                                                    borderRight: '2px solid var(--tb-border)'
                                                 }}>{Number(firstItem.balance_cif || 0).toFixed(2)}</td>
                                                 <td className="text-center" rowSpan={rowSpan}
                                                     style={{

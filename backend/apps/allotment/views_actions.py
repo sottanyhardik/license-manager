@@ -159,44 +159,6 @@ class AllotmentActionViewSet(ViewSet):
             except (ValueError, TypeError, InvalidOperation):
                 pass
 
-        # Apply available value filters — against the LIVE computed value
-        # (available_value_calculated, via the batched available_value_
-        # bulk_map — same source LicenseImportItemSerializer.get_available_
-        # value uses for display), never the stored `available_value`
-        # column. That column is only refreshed on certain saves and can go
-        # stale (e.g. after a licence's Balance CIF formula itself changes),
-        # which silently excluded licenses whose displayed value clearly
-        # satisfied the filter. Not annotatable in SQL (available_value_
-        # calculated is a Python property), so this filters in Python after
-        # every other (SQL) filter has narrowed the candidate set, then
-        # narrows the queryset by id to keep pagination/ordering unchanged.
-        if available_value_gte or available_value_lte:
-            min_value = None
-            max_value = None
-            if available_value_gte:
-                try:
-                    min_value = Decimal(available_value_gte)
-                except (ValueError, TypeError, InvalidOperation):
-                    min_value = None
-
-            if available_value_lte:
-                try:
-                    max_value = Decimal(available_value_lte)
-                except (ValueError, TypeError, InvalidOperation):
-                    max_value = None
-
-            if min_value is not None or max_value is not None:
-                from apps.license.services.condition_pool import available_value_bulk_map
-
-                candidates = list(queryset)
-                value_map = available_value_bulk_map(candidates)
-                matching_ids = [
-                    item.id for item in candidates
-                    if (min_value is None or value_map.get(item.id, Decimal('0')) >= min_value)
-                    and (max_value is None or value_map.get(item.id, Decimal('0')) <= max_value)
-                ]
-                queryset = queryset.filter(id__in=matching_ids)
-
         # Apply notification number filter
         if notification_number:
             queryset = queryset.filter(license__notification_number__code=notification_number)
@@ -263,6 +225,48 @@ class AllotmentActionViewSet(ViewSet):
             item_name_list = [int(i.strip()) for i in item_names.split(',') if i.strip().isdigit()]
             if item_name_list:
                 queryset = queryset.filter(items__id__in=item_name_list).distinct()
+
+        # Apply available value filters — against the LIVE computed value
+        # (available_value_calculated, via the batched available_value_
+        # bulk_map — same source LicenseImportItemSerializer.get_available_
+        # value uses for display), never the stored `available_value`
+        # column. That column is only refreshed on certain saves and can go
+        # stale (e.g. after a licence's Balance CIF formula itself changes),
+        # which silently excluded licenses whose displayed value clearly
+        # satisfied the filter. Not annotatable in SQL (available_value_
+        # calculated is a Python property), so this filters in Python — but
+        # only AFTER every other (cheap, SQL) filter above has narrowed the
+        # candidate set first. This must stay the LAST filter applied: it's
+        # the only one that forces full materialization + a live Balance CIF
+        # computation for every remaining candidate, so running it before a
+        # selective filter (e.g. license_status=active) needlessly recomputes
+        # balances for licences that were always going to be excluded anyway.
+        if available_value_gte or available_value_lte:
+            min_value = None
+            max_value = None
+            if available_value_gte:
+                try:
+                    min_value = Decimal(available_value_gte)
+                except (ValueError, TypeError, InvalidOperation):
+                    min_value = None
+
+            if available_value_lte:
+                try:
+                    max_value = Decimal(available_value_lte)
+                except (ValueError, TypeError, InvalidOperation):
+                    max_value = None
+
+            if min_value is not None or max_value is not None:
+                from apps.license.services.condition_pool import available_value_bulk_map
+
+                candidates = list(queryset)
+                value_map = available_value_bulk_map(candidates)
+                matching_ids = [
+                    item.id for item in candidates
+                    if (min_value is None or value_map.get(item.id, Decimal('0')) >= min_value)
+                    and (max_value is None or value_map.get(item.id, Decimal('0')) <= max_value)
+                ]
+                queryset = queryset.filter(id__in=matching_ids)
 
         # Pagination
         page = _safe_int(request.query_params.get('page'), default=1, minimum=1)

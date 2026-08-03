@@ -27,7 +27,6 @@ from apps.core.constants import (
     CURRENCY_CHOICES,
     SCHEME_CODE_CHOICES,
     NOTIFICATION_NORM_CHOICES,
-    LICENCE_PURCHASE_CHOICES,
     GE,
     KG,
     USD,

@@ -1,4 +1,4 @@
-import {useEffect, useState, useMemo} from "react";
+import {useEffect, useState, useMemo, useRef} from "react";
 import {useParams, useNavigate, useLocation} from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import ConditionBadge from "../components/ConditionBadge";
 import TransferLetterForm from "../components/TransferLetterForm";
 import {openPdfPreview} from "../utils/pdfPreview";
 import {useBackButton} from "../hooks/useBackButton";
+import {usePurchaseStatusOptions} from "../hooks/useMasterOptions";
 import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
 import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
@@ -72,12 +73,24 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         hs_code: "",
         is_expired: "all",
         is_restricted: "all",
-        purchase_status: "GE,GO,SM,MI",  // GE Purchase, GE Operating, SM Purchase, Conversion
+        // Purchase Status default is applied once the master data loads
+        // (see the usePurchaseStatusOptions effect below) — never hardcoded.
+        purchase_status: "",
         license_status: "active",
         item_names: "",
         expiry_date_from: "",
         expiry_date_to: ""
     });
+    // Purchase Status options + default selection both come from the
+    // Purchase Status master (never hardcoded) — see useMasterOptions.ts.
+    const { options: purchaseStatusOptions } = usePurchaseStatusOptions();
+    const purchaseStatusDefaultApplied = useRef(false);
+    useEffect(() => {
+        if (!purchaseStatusDefaultApplied.current && purchaseStatusOptions.length > 0) {
+            purchaseStatusDefaultApplied.current = true;
+            setFilters(prev => ({...prev, purchase_status: purchaseStatusOptions.map(o => o.value).join(',')}));
+        }
+    }, [purchaseStatusOptions]);
     const [isFirstLoad, setIsFirstLoad] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 20;
@@ -925,6 +938,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         setFilters={setFilters}
                         availableItemNames={availableItemNames}
                         notificationOptions={notificationOptions}
+                        purchaseStatusOptions={purchaseStatusOptions}
                     />
 
                     <div className="max-h-[650px] overflow-y-auto pr-px">

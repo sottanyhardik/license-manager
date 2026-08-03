@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.permissions import LicenseBalanceLedgerPermission, LicensePermission, LicenseReadOnlyPermission
-from apps.core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, \
+from apps.core.constants import SCHEME_CODE_CHOICES, \
     NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
 from apps.core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
@@ -20,10 +20,16 @@ from apps.license.views.license_overview import add_license_overview_actions
 
 # Helper function to get default purchase status IDs from codes
 def get_default_purchase_status_ids():
-    """Convert default purchase status codes to IDs"""
+    """Default purchase-status filter = every status the master marks active.
+
+    The Purchase Status master (`PurchaseStatus.is_active`) is the single
+    source of truth for what's "active" — no code list is hardcoded here,
+    so this stays correct as statuses are added/retired in the master
+    without a matching code change here (see the global filter
+    standardization: Purchase Status must always come from the master).
+    """
     from apps.core.models import PurchaseStatus
-    default_codes = ['GE', 'MI', 'CO']  # GE Purchase, GE Operating, Conversion
-    ids = list(PurchaseStatus.objects.filter(code__in=default_codes).values_list('id', flat=True))
+    ids = list(PurchaseStatus.objects.filter(is_active=True).values_list('id', flat=True))
     return ','.join(map(str, ids)) if ids else ''
 
 # Nested field definitions for LicenseDetails

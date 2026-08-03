@@ -16,7 +16,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 import pytest
 
-from apps.core.models import CompanyModel, HSCodeModel, ItemNameModel
+from apps.core.models import CompanyModel, HSCodeModel, ItemNameModel, NotificationNumber
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan
 
 
@@ -70,16 +70,19 @@ def _make_import_item(
     available_quantity=Decimal("50.000"),
     condition_type="",
     item_names=None,
+    quantity=Decimal("100.000"),
+    cif_fc=Decimal("0.00"),
 ):
     item = LicenseImportItemsModel.objects.create(
         license=license_obj,
         serial_number=serial,
         description=f"Import item {serial}",
         hs_code=hs_code,
-        quantity=Decimal("100.000"),
+        quantity=quantity,
         available_quantity=available_quantity,
         available_value=available_value,
         condition_type=condition_type,
+        cif_fc=cif_fc,
     )
     if item_names:
         item.items.set(item_names)
@@ -176,6 +179,79 @@ def test_item_report_filters_is_restricted_combined_with_item_names(report_viewe
 
 
 @pytest.mark.django_db
+def test_item_report_filters_by_notification_number_code_not_pk(report_viewer_client, item_report_masters):
+    """`notification_numbers` is a comma-separated list of NotificationNumber
+    *codes* (e.g. "025/2023") sent by the frontend's Notification dropdown —
+    `license.notification_number` is a ForeignKey, so filtering must compare
+    against its `code` field, not the FK's own numeric PK. Filtering by PK
+    previously raised a 500 (Postgres/Django rejects comparing an integer PK
+    column to a string like "025/2023"), so this also guards against that
+    regression rather than just checking for a silently-empty result."""
+    notif_a = NotificationNumber.objects.create(code="025/2023", label="Deemed Exports")
+    notif_b = NotificationNumber.objects.create(code="019/2015", label="Physical Exports")
+    lic_a = _make_license("ITEM-REPORT-NOTIF-A", item_report_masters["parle"])
+    lic_a.notification_number = notif_a
+    lic_a.save(update_fields=["notification_number"])
+    lic_b = _make_license("ITEM-REPORT-NOTIF-B", item_report_masters["other"])
+    lic_b.notification_number = notif_b
+    lic_b.save(update_fields=["notification_number"])
+    item_a = _make_import_item(lic_a, item_report_masters["hs_code"], available_value=Decimal("500.00"))
+    item_b = _make_import_item(lic_b, item_report_masters["hs_code"], available_value=Decimal("500.00"))
+
+    response = report_viewer_client.get(
+        REPORT_URL, {"min_balance": 0, "notification_numbers": notif_a.code}
+    )
+    assert response.status_code == 200, getattr(response, "data", response.content[:300])
+    ids = {r["id"] for r in response.json()["items"]}
+    assert ids == {item_a.id}
+    assert item_b.id not in ids
+
+
+@pytest.mark.django_db
+def test_item_report_unit_price_from_cif_fc_with_available_balance_fallback(
+    report_viewer_client, item_report_masters
+):
+    """Unit Price = cif_fc / quantity when a usable cif_fc exists; falls back
+    to available_balance / available_quantity only when it doesn't (e.g. an
+    older/incomplete record with cif_fc still at its zero default)."""
+    lic = _make_license("ITEM-REPORT-UNITPRICE", item_report_masters["parle"])
+    with_cif = _make_import_item(
+        lic, item_report_masters["hs_code"], serial=1,
+        quantity=Decimal("100.000"), cif_fc=Decimal("250.00"),
+        available_value=Decimal("999.00"), available_quantity=Decimal("10.000"),
+    )
+    without_cif = _make_import_item(
+        lic, item_report_masters["hs_code"], serial=2,
+        quantity=Decimal("100.000"), cif_fc=Decimal("0.00"),
+        available_value=Decimal("40.00"), available_quantity=Decimal("20.000"),
+    )
+
+    response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+    assert response.status_code == 200
+    rows = {row["id"]: row for row in response.json()["items"]}
+
+    # 250.00 / 100 = 2.50 — uses cif_fc, ignores available_balance entirely.
+    assert rows[with_cif.id]["unit_price"] == pytest.approx(2.5)
+    # cif_fc is 0 (unusable) — falls back to 40.00 / 20 = 2.00.
+    assert rows[without_cif.id]["unit_price"] == pytest.approx(2.0)
+
+
+@pytest.mark.django_db
+def test_item_report_sorted_by_license_expiry_date_ascending(report_viewer_client, item_report_masters):
+    """Business-report ordering: soonest-expiring license first."""
+    lic_soon = _make_license("ITEM-REPORT-EXP-SOON", item_report_masters["parle"], expiry_days=10)
+    lic_later = _make_license("ITEM-REPORT-EXP-LATER", item_report_masters["other"], expiry_days=200)
+    item_later = _make_import_item(lic_later, item_report_masters["hs_code"], available_value=Decimal("500.00"))
+    item_soon = _make_import_item(lic_soon, item_report_masters["hs_code"], available_value=Decimal("500.00"))
+
+    response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+    assert response.status_code == 200
+    ids_in_order = [row["id"] for row in response.json()["items"]]
+
+    assert ids_in_order.index(item_soon.id) < ids_in_order.index(item_later.id)
+
+
+@pytest.mark.django_db
 def test_item_report_available_items_includes_name_with_no_plan(report_viewer_client, item_report_masters):
     lic = _make_license("ITEM-REPORT-AVAIL", item_report_masters["parle"])
     _make_import_item(
@@ -235,11 +311,11 @@ def test_item_report_excel_export_renders_planning_split_sub_rows(
     assert response.status_code == 200, getattr(response, "data", response.content[:300])
 
     workbook = load_workbook(BytesIO(response.content), data_only=True)
-    assert "Not Restricted" in workbook.sheetnames
-    ws = workbook["Not Restricted"]
+    assert "Item Report" in workbook.sheetnames
+    ws = workbook["Item Report"]
 
     # Row 2 = the import item's own row; rows 3-4 = one sub-row per split.
-    item_name_col, price_col, badge_col, qty_col, cif_col = 11, 10, 8, 18, 19
+    item_name_col, price_col, badge_col, qty_col, cif_col = 11, 10, 8, 15, 16
     split_row_1 = [ws.cell(row=3, column=c).value for c in
                     (badge_col, price_col, item_name_col, qty_col, cif_col)]
     split_row_2 = [ws.cell(row=4, column=c).value for c in
@@ -313,10 +389,10 @@ def test_item_report_excel_export_merges_shared_description_rows(
     assert len(json_response.json()["items"]) == 3
 
     workbook = load_workbook(BytesIO(response.content), data_only=True)
-    ws = workbook["Not Restricted"]
+    ws = workbook["Item Report"]
 
     serial_col, hsn_col, desc_col, avail_qty_col = 7, 9, 10, 12
-    item_name_col, price_col, badge_col, qty_col, cif_col = 11, 10, 8, 18, 19
+    item_name_col, price_col, badge_col, qty_col, cif_col = 11, 10, 8, 15, 16
 
     # One merged row (not 3) for the group; comma-joined, ascending serials.
     assert ws.cell(row=2, column=serial_col).value == "3, 13, 23"
@@ -338,3 +414,66 @@ def test_item_report_excel_export_merges_shared_description_rows(
 
     # No leftover rows for the other 2 merged serials.
     assert ws.cell(row=4, column=serial_col).value is None
+
+
+@pytest.mark.django_db
+def test_item_report_excel_export_single_sheet_with_totals_row(report_viewer_client, item_report_masters):
+    """Restricted and non-restricted items used to land on separate sheets
+    ("Restricted" / "Not Restricted") — the export is now a single sheet
+    (matching the View, which never had that split), with a bold totals
+    row summing Available Quantity / Available Balance / Plan Qty / Plan
+    CIF beneath the data."""
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    lic_a = _make_license("ITEM-REPORT-ONESHEET-A", item_report_masters["parle"])
+    lic_b = _make_license("ITEM-REPORT-ONESHEET-B", item_report_masters["other"])
+    restricted = _make_import_item(
+        lic_a, item_report_masters["hs_code"], condition_type="AU",
+        available_value=Decimal("500.00"), available_quantity=Decimal("50.000"),
+    )
+    not_restricted = _make_import_item(
+        lic_b, item_report_masters["hs_code"],
+        available_value=Decimal("300.00"), available_quantity=Decimal("20.000"),
+    )
+    LicenseItemPlan.objects.create(
+        license=lic_b, import_item=not_restricted, item_name=item_report_masters["wheat"],
+        planned_quantity=Decimal("5.000"), unit_price=Decimal("1.00"), planned_cif_fc=Decimal("5.00"),
+    )
+
+    response = report_viewer_client.get(REPORT_URL, {"min_balance": 0, "format": "excel"})
+    assert response.status_code == 200, getattr(response, "data", response.content[:300])
+
+    workbook = load_workbook(BytesIO(response.content), data_only=True)
+    assert workbook.sheetnames == ["Item Report"]
+    ws = workbook["Item Report"]
+
+    # Header matches the View's exact column order.
+    headers = [c.value for c in ws[1]]
+    assert headers == [
+        'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Ledger Date', 'Exporter Name',
+        'Serial Number', 'Condition', 'HSN Code', 'Product Description', 'Item Name',
+        'Available Quantity', 'Unit Price', 'Available Balance', 'Plan Qty', 'Plan CIF',
+        'Balance CIF', 'Is Restricted', 'Notes', 'Condition Sheet', 'Transfer Status',
+    ]
+
+    # Both items (one restricted, one not) present on the one sheet.
+    license_nos = {ws.cell(row=r, column=2).value for r in range(2, ws.max_row)}
+    license_nos.discard(None)
+    assert license_nos == {lic_a.license_number, lic_b.license_number}
+
+    # Totals row: bold "TOTAL" label, correct sums in the 4 numeric columns.
+    total_row = ws.max_row
+    assert ws.cell(row=total_row, column=1).value == "TOTAL"
+    assert ws.cell(row=total_row, column=1).font.bold is True
+    assert ws.cell(row=total_row, column=12).value == pytest.approx(70.0)   # Available Quantity: 50 + 20
+    assert ws.cell(row=total_row, column=14).value == pytest.approx(800.0)  # Available Balance: 500 + 300
+    assert ws.cell(row=total_row, column=15).value == pytest.approx(5.0)    # Plan Qty
+    assert ws.cell(row=total_row, column=16).value == pytest.approx(5.0)    # Plan CIF
+    # Unit Price (13) and the kept-extra columns (17-21) are never totaled.
+    assert ws.cell(row=total_row, column=13).value is None
+
+    # Freeze header + AutoFilter over the data range (excluding totals row).
+    assert ws.freeze_panes == "A2"
+    assert ws.auto_filter.ref == f"A1:U{total_row - 1}"

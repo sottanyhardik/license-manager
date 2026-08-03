@@ -19,7 +19,7 @@ export default function PlannedReport() {
     const {
         selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies,
         isRestricted, purchaseStatus, productDescSearch, hsnCodeSearch, selectedNorms, selectedNotifications,
-        notificationOptions, expiryDateFrom, expiryDateTo,
+        notificationOptions, purchaseStatusOptions, normOptions, expiryDateFrom, expiryDateTo,
         setMinBalance, setMinAvailQty, setLicenseStatus, setIsRestricted,
         setProductDescSearch, setHsnCodeSearch, setExpiryDateFrom, setExpiryDateTo,
         handleItemNameChange, handleCompanyChange, handleExcludeCompanyChange, handlePurchaseStatusChange,
@@ -99,8 +99,10 @@ export default function PlannedReport() {
                 onExcludeCompanyChange={handleExcludeCompanyChange}
                 isRestricted={isRestricted}
                 onIsRestrictedChange={setIsRestricted}
+                purchaseStatusOptions={purchaseStatusOptions}
                 purchaseStatus={purchaseStatus}
                 onPurchaseStatusChange={handlePurchaseStatusChange}
+                normOptions={normOptions}
                 selectedNorms={selectedNorms}
                 onNormsChange={handleNormsChange}
                 notificationOptions={notificationOptions}

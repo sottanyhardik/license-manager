@@ -8,10 +8,11 @@ interface AllotmentFiltersProps {
     setFilters: (f: any) => void;
     availableItemNames: { value: any; label: string }[];
     notificationOptions: { value: string; display_name: string }[];
+    purchaseStatusOptions: { value: string; label: string }[];
 }
 
 /** Allotment-action filter card — extracted verbatim from AllotmentAction. */
-export default function AllotmentFilters({ filters, setFilters, availableItemNames, notificationOptions }: AllotmentFiltersProps) {
+export default function AllotmentFilters({ filters, setFilters, availableItemNames, notificationOptions, purchaseStatusOptions }: AllotmentFiltersProps) {
     return (
                     <div className="mb-3 overflow-hidden rounded-lg border border-border/60 bg-muted/40">
                         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
@@ -34,7 +35,7 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                     hs_code: "",
                                     is_expired: "all",
                                     is_restricted: "all",
-                                    purchase_status: "GE,GO,SM,MI",
+                                    purchase_status: purchaseStatusOptions.map(o => o.value).join(','),
                                     license_status: "active",
                                     item_names: "",
                                     expiry_date_from: "",
@@ -64,7 +65,7 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                 <div>
                                     <label className="form-label">Norm Class</label>
                                     <HybridSelect
-                                        fieldMeta={{endpoint: "masters/sion-classes/", label_field: "norm_class"}}
+                                        fieldMeta={{endpoint: "masters/sion-classes/?is_active=true", label_field: "norm_class"}}
                                         value={filters.norm_class}
                                         onChange={(value) => setFilters({...filters, norm_class: value as string})}
                                         placeholder="All Norm Classes"
@@ -187,19 +188,12 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                         <label className="form-label">Purchase Status</label>
                                         <Select
                                             isMulti
-                                            value={filters.purchase_status ? filters.purchase_status.split(',').map(s => ({
-                                                value: s,
-                                                label: s === 'GE' ? 'GE Purchase' : s === 'GO' ? 'GE Operating' : s === 'SM' ? 'SM Purchase' : s === 'MI' ? 'Conversion' : s === 'IP' ? 'IP' : 'CO'
-                                            })) : []}
+                                            value={filters.purchase_status ? filters.purchase_status.split(',').map(s => {
+                                                const opt = purchaseStatusOptions.find(o => o.value === s);
+                                                return opt || {value: s, label: s};
+                                            }) : []}
                                             onChange={(selected) => setFilters({...filters, purchase_status: selected ? selected.map(s => s.value).join(',') : ''})}
-                                            options={[
-                                                {value: 'GE', label: 'GE Purchase'},
-                                                {value: 'GO', label: 'GE Operating'},
-                                                {value: 'SM', label: 'SM Purchase'},
-                                                {value: 'MI', label: 'Conversion'},
-                                                {value: 'IP', label: 'IP'},
-                                                {value: 'CO', label: 'CO'}
-                                            ]}
+                                            options={purchaseStatusOptions}
                                             placeholder="All"
                                             className="basic-multi-select"
                                             classNamePrefix="select"

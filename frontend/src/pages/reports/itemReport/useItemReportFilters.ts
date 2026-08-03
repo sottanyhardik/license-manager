@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "@/api/axios";
 import { useDebouncedFilters } from "@/hooks/useDebounce";
+import { usePurchaseStatusOptions, useSionNormOptions } from "@/hooks/useMasterOptions";
 import type { ReportFilterValues } from "./reportQueryString";
 
 export type SelectOption = { value: string; label: string };
+
+/** Order-independent: is `selected` exactly the full active-options set? */
+function isDefaultSelection(selected: string[], options: SelectOption[]): boolean {
+    if (selected.length !== options.length) return false;
+    const optionValues = new Set(options.map((o) => o.value));
+    return selected.every((value) => optionValues.has(value));
+}
 
 /**
  * Encapsulates every filter used by the Item Report and Planned Report
@@ -22,7 +30,20 @@ export function useItemReportFilters() {
     const [selectedCompanies, setSelectedCompanies] = useState<unknown[]>([]);
     const [excludeCompanies, setExcludeCompanies] = useState<unknown[]>([]);
     const [isRestricted, setIsRestricted] = useState('all'); // 'all', 'true', 'false'
-    const [purchaseStatus, setPurchaseStatus] = useState(['GE', 'MI', 'SM']); // Default: GE, MI, SM
+    // Purchase Status options + default selection both come from the
+    // Purchase Status master (never hardcoded) — see useMasterOptions.ts.
+    // Default = every status the master currently marks active, applied
+    // once as soon as the master data loads (see effect below).
+    const { options: purchaseStatusOptions, loading: purchaseStatusLoading } = usePurchaseStatusOptions();
+    const { options: normOptions } = useSionNormOptions();
+    const [purchaseStatus, setPurchaseStatus] = useState<string[]>([]);
+    const purchaseStatusDefaultApplied = useRef(false);
+    useEffect(() => {
+        if (!purchaseStatusDefaultApplied.current && purchaseStatusOptions.length > 0) {
+            purchaseStatusDefaultApplied.current = true;
+            setPurchaseStatus(purchaseStatusOptions.map((o) => o.value));
+        }
+    }, [purchaseStatusOptions]);
     const [productDescSearch, setProductDescSearch] = useState('');
     const [hsnCodeSearch, setHsnCodeSearch] = useState('');
     const [selectedNorms, setSelectedNorms] = useState<string[]>([]);
@@ -114,7 +135,8 @@ export function useItemReportFilters() {
         setSelectedCompanies([]);
         setExcludeCompanies([]);
         setIsRestricted('all');
-        setPurchaseStatus(['GE', 'MI', 'SM']);
+        // Back to the master's active-status default, not a hardcoded list.
+        setPurchaseStatus(purchaseStatusOptions.map((o) => o.value));
         setProductDescSearch('');
         setHsnCodeSearch('');
         setSelectedNorms([]);
@@ -123,7 +145,7 @@ export function useItemReportFilters() {
         setExpiryDateTo('');
     };
 
-    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || (purchaseStatus.length !== 3 || !purchaseStatus.includes('GE') || !purchaseStatus.includes('MI') || !purchaseStatus.includes('SM')) || productDescSearch !== '' || hsnCodeSearch !== '' || selectedNorms.length > 0 || selectedNotifications.length > 0 || expiryDateFrom !== '' || expiryDateTo !== '';
+    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || !isDefaultSelection(purchaseStatus, purchaseStatusOptions) || productDescSearch !== '' || hsnCodeSearch !== '' || selectedNorms.length > 0 || selectedNotifications.length > 0 || expiryDateFrom !== '' || expiryDateTo !== '';
 
     // Whether there's enough of a query to actually load/show a report —
     // matches the "select filters to view report" gating used by both pages.
@@ -144,6 +166,9 @@ export function useItemReportFilters() {
         selectedNorms,
         selectedNotifications,
         notificationOptions,
+        purchaseStatusOptions,
+        purchaseStatusLoading,
+        normOptions,
         expiryDateFrom,
         expiryDateTo,
 

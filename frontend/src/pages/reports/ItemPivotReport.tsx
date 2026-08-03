@@ -17,11 +17,10 @@ import { autoPlanAll } from "../../services/api/licenseApi";
 import NormCardGrid from "./NormCardGrid";
 import ItemPivotFilters from "./ItemPivotFilters";
 import { openAuthedFile } from "../../utils/documentDownload";
+import { usePurchaseStatusOptions } from "../../hooks/useMasterOptions";
 
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
-const DEFAULT_PURCHASE_STATUS = ['GE', 'MI', 'CO'];
-
 // Distinct, subtle background tints cycled per item so each item's column
 // group (and its name header) is easy to tell apart at a glance.
 const ITEM_BG_COLORS = [
@@ -220,9 +219,20 @@ export default function ItemPivotReport() {
     const [licenseStatus, setLicenseStatus] = useState('active');
     const [expiryDateFrom, setExpiryDateFrom] = useState('');
     const [expiryDateTo, setExpiryDateTo] = useState('');
-    // Purchase Status filter — populated from /masters/purchase-statuses/.
-    const [purchaseStatus, setPurchaseStatus] = useState(DEFAULT_PURCHASE_STATUS);
-    const [purchaseStatusOptions, setPurchaseStatusOptions] = useState([]);
+    // Purchase Status filter — options AND the default selection both come
+    // from the Purchase Status master's `is_active` rows (never hardcoded —
+    // see useMasterOptions.ts), applied once as soon as the master data
+    // loads (matches the same one-time-default pattern the Item Report page
+    // uses for its own Purchase Status filter).
+    const { options: purchaseStatusOptions } = usePurchaseStatusOptions();
+    const [purchaseStatus, setPurchaseStatus] = useState<string[]>([]);
+    const purchaseStatusDefaultApplied = useRef(false);
+    useEffect(() => {
+        if (!purchaseStatusDefaultApplied.current && purchaseStatusOptions.length > 0) {
+            purchaseStatusDefaultApplied.current = true;
+            setPurchaseStatus(purchaseStatusOptions.map(o => o.value));
+        }
+    }, [purchaseStatusOptions]);
     const [conditionModal, setConditionModal] = useState(null); // { licenseNumber, content }
     const [transferModal, setTransferModal] = useState(null); // { licenseNumber, content }
     const [noteModal, setNoteModal] = useState(null); // { licenseNumber, content }
@@ -275,18 +285,9 @@ export default function ItemPivotReport() {
         } catch (error) {
             setSionNorms([]);
         }
-        try {
-            // Purchase Status dropdown — show only active rows, ordered by display_order.
-            const psResp = await api.get('masters/purchase-statuses/');
-            const psData = psResp.data?.results || psResp.data || [];
-            const opts = (Array.isArray(psData) ? psData : [])
-                .filter(p => p.is_active !== false)
-                .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-                .map(p => ({value: p.code, label: p.label}));
-            setPurchaseStatusOptions(opts);
-        } catch (error) {
-            setPurchaseStatusOptions([]);
-        }
+        // Purchase Status options come from the shared usePurchaseStatusOptions
+        // hook (Purchase Status master, is_active-only, display_order/label
+        // ordering) — no per-page fetch needed here anymore.
     };
 
     const loadAvailableNorms = async () => {
@@ -452,13 +453,15 @@ export default function ItemPivotReport() {
         setLicenseStatus('active');
         setExpiryDateFrom('');
         setExpiryDateTo('');
-        setPurchaseStatus(DEFAULT_PURCHASE_STATUS);
+        // Back to the master's active-status default, not a hardcoded list.
+        setPurchaseStatus(purchaseStatusOptions.map(o => o.value));
     };
 
-    // Purchase Status is "active" only when it differs from the default trio.
+    // Purchase Status is "active" only when it differs from the master's
+    // full active-status default (order-independent).
     const isDefaultPurchaseStatus =
-        purchaseStatus.length === DEFAULT_PURCHASE_STATUS.length &&
-        DEFAULT_PURCHASE_STATUS.every(v => purchaseStatus.includes(v));
+        purchaseStatus.length === purchaseStatusOptions.length &&
+        purchaseStatusOptions.every(o => purchaseStatus.includes(o.value));
     const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active' || expiryDateFrom || expiryDateTo || !isDefaultPurchaseStatus;
 
     const handleAutoPlanAll = async () => {

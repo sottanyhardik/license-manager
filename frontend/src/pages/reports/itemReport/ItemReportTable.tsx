@@ -11,6 +11,14 @@ import type { SelectOption } from "./useItemReportFilters";
 export interface ItemReportTableProps {
     items: any[];
     /**
+     * Items the totals row sums over — defaults to `items`. Pass the full,
+     * unpaginated filtered set here when `items` itself is just the current
+     * page, so totals always reflect "after filtering", not "on this page".
+     */
+    totalsItems?: any[];
+    /** Sr No continues from this value — set to the count of rows on prior pages when paginating. */
+    startSrNo?: number;
+    /**
      * 'editable' (Item Report) renders the Item Name cell as a multiselect
      * that PATCHes `license-items/{id}/` on change. 'readonly' (Planned
      * Report) renders the row's single `planned_item_name` as plain text.
@@ -30,11 +38,26 @@ export interface ItemReportTableProps {
     onSaveEdit: (item: any) => void;
 }
 
-/** Grouped (one rowSpan block per license), sticky-header report table shared by Item Report and Planned Report. */
+function formatQty(value: unknown): string {
+    return Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+function formatCif(value: unknown): string {
+    return Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * Grouped (one rowSpan block per license), sticky-header report table shared
+ * by Item Report and Planned Report. Column order matches the Excel export
+ * exactly (see item_report.py's export_to_excel): the business-required
+ * columns (Sr No .. Plan CIF) followed by the pre-existing extra columns
+ * (Balance CIF, Is Restricted, Notes, Condition Sheet, Transfer Status).
+ */
 export default function ItemReportTable({
-    items, itemNameMode, itemNameOptions = [], onItemNamesChange,
+    items, totalsItems, startSrNo = 0, itemNameMode, itemNameOptions = [], onItemNamesChange,
     editingCell, editValue, onEditValueChange, onStartEdit, onCancelEdit, onSaveEdit,
 }: ItemReportTableProps) {
+    const totalsSource = totalsItems ?? items;
     // Group items by license_id
     const groupedByLicense: Record<string, any[]> = {};
     items.forEach(item => {
@@ -44,14 +67,14 @@ export default function ItemReportTable({
         groupedByLicense[item.license_id].push(item);
     });
 
-    let srNo = 0;
+    let srNo = startSrNo;
 
     return (
         <Card>
             <CardContent className="p-0">
                 <div className="overflow-x-auto">
                     <table className="table table-hover table-sm mb-0"
-                           style={{tableLayout: 'auto', minWidth: '1400px'}}>
+                           style={{tableLayout: 'auto', minWidth: '1600px'}}>
                         <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                         <tr className="table-light">
                             <th scope="col" className="text-center" style={{
@@ -78,17 +101,20 @@ export default function ItemReportTable({
                                 zIndex: 11,
                                 backgroundColor: 'var(--tb-sunken)',
                                 minWidth: '140px'
-                            }}>Expiry Date
+                            }}>License Expiry Date
                             </th>
+                            <th scope="col" style={{minWidth: '120px'}}>Ledger Date</th>
                             <th scope="col" style={{minWidth: '200px'}}>Exporter Name</th>
-                            <th scope="col" style={{minWidth: '100px'}}>Serial No</th>
+                            <th scope="col" style={{minWidth: '100px'}}>Serial Number</th>
+                            <th scope="col" className="text-center" style={{minWidth: '90px'}}>Condition</th>
                             <th scope="col" style={{minWidth: '100px'}}>HSN Code</th>
                             <th scope="col" style={{minWidth: '250px'}}>Product Description</th>
                             <th scope="col" style={{minWidth: '200px'}}>Item Name</th>
-                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Avail Qty</th>
+                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Available Quantity</th>
+                            <th scope="col" className="text-right" style={{minWidth: '110px'}}>Unit Price</th>
+                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Available Balance</th>
                             <th scope="col" className="text-right" style={{minWidth: '120px'}}>Plan Qty</th>
                             <th scope="col" className="text-right" style={{minWidth: '120px'}}>Plan CIF</th>
-                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Avail Bal</th>
                             <th scope="col" className="text-right" style={{
                                 position: 'sticky',
                                 left: '350px',
@@ -169,12 +195,15 @@ export default function ItemReportTable({
                                                 <td rowSpan={rowSpan} style={{
                                                     verticalAlign: 'middle',
                                                     backgroundColor: 'var(--tb-sunken)'
+                                                }}>{formatDate(firstItem.ledger_date)}</td>
+                                                <td rowSpan={rowSpan} style={{
+                                                    verticalAlign: 'middle',
+                                                    backgroundColor: 'var(--tb-sunken)'
                                                 }}>{firstItem.exporter_name || '-'}</td>
                                             </>
                                         )}
-                                        <td className="text-center"
-                                            style={{verticalAlign: 'middle'}}>
-                                            {item.serial_number}
+                                        <td style={{verticalAlign: 'middle'}}>{item.serial_number}</td>
+                                        <td className="text-center" style={{verticalAlign: 'middle'}}>
                                             <ConditionBadge type={item.condition_type} size="xs" />
                                         </td>
                                         <td style={{verticalAlign: 'middle'}}>{item.hs_code || '-'}</td>
@@ -204,20 +233,23 @@ export default function ItemReportTable({
                                                 <span>{item.planned_item_name || '-'}</span>
                                             )}
                                         </td>
-                                        <td className="text-right">{Number(item.available_quantity || 0).toFixed(3)}</td>
+                                        <td className="text-right">{formatQty(item.available_quantity)}</td>
+                                        <td className="text-right">{formatCif(item.unit_price)}</td>
+                                        {isFirstRow && (
+                                            <td className="text-right text-success font-semibold"
+                                                rowSpan={rowSpan} style={{
+                                                verticalAlign: 'middle',
+                                                backgroundColor: 'var(--tb-sunken)'
+                                            }}>{formatCif(firstItem.available_balance)}</td>
+                                        )}
                                         <td className="text-right" title={(item.planned_splits || []).map((s: any) => `${s.item_name || '—'}: ${Number(s.planned_quantity).toFixed(3)} @ ${Number(s.unit_price).toFixed(2)} = ${Number(s.planned_cif_fc).toFixed(2)}`).join('\n')}>
-                                            {Number(item.planned_quantity || 0) > 0 ? Number(item.planned_quantity).toFixed(3) : '-'}
+                                            {Number(item.planned_quantity || 0) > 0 ? formatQty(item.planned_quantity) : '-'}
                                         </td>
                                         <td className="text-right">
-                                            {Number(item.planned_cif || 0) > 0 ? Number(item.planned_cif).toFixed(2) : '-'}
+                                            {Number(item.planned_cif || 0) > 0 ? formatCif(item.planned_cif) : '-'}
                                         </td>
                                         {isFirstRow && (
                                             <>
-                                                <td className="text-right text-success font-semibold"
-                                                    rowSpan={rowSpan} style={{
-                                                    verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)'
-                                                }}>{Number(firstItem.available_balance || 0).toFixed(2)}</td>
                                                 <td className="text-right text-primary font-semibold"
                                                     rowSpan={rowSpan} style={{
                                                     position: 'sticky',
@@ -227,7 +259,7 @@ export default function ItemReportTable({
                                                     backgroundColor: 'var(--tb-sunken)',
                                                     boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                     borderRight: '2px solid var(--tb-border)'
-                                                }}>{Number(firstItem.balance_cif || 0).toFixed(2)}</td>
+                                                }}>{formatCif(firstItem.balance_cif)}</td>
                                                 <td className="text-center" rowSpan={rowSpan}
                                                     style={{
                                                         verticalAlign: 'middle',
@@ -336,7 +368,7 @@ export default function ItemReportTable({
                         </tbody>
                         <tfoot style={{position: 'sticky', bottom: 0, zIndex: 10}}>
                         <tr className="table-secondary font-bold">
-                            <td colSpan={10} className="text-right" style={{
+                            <td colSpan={11} className="text-right" style={{
                                 position: 'sticky',
                                 left: 0,
                                 zIndex: 11,
@@ -346,21 +378,29 @@ export default function ItemReportTable({
                                 Total:
                             </td>
                             <td className="text-right" style={{fontWeight: '600'}}>
-                                {items.reduce((sum, item) => sum + (item.available_quantity || 0), 0).toFixed(3)}
+                                {formatQty(totalsSource.reduce((sum, item) => sum + (item.available_quantity || 0), 0))}
                             </td>
+                            <td></td>
                             <td className="text-right text-success" style={{fontWeight: '600'}}>
                                 {(() => {
-                                    // Calculate unique license balance total (don't double count licenses with multiple items)
+                                    // Available Balance is license-level (repeated per item) —
+                                    // sum once per license, not once per raw row.
                                     const uniqueLicenses: Record<string, number> = {};
-                                    items.forEach((item: any) => {
-                                        if (!uniqueLicenses[item.license_id]) {
+                                    totalsSource.forEach((item: any) => {
+                                        if (!(item.license_id in uniqueLicenses)) {
                                             uniqueLicenses[item.license_id] = item.available_balance || 0;
                                         }
                                     });
-                                    return Object.values(uniqueLicenses).reduce((sum: number, val: number) => sum + val, 0).toFixed(2);
+                                    return formatCif(Object.values(uniqueLicenses).reduce((sum: number, val: number) => sum + val, 0));
                                 })()}
                             </td>
-                            <td colSpan={4}></td>
+                            <td className="text-right" style={{fontWeight: '600'}}>
+                                {formatQty(totalsSource.reduce((sum, item) => sum + (item.planned_quantity || 0), 0))}
+                            </td>
+                            <td className="text-right" style={{fontWeight: '600'}}>
+                                {formatCif(totalsSource.reduce((sum, item) => sum + (item.planned_cif || 0), 0))}
+                            </td>
+                            <td colSpan={5}></td>
                         </tr>
                         </tfoot>
                     </table>

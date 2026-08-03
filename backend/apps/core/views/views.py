@@ -316,7 +316,14 @@ SionNormClassViewSet = MasterViewSet.create_viewset(
             "search": ["norm_class", "description", "import_norm__description", "export_norm__description"],
             "filter": {
                 "head_norm": {"type": "fk", "fk_endpoint": "/masters/head-norms/", "label_field": "name"},
-                "is_active": {"type": "boolean", "default": True},
+                # "boolean" is not a recognized filter type in
+                # apply_advanced_filters (only "exact" handles the
+                # string->bool coercion) — using it here silently made
+                # ?is_active=true/false a no-op, so every one of the
+                # ~2,000 SION norm classes (all but a handful inactive)
+                # was returned regardless of the filter. "exact" is the
+                # same type PurchaseStatus's own is_active filter uses.
+                "is_active": {"type": "exact", "default": True},
             },
             "list_display": ["norm_class", "description", "head_norm_name", "is_active"],
             "form_fields": ["norm_class", "description", "head_norm", "is_active"],

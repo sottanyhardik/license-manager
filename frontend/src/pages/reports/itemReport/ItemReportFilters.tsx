@@ -11,22 +11,6 @@ import {
 import { normalizeReportNumber } from "./reportQueryString";
 import type { SelectOption } from "./useItemReportFilters";
 
-const PURCHASE_STATUS_OPTIONS: SelectOption[] = [
-    {value: 'GE', label: 'GE Purchase'},
-    {value: 'GO', label: 'GE Operating'},
-    {value: 'SM', label: 'SM Purchase'},
-    {value: 'MI', label: 'Conversion'},
-    {value: 'IP', label: 'IP'},
-    {value: 'CO', label: 'CO'},
-];
-
-const NORM_OPTIONS: SelectOption[] = [
-    {value: 'E1', label: 'E1'},
-    {value: 'E5', label: 'E5'},
-    {value: 'E126', label: 'E126'},
-    {value: 'E132', label: 'E132'},
-];
-
 export interface ItemReportFiltersProps {
     isPending: boolean;
     hasActiveFilters: boolean;
@@ -51,9 +35,11 @@ export interface ItemReportFiltersProps {
     isRestricted: string;
     onIsRestrictedChange: (value: string) => void;
 
+    purchaseStatusOptions: SelectOption[];
     purchaseStatus: string[];
     onPurchaseStatusChange: (values: string[] | null) => void;
 
+    normOptions: SelectOption[];
     selectedNorms: string[];
     onNormsChange: (values: string[] | null) => void;
 
@@ -79,8 +65,8 @@ export default function ItemReportFilters({
     expiryDateFrom, onExpiryDateFromChange, expiryDateTo, onExpiryDateToChange,
     selectedCompanies, onCompanyChange, excludeCompanies, onExcludeCompanyChange,
     isRestricted, onIsRestrictedChange,
-    purchaseStatus, onPurchaseStatusChange,
-    selectedNorms, onNormsChange,
+    purchaseStatusOptions, purchaseStatus, onPurchaseStatusChange,
+    normOptions, selectedNorms, onNormsChange,
     notificationOptions, selectedNotifications, onNotificationsChange,
     productDescSearch, onProductDescSearchChange, hsnCodeSearch, onHsnCodeSearchChange,
     itemNameOptions, selectedItemNames, onItemNameChange,
@@ -259,9 +245,9 @@ export default function ItemReportFilters({
                                 <Select
                                     inputId={purchaseStatusId}
                                     isMulti
-                                    value={PURCHASE_STATUS_OPTIONS.filter(opt => purchaseStatus.includes(opt.value))}
+                                    value={purchaseStatusOptions.filter(opt => purchaseStatus.includes(opt.value))}
                                     onChange={(selected) => onPurchaseStatusChange(selected ? selected.map(s => s.value) : [])}
-                                    options={PURCHASE_STATUS_OPTIONS}
+                                    options={purchaseStatusOptions}
                                     placeholder="Select purchase status..."
                                     className="basic-multi-select"
                                     classNamePrefix="select"
@@ -276,9 +262,9 @@ export default function ItemReportFilters({
                                 <Select
                                     inputId={normsId}
                                     isMulti
-                                    value={NORM_OPTIONS.filter(opt => selectedNorms.includes(opt.value))}
+                                    value={normOptions.filter(opt => selectedNorms.includes(opt.value))}
                                     onChange={(selected) => onNormsChange(selected ? selected.map(s => s.value) : [])}
-                                    options={NORM_OPTIONS}
+                                    options={normOptions}
                                     placeholder="Select norms..."
                                     className="basic-multi-select"
                                     classNamePrefix="select"
@@ -372,7 +358,7 @@ export default function ItemReportFilters({
                                         {selectedCompanies.length > 0 && <span className="chip chip-primary ml-2">Incl. Companies: {selectedCompanies.length}</span>}
                                         {excludeCompanies.length > 0 && <span className="chip chip-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>}
                                         {isRestricted !== 'all' && <span className="chip chip-primary ml-2">Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span>}
-                                        {purchaseStatus.length > 0 && purchaseStatus.length < 6 && <span className="chip chip-primary ml-2">Purchase Status: {purchaseStatus.length}</span>}
+                                        {purchaseStatus.length > 0 && purchaseStatus.length < purchaseStatusOptions.length && <span className="chip chip-primary ml-2">Purchase Status: {purchaseStatus.length}</span>}
                                         {selectedItemNames.length > 0 && <span className="chip chip-primary ml-2">Item Names: {selectedItemNames.length}</span>}
                                         {productDescSearch !== '' && <span className="chip chip-primary ml-2">Product Desc: "{productDescSearch}"</span>}
                                         {hsnCodeSearch !== '' && <span className="chip chip-primary ml-2">HSN Code: "{hsnCodeSearch}"</span>}

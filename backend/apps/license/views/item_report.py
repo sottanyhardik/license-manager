@@ -284,10 +284,13 @@ class ItemReportView(APIView):
         # Filter by notification numbers (license notification) if specified
         if notification_numbers:
             notification_list = [n.strip() for n in notification_numbers.split(',') if n.strip()]
-            items = items.filter(license__notification_number__in=notification_list).distinct()
+            items = items.filter(license__notification_number__code__in=notification_list).distinct()
 
-        # Order by license number and serial number
-        items = items.order_by('license__license_number', 'serial_number')
+        # Sorted by license expiry date (soonest-expiring first) — the
+        # business-report ordering requested for the Item Report — with
+        # license number / serial number as stable tie-breakers so a
+        # license's own item rows always stay contiguous for grouping.
+        items = items.order_by('license__license_expiry_date', 'license__license_number', 'serial_number')
 
         # Materialise the queryset once so the plan pre-fetch can use the IDs
         # without issuing a second DB round-trip.
@@ -328,6 +331,21 @@ class ItemReportView(APIView):
             # Note: Make sure to run "Update Balance" in Item Pivot Report to refresh these values
             available_balance = float(item.available_value or 0)
 
+            # Unit Price — the item's own originally-transacted per-unit CIF
+            # (cif_fc / quantity). Falls back to the live available balance
+            # per unit (available_balance / available_quantity) only when
+            # cif_fc isn't usable (e.g. zero on older/incomplete records),
+            # so the column is never blank when a sensible value exists.
+            quantity = float(item.quantity or 0)
+            cif_fc = float(item.cif_fc or 0)
+            available_quantity = float(item.available_quantity or 0)
+            if quantity > 0 and cif_fc > 0:
+                unit_price = cif_fc / quantity
+            elif available_quantity > 0:
+                unit_price = available_balance / available_quantity
+            else:
+                unit_price = 0
+
             # Get latest transfer information
             latest_transfer_info = None
             if hasattr(item.license, 'latest_transfers') and item.license.latest_transfers:
@@ -347,9 +365,10 @@ class ItemReportView(APIView):
                 'hs_code': item.hs_code.hs_code if item.hs_code else None,
                 'product_description': item.description or '',
                 'item_names': item_names_list,
-                'quantity': float(item.quantity or 0),
-                'available_quantity': float(item.available_quantity or 0),
+                'quantity': quantity,
+                'available_quantity': available_quantity,
                 'available_balance': available_balance,
+                'unit_price': unit_price,
                 'balance_cif': float(item.license.balance_cif or 0),
                 'is_restricted': item.is_restricted,
                 'condition_type': item.condition_type or '',
@@ -379,7 +398,9 @@ class ItemReportView(APIView):
         }
 
     def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None):
-        """Export item report to Excel with separate sheets for Restricted and Not Restricted items"""
+        """Export item report to Excel — single sheet, grouped by license, one row per
+        license item, laid out identically to the View Report table (same column
+        order/labels, same license-level grouping, same totals)."""
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
         from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
@@ -393,227 +414,252 @@ class ItemReportView(APIView):
                 return ILLEGAL_CHARACTERS_RE.sub('', v)
             return v
 
-        # Generate report data
+        # Generate report data — already sorted by license expiry date (see
+        # generate_report), so licenses appear in the same order as the View.
         report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
         items = report_data['items']
-
-        # Separate items into restricted and not restricted
-        restricted_items = [item for item in items if item['is_restricted']]
-        not_restricted_items = [item for item in items if not item['is_restricted']]
 
         # Create workbook
         wb = openpyxl.Workbook()
         wb.remove(wb.active)  # Remove default sheet
+
+        if not items:
+            ws = wb.create_sheet(title="No Data")
+            ws.cell(row=1, column=1, value="No items found matching the filter criteria")
+            excel_file = BytesIO()
+            wb.save(excel_file)
+            excel_file.seek(0)
+            response = HttpResponse(
+                excel_file.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename=item_report.xlsx'
+            return response
 
         # Header style
         header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
         header_font = Font(bold=True, color="FFFFFF", size=11)
         header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-        # Headers — "Condition" sits next to "Serial Number" so it's obvious
-        # which licence item the AU / N% restriction applies to.
+        # Column order matches the View Report table exactly (View/Excel
+        # parity): the 16 required business columns, followed by the
+        # pre-existing extra columns the View also keeps (Balance CIF,
+        # Is Restricted, Notes, Condition Sheet, Transfer Status).
+        # "Condition" sits next to "Serial Number" so it's obvious which
+        # licence item the AU / N% restriction applies to.
         headers = [
             'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Ledger Date', 'Exporter Name',
             'Serial Number', 'Condition', 'HSN Code', 'Product Description', 'Item Name',
-            'Available Quantity', 'Available Balance', 'Balance CIF', 'Notes', 'Condition Sheet', 'Transfer Status',
-            'Plan Qty', 'Plan CIF'
+            'Available Quantity', 'Unit Price', 'Available Balance', 'Plan Qty', 'Plan CIF',
+            'Balance CIF', 'Is Restricted', 'Notes', 'Condition Sheet', 'Transfer Status',
+        ]
+        COL = {name: i + 1 for i, name in enumerate(headers)}
+        QTY_FMT = '#,##0.000'
+        CIF_FMT = '#,##0.00'
+        # License-level columns: written once per license (first item's row)
+        # and Excel-merged down the whole group, exactly like the View's
+        # rowSpan cells.
+        GROUPED_COLS = [
+            COL['Sr No'], COL['License No'], COL['License Date'], COL['License Expiry Date'],
+            COL['Ledger Date'], COL['Exporter Name'], COL['Available Balance'], COL['Balance CIF'],
+            COL['Is Restricted'], COL['Notes'], COL['Condition Sheet'], COL['Transfer Status'],
         ]
 
-        def create_sheet(workbook, sheet_name, items_list):
-            """Helper function to create a sheet with given items, grouped by license"""
-            from openpyxl.styles import Border, Side
+        ws = wb.create_sheet(title="Item Report")
 
-            ws = workbook.create_sheet(title=sheet_name)
+        # Add headers
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
 
-            # Add headers
-            for col_num, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col_num, value=header)
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = header_alignment
+        # Column widths (openpyxl has no true content-measuring auto-fit —
+        # these are sized to comfortably fit typical values per column,
+        # the same approach the previous version of this export used).
+        widths = {
+            'Sr No': 8, 'License No': 18, 'License Date': 15, 'License Expiry Date': 18,
+            'Ledger Date': 15, 'Exporter Name': 25, 'Serial Number': 12, 'Condition': 11,
+            'HSN Code': 12, 'Product Description': 40, 'Item Name': 25, 'Available Quantity': 18,
+            'Unit Price': 14, 'Available Balance': 18, 'Plan Qty': 14, 'Plan CIF': 16,
+            'Balance CIF': 18, 'Is Restricted': 14, 'Notes': 30, 'Condition Sheet': 30,
+            'Transfer Status': 35,
+        }
+        for name, col_num in COL.items():
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col_num)].width = widths[name]
 
-            # Set column widths
-            ws.column_dimensions['A'].width = 8   # Sr No
-            ws.column_dimensions['B'].width = 18  # License No
-            ws.column_dimensions['C'].width = 15  # License Date
-            ws.column_dimensions['D'].width = 18  # License Expiry Date
-            ws.column_dimensions['E'].width = 15  # Ledger Date
-            ws.column_dimensions['F'].width = 25  # Exporter Name
-            ws.column_dimensions['G'].width = 12  # Serial Number
-            ws.column_dimensions['H'].width = 11  # Condition
-            ws.column_dimensions['I'].width = 12  # HSN Code
-            ws.column_dimensions['J'].width = 40  # Product Description
-            ws.column_dimensions['K'].width = 25  # Item Name
-            ws.column_dimensions['L'].width = 18  # Available Quantity
-            ws.column_dimensions['M'].width = 18  # Available Balance
-            ws.column_dimensions['N'].width = 18  # Balance CIF
-            ws.column_dimensions['O'].width = 30  # Notes
-            ws.column_dimensions['P'].width = 30  # Condition Sheet
-            ws.column_dimensions['Q'].width = 35  # Transfer Status
-            ws.column_dimensions['R'].width = 14  # Plan Qty
-            ws.column_dimensions['S'].width = 16  # Plan CIF
+        # Group items by license, preserving the license expiry-date order
+        # generate_report() already sorted them in.
+        grouped_items = {}
+        for item in items:
+            license_id = item['license_id']
+            if license_id not in grouped_items:
+                grouped_items[license_id] = []
+            grouped_items[license_id].append(item)
 
-            # Group items by license
-            grouped_items = {}
-            for item in items_list:
-                license_id = item['license_id']
-                if license_id not in grouped_items:
-                    grouped_items[license_id] = []
-                grouped_items[license_id].append(item)
+        # Merge each licence's raw rows (one per S.No) into one row per
+        # planning-item group (the same `plan_group_key` grouping
+        # `plan_utilization_rows()` uses) — e.g. 3 S.No rows that share a
+        # description collapse into 1, with a comma-joined Serial Number
+        # cell. Only the Excel export merges; `report_data['items']`
+        # (the JSON API) stays one row per raw import item, since the
+        # Item Report table edits item names per raw row.
+        grouped_items = {
+            license_id: _merge_report_items_by_group(rows)
+            for license_id, rows in grouped_items.items()
+        }
 
-            # Merge each licence's raw rows (one per S.No) into one row per
-            # planning-item group (the same `plan_group_key` grouping
-            # `plan_utilization_rows()` uses) — e.g. 3 S.No rows that share a
-            # description collapse into 1, with a comma-joined Serial Number
-            # cell. Only the Excel export merges; `report_data['items']`
-            # (the JSON API) stays one row per raw import item, since the
-            # Item Report table edits item names per raw row.
-            grouped_items = {
-                license_id: _merge_report_items_by_group(rows)
-                for license_id, rows in grouped_items.items()
-            }
+        # Define border style for merged cells
+        from openpyxl.styles import Border, Side
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
 
-            # Define border style for merged cells
-            thin_border = Border(
-                left=Side(style='thin'),
-                right=Side(style='thin'),
-                top=Side(style='thin'),
-                bottom=Side(style='thin')
-            )
+        # Planning split sub-row rendering is shared with
+        # license_balance_excel.py — see planning_split_rows.py.
+        from apps.license.services.exporters.planning_split_rows import (
+            rows_for_splits, write_split_sub_rows,
+        )
 
-            # Planning split sub-row rendering is shared with
-            # license_balance_excel.py — see planning_split_rows.py.
-            from apps.license.services.exporters.planning_split_rows import (
-                rows_for_splits, write_split_sub_rows,
-            )
+        # Add data rows with merged cells for same license
+        current_row = 2
+        sr_no = 1
 
-            # Add data rows with merged cells for same license
-            current_row = 2
-            sr_no = 1
+        for license_id, license_items in grouped_items.items():
+            # Per-item visible (qty>0 or cif>0) planning splits, sourced
+            # from the same plan_map_for_import_items() map
+            # generate_report() already built (item['planned_splits'],
+            # scoped to manual-plan items there) — no second
+            # LicenseItemPlan query here.
+            item_split_rows = [
+                rows_for_splits(item.get('planned_splits') or [])
+                for item in license_items
+            ]
+            # Row span now covers each item's own row PLUS its split
+            # sub-rows, so the merged license-level columns still span
+            # the whole license block correctly.
+            row_span = len(license_items) + sum(len(s) for s in item_split_rows)
+            start_row = current_row
 
-            for license_id, license_items in grouped_items.items():
-                # Per-item visible (qty>0 or cif>0) planning splits, sourced
-                # from the same plan_map_for_import_items() map
-                # generate_report() already built (item['planned_splits'],
-                # scoped to manual-plan items there) — no second
-                # LicenseItemPlan query here.
-                item_split_rows = [
-                    rows_for_splits(item.get('planned_splits') or [])
-                    for item in license_items
+            # Add each item in this license group
+            for item_idx, item in enumerate(license_items):
+                item_names_str = ', '.join([i['name'] for i in item['item_names']])
+
+                # License-level columns (only for first row, will be merged)
+                if item_idx == 0:
+                    ws.cell(row=current_row, column=COL['Sr No'], value=sr_no)
+                    ws.cell(row=current_row, column=COL['License No'], value=_safe(item['license_number']))
+                    ws.cell(row=current_row, column=COL['License Date'], value=_safe(item['license_date']))
+                    ws.cell(row=current_row, column=COL['License Expiry Date'], value=_safe(item['license_expiry_date']))
+                    ws.cell(row=current_row, column=COL['Ledger Date'], value=_safe(item.get('ledger_date')))
+                    ws.cell(row=current_row, column=COL['Exporter Name'], value=_safe(item['exporter_name']))
+                    avail_bal_cell = ws.cell(row=current_row, column=COL['Available Balance'], value=item['available_balance'])
+                    avail_bal_cell.number_format = CIF_FMT
+                    bal_cif_cell = ws.cell(row=current_row, column=COL['Balance CIF'], value=item['balance_cif'])
+                    bal_cif_cell.number_format = CIF_FMT
+                    ws.cell(row=current_row, column=COL['Is Restricted'], value='Yes' if item['is_restricted'] else 'No')
+                    ws.cell(row=current_row, column=COL['Notes'], value=_safe(item['notes']))
+                    ws.cell(row=current_row, column=COL['Condition Sheet'], value=_safe(item['condition_sheet']))
+                    ws.cell(row=current_row, column=COL['Transfer Status'], value=_safe(item.get('latest_transfer', '')))
+
+                # Item-level columns (for each row)
+                sn_cell = ws.cell(row=current_row, column=COL['Serial Number'], value=item['serial_number'])
+                cond = (item.get('condition_type') or '')
+                cond_cell = ws.cell(row=current_row, column=COL['Condition'], value=cond)
+                # Tint both Serial-Number and Condition cells so the row
+                # stands out at a glance.
+                _annotate_condition_cell(sn_cell, cond)
+                _annotate_condition_cell(cond_cell, cond)
+                ws.cell(row=current_row, column=COL['HSN Code'], value=_safe(item['hs_code']))
+                ws.cell(row=current_row, column=COL['Product Description'], value=_safe(item['product_description']))
+                ws.cell(row=current_row, column=COL['Item Name'], value=_safe(item_names_str))
+                qty_cell = ws.cell(row=current_row, column=COL['Available Quantity'], value=item['available_quantity'])
+                qty_cell.number_format = QTY_FMT
+                price_cell = ws.cell(row=current_row, column=COL['Unit Price'], value=item.get('unit_price') or 0)
+                price_cell.number_format = CIF_FMT
+                plan_qty_cell = ws.cell(row=current_row, column=COL['Plan Qty'], value=item.get('planned_quantity') or 0)
+                plan_qty_cell.number_format = QTY_FMT
+                plan_cif_cell = ws.cell(row=current_row, column=COL['Plan CIF'], value=item.get('planned_cif') or 0)
+                plan_cif_cell.number_format = CIF_FMT
+
+                current_row += 1
+
+                # ── Planning split sub-rows ─────────────────────────────
+                # One indented row per manual-plan split — Planning Item
+                # Name / Unit Price / Planned Qty / Planned CIF / "Split N"
+                # badge — matching license_balance_excel.py's per-item
+                # split rows exactly (same source map, same filter).
+                # item_name is sanitized like every other string field in
+                # this export (control chars openpyxl rejects).
+                _raw_splits = item.get('planned_splits') or []
+                _sanitized_splits = [
+                    {**s, 'item_name': _safe(s.get('item_name'))} for s in _raw_splits
                 ]
-                # Row span now covers each item's own row PLUS its split
-                # sub-rows, so the merged license-level columns (Sr No,
-                # License No, ... Transfer Status) still span the whole
-                # license block correctly.
-                row_span = len(license_items) + sum(len(s) for s in item_split_rows)
-                start_row = current_row
+                current_row += write_split_sub_rows(
+                    ws, current_row, _sanitized_splits,
+                    name_col=COL['Item Name'],
+                    price_col=COL['Product Description'],  # reused for the "@ $X/unit" label
+                    badge_col=COL['Condition'],
+                    qty_col=COL['Plan Qty'],
+                    cif_col=COL['Plan CIF'],
+                    other_cols=(
+                        COL['Serial Number'], COL['HSN Code'], COL['Available Quantity'],
+                        COL['Unit Price'], COL['Available Balance'], COL['Balance CIF'],
+                        COL['Is Restricted'], COL['Notes'], COL['Condition Sheet'], COL['Transfer Status'],
+                    ),
+                )
 
-                # Add each item in this license group
-                for item_idx, item in enumerate(license_items):
-                    item_names_str = ', '.join([i['name'] for i in item['item_names']])
+            # Merge cells for license-level columns
+            if row_span > 1:
+                end_row = start_row + row_span - 1
+                for col in GROUPED_COLS:
+                    ws.merge_cells(start_row=start_row, start_column=col, end_row=end_row, end_column=col)
 
-                    # License-level columns (only for first row, will be merged)
-                    if item_idx == 0:
-                        ws.cell(row=current_row, column=1, value=sr_no)  # Sr No
-                        ws.cell(row=current_row, column=2, value=_safe(item['license_number']))  # License No
-                        ws.cell(row=current_row, column=3, value=_safe(item['license_date']))  # License Date
-                        ws.cell(row=current_row, column=4, value=_safe(item['license_expiry_date']))  # License Expiry Date
-                        ws.cell(row=current_row, column=5, value=_safe(item.get('ledger_date')))  # Ledger Date
-                        ws.cell(row=current_row, column=6, value=_safe(item['exporter_name']))  # Exporter Name
-                        ws.cell(row=current_row, column=13, value=item['available_balance'])  # Available Balance
-                        ws.cell(row=current_row, column=14, value=item['balance_cif'])  # Balance CIF
-                        ws.cell(row=current_row, column=15, value=_safe(item['notes']))  # Notes
-                        ws.cell(row=current_row, column=16, value=_safe(item['condition_sheet']))  # Condition Sheet
-                        ws.cell(row=current_row, column=17, value=_safe(item.get('latest_transfer', '')))  # Transfer Status
+                # Apply vertical center alignment to merged cells
+                for col in GROUPED_COLS:
+                    cell = ws.cell(row=start_row, column=col)
+                    cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                    cell.border = thin_border
 
-                    # Item-level columns (for each row)
-                    sn_cell = ws.cell(row=current_row, column=7, value=item['serial_number'])  # Serial Number
-                    cond = (item.get('condition_type') or '')
-                    cond_cell = ws.cell(row=current_row, column=8, value=cond)  # Condition
-                    # Tint both Serial-Number and Condition cells so the row
-                    # stands out at a glance.
-                    _annotate_condition_cell(sn_cell, cond)
-                    _annotate_condition_cell(cond_cell, cond)
-                    ws.cell(row=current_row, column=9, value=_safe(item['hs_code']))  # HSN Code
-                    ws.cell(row=current_row, column=10, value=_safe(item['product_description']))  # Product Description
-                    ws.cell(row=current_row, column=11, value=_safe(item_names_str))  # Item Name
-                    ws.cell(row=current_row, column=12, value=item['available_quantity'])  # Available Quantity
-                    # Utilization plan (per item) — appended so merged license
-                    # columns (13–17) keep their indices.
-                    ws.cell(row=current_row, column=18, value=item.get('planned_quantity') or 0)  # Plan Qty
-                    ws.cell(row=current_row, column=19, value=item.get('planned_cif') or 0)  # Plan CIF
+            sr_no += 1
 
-                    current_row += 1
+        # ── Totals row — only the numeric columns the View totals ──────────
+        # Available Balance is a license-level value (repeated per item, same
+        # simplification the View's grouped rowSpan cell uses), so it's summed
+        # once per license, not once per raw row, to avoid overcounting.
+        last_data_row = current_row - 1
+        total_available_quantity = sum(item['available_quantity'] for item in items)
+        total_planned_quantity = sum(item.get('planned_quantity') or 0 for item in items)
+        total_planned_cif = sum(item.get('planned_cif') or 0 for item in items)
+        unique_license_balances = {}
+        for item in items:
+            unique_license_balances.setdefault(item['license_id'], item['available_balance'])
+        total_available_balance = sum(unique_license_balances.values())
 
-                    # ── Planning split sub-rows ─────────────────────────────
-                    # One indented row per manual-plan split — Planning Item
-                    # Name / Unit Price / Planned Qty / Planned CIF / "Split N"
-                    # badge — matching license_balance_excel.py's per-item
-                    # split rows exactly (same source map, same filter).
-                    # item_name is sanitized like every other string field in
-                    # this export (control chars openpyxl rejects).
-                    _raw_splits = item.get('planned_splits') or []
-                    _sanitized_splits = [
-                        {**s, 'item_name': _safe(s.get('item_name'))} for s in _raw_splits
-                    ]
-                    current_row += write_split_sub_rows(
-                        ws, current_row, _sanitized_splits,
-                        name_col=11,   # Item Name
-                        price_col=10,  # Product Description col reused for unit price
-                        badge_col=8,   # Condition col reused for badge
-                        qty_col=18,    # Plan Qty
-                        cif_col=19,    # Plan CIF
-                        other_cols=(7, 9, 12, 13, 14, 15, 16, 17),
-                    )
+        totals_row = current_row
+        label_cell = ws.cell(row=totals_row, column=1, value='TOTAL')
+        label_cell.font = Font(bold=True)
+        ws.merge_cells(start_row=totals_row, start_column=1, end_row=totals_row, end_column=COL['Item Name'])
+        for name, value, fmt in (
+            ('Available Quantity', total_available_quantity, QTY_FMT),
+            ('Available Balance', total_available_balance, CIF_FMT),
+            ('Plan Qty', total_planned_quantity, QTY_FMT),
+            ('Plan CIF', total_planned_cif, CIF_FMT),
+        ):
+            cell = ws.cell(row=totals_row, column=COL[name], value=value)
+            cell.font = Font(bold=True)
+            cell.number_format = fmt
+        for row in ws[totals_row]:
+            row.fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
 
-                # Merge cells for license-level columns
-                if row_span > 1:
-                    end_row = start_row + row_span - 1
-
-                    # Merge Sr No (column A / 1)
-                    ws.merge_cells(start_row=start_row, start_column=1, end_row=end_row, end_column=1)
-                    # Merge License No (column B / 2)
-                    ws.merge_cells(start_row=start_row, start_column=2, end_row=end_row, end_column=2)
-                    # Merge License Date (column C / 3)
-                    ws.merge_cells(start_row=start_row, start_column=3, end_row=end_row, end_column=3)
-                    # Merge License Expiry Date (column D / 4)
-                    ws.merge_cells(start_row=start_row, start_column=4, end_row=end_row, end_column=4)
-                    # Merge Ledger Date (column E / 5)
-                    ws.merge_cells(start_row=start_row, start_column=5, end_row=end_row, end_column=5)
-                    # Merge Exporter Name (column F / 6)
-                    ws.merge_cells(start_row=start_row, start_column=6, end_row=end_row, end_column=6)
-                    # Merge Available Balance (column M / 13)
-                    ws.merge_cells(start_row=start_row, start_column=13, end_row=end_row, end_column=13)
-                    # Merge Balance CIF (column N / 14)
-                    ws.merge_cells(start_row=start_row, start_column=14, end_row=end_row, end_column=14)
-                    # Merge Notes (column O / 15)
-                    ws.merge_cells(start_row=start_row, start_column=15, end_row=end_row, end_column=15)
-                    # Merge Condition Sheet (column P / 16)
-                    ws.merge_cells(start_row=start_row, start_column=16, end_row=end_row, end_column=16)
-                    # Merge Transfer Status (column Q / 17)
-                    ws.merge_cells(start_row=start_row, start_column=17, end_row=end_row, end_column=17)
-
-                    # Apply vertical center alignment to merged cells
-                    for col in [1, 2, 3, 4, 5, 6, 13, 14, 15, 16, 17]:
-                        cell = ws.cell(row=start_row, column=col)
-                        cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-                        cell.border = thin_border
-
-                sr_no += 1
-
-            return ws
-
-        # Create sheets (Restricted first, then Not Restricted)
-        if restricted_items:
-            create_sheet(wb, "Restricted", restricted_items)
-
-        if not_restricted_items:
-            create_sheet(wb, "Not Restricted", not_restricted_items)
-
-        # If no items at all, create an empty sheet with message
-        if not restricted_items and not not_restricted_items:
-            ws = wb.create_sheet(title="No Data")
-            ws.cell(row=1, column=1, value="No items found matching the filter criteria")
+        # Freeze the header row and enable AutoFilter over the data range
+        # (the totals row sits below the filterable range, same convention
+        # every business report in this app uses).
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = f"A1:{openpyxl.utils.get_column_letter(len(headers))}{last_data_row}"
 
         # Save to bytes
         excel_file = BytesIO()

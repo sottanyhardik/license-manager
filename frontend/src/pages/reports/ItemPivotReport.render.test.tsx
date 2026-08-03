@@ -291,6 +291,26 @@ describe("ItemPivotReport — Compact Scroll Mode", () => {
         expect(screen.getAllByRole("columnheader", { name: "Total CIF" }).length).toBeGreaterThan(0);
     });
 
+    it("keeps the entire two-row header (license-identity columns + per-item sub-columns) inside one sticky-top thead, so it stays fixed on vertical scroll", async () => {
+        await renderAndSelectNorm();
+
+        const srNoHeader = screen.getAllByRole("columnheader", { name: "Sr No" })[0];
+        const hsnHeader = screen.getAllByRole("columnheader", { name: "HSN Code" })[0];
+        const totalQtyHeader = screen.getAllByRole("columnheader", { name: "Total QTY" })[0];
+        const planQtyHeader = screen.getAllByRole("columnheader", { name: "Plan Qty" })[0];
+
+        const thead = srNoHeader.closest("thead") as HTMLElement;
+        expect(thead).not.toBeNull();
+        expect(thead).toHaveStyle({ position: "sticky", top: "0px" });
+
+        // Both header rows — the license-identity row AND the per-item
+        // sub-column row (HSN/Description/Qty/.../Plan Qty) — must live
+        // inside that SAME sticky thead, not a second, non-sticky one.
+        expect(hsnHeader.closest("thead")).toBe(thead);
+        expect(totalQtyHeader.closest("thead")).toBe(thead);
+        expect(planQtyHeader.closest("thead")).toBe(thead);
+    });
+
     it("gives DFIA No, Expiry Dt, and Balance CIF a non-negative, numeric sticky `left` derived from measured widths rather than a hard-coded guess", async () => {
         await renderAndSelectNorm();
 

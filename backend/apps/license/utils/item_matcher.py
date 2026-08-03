@@ -2,7 +2,12 @@
 Utility module for matching license import items to ItemNameModel items.
 This ensures consistent item matching logic across the codebase.
 """
+import logging
+import re
+
 from django.db.models import Q
+
+logger = logging.getLogger(__name__)
 
 
 def get_item_filters():
@@ -734,6 +739,145 @@ def get_item_filters():
     ]
 
 
+# ─── PP-norm packaging pre-classification ──────────────────────────────────
+#
+# Generic HSN/description rule engine for licences carrying the 'PP' SION
+# norm class. Runs BEFORE the generic `get_item_filters()` matcher and
+# normalizes PP/HDPE/LDPE/LLDPE/Paper/Paper-Board import items into a fixed
+# set of "<NAME> - COMMON" ItemNameModel rows (reusing an existing row when
+# one already exists, case-insensitively, never creating a duplicate).
+#
+# Scope: PP-norm licences only. Every other norm (E1, E5, E126, E132, ...)
+# is untouched — this block is never consulted unless 'PP' is among the
+# licence's norm classes, and falls through to the existing matcher
+# unchanged whenever none of its rules match.
+
+_PP_NORM_ITEM_NAMES: tuple[str, ...] = (
+    'PP - COMMON',
+    'HDPE - COMMON',
+    'LDPE - COMMON',
+    'PAPER - COMMON',
+    'PAPER BOARD - COMMON',
+)
+
+_PP_NORM_GSM_UNIT = r'G\.?\s*S\.?\s*M\.?(?![A-Z0-9])'
+_PP_NORM_GSM_RANGE_RE = re.compile(r'(\d+)\s*(?:-|TO|/|~)\s*(\d+)\s*' + _PP_NORM_GSM_UNIT)
+_PP_NORM_GSM_SINGLE_RE = re.compile(r'(\d+)\s*' + _PP_NORM_GSM_UNIT)
+
+
+def _pp_norm_normalize(text) -> str:
+    """Upper-case + punctuation-stripped + whitespace-collapsed text, for
+    PP-norm keyword containment checks only. Punctuation (-, _, ., /, ,) is
+    replaced with a space so hyphenated variants ('HIGH-DENSITY
+    POLYETHYLENE') match the same as spaced ones."""
+    text = (text or '').upper()
+    for ch in ('-', '_', '.', '/', ','):
+        text = text.replace(ch, ' ')
+    return ' '.join(text.split())
+
+
+def _pp_norm_hsn_digits(hs_code) -> str:
+    """Digits-only HSN for prefix matching (ignores spaces/dashes/case)."""
+    return ''.join(c for c in (hs_code or '') if c.isdigit())
+
+
+def extract_gsm_range(description) -> tuple[int, int] | None:
+    """Extract a ``(min_gsm, max_gsm)`` pair from free-text GSM mentions.
+
+    Recognises a single value ('70 GSM', '70GSM', '70 G.S.M.') and ranges
+    joined by '-', 'TO', '/', or '~' ('40-100 GSM', '40 TO 100 GSM',
+    '40/100 GSM', '40~100 GSM'). Only whitespace is collapsed before
+    matching — punctuation is left intact because '-', '/' and '~' are
+    meaningful range separators here. Returns ``None`` when no GSM figure
+    is present.
+    """
+    text = ' '.join((description or '').upper().split())
+    match = _PP_NORM_GSM_RANGE_RE.search(text)
+    if match:
+        a, b = int(match.group(1)), int(match.group(2))
+        return (min(a, b), max(a, b))
+    match = _PP_NORM_GSM_SINGLE_RE.search(text)
+    if match:
+        value = int(match.group(1))
+        return (value, value)
+    return None
+
+
+def classify_pp_norm_item(hs_code: str | None, description: str | None) -> tuple[str, str] | None:
+    """PP-norm packaging pre-classification — see module-level comment.
+
+    Returns ``(item_name, rule_tag)`` for the first matching rule, or
+    ``None`` if nothing matches (caller falls back to the existing matcher
+    unchanged). Matching is case-insensitive and punctuation-agnostic.
+
+    Priority:
+      1. HSN starts with 3902                                     → PP - COMMON
+      2. HSN starts with 3901, or description contains 'HDPE' /
+         'HIGH DENSITY POLYETHYLENE'                                → HDPE - COMMON
+      3. description contains 'LLDPE' / 'LINEAR LOW DENSITY
+         POLYETHYLENE' — checked BEFORE the plain LDPE keywords:
+         both map to the same bucket, but every LLDPE token is a
+         superstring of an LDPE token ("LLDPE" contains "LDPE",
+         "LINEAR LOW DENSITY POLYETHYLENE" contains "LOW DENSITY
+         POLYETHYLENE"), so checking LDPE first would always win and
+         the debug log would misreport LLDPE items as plain LDPE      → LDPE - COMMON
+      4. description contains 'LDPE' / 'LOW DENSITY POLYETHYLENE'   → LDPE - COMMON
+      5. description contains 'PAPER' and extracted GSM has
+         min >= 40 and max <= 150                                   → PAPER - COMMON
+      6. description contains 'PAPER' and extracted max GSM > 150   → PAPER BOARD - COMMON
+    """
+    hs = _pp_norm_hsn_digits(hs_code)
+    desc = _pp_norm_normalize(description)
+
+    if hs.startswith('3902'):
+        return 'PP - COMMON', 'PP_RULE_PP_COMMON'
+
+    if hs.startswith('3901') or 'HDPE' in desc or 'HIGH DENSITY POLYETHYLENE' in desc:
+        return 'HDPE - COMMON', 'PP_RULE_HDPE_COMMON'
+
+    if 'LLDPE' in desc or 'LINEAR LOW DENSITY POLYETHYLENE' in desc:
+        return 'LDPE - COMMON', 'PP_RULE_LLDPE_COMMON'
+
+    if 'LDPE' in desc or 'LOW DENSITY POLYETHYLENE' in desc:
+        return 'LDPE - COMMON', 'PP_RULE_LDPE_COMMON'
+
+    if 'PAPER' in desc:
+        gsm = extract_gsm_range(description)
+        if gsm:
+            min_gsm, max_gsm = gsm
+            if max_gsm > 150:
+                return 'PAPER BOARD - COMMON', 'PP_RULE_PAPER_BOARD_COMMON'
+            if min_gsm >= 40:
+                return 'PAPER - COMMON', 'PP_RULE_PAPER_COMMON'
+
+    return None
+
+
+def _get_or_create_pp_norm_item_name(name: str):
+    """Case-insensitive get-or-create for a fixed PP-norm packaging item
+    name. Reuses an existing ``ItemNameModel`` row regardless of case,
+    never creates a duplicate. Ties new rows to the 'COMMON' SION norm
+    class when one exists (matching the ' - COMMON' naming convention),
+    falling back to 'PP' (the licence's own norm) and then to no norm at
+    all — all tolerated the same way ``ensure_plan_item_names`` tolerates a
+    missing norm class."""
+    from apps.core.models import ItemNameModel, SionNormClassModel
+
+    existing = ItemNameModel.objects.filter(name__iexact=name).first()
+    if existing:
+        return existing
+
+    norm_obj = (
+        SionNormClassModel.objects.filter(norm_class='COMMON').first()
+        or SionNormClassModel.objects.filter(norm_class='PP').first()
+    )
+    obj, _ = ItemNameModel.objects.get_or_create(
+        name=name,
+        defaults={'sion_norm_class': norm_obj, 'is_active': True},
+    )
+    return obj
+
+
 def bulk_auto_link_license_items(license_instance):
     """
     Bulk auto-link ItemNameModel rows to all unlinked import items on a
@@ -773,6 +917,37 @@ def bulk_auto_link_license_items(license_instance):
     filter_configs = get_item_filters()
     needed_names = set()  # (base_name, norm) pairs we'll look up
     item_to_basenames: dict[int, list[tuple[str, str]]] = {}
+    name_to_obj: dict[str, ItemNameModel] = {}
+
+    # PP-norm packaging pre-classification — runs BEFORE the generic filter
+    # loop, and only for licences carrying the 'PP' norm (see
+    # classify_pp_norm_item). Matched items are resolved directly (not via
+    # the sion_norm_class__norm_class__in=norm_classes query below, since
+    # these fixed "... - COMMON" names may not be tied to one of the
+    # licence's own norm classes) and excluded from the generic pass so they
+    # are never double-matched by an unrelated filter config.
+    remaining_unlinked_ids = unlinked_ids
+    if 'PP' in norm_classes:
+        pp_candidates = (
+            LicenseImportItemsModel.objects
+            .filter(id__in=unlinked_ids)
+            .select_related('hs_code')
+        )
+        for ii in pp_candidates:
+            hs_code_str = ii.hs_code.hs_code if ii.hs_code_id else None
+            pp_match = classify_pp_norm_item(hs_code_str, ii.description)
+            if not pp_match:
+                continue
+            name, rule_tag = pp_match
+            logger.debug(
+                "bulk_auto_link_license_items: %s matched import item %s -> %r",
+                rule_tag, ii.id, name,
+            )
+            item_name_obj = _get_or_create_pp_norm_item_name(name)
+            name_to_obj[item_name_obj.name] = item_name_obj
+            item_to_basenames.setdefault(ii.id, []).append(item_name_obj.name)
+        if item_to_basenames:
+            remaining_unlinked_ids = [iid for iid in unlinked_ids if iid not in item_to_basenames]
 
     for item_config in filter_configs:
         applicable_norms = [n for n in norm_classes if n in item_config["norms"]]
@@ -781,7 +956,7 @@ def bulk_auto_link_license_items(license_instance):
         combined_q = reduce(or_, item_config["filters"])
         matching_ids = list(
             LicenseImportItemsModel.objects
-            .filter(id__in=unlinked_ids)
+            .filter(id__in=remaining_unlinked_ids)
             .filter(combined_q)
             .values_list("id", flat=True)
         )
@@ -795,12 +970,14 @@ def bulk_auto_link_license_items(license_instance):
     if not item_to_basenames:
         return 0
 
-    # Resolve all ItemNames in a single query.
-    name_to_obj = {
-        it.name: it
-        for it in ItemNameModel.objects
-        .filter(name__in=needed_names, sion_norm_class__norm_class__in=norm_classes)
-    }
+    # Resolve the generic-filter ItemNames in a single query (PP-norm names
+    # were already resolved above and are already in name_to_obj).
+    if needed_names:
+        name_to_obj.update({
+            it.name: it
+            for it in ItemNameModel.objects
+            .filter(name__in=needed_names, sion_norm_class__norm_class__in=norm_classes)
+        })
     if not name_to_obj:
         return 0
 
@@ -841,6 +1018,22 @@ def match_import_item_to_items(import_item, license_norm_classes):
 
     if not license_norm_classes:
         return ItemNameModel.objects.none()
+
+    # PP-norm packaging pre-classification — runs BEFORE the generic filter
+    # loop, and only for licences carrying the 'PP' norm (see
+    # classify_pp_norm_item). A match here short-circuits the generic
+    # matcher entirely for this item; no match falls through unchanged.
+    if 'PP' in license_norm_classes:
+        hs_code_str = import_item.hs_code.hs_code if import_item.hs_code_id else None
+        pp_match = classify_pp_norm_item(hs_code_str, import_item.description)
+        if pp_match:
+            name, rule_tag = pp_match
+            logger.debug(
+                "match_import_item_to_items: %s matched import item %s -> %r",
+                rule_tag, import_item.id, name,
+            )
+            item_name_obj = _get_or_create_pp_norm_item_name(name)
+            return ItemNameModel.objects.filter(id=item_name_obj.id)
 
     filters = get_item_filters()
     matched_item_ids = set()

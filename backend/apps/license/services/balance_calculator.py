@@ -143,12 +143,42 @@ class LicenseBalanceCalculator:
 
         Returns `boe_ids_by_license`: `{license_id: {bill_of_entry_id,
         ...}}` grouped by the trade LINE's own licence.
+
+        PERFORMANCE: resolves the "genuinely hidden" BOE set in ONE query
+        for every BOE referenced by `trades_queryset`, not one query per
+        trade. `annotate_and_exclude_hidden(trade.boes)` — calling
+        `.annotate()`/`.exclude()` directly on a prefetched M2M manager —
+        clones the manager's cached queryset, which resets its
+        `_result_cache` and forces a fresh SQL round-trip on every trade,
+        silently defeating the `prefetch_related("boes")` above. At 109
+        licenses / 75 candidate trades locally this measured ~74 extra
+        queries (~60ms) for what should be O(1); at production scale (many
+        more SALE trades with legacy `.boes` tags) this is the leading
+        suspect for the reported multi-minute hang. Resolving hidden-ness
+        once via a plain `id__in` queryset (not a related manager) keeps
+        `annotate_and_exclude_hidden`'s subquery-per-row semantics intact
+        while making it a single query regardless of trade count.
         """
-        boe_ids_by_license: dict = {}
-        for trade in trades_queryset.prefetch_related("lines__sr_number", "boes"):
-            tagged_boe_ids = set(
-                annotate_and_exclude_hidden(trade.boes).values_list("id", flat=True)
+        from apps.bill_of_entry.models import BillOfEntryModel
+
+        trades = list(trades_queryset.prefetch_related("lines__sr_number", "boes"))
+
+        all_boe_ids: set = set()
+        for trade in trades:
+            all_boe_ids.update(boe.id for boe in trade.boes.all())
+
+        if all_boe_ids:
+            visible_boe_ids = set(
+                annotate_and_exclude_hidden(
+                    BillOfEntryModel.objects.filter(id__in=all_boe_ids)
+                ).values_list("id", flat=True)
             )
+        else:
+            visible_boe_ids = set()
+
+        boe_ids_by_license: dict = {}
+        for trade in trades:
+            tagged_boe_ids = {boe.id for boe in trade.boes.all() if boe.id in visible_boe_ids}
             if not tagged_boe_ids:
                 continue
             for line in trade.lines.all():

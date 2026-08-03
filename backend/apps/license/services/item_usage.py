@@ -92,3 +92,45 @@ def get_item_usage_for_items(item_ids):
         result[i]['boes'] = boes_by_item.get(i, [])
         result[i]['allotments'] = allotments_by_item.get(i, [])
     return result
+
+
+def billed_no_boe_bulk_map(item_ids) -> dict:
+    """
+    Batched sibling of `LicenseImportItemSerializer.get_billed_no_boe` —
+    total CIF from SALE trade lines with no BOE attached to the parent
+    trade, for MANY import items in one query instead of one per item.
+
+    Byte-identical to calling the per-item aggregate
+    (`LicenseTradeLine.objects.filter(sr_number=item, trade__direction=
+    'SALE', trade__boes__isnull=True).aggregate(Sum('cif_fc'))`) for each
+    id — same filter, just grouped. An id with no matching trade lines is
+    simply absent from the result (callers should use `.get(id, DEC_0)`,
+    matching the per-item method's own zero-default via `Coalesce`).
+
+    Args:
+        item_ids: iterable of LicenseImportItemsModel pks.
+
+    Returns:
+        `{item_id: Decimal}` billed-no-BOE total per item.
+    """
+    from decimal import Decimal
+
+    from django.db.models import DecimalField, Sum, Value
+    from django.db.models.functions import Coalesce
+
+    from apps.trade.models import LicenseTradeLine
+
+    ids = list(item_ids)
+    if not ids:
+        return {}
+
+    rows = (
+        LicenseTradeLine.objects.filter(
+            sr_number_id__in=ids,
+            trade__direction='SALE',
+            trade__boes__isnull=True,
+        )
+        .values('sr_number_id')
+        .annotate(t=Coalesce(Sum('cif_fc'), Value(Decimal('0')), output_field=DecimalField()))
+    )
+    return {row['sr_number_id']: row['t'] for row in rows}

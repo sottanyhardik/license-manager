@@ -293,7 +293,18 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         debits but have no linked BOE, which can cause apparent double-counting
         when a separate BOE also debits the same item.  Surfacing this value in
         the UI lets operators spot and fix the missing BOE link.
+
+        List callers should batch a `{item_id: Decimal}` map once via
+        `item_usage.billed_no_boe_bulk_map` and pass it in as
+        `self.context['billed_no_boe_map']` — same pattern as
+        `get_available_value`'s `available_value_map` / `get_planned_
+        quantity`'s `plan_map` — so a page of N items on M different
+        licences issues one query instead of N. Falls back to the live
+        per-item aggregate when no batch map is supplied (standalone usage).
         """
+        billed_no_boe_map = self.context.get('billed_no_boe_map')
+        if billed_no_boe_map is not None:
+            return float(billed_no_boe_map.get(obj.id) or 0)
         try:
             from apps.trade.models import LicenseTradeLine
             from django.db.models import Sum, DecimalField

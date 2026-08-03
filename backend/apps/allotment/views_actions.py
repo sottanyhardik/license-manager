@@ -95,6 +95,8 @@ class AllotmentActionViewSet(ViewSet):
             'license',
             'license__exporter',
             'license__port',
+            'license__notification_number',
+            'license__notes',
             'hs_code'
         ).prefetch_related(
             'items',
@@ -293,10 +295,25 @@ class AllotmentActionViewSet(ViewSet):
         from apps.license.services.condition_pool import available_value_bulk_map
         available_value_map = available_value_bulk_map(paginated_items)
 
+        # Same batching for the two other per-item SerializerMethodFields
+        # that would otherwise run one query each per row on the page:
+        # `planned_quantity` (LicenseItemPlan) and `billed_no_boe`
+        # (LicenseTradeLine) — mirrors `available_value_map` above.
+        page_item_ids = [item.id for item in paginated_items]
+        from apps.license.services.plan_reporting import plan_map_for_import_items
+        plan_map = plan_map_for_import_items(page_item_ids)
+        from apps.license.services.item_usage import billed_no_boe_bulk_map
+        billed_no_boe_map = billed_no_boe_bulk_map(page_item_ids)
+
         # Serialize the data
         license_serializer = LicenseImportItemSerializer(
             paginated_items, many=True,
-            context={'request': request, 'available_value_map': available_value_map}
+            context={
+                'request': request,
+                'available_value_map': available_value_map,
+                'plan_map': plan_map,
+                'billed_no_boe_map': billed_no_boe_map,
+            }
         )
         allotment_serializer = AllotmentSerializer(allotment, context={'request': request})
 
@@ -311,13 +328,16 @@ class AllotmentActionViewSet(ViewSet):
         # Original/Used/Remaining `plan_status_for` computes for the
         # `plan_exceeded` check in `allocate_items`. Always computed (not an
         # opt-in toggle): the frontend's Max-allotment cap depends on
-        # `remaining_planned_*`, so it can't be a display-only extra. Cost is
-        # one extra group-lookup + two aggregates per item, bounded by
-        # `page_size` (≤100) — acceptable for a paginated admin screen; batch
-        # by license in one query as a follow-up if this is ever measured slow.
-        from apps.license.services.plan_enforcement import plan_status_for
+        # `remaining_planned_*`, so it can't be a display-only extra.
+        # Batched once for the whole page via `plan_status_for_items` (fixed
+        # number of queries regardless of page size) rather than calling
+        # `plan_status_for` per item — that used to cost one extra group-
+        # lookup + four aggregates PER item (~315 queries / ~290ms measured
+        # for a 100-item page against a small dev DB).
+        from apps.license.services.plan_enforcement import plan_status_for_items
+        plan_status_map = plan_status_for_items(paginated_items)
         for row, item in zip(available_items_data, paginated_items):
-            status = plan_status_for(item)
+            status = plan_status_map.get(item.id)
             row['has_plan'] = status is not None
             if status is not None:
                 row['original_planned_quantity'] = str(status['original_quantity'])

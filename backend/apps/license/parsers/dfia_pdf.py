@@ -784,10 +784,31 @@ def _parse_items(text: str) -> list[dict[str, Any]]:
         # stops there naturally.
         si = None
         desc_lines: list[str] = []
+        # Set once we've hit the natural end of the description while the
+        # SI# is still unfound — happens when a row straddles a page break
+        # and the SI# landed glued to the SION-category text on the
+        # *previous* page (e.g. "...Gellan 8") rather than right before the
+        # data row. In this mode we keep scanning upward purely to locate
+        # the SI#, without extending the description any further.
+        #
+        # This is tied tightly to the page-break signature so it can't go
+        # hunting through unrelated rows/footers on other templates and pick
+        # up a digit off some other row's CIF value: we require (a) a blank
+        # gap first — the residue left behind once the stripped per-page
+        # footer's lines are replaced with "" — and only then (b) a match
+        # with real text attached (a bare standalone digit past that gap is
+        # a stray page number, not an SI#). No blank gap ⇒ we're not looking
+        # at page-break debris at all, so give up rather than guess.
+        recovering_si = False
+        recovery_saw_blank_gap = False
+        recovery_lines_checked = 0
+        _MAX_RECOVERY_LINES = 2
         j = i - 1
         while j >= 0:
             raw = lines[j]
             if not raw.strip():
+                if recovering_si:
+                    recovery_saw_blank_gap = True
                 j -= 1
                 continue
             stripped = raw.rstrip()
@@ -796,6 +817,17 @@ def _parse_items(text: str) -> list[dict[str, Any]]:
                 break
             if stripped.startswith("Import Item Name") or _TABLE_HEADER_LINE_RX.search(stripped):
                 break
+
+            if recovering_si:
+                recovery_lines_checked += 1
+                if recovery_lines_checked > _MAX_RECOVERY_LINES:
+                    break
+                tail = _DESC_TAIL_RX.search(stripped) or _DESC_TAIL_FALLBACK_RX.search(stripped)
+                if tail and tail.start("si") > 0 and recovery_saw_blank_gap:
+                    si = int(tail.group("si"))
+                    break
+                j -= 1
+                continue
 
             # SI# capture — strip the trailing digits but keep any earlier
             # trailing-space marker on the remaining text.
@@ -829,6 +861,11 @@ def _parse_items(text: str) -> list[dict[str, Any]]:
             if multi_line_descriptions and _GROUP_HEADER_RX.match(stripped):
                 desc_lines.append(line_for_storage)
                 break
+
+            if si is None:
+                recovering_si = True
+                j -= 1
+                continue
 
             break
 

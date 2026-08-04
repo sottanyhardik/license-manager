@@ -131,7 +131,8 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
     """
     Full-replace: delete a license's existing `LicenseItemPlan` rows and
     create new ones from `lines` (dicts with `import_item`, `item_name`,
-    `planned_quantity`, `unit_price`, `planned_cif_fc`, `note`) — the shape
+    `planned_quantity`, `unit_price`, `planned_cif_fc`, `note`, and
+    optionally `remaining_quantity`/`remaining_cif_fc`) — the shape
     `bulk_upsert`, `auto_plan`/`e1_auto_plan`/`auto_plan_all`
     (`views/item_plan.py`) and the `plan_norms` management command all
     already produce.
@@ -144,6 +145,14 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
     that row's `created_on` never advances, so a since-filter would silently
     miss any such amendment made after a re-plan. A snapshot doesn't care
     how the live total changed, only that it did.
+
+    `remaining_quantity`/`remaining_cif_fc` — the live, independently-
+    draining balance `allocate_items` decrements when an allotment names
+    this specific line via `plan_line_id` (see views_actions.py) — default
+    to the freshly-planned amount for a brand-new line. A caller that wants
+    to PRESERVE an existing line's already-decremented balance across a
+    regenerate-and-replace cycle (e.g. `e132_auto_plan.py` re-emitting an
+    already-generated Vegetable Oil split unchanged) passes them explicitly.
     """
     from apps.license.models import LicenseItemPlan
 
@@ -162,13 +171,19 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
     created = []
     for ln in lines:
         baseline_qty, baseline_val = _baseline(ln.get("import_item"))
+        planned_quantity = ln.get("planned_quantity", 0) or 0
+        planned_cif_fc = ln.get("planned_cif_fc", 0) or 0
+        remaining_quantity = ln["remaining_quantity"] if ln.get("remaining_quantity") is not None else planned_quantity
+        remaining_cif_fc = ln["remaining_cif_fc"] if ln.get("remaining_cif_fc") is not None else planned_cif_fc
         created.append(LicenseItemPlan.objects.create(
             license=license_obj,
             import_item_id=ln.get("import_item"),
             item_name_id=ln.get("item_name"),
-            planned_quantity=ln.get("planned_quantity", 0) or 0,
+            planned_quantity=planned_quantity,
             unit_price=ln.get("unit_price", 0) or 0,
-            planned_cif_fc=ln.get("planned_cif_fc", 0) or 0,
+            planned_cif_fc=planned_cif_fc,
+            remaining_quantity=remaining_quantity,
+            remaining_cif_fc=remaining_cif_fc,
             note=ln.get("note", ""),
             baseline_used_quantity=baseline_qty,
             baseline_used_cif_fc=baseline_val,

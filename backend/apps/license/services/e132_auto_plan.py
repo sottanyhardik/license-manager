@@ -9,21 +9,37 @@ Pipeline:
   1. Load import items; skip any with available_quantity < MIN_PLAN_QTY.
   2. Build a records list keyed by import_item.id, using available_quantity
      as the planning quantity — for EVERY category, including the Vegetable
-     Oil PKO/Cheese split target (critical business rule: the split is
-     always 40%/60% of the item's CURRENT available quantity, never its
-     original/total import quantity — see e132_plan.py's module docstring).
+     Oil PKO/Cheese split target (the split is 40%/60% of the item's CURRENT
+     available quantity — see e132_plan.py's module docstring — but ONLY the
+     first time it's generated; see step 4).
   3. Call plan_e132_per_item_split(records, balance_cif) — this runs the
      E132 waterfall (classify, allocate, wastage-reduction rebalance).
-  4. For each (import_item, [split_lines]) map planning_item_name →
+  4. PKO/Cheese balance tracking (business rule: once generated, a
+     Vegetable Oil item's split becomes a FIXED commitment — Auto-Plan must
+     never regenerate or recalculate it from the current available_quantity
+     again). For any import item the engine still classifies as split-
+     eligible, check for EXISTING PKO/Cheese `LicenseItemPlan` rows: if
+     EITHER is found, the WHOLE split is treated as already generated and
+     BOTH targets re-emit their current `remaining_quantity`/
+     `remaining_cif_fc` unchanged instead of the engine's freshly
+     (re)computed 40/60 split (never just one side — see
+     `compute_e132_auto_plan`'s inline comment for why partial overriding
+     would risk breaking quantity conservation). Only an item with NO
+     existing split plan gets the engine's fresh split as its starting
+     point. This is the only reason this file reads `LicenseItemPlan` —
+     everything else here is a pure recompute from `available_quantity`,
+     same as every other E132 category.
+  5. For each (import_item, [split_lines]) map planning_item_name →
      ItemNameModel.id so the frontend can display the item-name labels.
-  5. Return (lines, remaining_cif).
+  6. Return (lines, remaining_cif).
 
-Because available_quantity already self-corrects for real consumption (it
-shrinks the moment an allotment debits it), re-running Auto-Plan simply
-recomputes 40%/60% of whatever it currently is — automatically correct and
-idempotent, with no separate "already planned" bookkeeping needed. This file
-has no other reason to touch the database beyond loading the licence and its
-import items; `e132_plan.py` stays a pure function.
+Real debits/allotments against a specific plan line are attributed via
+`plan_line_id` in the allocate-items request (see
+`views_actions.py::allocate_items`), which decrements THAT line's
+`remaining_quantity`/`remaining_cif_fc` directly — never derived from the
+shared import item's `available_quantity`, which cannot tell PKO and Cheese
+apart. This file's job is only to make sure Auto-Plan doesn't stomp on that
+independently-draining balance once it exists.
 
 MIN_PLAN_QTY = 50 — import items with available_quantity below this
 threshold are silently excluded.
@@ -34,9 +50,46 @@ import math
 from decimal import Decimal
 from typing import Optional
 
-from apps.license.services.e132_plan import PLANNING_ORDER, plan_e132_per_item_split
+from apps.license.services.e132_plan import CHEESE, PKO, PLANNING_ORDER, UNIT_PRICE, plan_e132_per_item_split
 
 MIN_PLAN_QTY: float = 50.0
+
+# Only these two planning items are ever "fixed once generated" — every
+# other E132 category has no cross-target attribution ambiguity (a single
+# item_name per import item), so it's always safe (and desired) to keep
+# recomputing them fresh from available_quantity on every run.
+_SPLIT_TARGET_NAMES = (PKO, CHEESE)
+
+
+def _existing_split_balances(license_obj, import_item_ids: list[int]) -> dict:
+    """{import_item_id: {planning_item_name: {'remaining_quantity', 'remaining_cif_fc', 'unit_price'}}}
+
+    Read from this licence's CURRENT PKO/Cheese `LicenseItemPlan` rows —
+    the live, independently-draining balances `allocate_items` maintains.
+    Used ONLY to decide whether an item's split has already been generated
+    (and must therefore be preserved, not recalculated) — see module
+    docstring, step 4.
+    """
+    from apps.license.models import LicenseItemPlan
+
+    if not import_item_ids:
+        return {}
+
+    rows = (
+        LicenseItemPlan.objects
+        .filter(license=license_obj, import_item_id__in=import_item_ids,
+                 item_name__name__in=_SPLIT_TARGET_NAMES)
+        .values("import_item_id", "item_name__name", "remaining_quantity", "remaining_cif_fc", "unit_price")
+    )
+    out: dict[int, dict[str, dict]] = {}
+    for row in rows:
+        bucket = out.setdefault(row["import_item_id"], {})
+        bucket[row["item_name__name"]] = {
+            "remaining_quantity": row["remaining_quantity"] or Decimal("0"),
+            "remaining_cif_fc": row["remaining_cif_fc"] or Decimal("0"),
+            "unit_price": row["unit_price"] or Decimal("0"),
+        }
+    return out
 
 
 def _r2(x) -> float:
@@ -110,6 +163,12 @@ def compute_e132_auto_plan(license_obj) -> tuple[list[dict], float]:
     #                  unit_price, planned_cif}, ... ]}
     split_result = plan_e132_per_item_split(records, balance_cif)
 
+    # ── PKO/Cheese balance preservation (module docstring, step 4) ───────────
+    # Only import items the engine STILL classifies as split-eligible (same
+    # HSN/description match today) are candidates — this never revives a
+    # stale balance for an item that's since been reclassified.
+    existing_balances = _existing_split_balances(license_obj, [r['record_id'] for r in records])
+
     # ── Convert to plan line dicts ────────────────────────────────────────────
     lines: list[dict] = []
     total_planned_cif = 0.0
@@ -119,6 +178,44 @@ def compute_e132_auto_plan(license_obj) -> tuple[list[dict], float]:
         item_splits = split_result.get(rid)
         if not item_splits:
             continue
+
+        preserved_for_item = existing_balances.get(rid)
+        if preserved_for_item:
+            # Fixed commitment already generated for this item — preservation
+            # applies to the WHOLE split (PKO + Cheese together, since both
+            # are always generated in the SAME Auto-Plan run), never one
+            # target alone. Overriding just one side while leaving the other
+            # to the engine's fresh computation would let the engine's own
+            # wastage-rebalance (which has no idea a preserved balance
+            # exists) inflate the non-preserved side using its OWN default
+            # 40/60 assumption — silently breaking quantity conservation. A
+            # target with no row of its own (shouldn't normally happen; both
+            # are always created together) falls back to 0 remaining rather
+            # than a fresh computed share, for the same reason.
+            for planning_item in _SPLIT_TARGET_NAMES:
+                preserved = preserved_for_item.get(planning_item, {
+                    'remaining_quantity': Decimal('0'),
+                    'remaining_cif_fc': Decimal('0'),
+                    'unit_price': UNIT_PRICE.get(planning_item, Decimal('0')),
+                })
+                preserved_qty = _floor_qty(preserved['remaining_quantity'])
+                preserved_cif = _r2(preserved['remaining_cif_fc'])
+                # Still emitted at 0 remaining (e.g. fully consumed) so the
+                # row — and its history — isn't silently dropped on the next
+                # regenerate-and-replace.
+                lines.append({
+                    'import_item':        rid,
+                    'item_name':          name_ids.get(planning_item),
+                    'planned_quantity':   preserved_qty,
+                    'unit_price':         _r2(preserved['unit_price']),
+                    'planned_cif_fc':     preserved_cif,
+                    'remaining_quantity': preserved_qty,
+                    'remaining_cif_fc':   preserved_cif,
+                    'note': f"Auto-planned (E132 — {planning_item}) — existing plan preserved",
+                })
+                total_planned_cif += preserved_cif
+            continue
+
         for sp in item_splits:
             planning_item = sp.get('planning_item')
             planned_qty   = sp.get('planned_quantity')

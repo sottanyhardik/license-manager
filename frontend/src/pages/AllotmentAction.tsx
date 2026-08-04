@@ -249,6 +249,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     item_id: payload.item.import_item_id ?? payload.item.id,
                     qty: payload.allocation.qty,
                     cif_fc: payload.allocation.cif_fc,
+                    // Plan mode only: names the specific plan line (e.g. PKO
+                    // vs Cheese) this allocation was made against, so the
+                    // backend can decrement THAT line's own remaining balance
+                    // independently of its siblings (see allocate_items).
+                    ...(payload.item.import_item_id ? { plan_line_id: payload.item.id } : {}),
                 }],
             }).then(r => r.data),
         onSuccess: (data, { item, allocation }) => {

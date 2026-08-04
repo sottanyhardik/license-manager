@@ -382,9 +382,16 @@ class AllotmentActionViewSet(ViewSet):
         reached through `import_item__` (one extra join hop, since most of
         these fields live on the underlying import item / its licence, not
         on `LicenseItemPlan` itself). Quantity/value range filters target
-        `planned_quantity`/`planned_cif_fc` directly — plain stored columns
-        on `LicenseItemPlan`, so (unlike Actual mode) no live-computed-value
-        Python post-filter step is needed here.
+        `remaining_quantity`/`remaining_cif_fc` directly — plain stored
+        columns on `LicenseItemPlan`, so (unlike Actual mode) no live-
+        computed-value Python post-filter step is needed here.
+
+        `remaining_quantity`/`remaining_cif_fc` are the live, independently-
+        draining balance for THIS plan line (see `allocate_items`'s
+        `plan_line_id` handling) — the authoritative "how much of this
+        planning item is left" once Auto-Plan has generated it, never
+        recalculated from the shared import item's `available_quantity`.
+        `planned_quantity`/`planned_cif_fc` stay the FIXED original target.
         """
         from apps.license.models import LicenseItemPlan
 
@@ -409,7 +416,7 @@ class AllotmentActionViewSet(ViewSet):
         expiry_date_to = request.query_params.get('expiry_date_to', '')
 
         queryset = LicenseItemPlan.objects.filter(
-            planned_quantity__gt=0
+            remaining_quantity__gt=0
         ).select_related(
             'import_item',
             'import_item__license',
@@ -456,13 +463,13 @@ class AllotmentActionViewSet(ViewSet):
 
         if planned_quantity_gte:
             try:
-                queryset = queryset.filter(planned_quantity__gte=Decimal(planned_quantity_gte))
+                queryset = queryset.filter(remaining_quantity__gte=Decimal(planned_quantity_gte))
             except (ValueError, TypeError, InvalidOperation):
                 pass
 
         if planned_quantity_lte:
             try:
-                queryset = queryset.filter(planned_quantity__lte=Decimal(planned_quantity_lte))
+                queryset = queryset.filter(remaining_quantity__lte=Decimal(planned_quantity_lte))
             except (ValueError, TypeError, InvalidOperation):
                 pass
 
@@ -535,12 +542,12 @@ class AllotmentActionViewSet(ViewSet):
 
         if planned_cif_gte:
             try:
-                queryset = queryset.filter(planned_cif_fc__gte=Decimal(planned_cif_gte))
+                queryset = queryset.filter(remaining_cif_fc__gte=Decimal(planned_cif_gte))
             except (ValueError, TypeError, InvalidOperation):
                 pass
         if planned_cif_lte:
             try:
-                queryset = queryset.filter(planned_cif_fc__lte=Decimal(planned_cif_lte))
+                queryset = queryset.filter(remaining_cif_fc__lte=Decimal(planned_cif_lte))
             except (ValueError, TypeError, InvalidOperation):
                 pass
 
@@ -592,13 +599,17 @@ class AllotmentActionViewSet(ViewSet):
             # which must always target the actual import item regardless of
             # which split row triggered it (allocation logic itself is
             # unchanged — see AllotmentAction.tsx's allocateMutation).
+            remaining_qty = plan.remaining_quantity if plan.remaining_quantity is not None else plan.planned_quantity
+            remaining_cif = plan.remaining_cif_fc if plan.remaining_cif_fc is not None else plan.planned_cif_fc
             row['id'] = plan.id
             row['import_item_id'] = plan.import_item_id
             row['planned_item_name'] = plan.item_name.name if plan.item_name_id else None
-            row['planned_quantity'] = str(plan.planned_quantity)
+            row['planned_quantity'] = str(plan.planned_quantity)     # fixed original target
             row['planned_cif_fc'] = str(plan.planned_cif_fc)
-            row['available_quantity'] = str(plan.planned_quantity)
-            row['balance_cif_fc'] = str(plan.planned_cif_fc)
+            row['remaining_quantity'] = str(remaining_qty)           # live, independently-draining balance
+            row['remaining_cif_fc'] = str(remaining_cif)
+            row['available_quantity'] = str(remaining_qty)           # aliased for the existing stat-bar/Max-allocation UI
+            row['balance_cif_fc'] = str(remaining_cif)
 
         return Response({
             'allotment': allotment_data,
@@ -622,7 +633,13 @@ class AllotmentActionViewSet(ViewSet):
                     "item_id": 123,
                     "qty": 100.00,
                     "cif_fc": 1000.00,
-                    "cif_inr": 83000.00
+                    "cif_inr": 83000.00,
+                    "plan_line_id": 456   # optional — LicenseItemPlan row id
+                                          # this allocation was made against
+                                          # (sent by the Plan-mode grid);
+                                          # decrements that line's own
+                                          # remaining_quantity/remaining_cif_fc
+                                          # independently of its siblings.
                 },
                 ...
             ]
@@ -785,6 +802,40 @@ class AllotmentActionViewSet(ViewSet):
                     'cif_fc': str(cif_fc),
                     'cif_inr': str(cif_inr)
                 })
+
+                # --- Plan-line balance tracking (Plan View allocations) -----
+                # A real debit has no item_name of its own — when one import
+                # item carries several plan lines (e.g. E132's Vegetable Oil
+                # split into PKO + Cheese), `available_quantity` alone can't
+                # say which line this allotment was meant to draw down. The
+                # Plan-mode grid (views_actions.py::_available_licenses_plan_mode)
+                # already knows exactly which LicenseItemPlan row the request
+                # originated from and sends it as `plan_line_id` — use THAT as
+                # the source of truth and decrement its own remaining balance
+                # directly, independent of any sibling plan line on the same
+                # import item. Absent for Actual-mode allocations (unchanged
+                # behavior — no plan line to decrement).
+                plan_line_id = allocation.get('plan_line_id')
+                if plan_line_id:
+                    from apps.license.models import LicenseItemPlan
+                    try:
+                        plan_line = LicenseItemPlan.objects.select_for_update().get(id=plan_line_id)
+                        current_remaining = (
+                            plan_line.remaining_quantity
+                            if plan_line.remaining_quantity is not None
+                            else plan_line.planned_quantity
+                        )
+                        new_remaining_qty = max(Decimal('0'), current_remaining - qty)
+                        plan_line.remaining_quantity = new_remaining_qty
+                        plan_line.remaining_cif_fc = new_remaining_qty * plan_line.unit_price
+                        plan_line.save(update_fields=['remaining_quantity', 'remaining_cif_fc'])
+                    except LicenseItemPlan.DoesNotExist:
+                        # Stale reference (e.g. Auto-Plan regenerated this
+                        # line between page load and Confirm) — the real
+                        # allotment above already succeeded; there's just no
+                        # specific plan-line balance left to decrement.
+                        pass
+                # ------------------------------------------------------------
 
             except LicenseImportItemsModel.DoesNotExist:
                 errors.append({

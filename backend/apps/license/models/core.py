@@ -1219,6 +1219,27 @@ class LicenseItemPlan(AuditModel):
     planned_cif_inr = models.DecimalField(
         max_digits=15, decimal_places=2, default=DEC_0, null=True, blank=True,
     )
+    # Live, independently-draining balance for this SPECIFIC plan line —
+    # distinct from `planned_quantity`/`planned_cif_fc` above, which stay
+    # the FIXED original target once Auto-Plan generates them. Needed
+    # because a real debit (`AllotmentItems`) has no item_name of its own —
+    # when one import item carries several plan lines (e.g. E132's
+    # Vegetable Oil split into PKO + Cheese), there is no way to derive
+    # "how much of THIS specific line has been consumed" from the shared
+    # import item's `available_quantity` alone. `allocate_items` decrements
+    # these fields directly (only when the request names this line via
+    # `plan_line_id`) so each line's remaining balance is tracked
+    # independently of its siblings. Defaults to the planned amount at
+    # creation (see `plan_enforcement.save_plan_lines_for_license`); null
+    # only for rows created before this field existed.
+    remaining_quantity = models.DecimalField(
+        max_digits=15, decimal_places=3, null=True, blank=True,
+        validators=[MinValueValidator(DEC_000)],
+    )
+    remaining_cif_fc = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(DEC_0)],
+    )
     note = models.CharField(max_length=500, blank=True, null=True)
 
     # Snapshot of the group's ALL-TIME live-allotted qty/CIF, taken the

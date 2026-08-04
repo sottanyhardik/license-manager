@@ -77,10 +77,12 @@ def veg_oil_split(db, item_names):
     pko_line = LicenseItemPlan.objects.create(
         license=license_obj, import_item=import_item, item_name=item_names["PKO - PLANMODE-TEST"],
         planned_quantity=Decimal("30.000"), unit_price=Decimal("1.80"), planned_cif_fc=Decimal("54.00"),
+        remaining_quantity=Decimal("30.000"), remaining_cif_fc=Decimal("54.00"),
     )
     cheese_line = LicenseItemPlan.objects.create(
         license=license_obj, import_item=import_item, item_name=item_names["CHEESE - PLANMODE-TEST"],
         planned_quantity=Decimal("70.000"), unit_price=Decimal("5.50"), planned_cif_fc=Decimal("385.00"),
+        remaining_quantity=Decimal("70.000"), remaining_cif_fc=Decimal("385.00"),
     )
     return {"license": license_obj, "import_item": import_item, "pko_line": pko_line, "cheese_line": cheese_line}
 
@@ -139,6 +141,23 @@ class TestPlanModeSplitRows:
         for row in resp.data["available_items"]:
             if row.get("import_item_id") == veg_oil_split["import_item"].id:
                 assert Decimal(row["available_quantity"]) != Decimal("100.000")
+
+    def test_fully_consumed_plan_line_disappears_from_the_grid(
+        self, allotment_client, allotment_obj, veg_oil_split,
+    ):
+        # Business rule: once a plan line's remaining balance hits 0 (fully
+        # allotted against), it's no longer "available" — it must drop out
+        # of the Plan-mode grid, exactly like an Actual-mode row whose
+        # available_quantity has been fully consumed. Its sibling (Cheese,
+        # untouched) must still appear.
+        veg_oil_split["pko_line"].remaining_quantity = Decimal("0")
+        veg_oil_split["pko_line"].remaining_cif_fc = Decimal("0")
+        veg_oil_split["pko_line"].save(update_fields=["remaining_quantity", "remaining_cif_fc"])
+
+        resp = _get_available_licenses(allotment_client, allotment_obj, debit_based_on="plan")
+        ids = [r["id"] for r in resp.data["available_items"]]
+        assert veg_oil_split["pko_line"].id not in ids
+        assert veg_oil_split["cheese_line"].id in ids
 
 
 @pytest.mark.django_db

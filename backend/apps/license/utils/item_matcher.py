@@ -322,10 +322,31 @@ def get_item_filters():
         },
         {
             "base_name": "CHEESE",
-            "norms": ["E1", "E5", "E132"],
+            "norms": ["E1", "E5"],
             "filters": [
                 Q(description__icontains="0406")
                 | Q(hs_code__hs_code__startswith="0406")
+            ],
+        },
+        # E132 Cheese detection is strict (Auto Planning business rules) — one
+        # of 0401/0405/0406 (HSN or description) AND the description contains
+        # BOTH "vegetable" and "oil". Kept as its own norm-scoped entry (not
+        # merged into the loose E1/E5 CHEESE rule above) so tightening this
+        # for E132 never changes E1/E5 item-name linking.
+        {
+            "base_name": "CHEESE",
+            "norms": ["E132"],
+            "filters": [
+                (
+                    Q(description__icontains="0401")
+                    | Q(hs_code__hs_code__startswith="0401")
+                    | Q(description__icontains="0405")
+                    | Q(hs_code__hs_code__startswith="0405")
+                    | Q(description__icontains="0406")
+                    | Q(hs_code__hs_code__startswith="0406")
+                )
+                & Q(description__icontains="vegetable")
+                & Q(description__icontains="oil")
             ],
         },
         {
@@ -401,13 +422,25 @@ def get_item_filters():
         },
         {
             "base_name": "RBD PALMOLEIN OIL",
-            "norms": ["E1", "E5", "E126", "E132"],
+            "norms": ["E1", "E5", "E126"],
             "filters": [
                 Q(description__icontains="vegetable shortening")
                 | Q(description__icontains="rbd palmolein oil")
                 | Q(hs_code__hs_code__startswith="15119020")
             ],
             "is_active": False,
+        },
+        # E132 RBD Palmolein Oil detection (Auto Planning business rules) —
+        # HSN 1510 (or "1510" in the description), scoped to E132 only so it
+        # never changes E1/E5/E126 item-name linking above.
+        {
+            "base_name": "RBD PALMOLEIN OIL",
+            "norms": ["E132"],
+            "filters": [
+                Q(hs_code__hs_code__startswith="1510")
+                | Q(description__icontains="1510")
+            ],
+            "is_active": True,
         },
         {
             "base_name": "PALM KERNEL OIL",
@@ -600,7 +633,7 @@ def get_item_filters():
         },
         {
             "base_name": "NUTS",
-            "norms": ["E1", "E5", "E132", "E126"],
+            "norms": ["E1", "E5", "E126"],
             "filters": [
                 Q(
                     Q(description__icontains="Nuts")
@@ -611,6 +644,28 @@ def get_item_filters():
                 & Q(
                     Q(description__icontains="0802")
                     | Q(hs_code__hs_code__startswith="0802")
+                )
+            ],
+        },
+        # E132 Nuts detection (Auto Planning business rules) — 0802 (HSN or
+        # description) AND the description contains the WORD "nut" or "nuts"
+        # (word-boundary — e.g. must not match "peanut" as a substring).
+        # Scoped to E132 only so it never changes E1/E5/E126 item-name linking
+        # above.
+        {
+            "base_name": "NUTS",
+            "norms": ["E132"],
+            "filters": [
+                Q(
+                    Q(description__icontains="0802")
+                    | Q(hs_code__hs_code__startswith="0802")
+                )
+                # PostgreSQL's regex engine uses `\y` for a word boundary
+                # (Advanced Regular Expressions), NOT the Perl/Python `\b` —
+                # `\b` is not a word-boundary escape here.
+                & (
+                    Q(description__iregex=r"\ynut\y")
+                    | Q(description__iregex=r"\ynuts\y")
                 )
             ],
         },

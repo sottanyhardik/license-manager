@@ -22,6 +22,12 @@ def e_norms():
     }
 
 
+@pytest.fixture
+def e132_norm():
+    head_norm = HeadSIONNormsModel.objects.create(name="E132 Norms")
+    return SionNormClassModel.objects.create(head_norm=head_norm, norm_class="E132")
+
+
 @pytest.mark.django_db
 def test_match_import_item_uses_applicable_norm_for_multi_norm_license(monkeypatch, e_norms):
     monkeypatch.setattr(
@@ -124,6 +130,133 @@ def test_aluminium_foil_matches_via_description_containing_7607(e_norms):
     )
 
     matched = match_import_item_to_items(import_item, ["E1"])
+
+    assert list(matched) == [expected]
+
+
+# ─── E132 Auto Planning business rules — item detection ────────────────────
+# These mirror the classification rules in services/e132_plan.py so item-name
+# linking stays consistent with the planner. Each E132 entry is deliberately
+# a SEPARATE, norm-scoped filter config (not merged into the shared E1/E5/E126
+# entries) so tightening these never changes E1/E5/E126 item-name linking —
+# see item_matcher.py's NUTS/CHEESE/RBD PALMOLEIN OIL entries.
+
+
+@pytest.mark.django_db
+def test_e132_nuts_requires_0802_and_word_boundary(e132_norm):
+    expected = ItemNameModel.objects.create(name="NUTS - E132", sion_norm_class=e132_norm)
+    hs_code = HSCodeModel.objects.create(hs_code="08021100")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E132-NUTS-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code, description="Cashew Nuts",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E132"])
+
+    assert list(matched) == [expected]
+
+
+@pytest.mark.django_db
+def test_e132_nuts_word_boundary_excludes_peanut(e132_norm):
+    ItemNameModel.objects.create(name="NUTS - E132", sion_norm_class=e132_norm)
+    hs_code = HSCodeModel.objects.create(hs_code="08029090")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E132-NUTS-002")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code, description="Peanut Kernels",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E132"])
+
+    assert not matched.exists()
+
+
+@pytest.mark.django_db
+def test_e132_cheese_requires_dairy_code_and_vegetable_and_oil(e132_norm):
+    expected = ItemNameModel.objects.create(name="CHEESE - E132", sion_norm_class=e132_norm)
+    hs_code = HSCodeModel.objects.create(hs_code="04061000")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E132-CHEESE-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code,
+        description="Relevant Vegetable Oil Fat Blend",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E132"])
+
+    assert list(matched) == [expected]
+
+
+@pytest.mark.django_db
+def test_e132_cheese_dairy_code_alone_does_not_match(e132_norm):
+    # Business rule: bare 0406 (no "vegetable"/"oil") no longer matches
+    # CHEESE for E132 — unlike the loose E1/E5 CHEESE rule.
+    ItemNameModel.objects.create(name="CHEESE - E132", sion_norm_class=e132_norm)
+    hs_code = HSCodeModel.objects.create(hs_code="04061000")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E132-CHEESE-002")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code, description="Fresh Cheese Only",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E132"])
+
+    assert not matched.exists()
+
+
+@pytest.mark.django_db
+def test_e132_cheese_strict_rule_does_not_affect_e1_e5(e_norms):
+    # The loose E1/E5 CHEESE rule (bare 0406) must still match — confirms the
+    # E132 tightening was scoped to its own filter entry only.
+    expected = ItemNameModel.objects.create(name="CHEESE - E1", sion_norm_class=e_norms["E1"])
+    hs_code = HSCodeModel.objects.create(hs_code="04061000")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E132-CHEESE-003")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code, description="Fresh Cheese Only",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E1"])
+
+    assert list(matched) == [expected]
+
+
+@pytest.mark.django_db
+def test_e132_rbd_palmolein_oil_matches_via_hsn_1510(e132_norm):
+    expected = ItemNameModel.objects.create(name="RBD PALMOLEIN OIL - E132", sion_norm_class=e132_norm)
+    hs_code = HSCodeModel.objects.create(hs_code="15100000")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E132-RBD-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code, description="RBD Palm Oil",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E132"])
+
+    assert list(matched) == [expected]
+
+
+@pytest.mark.django_db
+def test_e132_rbd_palmolein_oil_free_text_alone_does_not_match(e132_norm):
+    # Business rule: E132's RBD detection is HSN 1510 (or "1510" in the
+    # description) only — the old free-text "rbd palmolein oil" fallback
+    # (still used by E1/E5/E126) does not apply here.
+    ItemNameModel.objects.create(name="RBD PALMOLEIN OIL - E132", sion_norm_class=e132_norm)
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E132-RBD-002")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, description="RBD Palmolein Oil",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E132"])
+
+    assert not matched.exists()
+
+
+@pytest.mark.django_db
+def test_e132_palm_kernel_oil_matches_via_hsn_1513(e132_norm):
+    expected = ItemNameModel.objects.create(name="PALM KERNEL OIL - E132", sion_norm_class=e132_norm)
+    hs_code = HSCodeModel.objects.create(hs_code="15132900")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E132-PKO-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code, description="Palm Kernel Oil",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E132"])
 
     assert list(matched) == [expected]
 

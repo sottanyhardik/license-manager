@@ -16,23 +16,30 @@ BUSINESS-RULE DECISIONS (made explicit — not silent assumptions)
    Oil and Cheese as independently priced Priority-3 items, so a record that
    signals ONLY one of them (1513 without the strict Cheese signal, or the
    strict Cheese signal without 1513) still has to classify somewhere. Such
-   a record goes 100% to that single item — no split, no debit adjustment
-   (the split/adjustment only applies when BOTH signals are present on the
-   same record, per Rule 7's stated precondition).
+   a record goes 100% to that single item — no split (the split only
+   applies when BOTH signals are present on the same record).
 2. This engine is a NEW, standalone classifier. It does NOT replace the
    existing apps.license.services.e132_debit (a different sequential
    balance-consuming model used by the Download-License Excel, with
    different items/prices).
+3. EVERY E132 planning quantity — including the Vegetable Oil PKO/Cheese
+   split target — is based on the record's CURRENT Available Quantity, never
+   its original/total import quantity. A record's available quantity already
+   self-corrects for real consumption (it shrinks the moment an allotment
+   debits it), so recomputing the 40%/60% split fresh against it every run
+   is automatically correct and idempotent — no separate "already
+   planned/debited" bookkeeping is needed (or should be reintroduced): that
+   would be double-accounting for something `available_quantity` already
+   reflects.
 
 DATA MAPPING (source: LicenseImportItemsModel of an E132 licence)
     Norm        → licence export norm_class == "E132" (caller filters to these)
     HSN Code    → item.hs_code.hs_code   (str, may be null/blank)
     Description → item.description        (str, may be null/blank)
     Quantity    → item.available_quantity (Decimal) — the currently
-                  allocatable pool for this record.
-    Original quantity → item.quantity (Decimal) — ONLY used as the basis for
-                  the Vegetable Oil 40/60 split target (Rule 8); every other
-                  category plans against the available quantity above.
+                  allocatable pool for this record; ALSO the basis for the
+                  Vegetable Oil 40/60 split target (never the original/total
+                  import quantity — see decision #3 above).
     Record id   → item.id                (preserved for traceability)
 """
 from __future__ import annotations
@@ -57,8 +64,8 @@ ALUMINIUM = "Aluminium Foil - E132"
 # satisfies BOTH the 1513 (PKO) signal and the strict Cheese signal — never
 # an output item name; expanded into PKO (40%) + Cheese (60%) at allocation
 # time by `_split_veg_oil_record` (per-record, NOT license-wide pooled —
-# each Vegetable Oil import item's split target is its OWN original
-# quantity, see Rule 8).
+# each Vegetable Oil import item's split target is its OWN CURRENT
+# available quantity, never its original/total import quantity).
 _VEG_OIL_SPLIT = "__VEG_OIL_SPLIT__"
 
 # ── Fixed planning unit prices (USD). ────────────────────────────────────────
@@ -249,40 +256,23 @@ def _allocate_step(qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[
     return balance, balance / qty
 
 
-def _split_veg_oil_record(
-    available_qty: Decimal, original_qty: Decimal, existing: dict[str, Any] | None,
-) -> dict[str, Decimal]:
-    """Rule 8 — Vegetable Oil 40/60 split, PER RECORD (not license-wide
-    pooled, unlike the old Milk split): target quantities are 40%/60% of
-    THIS record's ORIGINAL import quantity, minus whatever has already been
-    planned for PKO/Cheese on this same record (``existing``, keyed by
-    planning-item name — supplied by the DB-aware caller, empty/None in
-    report-only contexts).
+def _split_veg_oil_record(available_qty: Decimal) -> dict[str, Decimal]:
+    """Vegetable Oil 40/60 split, PER RECORD (not license-wide pooled, unlike
+    the old Milk split): target quantities are 40%/60% of THIS record's
+    CURRENT Available Quantity — never its original/total import quantity
+    (critical business rule: available_quantity already self-corrects for
+    real consumption, so there is nothing further to subtract here; re-
+    deriving 40%/60% of it fresh every run is automatically correct AND
+    idempotent, with no separate "already planned" bookkeeping needed).
 
-    Returns ``{PKO: shortfall_qty, CHEESE: shortfall_qty}`` — the "Quantity
-    to Allocate" from Rule 8 (never negative; 0 once a target is already
-    met). The combined shortfall is additionally capped at
-    ``available_qty`` — the record's currently allocatable pool — since a
-    target can never be filled beyond what's actually still available.
+    Returns ``{PKO: qty, CHEESE: qty}``, always summing to exactly
+    ``available_qty`` (never negative, never more than what's available —
+    by construction, not by capping).
     """
     z = Decimal("0")
-    if original_qty <= 0:
+    if available_qty <= 0:
         return {PKO: z, CHEESE: z}
-
-    existing = existing or {}
-    shortfalls: dict[str, Decimal] = {}
-    for name, frac in _VEG_OIL_SPLIT_TARGETS.items():
-        target = original_qty * frac
-        already = _d(existing.get(name, 0))
-        shortfalls[name] = max(z, target - already)
-
-    total_shortfall = sum(shortfalls.values(), z)
-    available = max(z, available_qty)
-    if total_shortfall > available and total_shortfall > 0:
-        scale = available / total_shortfall
-        shortfalls = {name: qty * scale for name, qty in shortfalls.items()}
-
-    return shortfalls
+    return {name: available_qty * frac for name, frac in _VEG_OIL_SPLIT_TARGETS.items()}
 
 
 def _allocate_buckets(agg: dict, balance_cif) -> dict:
@@ -336,49 +326,123 @@ def _agg_from(recs: list) -> dict:
     return agg
 
 
-def _classify_records(
-    records: Iterable[dict], balance_cif, existing_split_allocations: dict | None = None,
-) -> list:
+def _classify_records(records: Iterable[dict], balance_cif) -> list:
     """Classify every record. Returns a list of dicts with normalized fields:
     ``{record_id, item, reason, qty, hsn, desc, raw_hs, raw_desc, split}``.
     ``split`` is only populated (``{PKO: qty, CHEESE: qty}``) for records
-    classified to the internal Vegetable Oil split marker.
-
-    ``existing_split_allocations`` — ``{record_id: {PKO: already_planned_qty,
-    CHEESE: already_planned_qty}}`` — supplied by the DB-aware caller
-    (`e132_auto_plan.py`) so re-running Auto-Plan doesn't re-target the split
-    from zero every time (Rule 8). ``None``/absent in report-only contexts,
-    which is equivalent to "nothing planned yet" (the full 40/60 target).
-    """
-    existing_split_allocations = existing_split_allocations or {}
+    classified to the internal Vegetable Oil split marker — always 40%/60%
+    of that record's OWN ``qty`` (current Available Quantity)."""
     recs = []
     for rec in records:
         raw_hs = rec.get("hs_code")
         raw_desc = rec.get("description")
         item, reason = classify_e132_record(raw_hs, raw_desc)
         qty = _d(rec.get("quantity"))
-        split: dict[str, Decimal] = {}
-        split_already: dict[str, Decimal] = {}
-        if item == _VEG_OIL_SPLIT:
-            original_qty = _d(rec.get("original_quantity", rec.get("quantity")))
-            existing = existing_split_allocations.get(rec.get("record_id"))
-            split = _split_veg_oil_record(qty, original_qty, existing)
-            split_already = {
-                name: _d((existing or {}).get(name, 0)) for name in _VEG_OIL_SPLIT_TARGETS
-            }
+        split: dict[str, Decimal] = _split_veg_oil_record(qty) if item == _VEG_OIL_SPLIT else {}
         recs.append({
             "record_id": rec.get("record_id"),
             "item": item,
             "reason": reason,
             "qty": qty,
             "split": split,
-            "split_already": split_already,
             "hsn": _norm_hsn(raw_hs),
             "desc": _norm_text(raw_desc),
             "raw_hs": raw_hs,
             "raw_desc": raw_desc,
         })
     return recs
+
+
+# PKO -> Cheese wastage-reduction rebalance ("Replace Existing Split Logic"
+# refinement). Cheese is priced higher than PKO, so shifting quantity from
+# PKO to Cheese raises total planned value without raising total planned
+# quantity — used ONLY to close out leftover Remaining Balance CIF after the
+# full waterfall has already run.
+_PKO_TO_CHEESE_VALUE_GAIN: Decimal = UNIT_PRICE[CHEESE] - UNIT_PRICE[PKO]  # $3.70/unit
+
+
+def _rebalance_veg_oil_wastage(recs: list, alloc: dict, balance_cif) -> None:
+    """
+    Wastage-reduction pass: the 40%/60% PKO/Cheese split is the DEFAULT
+    allocation, but if the full waterfall still leaves Remaining Balance CIF
+    unused, shift quantity from PKO to Cheese on the Vegetable Oil split
+    records to close that gap — Cheese ($5.50) is priced higher than PKO
+    ($1.80), so moving quantity from one to the other increases total
+    planned value WITHOUT increasing total planned quantity for that record
+    (its PKO + Cheese quantity is unchanged, only the mix shifts).
+
+    Mutates `recs`' `split` dicts and `alloc`'s PKO/CHEESE entries in place;
+    every other bucket (Nuts, Yeast, RBD, Aluminium) is left exactly as the
+    waterfall computed it, per the business rule that higher/other-priority
+    allocations already finalized must never be touched.
+
+    No-op (Case A) when:
+      * `balance_cif` is None — classification-only/report mode has no
+        balance target, so there is no "remaining" to reduce; OR
+      * there is no leftover balance — either the default split already
+        used it all, or the waterfall itself already capped every bucket
+        (both mean nothing here needs adjusting).
+
+    Otherwise (Case B), each Vegetable Oil split record is visited ONCE, in
+    the given `recs` order (the caller's own stable order — e.g. import-item
+    serial_number order from `e132_auto_plan.py`), and its shift is a single
+    CLOSED-FORM calculation (`min(this record's PKO qty, remaining_balance /
+    price_gain)`) rather than an arbitrary-step iterative search — the exact
+    mathematical optimum, computed once. Same inputs always produce the same
+    shifts, satisfying "deterministic and idempotent, producing the same
+    result on every run" without needing a numerical loop at all. Stops the
+    moment `remaining` reaches 0 or every split record's PKO is exhausted —
+    the same two stopping conditions the business spec describes.
+    """
+    if balance_cif is None:
+        return
+    if _PKO_TO_CHEESE_VALUE_GAIN <= 0:
+        return  # defensive — rebalancing only helps when Cheese > PKO price
+
+    total_planned = sum(
+        (a["value"] for a in alloc.values() if a.get("value") is not None), Decimal("0"),
+    )
+    remaining = _d(balance_cif) - total_planned
+    if remaining <= 0:
+        return  # Case A: default split already correct, or waterfall already capped
+
+    pko_bucket = alloc.get(PKO)
+    cheese_bucket = alloc.get(CHEESE)
+    if pko_bucket is None or cheese_bucket is None:
+        return
+
+    for r in recs:
+        if remaining <= 0:
+            break
+        if r["item"] != _VEG_OIL_SPLIT:
+            continue
+        pko_qty = r["split"].get(PKO, Decimal("0"))
+        if pko_qty <= 0:
+            continue
+
+        shift = min(pko_qty, remaining / _PKO_TO_CHEESE_VALUE_GAIN)
+        if shift <= 0:
+            continue
+
+        r["split"][PKO] = pko_qty - shift
+        r["split"][CHEESE] = r["split"].get(CHEESE, Decimal("0")) + shift
+
+        pko_bucket["qty"] -= shift
+        pko_bucket["value"] -= shift * UNIT_PRICE[PKO]
+        cheese_bucket["qty"] += shift
+        cheese_bucket["value"] += shift * UNIT_PRICE[CHEESE]
+        remaining -= shift * _PKO_TO_CHEESE_VALUE_GAIN
+
+
+def _classify_and_allocate(records: Iterable[dict], balance_cif) -> tuple[list, dict]:
+    """Shared pipeline for every public ``plan_e132*`` function: classify →
+    aggregate → waterfall-allocate → wastage-reduction rebalance (see
+    `_rebalance_veg_oil_wastage`). Kept in one place so the rebalance pass
+    can never be forgotten in one of the three call sites."""
+    recs = _classify_records(records, balance_cif)
+    alloc = _allocate_buckets(_agg_from(recs), balance_cif)
+    _rebalance_veg_oil_wastage(recs, alloc, balance_cif)
+    return recs, alloc
 
 
 @dataclass
@@ -422,9 +486,7 @@ def _blended_veg_oil_rate(split: dict, alloc: dict):
     return total_val / total_qty
 
 
-def plan_e132_per_item(
-    records: Iterable[dict], balance_cif=None, existing_split_allocations: dict | None = None,
-) -> dict:
+def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
     """Per-record planning for E132 (for report views that show one plan line per
     import item).
 
@@ -445,8 +507,7 @@ def plan_e132_per_item(
     that want the PKO/Cheese breakdown per record use
     ``plan_e132_per_item_split``.
     """
-    recs = _classify_records(records, balance_cif, existing_split_allocations)
-    alloc = _allocate_buckets(_agg_from(recs), balance_cif)
+    recs, alloc = _classify_and_allocate(records, balance_cif)
     out: dict = {}
     for r in recs:
         item = r["item"]
@@ -468,19 +529,17 @@ def plan_e132_per_item(
     return out
 
 
-def plan_e132_per_item_split(
-    records: Iterable[dict], balance_cif=None, existing_split_allocations: dict | None = None,
-) -> dict:
+def plan_e132_per_item_split(records: Iterable[dict], balance_cif=None) -> dict:
     """Like ``plan_e132_per_item`` but returns a LIST of plan lines per record so a
     single Vegetable Oil import item can be shown as its PKO/Cheese split.
 
     Returns ``{record_id: [ {planning_item, reason, planned_quantity, unit_price,
     planned_cif}, ... ]}``. Non-split records yield a single-element list;
     split records yield one entry per target (PKO/Cheese) that carries
-    quantity this round (Rule 8 shortfall — see `_split_veg_oil_record`).
+    quantity (40%/60% of the record's current Available Quantity — see
+    `_split_veg_oil_record`).
     """
-    recs = _classify_records(records, balance_cif, existing_split_allocations)
-    alloc = _allocate_buckets(_agg_from(recs), balance_cif)
+    recs, alloc = _classify_and_allocate(records, balance_cif)
 
     out: dict = {}
     for r in recs:
@@ -491,15 +550,7 @@ def plan_e132_per_item_split(
         if item == _VEG_OIL_SPLIT:
             lines = []
             for name, qty in r["split"].items():
-                already = r["split_already"].get(name, Decimal("0"))
-                # Emit a line whenever there's new shortfall to allocate OR an
-                # already-achieved amount to preserve — the caller (DB-aware
-                # e132_auto_plan.py) adds `already_planned_quantity` back onto
-                # `planned_quantity` to get the cumulative target-so-far value
-                # it persists, so a target that's already fully met (qty==0)
-                # must still surface here or its prior allocation would be
-                # silently dropped on the next full-replace save.
-                if qty <= 0 and already <= 0:
+                if qty <= 0:
                     continue
                 rate = _effective_rate(alloc.get(name))
                 lines.append({
@@ -508,7 +559,6 @@ def plan_e132_per_item_split(
                     "planned_quantity": qty,
                     "unit_price": rate,
                     "planned_cif": (qty * rate) if rate is not None else None,
-                    "already_planned_quantity": already,
                 })
             out[rid] = lines
         else:
@@ -524,24 +574,19 @@ def plan_e132_per_item_split(
     return out
 
 
-def plan_e132(
-    records: Iterable[dict], balance_cif=None, existing_split_allocations: dict | None = None,
-) -> dict:
+def plan_e132(records: Iterable[dict], balance_cif=None) -> dict:
     """Classify + aggregate E132 records into a planning result.
 
     Args:
         records: iterable of dicts with keys ``record_id``, ``hs_code``,
-            ``description``, ``quantity`` (and optionally
-            ``original_quantity`` for Vegetable Oil split records — see
-            Rule 8; defaults to ``quantity`` when absent). Records are
+            ``description``, ``quantity`` (the record's current Available
+            Quantity — ALSO the basis for the Vegetable Oil 40/60 split
+            target, never an original/total import quantity). Records are
             assumed already filtered to Norm E132.
         balance_cif: licence Balance CIF $. When given, planning value is
             waterfall-allocated in priority order and capped so the total never
             exceeds it (max debit per licence = Balance CIF), and ``unit_price`` is
             the effective rate. When None, value is the uncapped qty × fixed price.
-        existing_split_allocations: ``{record_id: {PKO: qty, CHEESE: qty}}``
-            already-planned amounts for Vegetable Oil split records — see
-            `_classify_records`.
 
     Returns dict with:
         ``items``      – planning rows (in PLANNING_ORDER, only items with
@@ -553,7 +598,7 @@ def plan_e132(
                          (matched no rule).
         ``missing_inputs`` – planning items whose unit price is undefined.
     """
-    recs = _classify_records(records, balance_cif, existing_split_allocations)
+    recs, alloc = _classify_and_allocate(records, balance_cif)
     classified: list[ClassifiedRecord] = [
         ClassifiedRecord(
             record_id=r["record_id"],
@@ -565,8 +610,6 @@ def plan_e132(
         )
         for r in recs
     ]
-    agg = _agg_from(recs)
-    alloc = _allocate_buckets(agg, balance_cif)  # priority-order, balance-capped
     items = []
     for name in PLANNING_ORDER:
         a = alloc.get(name)

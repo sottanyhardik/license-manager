@@ -1,16 +1,17 @@
 """Tests for the E132 Auto-Plan service (services/e132_auto_plan.py).
 
 `compute_e132_auto_plan` is the only DB-aware layer of the E132 planner — it
-loads import items, reads this licence's existing `LicenseItemPlan` rows for
-the Vegetable Oil 40/60 split (Rule 8's "existing debit adjustment"), and
-delegates the actual classification/waterfall to the pure
-`services.e132_plan` engine (already unit-tested in test_e132_plan.py).
+loads import items and delegates classification/waterfall/rebalance entirely
+to the pure `services.e132_plan` engine (already unit-tested in
+test_e132_plan.py). CRITICAL business rule: the Vegetable Oil PKO/Cheese
+split is always 40%/60% of the import item's CURRENT `available_quantity`
+(never its original/total import quantity) — since `available_quantity`
+already self-corrects for real consumption, this file has no "already
+planned" bookkeeping to do; it's a pure recompute every run.
 
 These tests focus on what only this adapter can be responsible for: DB
-mapping (ItemNameModel ids), the MIN_PLAN_QTY gate, and — the important new
-behavior — reading prior `LicenseItemPlan` rows so re-running Auto-Plan
-reconciles to the correct cumulative PKO/Cheese target instead of drifting,
-zeroing out, or double counting.
+mapping (ItemNameModel ids), the MIN_PLAN_QTY gate, and confirming the split
+tracks `available_quantity` (not history, not the original quantity).
 """
 from datetime import date
 from decimal import Decimal
@@ -134,9 +135,20 @@ class TestComputeE132AutoPlanBasics:
 
 
 @pytest.mark.django_db
-class TestVegOilSplitDebitAdjustment:
-    def test_fresh_split_targets_40_60_of_original_quantity(self, item_names):
-        license_obj, patcher = _make_license("LIC-E132-SPLIT-FRESH", Decimal('100000'))
+class TestVegOilSplitAvailableQuantity:
+    """CRITICAL business rule: the Vegetable Oil PKO/Cheese split is always
+    40%/60% of the import item's CURRENT `available_quantity` — never its
+    original/total import quantity. Because `available_quantity` already
+    self-corrects the moment a REAL allotment debits it, re-running
+    Auto-Plan simply recomputes 40%/60% of whatever it currently is — no
+    separate "already planned" bookkeeping is needed for this to be stable
+    and idempotent."""
+
+    def test_fresh_split_targets_40_60_of_available_quantity(self, item_names):
+        # balance_cif == exactly the default 40/60 split's value (402) so the
+        # wastage-rebalance pass (see TestVegOilWastageRebalanceAutoPlan)
+        # has nothing to do here — this test is about the raw split only.
+        license_obj, patcher = _make_license("LIC-E132-SPLIT-FRESH", Decimal('402'))
         try:
             LicenseImportItemsModel.objects.create(
                 license=license_obj, serial_number=1, description=VEG_OIL_DESC,
@@ -150,36 +162,29 @@ class TestVegOilSplitDebitAdjustment:
         finally:
             patcher.stop()
 
-    def test_reruns_reconcile_to_target_not_naive_resplit(self, item_names):
-        # The exact worked example from the business spec: 100kg item, PKO
-        # already planned 30kg → this run must produce PKO=40 (10 new +
-        # 30 already) / Cheese=60 in TOTAL — never 28/42 (naive re-split of
-        # the 70kg physically remaining) and never 70/60 (ignoring history).
-        license_obj, patcher = _make_license("LIC-E132-SPLIT-RERUN", Decimal('100000'))
+    def test_split_follows_available_quantity_down_after_real_consumption(self, item_names):
+        # 100kg originally imported, 40kg already really allotted/debited
+        # elsewhere -> available_quantity is now 60kg. The split must be
+        # 40%/60% of THAT 60kg (24/36) — never of the original 100.
+        license_obj, patcher = _make_license("LIC-E132-SPLIT-AFTER-DEBIT", Decimal('241.2'))  # 24×1.80 + 36×5.50
         try:
-            import_item = LicenseImportItemsModel.objects.create(
+            LicenseImportItemsModel.objects.create(
                 license=license_obj, serial_number=1, description=VEG_OIL_DESC,
                 hs_code=_hs('15132900'),
-                quantity=Decimal('100'), available_quantity=Decimal('70'),
+                quantity=Decimal('100'), available_quantity=Decimal('60'),
             )
-            LicenseItemPlan.objects.create(
-                license=license_obj, import_item=import_item, item_name=item_names[PKO],
-                planned_quantity=Decimal('30'), unit_price=Decimal('1.80'), planned_cif_fc=Decimal('54'),
-            )
-
             lines, _ = compute_e132_auto_plan(license_obj)
             by_name_id = {l['item_name']: l for l in lines}
-
-            assert by_name_id[item_names[PKO].id]['planned_quantity'] == 40.0
-            assert by_name_id[item_names[CHEESE].id]['planned_quantity'] == 60.0
+            assert by_name_id[item_names[PKO].id]['planned_quantity'] == 24.0
+            assert by_name_id[item_names[CHEESE].id]['planned_quantity'] == 36.0
         finally:
             patcher.stop()
 
-    def test_target_already_fully_met_is_a_stable_fixed_point(self, item_names):
-        # Simulate a THIRD run: the previous run already reconciled to the
-        # full 40/60 target. Re-running again with nothing else changed must
-        # reproduce exactly 40/60 — not drift, not zero out.
-        license_obj, patcher = _make_license("LIC-E132-SPLIT-STABLE", Decimal('100000'))
+    def test_reruns_with_unchanged_available_quantity_reproduce_the_same_split(self, item_names):
+        # A prior run's LicenseItemPlan rows sitting in the DB (however they
+        # got there) must NOT influence this run at all — only the import
+        # item's CURRENT available_quantity does.
+        license_obj, patcher = _make_license("LIC-E132-SPLIT-RERUN", Decimal('402'))
         try:
             import_item = LicenseImportItemsModel.objects.create(
                 license=license_obj, serial_number=1, description=VEG_OIL_DESC,
@@ -188,11 +193,7 @@ class TestVegOilSplitDebitAdjustment:
             )
             LicenseItemPlan.objects.create(
                 license=license_obj, import_item=import_item, item_name=item_names[PKO],
-                planned_quantity=Decimal('40'), unit_price=Decimal('1.80'), planned_cif_fc=Decimal('72'),
-            )
-            LicenseItemPlan.objects.create(
-                license=license_obj, import_item=import_item, item_name=item_names[CHEESE],
-                planned_quantity=Decimal('60'), unit_price=Decimal('5.50'), planned_cif_fc=Decimal('330'),
+                planned_quantity=Decimal('9999'), unit_price=Decimal('1.80'), planned_cif_fc=Decimal('1'),
             )
 
             lines, _ = compute_e132_auto_plan(license_obj)
@@ -203,16 +204,19 @@ class TestVegOilSplitDebitAdjustment:
         finally:
             patcher.stop()
 
-    def test_explicit_cheese_ignores_existing_pko_history(self, item_names):
+    def test_explicit_cheese_ignores_unrelated_history(self, item_names):
         # An explicit Cheese+Vegetable+Oil item must always plan 100% of its
-        # own available quantity to Cheese, regardless of any unrelated PKO
-        # plan history sitting on a DIFFERENT import item.
-        license_obj, patcher = _make_license("LIC-E132-EXPLICIT-CHEESE", Decimal('100000'))
+        # own available quantity to Cheese, regardless of any unrelated
+        # plan rows sitting on a DIFFERENT import item.
+        # balance_cif == exactly veg_oil's split value (402) + the explicit
+        # item's full value (50 × 5.50 = 275) = 677, so the wastage-rebalance
+        # pass has nothing left over to touch here.
+        license_obj, patcher = _make_license("LIC-E132-EXPLICIT-CHEESE", Decimal('677'))
         try:
             veg_oil_item = LicenseImportItemsModel.objects.create(
                 license=license_obj, serial_number=1, description=VEG_OIL_DESC,
                 hs_code=_hs('15132900'),
-                quantity=Decimal('100'), available_quantity=Decimal('70'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
             )
             LicenseItemPlan.objects.create(
                 license=license_obj, import_item=veg_oil_item, item_name=item_names[PKO],
@@ -242,7 +246,10 @@ class TestVegOilSplitDebitAdjustment:
     def test_split_scoped_per_import_item_not_licence_wide(self, item_names):
         # Two separate 100kg Vegetable Oil items on the same licence each get
         # their OWN independent 40/60 target — not a pooled licence-wide split.
-        license_obj, patcher = _make_license("LIC-E132-SPLIT-PER-ITEM", Decimal('1000000'))
+        # balance_cif == exactly both items' default-split value combined
+        # (402 + 804 = 1206) so the wastage-rebalance pass has nothing left
+        # over to touch here.
+        license_obj, patcher = _make_license("LIC-E132-SPLIT-PER-ITEM", Decimal('1206'))
         try:
             LicenseImportItemsModel.objects.create(
                 license=license_obj, serial_number=1, description=VEG_OIL_DESC,
@@ -260,5 +267,84 @@ class TestVegOilSplitDebitAdjustment:
             # Item 1: 40/60, Item 2: 80/120 → totals 120/180.
             assert pko_total == 120.0
             assert cheese_total == 180.0
+        finally:
+            patcher.stop()
+
+
+@pytest.mark.django_db
+class TestVegOilWastageRebalanceAutoPlan:
+    """End-to-end (DB-level) coverage for the wastage-reduction rebalance:
+    when the licence's live Balance CIF exceeds the default 40/60 split's
+    value, `compute_e132_auto_plan` shifts quantity from PKO to Cheese to
+    close the gap. The pure-function math is exercised exhaustively in
+    test_e132_plan.py::TestVegOilWastageRebalance — this only confirms the
+    DB-aware adapter wires it through correctly."""
+
+    def test_leftover_balance_shifts_pko_into_cheese(self, item_names):
+        # Default split value = 402 (40×1.80 + 60×5.50). Give a much larger
+        # balance so the leftover gets absorbed by converting PKO to Cheese.
+        license_obj, patcher = _make_license("LIC-E132-REBALANCE-BASIC", Decimal('100000'))
+        try:
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            lines, remaining_cif = compute_e132_auto_plan(license_obj)
+            by_name_id = {l['item_name']: l for l in lines}
+
+            # PKO fully converted (max possible gain 40×3.70=148 can't come
+            # close to using up a 100000 balance) — no PKO line at all.
+            assert item_names[PKO].id not in by_name_id
+            assert by_name_id[item_names[CHEESE].id]['planned_quantity'] == 100.0
+            assert by_name_id[item_names[CHEESE].id]['planned_cif_fc'] == 550.0  # 100 × 5.50
+        finally:
+            patcher.stop()
+
+    def test_reruns_with_unchanged_available_quantity_are_stable(self, item_names):
+        # Calling compute_e132_auto_plan twice in a row with nothing else
+        # changed (same available_quantity, same balance) must reproduce
+        # IDENTICAL results — a pure recompute, never drifting.
+        license_obj, patcher = _make_license("LIC-E132-REBALANCE-STABLE", Decimal('100000'))
+        try:
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            run1, remaining1 = compute_e132_auto_plan(license_obj)
+            run2, remaining2 = compute_e132_auto_plan(license_obj)
+            key = lambda l: (l['import_item'], l['item_name'], l['planned_quantity'])
+            assert sorted(run1, key=key) == sorted(run2, key=key)
+            assert remaining1 == remaining2
+        finally:
+            patcher.stop()
+
+    def test_partial_rebalance_leaves_other_categories_untouched(self, item_names):
+        # A licence with Nuts + a Vegetable Oil split item, balance just
+        # large enough to fully fund Nuts plus a partial PKO->Cheese shift.
+        # Nuts' allocation must be exactly its own fixed-price value either
+        # way. (Nuts quantity must be >= MIN_PLAN_QTY=50 or it's silently
+        # excluded — see e132_auto_plan.py.)
+        balance = Decimal('300') + Decimal('452')  # Nuts (100×3.00) + veg-oil default(402) + 50 surplus
+        license_obj, patcher = _make_license("LIC-E132-REBALANCE-PARTIAL", balance)
+        try:
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Cashew Nuts",
+                hs_code=_hs('08021100'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            lines, remaining_cif = compute_e132_auto_plan(license_obj)
+            by_name_id = {l['item_name']: l for l in lines}
+
+            assert by_name_id[item_names[NUT_NUTS].id]['planned_cif_fc'] == 300.0
+            assert by_name_id[item_names[PKO].id]['planned_quantity'] < 40.0
+            assert by_name_id[item_names[CHEESE].id]['planned_quantity'] > 60.0
+            assert remaining_cif == pytest.approx(0.0, abs=0.01)
         finally:
             patcher.stop()

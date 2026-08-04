@@ -307,114 +307,83 @@ class TestBalanceCap(unittest.TestCase):
 
 
 class TestVegOilSplit(unittest.TestCase):
-    """Rules 7/8 — the 40/60 PKO/Cheese split and the existing-allocation
-    (debit) adjustment, per record, based on the record's ORIGINAL quantity."""
+    """Rule 7 — the 40/60 PKO/Cheese split. CRITICAL business rule: the
+    split target is always 40%/60% of the record's CURRENT Available
+    Quantity (`quantity`), NEVER an original/total import quantity — the
+    engine no longer even accepts one. Available Quantity already self-
+    corrects for real consumption, so the split is simply recomputed fresh,
+    every run, from whatever it currently is — no separate "already
+    planned/debited" bookkeeping."""
 
-    def _split_record(self, available_qty, original_qty):
+    def _split_record(self, available_qty):
         return [{
             "record_id": 1,
             "hs_code": "15132900",
             "description": "Relevant Vegetable Oil viz Palm Kernel (1513) or Dairy Fat 0406 Vegetable Oil",
             "quantity": available_qty,
-            "original_quantity": original_qty,
         }]
 
-    def test_fresh_split_is_40_60_of_original_quantity(self):
-        recs = self._split_record(Decimal("100"), Decimal("100"))
-        lines = plan_e132_per_item_split(recs, balance_cif=Decimal("10000"))[1]
+    def test_split_is_40_60_of_available_quantity(self):
+        # balance_cif == exactly the default split's value (Case A — see
+        # TestVegOilWastageRebalance for what happens when the balance
+        # EXCEEDS this, i.e. leftover CIF to absorb).
+        recs = self._split_record(Decimal("100"))
+        lines = plan_e132_per_item_split(recs, balance_cif=Decimal("402"))[1]
         by = {L["planning_item"]: L for L in lines}
         self.assertEqual(by[PKO]["planned_quantity"], Decimal("40"))
         self.assertEqual(by[CHEESE]["planned_quantity"], Decimal("60"))
 
-    def test_debit_adjustment_example_from_spec(self):
-        # 100kg total, PKO already planned 30kg → allocate PKO=10, Cheese=60
-        # (NOT a naive 28/42 re-split of the 70kg remaining).
-        recs = self._split_record(Decimal("70"), Decimal("100"))
-        lines = plan_e132_per_item_split(
-            recs, balance_cif=Decimal("10000"),
-            existing_split_allocations={1: {PKO: Decimal("30")}},
-        )[1]
+    def test_split_follows_available_quantity_down_after_real_consumption(self):
+        # The exact scenario the business rule calls out: 100kg originally
+        # imported, 40kg already really allotted/debited elsewhere -> the
+        # import item's available_quantity is now 60kg, and the split must
+        # be 40%/60% of THAT 60kg (24/36) — never 40%/60% of the original 100.
+        recs = self._split_record(Decimal("60"))
+        lines = plan_e132_per_item_split(recs, balance_cif=Decimal("241.2"))[1]  # 24×1.80 + 36×5.50
         by = {L["planning_item"]: L for L in lines}
-        self.assertEqual(by[PKO]["planned_quantity"], Decimal("10"))
-        self.assertEqual(by[CHEESE]["planned_quantity"], Decimal("60"))
+        self.assertEqual(by[PKO]["planned_quantity"], Decimal("24"))
+        self.assertEqual(by[CHEESE]["planned_quantity"], Decimal("36"))
 
-    def test_target_already_met_allocates_zero(self):
-        recs = self._split_record(Decimal("70"), Decimal("100"))
-        lines = plan_e132_per_item_split(
-            recs, balance_cif=Decimal("10000"),
-            existing_split_allocations={1: {PKO: Decimal("40"), CHEESE: Decimal("60")}},
-        )[1]
-        by = {L["planning_item"]: L for L in lines}
-        self.assertEqual(by[PKO]["planned_quantity"], Decimal("0"))
-        self.assertEqual(by[CHEESE]["planned_quantity"], Decimal("0"))
+    def test_total_never_exceeds_available_quantity(self):
+        for available in (Decimal("1"), Decimal("60"), Decimal("100"), Decimal("12345.678")):
+            recs = self._split_record(available)
+            lines = plan_e132_per_item_split(recs, balance_cif=None)[1]
+            total = sum((L["planned_quantity"] for L in lines), Decimal("0"))
+            self.assertEqual(total, available)
 
-    def test_shortfall_never_negative_when_over_planned(self):
-        # Already planned exceeds target (data drift) — shortfall floors at 0,
-        # never goes negative.
-        recs = self._split_record(Decimal("10"), Decimal("100"))
-        lines = plan_e132_per_item_split(
-            recs, balance_cif=Decimal("10000"),
-            existing_split_allocations={1: {PKO: Decimal("999")}},
-        )[1]
-        by = {L["planning_item"]: L for L in lines}
-        self.assertEqual(by[PKO]["planned_quantity"], Decimal("0"))
-
-    def test_shortfall_capped_at_available_quantity(self):
-        # Fresh split but only 70kg is actually available (30kg already
-        # consumed by something outside this record's plan history) — the
-        # combined new shortfall (100) is scaled down to fit within 70.
-        recs = self._split_record(Decimal("70"), Decimal("100"))
+    def test_zero_available_quantity_yields_no_lines(self):
+        recs = self._split_record(Decimal("0"))
         lines = plan_e132_per_item_split(recs, balance_cif=Decimal("10000"))[1]
-        by = {L["planning_item"]: L for L in lines}
-        total = by[PKO]["planned_quantity"] + by[CHEESE]["planned_quantity"]
-        self.assertEqual(total, Decimal("70"))
-        # Proportional: 40/100 × 70 = 28, 60/100 × 70 = 42.
-        self.assertAlmostEqual(float(by[PKO]["planned_quantity"]), 28.0, places=2)
-        self.assertAlmostEqual(float(by[CHEESE]["planned_quantity"]), 42.0, places=2)
+        self.assertEqual(lines, [])
 
-    def test_explicit_cheese_never_splits_or_adjusts(self):
+    def test_no_extra_history_parameter_accepted(self):
+        # The engine no longer has any "already planned" concept to pass in —
+        # confirms the old keyword argument is gone, not merely ignored.
+        with self.assertRaises(TypeError):
+            plan_e132_per_item_split(
+                self._split_record(Decimal("100")), balance_cif=Decimal("402"),
+                existing_split_allocations={1: {PKO: Decimal("30")}},
+            )
+
+    def test_explicit_cheese_never_splits(self):
         recs = [{
             "record_id": 1, "hs_code": "15132900",
             "description": "Cheese Vegetable Oil Blend (1513)",
-            "quantity": Decimal("50"), "original_quantity": Decimal("50"),
+            "quantity": Decimal("50"),
         }]
-        lines = plan_e132_per_item_split(
-            recs, balance_cif=Decimal("10000"),
-            existing_split_allocations={1: {PKO: Decimal("999")}},  # must be ignored
-        )[1]
+        lines = plan_e132_per_item_split(recs, balance_cif=Decimal("10000"))[1]
+        # Explicit-cheese converts ALL of it (fully-priced ceiling value
+        # 50×5.50=275, well under the 10000 balance, so no rebalancing
+        # triggers here anyway — nothing to rebalance since there's no PKO).
         self.assertEqual(len(lines), 1)
         self.assertEqual(lines[0]["planning_item"], CHEESE)
         self.assertEqual(lines[0]["planned_quantity"], Decimal("50"))
 
-    def test_no_prior_allocation_defaults_to_full_target(self):
-        # `existing_split_allocations=None` (report-only context) behaves
-        # exactly like an empty history.
-        recs = self._split_record(Decimal("100"), Decimal("100"))
-        lines_a = plan_e132_per_item_split(recs, balance_cif=Decimal("10000"))[1]
-        lines_b = plan_e132_per_item_split(
-            recs, balance_cif=Decimal("10000"), existing_split_allocations={},
-        )[1]
-        self.assertEqual(
-            {L["planning_item"]: L["planned_quantity"] for L in lines_a},
-            {L["planning_item"]: L["planned_quantity"] for L in lines_b},
-        )
-
-    def test_original_quantity_defaults_to_quantity_when_absent(self):
-        # Report-only callers never pass `original_quantity` — it should
-        # fall back to `quantity` so the split still works sensibly.
-        recs = [{
-            "record_id": 1, "hs_code": "15132900",
-            "description": "Relevant Vegetable Oil viz Palm Kernel (1513) or Dairy Fat 0406 Vegetable Oil",
-            "quantity": Decimal("100"),
-        }]
-        lines = plan_e132_per_item_split(recs, balance_cif=Decimal("10000"))[1]
-        by = {L["planning_item"]: L for L in lines}
-        self.assertEqual(by[PKO]["planned_quantity"], Decimal("40"))
-        self.assertEqual(by[CHEESE]["planned_quantity"], Decimal("60"))
-
     def test_per_item_single_line_blended_rate(self):
-        recs = self._split_record(Decimal("100"), Decimal("100"))
-        per = plan_e132_per_item(recs, balance_cif=Decimal("10000"))[1]
+        # balance_cif == exactly the default split's value (Case A) so the
+        # blended rate reflects the untouched 40/60 mix.
+        recs = self._split_record(Decimal("100"))
+        per = plan_e132_per_item(recs, balance_cif=Decimal("402"))[1]
         self.assertEqual(per["planned_quantity"], Decimal("100"))
         # blended = (40×1.80 + 60×5.50) / 100 = (72 + 330) / 100 = 4.02
         self.assertAlmostEqual(float(per["unit_price"]), 4.02, places=2)
@@ -427,7 +396,7 @@ class TestVegOilSplit(unittest.TestCase):
             {
                 "record_id": 2, "hs_code": "15132900",
                 "description": "Relevant Vegetable Oil viz Palm Kernel (1513) or Dairy Fat 0406 Vegetable Oil",
-                "quantity": Decimal("100"), "original_quantity": Decimal("100"),
+                "quantity": Decimal("100"),
             },
         ]
         result = plan_e132(recs, balance_cif=None)
@@ -435,6 +404,117 @@ class TestVegOilSplit(unittest.TestCase):
         # record 1 contributes 10, record 2 contributes 40 (its 40% share) → 50 total
         self.assertEqual(by[PKO]["total_quantity"], Decimal("50"))
         self.assertEqual(by[CHEESE]["total_quantity"], Decimal("60"))
+
+
+class TestVegOilWastageRebalance(unittest.TestCase):
+    """The 40/60 split is the DEFAULT allocation; if the full waterfall
+    still leaves Remaining Balance CIF > 0, quantity shifts from PKO to
+    Cheese (higher-priced) to close that gap — see
+    `_rebalance_veg_oil_wastage`."""
+
+    def _split_record(self, available_qty, record_id=1):
+        return {
+            "record_id": record_id,
+            "hs_code": "15132900",
+            "description": "Relevant Vegetable Oil viz Palm Kernel (1513) or Dairy Fat 0406 Vegetable Oil",
+            "quantity": available_qty,
+        }
+
+    def test_case_a_balance_matches_default_split_exactly_no_change(self):
+        recs = [self._split_record(Decimal("100"))]
+        lines = plan_e132_per_item_split(recs, balance_cif=Decimal("402"))[1]  # 40×1.80 + 60×5.50
+        by = {L["planning_item"]: L for L in lines}
+        self.assertEqual(by[PKO]["planned_quantity"], Decimal("40"))
+        self.assertEqual(by[CHEESE]["planned_quantity"], Decimal("60"))
+
+    def test_case_b_partial_rebalance_absorbs_exact_surplus(self):
+        # Default value 402 + a 50 surplus = 452. Shift = 50 / 3.70 kg.
+        recs = [self._split_record(Decimal("100"))]
+        lines = plan_e132_per_item_split(recs, balance_cif=Decimal("452"))[1]
+        by = {L["planning_item"]: L for L in lines}
+        total_qty = by[PKO]["planned_quantity"] + by[CHEESE]["planned_quantity"]
+        total_cif = by[PKO]["planned_cif"] + by[CHEESE]["planned_cif"]
+        self.assertAlmostEqual(float(total_qty), 100.0, places=6)   # quantity conserved
+        self.assertAlmostEqual(float(total_cif), 452.0, places=6)   # surplus fully absorbed
+        self.assertLess(by[PKO]["planned_quantity"], Decimal("40"))    # PKO shrank
+        self.assertGreater(by[CHEESE]["planned_quantity"], Decimal("60"))  # Cheese grew
+        # Prices themselves never change — only the qty mix does.
+        self.assertEqual(by[PKO]["unit_price"], Decimal("1.80"))
+        self.assertEqual(by[CHEESE]["unit_price"], Decimal("5.50"))
+
+    def test_case_b_all_pko_converted_when_surplus_exceeds_max_possible_gain(self):
+        # Max possible gain from converting all 40kg PKO = 40 × 3.70 = 148.
+        # A much larger surplus still can't manufacture more Cheese quantity
+        # than the record physically has — stops once PKO hits 0, per spec.
+        recs = [self._split_record(Decimal("100"))]
+        lines = plan_e132_per_item_split(recs, balance_cif=Decimal("100000"))[1]
+        by = {L["planning_item"]: L for L in lines}
+        self.assertNotIn(PKO, by)  # fully drained — no line emitted for it
+        self.assertEqual(by[CHEESE]["planned_quantity"], Decimal("100"))
+        self.assertEqual(by[CHEESE]["planned_cif"], Decimal("550"))  # 100 × 5.50 ceiling
+
+    def test_never_allocates_negative_or_exceeds_available_quantity(self):
+        recs = [self._split_record(Decimal("100"))]
+        for balance in (Decimal("402"), Decimal("452"), Decimal("100000")):
+            lines = plan_e132_per_item_split(recs, balance_cif=balance)[1]
+            by = {L["planning_item"]: L for L in lines}
+            for L in by.values():
+                self.assertGreaterEqual(L["planned_quantity"], Decimal("0"))
+            total_qty = sum((L["planned_quantity"] for L in by.values()), Decimal("0"))
+            self.assertLessEqual(total_qty, Decimal("100.0001"))
+
+    def test_multiple_split_records_rebalanced_in_order(self):
+        # Two 100kg split records (default 40/60 each = 402 value each,
+        # 804 total). A 100 surplus should drain record 1's PKO first
+        # (max gain 148 > 100 needed) before ever touching record 2.
+        recs = [
+            self._split_record(Decimal("100"), record_id=1),
+            self._split_record(Decimal("100"), record_id=2),
+        ]
+        result = plan_e132_per_item_split(recs, balance_cif=Decimal("904"))  # 804 + 100
+        by1 = {L["planning_item"]: L for L in result[1]}
+        by2 = {L["planning_item"]: L for L in result[2]}
+        # Record 1 absorbed the whole surplus; record 2 stayed at the default.
+        self.assertLess(by1[PKO]["planned_quantity"], Decimal("40"))
+        self.assertEqual(by2[PKO]["planned_quantity"], Decimal("40"))
+        self.assertEqual(by2[CHEESE]["planned_quantity"], Decimal("60"))
+
+    def test_does_not_touch_other_buckets(self):
+        recs = [
+            {"record_id": 1, "hs_code": "08021100", "description": "cashew nuts", "quantity": Decimal("10")},
+            {"record_id": 2, "hs_code": "2106", "description": "yeast", "quantity": Decimal("10")},
+            {"record_id": 3, "hs_code": "1510", "description": "rbd", "quantity": Decimal("10")},
+            {"record_id": 4, "hs_code": "7607", "description": "foil", "quantity": Decimal("10")},
+            self._split_record(Decimal("100"), record_id=5),
+        ]
+        # Huge balance so Nuts/Yeast/RBD/Aluminium are all fully, uncapped
+        # allocated AND there's still leftover to trigger PKO/Cheese rebalance.
+        result = plan_e132(recs, balance_cif=Decimal("1000000"))
+        by = {i["planning_item_name"]: i for i in result["items"]}
+        self.assertEqual(by[NUT_NUTS]["planning_value"], Decimal("10") * Decimal("3.00"))
+        self.assertEqual(by[YEAST]["planning_value"], Decimal("10") * Decimal("5.00"))
+        self.assertEqual(by[RBD]["planning_value"], Decimal("10") * Decimal("1.20"))
+        self.assertEqual(by[ALUMINIUM]["planning_value"], Decimal("10") * Decimal("4.50"))
+        # ...while the split record's PKO/Cheese mix WAS rebalanced.
+        self.assertEqual(by[PKO]["total_quantity"], Decimal("0"))
+        self.assertEqual(by[CHEESE]["total_quantity"], Decimal("100"))
+
+    def test_no_op_when_balance_cif_is_none(self):
+        # Classification-only/report mode has no "remaining balance" concept.
+        recs = [self._split_record(Decimal("100"))]
+        lines = plan_e132_per_item_split(recs, balance_cif=None)[1]
+        by = {L["planning_item"]: L for L in lines}
+        self.assertEqual(by[PKO]["planned_quantity"], Decimal("40"))
+        self.assertEqual(by[CHEESE]["planned_quantity"], Decimal("60"))
+
+    def test_deterministic_and_idempotent(self):
+        recs = [self._split_record(Decimal("100"))]
+        run1 = plan_e132_per_item_split(recs, balance_cif=Decimal("452"))[1]
+        run2 = plan_e132_per_item_split(recs, balance_cif=Decimal("452"))[1]
+        self.assertEqual(
+            [(L["planning_item"], L["planned_quantity"]) for L in run1],
+            [(L["planning_item"], L["planned_quantity"]) for L in run2],
+        )
 
 
 if __name__ == "__main__":

@@ -482,6 +482,42 @@ export function useMasterFormSubmit({
         } catch (err: any) {
             console.error('Save error:', err.response?.data);
 
+            // Duplicate BOE (bill_of_entry_number + bill_of_entry_date unique_together
+            // violation) — instead of the generic inline validation box, toast and jump
+            // straight to the existing record's edit page so the user can fix/merge it there.
+            const nonFieldErrors = err.response?.data?.non_field_errors;
+            const isDuplicateBoe = entityName === 'bill-of-entries' &&
+                Array.isArray(nonFieldErrors) &&
+                nonFieldErrors.some((m: any) =>
+                    typeof m === 'string' &&
+                    m.includes('bill_of_entry_number') &&
+                    m.includes('bill_of_entry_date') &&
+                    m.toLowerCase().includes('unique set')
+                );
+
+            if (isDuplicateBoe && !isModal) {
+                toast.error('A Bill of Entry with this number and date already exists. Opening it for editing…');
+                try {
+                    const submittedDate = formData.bill_of_entry_date
+                        ? formatDateForAPI(parseDate(formData.bill_of_entry_date))
+                        : null;
+                    const { data } = await api.get('bill-of-entries/', {
+                        params: { search: formData.bill_of_entry_number, is_invoice: 'all', page_size: 50 },
+                    });
+                    const existing = (data?.results || []).find((r: any) =>
+                        r.bill_of_entry_number === formData.bill_of_entry_number &&
+                        r.bill_of_entry_date === submittedDate
+                    );
+                    if (existing?.id && String(existing.id) !== String(recordId)) {
+                        navigate(`/bill-of-entries/${existing.id}/edit`);
+                    }
+                } catch {
+                    // Lookup failed — the toast already told the user what happened.
+                }
+                setSaving(false);
+                return;
+            }
+
             // Handle field-level errors
             if (err.response?.data && typeof err.response.data === 'object') {
                 // Format backend errors using utility

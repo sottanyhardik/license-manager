@@ -134,6 +134,7 @@ _DATA_LINE_SINGLELINE_RX = re.compile(
 )
 _DESC_TAIL_RX = re.compile(r"\d{8}(?P<si>\d{1,2})\s*$")
 _DESC_TAIL_FALLBACK_RX = re.compile(r"(?P<si>\d{1,2})\s*$")
+_TRAILING_DIGITS_RX = re.compile(r"(?P<digits>\d+)\s*$")
 _GROUP_HEADER_RX = re.compile(
     r"^(Glass Formers|Intermediates|Modifiers|Other Special Additives|"
     r"Packing Material|Import Item Name|Total)\b",
@@ -163,6 +164,37 @@ def _wraps_into_next(line: str) -> bool:
     if line.endswith(" "):
         return True
     return bool(_CONTINUATION_END_RX.search(line))
+
+
+def _split_si_by_hsn_heading(line: str, hsn: str | None) -> tuple[int, int] | None:
+    """Split a trailing SI.No off a description that embeds its own HS heading.
+
+    Some DGFT item names reference their ITC(HS) heading in the name itself
+    (e.g. "Automotive Battery-8507"). When the SI.No column sits right next
+    to the description column with no gap, pypdf glues the two together
+    into a single digit run (e.g. "85072" for heading "8507" + SI "2", or
+    "850742" for heading "8507" + SI "42"). The naive "grab the trailing 1-2
+    digits" heuristic then misreads part of the heading as the SI.No (e.g.
+    "72" instead of "2") — this silently drops the real item and can even
+    collide with and mask a later item that legitimately has that SI.No.
+
+    Recognise this shape from the row's own HSN code: if the trailing digit
+    run starts with the row's 4-digit HS heading and 1-3 digits remain
+    after it, split there instead.
+
+    Returns (cut_index, si) if recognised, else None.
+    """
+    if not hsn or len(hsn) < 4:
+        return None
+    m = _TRAILING_DIGITS_RX.search(line)
+    if not m:
+        return None
+    run = m.group("digits")
+    heading = hsn[:4]
+    if len(run) - len(heading) in (1, 2, 3) and run.startswith(heading):
+        si_str = run[len(heading):]
+        return m.start("digits") + len(heading), int(si_str)
+    return None
 
 # ── OCR normalization map (common tesseract misreads on DGFT layouts) ──
 _OCR_FIXUPS = [
@@ -833,12 +865,17 @@ def _parse_items(text: str) -> list[dict[str, Any]]:
             # trailing-space marker on the remaining text.
             line_for_storage = raw
             if si is None:
-                tail = _DESC_TAIL_RX.search(stripped) or _DESC_TAIL_FALLBACK_RX.search(stripped)
-                if tail:
-                    si = int(tail.group("si"))
-                    # Drop the SI# digits AND any trailing whitespace after.
-                    cut = tail.start("si")
+                hs_split = _split_si_by_hsn_heading(stripped, hsn)
+                if hs_split:
+                    cut, si = hs_split
                     line_for_storage = stripped[:cut].rstrip()
+                else:
+                    tail = _DESC_TAIL_RX.search(stripped) or _DESC_TAIL_FALLBACK_RX.search(stripped)
+                    if tail:
+                        si = int(tail.group("si"))
+                        # Drop the SI# digits AND any trailing whitespace after.
+                        cut = tail.start("si")
+                        line_for_storage = stripped[:cut].rstrip()
 
             # First substantive line we encounter is the natural end of the
             # description. Edge case: if the SI# was on a line of its own,

@@ -12,7 +12,28 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.core.models import ItemNameModel, SionNormClassModel
-from apps.license.services.e132_plan import MILK, NORM, PLANNING_ORDER
+from apps.license.services.e132_plan import NORM, PLANNING_ORDER
+
+# Planning items the E132 rule-set USED to produce, before the "Replace
+# Existing Split Logic" rewrite dropped them (Milk/SWP/DWP/WPC/Raisin/Cereals
+# Flakes/CMC are no longer part of `PLANNING_ORDER` and never classify a
+# record anymore). Named as literal strings, not imported — the constants
+# themselves were deleted along with the rules that produced them. A
+# production database may still have these masters marked active from
+# before the rewrite; hide them so they stop showing up as selectable
+# planning items (e.g. the Allotment "Planned Item Name" filter, which only
+# lists `is_active=True` names) even though nothing will ever plan into them
+# again. Historical `LicenseItemPlan` rows that already reference one are
+# untouched (`ItemNameModel.is_active=False` doesn't cascade to existing FKs).
+_RETIRED_PLANNING_ITEMS = (
+    "Milk - E132",
+    "SWP - E132",
+    "DWP - E132",
+    "WPC - E132",
+    "RAISIN - E132",
+    "CEREALS FLAKES - E132",
+    "CMC - E132",
+)
 
 
 class Command(BaseCommand):
@@ -64,15 +85,17 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f"  = ok      {name}")
 
-        # Milk is now an internal classification pool only (split into SWP/DWP/WPC),
-        # never an output planning item — hide its master.
-        milk = ItemNameModel.objects.filter(name=MILK).first()
-        if milk is not None and milk.is_active:
-            self.stdout.write(f"  ~ hide    {MILK} (now internal pool)")
-            updated += 1
-            if not dry:
-                milk.is_active = False
-                milk.save(update_fields=["is_active"])
+        # Hide masters for planning items the rule-set no longer produces at
+        # all (see _RETIRED_PLANNING_ITEMS) — safe/idempotent no-op once
+        # they're already inactive or don't exist.
+        for name in _RETIRED_PLANNING_ITEMS:
+            obj = ItemNameModel.objects.filter(name=name).first()
+            if obj is not None and obj.is_active:
+                self.stdout.write(f"  ~ hide    {name} (retired planning item)")
+                updated += 1
+                if not dry:
+                    obj.is_active = False
+                    obj.save(update_fields=["is_active"])
 
         self.stdout.write(self.style.SUCCESS(
             f"E132 planning items: {created} created, {updated} updated"

@@ -28,6 +28,12 @@ def e132_norm():
     return SionNormClassModel.objects.create(head_norm=head_norm, norm_class="E132")
 
 
+@pytest.fixture
+def e126_norm():
+    head_norm = HeadSIONNormsModel.objects.create(name="E126 Norms")
+    return SionNormClassModel.objects.create(head_norm=head_norm, norm_class="E126")
+
+
 @pytest.mark.django_db
 def test_match_import_item_uses_applicable_norm_for_multi_norm_license(monkeypatch, e_norms):
     monkeypatch.setattr(
@@ -257,6 +263,55 @@ def test_e132_palm_kernel_oil_matches_via_hsn_1513(e132_norm):
     )
 
     matched = match_import_item_to_items(import_item, ["E132"])
+
+    assert list(matched) == [expected]
+
+
+# ─── E126 Auto Planning business rules — item detection ────────────────────
+# The strict NUTS entry is shared between E132/E126 (see item_matcher.py's
+# "norms": ["E132", "E126"]). Palm Kernel Oil / Olive Oil detection for E126
+# reuses the existing looser E1/E5/E126 entries — no new filter rules were
+# added for those two; these tests just confirm E126 already resolves them.
+
+
+@pytest.mark.django_db
+def test_e126_nuts_requires_0802_and_word_boundary(e126_norm):
+    expected = ItemNameModel.objects.create(name="NUTS - E126", sion_norm_class=e126_norm)
+    hs_code = HSCodeModel.objects.create(hs_code="08021100")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E126-NUTS-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code, description="Cashew Nuts",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E126"])
+
+    assert list(matched) == [expected]
+
+
+@pytest.mark.django_db
+def test_e126_palm_kernel_oil_matches_via_hsn_1513(e126_norm):
+    expected = ItemNameModel.objects.create(name="PALM KERNEL OIL - E126", sion_norm_class=e126_norm)
+    hs_code = HSCodeModel.objects.create(hs_code="15132900")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E126-PKO-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code, description="Palm Kernel Oil",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E126"])
+
+    assert list(matched) == [expected]
+
+
+@pytest.mark.django_db
+def test_e126_olive_oil_matches_via_hsn_1509(e126_norm):
+    expected = ItemNameModel.objects.create(name="OLIVE OIL - E126", sion_norm_class=e126_norm)
+    hs_code = HSCodeModel.objects.create(hs_code="15091000")
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E126-OLIVE-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_code, description="Extra Virgin Olive Oil",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E126"])
 
     assert list(matched) == [expected]
 

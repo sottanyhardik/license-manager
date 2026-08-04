@@ -34,9 +34,11 @@ def _load_defaults() -> None:
         return
     from apps.license.services.e1_auto_plan import compute_e1_auto_plan
     from apps.license.services.e5_auto_plan import compute_e5_auto_plan
+    from apps.license.services.e126_auto_plan import compute_e126_auto_plan
     from apps.license.services.e132_auto_plan import compute_e132_auto_plan
     _REGISTRY['E1']  = compute_e1_auto_plan
     _REGISTRY['E5']  = compute_e5_auto_plan
+    _REGISTRY['E126'] = compute_e126_auto_plan
     _REGISTRY['E132'] = compute_e132_auto_plan
 
 

@@ -647,14 +647,17 @@ def get_item_filters():
                 )
             ],
         },
-        # E132 Nuts detection (Auto Planning business rules) — 0802 (HSN or
-        # description) AND the description contains the WORD "nut" or "nuts"
-        # (word-boundary — e.g. must not match "peanut" as a substring).
-        # Scoped to E132 only so it never changes E1/E5/E126 item-name linking
-        # above.
+        # E132/E126 Auto Planning Nuts detection (business rules) — 0802
+        # (HSN or description) AND the description contains the WORD "nut"
+        # or "nuts" (word-boundary — e.g. must not match "peanut" as a
+        # substring). Scoped to E132/E126 only so it never changes the
+        # looser E1/E5/E126 item-name linking entry above (that entry keeps
+        # E126 too, for backward-compat item-name linking elsewhere — this
+        # stricter one is what the E126 Auto Planning engine's own
+        # `item_matcher`-independent classification mirrors).
         {
             "base_name": "NUTS",
-            "norms": ["E132"],
+            "norms": ["E132", "E126"],
             "filters": [
                 Q(
                     Q(description__icontains="0802")

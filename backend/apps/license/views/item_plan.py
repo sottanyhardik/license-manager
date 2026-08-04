@@ -282,11 +282,11 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="auto-plan")
     def auto_plan(self, request):
         """
-        Unified Auto Plan endpoint — detects the licence norm (E1 or E5)
-        and dispatches to the appropriate waterfall service.
+        Unified Auto Plan endpoint — detects the licence norm (E1, E5, E126,
+        or E132) and dispatches to the appropriate waterfall service.
 
         Body:  {"license": <id>}
-        Returns: {"norm": "E1"|"E5", "planned": N, "remaining_cif": X, "lines": [...]}
+        Returns: {"norm": "E1"|"E5"|"E126"|"E132", "planned": N, "remaining_cif": X, "lines": [...]}
         """
         from apps.license.services.norm_plan import detect_norm
 
@@ -312,13 +312,16 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         elif norm == 'E5':
             from apps.license.services.e5_auto_plan import compute_e5_auto_plan
             lines, remaining_cif = compute_e5_auto_plan(license_obj)
+        elif norm == 'E126':
+            from apps.license.services.e126_auto_plan import compute_e126_auto_plan
+            lines, remaining_cif = compute_e126_auto_plan(license_obj)
         elif norm == 'E132':
             from apps.license.services.e132_auto_plan import compute_e132_auto_plan
             lines, remaining_cif = compute_e132_auto_plan(license_obj)
         else:
             return Response(
                 {"error": (
-                    f"Auto Plan supports E1, E5, and E132 licenses only. "
+                    f"Auto Plan supports E1, E5, E126, and E132 licenses only. "
                     f"This license uses norm '{norm or 'unknown'}'."
                 )},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -360,9 +363,9 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="auto-plan-all")
     def auto_plan_all(self, request):
         """
-        Batch Auto Plan for ALL eligible DFIA licenses (E1 / E5 / E132).
+        Batch Auto Plan for ALL eligible DFIA licenses (E1 / E5 / E126 / E132).
 
-        Eligible: norm in (E1, E5, E132) AND balance_cif > 0.
+        Eligible: norm in (E1, E5, E126, E132) AND balance_cif > 0.
         "Already planned": existing plan covers ≥ 99 % of balance CIF.
         Failures are isolated per-license; the batch always continues.
 
@@ -374,6 +377,7 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         from apps.license.services.norm_plan import detect_norm
         from apps.license.services.e1_auto_plan import compute_e1_auto_plan
         from apps.license.services.e5_auto_plan import compute_e5_auto_plan
+        from apps.license.services.e126_auto_plan import compute_e126_auto_plan
         from apps.license.services.e132_auto_plan import compute_e132_auto_plan
 
         licenses = (
@@ -393,7 +397,7 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
 
         for lic in licenses:
             norm = detect_norm(lic)
-            if norm not in ('E1', 'E5', 'E132'):
+            if norm not in ('E1', 'E5', 'E126', 'E132'):
                 res["skipped_unknown_norm"] += 1
                 continue
 
@@ -413,6 +417,8 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
                     lines, _ = compute_e1_auto_plan(lic)
                 elif norm == 'E5':
                     lines, _ = compute_e5_auto_plan(lic)
+                elif norm == 'E126':
+                    lines, _ = compute_e126_auto_plan(lic)
                 else:
                     lines, _ = compute_e132_auto_plan(lic)
 

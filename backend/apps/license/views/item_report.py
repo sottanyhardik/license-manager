@@ -701,3 +701,22 @@ class ItemReportViewSet(viewsets.ViewSet):
             .values('id', 'name')
         )
         return Response(list(item_names))
+
+    @action(detail=False, methods=['get'], url_path='planned-item-names')
+    def planned_item_names(self, request):
+        """
+        Get item names actually used as a planning-item target on at least
+        one `LicenseItemPlan` line (e.g. E132 Auto-Plan's Nuts / Yeast / Palm
+        Kernel Oil / RBD Palmolein Oil / Cheese / Aluminium Foil). Powers the
+        "Planned Item Name" filter on the Allotment Available License Items
+        screen's Plan mode — only these names can ever produce a match there.
+        Returns: List of {id, name} dicts ordered by name.
+        """
+        item_names = (
+            ItemNameModel.objects
+            .filter(is_active=True, plan_lines__isnull=False)
+            .distinct()
+            .order_by('name')
+            .values('id', 'name')
+        )
+        return Response(list(item_names))

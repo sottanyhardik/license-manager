@@ -9,10 +9,12 @@ interface AllotmentFiltersProps {
     availableItemNames: { value: any; label: string }[];
     notificationOptions: { value: string; display_name: string }[];
     purchaseStatusOptions: { value: string; label: string }[];
+    plannedItemNameOptions: { value: any; label: string }[];
 }
 
 /** Allotment-action filter card — extracted verbatim from AllotmentAction. */
-export default function AllotmentFilters({ filters, setFilters, availableItemNames, notificationOptions, purchaseStatusOptions }: AllotmentFiltersProps) {
+export default function AllotmentFilters({ filters, setFilters, availableItemNames, notificationOptions, purchaseStatusOptions, plannedItemNameOptions }: AllotmentFiltersProps) {
+    const isPlanMode = filters.debit_based_on === "plan";
     return (
                     <div className="mb-3 overflow-hidden rounded-lg border border-border/60 bg-muted/40">
                         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
@@ -39,7 +41,9 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                     license_status: "active",
                                     item_names: "",
                                     expiry_date_from: "",
-                                    expiry_date_to: ""
+                                    expiry_date_to: "",
+                                    debit_based_on: "actual",
+                                    planned_item_names: ""
                                 })}
                             >
                                 <XCircle className="size-4" aria-hidden="true" />Clear All
@@ -195,6 +199,36 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                             onChange={(selected) => setFilters({...filters, purchase_status: selected ? selected.map(s => s.value).join(',') : ''})}
                                             options={purchaseStatusOptions}
                                             placeholder="All"
+                                            className="basic-multi-select"
+                                            classNamePrefix="select"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="form-label">Debit Based On</label>
+                                        <select
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            value={filters.debit_based_on || "actual"}
+                                            onChange={(e) => setFilters({...filters, debit_based_on: e.target.value})}
+                                        >
+                                            <option value="actual">Actual</option>
+                                            <option value="plan">Plan</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="form-label">
+                                            Planned Item Name
+                                            {!isPlanMode && <span className="ml-1 font-normal normal-case text-muted-foreground">(Plan mode only)</span>}
+                                        </label>
+                                        <Select
+                                            isMulti
+                                            isDisabled={!isPlanMode}
+                                            value={filters.planned_item_names ? filters.planned_item_names.split(',').map(id => {
+                                                const item = plannedItemNameOptions.find(i => i.value === parseInt(id));
+                                                return item || {value: id, label: id};
+                                            }) : []}
+                                            onChange={(selected) => setFilters({...filters, planned_item_names: selected ? selected.map(s => s.value).join(',') : ''})}
+                                            options={plannedItemNameOptions}
+                                            placeholder="All Planned Items"
                                             className="basic-multi-select"
                                             classNamePrefix="select"
                                         />

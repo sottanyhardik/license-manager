@@ -62,9 +62,26 @@ class AllotmentActionViewSet(ViewSet):
         - purchase_status: Filter by purchase status (comma-separated)
         - license_status: Filter by license status (active/expired/expiring_soon/all)
         - item_names: Filter by item name IDs (comma-separated)
+        - debit_based_on: 'actual' (default) or 'plan' — 'plan' switches the
+          entire grid to one row per LicenseItemPlan line instead of per
+          import item, so a single import item split across multiple
+          planned items (e.g. E132's Vegetable Oil -> PKO + Cheese) shows as
+          separate rows, each with only its own planned quantity/value.
+        - planned_item_names: (plan mode only) filter by ItemNameModel IDs
+          on the plan line itself (comma-separated)
         """
         allotment = get_object_or_404(
             AllotmentModel.objects.prefetch_related('allotment_details__item__license__exporter'), pk=pk)
+
+        # 'plan' mode is a self-contained branch (see _available_licenses_plan_mode)
+        # deliberately NOT sharing filter-application code with the Actual-mode
+        # path below: duplicating the (small, stable) filter set there keeps
+        # this well-tested Actual-mode path completely untouched, which is the
+        # strongest guarantee that "Debit Based On = Actual" behaves exactly as
+        # it always has.
+        debit_based_on = (request.query_params.get('debit_based_on') or 'actual').strip().lower()
+        if debit_based_on == 'plan':
+            return self._available_licenses_plan_mode(request, allotment)
 
         # Get query parameters for filtering
         search = request.query_params.get('search', '')
@@ -346,6 +363,242 @@ class AllotmentActionViewSet(ViewSet):
                 row['original_planned_cif_fc'] = str(status['original_cif_fc'])
                 row['used_planned_cif_fc'] = str(status['used_cif_fc'])
                 row['remaining_planned_cif_fc'] = str(status['remaining_cif_fc'])
+
+        return Response({
+            'allotment': allotment_data,
+            'available_items': available_items_data,
+            'count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size
+        })
+
+    def _available_licenses_plan_mode(self, request, allotment):
+        """
+        Plan-mode variant of `available_licenses`: one row per
+        `LicenseItemPlan` line instead of per `LicenseImportItemsModel` row.
+
+        Mirrors the same filter set as the Actual-mode branch above, just
+        reached through `import_item__` (one extra join hop, since most of
+        these fields live on the underlying import item / its licence, not
+        on `LicenseItemPlan` itself). Quantity/value range filters target
+        `planned_quantity`/`planned_cif_fc` directly — plain stored columns
+        on `LicenseItemPlan`, so (unlike Actual mode) no live-computed-value
+        Python post-filter step is needed here.
+        """
+        from apps.license.models import LicenseItemPlan
+
+        search = request.query_params.get('search', '')
+        license_number = request.query_params.get('license_number', '')
+        exporter = request.query_params.get('exporter', '')
+        exclude_exporter = request.query_params.get('exclude_exporter', '')
+        description = request.query_params.get('description', '')
+        planned_quantity_gte = request.query_params.get('available_quantity_gte', '')
+        planned_quantity_lte = request.query_params.get('available_quantity_lte', '')
+        planned_cif_gte = request.query_params.get('available_value_gte', '')
+        planned_cif_lte = request.query_params.get('available_value_lte', '')
+        notification_number = request.query_params.get('notification_number', '')
+        norm_class = request.query_params.get('norm_class', '')
+        hs_code = request.query_params.get('hs_code', '')
+        is_restricted = request.query_params.get('is_restricted', '')
+        purchase_status = request.query_params.get('purchase_status', '')
+        license_status = request.query_params.get('license_status', '')
+        item_names = request.query_params.get('item_names', '')
+        planned_item_names = request.query_params.get('planned_item_names', '')
+        expiry_date_from = request.query_params.get('expiry_date_from', '')
+        expiry_date_to = request.query_params.get('expiry_date_to', '')
+
+        queryset = LicenseItemPlan.objects.filter(
+            planned_quantity__gt=0
+        ).select_related(
+            'import_item',
+            'import_item__license',
+            'import_item__license__exporter',
+            'import_item__license__port',
+            'import_item__license__notification_number',
+            'import_item__license__notes',
+            'import_item__hs_code',
+            'item_name',
+        ).prefetch_related(
+            'import_item__items',
+            'import_item__items__sion_norm_class',
+            'import_item__license__export_license',
+        ).order_by('import_item__license__license_expiry_date', 'import_item__serial_number')
+
+        if search:
+            queryset = queryset.filter(
+                Q(import_item__license__license_number__icontains=search) |
+                Q(import_item__description__icontains=search) |
+                Q(import_item__license__exporter__name__icontains=search)
+            )
+
+        if license_number:
+            queryset = queryset.filter(import_item__license__license_number__icontains=license_number)
+
+        if description:
+            exact_queryset = queryset.filter(
+                Q(import_item__items__name__iexact=description) |
+                Q(import_item__description__iexact=description) |
+                Q(import_item__hs_code__product_description__iexact=description)
+            ).distinct()
+            if exact_queryset.exists():
+                queryset = exact_queryset
+            else:
+                queryset = queryset.filter(
+                    Q(import_item__items__name__icontains=description) |
+                    Q(import_item__description__icontains=description) |
+                    Q(import_item__hs_code__hs_code__icontains=description) |
+                    Q(import_item__hs_code__product_description__icontains=description)
+                ).distinct()
+
+        if exporter:
+            queryset = queryset.filter(import_item__license__exporter_id=exporter)
+
+        if planned_quantity_gte:
+            try:
+                queryset = queryset.filter(planned_quantity__gte=Decimal(planned_quantity_gte))
+            except (ValueError, TypeError, InvalidOperation):
+                pass
+
+        if planned_quantity_lte:
+            try:
+                queryset = queryset.filter(planned_quantity__lte=Decimal(planned_quantity_lte))
+            except (ValueError, TypeError, InvalidOperation):
+                pass
+
+        if notification_number:
+            queryset = queryset.filter(import_item__license__notification_number__code=notification_number)
+
+        if norm_class:
+            queryset = queryset.filter(import_item__license__export_license__norm_class_id=norm_class)
+
+        if hs_code:
+            queryset = queryset.filter(import_item__hs_code__hs_code__startswith=hs_code)
+
+        if exclude_exporter:
+            queryset = queryset.exclude(import_item__license__exporter_id=exclude_exporter)
+
+        if is_restricted and is_restricted.lower() != 'all':
+            if is_restricted.lower() in ['true', '1', 'yes']:
+                queryset = queryset.filter(import_item__is_restricted=True)
+            elif is_restricted.lower() in ['false', '0', 'no']:
+                queryset = queryset.filter(import_item__is_restricted=False)
+
+        if purchase_status:
+            status_list = [s.strip() for s in purchase_status.split(',') if s.strip()]
+            if status_list:
+                queryset = queryset.filter(import_item__license__purchase_status__code__in=status_list)
+
+        if license_status and license_status.lower() != 'all':
+            from django.utils import timezone
+            from datetime import timedelta
+            today = timezone.now().date()
+            if license_status.lower() == 'active':
+                queryset = queryset.filter(import_item__license__license_expiry_date__gte=today)
+            elif license_status.lower() == 'expired':
+                queryset = queryset.filter(import_item__license__license_expiry_date__lt=today)
+            elif license_status.lower() == 'expiring_soon':
+                expiring_date = today + timedelta(days=30)
+                queryset = queryset.filter(
+                    import_item__license__license_expiry_date__gte=today,
+                    import_item__license__license_expiry_date__lte=expiring_date,
+                )
+
+        if expiry_date_from:
+            try:
+                from datetime import datetime as _dt
+                queryset = queryset.filter(
+                    import_item__license__license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date())
+            except (ValueError, TypeError):
+                pass
+
+        if expiry_date_to:
+            try:
+                from datetime import datetime as _dt
+                queryset = queryset.filter(
+                    import_item__license__license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date())
+            except (ValueError, TypeError):
+                pass
+
+        if item_names:
+            item_name_list = [int(i.strip()) for i in item_names.split(',') if i.strip().isdigit()]
+            if item_name_list:
+                queryset = queryset.filter(import_item__items__id__in=item_name_list).distinct()
+
+        # Planned Item Name filter — the new filter this Plan-mode branch
+        # exists for: narrows to plan lines tagged with one of the selected
+        # planning items (e.g. only the Palm Kernel Oil split rows).
+        if planned_item_names:
+            planned_item_name_list = [int(i.strip()) for i in planned_item_names.split(',') if i.strip().isdigit()]
+            if planned_item_name_list:
+                queryset = queryset.filter(item_name_id__in=planned_item_name_list)
+
+        if planned_cif_gte:
+            try:
+                queryset = queryset.filter(planned_cif_fc__gte=Decimal(planned_cif_gte))
+            except (ValueError, TypeError, InvalidOperation):
+                pass
+        if planned_cif_lte:
+            try:
+                queryset = queryset.filter(planned_cif_fc__lte=Decimal(planned_cif_lte))
+            except (ValueError, TypeError, InvalidOperation):
+                pass
+
+        # Pagination — same slice-then-count pattern as Actual mode.
+        page = _safe_int(request.query_params.get('page'), default=1, minimum=1)
+        page_size = min(_safe_int(request.query_params.get('page_size'), default=20, minimum=1), 100)
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_plans = list(queryset[start:end])
+        total_count = queryset.count()
+
+        # Serialize each row's underlying import item through the EXISTING
+        # serializer — license/HS/description/exporter/condition/items_detail
+        # all come for free, zero duplicated serialization logic — then
+        # overlay the plan-specific fields. `available_quantity`/
+        # `balance_cif_fc` are ALIASED to the plan line's own quantity/value
+        # so the existing stat-bar / Max-allocation frontend code keeps
+        # working unchanged in Plan mode too; the new, honest
+        # `planned_quantity`/`planned_cif_fc`/`planned_item_name` fields are
+        # ALSO included for the new column and mode-aware labels.
+        import_items = [plan.import_item for plan in paginated_plans]
+        from apps.license.services.condition_pool import available_value_bulk_map
+        available_value_map = available_value_bulk_map(import_items)
+        from apps.license.services.item_usage import billed_no_boe_bulk_map
+        billed_no_boe_map = billed_no_boe_bulk_map([ii.id for ii in import_items])
+
+        license_serializer = LicenseImportItemSerializer(
+            import_items, many=True,
+            context={
+                'request': request,
+                'available_value_map': available_value_map,
+                'plan_map': {},  # Row 2.5's aggregate plan-status banner doesn't
+                                 # apply to an already-per-plan-line row — see
+                                 # the frontend, which only renders it in Actual mode.
+                'billed_no_boe_map': billed_no_boe_map,
+            }
+        )
+        allotment_serializer = AllotmentSerializer(allotment, context={'request': request})
+        allotment_data = allotment_serializer.data
+        allotment_data['required_value_with_buffer'] = str(float(allotment_data.get('required_value', 0)) + 20)
+
+        available_items_data = license_serializer.data
+        for row, plan in zip(available_items_data, paginated_plans):
+            # `id` must be unique PER ROW (two split rows share the same
+            # underlying import item) — the frontend keys React lists and its
+            # allocation-draft state off `id`, so this has to be the plan
+            # line's own id, not the import item's. `import_item_id` carries
+            # the real underlying item for the Confirm-allot submission,
+            # which must always target the actual import item regardless of
+            # which split row triggered it (allocation logic itself is
+            # unchanged — see AllotmentAction.tsx's allocateMutation).
+            row['id'] = plan.id
+            row['import_item_id'] = plan.import_item_id
+            row['planned_item_name'] = plan.item_name.name if plan.item_name_id else None
+            row['planned_quantity'] = str(plan.planned_quantity)
+            row['planned_cif_fc'] = str(plan.planned_cif_fc)
+            row['available_quantity'] = str(plan.planned_quantity)
+            row['balance_cif_fc'] = str(plan.planned_cif_fc)
 
         return Response({
             'allotment': allotment_data,

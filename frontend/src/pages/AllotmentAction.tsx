@@ -44,6 +44,16 @@ interface AvailableItem {
     original_planned_cif_fc?: string;
     used_planned_cif_fc?: string;
     remaining_planned_cif_fc?: string;
+    // Plan mode (Debit Based On = Plan) only — one row per LicenseItemPlan
+    // line. `id` is the plan line's own id (unique per split row); the real
+    // underlying import item is `import_item_id` — the Confirm-allot payload
+    // must submit that, never the plan line's id. `available_quantity`/
+    // `balance_cif_fc` above are ALIASED to this row's own planned amount in
+    // Plan mode (see backend `_available_licenses_plan_mode`), so this
+    // interface's existing fields already cover display; these two are only
+    // needed for submission + the new "Planned Item Name" column.
+    import_item_id?: number;
+    planned_item_name?: string;
 }
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
@@ -79,7 +89,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         license_status: "active",
         item_names: "",
         expiry_date_from: "",
-        expiry_date_to: ""
+        expiry_date_to: "",
+        // "Debit Based On" — 'actual' (default, today's behavior, unchanged)
+        // or 'plan' (one row per LicenseItemPlan line — see AvailableItem's
+        // planned_item_name/import_item_id fields).
+        debit_based_on: "actual",
+        planned_item_names: ""
     });
     // Purchase Status options + default selection both come from the
     // Purchase Status master (never hardcoded) — see useMasterOptions.ts.
@@ -132,6 +147,19 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         staleTime: Infinity,
     });
     const availableItemNames = rawItemNames;
+
+    // Planned Item Name options (Plan mode filter) — item names actually
+    // used as a planning-item target on at least one LicenseItemPlan line.
+    const { data: rawPlannedItemNames = [] } = useQuery({
+        queryKey: ['allotments-planned-item-names'],
+        queryFn: () =>
+            api.get('item-report/planned-item-names/').then(r =>
+                (r.data || []).map((item: { id: unknown; name: string }) => ({ value: item.id, label: item.name }))
+            ),
+        staleTime: Infinity,
+    });
+    const plannedItemNameOptions = rawPlannedItemNames;
+    const isPlanMode = filters.debit_based_on === "plan";
 
     // Allotment header info (details, progress, allotted items)
     const {
@@ -215,7 +243,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) =>
             api.post(`allotment-actions/${id}/allocate-items/`, {
                 allocations: [{
-                    item_id: payload.item.id,
+                    // Plan mode's row id is the LicenseItemPlan line's own id
+                    // (unique per split row) — allocation always targets the
+                    // real underlying import item, via import_item_id when set.
+                    item_id: payload.item.import_item_id ?? payload.item.id,
                     qty: payload.allocation.qty,
                     cif_fc: payload.allocation.cif_fc,
                 }],
@@ -939,6 +970,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         availableItemNames={availableItemNames}
                         notificationOptions={notificationOptions}
                         purchaseStatusOptions={purchaseStatusOptions}
+                        plannedItemNameOptions={plannedItemNameOptions}
                     />
 
                     <div className="max-h-[650px] overflow-y-auto pr-px">
@@ -1013,14 +1045,22 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         {item.items_detail && item.items_detail.length > 0 && item.items_detail.map((i, idx) => (
                                             <span key={idx} className="rounded border border-primary/20 bg-primary/10 px-1.5 text-[0.7rem] font-semibold leading-[1.6] text-primary">{i.name}</span>
                                         ))}
+                                        {item.planned_item_name && (
+                                            <span className="rounded border border-success/30 bg-success/10 px-1.5 text-[0.7rem] font-semibold leading-[1.6] text-success">
+                                                Planned: {item.planned_item_name}
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* ── Row 2.5: Utilization-plan status (Original/Used/Remaining) —
                                         only rendered for items that actually carry a plan. This is the
                                         SAME Original/Used/Remaining the Max button below is capped to,
                                         and what the server re-checks on Confirm — shown here so the
-                                        operator sees the cap before typing, not after a rejection. ── */}
-                                    {item.has_plan && (() => {
+                                        operator sees the cap before typing, not after a rejection.
+                                        Never shown in Plan mode: each row there IS already one plan
+                                        line, so the aggregate Original/Used/Remaining concept doesn't
+                                        map onto a single split row. ── */}
+                                    {!isPlanMode && item.has_plan && (() => {
                                         const origQty = Number(item.original_planned_quantity ?? 0);
                                         const usedQty = Number(item.used_planned_quantity ?? 0);
                                         const remQty  = Number(item.remaining_planned_quantity ?? 0);
@@ -1052,7 +1092,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         {/* Availability stats */}
                                         <div className="flex gap-3 px-3 py-[7px] shrink-0">
                                             {[
-                                                {label: 'Avail Qty', value: qty.toFixed(3)},
+                                                {label: isPlanMode ? 'Plan Qty' : 'Avail Qty', value: qty.toFixed(3)},
                                                 {label: 'CIF FC', value: cifFc.toFixed(2)},
                                                 {label: 'Avg', value: average},
                                             ].map(({label, value}) => (

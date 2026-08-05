@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import api from "@/api/axios";
 import { openAuthedFile } from "@/utils/documentDownload";
+import { getReportErrorInfo } from "@/utils/reportErrorHandling";
 import { buildLicensePurchaseProfitReportPath } from "./buildLicensePurchaseProfitReportPath";
 
 export type LicensePurchaseProfitReportQuery = {
@@ -9,30 +10,48 @@ export type LicensePurchaseProfitReportQuery = {
     toDate: string;
     norm: string;
     licenseNumber: string;
+    excludeLicenseNumber: string[];
     exporter: unknown;
 };
 
+/** Auto-retry delay for a transient (network/5xx) failure — one retry only,
+ * then the friendly error banner takes over. */
+const RETRY_DELAY_MS = 2500;
+
 /**
- * Fetches the License Purchase & Profit Report for the given (already
- * debounced/settled) filters, cancelling any in-flight request when the
- * filters change again before it resolves — same `AbortController` pattern
- * `ItemPivotReport.tsx`'s `reportAbortRef`/`loadReport` use, to avoid a slow
- * stale response overwriting a fresher one. Also exposes Excel/PDF export,
- * both routed through the authenticated blob-download helper so the JWT
- * never rides a bare `<a href>`/query-param link.
+ * Fetches the License Purchase & Profit Report — auto-fetches whenever the
+ * (debounced) filter values change, no explicit "Apply"/"Generate" action.
+ * Cancels any in-flight request when a new one starts — same
+ * `AbortController` pattern `ItemPivotReport.tsx`'s `reportAbortRef` uses,
+ * to avoid a slow stale response overwriting a fresher one.
+ *
+ * Tracks `isInitialLoading` (fetching with no previous result — shows a
+ * skeleton table) separately from `isRefetching` (fetching while a
+ * previous result is still on screen — keeps it visible under a thin
+ * progress bar instead of blanking the page). On a transient failure (no
+ * `response` at all, or a 5xx) the first failure for a given request
+ * retries once automatically after ~2.5s before surfacing the friendly
+ * error from `getReportErrorInfo`; a 4xx surfaces immediately, no retry.
+ *
+ * Also exposes Excel/PDF export, both routed through the authenticated
+ * blob-download helper so the JWT never rides a bare `<a href>`/query-param
+ * link.
  */
-export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, licenseNumber, exporter }: LicensePurchaseProfitReportQuery) {
+export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }: LicensePurchaseProfitReportQuery) {
     const [reportData, setReportData] = useState<Record<string, any> | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [downloading, setDownloading] = useState(false);
+    // Bumped by `refetch()` to re-run the fetch effect for an identical
+    // filter set (the error banner's manual "Retry" button).
+    const [retryToken, setRetryToken] = useState(0);
 
     const reportAbortRef = useRef<AbortController | null>(null);
 
-    const hasQuery = Boolean(fromDate) && Boolean(toDate);
+    const canApply = Boolean(fromDate) && Boolean(toDate);
 
-    const loadReport = useCallback(async () => {
-        if (!hasQuery) return;
+    useEffect(() => {
+        if (!canApply) return undefined;
 
         if (reportAbortRef.current) {
             reportAbortRef.current.abort();
@@ -40,46 +59,68 @@ export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, lic
         const controller = new AbortController();
         reportAbortRef.current = controller;
 
-        setLoading(true);
-        setError(null);
-        try {
-            const response = await api.get(
-                buildLicensePurchaseProfitReportPath({ format: "json", fromDate, toDate, norm, licenseNumber, exporter }),
-                { signal: controller.signal },
-            );
-            if (!controller.signal.aborted) {
-                setReportData(response.data);
-            }
-        } catch (err: any) {
-            // Axios names aborted requests 'CanceledError'; ignore them silently.
-            if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || controller.signal.aborted) {
-                return;
-            }
-            const message = err?.response?.data?.error || 'Failed to load report. Please try again.';
-            toast.error(message);
-            setError(message);
-            setReportData(null);
-        } finally {
-            if (!controller.signal.aborted) {
+        // True once this effect run has already retried once — closed over
+        // by `load`, which may call itself again after the retry delay.
+        let hasRetried = false;
+
+        const load = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const response = await api.get(
+                    buildLicensePurchaseProfitReportPath({ format: "json", fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }),
+                    { signal: controller.signal },
+                );
+                if (!controller.signal.aborted) {
+                    setReportData(response.data);
+                    setLoading(false);
+                }
+            } catch (err: any) {
+                // Axios names aborted requests 'CanceledError'; ignore them silently.
+                if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || controller.signal.aborted) {
+                    return;
+                }
+                const { message, retryable } = getReportErrorInfo(err);
+                if (retryable && !hasRetried) {
+                    hasRetried = true;
+                    setTimeout(() => {
+                        if (!controller.signal.aborted) {
+                            load();
+                        }
+                    }, RETRY_DELAY_MS);
+                    return;
+                }
+                toast.error(message);
+                setError(message);
                 setLoading(false);
             }
-        }
-    }, [hasQuery, fromDate, toDate, norm, licenseNumber, exporter]);
+        };
 
-    useEffect(() => {
-        if (hasQuery) {
-            loadReport();
-        } else {
-            setReportData(null);
-            setError(null);
+        load();
+
+        return () => {
+            controller.abort();
+        };
+    }, [canApply, fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter, retryToken]);
+
+    const refetch = useCallback(() => {
+        setRetryToken((t) => t + 1);
+    }, []);
+
+    const resetReport = useCallback(() => {
+        if (reportAbortRef.current) {
+            reportAbortRef.current.abort();
         }
-    }, [hasQuery, loadReport]);
+        setReportData(null);
+        setError(null);
+        setLoading(false);
+    }, []);
 
     const exportExcel = useCallback(async () => {
         setDownloading(true);
         try {
             await openAuthedFile(
-                buildLicensePurchaseProfitReportPath({ format: "excel", fromDate, toDate, norm, licenseNumber, exporter }),
+                buildLicensePurchaseProfitReportPath({ format: "excel", fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }),
                 "license-purchase-profit-report.xlsx",
             );
         } catch (err: any) {
@@ -87,13 +128,13 @@ export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, lic
         } finally {
             setDownloading(false);
         }
-    }, [fromDate, toDate, norm, licenseNumber, exporter]);
+    }, [fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter]);
 
     const exportPdf = useCallback(async () => {
         setDownloading(true);
         try {
             await openAuthedFile(
-                buildLicensePurchaseProfitReportPath({ format: "pdf", fromDate, toDate, norm, licenseNumber, exporter }),
+                buildLicensePurchaseProfitReportPath({ format: "pdf", fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }),
                 "license-purchase-profit-report.pdf",
             );
         } catch (err: any) {
@@ -101,14 +142,20 @@ export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, lic
         } finally {
             setDownloading(false);
         }
-    }, [fromDate, toDate, norm, licenseNumber, exporter]);
+    }, [fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter]);
+
+    const isInitialLoading = loading && reportData === null;
+    const isRefetching = loading && reportData !== null;
 
     return {
         reportData,
-        loading,
+        isInitialLoading,
+        isRefetching,
         error,
         downloading,
-        hasQuery,
+        canApply,
+        refetch,
+        resetReport,
         exportExcel,
         exportPdf,
     };

@@ -10,7 +10,6 @@ from apps.license.views.item_pivot_report import ItemPivotViewSet, ItemPivotRepo
 from apps.license.views.item_report import ItemReportViewSet, ItemReportView
 from apps.license.views.planned_report import PlannedReportViewSet, PlannedReportView
 from apps.license.views.license_purchase_profit_report import LicensePurchaseProfitReportView
-from apps.license.views.license_trading_register_report import LicenseTradingRegisterReportView
 from apps.license.views.inventory_balance_report import InventoryBalanceReportView
 from apps.license.views.inventory_balance_viewset import InventoryBalanceViewSet
 from apps.license.views.license_items import LicenseItemViewSet
@@ -54,7 +53,6 @@ urlpatterns = [
     path("reports/item-report/", ItemReportView.as_view(), name="item-report"),
     path("reports/planned-report/", PlannedReportView.as_view(), name="planned-report"),
     path("reports/license-purchase-profit/", LicensePurchaseProfitReportView.as_view(), name="license-purchase-profit-report"),
-    path("reports/license-trading-register/", LicenseTradingRegisterReportView.as_view(), name="license-trading-register-report"),
     # Router URLs must come LAST
     path("", include(router.urls)),
 ]

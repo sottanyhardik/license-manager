@@ -3,15 +3,23 @@ Tests for the License Purchase & Profit Report
 (`apps.license.services.purchase_profit_report.build_purchase_profit_report`
 and `apps.license.views.license_purchase_profit_report.LicensePurchaseProfitReportView`).
 
-Covers:
-- Purchase Cost consolidation across multiple `LicensePurchase` invoices.
-- Item-wise allocation reconciling exactly to the license's allocated purchase.
-- The decision-1/decision-2 asymmetry: Debited CIF is date-scoped, Purchase
-  Cost never is.
-- Hidden (previous-owner) BOE rows excluded from Debited CIF.
-- Norm bucketing (exact / Others / no-norm-excluded / All).
-- Item -> License -> Norm -> Grand Total reconciliation.
-- View-level contract: JSON shape, Excel export, param validation, permissions.
+The report is a single, flat License Summary table. Covers:
+- License selection: earliest QUALIFYING (external, non-internal-linked)
+  `LicenseTrade` PURCHASE determines whether a license appears at all.
+- Internal linked purchases (`linked_trade IS NOT NULL` — the auto-created
+  mirror of an internal company-to-company transfer) are excluded from both
+  the first-purchase-date, Purchase Amount, AND Purchase $.
+- Purchase Amount (INR) / Purchase $ (`LicenseTradeLine.cif_fc`): full
+  lifecycle sums of qualifying external purchase trades, never
+  date-filtered once a license qualifies.
+- Exporter: the license's own exporter/company, same as elsewhere in the
+  License module.
+- Exclude License Number: applied AFTER `license_number`/`norm`/
+  `exporter_id` inclusion — always wins over an overlapping inclusion.
+- Norm(s): every distinct raw SION norm_class attached to the license,
+  sorted numerically and deduplicated — not bucketed into "Others".
+- View-level contract: JSON shape, Excel sheet name, param validation,
+  permissions — unchanged API contract, new payload shape.
 """
 import uuid
 from datetime import date, timedelta
@@ -21,17 +29,16 @@ from io import BytesIO
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.urls import reverse
 from openpyxl import load_workbook
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.core.constants import DEBIT
+from apps.core.constants import DEC_0
 from apps.core.models import CompanyModel, HSCodeModel, HeadSIONNormsModel, ItemNameModel, SionNormClassModel
-from apps.bill_of_entry.models import BillOfEntryModel, OTH_INVOICE_MARKER, RowDetails
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
-from apps.license.models.core import LicensePurchase
+from apps.license.services.balance_calculator import LicenseBalanceCalculator
 from apps.license.services.purchase_profit_report import build_purchase_profit_report
+from apps.trade.models import LicenseTrade, LicenseTradeLine
 
 User = get_user_model()
 
@@ -83,10 +90,14 @@ def ppr_masters(db):
     head_norm = HeadSIONNormsModel.objects.create(name="PPR Test Head Norm")
     return {
         "exporter": CompanyModel.objects.create(iec="7770001111", name="PPR Exporter"),
+        "supplier_early": CompanyModel.objects.create(iec="7770002222", name="PPR Supplier Early"),
+        "supplier_late": CompanyModel.objects.create(iec="7770003333", name="PPR Supplier Late"),
         "hs_code": HSCodeModel.objects.create(hs_code="88888888", product_description="PPR Test Product"),
         "item_a": ItemNameModel.objects.create(name="PPR Item A"),
         "item_b": ItemNameModel.objects.create(name="PPR Item B"),
         "e1_norm": SionNormClassModel.objects.create(head_norm=head_norm, norm_class="E1", is_active=True),
+        "e5_norm": SionNormClassModel.objects.create(head_norm=head_norm, norm_class="E5", is_active=True),
+        "e132_norm": SionNormClassModel.objects.create(head_norm=head_norm, norm_class="E132", is_active=True),
         "other_norm": SionNormClassModel.objects.create(head_norm=head_norm, norm_class="PPROTHER", is_active=True),
     }
 
@@ -110,7 +121,7 @@ def _make_export_item(license_obj, norm_class, cif_fc):
     )
 
 
-def _make_import_item(license_obj, hs_code, serial, item_names=None, description=None):
+def _make_import_item(license_obj, hs_code, serial, item_names=None, description=None, cif_fc=None):
     item = LicenseImportItemsModel.objects.create(
         license=license_obj,
         serial_number=serial,
@@ -118,59 +129,95 @@ def _make_import_item(license_obj, hs_code, serial, item_names=None, description
         hs_code=hs_code,
         quantity=Decimal("1000.000"),
         available_quantity=Decimal("1000.000"),
+        cif_fc=cif_fc if cif_fc is not None else DEC_0,
     )
     if item_names:
         item.items.set(item_names)
     return item
 
 
-def _make_purchase(license_obj, amount, invoice_date=None):
-    """Uses MODE_QTY (qty=1 x rate=amount) so `amount_inr` == amount exactly,
-    without fighting `LicensePurchase.save()`'s markup-based computation."""
-    return LicensePurchase.objects.create(
-        license=license_obj,
-        mode=LicensePurchase.MODE_QTY,
-        quantity_kg=Decimal("1.000"),
-        rate_inr=Decimal(amount),
+def _make_purchase_trade(item, amount_inr, invoice_date=None, cif_fc=None, from_company=None):
+    """Genuine EXTERNAL purchase: a `LicenseTrade(direction=PURCHASE)` +
+    one billed `LicenseTradeLine` against `item`, with no `linked_trade` —
+    `amount_inr` is passed straight through as the line's exact INR amount
+    (MODE_QTY with qty=1). `cif_fc` is the line's foreign-currency/USD CIF
+    value (Purchase $'s source) — defaults to 0 when not exercising that
+    specific field. `from_company` is the supplier (Purchase From's
+    source) — left unset (`None`) when not exercising that field."""
+    trade = LicenseTrade.objects.create(
+        direction=LicenseTrade.DIR_PURCHASE,
         invoice_date=invoice_date or date.today(),
+        invoice_number=f"PUR-{uuid.uuid4().hex[:8]}",
+        from_company=from_company,
     )
-
-
-def _make_boe(company, boe_date, invoice_no=""):
-    return BillOfEntryModel.objects.create(
-        company=company,
-        bill_of_entry_number=str(uuid.uuid4().int)[:9],
-        bill_of_entry_date=boe_date,
-        exchange_rate=Decimal("84.50"),
-        invoice_no=invoice_no,
-    )
-
-
-def _make_debit_row(boe, item, cif_fc, qty):
-    return RowDetails.objects.create(
-        bill_of_entry=boe,
+    LicenseTradeLine.objects.create(
+        trade=trade,
         sr_number=item,
-        transaction_type=DEBIT,
-        cif_fc=cif_fc,
-        cif_inr=cif_fc * Decimal("84.5"),
-        qty=qty,
+        mode=LicenseTradeLine.MODE_QTY,
+        qty_kg=Decimal("1.000"),
+        rate_inr_per_kg=Decimal(amount_inr),
+        amount_inr=Decimal(amount_inr),
+        cif_fc=Decimal(cif_fc) if cif_fc is not None else Decimal("0.00"),
     )
+    return trade
 
 
-def _hide_boe(boe):
-    """Mirrors the real hide flow's audit trail — see
-    `test_balance_calculator.py::TestHiddenBoeExclusion._make_boe`'s own
-    comment: a BOE only counts as genuinely hidden if a `ReconciliationLog`
-    entry confirms a real hide, not merely `invoice_no == OTH_INVOICE_MARKER`
-    colliding with unrelated legacy free-text data."""
-    from apps.reconciliation.models import ReconciliationLog
-
-    ReconciliationLog.objects.create(
-        action=ReconciliationLog.ACTION_HIDE_BOE,
-        bill_of_entry=boe,
-        before={"is_hidden": False, "invoice_no": ""},
-        after={"is_hidden": True, "bill_of_entry_number": boe.bill_of_entry_number},
+def _make_internal_linked_purchase_trade(item, amount_inr, invoice_date=None, cif_fc=None):
+    """Mirrors the real `auto_create_paired` flow (`apps/trade/serializers.py`):
+    an internal transfer between the business's own companies creates a
+    PURCHASE trade AND its auto-generated SALE counterpart, cross-linked via
+    `linked_trade` on BOTH sides. Must be ignored entirely for first-purchase
+    -date, Purchase Amount, AND Purchase $ — it's a ledger-balancing mirror,
+    not a real external acquisition."""
+    purchase = _make_purchase_trade(item, amount_inr, invoice_date=invoice_date, cif_fc=cif_fc)
+    mirror = LicenseTrade.objects.create(
+        direction=LicenseTrade.DIR_SALE,
+        invoice_date=purchase.invoice_date,
+        invoice_number=f"SALE-{uuid.uuid4().hex[:8]}",
+        linked_trade=purchase,
     )
+    LicenseTrade.objects.filter(pk=purchase.pk).update(linked_trade=mirror)
+    purchase.refresh_from_db()
+    return purchase
+
+
+def _make_debit_trade(item, amount_inr, invoice_date=None, cif_fc=None, qty_kg=None):
+    """Genuine EXTERNAL debit: a `LicenseTrade(direction=SALE)` + one billed
+    `LicenseTradeLine` against `item`, with no `linked_trade` — the debit-
+    side counterpart of `_make_purchase_trade`. `qty_kg` defaults to 1 (MODE_QTY,
+    `amount_inr` passed straight through as the line's exact INR amount)."""
+    trade = LicenseTrade.objects.create(
+        direction=LicenseTrade.DIR_SALE,
+        invoice_date=invoice_date or date.today(),
+        invoice_number=f"DEBIT-{uuid.uuid4().hex[:8]}",
+    )
+    LicenseTradeLine.objects.create(
+        trade=trade,
+        sr_number=item,
+        mode=LicenseTradeLine.MODE_QTY,
+        qty_kg=Decimal(qty_kg) if qty_kg is not None else Decimal("1.000"),
+        rate_inr_per_kg=Decimal(amount_inr),
+        amount_inr=Decimal(amount_inr),
+        cif_fc=Decimal(cif_fc) if cif_fc is not None else Decimal("0.00"),
+    )
+    return trade
+
+
+def _make_internal_linked_debit_trade(item, amount_inr, invoice_date=None, cif_fc=None, qty_kg=None):
+    """Mirrors `_make_internal_linked_purchase_trade`, but for the debit
+    (SALE) side: an internal transfer's SALE leg, cross-linked via
+    `linked_trade` on BOTH sides with its auto-generated PURCHASE
+    counterpart. Must be excluded entirely from the debit aggregation."""
+    debit = _make_debit_trade(item, amount_inr, invoice_date=invoice_date, cif_fc=cif_fc, qty_kg=qty_kg)
+    mirror = LicenseTrade.objects.create(
+        direction=LicenseTrade.DIR_PURCHASE,
+        invoice_date=debit.invoice_date,
+        invoice_number=f"PUR-{uuid.uuid4().hex[:8]}",
+        linked_trade=debit,
+    )
+    LicenseTrade.objects.filter(pk=debit.pk).update(linked_trade=mirror)
+    debit.refresh_from_db()
+    return debit
 
 
 # ---------------------------------------------------------------------------
@@ -178,246 +225,621 @@ def _hide_boe(boe):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.django_db
-def test_single_license_single_invoice_single_item_profit(ppr_masters):
+def test_single_license_single_purchase_trade(ppr_masters):
     lic = _make_license("PPR-001", ppr_masters["exporter"])
     _make_export_item(lic, ppr_masters["e1_norm"], Decimal("95000.00"))
     item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    _make_purchase(lic, "60000.00")
-    boe = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe, item, Decimal("90000.00"), Decimal("500.000"))
+    _make_purchase_trade(
+        item, "60000.00", invoice_date=FROM_DATE + timedelta(days=1), cif_fc="705.50",
+    )
 
     report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
 
-    e1 = next(n for n in report["norms"] if n["norm"] == "E1")
-    lic_row = e1["licenses"][0]
-    assert lic_row["license_number"] == "PPR-001"
-    assert lic_row["purchase_cost"] == 60000.00
-    assert lic_row["debited_cif"] == 90000.00
-    assert lic_row["remaining_cif"] == 5000.00  # 95000 export credit - 90000 all-time BOE debit
-    assert lic_row["allocated_purchase"] == 60000.00
-    assert lic_row["realized_profit"] == 30000.00
-    assert lic_row["profit_pct"] == 50.00
-
-    assert len(e1["items"]) == 1
-    item_row = e1["items"][0]
-    assert item_row["debited_cif"] == 90000.00
-    assert item_row["allocated_purchase"] == 60000.00
-    assert item_row["profit"] == 30000.00
-    assert item_row["pct_share"] == 100.00
-    assert item_row["item"] == "PPR Item A"
+    assert set(report.keys()) == {"summary", "licenses", "item_matrix"}
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-001")
+    assert lic_row["purchase_amount"] == 60000.00
+    assert lic_row["purchase_usd"] == 705.50
+    assert lic_row["exporter"] == ppr_masters["exporter"].name
+    assert lic_row["license_date"] == lic.license_date.isoformat()
+    assert lic_row["expiry_date"] == lic.license_expiry_date.isoformat()
+    assert lic_row["norms"] == ["E1"]
 
 
 @pytest.mark.django_db
-def test_multiple_invoices_consolidate_to_one_purchase_cost(ppr_masters):
-    """Core acceptance criterion: one license, many supplier invoices ->
-    one Purchase Cost row, consolidated to their sum."""
+def test_multiple_purchase_trades_consolidate_to_one_purchase_amount(ppr_masters):
+    """Core acceptance criterion: one license, many qualifying external
+    purchase trades -> one Purchase Amount, consolidated to their sum,
+    even when some trades are dated OUTSIDE the report's range — only the
+    EARLIEST trade's date determines whether the license qualifies at all."""
     lic = _make_license("PPR-002", ppr_masters["exporter"])
     _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
     item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    _make_purchase(lic, "20000.00", invoice_date=date.today() - timedelta(days=200))
-    _make_purchase(lic, "15000.00", invoice_date=date.today() - timedelta(days=100))
-    _make_purchase(lic, "5000.00", invoice_date=date.today() - timedelta(days=10))
-    boe = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe, item, Decimal("30000.00"), Decimal("100.000"))
+    _make_purchase_trade(item, "20000.00", invoice_date=FROM_DATE + timedelta(days=1))  # earliest, in range
+    _make_purchase_trade(item, "15000.00", invoice_date=FROM_DATE + timedelta(days=10))  # in range
+    _make_purchase_trade(item, "5000.00", invoice_date=TO_DATE + timedelta(days=50))  # OUT of range, still counted
 
     report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
 
-    e1 = next(n for n in report["norms"] if n["norm"] == "E1")
-    lic_row = next(r for r in e1["licenses"] if r["license_number"] == "PPR-002")
-    assert lic_row["purchase_cost"] == 40000.00  # 20000 + 15000 + 5000
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-002")
+    assert lic_row["purchase_amount"] == 40000.00  # 20000 + 15000 + 5000
 
 
 @pytest.mark.django_db
-def test_multi_item_allocation_sums_exactly_to_license_allocated_purchase(ppr_masters):
-    lic = _make_license("PPR-003", ppr_masters["exporter"])
-    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("200000.00"))
-    item1 = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    item2 = _make_import_item(lic, ppr_masters["hs_code"], 2, item_names=[ppr_masters["item_b"]])
-    _make_purchase(lic, "77777.00")  # deliberately awkward number to exercise rounding
-    boe = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe, item1, Decimal("45000.00"), Decimal("300.000"))
-    _make_debit_row(boe, item2, Decimal("30000.00"), Decimal("200.000"))
+def test_first_purchase_date_outside_range_excludes_license(ppr_masters):
+    """A license whose EARLIEST qualifying purchase trade falls outside the
+    report's date range must not appear at all."""
+    lic = _make_license("PPR-OUT-OF-RANGE", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=OUT_OF_RANGE_DATE - timedelta(days=1))
 
     report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
 
-    e1 = next(n for n in report["norms"] if n["norm"] == "E1")
-    lic_row = next(r for r in e1["licenses"] if r["license_number"] == "PPR-003")
-    items = [it for it in e1["items"] if it["license_number"] == "PPR-003"]
-    assert len(items) == 2
-
-    total_allocated = sum(Decimal(str(it["allocated_purchase"])) for it in items)
-    assert total_allocated == Decimal(str(lic_row["allocated_purchase"]))
-    assert total_allocated == Decimal("77777.00")
-
-    total_item_profit = sum(Decimal(str(it["profit"])) for it in items)
-    assert total_item_profit == Decimal(str(lic_row["realized_profit"]))
+    license_numbers = {r["license_number"] for r in report["licenses"]}
+    assert "PPR-OUT-OF-RANGE" not in license_numbers
 
 
 @pytest.mark.django_db
-def test_date_range_excludes_out_of_range_debit_but_not_purchase_cost(ppr_masters):
-    """Decision-2 (Debited CIF is date-scoped) vs decision-1 (Purchase Cost
-    is never date-scoped) asymmetry, tested explicitly."""
-    lic = _make_license("PPR-004", ppr_masters["exporter"])
-    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("100000.00"))
+def test_internal_linked_purchase_excluded_from_amount_and_first_date(ppr_masters):
+    lic = _make_license("PPR-INTERNAL", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
     item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
 
-    # Purchase invoice dated LONG before the report's date range.
-    _make_purchase(lic, "40000.00", invoice_date=OUT_OF_RANGE_DATE - timedelta(days=365))
+    # Internal linked purchase: earlier date, much larger amount — must be
+    # entirely ignored for BOTH first-purchase-date and Purchase Amount.
+    _make_internal_linked_purchase_trade(
+        item, "999999.00", invoice_date=OUT_OF_RANGE_DATE - timedelta(days=500),
+    )
 
-    in_range_boe = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(in_range_boe, item, Decimal("25000.00"), Decimal("100.000"))
-
-    out_of_range_boe = _make_boe(ppr_masters["exporter"], OUT_OF_RANGE_DATE)
-    _make_debit_row(out_of_range_boe, item, Decimal("10000.00"), Decimal("50.000"))
+    # The only genuine external purchase — this alone should determine
+    # both qualification and Purchase Amount.
+    _make_purchase_trade(item, "25000.00", invoice_date=FROM_DATE + timedelta(days=1))
 
     report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
 
-    e1 = next(n for n in report["norms"] if n["norm"] == "E1")
-    lic_row = next(r for r in e1["licenses"] if r["license_number"] == "PPR-004")
-    # Debited CIF only counts the in-range row.
-    assert lic_row["debited_cif"] == 25000.00
-    # Purchase Cost counts the invoice regardless of its own (out-of-range) date.
-    assert lic_row["purchase_cost"] == 40000.00
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-INTERNAL")
+    assert lic_row["purchase_amount"] == 25000.00  # NOT 999999 + 25000
 
 
 @pytest.mark.django_db
-def test_hidden_boe_row_excluded_from_debited_cif(ppr_masters):
-    lic = _make_license("PPR-005", ppr_masters["exporter"])
-    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("100000.00"))
+def test_license_with_only_internal_linked_purchase_does_not_qualify(ppr_masters):
+    lic = _make_license("PPR-ONLY-INTERNAL", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
     item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    _make_purchase(lic, "10000.00")
-
-    hidden_boe = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1), invoice_no=OTH_INVOICE_MARKER)
-    _hide_boe(hidden_boe)
-    _make_debit_row(hidden_boe, item, Decimal("50000.00"), Decimal("400.000"))
-
-    visible_boe = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=2))
-    _make_debit_row(visible_boe, item, Decimal("15000.00"), Decimal("100.000"))
+    _make_internal_linked_purchase_trade(item, "40000.00", invoice_date=FROM_DATE + timedelta(days=1))
 
     report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
 
-    e1 = next(n for n in report["norms"] if n["norm"] == "E1")
-    lic_row = next(r for r in e1["licenses"] if r["license_number"] == "PPR-005")
-    # Only the visible row's 15000.00 counts — the hidden row's 50000.00 must
-    # be dropped, not merely coincidentally not double-counted.
-    assert lic_row["debited_cif"] == 15000.00
+    assert report["licenses"] == []
 
 
 @pytest.mark.django_db
-def test_norm_bucketing_exact_others_and_no_norm_exclusion(ppr_masters):
-    # E1 exact match.
+def test_purchase_usd_consolidates_across_trades_and_excludes_internal_linked(ppr_masters):
+    lic = _make_license("PPR-USD", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1), cif_fc="120.00")
+    _make_purchase_trade(item, "5000.00", invoice_date=FROM_DATE + timedelta(days=5), cif_fc="60.00")
+    # Internal linked purchase: must NOT contribute to Purchase $ either.
+    _make_internal_linked_purchase_trade(
+        item, "999999.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="88888.00",
+    )
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-USD")
+    assert lic_row["purchase_amount"] == 15000.00  # 10000 + 5000, NOT + 999999
+    assert lic_row["purchase_usd"] == 180.00  # 120 + 60, NOT + 88888
+
+
+@pytest.mark.django_db
+def test_sale_amount_and_sale_usd_sum_qualifying_sale_lines_excluding_internal_linked(ppr_masters):
+    """Sale Amount/Sale $ consolidate across every qualifying (external,
+    non-internal-linked) SALE trade line for the license — the disposal-
+    side mirror of the existing Purchase Amount/Purchase $ tests above."""
+    lic = _make_license("PPR-SALE", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1), cif_fc="100.00")
+
+    _make_debit_trade(item, "4000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="50.00", qty_kg="100.000")
+    _make_debit_trade(item, "1000.00", invoice_date=FROM_DATE + timedelta(days=3), cif_fc="10.00", qty_kg="20.000")
+    # Internal linked SALE trade: must NOT contribute to Sale Amount/Sale $.
+    _make_internal_linked_debit_trade(
+        item, "999999.00", invoice_date=FROM_DATE + timedelta(days=4), cif_fc="88888.00", qty_kg="500.000",
+    )
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-SALE")
+    assert lic_row["sale_amount"] == 5000.00  # 4000 + 1000, NOT + 999999
+    assert lic_row["sale_usd"] == 60.00  # 50 + 10, NOT + 88888
+
+
+@pytest.mark.django_db
+def test_profit_loss_equals_sale_amount_minus_purchase_amount(ppr_masters):
+    lic = _make_license("PPR-PROFIT", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item, "16000.00", invoice_date=FROM_DATE + timedelta(days=2), qty_kg="100.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-PROFIT")
+    assert lic_row["purchase_amount"] == 10000.00
+    assert lic_row["sale_amount"] == 16000.00
+    assert lic_row["profit_loss"] == 6000.00  # 16000 - 10000
+
+
+@pytest.mark.django_db
+def test_sale_amount_not_doubled_for_multi_item_name_import_item(ppr_masters):
+    """Regression test for the double-counting fix: an Import Item with 2
+    `ItemNameModel`s attached (which the Item Utilization Matrix's
+    `debit_qty`/`debit_cif`/`debit_bill` dicts deliberately duplicate the
+    debit across, for THAT table's display purpose) must NOT cause
+    Sale Amount/Sale $ to be doubled — they come from a separate,
+    per-license-only aggregate, not from summing the item-matrix's
+    per-item-name cells."""
+    name_x = ItemNameModel.objects.create(name="PPR Sale Multi X")
+    name_y = ItemNameModel.objects.create(name="PPR Sale Multi Y")
+    lic = _make_license("PPR-SALE-MULTI-NAME", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[name_x, name_y])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+
+    # Exactly ONE genuine SALE trade line against the multi-name item.
+    _make_debit_trade(item, "4000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="80.00", qty_kg="200.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    # Sanity check: the item_matrix DOES duplicate this debit across both
+    # header columns (the correct, documented DISPLAY convention there).
+    lic_row_matrix = next(r for r in report["item_matrix"]["rows"] if r["license_number"] == "PPR-SALE-MULTI-NAME")
+    for name in (name_x.name, name_y.name):
+        assert lic_row_matrix["items"][name] == {"qty": 200.0, "cif": 80.0, "bill": 4000.0}
+
+    # But Sale Amount/Sale $ on the License Summary row must equal that ONE
+    # trade line's raw amount exactly once, NOT doubled to 8000.0/160.0.
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-SALE-MULTI-NAME")
+    assert lic_row["sale_amount"] == 4000.00
+    assert lic_row["sale_usd"] == 80.00
+
+
+@pytest.mark.django_db
+def test_exclude_license_number_overrides_license_number_inclusion(ppr_masters):
+    """The exclusion filter takes precedence: first License Number/Norm/
+    Exporter determine the included set, then Exclude License Number
+    removes any of those explicitly."""
+    numbers = ["0311050703", "0311051359", "0311051945"]
+    for number in numbers:
+        lic = _make_license(number, ppr_masters["exporter"])
+        _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+        item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+        _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+
+    report = build_purchase_profit_report(
+        FROM_DATE, TO_DATE, norm="All",
+        license_number=numbers, exclude_license_number=["0311051359"],
+    )
+
+    license_numbers = {r["license_number"] for r in report["licenses"]}
+    assert license_numbers == {"0311050703", "0311051945"}
+    assert "0311051359" not in license_numbers
+
+
+@pytest.mark.django_db
+def test_norms_column_sorted_numerically_and_deduplicated(ppr_masters):
+    lic = _make_license("PPR-NORMS", ppr_masters["exporter"])
+    # Deliberately out of order, with a duplicate norm_class across two
+    # export items.
+    _make_export_item(lic, ppr_masters["e132_norm"], Decimal("30000.00"))
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("20000.00"))
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("10000.00"))  # duplicate norm_class
+    _make_export_item(lic, ppr_masters["e5_norm"], Decimal("15000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-NORMS")
+    assert lic_row["norms"] == ["E1", "E5", "E132"]  # numeric order, deduplicated
+
+
+@pytest.mark.django_db
+def test_norms_column_shows_raw_codes_outside_conversion_norms(ppr_masters):
+    """A norm_class outside CONVERSION_NORMS still appears in the Norm(s)
+    column under its own raw code — the display column is never bucketed
+    into "Others" the way the `norm` FILTER parameter is."""
+    lic = _make_license("PPR-RAW-NORM", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["other_norm"], Decimal("30000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-RAW-NORM")
+    assert lic_row["norms"] == ["PPROTHER"]
+
+
+@pytest.mark.django_db
+def test_norm_filter_still_narrows_licenses_no_output_grouping(ppr_masters):
+    """`norm` remains a valid filter parameter, but the report's output is a
+    flat list — never grouped/bucketed by norm."""
     lic_e1 = _make_license("PPR-NORM-E1", ppr_masters["exporter"])
     _make_export_item(lic_e1, ppr_masters["e1_norm"], Decimal("50000.00"))
     item_e1 = _make_import_item(lic_e1, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    _make_purchase(lic_e1, "10000.00")
-    boe_e1 = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe_e1, item_e1, Decimal("20000.00"), Decimal("100.000"))
+    _make_purchase_trade(item_e1, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
 
-    # A norm_class outside CONVERSION_NORMS -> "Others" catch-all.
     lic_other = _make_license("PPR-NORM-OTHER", ppr_masters["exporter"])
     _make_export_item(lic_other, ppr_masters["other_norm"], Decimal("50000.00"))
     item_other = _make_import_item(lic_other, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_b"]])
-    _make_purchase(lic_other, "10000.00")
-    boe_other = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe_other, item_other, Decimal("20000.00"), Decimal("100.000"))
+    _make_purchase_trade(item_other, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
 
     # No norm_class at all -> out of scope, excluded entirely.
     lic_no_norm = _make_license("PPR-NORM-NONE", ppr_masters["exporter"])
     item_no_norm = _make_import_item(lic_no_norm, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    _make_purchase(lic_no_norm, "10000.00")
-    boe_no_norm = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe_no_norm, item_no_norm, Decimal("20000.00"), Decimal("100.000"))
+    _make_purchase_trade(item_no_norm, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
 
     all_report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
-    all_license_numbers = {
-        lic["license_number"] for n in all_report["norms"] for lic in n["licenses"]
-    }
+    assert set(all_report.keys()) == {"summary", "licenses", "item_matrix"}
+    all_license_numbers = {r["license_number"] for r in all_report["licenses"]}
     assert "PPR-NORM-E1" in all_license_numbers
     assert "PPR-NORM-OTHER" in all_license_numbers
     assert "PPR-NORM-NONE" not in all_license_numbers
 
     e1_only = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="E1")
-    e1_license_numbers = {
-        lic["license_number"] for n in e1_only["norms"] for lic in n["licenses"]
-    }
-    assert e1_license_numbers == {"PPR-NORM-E1"}
+    assert {r["license_number"] for r in e1_only["licenses"]} == {"PPR-NORM-E1"}
 
     others_only = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="Others")
-    others_license_numbers = {
-        lic["license_number"] for n in others_only["norms"] for lic in n["licenses"]
-    }
-    assert others_license_numbers == {"PPR-NORM-OTHER"}
+    assert {r["license_number"] for r in others_only["licenses"]} == {"PPR-NORM-OTHER"}
 
 
 @pytest.mark.django_db
-def test_multi_norm_license_buckets_under_active_filter_not_arbitrary_pick(ppr_masters):
-    """A license with export items spanning two distinct norm_class values
-    (E1 and an "Others" norm) must land in whichever norm section the
-    request actually asked for -- not an arbitrary/DB-order-dependent pick
-    that could contradict the `norm` filter that put it in scope."""
-    lic = _make_license("PPR-MULTI-NORM", ppr_masters["exporter"])
+def test_purchase_from_is_earliest_qualifying_trades_supplier(ppr_masters):
+    """When a license has 2+ qualifying purchases from different
+    suppliers, `purchase_from` is the supplier of the EARLIEST one by
+    date — verified here by making the earliest trade's supplier
+    unambiguous even though it is created/saved AFTER the later trade."""
+    lic = _make_license("PPR-FROM", ppr_masters["exporter"])
     _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
-    _make_export_item(lic, ppr_masters["other_norm"], Decimal("50000.00"))
     item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    _make_purchase(lic, "10000.00")
-    boe = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe, item, Decimal("20000.00"), Decimal("100.000"))
 
-    e1_report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="E1")
-    e1_norms_present = {n["norm"] for n in e1_report["norms"] if n["licenses"]}
-    assert e1_norms_present == {"E1"}
-    assert {lic_row["license_number"] for n in e1_report["norms"] for lic_row in n["licenses"]} == {"PPR-MULTI-NORM"}
-
-    # norm="Others" uses an exclusion filter (`.exclude(norm_class__in=CONVERSION_NORMS)`),
-    # so a license that also carries an E1 export item is out of scope for "Others"
-    # entirely -- it isn't "purely other". That exclusion happens upstream in
-    # `_base_license_queryset`, before bucketing ever runs.
-    others_report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="Others")
-    others_license_numbers = {
-        lic_row["license_number"] for n in others_report["norms"] for lic_row in n["licenses"]
-    }
-    assert "PPR-MULTI-NORM" not in others_license_numbers
-
-    # "All": deterministic precedence (NORM_DISPLAY_ORDER) picks E1 over
-    # Others for this license, and it appears in exactly one section, not both.
-    all_report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
-    sections_with_license = [
-        n["norm"] for n in all_report["norms"]
-        if "PPR-MULTI-NORM" in {lic_row["license_number"] for lic_row in n["licenses"]}
-    ]
-    assert sections_with_license == ["E1"]
-
-
-@pytest.mark.django_db
-def test_grand_total_reconciles_with_per_norm_summaries(ppr_masters):
-    lic_e1 = _make_license("PPR-GT-E1", ppr_masters["exporter"])
-    _make_export_item(lic_e1, ppr_masters["e1_norm"], Decimal("80000.00"))
-    item_e1 = _make_import_item(lic_e1, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    _make_purchase(lic_e1, "30000.00")
-    boe_e1 = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe_e1, item_e1, Decimal("40000.00"), Decimal("100.000"))
-
-    lic_other = _make_license("PPR-GT-OTHER", ppr_masters["exporter"])
-    _make_export_item(lic_other, ppr_masters["other_norm"], Decimal("60000.00"))
-    item_other = _make_import_item(lic_other, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_b"]])
-    _make_purchase(lic_other, "20000.00")
-    boe_other = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe_other, item_other, Decimal("35000.00"), Decimal("100.000"))
+    # Later trade (by invoice_date) created FIRST, to prove ordering is by
+    # date, not by insertion/creation order.
+    _make_purchase_trade(
+        item, "15000.00", invoice_date=FROM_DATE + timedelta(days=10),
+        from_company=ppr_masters["supplier_late"],
+    )
+    _make_purchase_trade(
+        item, "20000.00", invoice_date=FROM_DATE + timedelta(days=1),
+        from_company=ppr_masters["supplier_early"],
+    )
 
     report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
 
-    sum_purchase = sum(Decimal(str(n["summary"]["total_purchase"])) for n in report["norms"])
-    sum_debited = sum(Decimal(str(n["summary"]["total_debited_cif"])) for n in report["norms"])
-    sum_profit = sum(Decimal(str(n["summary"]["total_profit"])) for n in report["norms"])
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-FROM")
+    assert lic_row["purchase_from"] == ppr_masters["supplier_early"].name
+    assert lic_row["purchase_amount"] == 35000.00  # both still consolidated
 
-    grand_total = report["grand_summary"]["total"]
-    assert sum_purchase == Decimal(str(grand_total["purchase"]))
-    assert sum_debited == Decimal(str(grand_total["debited_cif"]))
-    assert sum_profit == Decimal(str(grand_total["profit"]))
 
-    # Also reconcile against the grand_summary rows list itself.
-    rows_purchase = sum(Decimal(str(r["purchase"])) for r in report["grand_summary"]["rows"])
-    assert rows_purchase == Decimal(str(grand_total["purchase"]))
+@pytest.mark.django_db
+def test_balance_cif_matches_centralized_balance_calculator(ppr_masters):
+    """`balance_cif` must surface exactly what the centralized Balance CIF
+    engine (`LicenseBalanceCalculator.calculate_financial_balance_for_licenses`)
+    returns for the same license — this report never reimplements the
+    balance formula itself."""
+    lic = _make_license("PPR-BALANCE", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1), cif_fc="500.00")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-BALANCE")
+    expected = LicenseBalanceCalculator.calculate_financial_balance_for_licenses([lic.id])[lic.id]
+    assert lic_row["balance_cif"] == float(expected)
+
+
+@pytest.mark.django_db
+def test_summary_totals_match_sum_of_license_rows(ppr_masters):
+    """The `summary` block's totals must match manually-computed sums
+    across the returned `licenses` rows for a multi-license scenario."""
+    lic_1 = _make_license("PPR-SUM-001", ppr_masters["exporter"])
+    _make_export_item(lic_1, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item_1 = _make_import_item(lic_1, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item_1, "10000.00", invoice_date=FROM_DATE + timedelta(days=1), cif_fc="120.00")
+
+    lic_2 = _make_license("PPR-SUM-002", ppr_masters["exporter"])
+    _make_export_item(lic_2, ppr_masters["e5_norm"], Decimal("30000.00"))
+    item_2 = _make_import_item(lic_2, ppr_masters["hs_code"], 2, item_names=[ppr_masters["item_b"]])
+    _make_purchase_trade(item_2, "25000.50", invoice_date=FROM_DATE + timedelta(days=3), cif_fc="310.25")
+    _make_debit_trade(item_1, "5000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="60.00", qty_kg="10.000")
+    _make_debit_trade(item_2, "9000.00", invoice_date=FROM_DATE + timedelta(days=4), cif_fc="95.00", qty_kg="15.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    rows = [
+        r for r in report["licenses"] if r["license_number"] in {"PPR-SUM-001", "PPR-SUM-002"}
+    ]
+    assert len(rows) == 2
+    assert report["summary"]["total_licenses"] == len(report["licenses"])
+    assert report["summary"]["purchase_amount"] == round(sum(r["purchase_amount"] for r in report["licenses"]), 2)
+    assert report["summary"]["purchase_usd"] == round(sum(r["purchase_usd"] for r in report["licenses"]), 2)
+    assert report["summary"]["balance_cif"] == round(sum(r["balance_cif"] for r in report["licenses"]), 2)
+    assert report["summary"]["total_sale_amount"] == round(sum(r["sale_amount"] for r in report["licenses"]), 2)
+    assert report["summary"]["total_sale_usd"] == round(sum(r["sale_usd"] for r in report["licenses"]), 2)
+
+
+@pytest.mark.django_db
+def test_total_profit_loss_from_raw_sums_diverges_from_naive_item_matrix_sum(ppr_masters):
+    """Grand `total_profit_loss` must equal `total_sale_amount -
+    purchase_amount` computed from the RAW per-license ledger sums (the
+    `sale_agg` aggregate) — never by re-deriving a "Sale Amount" from the
+    Item Utilization Matrix's per-header totals (which duplicate a
+    multi-item-name Import Item's debit across every header it maps to).
+    This fixture deliberately includes such a multi-name item so the two
+    approaches would visibly diverge if the wrong (item-matrix-derived) one
+    were used instead of the correct one."""
+    name_x = ItemNameModel.objects.create(name="PPR Grand Multi X")
+    name_y = ItemNameModel.objects.create(name="PPR Grand Multi Y")
+
+    # License 1: a multi-item-name Import Item with ONE genuine SALE line —
+    # the item_matrix duplicates this debit across BOTH its headers.
+    lic1 = _make_license("PPR-GRAND-001", ppr_masters["exporter"])
+    _make_export_item(lic1, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item1 = _make_import_item(lic1, ppr_masters["hs_code"], 1, item_names=[name_x, name_y])
+    _make_purchase_trade(item1, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item1, "4000.00", invoice_date=FROM_DATE + timedelta(days=2), qty_kg="200.000")
+
+    # License 2: a plain single-name item, purchase + sale.
+    lic2 = _make_license("PPR-GRAND-002", ppr_masters["exporter"])
+    _make_export_item(lic2, ppr_masters["e5_norm"], Decimal("30000.00"))
+    item2 = _make_import_item(lic2, ppr_masters["hs_code"], 2, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item2, "8000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item2, "5000.00", invoice_date=FROM_DATE + timedelta(days=2), qty_kg="50.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    rows = [r for r in report["licenses"] if r["license_number"] in {"PPR-GRAND-001", "PPR-GRAND-002"}]
+    assert len(rows) == 2
+
+    # Correct raw sums, from the actual trade-ledger fixture values.
+    expected_total_purchase = Decimal("10000.00") + Decimal("8000.00")
+    expected_total_sale = Decimal("4000.00") + Decimal("5000.00")  # NOT 8000 + 5000 = 13000
+    expected_profit_loss = float(expected_total_sale - expected_total_purchase)
+
+    assert report["summary"]["purchase_amount"] == float(expected_total_purchase)
+    assert report["summary"]["total_sale_amount"] == float(expected_total_sale)
+    assert report["summary"]["total_profit_loss"] == expected_profit_loss
+
+    # Demonstrate the divergence: naively summing the item_matrix's own
+    # per-header "bill" totals (the wrong source for a grand total) DOES
+    # double-count license 1's debit and would NOT match the correct
+    # total_sale_amount above.
+    naive_sale_from_matrix = sum(
+        h["bill"] for h in report["item_matrix"]["totals"].values()
+    )
+    assert naive_sale_from_matrix != report["summary"]["total_sale_amount"]
+    assert naive_sale_from_matrix == 13000.0  # 4000 (x2 headers) + 5000
+
+
+# ---------------------------------------------------------------------------
+# Dynamic Import Item Utilization Matrix — service-level tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_item_matrix_headers_sorted_case_insensitive_and_deduplicated(ppr_masters):
+    """Headers come from Import Item names, sorted case-insensitively and
+    deduplicated across licenses/import items, regardless of creation or
+    trade order."""
+    apple = ItemNameModel.objects.create(name="apple")
+    banana = ItemNameModel.objects.create(name="Banana")
+
+    lic1 = _make_license("PPR-HDR-001", ppr_masters["exporter"])
+    _make_export_item(lic1, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item1 = _make_import_item(lic1, ppr_masters["hs_code"], 1, item_names=[banana])
+    _make_purchase_trade(item1, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    # A non-zero debit is required so Dynamic Column Optimization doesn't
+    # drop this header (an all-zero-Grand-Total header would be removed —
+    # see the dedicated `test_item_matrix_*_optimization*` tests below).
+    _make_debit_trade(item1, "1000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="15.00", qty_kg="10.000")
+
+    lic2 = _make_license("PPR-HDR-002", ppr_masters["exporter"])
+    _make_export_item(lic2, ppr_masters["e1_norm"], Decimal("50000.00"))
+    # Two import items on the SAME license reuse the same "apple" item name
+    # — must collapse to one header, not two.
+    item2a = _make_import_item(lic2, ppr_masters["hs_code"], 1, item_names=[apple])
+    item2b = _make_import_item(lic2, ppr_masters["hs_code"], 2, item_names=[apple])
+    _make_purchase_trade(item2a, "5000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_purchase_trade(item2b, "5000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item2a, "500.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="8.00", qty_kg="5.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    assert report["item_matrix"]["headers"] == ["apple", "Banana"]
+
+
+@pytest.mark.django_db
+def test_item_matrix_aggregates_multiple_sale_lines_on_same_import_item(ppr_masters):
+    """Multiple SALE trade lines against the same import item aggregate into
+    one qty/cif/bill cell."""
+    lic = _make_license("PPR-DEBIT-AGG", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item, "3000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="40.00", qty_kg="100.000")
+    _make_debit_trade(item, "2000.00", invoice_date=FROM_DATE + timedelta(days=3), cif_fc="10.00", qty_kg="50.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    lic_row = next(r for r in report["item_matrix"]["rows"] if r["license_number"] == "PPR-DEBIT-AGG")
+    cell = lic_row["items"][ppr_masters["item_a"].name]
+    assert cell == {"qty": 150.0, "cif": 50.0, "bill": 5000.0}
+
+
+@pytest.mark.django_db
+def test_item_matrix_zero_fills_header_with_no_debit(ppr_masters):
+    """A license with an import item but zero SALE trades shows the
+    zero-filled dict for that header — the key must be present, not
+    omitted. A SECOND license shares the same item name WITH a debit, so
+    the header's Grand Total is non-zero and Dynamic Column Optimization
+    keeps the column — this test is about per-row zero-fill, not the
+    all-zero-Grand-Total column removal covered separately below."""
+    lic = _make_license("PPR-ZERO-DEBIT", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    # Deliberately no SALE/debit trade against `item`.
+
+    lic_other = _make_license("PPR-ZERO-DEBIT-PEER", ppr_masters["exporter"])
+    _make_export_item(lic_other, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item_other = _make_import_item(lic_other, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item_other, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item_other, "1000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="15.00", qty_kg="10.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    assert ppr_masters["item_a"].name in report["item_matrix"]["headers"]
+    lic_row = next(r for r in report["item_matrix"]["rows"] if r["license_number"] == "PPR-ZERO-DEBIT")
+    assert ppr_masters["item_a"].name in lic_row["items"]
+    assert lic_row["items"][ppr_masters["item_a"].name] == {"qty": 0, "cif": 0.0, "bill": 0.0}
+
+
+@pytest.mark.django_db
+def test_item_matrix_multi_name_import_item_contributes_full_debit_to_both(ppr_masters):
+    """An import item with 2 `ItemNameModel`s attached contributes its FULL
+    debit amount to BOTH header columns — never split."""
+    item_x = ItemNameModel.objects.create(name="PPR Multi X")
+    item_y = ItemNameModel.objects.create(name="PPR Multi Y")
+    lic = _make_license("PPR-MULTI-NAME", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[item_x, item_y])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item, "4000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="80.00", qty_kg="200.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    lic_row = next(r for r in report["item_matrix"]["rows"] if r["license_number"] == "PPR-MULTI-NAME")
+    for name in (item_x.name, item_y.name):
+        assert lic_row["items"][name] == {"qty": 200.0, "cif": 80.0, "bill": 4000.0}
+
+
+@pytest.mark.django_db
+def test_item_matrix_totals_match_manual_sums(ppr_masters):
+    """`item_matrix.totals` must equal manually-computed sums across the
+    test fixtures. (The top-level `summary.total_sale_usd`/
+    `total_sale_amount` are NOT derived from these per-header totals — see
+    the dedicated Sale Amount/Sale $ tests below — so they are not
+    asserted against `item_matrix` sums here.)"""
+    item_a_name = ppr_masters["item_a"].name
+
+    lic1 = _make_license("PPR-MTOT-001", ppr_masters["exporter"])
+    _make_export_item(lic1, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item1 = _make_import_item(lic1, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item1, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item1, "3000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="40.00", qty_kg="100.000")
+
+    lic2 = _make_license("PPR-MTOT-002", ppr_masters["exporter"])
+    _make_export_item(lic2, ppr_masters["e5_norm"], Decimal("30000.00"))
+    item2 = _make_import_item(lic2, ppr_masters["hs_code"], 2, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item2, "8000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item2, "1500.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="20.00", qty_kg="50.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    rows = [
+        r for r in report["item_matrix"]["rows"] if r["license_number"] in {"PPR-MTOT-001", "PPR-MTOT-002"}
+    ]
+    assert len(rows) == 2
+    manual_cif = sum(r["items"][item_a_name]["cif"] for r in rows)
+    manual_bill = sum(r["items"][item_a_name]["bill"] for r in rows)
+    assert report["item_matrix"]["totals"][item_a_name]["cif"] == round(manual_cif, 2)
+    assert report["item_matrix"]["totals"][item_a_name]["bill"] == round(manual_bill, 2)
+
+
+@pytest.mark.django_db
+def test_item_matrix_excludes_internal_linked_sale_trades(ppr_masters):
+    """Internal-linked SALE trades (`trade.linked_trade` set) are excluded
+    from the debit aggregation — same pattern as the existing
+    internal-linked PURCHASE exclusion test."""
+    lic = _make_license("PPR-INTERNAL-DEBIT", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+
+    # Internal linked debit: much larger amount — must be entirely ignored.
+    _make_internal_linked_debit_trade(
+        item, "999999.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="88888.00", qty_kg="500.000",
+    )
+    # The only genuine external debit.
+    _make_debit_trade(item, "3000.00", invoice_date=FROM_DATE + timedelta(days=3), cif_fc="40.00", qty_kg="100.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    lic_row = next(r for r in report["item_matrix"]["rows"] if r["license_number"] == "PPR-INTERNAL-DEBIT")
+    cell = lic_row["items"][ppr_masters["item_a"].name]
+    assert cell == {"qty": 100.0, "cif": 40.0, "bill": 3000.0}  # NOT +500/+88888/+999999
+
+
+@pytest.mark.django_db
+def test_item_matrix_optimization_removes_all_zero_grand_total_header(ppr_masters):
+    """Dynamic Column Optimization: an Import Item column group whose Grand
+    Total Qty/CIF $/Bill are ALL zero across every qualifying license is
+    dropped entirely — from `headers`, from every row's `items`, and from
+    `totals` — while a header with a genuine debit anywhere is kept."""
+    keep_name = ItemNameModel.objects.create(name="PPR Opt Keep")
+    drop_name = ItemNameModel.objects.create(name="PPR Opt Drop")
+
+    lic_keep = _make_license("PPR-OPT-KEEP", ppr_masters["exporter"])
+    _make_export_item(lic_keep, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item_keep = _make_import_item(lic_keep, ppr_masters["hs_code"], 1, item_names=[keep_name])
+    _make_purchase_trade(item_keep, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item_keep, "3000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="40.00", qty_kg="100.000")
+
+    lic_drop = _make_license("PPR-OPT-DROP", ppr_masters["exporter"])
+    _make_export_item(lic_drop, ppr_masters["e5_norm"], Decimal("30000.00"))
+    item_drop = _make_import_item(lic_drop, ppr_masters["hs_code"], 2, item_names=[drop_name])
+    _make_purchase_trade(item_drop, "8000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    # Deliberately no SALE/debit trade against `item_drop` anywhere in the
+    # report — its Grand Total Qty/CIF/Bill are all zero.
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    assert keep_name.name in report["item_matrix"]["headers"]
+    assert drop_name.name not in report["item_matrix"]["headers"]
+    assert drop_name.name not in report["item_matrix"]["totals"]
+    for row in report["item_matrix"]["rows"]:
+        assert drop_name.name not in row["items"]
+
+
+@pytest.mark.django_db
+def test_item_matrix_optimization_keeps_header_when_only_one_license_is_zero(ppr_masters):
+    """The removal decision is based on the GRAND TOTAL, never on an
+    individual license's row — a header must NOT be dropped just because
+    one license (among several sharing it) has zero values."""
+    shared_name = ppr_masters["item_a"]
+
+    lic_zero = _make_license("PPR-OPT-ONE-ZERO", ppr_masters["exporter"])
+    _make_export_item(lic_zero, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item_zero = _make_import_item(lic_zero, ppr_masters["hs_code"], 1, item_names=[shared_name])
+    _make_purchase_trade(item_zero, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    # No debit for this license.
+
+    lic_nonzero = _make_license("PPR-OPT-ONE-NONZERO", ppr_masters["exporter"])
+    _make_export_item(lic_nonzero, ppr_masters["e5_norm"], Decimal("30000.00"))
+    item_nonzero = _make_import_item(lic_nonzero, ppr_masters["hs_code"], 2, item_names=[shared_name])
+    _make_purchase_trade(item_nonzero, "8000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item_nonzero, "1500.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="20.00", qty_kg="50.000")
+
+    report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
+
+    assert shared_name.name in report["item_matrix"]["headers"]
+    zero_row = next(r for r in report["item_matrix"]["rows"] if r["license_number"] == "PPR-OPT-ONE-ZERO")
+    assert zero_row["items"][shared_name.name] == {"qty": 0, "cif": 0.0, "bill": 0.0}
+    nonzero_row = next(r for r in report["item_matrix"]["rows"] if r["license_number"] == "PPR-OPT-ONE-NONZERO")
+    assert nonzero_row["items"][shared_name.name] == {"qty": 50.0, "cif": 20.0, "bill": 1500.0}
 
 
 # ---------------------------------------------------------------------------
@@ -429,19 +851,52 @@ def test_view_json_response_has_expected_top_level_keys(report_viewer_client, pp
     lic = _make_license("PPR-VIEW-001", ppr_masters["exporter"])
     _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
     item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    _make_purchase(lic, "10000.00")
-    boe = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe, item, Decimal("20000.00"), Decimal("100.000"))
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
 
     response = report_viewer_client.get(
         REPORT_URL, {"from_date": FROM_DATE.isoformat(), "to_date": TO_DATE.isoformat()}
     )
     assert response.status_code == 200
     data = response.json()
-    assert "norms" in data
-    assert "grand_summary" in data
-    assert "rows" in data["grand_summary"]
-    assert "total" in data["grand_summary"]
+    assert set(data.keys()) == {"summary", "licenses", "item_matrix"}
+    assert isinstance(data["licenses"], list)
+    assert set(data["summary"].keys()) == {
+        "total_licenses", "purchase_amount", "purchase_usd", "balance_cif",
+        "total_sale_usd", "total_sale_amount", "total_profit_loss",
+    }
+    row = data["licenses"][0]
+    assert set(row.keys()) >= {
+        "license_number", "license_date", "expiry_date", "exporter", "norms",
+        "purchase_from", "purchase_amount", "purchase_usd",
+        "sale_amount", "sale_usd", "profit_loss", "balance_cif",
+    }
+    assert "license_id" not in row
+
+    assert set(data["item_matrix"].keys()) == {"headers", "rows", "totals"}
+    assert isinstance(data["item_matrix"]["headers"], list)
+    assert isinstance(data["item_matrix"]["rows"], list)
+    assert isinstance(data["item_matrix"]["totals"], dict)
+
+
+@pytest.mark.django_db
+def test_view_exclude_license_number_param_is_comma_separated(report_viewer_client, ppr_masters):
+    numbers = ["PPR-KEEP", "PPR-DROP"]
+    for number in numbers:
+        lic = _make_license(number, ppr_masters["exporter"])
+        _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+        item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+        _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+
+    response = report_viewer_client.get(
+        REPORT_URL,
+        {
+            "from_date": FROM_DATE.isoformat(), "to_date": TO_DATE.isoformat(),
+            "exclude_license_number": "PPR-DROP, PPR-NONEXISTENT",
+        },
+    )
+    assert response.status_code == 200
+    license_numbers = {r["license_number"] for r in response.json()["licenses"]}
+    assert license_numbers == {"PPR-KEEP"}
 
 
 @pytest.mark.django_db
@@ -449,9 +904,7 @@ def test_view_excel_export_returns_valid_workbook(report_viewer_client, ppr_mast
     lic = _make_license("PPR-VIEW-002", ppr_masters["exporter"])
     _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
     item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
-    _make_purchase(lic, "10000.00")
-    boe = _make_boe(ppr_masters["exporter"], FROM_DATE + timedelta(days=1))
-    _make_debit_row(boe, item, Decimal("20000.00"), Decimal("100.000"))
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
 
     response = report_viewer_client.get(
         REPORT_URL,
@@ -461,7 +914,58 @@ def test_view_excel_export_returns_valid_workbook(report_viewer_client, ppr_mast
     assert response["Content-Type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
     workbook = load_workbook(BytesIO(response.content))
-    assert "Purchase & Profit Report" in workbook.sheetnames
+    assert workbook.sheetnames == ["License Summary", "Item Utilization Matrix"]
+
+
+@pytest.mark.django_db
+def test_view_excel_item_matrix_grand_total_row_shows_static_column_totals(report_viewer_client, ppr_masters):
+    """The Item Utilization Matrix sheet's GRAND TOTAL row must show real
+    values for Purchase Amount/Purchase $/Sale Amount/Sale $/Profit-Loss/
+    Balance CIF ($) (columns 7-12) — not blanks left over from a label that
+    used to span all 12 static columns. Cross-checked against the same
+    request's JSON `summary` so a column-offset regression (e.g. `n_static`
+    vs. the new `n_label` getting confused) would fail this test."""
+    lic = _make_license("PPR-XL-TOTALS", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+    _make_debit_trade(item, "3000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="40.00", qty_kg="100.000")
+
+    params = {"from_date": FROM_DATE.isoformat(), "to_date": TO_DATE.isoformat()}
+    json_response = report_viewer_client.get(REPORT_URL, params)
+    summary = json_response.json()["summary"]
+
+    excel_response = report_viewer_client.get(REPORT_URL, {**params, "format": "excel"})
+    workbook = load_workbook(BytesIO(excel_response.content))
+    matrix_ws = workbook["Item Utilization Matrix"]
+
+    # hdr_row1=1, hdr_row2=2, one data row=3, GRAND TOTAL=4.
+    total_row = 4
+    assert matrix_ws.cell(row=total_row, column=1).value == "GRAND TOTAL"
+    assert matrix_ws.cell(row=total_row, column=7).value == summary["purchase_amount"]
+    assert matrix_ws.cell(row=total_row, column=8).value == summary["purchase_usd"]
+    assert matrix_ws.cell(row=total_row, column=9).value == summary["total_sale_amount"]
+    assert matrix_ws.cell(row=total_row, column=10).value == summary["total_sale_usd"]
+    assert matrix_ws.cell(row=total_row, column=11).value == summary["total_profit_loss"]
+    assert matrix_ws.cell(row=total_row, column=12).value == summary["balance_cif"]
+    # Sanity: Profit/Loss is a real, non-zero (here: negative) figure —
+    # confirms this isn't accidentally reading an empty/zeroed cell.
+    assert summary["total_profit_loss"] == -7000.0
+
+
+@pytest.mark.django_db
+def test_view_pdf_export_returns_pdf(report_viewer_client, ppr_masters):
+    lic = _make_license("PPR-VIEW-003", ppr_masters["exporter"])
+    _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
+    item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
+    _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1))
+
+    response = report_viewer_client.get(
+        REPORT_URL,
+        {"from_date": FROM_DATE.isoformat(), "to_date": TO_DATE.isoformat(), "format": "pdf"},
+    )
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
 
 
 @pytest.mark.django_db

@@ -33,14 +33,23 @@ the trade ledger:
   first-purchase-date/License Selection) — the supplier the license was
   originally acquired from. Sourced as a side-effect of the single ordered
   pass described below, never a second query.
-- **Balance CIF** — the license's Financial Available Balance, delegated
-  entirely to `LicenseBalanceCalculator.calculate_financial_balance_for_licenses`
-  (`apps.license.services.balance_calculator`) — the centralized, bulk,
-  already-quantized-and-floored-at-0 "Balance CIF" engine used elsewhere in
-  the License module. Deliberately NOT
-  `LicenseBalanceCalculator.calculate_balance_for_licenses`, which is a
-  different "Customs Balance" engine. This report never reimplements the
-  balance formula itself.
+- **Balance CIF** — `Purchase $ − Sale $` (Original/acquired CIF $ minus
+  Debited/utilized CIF $), computed directly from this report's OWN
+  `purchase_usd`/`sale_usd` figures — NOT delegated to
+  `LicenseBalanceCalculator.calculate_financial_balance_for_licenses`
+  (`apps.license.services.balance_calculator`). That calculator's
+  "Financial Available Balance" is a different, broader concept — it also
+  factors in Bill-of-Entry debits, allotments, and an opening-balance
+  anchor, none of which this report tracks or displays anywhere else.
+  Using it here would silently diverge from this report's own Purchase
+  $/Sale $ columns (e.g. `Purchase $ − Sale $` on screen would NOT equal
+  the "Balance CIF ($)" column next to it). Balance CIF here is
+  deliberately this report's own, narrower, self-consistent figure: the
+  same `sale_usd` (SALE-direction trade-ledger debit) already computed for
+  the Sale $ column, subtracted from the same `purchase_usd` already
+  computed for the Purchase $ column — both raw (unquantized) Decimals,
+  subtracted once, quantized once, matching this file's usual
+  double-rounding-avoidance rule.
 - **Exporter** — `LicenseDetailsModel.exporter.name`, the same company
   shown throughout the License module.
 - **Norm(s)** — every distinct `LicenseExportItemModel.norm_class.norm_class`
@@ -158,7 +167,6 @@ from django.db.models.functions import Coalesce
 from apps.core.constants import DEC_0
 from apps.core.models import ItemNameModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
-from apps.license.services.balance_calculator import LicenseBalanceCalculator
 from apps.trade.models import LicenseTrade, LicenseTradeLine
 
 # Mirrors the frontend's `NormCardGrid.tsx:22` convention — the four DFIA
@@ -409,12 +417,6 @@ def build_purchase_profit_report(
 
     norms_by_license = _norms_by_license(qualifying_license_ids)
 
-    # --- Balance CIF: centralized Financial Available Balance engine,
-    # already bulk + quantized + floored at 0. Never reimplemented here. --
-    balance_cif_by_license: Dict[int, Decimal] = (
-        LicenseBalanceCalculator.calculate_financial_balance_for_licenses(qualifying_license_ids)
-    )
-
     license_lookup = {
         lic.id: lic
         for lic in LicenseDetailsModel.objects.filter(id__in=qualifying_license_ids)
@@ -438,10 +440,14 @@ def build_purchase_profit_report(
             continue
         purchase_amount = purchase_amount_by_license.get(license_id, DEC_0)
         purchase_usd = purchase_usd_by_license.get(license_id, DEC_0)
-        balance_cif = balance_cif_by_license.get(license_id, DEC_0)
         sale_amount = sale_amount_by_license.get(license_id, DEC_0)
         sale_usd = sale_usd_by_license.get(license_id, DEC_0)
         profit_loss = sale_amount - purchase_amount
+        # Balance CIF ($) = Purchase $ − Sale $ (Original/acquired CIF $
+        # minus Debited/utilized CIF $) — this report's OWN figures, never
+        # the broader `LicenseBalanceCalculator` engine. See module
+        # docstring for why.
+        balance_cif = purchase_usd - sale_usd
         total_purchase_amount += purchase_amount
         total_purchase_usd += purchase_usd
         total_balance_cif += balance_cif

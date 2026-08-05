@@ -36,7 +36,6 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.core.constants import DEC_0
 from apps.core.models import CompanyModel, HSCodeModel, HeadSIONNormsModel, ItemNameModel, SionNormClassModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
-from apps.license.services.balance_calculator import LicenseBalanceCalculator
 from apps.license.services.purchase_profit_report import build_purchase_profit_report
 from apps.trade.models import LicenseTrade, LicenseTradeLine
 
@@ -525,21 +524,25 @@ def test_purchase_from_is_earliest_qualifying_trades_supplier(ppr_masters):
 
 
 @pytest.mark.django_db
-def test_balance_cif_matches_centralized_balance_calculator(ppr_masters):
-    """`balance_cif` must surface exactly what the centralized Balance CIF
-    engine (`LicenseBalanceCalculator.calculate_financial_balance_for_licenses`)
-    returns for the same license — this report never reimplements the
-    balance formula itself."""
+def test_balance_cif_equals_purchase_usd_minus_sale_usd(ppr_masters):
+    """Balance CIF ($) = Purchase $ − Sale $ (Original/acquired CIF $ minus
+    Debited/utilized CIF $) — this report's OWN already-computed figures,
+    never the broader `LicenseBalanceCalculator` engine (which also
+    factors in BOE debits/allotments/an opening-balance anchor this report
+    doesn't track or display anywhere else, and would silently diverge
+    from the Purchase $/Sale $ columns shown right next to it)."""
     lic = _make_license("PPR-BALANCE", ppr_masters["exporter"])
     _make_export_item(lic, ppr_masters["e1_norm"], Decimal("50000.00"))
     item = _make_import_item(lic, ppr_masters["hs_code"], 1, item_names=[ppr_masters["item_a"]])
     _make_purchase_trade(item, "10000.00", invoice_date=FROM_DATE + timedelta(days=1), cif_fc="500.00")
+    _make_debit_trade(item, "3000.00", invoice_date=FROM_DATE + timedelta(days=2), cif_fc="180.00", qty_kg="50.000")
 
     report = build_purchase_profit_report(FROM_DATE, TO_DATE, norm="All")
 
     lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-BALANCE")
-    expected = LicenseBalanceCalculator.calculate_financial_balance_for_licenses([lic.id])[lic.id]
-    assert lic_row["balance_cif"] == float(expected)
+    assert lic_row["purchase_usd"] == 500.00
+    assert lic_row["sale_usd"] == 180.00
+    assert lic_row["balance_cif"] == 320.00  # 500.00 - 180.00
 
 
 @pytest.mark.django_db

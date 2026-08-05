@@ -29,10 +29,11 @@ GET parameters:
     - exporter_id: optional
     - format / _format: 'json' (default) / 'excel' / 'pdf'
 """
+import functools
 import logging
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from django.http import HttpResponse, JsonResponse
 from rest_framework.renderers import BaseRenderer, JSONRenderer
@@ -43,6 +44,66 @@ from apps.license.services.purchase_profit_report import build_purchase_profit_r
 from apps.license.views.item_report import _ExcelPassthroughRenderer
 
 logger = logging.getLogger(__name__)
+
+
+def _get_generated_by(request) -> str:
+    """
+    ``request.user.get_full_name() or request.user.username`` — guarded so
+    a user object with no callable ``get_full_name`` (or one that raises
+    or returns an empty string) never turns an export into a 500. Falls
+    back to ``"Unknown"`` if even ``username`` is unavailable.
+    """
+    user = getattr(request, 'user', None)
+    if user is None:
+        return 'Unknown'
+    get_full_name = getattr(user, 'get_full_name', None)
+    full_name = None
+    if callable(get_full_name):
+        try:
+            full_name = get_full_name()
+        except Exception:
+            full_name = None
+    return full_name or getattr(user, 'username', None) or 'Unknown'
+
+
+def _build_applied_filters(
+    from_date, to_date, norm, license_number, exporter_id,
+    exclude_license_number: Optional[List[str]],
+) -> List[str]:
+    """
+    The "Filters:" line shared verbatim by both Excel and PDF exports —
+    every filter is listed explicitly (From/To/Norm/Exporter/License/
+    Exclude), showing the literal string ``"All"`` when a filter is at its
+    default rather than omitting the line, e.g. ``"Norm : E1"`` /
+    ``"Exporter : All"``.
+    """
+    return [
+        f"From : {from_date.isoformat() if from_date else 'All'}",
+        f"To : {to_date.isoformat() if to_date else 'All'}",
+        f"Norm : {norm or 'All'}",
+        f"Exporter : {exporter_id if exporter_id else 'All'}",
+        f"License Number : {license_number or 'All'}",
+        "Exclude License Number : " + (
+            ', '.join(exclude_license_number) if exclude_license_number else 'All'
+        ),
+    ]
+
+
+def _summary_metric_rows(summary: Dict[str, Any]) -> List[tuple]:
+    """
+    The 7 Metric/Value rows shared verbatim by both exports' summary
+    table — sourced entirely from ``report_data['summary']``, never
+    recomputed here.
+    """
+    return [
+        ("Total Licenses", summary['total_licenses']),
+        ("Purchase Amount", summary['purchase_amount']),
+        ("Purchase $", summary['purchase_usd']),
+        ("Sale Amount", summary['total_sale_amount']),
+        ("Sale $", summary['total_sale_usd']),
+        ("Profit / Loss", summary['total_profit_loss']),
+        ("Balance CIF ($)", summary['balance_cif']),
+    ]
 
 
 class _PdfPassthroughRenderer(BaseRenderer):
@@ -119,7 +180,10 @@ class LicensePurchaseProfitReportView(APIView):
 
         if output_format == 'excel':
             try:
-                return self.export_to_excel(report_data)
+                return self.export_to_excel(
+                    request, report_data, from_date, to_date, norm, license_number, exporter_id,
+                    exclude_license_number,
+                )
             except Exception as e:
                 logger.exception("Error exporting License Purchase & Profit Report to Excel")
                 return JsonResponse({'error': str(e)}, status=500)
@@ -127,7 +191,8 @@ class LicensePurchaseProfitReportView(APIView):
         if output_format == 'pdf':
             try:
                 return self.export_to_pdf(
-                    report_data, from_date, to_date, norm, license_number, exporter_id, exclude_license_number,
+                    request, report_data, from_date, to_date, norm, license_number, exporter_id,
+                    exclude_license_number,
                 )
             except Exception as e:
                 logger.exception("Error exporting License Purchase & Profit Report to PDF")
@@ -136,12 +201,25 @@ class LicensePurchaseProfitReportView(APIView):
         return JsonResponse(report_data, safe=False)
 
     # ------------------------------------------------------------------
-    # Excel export — single "License Summary" worksheet
+    # Excel export — "License Summary" + "Item Utilization Matrix" sheets
     # ------------------------------------------------------------------
-    def export_to_excel(self, report_data: Dict[str, Any]) -> HttpResponse:
+    def export_to_excel(
+        self, request, report_data: Dict[str, Any], from_date, to_date, norm, license_number, exporter_id,
+        exclude_license_number=None,
+    ) -> HttpResponse:
+        """
+        NOTE: this method's signature was extended beyond `(request,
+        report_data)` to also take the filter parameters, so its "Filters:"
+        header block (see `_build_applied_filters`) can show the same
+        From/To/Norm/Exporter/License/Exclude values the PDF export already
+        shows — every value is display-only, sourced from the already-
+        validated `get()` params, never recomputed. `report_data` itself
+        (summary/licenses/item_matrix) is still rendered completely
+        verbatim, with zero recalculation.
+        """
         import openpyxl
         from openpyxl.cell.cell import MergedCell
-        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
         workbook = openpyxl.Workbook()
         worksheet = workbook.active
@@ -150,6 +228,43 @@ class LicensePurchaseProfitReportView(APIView):
         header_font = Font(bold=True, color='FFFFFF')
         header_fill = PatternFill(start_color='2C3E50', end_color='2C3E50', fill_type='solid')
         center = Alignment(horizontal='center')
+        left_align = Alignment(horizontal='left')
+        right_align = Alignment(horizontal='right')
+        thin_border = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin'),
+        )
+        zebra_fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
+
+        def _apply_grid(ws, *, header_rows, data_rows, text_cols, numeric_cols, max_col, zebra_rows=frozenset()):
+            """
+            Shared formatting pass for a table's header + data rows: a thin
+            border on every cell, right-aligned `#,##0.00` on numeric data
+            cells, left-aligned on text data cells, and light zebra-striping
+            on `zebra_rows` (callers omit the GRAND TOTAL row from
+            `zebra_rows` — it keeps its bold-only styling). Never touches
+            `.value`, `.font`, or header `.fill` — those are set by callers.
+            """
+            for row in header_rows:
+                for col in range(1, max_col + 1):
+                    ws.cell(row=row, column=col).border = thin_border
+            for row in data_rows:
+                for col in range(1, max_col + 1):
+                    cell = ws.cell(row=row, column=col)
+                    cell.border = thin_border
+                    if col in numeric_cols:
+                        cell.number_format = '#,##0.00'
+                        cell.alignment = right_align
+                    elif col in text_cols:
+                        cell.alignment = left_align
+                    if row in zebra_rows:
+                        cell.fill = zebra_fill
+
+        generated_by = _get_generated_by(request)
+        generated_on = datetime.now().strftime('%d-%b-%Y %I:%M %p')
+        applied_filters = _build_applied_filters(
+            from_date, to_date, norm, license_number, exporter_id, exclude_license_number,
+        )
 
         headers = [
             'License No.', 'License Date', 'Expiry Date', 'Exporter', 'Norm(s)', 'Purchase From',
@@ -163,32 +278,61 @@ class LicensePurchaseProfitReportView(APIView):
         worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=max_cols)
         title_cell.font = Font(bold=True, size=14)
         title_cell.alignment = center
-        current_row += 2
+        current_row += 1
 
-        summary = report_data['summary']
-        summary_cell = worksheet.cell(
+        generated_cell = worksheet.cell(
             row=current_row, column=1,
-            value=(
-                f"Total Licenses: {summary['total_licenses']} | "
-                f"Purchase Amount: {summary['purchase_amount']} | "
-                f"Purchase $: {summary['purchase_usd']} | "
-                f"Sale Amount: {summary['total_sale_amount']} | "
-                f"Sale $: {summary['total_sale_usd']} | "
-                f"Profit / Loss: {summary['total_profit_loss']} | "
-                f"Balance CIF ($): {summary['balance_cif']}"
-            ),
+            value=f"Generated On: {generated_on}    Generated By: {generated_by}",
         )
         worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=max_cols)
-        summary_cell.font = Font(bold=True)
-        summary_cell.alignment = center
+        generated_cell.font = Font(italic=True, size=9)
+        generated_cell.alignment = center
+        current_row += 1
+
+        filters_cell = worksheet.cell(
+            row=current_row, column=1, value="Filters: " + " | ".join(applied_filters),
+        )
+        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=max_cols)
+        filters_cell.font = Font(italic=True, size=9)
+        filters_cell.alignment = center
         current_row += 2
 
+        # Summary as a "Metric | Value" table — same 7 rows/values the PDF
+        # export's own summary table below shows, read verbatim off
+        # `report_data['summary']`.
+        summary = report_data['summary']
+        summary_header_row = current_row
+        for col_num, label in enumerate(("Metric", "Value"), 1):
+            cell = worksheet.cell(row=current_row, column=col_num, value=label)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center
+        current_row += 1
+        summary_first_data_row = current_row
+        for metric, value in _summary_metric_rows(summary):
+            worksheet.cell(row=current_row, column=1, value=metric)
+            worksheet.cell(row=current_row, column=2, value=value)
+            current_row += 1
+        summary_last_data_row = current_row - 1
+        _apply_grid(
+            worksheet,
+            header_rows=[summary_header_row],
+            data_rows=range(summary_first_data_row, summary_last_data_row + 1),
+            text_cols={1}, numeric_cols={2}, max_col=2,
+            zebra_rows={
+                r for i, r in enumerate(range(summary_first_data_row, summary_last_data_row + 1)) if i % 2 == 1
+            },
+        )
+        current_row += 1
+
+        header_row = current_row
         for col_num, header in enumerate(headers, 1):
             cell = worksheet.cell(row=current_row, column=col_num, value=header)
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = center
         current_row += 1
+        first_data_row = current_row
 
         for lic in report_data['licenses']:
             row_data = [
@@ -201,10 +345,12 @@ class LicensePurchaseProfitReportView(APIView):
             for col_num, value in enumerate(row_data, 1):
                 worksheet.cell(row=current_row, column=col_num, value=value)
             current_row += 1
+        last_data_row = current_row - 1
 
         # GRAND TOTAL row — sourced from `report_data['summary']`, never a
         # re-sum of the rows above (same convention as the Item Utilization
         # Matrix's own GRAND TOTAL row further below).
+        total_row = current_row
         total_label_cell = worksheet.cell(row=current_row, column=1, value='GRAND TOTAL')
         total_label_cell.font = Font(bold=True)
         worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=n_static)
@@ -217,6 +363,21 @@ class LicensePurchaseProfitReportView(APIView):
             cell = worksheet.cell(row=current_row, column=n_static + 1 + offset, value=value)
             cell.font = Font(bold=True)
         current_row += 1
+
+        # Formatting pass (number_format/alignment/borders/zebra) covers the
+        # header row through the GRAND TOTAL row inclusive — GRAND TOTAL
+        # gets number_format/alignment/borders too, just no zebra fill.
+        _apply_grid(
+            worksheet,
+            header_rows=[header_row],
+            data_rows=range(first_data_row, total_row + 1),
+            text_cols={1, 2, 3, 4, 5, 6}, numeric_cols={7, 8, 9, 10, 11, 12}, max_col=max_cols,
+            zebra_rows={r for i, r in enumerate(range(first_data_row, last_data_row + 1)) if i % 2 == 1},
+        )
+        worksheet.freeze_panes = f"A{header_row + 1}"
+        worksheet.auto_filter.ref = (
+            f"A{header_row}:{openpyxl.utils.get_column_letter(max_cols)}{header_row}"
+        )
 
         for col_idx in range(1, max_cols + 1):
             max_length = 0
@@ -250,6 +411,7 @@ class LicensePurchaseProfitReportView(APIView):
         ]
         item_headers = item_matrix['headers']
         n_static = len(static_headers)
+        matrix_max_cols = n_static + 3 * len(item_headers)
         hdr_row1, hdr_row2 = 1, 2
 
         for col_idx, label in enumerate(static_headers, 1):
@@ -272,7 +434,8 @@ class LicensePurchaseProfitReportView(APIView):
                 sub_cell.fill = header_fill
                 sub_cell.alignment = center
 
-        data_row = hdr_row2 + 1
+        matrix_first_data_row = hdr_row2 + 1
+        data_row = matrix_first_data_row
         for row in item_matrix['rows']:
             row_values = [
                 row['license_number'], row['license_date'], row['expiry_date'], row['exporter'],
@@ -289,6 +452,7 @@ class LicensePurchaseProfitReportView(APIView):
                 matrix_ws.cell(row=data_row, column=base_col + 1, value=cell_data['cif'])
                 matrix_ws.cell(row=data_row, column=base_col + 2, value=cell_data['bill'])
             data_row += 1
+        matrix_last_data_row = data_row - 1
 
         # GRAND TOTAL row — static-column totals from `report_data['summary']`
         # (the SAME numbers the License Summary sheet's own GRAND TOTAL row
@@ -313,8 +477,29 @@ class LicensePurchaseProfitReportView(APIView):
             for offset, key in enumerate(('qty', 'cif', 'bill')):
                 total_cell = matrix_ws.cell(row=data_row, column=base_col + offset, value=item_totals[key])
                 total_cell.font = Font(bold=True)
+        matrix_total_row = data_row
 
-        matrix_max_cols = n_static + 3 * len(item_headers)
+        # Formatting pass — text cols are the 6 leading static columns
+        # (License No. through Purchase From); everything from column 7
+        # onward (the remaining static financial columns plus every
+        # dynamic Qty/CIF $/Bill ₹ column) is numeric. Covers the GRAND
+        # TOTAL row too (number_format/alignment/borders, no zebra fill).
+        matrix_text_cols = {1, 2, 3, 4, 5, 6}
+        matrix_numeric_cols = set(range(7, matrix_max_cols + 1))
+        _apply_grid(
+            matrix_ws,
+            header_rows=[hdr_row1, hdr_row2],
+            data_rows=range(matrix_first_data_row, matrix_total_row + 1),
+            text_cols=matrix_text_cols, numeric_cols=matrix_numeric_cols, max_col=matrix_max_cols,
+            zebra_rows={
+                r for i, r in enumerate(range(matrix_first_data_row, matrix_last_data_row + 1)) if i % 2 == 1
+            },
+        )
+        matrix_ws.freeze_panes = "A3"  # below the 2-row header (hdr_row1, hdr_row2).
+        matrix_ws.auto_filter.ref = (
+            f"A{hdr_row2}:{openpyxl.utils.get_column_letter(matrix_max_cols)}{hdr_row2}"
+        )
+
         for col_idx in range(1, matrix_max_cols + 1):
             max_length = 0
             column_letter = openpyxl.utils.get_column_letter(col_idx)
@@ -337,19 +522,20 @@ class LicensePurchaseProfitReportView(APIView):
         return response
 
     # ------------------------------------------------------------------
-    # PDF export — Header, Applied Filters, License Summary
+    # PDF export — Header, Applied Filters, Summary, License Summary
     # ------------------------------------------------------------------
     def export_to_pdf(
-        self, report_data: Dict[str, Any], from_date, to_date, norm, license_number, exporter_id,
+        self, request, report_data: Dict[str, Any], from_date, to_date, norm, license_number, exporter_id,
         exclude_license_number=None,
     ) -> HttpResponse:
         from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A2, A3
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib.units import inch
         from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
         from shared.pdf.builders import (
-            append_generated_footer,
+            draw_page_footer,
             format_indian_number,
             make_data_grid_commands,
             make_header_table_style_commands,
@@ -359,37 +545,62 @@ class LicensePurchaseProfitReportView(APIView):
             make_title_style,
         )
 
+        # Page-size decision needs the Item Utilization Matrix's column
+        # count up front, before the doc/buffer are created below.
+        item_matrix = report_data.get('item_matrix') or {"headers": [], "rows": [], "totals": {}}
+        item_headers = item_matrix['headers']
+        n_static = 12  # the 12 static License Summary columns, same count used by the Excel matrix sheet.
+        n_matrix_cols = n_static + 3 * len(item_headers)
+
         buffer = BytesIO()
-        doc = make_landscape_doc(buffer)
+        # A3 landscape is preferred per spec. Escalate to A2 only when the
+        # Item Utilization Matrix would exceed ~20 columns (12 static + 3
+        # sub-columns per dynamic Import Item, i.e. more than ~2-3 dynamic
+        # items) at this report's existing ~7pt font / 4pt cell padding —
+        # a deliberate, coarse single-tier heuristic picked from A3's rough
+        # practical column capacity at that font/padding, NOT a measured
+        # guarantee: reportlab never auto-shrinks a `Table` to fit a page,
+        # so beyond this it can still overflow — consistent with this
+        # file's already-accepted "column-wise pagination for very many
+        # items" limitation on the Item Utilization Matrix table itself.
+        page_size = A2 if n_matrix_cols > 20 else A3
+        doc = make_landscape_doc(buffer, pagesize=page_size)
         styles = getSampleStyleSheet()
         elements = []
+
+        generated_by = _get_generated_by(request)
+        generated_on = datetime.now().strftime('%d-%b-%Y %I:%M %p')
 
         elements.append(Paragraph("License Purchase & Profit Report", make_title_style(styles)))
         elements.append(
             Paragraph(f"Period: {from_date.isoformat()} to {to_date.isoformat()}", make_subtitle_style(styles))
         )
+        elements.append(
+            Paragraph(
+                f"Generated On: {generated_on}    Generated By: {generated_by}", make_subtitle_style(styles),
+            )
+        )
 
-        applied_filters = [f"Norm: {norm or 'All'}"]
-        if license_number:
-            applied_filters.append(f"License Number: {license_number}")
-        if exclude_license_number:
-            applied_filters.append(f"Exclude License Number: {', '.join(exclude_license_number)}")
-        if exporter_id:
-            applied_filters.append(f"Exporter ID: {exporter_id}")
+        applied_filters = _build_applied_filters(
+            from_date, to_date, norm, license_number, exporter_id, exclude_license_number,
+        )
         elements.append(Paragraph("Filters: " + " | ".join(applied_filters), styles["Normal"]))
         elements.append(Spacer(1, 0.2 * inch))
 
+        # Summary as a "Metric | Value" table — same 7 rows the Excel
+        # export's own summary table above shows, read verbatim off
+        # `report_data['summary']`.
         summary = report_data['summary']
-        summary_line = (
-            f"Total Licenses: {summary['total_licenses']} | "
-            f"Purchase Amount: {format_indian_number(summary['purchase_amount'])} | "
-            f"Purchase $: {format_indian_number(summary['purchase_usd'])} | "
-            f"Sale Amount: {format_indian_number(summary['total_sale_amount'])} | "
-            f"Sale $: {format_indian_number(summary['total_sale_usd'])} | "
-            f"Profit / Loss: {format_indian_number(summary['total_profit_loss'])} | "
-            f"Balance CIF ($): {format_indian_number(summary['balance_cif'])}"
-        )
-        elements.append(Paragraph(summary_line, styles["Normal"]))
+        summary_table_data = [["Metric", "Value"]] + [
+            [
+                metric,
+                str(value) if metric == "Total Licenses" else format_indian_number(value),
+            ]
+            for metric, value in _summary_metric_rows(summary)
+        ]
+        summary_table = Table(summary_table_data, colWidths=[2.5 * inch, 2.5 * inch])
+        summary_table.setStyle(TableStyle(make_header_table_style_commands() + make_data_grid_commands()))
+        elements.append(summary_table)
         elements.append(Spacer(1, 0.2 * inch))
 
         elements.append(Paragraph("License Summary", make_section_title_style(styles)))
@@ -534,9 +745,12 @@ class LicensePurchaseProfitReportView(APIView):
         matrix_table.setStyle(TableStyle(matrix_style_commands))
         elements.append(matrix_table)
 
-        append_generated_footer(elements, styles)
-
-        doc.build(elements)
+        # Canvas-callback footer (page numbers must be drawn per-page — a
+        # flowable `Paragraph`, like `append_generated_footer` appends, is
+        # only drawn once) — replaces `append_generated_footer` for THIS
+        # report only; other PDF exports keep using it unchanged.
+        footer_cb = functools.partial(draw_page_footer, generated_by=generated_by)
+        doc.build(elements, onFirstPage=footer_cb, onLaterPages=footer_cb)
         pdf_bytes = buffer.getvalue()
         buffer.close()
 

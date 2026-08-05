@@ -35,7 +35,11 @@ const RETRY_DELAY_MS = 2500;
  *
  * Also exposes Excel/PDF export, both routed through the authenticated
  * blob-download helper so the JWT never rides a bare `<a href>`/query-param
- * link.
+ * link. Each export follows the same retry-once-on-transient-failure shape
+ * as `load()` above (one retry after `RETRY_DELAY_MS` on a missing
+ * `response` or a 5xx, immediate toast on a definitive 4xx) — but as a
+ * recursive async call scoped to that single button click rather than an
+ * effect, since exports are user-triggered, not filter-driven.
  */
 export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }: LicensePurchaseProfitReportQuery) {
     const [reportData, setReportData] = useState<Record<string, any> | null>(null);
@@ -118,13 +122,27 @@ export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, lic
 
     const exportExcel = useCallback(async () => {
         setDownloading(true);
+        // Scoped to this single invocation (not a ref) — a fresh click gets
+        // its own retry budget, same one-retry-then-surface shape as `load()`.
+        let hasRetried = false;
+        const attempt = async (): Promise<void> => {
+            try {
+                await openAuthedFile(
+                    buildLicensePurchaseProfitReportPath({ format: "excel", fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }),
+                    "license-purchase-profit-report.xlsx",
+                );
+            } catch (err: unknown) {
+                const { message, retryable } = getReportErrorInfo(err, { action: "generate the Excel export" });
+                if (retryable && !hasRetried) {
+                    hasRetried = true;
+                    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+                    return attempt();
+                }
+                toast.error(message);
+            }
+        };
         try {
-            await openAuthedFile(
-                buildLicensePurchaseProfitReportPath({ format: "excel", fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }),
-                "license-purchase-profit-report.xlsx",
-            );
-        } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to download report. Please try again.');
+            await attempt();
         } finally {
             setDownloading(false);
         }
@@ -132,13 +150,27 @@ export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, lic
 
     const exportPdf = useCallback(async () => {
         setDownloading(true);
+        // Scoped to this single invocation (not a ref) — a fresh click gets
+        // its own retry budget, same one-retry-then-surface shape as `load()`.
+        let hasRetried = false;
+        const attempt = async (): Promise<void> => {
+            try {
+                await openAuthedFile(
+                    buildLicensePurchaseProfitReportPath({ format: "pdf", fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }),
+                    "license-purchase-profit-report.pdf",
+                );
+            } catch (err: unknown) {
+                const { message, retryable } = getReportErrorInfo(err, { action: "generate the PDF export" });
+                if (retryable && !hasRetried) {
+                    hasRetried = true;
+                    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+                    return attempt();
+                }
+                toast.error(message);
+            }
+        };
         try {
-            await openAuthedFile(
-                buildLicensePurchaseProfitReportPath({ format: "pdf", fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }),
-                "license-purchase-profit-report.pdf",
-            );
-        } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to download report. Please try again.');
+            await attempt();
         } finally {
             setDownloading(false);
         }

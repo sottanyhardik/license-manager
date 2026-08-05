@@ -17,17 +17,21 @@ export type ReportErrorInfo = {
     retryable: boolean;
 };
 
-const RETRYABLE_MESSAGE =
-    "Unable to load the report. The server is temporarily busy. Please try again in a few seconds.";
+const DEFAULT_ACTION = "load the report";
 const GENERIC_MESSAGE = "Something went wrong loading the report.";
 
-export function getReportErrorInfo(err: unknown): ReportErrorInfo {
+function retryableMessage(action: string): string {
+    return `Unable to ${action}. The server is temporarily busy. Please try again in a few seconds.`;
+}
+
+export function getReportErrorInfo(err: unknown, opts?: { action?: string }): ReportErrorInfo {
+    const action = opts?.action ?? DEFAULT_ACTION;
     const response = (err as { response?: { status?: number; data?: { error?: unknown } } } | undefined)?.response;
     const status = response?.status;
     const retryable = !response || (typeof status === "number" && status >= 500);
 
     if (retryable) {
-        return { message: RETRYABLE_MESSAGE, retryable: true };
+        return { message: retryableMessage(action), retryable: true };
     }
 
     const backendMessage = response?.data?.error;

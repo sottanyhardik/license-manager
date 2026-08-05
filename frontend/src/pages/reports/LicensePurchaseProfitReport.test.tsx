@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "@/api/axios";
+import { openAuthedFile } from "@/utils/documentDownload";
+import { toast } from "sonner";
 import LicensePurchaseProfitReport from "./LicensePurchaseProfitReport";
 
 const mockSetSearchParams = vi.fn();
@@ -17,6 +19,10 @@ vi.mock("@/api/axios", () => ({
     },
 }));
 
+vi.mock("@/utils/documentDownload", () => ({
+    openAuthedFile: vi.fn(),
+}));
+
 vi.mock("sonner", () => ({
     toast: {
         error: vi.fn(),
@@ -30,6 +36,8 @@ vi.mock("@/components/AsyncSelectField", () => ({
 }));
 
 const mockedApiGet = vi.mocked(api.get);
+const mockedOpenAuthedFile = vi.mocked(openAuthedFile);
+const mockedToastError = vi.mocked(toast.error);
 
 // Numbers arrive as Decimal-safe strings from the API — the UI must parse
 // them with Number(...) rather than assume they're already JS numbers.
@@ -133,6 +141,7 @@ describe("LicensePurchaseProfitReport", () => {
         vi.clearAllMocks();
         sessionStorage.clear();
         mockApi();
+        mockedOpenAuthedFile.mockResolvedValue(undefined);
     });
 
     afterEach(() => {
@@ -516,5 +525,125 @@ describe("LicensePurchaseProfitReport", () => {
         await flushMicrotasks();
 
         expect(screen.getByText("No import items to display")).toBeInTheDocument();
+    });
+
+    describe("Excel/PDF export retry-on-529", () => {
+        it("exportExcel retries once on a transient 5xx failure, then succeeds with no error toast", async () => {
+            vi.useFakeTimers();
+            mockedOpenAuthedFile
+                .mockRejectedValueOnce({ response: { status: 503 } })
+                .mockResolvedValueOnce(undefined);
+
+            render(<LicensePurchaseProfitReport />);
+            pickDateRange();
+            await flushMicrotasks();
+            expect(screen.getAllByText("DFIA-E126-1")).not.toHaveLength(0);
+
+            fireEvent.click(screen.getByRole("button", { name: /Excel/i }));
+
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+            // First attempt has failed and scheduled the retry — still
+            // downloading, no toast yet.
+            expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(1);
+            expect(mockedToastError).not.toHaveBeenCalled();
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(2500);
+            });
+
+            expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(2);
+            expect(mockedOpenAuthedFile).toHaveBeenLastCalledWith(
+                expect.stringContaining("format=excel"),
+                "license-purchase-profit-report.xlsx",
+            );
+            expect(mockedToastError).not.toHaveBeenCalled();
+        });
+
+        it("exportExcel does NOT retry on a definitive 4xx — single attempt, immediate toast", async () => {
+            vi.useFakeTimers();
+            mockedOpenAuthedFile.mockRejectedValueOnce({ response: { status: 422, data: { error: "Invalid filters." } } });
+
+            render(<LicensePurchaseProfitReport />);
+            pickDateRange();
+            await flushMicrotasks();
+            expect(screen.getAllByText("DFIA-E126-1")).not.toHaveLength(0);
+
+            fireEvent.click(screen.getByRole("button", { name: /Excel/i }));
+
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(1);
+            expect(mockedToastError).toHaveBeenCalledWith("Invalid filters.");
+
+            // No retry ever fires, even after the retry-delay window passes.
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(2500);
+            });
+            expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(1);
+            expect(mockedToastError).toHaveBeenCalledTimes(1);
+        });
+
+        it("exportPdf retries once on a transient network failure (no response), then succeeds", async () => {
+            vi.useFakeTimers();
+            mockedOpenAuthedFile
+                .mockRejectedValueOnce(new Error("Network Error"))
+                .mockResolvedValueOnce(undefined);
+
+            render(<LicensePurchaseProfitReport />);
+            pickDateRange();
+            await flushMicrotasks();
+            expect(screen.getAllByText("DFIA-E126-1")).not.toHaveLength(0);
+
+            fireEvent.click(screen.getByRole("button", { name: /PDF/i }));
+
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+            expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(1);
+            expect(mockedToastError).not.toHaveBeenCalled();
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(2500);
+            });
+
+            expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(2);
+            expect(mockedOpenAuthedFile).toHaveBeenLastCalledWith(
+                expect.stringContaining("format=pdf"),
+                "license-purchase-profit-report.pdf",
+            );
+            expect(mockedToastError).not.toHaveBeenCalled();
+        });
+
+        it("exportPdf does NOT retry on a definitive 4xx — single attempt, distinct 'generate the PDF export' message on a generic 5xx-then-4xx is not conflated", async () => {
+            vi.useFakeTimers();
+            mockedOpenAuthedFile.mockRejectedValueOnce({ response: { status: 400, data: {} } });
+
+            render(<LicensePurchaseProfitReport />);
+            pickDateRange();
+            await flushMicrotasks();
+            expect(screen.getAllByText("DFIA-E126-1")).not.toHaveLength(0);
+
+            fireEvent.click(screen.getByRole("button", { name: /PDF/i }));
+
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(1);
+            expect(mockedToastError).toHaveBeenCalledWith("Something went wrong loading the report.");
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(2500);
+            });
+            expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(1);
+        });
     });
 });

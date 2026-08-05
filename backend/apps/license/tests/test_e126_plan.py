@@ -224,9 +224,11 @@ class TestBalanceCap(unittest.TestCase):
 
 
 class TestPkoOliveSplit(unittest.TestCase):
-    """The 40/60 PKO/Olive-Oil split. CRITICAL business rule: the split
-    target is always 40%/60% of the record's CURRENT Available Quantity
-    (`quantity`), NEVER an original/total import quantity."""
+    """The 50/50 PKO/Olive-Oil split. CRITICAL business rule: the split
+    target is always 50%/50% of the record's CURRENT Available Quantity
+    (`quantity`), NEVER an original/total import quantity — this is the
+    INITIAL allocation, before any Balance CIF optimization (see
+    TestPkoOliveWastageRebalance for the optimization pass)."""
 
     def _split_record(self, available_qty):
         return [{
@@ -236,20 +238,20 @@ class TestPkoOliveSplit(unittest.TestCase):
             "quantity": available_qty,
         }]
 
-    def test_split_is_40_60_of_available_quantity(self):
-        # balance_cif == exactly the default split's value (Case A): 40×1.80 + 60×5.00 = 372.
+    def test_split_is_50_50_of_available_quantity(self):
+        # balance_cif == exactly the default split's value (Case A): 50×1.80 + 50×5.00 = 340.
         recs = self._split_record(Decimal("100"))
-        lines = plan_e126_per_item_split(recs, balance_cif=Decimal("372"))[1]
+        lines = plan_e126_per_item_split(recs, balance_cif=Decimal("340"))[1]
         by = {L["planning_item"]: L for L in lines}
-        self.assertEqual(by[PKO]["planned_quantity"], Decimal("40"))
-        self.assertEqual(by[OLIVE_OIL]["planned_quantity"], Decimal("60"))
+        self.assertEqual(by[PKO]["planned_quantity"], Decimal("50"))
+        self.assertEqual(by[OLIVE_OIL]["planned_quantity"], Decimal("50"))
 
     def test_split_follows_available_quantity_down_after_real_consumption(self):
         recs = self._split_record(Decimal("60"))
-        lines = plan_e126_per_item_split(recs, balance_cif=Decimal("223.2"))[1]  # 24×1.80 + 36×5.00
+        lines = plan_e126_per_item_split(recs, balance_cif=Decimal("204"))[1]  # 30×1.80 + 30×5.00
         by = {L["planning_item"]: L for L in lines}
-        self.assertEqual(by[PKO]["planned_quantity"], Decimal("24"))
-        self.assertEqual(by[OLIVE_OIL]["planned_quantity"], Decimal("36"))
+        self.assertEqual(by[PKO]["planned_quantity"], Decimal("30"))
+        self.assertEqual(by[OLIVE_OIL]["planned_quantity"], Decimal("30"))
 
     def test_total_never_exceeds_available_quantity(self):
         for available in (Decimal("1"), Decimal("60"), Decimal("100"), Decimal("12345.678")):
@@ -266,7 +268,7 @@ class TestPkoOliveSplit(unittest.TestCase):
     def test_no_extra_history_parameter_accepted(self):
         with self.assertRaises(TypeError):
             plan_e126_per_item_split(
-                self._split_record(Decimal("100")), balance_cif=Decimal("372"),
+                self._split_record(Decimal("100")), balance_cif=Decimal("340"),
                 existing_split_allocations={1: {PKO: Decimal("30")}},
             )
 
@@ -283,10 +285,10 @@ class TestPkoOliveSplit(unittest.TestCase):
 
     def test_per_item_single_line_blended_rate(self):
         recs = self._split_record(Decimal("100"))
-        per = plan_e126_per_item(recs, balance_cif=Decimal("372"))[1]
+        per = plan_e126_per_item(recs, balance_cif=Decimal("340"))[1]
         self.assertEqual(per["planned_quantity"], Decimal("100"))
-        # blended = (40×1.80 + 60×5.00) / 100 = (72 + 300) / 100 = 3.72
-        self.assertAlmostEqual(float(per["unit_price"]), 3.72, places=2)
+        # blended = (50×1.80 + 50×5.00) / 100 = (90 + 250) / 100 = 3.40
+        self.assertAlmostEqual(float(per["unit_price"]), 3.40, places=2)
 
     def test_split_contributes_to_shared_pko_olive_buckets(self):
         recs = [
@@ -299,13 +301,13 @@ class TestPkoOliveSplit(unittest.TestCase):
         ]
         result = plan_e126(recs, balance_cif=None)
         by = {i["planning_item_name"]: i for i in result["items"]}
-        # record 1 contributes 10, record 2 contributes 40 (its 40% share) → 50 total
-        self.assertEqual(by[PKO]["total_quantity"], Decimal("50"))
-        self.assertEqual(by[OLIVE_OIL]["total_quantity"], Decimal("60"))
+        # record 1 contributes 10, record 2 contributes 50 (its 50% share) → 60 total
+        self.assertEqual(by[PKO]["total_quantity"], Decimal("60"))
+        self.assertEqual(by[OLIVE_OIL]["total_quantity"], Decimal("50"))
 
 
 class TestPkoOliveWastageRebalance(unittest.TestCase):
-    """The 40/60 split is the DEFAULT allocation; if the full waterfall
+    """The 50/50 split is the INITIAL allocation; if the full waterfall
     still leaves Remaining Balance CIF > 0, quantity shifts from PKO to
     Olive Oil (higher-priced) to close that gap — see
     `_rebalance_pko_olive_wastage`."""
@@ -320,28 +322,28 @@ class TestPkoOliveWastageRebalance(unittest.TestCase):
 
     def test_case_a_balance_matches_default_split_exactly_no_change(self):
         recs = [self._split_record(Decimal("100"))]
-        lines = plan_e126_per_item_split(recs, balance_cif=Decimal("372"))[1]  # 40×1.80 + 60×5.00
+        lines = plan_e126_per_item_split(recs, balance_cif=Decimal("340"))[1]  # 50×1.80 + 50×5.00
         by = {L["planning_item"]: L for L in lines}
-        self.assertEqual(by[PKO]["planned_quantity"], Decimal("40"))
-        self.assertEqual(by[OLIVE_OIL]["planned_quantity"], Decimal("60"))
+        self.assertEqual(by[PKO]["planned_quantity"], Decimal("50"))
+        self.assertEqual(by[OLIVE_OIL]["planned_quantity"], Decimal("50"))
 
     def test_case_b_partial_rebalance_absorbs_exact_surplus(self):
-        # Default value 372 + a 50 surplus = 422. Shift = 50 / 3.20 kg.
+        # Default value 340 + a 50 surplus = 390. Shift = 50 / 3.20 kg.
         recs = [self._split_record(Decimal("100"))]
-        lines = plan_e126_per_item_split(recs, balance_cif=Decimal("422"))[1]
+        lines = plan_e126_per_item_split(recs, balance_cif=Decimal("390"))[1]
         by = {L["planning_item"]: L for L in lines}
         total_qty = by[PKO]["planned_quantity"] + by[OLIVE_OIL]["planned_quantity"]
         total_cif = by[PKO]["planned_cif"] + by[OLIVE_OIL]["planned_cif"]
         self.assertAlmostEqual(float(total_qty), 100.0, places=6)   # quantity conserved
-        self.assertAlmostEqual(float(total_cif), 422.0, places=6)   # surplus fully absorbed
-        self.assertLess(by[PKO]["planned_quantity"], Decimal("40"))       # PKO shrank
-        self.assertGreater(by[OLIVE_OIL]["planned_quantity"], Decimal("60"))  # Olive Oil grew
+        self.assertAlmostEqual(float(total_cif), 390.0, places=6)   # surplus fully absorbed
+        self.assertLess(by[PKO]["planned_quantity"], Decimal("50"))       # PKO shrank
+        self.assertGreater(by[OLIVE_OIL]["planned_quantity"], Decimal("50"))  # Olive Oil grew
         # Prices themselves never change — only the qty mix does.
         self.assertEqual(by[PKO]["unit_price"], Decimal("1.80"))
         self.assertEqual(by[OLIVE_OIL]["unit_price"], Decimal("5.00"))
 
     def test_case_b_all_pko_converted_when_surplus_exceeds_max_possible_gain(self):
-        # Max possible gain from converting all 40kg PKO = 40 × 3.20 = 128.
+        # Max possible gain from converting all 50kg PKO = 50 × 3.20 = 160.
         recs = [self._split_record(Decimal("100"))]
         lines = plan_e126_per_item_split(recs, balance_cif=Decimal("100000"))[1]
         by = {L["planning_item"]: L for L in lines}
@@ -351,7 +353,7 @@ class TestPkoOliveWastageRebalance(unittest.TestCase):
 
     def test_never_allocates_negative_or_exceeds_available_quantity(self):
         recs = [self._split_record(Decimal("100"))]
-        for balance in (Decimal("372"), Decimal("422"), Decimal("100000")):
+        for balance in (Decimal("340"), Decimal("390"), Decimal("100000")):
             lines = plan_e126_per_item_split(recs, balance_cif=balance)[1]
             by = {L["planning_item"]: L for L in lines}
             for L in by.values():
@@ -360,20 +362,20 @@ class TestPkoOliveWastageRebalance(unittest.TestCase):
             self.assertLessEqual(total_qty, Decimal("100.0001"))
 
     def test_multiple_split_records_rebalanced_in_order(self):
-        # Two 100kg split records (default 40/60 each = 372 value each,
-        # 744 total). A 100 surplus should drain record 1's PKO first
-        # (max gain 128 > 100 needed) before ever touching record 2.
+        # Two 100kg split records (default 50/50 each = 340 value each,
+        # 680 total). A 100 surplus should drain record 1's PKO first
+        # (max gain 160 > 100 needed) before ever touching record 2.
         recs = [
             self._split_record(Decimal("100"), record_id=1),
             self._split_record(Decimal("100"), record_id=2),
         ]
-        result = plan_e126_per_item_split(recs, balance_cif=Decimal("844"))  # 744 + 100
+        result = plan_e126_per_item_split(recs, balance_cif=Decimal("780"))  # 680 + 100
         by1 = {L["planning_item"]: L for L in result[1]}
         by2 = {L["planning_item"]: L for L in result[2]}
         # Record 1 absorbed the whole surplus; record 2 stayed at the default.
-        self.assertLess(by1[PKO]["planned_quantity"], Decimal("40"))
-        self.assertEqual(by2[PKO]["planned_quantity"], Decimal("40"))
-        self.assertEqual(by2[OLIVE_OIL]["planned_quantity"], Decimal("60"))
+        self.assertLess(by1[PKO]["planned_quantity"], Decimal("50"))
+        self.assertEqual(by2[PKO]["planned_quantity"], Decimal("50"))
+        self.assertEqual(by2[OLIVE_OIL]["planned_quantity"], Decimal("50"))
 
     def test_does_not_touch_other_buckets(self):
         recs = [
@@ -393,13 +395,13 @@ class TestPkoOliveWastageRebalance(unittest.TestCase):
         recs = [self._split_record(Decimal("100"))]
         lines = plan_e126_per_item_split(recs, balance_cif=None)[1]
         by = {L["planning_item"]: L for L in lines}
-        self.assertEqual(by[PKO]["planned_quantity"], Decimal("40"))
-        self.assertEqual(by[OLIVE_OIL]["planned_quantity"], Decimal("60"))
+        self.assertEqual(by[PKO]["planned_quantity"], Decimal("50"))
+        self.assertEqual(by[OLIVE_OIL]["planned_quantity"], Decimal("50"))
 
     def test_deterministic_and_idempotent(self):
         recs = [self._split_record(Decimal("100"))]
-        run1 = plan_e126_per_item_split(recs, balance_cif=Decimal("422"))[1]
-        run2 = plan_e126_per_item_split(recs, balance_cif=Decimal("422"))[1]
+        run1 = plan_e126_per_item_split(recs, balance_cif=Decimal("390"))[1]
+        run2 = plan_e126_per_item_split(recs, balance_cif=Decimal("390"))[1]
         self.assertEqual(
             [(L["planning_item"], L["planned_quantity"]) for L in run1],
             [(L["planning_item"], L["planned_quantity"]) for L in run2],

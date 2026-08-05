@@ -5,7 +5,13 @@ import pytest
 
 from apps.core.models import CompanyModel, HSCodeModel, ItemNameModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
-from apps.license.services.plan_grouping import group_ids_of, merge_items_for_classification, plan_group_key
+from apps.license.services.plan_grouping import (
+    group_ids_of,
+    merge_items_for_classification,
+    plan_group_key,
+    validate_fresh_plan_lines,
+    validate_group_plan_lines,
+)
 
 
 def _hs(code):
@@ -143,6 +149,50 @@ def test_merge_items_for_classification_groups_by_plan_group_key(license_obj):
 
 
 @pytest.mark.django_db
+def test_merge_items_for_classification_normalizes_slash_spacing(license_obj):
+    # Real DGFT license data carries inconsistent slash-spacing for the SAME
+    # physical product (module docstring's "Fruit /Juice" example, HSN
+    # 20089991) — `merge_items_for_classification` must pool these into one
+    # group, the same way `plan_group_key`/`_normalize_text` already do for
+    # the display/enforcement layers, so Auto-Plan never splits one product
+    # across multiple lines just because of cosmetic slash spacing.
+    hsn = _hs("20089991")
+    item_a = _import_item(license_obj, 1, "Fruit /Juice", hs_code=hsn)
+    item_b = _import_item(license_obj, 2, "Fruit/ Juice", hs_code=hsn)
+    item_c = _import_item(license_obj, 3, "Fruit / Juice", hs_code=hsn)
+
+    groups = merge_items_for_classification(
+        LicenseImportItemsModel.objects.filter(license=license_obj).select_related("hs_code").prefetch_related("items")
+    )
+    assert len(groups) == 1
+    assert groups[0]['member_ids'] == [item_a.id, item_b.id, item_c.id]
+    assert groups[0]['available_quantity'] == Decimal("30.000")
+
+
+@pytest.mark.django_db
+def test_merge_items_for_classification_representative_is_lowest_serial_not_lowest_id(license_obj):
+    # The group's representative must be the LOWEST SERIAL_NUMBER member —
+    # this app's own documented convention (module docstring: "a group's
+    # plan is stored on its representative import item, lowest serial
+    # number"), matching E1/E5's real `auto_plan_shared.group_by_desc`
+    # behavior. Create the HIGHER-serial item FIRST (so it gets the LOWER
+    # DB id) to prove serial_number decides it, not id or creation order —
+    # this is exactly the DGFT-resync shape found in real dev-DB data,
+    # where ids and serial numbers can end up in different orders.
+    hsn = _hs("17023010")
+    higher_serial_lower_id = _import_item(license_obj, 12, "Liquid Glucose", hs_code=hsn)
+    lower_serial_higher_id = _import_item(license_obj, 2, "Liquid Glucose", hs_code=hsn)
+    assert higher_serial_lower_id.id < lower_serial_higher_id.id  # sanity: ids really are reversed vs serials
+
+    groups = merge_items_for_classification(
+        LicenseImportItemsModel.objects.filter(license=license_obj).select_related("hs_code").prefetch_related("items")
+    )
+    assert len(groups) == 1
+    assert groups[0]['representative_id'] == lower_serial_higher_id.id
+    assert groups[0]['representative_id'] != higher_serial_lower_id.id
+
+
+@pytest.mark.django_db
 def test_merge_items_for_classification_unions_item_name_tags(license_obj):
     # Two serials of the same physical product (same HSN+description), but
     # only one is M2M-tagged. `classify_e1_item`/`classify_e5_item` partly
@@ -163,3 +213,97 @@ def test_merge_items_for_classification_unions_item_name_tags(license_obj):
     assert group['member_ids'] == [item_a.id, item_b.id]
     assert group['item_names'] == ["Other Confectionery Ingredients - E1"]
     assert group['available_quantity'] == Decimal("20.000")
+
+
+class TestValidateGroupPlanLines:
+    """Unit tests for the shared validation gate every Auto-Plan engine
+    (E1, E5, E126, E132) runs before accepting a group's plan lines."""
+
+    _PRICES = {"PKO": Decimal("1.80"), "OLIVE OIL": Decimal("5.00")}
+
+    def test_fresh_lines_within_price_and_qty_pass(self):
+        lines = [
+            {"unit_price": 1.80, "planned_quantity": 40.0},
+            {"unit_price": 5.00, "planned_quantity": 60.0},
+        ]
+        assert validate_group_plan_lines(
+            lines, ["PKO", "OLIVE OIL"], Decimal("100"), self._PRICES, is_preserved=False,
+        ) is True
+
+    def test_fresh_lines_exceeding_available_quantity_are_rejected(self):
+        lines = [{"unit_price": 1.80, "planned_quantity": 150.0}]
+        assert validate_group_plan_lines(
+            lines, ["PKO"], Decimal("100"), self._PRICES, is_preserved=False,
+        ) is False
+
+    def test_price_above_ceiling_is_rejected_even_when_preserved(self):
+        # A preserved line's quantity is exempt from the availability check,
+        # but a price above the fixed ceiling is NEVER legitimate, preserved
+        # or not — this is exactly what caught the reported production bug
+        # ($4.84 PKO price, ceiling $1.80).
+        lines = [{"unit_price": 4.84, "planned_quantity": 40.0}]
+        assert validate_group_plan_lines(
+            lines, ["PKO"], Decimal("10"), self._PRICES, is_preserved=True,
+        ) is False
+
+    def test_preserved_lines_exceeding_available_quantity_still_pass(self):
+        # The core "fixed once generated" business rule: a preserved split's
+        # quantity is intentionally NOT re-validated against the group's
+        # current available_quantity — only fresh computations are.
+        lines = [
+            {"unit_price": 1.80, "planned_quantity": 40.0},
+            {"unit_price": 5.00, "planned_quantity": 60.0},
+        ]
+        assert validate_group_plan_lines(
+            lines, ["PKO", "OLIVE OIL"], Decimal("10"), self._PRICES, is_preserved=True,
+        ) is True
+
+    def test_price_exactly_at_ceiling_passes(self):
+        lines = [{"unit_price": 1.80, "planned_quantity": 40.0}]
+        assert validate_group_plan_lines(
+            lines, ["PKO"], Decimal("100"), self._PRICES, is_preserved=False,
+        ) is True
+
+    def test_price_below_ceiling_passes(self):
+        # A legitimately capped/reduced effective rate (balance-constrained
+        # waterfall) must never be rejected — only prices ABOVE the ceiling.
+        lines = [{"unit_price": 0.50, "planned_quantity": 40.0}]
+        assert validate_group_plan_lines(
+            lines, ["PKO"], Decimal("100"), self._PRICES, is_preserved=False,
+        ) is True
+
+
+class TestValidateFreshPlanLines:
+    """Unit tests for the lighter validation gate E1/E5 run — no
+    price-ceiling check (see `validate_fresh_plan_lines`'s docstring for
+    why), just non-negative values and qty-vs-available."""
+
+    def test_valid_lines_pass(self):
+        lines = [
+            {"planned_quantity": 40.0, "planned_cif_fc": 72.0},
+            {"planned_quantity": 60.0, "planned_cif_fc": 330.0},
+        ]
+        assert validate_fresh_plan_lines(lines, Decimal("100")) is True
+
+    def test_quantity_exceeding_available_is_rejected(self):
+        lines = [{"planned_quantity": 150.0, "planned_cif_fc": 300.0}]
+        assert validate_fresh_plan_lines(lines, Decimal("100")) is False
+
+    def test_negative_quantity_is_rejected(self):
+        lines = [{"planned_quantity": -1.0, "planned_cif_fc": 10.0}]
+        assert validate_fresh_plan_lines(lines, Decimal("100")) is False
+
+    def test_negative_cif_is_rejected(self):
+        lines = [{"planned_quantity": 10.0, "planned_cif_fc": -5.0}]
+        assert validate_fresh_plan_lines(lines, Decimal("100")) is False
+
+    def test_quantity_exactly_at_available_passes(self):
+        lines = [{"planned_quantity": 100.0, "planned_cif_fc": 300.0}]
+        assert validate_fresh_plan_lines(lines, Decimal("100")) is True
+
+    def test_no_price_ceiling_check_arbitrarily_high_price_still_passes(self):
+        # Unlike validate_group_plan_lines, there's no unit_price_map
+        # parameter at all — an arbitrarily high implied rate is not this
+        # function's concern (E1/E5 have no fixed ceiling to check).
+        lines = [{"planned_quantity": 1.0, "planned_cif_fc": 999999.0}]
+        assert validate_fresh_plan_lines(lines, Decimal("100")) is True

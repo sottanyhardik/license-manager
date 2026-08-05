@@ -253,30 +253,184 @@ class TestVegOilSplitAvailableQuantity:
         finally:
             patcher.stop()
 
-    def test_split_scoped_per_import_item_not_licence_wide(self, item_names):
-        # Two separate 100kg Vegetable Oil items on the same licence each get
-        # their OWN independent 40/60 target — not a pooled licence-wide split.
-        # balance_cif == exactly both items' default-split value combined
-        # (402 + 804 = 1206) so the wastage-rebalance pass has nothing left
-        # over to touch here.
-        license_obj, patcher = _make_license("LIC-E132-SPLIT-PER-ITEM", Decimal('1206'))
+    def test_same_hsn_and_description_items_are_pooled_into_one_group(self, item_names):
+        # Two import items sharing the SAME hs_code + description are the
+        # SAME `plan_group_key` (plan_grouping.py) — the canonical grouping
+        # every other planning-aware part of the app (display, real
+        # allotment-cap enforcement) already uses. Auto-Plan pools them
+        # into ONE group-level 40/60 split of their SUMMED available
+        # quantity (100+200=300), anchored on the representative (lowest
+        # serial_number) — never two independent per-item splits.
+        # balance_cif == exactly the pooled group's default-split value
+        # (120×1.80 + 180×5.50 = 1206) so the wastage-rebalance pass has
+        # nothing left over to touch here.
+        license_obj, patcher = _make_license("LIC-E132-SPLIT-POOLED", Decimal('1206'))
         try:
-            LicenseImportItemsModel.objects.create(
+            item1 = LicenseImportItemsModel.objects.create(
                 license=license_obj, serial_number=1, description=VEG_OIL_DESC,
                 hs_code=_hs('15132900'),
                 quantity=Decimal('100'), available_quantity=Decimal('100'),
             )
-            LicenseImportItemsModel.objects.create(
+            item2 = LicenseImportItemsModel.objects.create(
                 license=license_obj, serial_number=2, description=VEG_OIL_DESC,
                 hs_code=_hs('15132900'),
                 quantity=Decimal('200'), available_quantity=Decimal('200'),
             )
             lines, _ = compute_e132_auto_plan(license_obj)
-            pko_total = sum(l['planned_quantity'] for l in lines if l['item_name'] == item_names[PKO].id)
-            cheese_total = sum(l['planned_quantity'] for l in lines if l['item_name'] == item_names[CHEESE].id)
-            # Item 1: 40/60, Item 2: 80/120 → totals 120/180.
-            assert pko_total == 120.0
-            assert cheese_total == 180.0
+
+            pko_lines = [l for l in lines if l['item_name'] == item_names[PKO].id]
+            cheese_lines = [l for l in lines if l['item_name'] == item_names[CHEESE].id]
+
+            # Exactly ONE PKO row and ONE Cheese row for the whole group —
+            # never one per member.
+            assert len(pko_lines) == 1
+            assert len(cheese_lines) == 1
+            assert pko_lines[0]['planned_quantity'] == 120.0
+            assert cheese_lines[0]['planned_quantity'] == 180.0
+
+            # Anchored on the representative (lowest serial_number = item1).
+            assert pko_lines[0]['import_item'] == item1.id
+            assert cheese_lines[0]['import_item'] == item1.id
+            assert all(l['import_item'] != item2.id for l in lines)
+        finally:
+            patcher.stop()
+
+    def test_different_description_items_are_never_pooled(self, item_names):
+        # Same HSN, DIFFERENT description -> different plan_group_key ->
+        # two independent groups, each with its own 40/60 split.
+        license_obj, patcher = _make_license("LIC-E132-SPLIT-DIFF-DESC", Decimal('1206'))
+        try:
+            item1 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            item2 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description=VEG_OIL_DESC + " VARIANT B",
+                hs_code=_hs('15132900'),
+                quantity=Decimal('200'), available_quantity=Decimal('200'),
+            )
+            lines, _ = compute_e132_auto_plan(license_obj)
+
+            pko_lines = [l for l in lines if l['item_name'] == item_names[PKO].id]
+            cheese_lines = [l for l in lines if l['item_name'] == item_names[CHEESE].id]
+
+            assert len(pko_lines) == 2
+            assert len(cheese_lines) == 2
+            assert {l['import_item'] for l in pko_lines} == {item1.id, item2.id}
+        finally:
+            patcher.stop()
+
+    def test_different_hsn_items_are_never_pooled(self, item_names):
+        # DIFFERENT HSN, same description -> different plan_group_key ->
+        # two independent groups, each with its own 40/60 split.
+        license_obj, patcher = _make_license("LIC-E132-SPLIT-DIFF-HSN", Decimal('1206'))
+        try:
+            item1 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            item2 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description=VEG_OIL_DESC,
+                hs_code=_hs('99999999'),
+                quantity=Decimal('200'), available_quantity=Decimal('200'),
+            )
+            lines, _ = compute_e132_auto_plan(license_obj)
+
+            pko_lines = [l for l in lines if l['item_name'] == item_names[PKO].id]
+            cheese_lines = [l for l in lines if l['item_name'] == item_names[CHEESE].id]
+
+            assert len(pko_lines) == 2
+            assert len(cheese_lines) == 2
+            assert {l['import_item'] for l in pko_lines} == {item1.id, item2.id}
+        finally:
+            patcher.stop()
+
+    def test_representative_is_lowest_serial_number(self, item_names):
+        # The group's plan is always anchored on the LOWEST serial_number
+        # member, regardless of insertion order or which member has the
+        # larger quantity.
+        license_obj, patcher = _make_license("LIC-E132-REPRESENTATIVE", Decimal('1206'))
+        try:
+            # Insert the HIGHER serial number first, to confirm ordering by
+            # serial_number (not creation order / DB id) decides it.
+            item_serial_5 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=5, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('200'), available_quantity=Decimal('200'),
+            )
+            item_serial_2 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            lines, _ = compute_e132_auto_plan(license_obj)
+            assert lines
+            assert all(l['import_item'] == item_serial_2.id for l in lines)
+            assert all(l['import_item'] != item_serial_5.id for l in lines)
+        finally:
+            patcher.stop()
+
+    def test_scattered_legacy_balances_across_group_members_are_consolidated(self, item_names):
+        # Regression test for a reported production bug (found on E126,
+        # architecturally identical on E132): a DGFT re-serialization split
+        # one large item into several new sibling rows sharing the same
+        # HSN+description. The ORIGINAL item still carries a stale
+        # PKO/Cheese split generated before the split (now sitting on a
+        # smaller, shrunk `available_quantity`); the new siblings have no
+        # plan of their own yet. A fresh Auto-Plan run must consolidate the
+        # existing split onto the group's representative — NOT also
+        # generate a second, independent fresh split for the group's
+        # summed availability (the exact mechanism that doubled the
+        # reported bug's total).
+        license_obj, patcher = _make_license("LIC-E132-SCATTERED-LEGACY", Decimal('100000'))
+        try:
+            original_item = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('10'),
+            )
+            LicenseItemPlan.objects.create(
+                license=license_obj, import_item=original_item, item_name=item_names[PKO],
+                planned_quantity=Decimal('40'), unit_price=Decimal('1.80'), planned_cif_fc=Decimal('72'),
+                remaining_quantity=Decimal('40'), remaining_cif_fc=Decimal('72'),
+            )
+            LicenseItemPlan.objects.create(
+                license=license_obj, import_item=original_item, item_name=item_names[CHEESE],
+                planned_quantity=Decimal('60'), unit_price=Decimal('5.50'), planned_cif_fc=Decimal('330'),
+                remaining_quantity=Decimal('60'), remaining_cif_fc=Decimal('330'),
+            )
+            # New sibling rows created by the resync — same HSN+description,
+            # no plan of their own.
+            sibling1 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+            sibling2 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=3, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('60'), available_quantity=Decimal('60'),
+            )
+
+            lines, _ = compute_e132_auto_plan(license_obj)
+
+            pko_lines = [l for l in lines if l['item_name'] == item_names[PKO].id]
+            cheese_lines = [l for l in lines if l['item_name'] == item_names[CHEESE].id]
+
+            # Exactly one PKO row and one Cheese row for the WHOLE group —
+            # the preserved balance, never doubled by an additional fresh
+            # split of the group's summed availability.
+            assert len(pko_lines) == 1
+            assert len(cheese_lines) == 1
+            assert pko_lines[0]['planned_quantity'] == 40.0
+            assert cheese_lines[0]['planned_quantity'] == 60.0
+
+            # Anchored on the group's representative (lowest serial_number).
+            assert pko_lines[0]['import_item'] == original_item.id
+            assert cheese_lines[0]['import_item'] == original_item.id
+            assert all(l['import_item'] not in (sibling1.id, sibling2.id) for l in lines)
         finally:
             patcher.stop()
 
@@ -488,6 +642,75 @@ class TestVegOilSplitPreservedOnceGenerated:
             by_name_id = {l['item_name']: l for l in lines}
 
             assert by_name_id[item_names[PKO].id]['planned_quantity'] == 0.0
+            assert by_name_id[item_names[CHEESE].id]['planned_quantity'] == 60.0
+        finally:
+            patcher.stop()
+
+
+@pytest.mark.django_db
+class TestCorruptedPreservedPlanIsRejected:
+    """New coverage: E132 previously had NO validation gate at all (unlike
+    E126, which already had one) — a stale/legacy `LicenseItemPlan` row (not
+    created by this engine — e.g. left behind by a DGFT re-serialization, or
+    a hand-edited `bulk_upsert` row) carrying a unit price ABOVE the fixed
+    ceiling must never be blindly re-emitted by the "preserve once
+    generated" rule. `compute_e132_auto_plan` rejects the WHOLE item's plan
+    (never a partial save) and logs a warning instead."""
+
+    def test_preserved_price_above_fixed_ceiling_rejects_whole_item(self, item_names):
+        # PKO's stored price ($9.99) is above its $1.80 ceiling. The item's
+        # plan (both PKO and its sibling Cheese line) must be dropped
+        # entirely, not re-emitted.
+        license_obj, patcher = _make_license("LIC-E132-CORRUPT-PRICE", Decimal('100000'))
+        try:
+            import_item = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            LicenseItemPlan.objects.create(
+                license=license_obj, import_item=import_item, item_name=item_names[PKO],
+                planned_quantity=Decimal('40'), unit_price=Decimal('9.99'), planned_cif_fc=Decimal('399.60'),
+                remaining_quantity=Decimal('40'), remaining_cif_fc=Decimal('399.60'),
+            )
+            LicenseItemPlan.objects.create(
+                license=license_obj, import_item=import_item, item_name=item_names[CHEESE],
+                planned_quantity=Decimal('60'), unit_price=Decimal('5.50'), planned_cif_fc=Decimal('330'),
+                remaining_quantity=Decimal('60'), remaining_cif_fc=Decimal('330'),
+            )
+
+            lines, _ = compute_e132_auto_plan(license_obj)
+            item_lines = [l for l in lines if l['import_item'] == import_item.id]
+
+            assert item_lines == []
+        finally:
+            patcher.stop()
+
+    def test_preserved_price_within_ceiling_is_unaffected(self, item_names):
+        # A legitimately capped/reduced price (still <= the fixed ceiling)
+        # must NOT be rejected — only prices ABOVE the ceiling are invalid.
+        license_obj, patcher = _make_license("LIC-E132-VALID-CAPPED-PRICE", Decimal('100000'))
+        try:
+            import_item = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            LicenseItemPlan.objects.create(
+                license=license_obj, import_item=import_item, item_name=item_names[PKO],
+                planned_quantity=Decimal('40'), unit_price=Decimal('1.00'), planned_cif_fc=Decimal('40'),
+                remaining_quantity=Decimal('40'), remaining_cif_fc=Decimal('40'),
+            )
+            LicenseItemPlan.objects.create(
+                license=license_obj, import_item=import_item, item_name=item_names[CHEESE],
+                planned_quantity=Decimal('60'), unit_price=Decimal('3.00'), planned_cif_fc=Decimal('180'),
+                remaining_quantity=Decimal('60'), remaining_cif_fc=Decimal('180'),
+            )
+
+            lines, _ = compute_e132_auto_plan(license_obj)
+            by_name_id = {l['item_name']: l for l in lines}
+
+            assert by_name_id[item_names[PKO].id]['planned_quantity'] == 40.0
             assert by_name_id[item_names[CHEESE].id]['planned_quantity'] == 60.0
         finally:
             patcher.stop()

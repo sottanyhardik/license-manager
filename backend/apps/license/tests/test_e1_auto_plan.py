@@ -17,6 +17,7 @@ from apps.core.models import CompanyModel, HSCodeModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.license.services.e1_auto_plan import compute_e1_auto_plan
 from apps.license.services.e1_plan import E1Item, classify_e1_item, plan_e1_items
+from apps.license.services.plan_grouping import validate_group_plan_lines
 
 
 def _hs(code):
@@ -206,6 +207,177 @@ class TestComputeE1AutoPlanParity:
             milk_lines = [l for l in lines if 'DWP' in l['note'] or 'SWP' in l['note']]
             assert egg_lines and egg_lines[0]['unit_price'] == 25.0
             assert milk_lines and all(l['unit_price'] in (5.0, 1.5, 4.4) for l in milk_lines)
+        finally:
+            patcher.stop()
+
+
+@pytest.mark.django_db
+class TestComputeE1AutoPlanGrouping:
+    """E1 now groups via the SAME canonical `plan_group_key` (HSN +
+    normalized description) every other Auto-Plan engine and every plan-
+    consuming layer (enforcement, display, exports) uses — previously E1
+    grouped by description ALONE (`auto_plan_shared.group_by_desc`), a
+    narrower key that could pool two items plan_status_for's HSN-aware
+    enforcement would treat as separate groups (a real, if rare, bug: the
+    whole pooled plan sat on one representative whose own HSN-based group
+    didn't cover the other member, leaving it unconstrained). Real dev-DB
+    licence `0311045101` has exactly this shape (two items, same
+    description, different HS codes) — these tests mirror it."""
+
+    def test_same_description_and_hsn_items_are_pooled_into_one_group(self):
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E1-GROUP-POOLED", balance)
+        try:
+            hsn = _hs('08021100')
+            item1 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Other Confectionery Ingredients",
+                hs_code=hsn, quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            item2 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Other Confectionery Ingredients",
+                hs_code=hsn, quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+            lines, _ = compute_e1_auto_plan(license_obj)
+
+            # Pooled into ONE group (150kg @ $3.00 = $450), anchored on the
+            # representative (lowest serial_number = item1) — never two
+            # independent lines.
+            assert len(lines) == 1
+            assert lines[0]['import_item'] == item1.id
+            assert lines[0]['planned_quantity'] == 150.0
+            assert lines[0]['planned_cif_fc'] == 450.0
+            assert all(l['import_item'] != item2.id for l in lines)
+        finally:
+            patcher.stop()
+
+    def test_same_description_different_hsn_items_are_never_pooled(self):
+        # The exact fix this migration delivers: same description, DIFFERENT
+        # HS codes must plan (and therefore enforce) SEPARATELY — mirrors
+        # real licence 0311045101's shape.
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E1-GROUP-DIFF-HSN", balance)
+        try:
+            item1 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Other Confectionery Ingredients",
+                hs_code=_hs('08021100'), quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            item2 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Other Confectionery Ingredients",
+                hs_code=_hs('08029000'), quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+            lines, _ = compute_e1_auto_plan(license_obj)
+
+            assert len(lines) == 2
+            by_item = {l['import_item']: l for l in lines}
+            assert by_item[item1.id]['planned_quantity'] == 100.0
+            assert by_item[item2.id]['planned_quantity'] == 50.0
+        finally:
+            patcher.stop()
+
+    def test_representative_is_lowest_serial_number(self):
+        # Create the HIGHER-serial item FIRST (so it gets the LOWER DB id)
+        # to prove serial_number decides the representative, not id or
+        # creation order — the real DGFT-resync shape found in dev-DB data.
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E1-GROUP-REP", balance)
+        try:
+            hsn = _hs('08021100')
+            higher_serial_lower_id = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=12, description="Other Confectionery Ingredients",
+                hs_code=hsn, quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            lower_serial_higher_id = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Other Confectionery Ingredients",
+                hs_code=hsn, quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+            assert higher_serial_lower_id.id < lower_serial_higher_id.id  # sanity
+
+            lines, _ = compute_e1_auto_plan(license_obj)
+            assert len(lines) == 1
+            assert lines[0]['import_item'] == lower_serial_higher_id.id
+        finally:
+            patcher.stop()
+
+
+@pytest.mark.django_db
+class TestComputeE1AutoPlanIsIdempotent:
+    """E1 has no "preserve once generated" concept — every run is a fresh
+    recompute — so re-running Auto-Plan against unchanged data must settle
+    to IDENTICAL persisted rows every time: same representative, same
+    totals, no duplication and no drift to a different member of the group
+    across runs. `save_plan_lines_for_license`'s `delete_existing=True`
+    default makes this true by construction, but the group's chosen
+    representative must also stay stable run-to-run for that guarantee to
+    actually hold."""
+
+    def test_rerunning_and_resaving_produces_identical_rows(self):
+        from apps.license.models import LicenseItemPlan
+        from apps.license.services.plan_enforcement import save_plan_lines_for_license
+
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E1-IDEMPOTENT", balance)
+        try:
+            hsn = _hs('08021100')
+            item1 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Other Confectionery Ingredients",
+                hs_code=hsn, quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Other Confectionery Ingredients",
+                hs_code=hsn, quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+
+            lines_first, _ = compute_e1_auto_plan(license_obj)
+            save_plan_lines_for_license(license_obj, lines_first)
+            first_run = list(
+                LicenseItemPlan.objects.filter(license=license_obj)
+                .values_list('import_item_id', 'planned_quantity', 'planned_cif_fc')
+            )
+
+            lines_second, _ = compute_e1_auto_plan(license_obj)
+            save_plan_lines_for_license(license_obj, lines_second)
+            second_run = list(
+                LicenseItemPlan.objects.filter(license=license_obj)
+                .values_list('import_item_id', 'planned_quantity', 'planned_cif_fc')
+            )
+
+            assert lines_first == lines_second
+            assert len(first_run) == 1
+            assert first_run == second_run
+            assert first_run[0][0] == item1.id
+        finally:
+            patcher.stop()
+
+
+@pytest.mark.django_db
+class TestE1SharedValidatorAgreesWithRealOutput:
+    """E1 runs `validate_fresh_plan_lines` at runtime (qty/non-negative
+    checks only — see e1_auto_plan.py's module docstring for why no
+    price-ceiling check applies), not the stricter `validate_group_plan_lines`
+    E126/E132 use. This proves E1's real computed output would ALSO satisfy
+    the stricter validator's price-ceiling check, not just the lighter one
+    actually wired in — extra proof the waterfall is structurally bounded,
+    not just an untested assumption."""
+
+    def test_shared_validator_accepts_real_pooled_e1_output(self):
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E1-VALIDATOR-CHECK", balance)
+        try:
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Other Confectionery Ingredients",
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Other Confectionery Ingredients",
+                quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+            lines, _ = compute_e1_auto_plan(license_obj)
+            assert len(lines) == 1
+
+            assert validate_group_plan_lines(
+                lines, ['OTHER CONFECTIONERY INGREDIENTS'], Decimal('150'),
+                {'OTHER CONFECTIONERY INGREDIENTS': Decimal('3.00')}, is_preserved=False,
+            ) is True
         finally:
             patcher.stop()
 

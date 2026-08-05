@@ -6,8 +6,10 @@ All business rules (rates, processing order, Special Validation, per-item
 in the shared engine ``services/e5_plan.py`` (:func:`plan_e5_items`). This
 module only handles what's specific to writing persisted plan lines:
 
-  * bucketing raw import items into groups (one plan line per description
-    group, saved on the group's lowest-serial representative — matching how
+  * bucketing raw import items into groups (one plan line per
+    `plan_group_key` group — HSN + normalized description, the same
+    canonical grouping `plan_enforcement.py`/`plan_utilization.py`/exports
+    use — saved on the group's lowest-serial representative — matching how
     the Plan Tab groups them in the UI);
   * a keyword-based fallback for classifying milk/dairy items whose HSN is
     missing or unreliable (``_is_milk_group``) — a data-quality workaround,
@@ -18,17 +20,29 @@ module only handles what's specific to writing persisted plan lines:
   * the persistence-layer conventions the engine's ``min_plan_qty=50`` /
     ``floor_qty=True`` options implement: import items below 50 units are
     never planned, and fixed-rate steps floor to whole-number quantities.
+
+Unlike E126/E132, this module does NOT run
+``plan_grouping.validate_group_plan_lines``'s price-ceiling check — E5
+includes genuinely dynamic, balance-driven rates (milk DWP/SWP/WPC, the
+Wheat Flour mop-up) with no fixed business-rule maximum to check against,
+and there is no "preserve once generated" concept here for a stale price to
+drift from. It DOES run ``plan_grouping.validate_fresh_plan_lines``
+(non-negative values + total qty ≤ available), the same "never skip this"
+mandatory safety net E126/E132 apply — E5's waterfall is structurally
+bounded and should never trip it, but a safety net that can't fire is still
+cheap insurance, not proof it's unnecessary.
 """
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import Optional
 
-from apps.license.services.auto_plan_shared import (
-    ensure_plan_item_names as _ensure_names,
-    group_by_desc as _group_by_desc,
-)
+from apps.license.services.auto_plan_shared import ensure_plan_item_names as _ensure_names
 from apps.license.services.e5_plan import E5Item, classify_e5_item, plan_e5_items
+from apps.license.services.plan_grouping import merge_items_for_classification, validate_fresh_plan_lines
+
+logger = logging.getLogger(__name__)
 
 MIN_PLAN_QTY = Decimal('50')
 
@@ -181,16 +195,24 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
             wheat_flour.append(ii)
         # else: unclassified — left unplanned
 
-    # ── Group each bucket by description; one E5Item per group, keyed on
-    # the group's lowest-serial representative (matches how the Plan Tab
-    # groups items and how manual plans are anchored). ──────────────────
+    # ── Group each already-classified bucket by `plan_group_key` (HSN +
+    # normalized description) — the same canonical grouping mechanism every
+    # Auto-Plan engine and every plan-consuming layer (enforcement, display,
+    # exports) uses; see `merge_items_for_classification`'s docstring. One
+    # E5Item per group, keyed on the group's lowest-serial representative
+    # (matches how the Plan Tab groups items and how manual plans are
+    # anchored). ──────────────────────────────────────────────────────────
     rep_by_key: dict = {}
+    avail_by_rep: dict[int, Decimal] = {}
     items: list[E5Item] = []
 
     def _add_group(bucket: list, category: str) -> None:
-        for rep, group_avail in _group_by_desc(bucket):
-            rep_by_key[rep.id] = rep
-            items.append(E5Item(key=rep.id, category=category, qty=Decimal(str(group_avail))))
+        items_by_id = {ii.id: ii for ii in bucket}
+        for group in merge_items_for_classification(bucket):
+            rep_id = group['representative_id']
+            rep_by_key[rep_id] = items_by_id[rep_id]
+            avail_by_rep[rep_id] = group['available_quantity']
+            items.append(E5Item(key=rep_id, category=category, qty=group['available_quantity']))
 
     _add_group(dietary_fibre, 'DIETARY FIBRE')
     _add_group(milk_0404, 'MILK PRODUCTS')
@@ -202,14 +224,14 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
 
     result = plan_e5_items(items, balance_cif, min_plan_qty=MIN_PLAN_QTY, floor_qty=True)
 
-    lines: list[dict] = []
+    lines_by_rep: dict[int, list[dict]] = {}
     for line in result.lines:
         rep = rep_by_key[line.key]
         if line.step == 'SWP' and result.special_validation_triggered:
             label = 'Rule Special — SWP - E5'
         else:
             label = _STEP_LABEL[line.step]
-        lines.append({
+        lines_by_rep.setdefault(rep.id, []).append({
             'import_item':      rep.id,
             'item_name':        name_ids.get(STEP_ITEM_NAME[line.step]),
             'planned_quantity': float(line.planned_qty),
@@ -217,5 +239,22 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
             'planned_cif_fc':   float(line.planned_cif),
             'note':             f'Auto-planned (E5 {label})',
         })
+
+    # ── Mandatory generic validation (never skip this) ────────────────────
+    # Same "never skip this" safety net E126/E132 apply — see
+    # `validate_fresh_plan_lines`'s docstring for why no price-ceiling check
+    # runs here.
+    lines: list[dict] = []
+    for rep_id, group_lines in lines_by_rep.items():
+        if validate_fresh_plan_lines(group_lines, avail_by_rep[rep_id]):
+            lines.extend(group_lines)
+        else:
+            logger.warning(
+                "compute_e5_auto_plan: rejecting plan for group represented by "
+                "import_item %s — planned_quantity=%s available=%s; likely a "
+                "bug in the E5 waterfall, since this should never happen for "
+                "its structurally-bounded computation.",
+                rep_id, [ln['planned_quantity'] for ln in group_lines], avail_by_rep[rep_id],
+            )
 
     return lines, float(result.remaining_cif)

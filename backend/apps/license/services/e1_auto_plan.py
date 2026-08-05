@@ -6,24 +6,38 @@ Remaining CIF drawdown) live in the shared engine ``services/e1_plan.py``
 (:func:`plan_e1_items`). This module only handles what's specific to writing
 persisted plan lines:
 
-  * bucketing raw import items into groups (one plan line per description
-    group, saved on the group's lowest-serial representative — matching how
+  * bucketing raw import items into groups (one plan line per
+    `plan_group_key` group — HSN + normalized description, the same
+    canonical grouping `plan_enforcement.py`/`plan_utilization.py`/exports
+    use — saved on the group's lowest-serial representative — matching how
     the Plan Tab groups them in the UI);
   * mapping the engine's per-item results to ``LicenseItemPlan``-shaped
     line dicts (``import_item``, ``item_name``, ``planned_quantity``,
     ``unit_price``, ``planned_cif_fc``, ``note``);
   * the persistence-layer convention shared with E5/E132: import items below
     50 units are never planned (``min_plan_qty=50``).
+
+Unlike E126/E132, this module does NOT run
+``plan_grouping.validate_group_plan_lines``'s price-ceiling check — E1
+includes genuinely dynamic, balance-driven rates (milk DWP/SWP/WPC) with no
+fixed business-rule maximum to check against, and there is no "preserve
+once generated" concept here for a stale price to drift from. It DOES run
+``plan_grouping.validate_fresh_plan_lines`` (non-negative values + total
+qty ≤ available), the same "never skip this" mandatory safety net E126/E132
+apply — E1's waterfall is structurally bounded and should never trip it,
+but a safety net that can't fire is still cheap insurance, not proof it's
+unnecessary.
 """
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 
-from apps.license.services.auto_plan_shared import (
-    ensure_plan_item_names as _ensure_names,
-    group_by_desc as _group_by_desc,
-)
+from apps.license.services.auto_plan_shared import ensure_plan_item_names as _ensure_names
 from apps.license.services.e1_plan import E1Item, classify_e1_item, plan_e1_items
+from apps.license.services.plan_grouping import merge_items_for_classification, validate_fresh_plan_lines
+
+logger = logging.getLogger(__name__)
 
 MIN_PLAN_QTY = Decimal('50')
 
@@ -99,10 +113,15 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
     ))
 
     # ── Bucket import items by classification (single source of truth:
-    # classify_e1_item), then group each bucket by description — one
-    # E1Item per group, keyed on the group's lowest-serial representative
-    # (matches how the Plan Tab groups items and how manual plans are
-    # anchored). ─────────────────────────────────────────────────────────
+    # classify_e1_item — unchanged, still per RAW item, since classification
+    # partly keys off an item's own M2M item-name tags), then group each
+    # already-classified bucket by `plan_group_key` (HSN + normalized
+    # description) — the same canonical grouping mechanism every Auto-Plan
+    # engine (E1/E5/E126/E132) and every plan-consuming layer (enforcement,
+    # display, exports) uses; see `merge_items_for_classification`'s
+    # docstring. One E1Item per group, keyed on the group's lowest-serial
+    # representative (matches how the Plan Tab groups items and how manual
+    # plans are anchored). ─────────────────────────────────────────────────
     buckets: dict[str, list] = {}
     for ii in import_items:
         item_names = [n.name for n in ii.items.all()]
@@ -115,18 +134,22 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
         buckets.setdefault(cat, []).append(ii)
 
     rep_by_key: dict = {}
+    avail_by_rep: dict[int, Decimal] = {}
     items: list[E1Item] = []
     for cat, bucket in buckets.items():
-        for rep, group_avail in _group_by_desc(bucket):
-            rep_by_key[rep.id] = rep
-            items.append(E1Item(key=rep.id, category=cat, qty=Decimal(str(group_avail))))
+        items_by_id = {ii.id: ii for ii in bucket}
+        for group in merge_items_for_classification(bucket):
+            rep_id = group['representative_id']
+            rep_by_key[rep_id] = items_by_id[rep_id]
+            avail_by_rep[rep_id] = group['available_quantity']
+            items.append(E1Item(key=rep_id, category=cat, qty=group['available_quantity']))
 
     result = plan_e1_items(items, balance_cif, min_plan_qty=MIN_PLAN_QTY)
 
-    lines: list[dict] = []
+    lines_by_rep: dict[int, list[dict]] = {}
     for line in result.lines:
         rep = rep_by_key[line.key]
-        lines.append({
+        lines_by_rep.setdefault(rep.id, []).append({
             'import_item':      rep.id,
             'item_name':        name_ids.get(STEP_ITEM_NAME[line.step]),
             'planned_quantity': float(line.planned_qty),
@@ -134,5 +157,22 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
             'planned_cif_fc':   float(line.planned_cif),
             'note':             f'Auto-planned (E1 {_STEP_LABEL[line.step]})',
         })
+
+    # ── Mandatory generic validation (never skip this) ────────────────────
+    # Same "never skip this" safety net E126/E132 apply — see
+    # `validate_fresh_plan_lines`'s docstring for why no price-ceiling check
+    # runs here.
+    lines: list[dict] = []
+    for rep_id, group_lines in lines_by_rep.items():
+        if validate_fresh_plan_lines(group_lines, avail_by_rep[rep_id]):
+            lines.extend(group_lines)
+        else:
+            logger.warning(
+                "compute_e1_auto_plan: rejecting plan for group represented by "
+                "import_item %s — planned_quantity=%s available=%s; likely a "
+                "bug in the E1 waterfall, since this should never happen for "
+                "its structurally-bounded computation.",
+                rep_id, [ln['planned_quantity'] for ln in group_lines], avail_by_rep[rep_id],
+            )
 
     return lines, float(result.remaining_cif)

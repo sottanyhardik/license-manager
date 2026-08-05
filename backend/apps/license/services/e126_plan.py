@@ -31,7 +31,7 @@ BUSINESS-RULE DECISIONS (made explicit — not silent assumptions)
    is based on the record's CURRENT Available Quantity, never its
    original/total import quantity, for the same reason as E132 (see
    e132_plan.py's decision #3): available_quantity already self-corrects
-   for real consumption, so recomputing the 40%/60% split fresh against it
+   for real consumption, so recomputing the 50%/50% split fresh against it
    every run is automatically correct and idempotent.
 4. DFIA NIL / DFIA Balance / residual-balance handling is explicitly OUT OF
    SCOPE for this engine — not implemented here, to be specified separately.
@@ -42,7 +42,7 @@ DATA MAPPING (source: LicenseImportItemsModel of an E126 licence)
     Description → item.description        (str, may be null/blank)
     Quantity    → item.available_quantity (Decimal) — the currently
                   allocatable pool for this record; ALSO the basis for the
-                  PKO/Olive-Oil 40/60 split target (never the original/total
+                  PKO/Olive-Oil 50/50 split target (never the original/total
                   import quantity — see decision #3 above).
     Record id   → item.id                (preserved for traceability)
 """
@@ -63,7 +63,7 @@ OLIVE_OIL = "OLIVE OIL - E126"
 
 # Internal-only classification marker for a record that satisfies BOTH the
 # 1513 (PKO) signal and the Olive Oil signal — never an output item name;
-# expanded into PKO (40%) + Olive Oil (60%) at allocation time by
+# expanded into PKO (50%) + Olive Oil (50%) at allocation time by
 # `_split_pko_olive_record` (per-record, NOT license-wide pooled — each
 # record's split target is its OWN CURRENT available quantity, never its
 # original/total import quantity).
@@ -79,7 +79,7 @@ UNIT_PRICE: dict[str, Decimal | None] = {
 # Planning-item display/priority order for the OUTPUT — Nuts → {PKO, Olive Oil}.
 PLANNING_ORDER = (NUT_NUTS, PKO, OLIVE_OIL)
 
-_SPLIT_TARGETS: dict[str, Decimal] = {PKO: Decimal("0.4"), OLIVE_OIL: Decimal("0.6")}
+_SPLIT_TARGETS: dict[str, Decimal] = {PKO: Decimal("0.5"), OLIVE_OIL: Decimal("0.5")}
 
 
 # ── Normalization ────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ def _rule_priority_2(hsn: str, desc: str) -> tuple[str, str] | None:
 
     Sub-order (first match wins):
       a. Split — 1513 signal AND Olive Oil signal both present on the SAME
-         record — internal `_PKO_OLIVE_SPLIT` marker, expanded 40/60 at
+         record — internal `_PKO_OLIVE_SPLIT` marker, expanded 50/50 at
          allocation time.
       b. PKO alone — 1513 signal without the Olive Oil signal.
       c. Olive Oil alone — Olive Oil signal without the 1513 signal.
@@ -150,7 +150,7 @@ def _rule_priority_2(hsn: str, desc: str) -> tuple[str, str] | None:
     pko_signal = _is_pko_signal(hsn, desc)
     olive_signal = _is_olive_oil_signal(hsn, desc)
     if pko_signal and olive_signal:
-        return _PKO_OLIVE_SPLIT, "HSN/desc=1513 AND Olive Oil signal (1509/1500/1510) — 40% PKO / 60% Olive Oil split"
+        return _PKO_OLIVE_SPLIT, "HSN/desc=1513 AND Olive Oil signal (1509/1500/1510) — 50% PKO / 50% Olive Oil split"
     if pko_signal:
         return PKO, "HSN/desc=1513"
     if olive_signal:
@@ -211,8 +211,8 @@ def _allocate_step(qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[
 
 
 def _split_pko_olive_record(available_qty: Decimal) -> dict[str, Decimal]:
-    """PKO/Olive-Oil 40/60 split, PER RECORD (not license-wide pooled):
-    target quantities are 40%/60% of THIS record's CURRENT Available
+    """PKO/Olive-Oil 50/50 split, PER RECORD (not license-wide pooled):
+    target quantities are 50%/50% of THIS record's CURRENT Available
     Quantity — never its original/total import quantity (see decision #3).
 
     Returns ``{PKO: qty, OLIVE_OIL: qty}``, always summing to exactly
@@ -280,7 +280,7 @@ def _classify_records(records: Iterable[dict], balance_cif) -> list:
     """Classify every record. Returns a list of dicts with normalized fields:
     ``{record_id, item, reason, qty, hsn, desc, raw_hs, raw_desc, split}``.
     ``split`` is only populated (``{PKO: qty, OLIVE_OIL: qty}``) for records
-    classified to the internal PKO/Olive-Oil split marker — always 40%/60%
+    classified to the internal PKO/Olive-Oil split marker — always 50%/50%
     of that record's OWN ``qty`` (current Available Quantity)."""
     recs = []
     for rec in records:
@@ -313,7 +313,7 @@ _PKO_TO_OLIVE_VALUE_GAIN: Decimal = UNIT_PRICE[OLIVE_OIL] - UNIT_PRICE[PKO]  # $
 
 def _rebalance_pko_olive_wastage(recs: list, alloc: dict, balance_cif) -> None:
     """
-    Wastage-reduction pass: the 40%/60% PKO/Olive-Oil split is the DEFAULT
+    Wastage-reduction pass: the 50%/50% PKO/Olive-Oil split is the DEFAULT
     allocation, but if the full waterfall still leaves Remaining Balance CIF
     unused, shift quantity from PKO to Olive Oil on the split records to
     close that gap — Olive Oil ($5.00) is priced higher than PKO ($1.80), so
@@ -476,7 +476,7 @@ def plan_e126_per_item_split(records: Iterable[dict], balance_cif=None) -> dict:
     Returns ``{record_id: [ {planning_item, reason, planned_quantity, unit_price,
     planned_cif}, ... ]}``. Non-split records yield a single-element list;
     split records yield one entry per target (PKO/Olive Oil) that carries
-    quantity (40%/60% of the record's current Available Quantity — see
+    quantity (50%/50% of the record's current Available Quantity — see
     `_split_pko_olive_record`).
     """
     recs, alloc = _classify_and_allocate(records, balance_cif)
@@ -520,7 +520,7 @@ def plan_e126(records: Iterable[dict], balance_cif=None) -> dict:
     Args:
         records: iterable of dicts with keys ``record_id``, ``hs_code``,
             ``description``, ``quantity`` (the record's current Available
-            Quantity — ALSO the basis for the PKO/Olive-Oil 40/60 split
+            Quantity — ALSO the basis for the PKO/Olive-Oil 50/50 split
             target, never an original/total import quantity). Records are
             assumed already filtered to Norm E126.
         balance_cif: licence Balance CIF $. When given, planning value is

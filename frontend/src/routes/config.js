@@ -131,4 +131,14 @@ export const reportEntities = [
         label: "Planned Report",
         icon: "check2-square",
     },
+    {
+        path: "/reports/license-purchase-profit",
+        label: "Purchase & Profit Report",
+        icon: "graph-up-arrow",
+    },
+    {
+        path: "/reports/license-trading-register-profit",
+        label: "Trading Register & Profit Report",
+        icon: "journal-text",
+    },
 ];

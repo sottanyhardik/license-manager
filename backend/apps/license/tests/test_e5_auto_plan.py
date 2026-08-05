@@ -17,6 +17,7 @@ from apps.core.models import CompanyModel, HSCodeModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.license.services.e5_auto_plan import compute_e5_auto_plan
 from apps.license.services.e5_plan import E5Item, classify_e5_item, plan_e5_items
+from apps.license.services.plan_grouping import validate_group_plan_lines
 
 
 def _hs(code):
@@ -126,6 +127,160 @@ class TestComputeE5AutoPlanParity:
             lines, remaining_cif = compute_e5_auto_plan(license_obj)
             assert lines == []
             assert Decimal(str(round(remaining_cif, 2))) == Decimal('5000')
+        finally:
+            patcher.stop()
+
+
+@pytest.mark.django_db
+class TestComputeE5AutoPlanGrouping:
+    """E5 now groups via the SAME canonical `plan_group_key` (HSN +
+    normalized description) every other Auto-Plan engine and every plan-
+    consuming layer (enforcement, display, exports) uses — previously E5
+    grouped by description ALONE (`auto_plan_shared.group_by_desc`), a
+    narrower key that could pool two items plan_status_for's HSN-aware
+    enforcement would treat as separate groups. Mirrors
+    test_e1_auto_plan.py::TestComputeE1AutoPlanGrouping."""
+
+    def test_same_description_and_hsn_items_are_pooled_into_one_group(self):
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E5-GROUP-POOLED", balance)
+        try:
+            hsn = _hs('19019090')
+            item1 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Dietary Fibre",
+                hs_code=hsn, quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            item2 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Dietary Fibre",
+                hs_code=hsn, quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+            lines, _ = compute_e5_auto_plan(license_obj)
+
+            assert len(lines) == 1
+            assert lines[0]['import_item'] == item1.id
+            assert lines[0]['planned_quantity'] == 150.0
+            assert lines[0]['planned_cif_fc'] == 450.0
+            assert all(l['import_item'] != item2.id for l in lines)
+        finally:
+            patcher.stop()
+
+    def test_same_description_different_hsn_items_are_never_pooled(self):
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E5-GROUP-DIFF-HSN", balance)
+        try:
+            item1 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Dietary Fibre",
+                hs_code=_hs('19019090'), quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            item2 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Dietary Fibre",
+                hs_code=_hs('19019010'), quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+            lines, _ = compute_e5_auto_plan(license_obj)
+
+            assert len(lines) == 2
+            by_item = {l['import_item']: l for l in lines}
+            assert by_item[item1.id]['planned_quantity'] == 100.0
+            assert by_item[item2.id]['planned_quantity'] == 50.0
+        finally:
+            patcher.stop()
+
+    def test_representative_is_lowest_serial_number(self):
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E5-GROUP-REP", balance)
+        try:
+            hsn = _hs('19019090')
+            higher_serial_lower_id = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=12, description="Dietary Fibre",
+                hs_code=hsn, quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            lower_serial_higher_id = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Dietary Fibre",
+                hs_code=hsn, quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+            assert higher_serial_lower_id.id < lower_serial_higher_id.id  # sanity
+
+            lines, _ = compute_e5_auto_plan(license_obj)
+            assert len(lines) == 1
+            assert lines[0]['import_item'] == lower_serial_higher_id.id
+        finally:
+            patcher.stop()
+
+
+@pytest.mark.django_db
+class TestComputeE5AutoPlanIsIdempotent:
+    """E5 has no "preserve once generated" concept — every run is a fresh
+    recompute — so re-running Auto-Plan against unchanged data must settle
+    to IDENTICAL persisted rows every time: same representative, same
+    totals, no duplication and no drift to a different member of the group
+    across runs."""
+
+    def test_rerunning_and_resaving_produces_identical_rows(self):
+        from apps.license.models import LicenseItemPlan
+        from apps.license.services.plan_enforcement import save_plan_lines_for_license
+
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E5-IDEMPOTENT", balance)
+        try:
+            item1 = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Dietary Fibre",
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Dietary Fibre",
+                quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+
+            lines_first, _ = compute_e5_auto_plan(license_obj)
+            save_plan_lines_for_license(license_obj, lines_first)
+            first_run = list(
+                LicenseItemPlan.objects.filter(license=license_obj)
+                .values_list('import_item_id', 'planned_quantity', 'planned_cif_fc')
+            )
+
+            lines_second, _ = compute_e5_auto_plan(license_obj)
+            save_plan_lines_for_license(license_obj, lines_second)
+            second_run = list(
+                LicenseItemPlan.objects.filter(license=license_obj)
+                .values_list('import_item_id', 'planned_quantity', 'planned_cif_fc')
+            )
+
+            assert lines_first == lines_second
+            assert len(first_run) == 1
+            assert first_run == second_run
+            assert first_run[0][0] == item1.id
+        finally:
+            patcher.stop()
+
+
+@pytest.mark.django_db
+class TestE5SharedValidatorAgreesWithRealOutput:
+    """E5 runs `validate_fresh_plan_lines` at runtime (qty/non-negative
+    checks only — see e5_auto_plan.py's module docstring for why no
+    price-ceiling check applies), not the stricter `validate_group_plan_lines`
+    E126/E132 use. This proves E5's real computed output would ALSO satisfy
+    the stricter validator's price-ceiling check, not just the lighter one
+    actually wired in."""
+
+    def test_shared_validator_accepts_real_pooled_e5_output(self):
+        balance = Decimal('100000')
+        license_obj, patcher = _make_license("LIC-E5-VALIDATOR-CHECK", balance)
+        try:
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Dietary Fibre",
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=2, description="Dietary Fibre",
+                quantity=Decimal('50'), available_quantity=Decimal('50'),
+            )
+            lines, _ = compute_e5_auto_plan(license_obj)
+            assert len(lines) == 1
+
+            assert validate_group_plan_lines(
+                lines, ['DIETARY FIBRE'], Decimal('150'),
+                {'DIETARY FIBRE': Decimal('3.00')}, is_preserved=False,
+            ) is True
         finally:
             patcher.stop()
 

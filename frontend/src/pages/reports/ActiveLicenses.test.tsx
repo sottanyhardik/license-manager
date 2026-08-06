@@ -33,7 +33,7 @@ describe("ActiveLicenses", () => {
         await waitFor(() => {
             expect(mockedOpenAuthedFile).toHaveBeenCalledWith(
                 "license/reports/active-licenses/?format=excel&days=45",
-                "active_licenses_45_days.xlsx",
+                expect.stringMatching(/^active-licenses_\d{4}-\d{2}-\d{2}\.xlsx$/),
             );
         });
     });

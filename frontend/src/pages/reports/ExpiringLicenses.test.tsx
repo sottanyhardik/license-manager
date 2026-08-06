@@ -30,7 +30,7 @@ describe("ExpiringLicenses", () => {
         await waitFor(() => {
             expect(mockedOpenAuthedFile).toHaveBeenCalledWith(
                 "license/reports/expiring-licenses/?format=excel&days=60",
-                "expiring_licenses_60_days.xlsx",
+                expect.stringMatching(/^expiring-licenses_\d{4}-\d{2}-\d{2}\.xlsx$/),
             );
         });
     });

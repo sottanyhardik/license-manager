@@ -557,7 +557,7 @@ describe("LicensePurchaseProfitReport", () => {
             expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(2);
             expect(mockedOpenAuthedFile).toHaveBeenLastCalledWith(
                 expect.stringContaining("format=excel"),
-                "license-purchase-profit-report.xlsx",
+                "purchase-profit-report_2026-01-01_to_2026-01-31.xlsx",
             );
             expect(mockedToastError).not.toHaveBeenCalled();
         });
@@ -616,7 +616,7 @@ describe("LicensePurchaseProfitReport", () => {
             expect(mockedOpenAuthedFile).toHaveBeenCalledTimes(2);
             expect(mockedOpenAuthedFile).toHaveBeenLastCalledWith(
                 expect.stringContaining("format=pdf"),
-                "license-purchase-profit-report.pdf",
+                "purchase-profit-report_2026-01-01_to_2026-01-31.pdf",
             );
             expect(mockedToastError).not.toHaveBeenCalled();
         });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import api from "@/api/axios";
 import { openAuthedFile } from "@/utils/documentDownload";
+import { buildExportFilename } from "@/utils/exportFilename";
 import { getReportErrorInfo } from "@/utils/reportErrorHandling";
 import { buildLicensePurchaseProfitReportPath } from "./buildLicensePurchaseProfitReportPath";
 
@@ -129,7 +130,7 @@ export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, lic
             try {
                 await openAuthedFile(
                     buildLicensePurchaseProfitReportPath({ format: "excel", fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }),
-                    "license-purchase-profit-report.xlsx",
+                    buildExportFilename("purchase-profit-report", "xlsx", { fromDate, toDate }),
                 );
             } catch (err: unknown) {
                 const { message, retryable } = getReportErrorInfo(err, { action: "generate the Excel export" });
@@ -157,7 +158,7 @@ export function useLicensePurchaseProfitReportData({ fromDate, toDate, norm, lic
             try {
                 await openAuthedFile(
                     buildLicensePurchaseProfitReportPath({ format: "pdf", fromDate, toDate, norm, licenseNumber, excludeLicenseNumber, exporter }),
-                    "license-purchase-profit-report.pdf",
+                    buildExportFilename("purchase-profit-report", "pdf", { fromDate, toDate }),
                 );
             } catch (err: unknown) {
                 const { message, retryable } = getReportErrorInfo(err, { action: "generate the PDF export" });

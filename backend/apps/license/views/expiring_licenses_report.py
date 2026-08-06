@@ -21,6 +21,7 @@ from apps.accounts.permissions import ReportPermission
 
 from apps.core.constants import DEC_0, DEC_000, GE, MI, IP, SM
 from apps.core.reports.envelope import validate_envelope
+from apps.core.reports.export_naming import build_export_filename
 from apps.license.models import LicenseDetailsModel
 
 
@@ -324,7 +325,12 @@ class ExpiringLicensesReportView(APIView):
             response = HttpResponse(
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
-            response['Content-Disposition'] = f'attachment; filename="expiring_licenses_{days}_days.xlsx"'
+            filename = build_export_filename(
+                'expiring-licenses', 'xlsx',
+                from_date=report_data['report_period']['from_date'],
+                to_date=report_data['report_period']['to_date'],
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
             workbook.save(response)
             return response
 
@@ -596,7 +602,12 @@ class ExpiringLicensesReportView(APIView):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = f'attachment; filename="expiring_licenses_{days}_days.xlsx"'
+        filename = build_export_filename(
+            'expiring-licenses', 'xlsx',
+            from_date=report_data['report_period']['from_date'],
+            to_date=report_data['report_period']['to_date'],
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
         workbook.save(response)
         return response

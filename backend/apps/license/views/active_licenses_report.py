@@ -20,6 +20,7 @@ from apps.accounts.permissions import ReportPermission
 
 from apps.core.constants import DEC_0, DEC_000, GE, MI, IP, SM
 from apps.core.reports.envelope import validate_envelope
+from apps.core.reports.export_naming import build_export_filename
 from apps.license.models import LicenseDetailsModel
 
 def _safe_int(value, default):
@@ -332,7 +333,12 @@ class ActiveLicensesReportView(APIView):
             response = HttpResponse(
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
-            response['Content-Disposition'] = f'attachment; filename="active_licenses_{days}_days.xlsx"'
+            filename = build_export_filename(
+                'active-licenses', 'xlsx',
+                from_date=report_data['report_period']['from_date'],
+                to_date=report_data['report_period']['to_date'],
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
             workbook.save(response)
             return response
 
@@ -605,7 +611,12 @@ class ActiveLicensesReportView(APIView):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = f'attachment; filename="active_licenses_{days}_days.xlsx"'
+        filename = build_export_filename(
+            'active-licenses', 'xlsx',
+            from_date=report_data['report_period']['from_date'],
+            to_date=report_data['report_period']['to_date'],
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
         workbook.save(response)
         return response

@@ -22,6 +22,7 @@ from apps.core.constants import DEC_0, DEC_000
 from apps.accounts.permissions import ReportPermission
 from apps.core.models import SionNormClassModel
 from apps.core.reports.envelope import validate_envelope
+from apps.core.reports.export_naming import build_export_filename
 from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
 # Excel export handled inline with openpyxl
 
@@ -324,7 +325,8 @@ class InventoryBalanceReportView(APIView):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = f'attachment; filename="inventory_balance_{sion_norm}.xlsx"'
+        filename = build_export_filename(f'inventory-balance-{sion_norm}', 'xlsx')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
         workbook.save(response)
         return response

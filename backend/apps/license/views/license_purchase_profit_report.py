@@ -41,6 +41,7 @@ from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import ReportPermission
+from apps.core.reports.export_naming import build_export_filename
 from apps.license.services.purchase_profit_report import build_purchase_profit_report
 from apps.license.views.item_report import _ExcelPassthroughRenderer
 
@@ -518,7 +519,8 @@ class LicensePurchaseProfitReportView(APIView):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = 'attachment; filename="license_purchase_profit_report.xlsx"'
+        filename = build_export_filename('purchase-profit-report', 'xlsx', from_date=from_date, to_date=to_date)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         workbook.save(response)
         return response
 
@@ -756,5 +758,6 @@ class LicensePurchaseProfitReportView(APIView):
         buffer.close()
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="license_purchase_profit_report.pdf"'
+        filename = build_export_filename('purchase-profit-report', 'pdf', from_date=from_date, to_date=to_date)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response

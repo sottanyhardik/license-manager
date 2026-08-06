@@ -164,3 +164,79 @@ def test_planned_report_available_items_only_lists_plan_scoped_names(
     names = {row["name"] for row in response.json()}
     assert planned_report_masters["wheat"].name in names
     assert planned_report_masters["milk"].name not in names
+
+
+@pytest.mark.django_db
+def test_planned_report_generate_report_called_exactly_once_per_request(report_viewer_client, planned_report_masters):
+    """Phase 2B.1 regression: the view must compute the Display Dataset
+    exactly once and thread the same dict to both the JSON response and the
+    Excel exporter — `export_to_excel` must never call `generate_report`
+    itself. Wraps the real method (not a stub) so this also still exercises
+    genuine report generation, just counts the calls."""
+    from unittest.mock import patch
+
+    from apps.license.views.planned_report import PlannedReportView
+
+    lic = _make_license("PLANNED-REPORT-ONCE", planned_report_masters["parle"])
+    planned_item = _make_import_item(
+        lic, planned_report_masters["hs_code"], item_names=[planned_report_masters["wheat"]]
+    )
+    LicenseItemPlan.objects.create(
+        import_item=planned_item, item_name=planned_report_masters["wheat"],
+        planned_quantity=Decimal("10.000"), unit_price=Decimal("5.00"), planned_cif_fc=Decimal("50.00"),
+    )
+
+    with patch.object(PlannedReportView, "generate_report", autospec=True, side_effect=PlannedReportView.generate_report) as mocked:
+        json_response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+        assert json_response.status_code == 200
+        assert mocked.call_count == 1
+
+    with patch.object(PlannedReportView, "generate_report", autospec=True, side_effect=PlannedReportView.generate_report) as mocked:
+        excel_response = report_viewer_client.get(REPORT_URL, {"min_balance": 0, "format": "excel"})
+        assert excel_response.status_code == 200
+        assert mocked.call_count == 1
+
+
+@pytest.mark.django_db
+def test_planned_report_excel_rows_match_json_rows(report_viewer_client, planned_report_masters):
+    """Phase 2B.1 regression: JSON and Excel must render the exact same
+    per-item figures for the same request — using the shared
+    apps.core.tests.report_assertions helper introduced in Phase 2A."""
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    from apps.core.tests.report_assertions import assert_excel_rows_match_json_rows
+
+    lic_a = _make_license("PLANNED-REPORT-MATCH-A", planned_report_masters["parle"])
+    item_a = _make_import_item(lic_a, planned_report_masters["hs_code"], item_names=[planned_report_masters["wheat"]])
+    LicenseItemPlan.objects.create(
+        import_item=item_a, item_name=planned_report_masters["wheat"],
+        planned_quantity=Decimal("10.000"), unit_price=Decimal("5.00"), planned_cif_fc=Decimal("50.00"),
+    )
+
+    lic_b = _make_license("PLANNED-REPORT-MATCH-B", planned_report_masters["parle"])
+    item_b = _make_import_item(
+        lic_b, planned_report_masters["hs_code"], serial=2, item_names=[planned_report_masters["milk"]],
+        available_value=Decimal("300.00"), available_quantity=Decimal("20.000"),
+    )
+    LicenseItemPlan.objects.create(
+        import_item=item_b, item_name=planned_report_masters["milk"],
+        planned_quantity=Decimal("4.000"), unit_price=Decimal("2.00"), planned_cif_fc=Decimal("8.00"),
+    )
+
+    json_response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+    json_items = json_response.json()["items"]
+    assert len(json_items) == 2
+
+    excel_response = report_viewer_client.get(REPORT_URL, {"min_balance": 0, "format": "excel"})
+    workbook = load_workbook(BytesIO(excel_response.content), data_only=True)
+
+    assert_excel_rows_match_json_rows(
+        workbook, json_items, "Not Restricted",
+        column_map={
+            "available_quantity": 12, "available_balance": 13,
+            "planned_quantity": 18, "planned_cif": 20,
+        },
+        header_row=1, key_field="license_number", key_column=2,
+    )

@@ -63,19 +63,22 @@ class PlannedReportView(APIView):
         expiry_date_from = request.GET.get('expiry_date_from')  # YYYY-MM-DD
         expiry_date_to = request.GET.get('expiry_date_to')      # YYYY-MM-DD
 
-        if output_format == 'excel':
-            try:
-                return self.export_to_excel(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
-            except Exception as e:
-                logger.exception("Error exporting planned report to Excel")
-                return JsonResponse({'error': str(e)}, status=500)
-
-        # For JSON, generate full report
+        # Generate the report data ONCE — the same dict is used for the JSON
+        # response and, if requested, handed to the Excel exporter. Neither
+        # path recomputes it independently (Display Dataset rule, see
+        # docs/02-architecture.md).
         try:
             report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
         except Exception as e:
             logger.exception("Error generating planned report")
             return JsonResponse({'error': str(e)}, status=500)
+
+        if output_format == 'excel':
+            try:
+                return self.export_to_excel(report_data)
+            except Exception as e:
+                logger.exception("Error exporting planned report to Excel")
+                return JsonResponse({'error': str(e)}, status=500)
 
         return JsonResponse(report_data, safe=False)
 
@@ -258,8 +261,13 @@ class PlannedReportView(APIView):
             'items': report_items,
         }
 
-    def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None):
-        """Export planned report to Excel with separate sheets for Restricted and Not Restricted items"""
+    def export_to_excel(self, report_data):
+        """Export planned report to Excel with separate sheets for Restricted
+        and Not Restricted items.
+
+        `report_data` is the exact dict `generate_report` produced for this
+        request's JSON response — this method only formats it; it never
+        recomputes anything (Display Dataset rule)."""
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
         from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
@@ -273,8 +281,6 @@ class PlannedReportView(APIView):
                 return ILLEGAL_CHARACTERS_RE.sub('', v)
             return v
 
-        # Generate report data
-        report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
         items = report_data['items']
 
         # Separate items into restricted and not restricted

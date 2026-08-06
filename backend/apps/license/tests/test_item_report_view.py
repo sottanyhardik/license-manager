@@ -512,3 +512,58 @@ def test_item_report_excel_export_single_sheet_with_totals_row(report_viewer_cli
     # Freeze header + AutoFilter over the data range (excluding totals row).
     assert ws.freeze_panes == "A2"
     assert ws.auto_filter.ref == f"A1:U{total_row - 1}"
+
+
+@pytest.mark.django_db
+def test_item_report_generate_report_called_exactly_once_per_request(report_viewer_client, item_report_masters):
+    """Phase 2B.1 regression: the view must compute the Display Dataset
+    exactly once and thread the same dict to both the JSON response and the
+    Excel exporter — `export_to_excel` must never call `generate_report`
+    itself. Wraps the real method (not a stub) so this also still exercises
+    genuine report generation, just counts the calls."""
+    from unittest.mock import patch
+
+    from apps.license.views.item_report import ItemReportView
+
+    lic = _make_license("ITEM-REPORT-ONCE-A", item_report_masters["parle"])
+    _make_import_item(lic, item_report_masters["hs_code"], available_value=Decimal("500.00"))
+
+    with patch.object(ItemReportView, "generate_report", autospec=True, side_effect=ItemReportView.generate_report) as mocked:
+        json_response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+        assert json_response.status_code == 200
+        assert mocked.call_count == 1
+
+    with patch.object(ItemReportView, "generate_report", autospec=True, side_effect=ItemReportView.generate_report) as mocked:
+        excel_response = report_viewer_client.get(REPORT_URL, {"min_balance": 0, "format": "excel"})
+        assert excel_response.status_code == 200
+        assert mocked.call_count == 1
+
+
+@pytest.mark.django_db
+def test_item_report_excel_rows_match_json_rows(report_viewer_client, item_report_masters):
+    """Phase 2B.1 regression: JSON and Excel must render the exact same
+    per-item figures for the same request — using the shared
+    apps.core.tests.report_assertions helper introduced in Phase 2A."""
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    from apps.core.tests.report_assertions import assert_excel_rows_match_json_rows
+
+    lic_a = _make_license("ITEM-REPORT-MATCH-A", item_report_masters["parle"])
+    lic_b = _make_license("ITEM-REPORT-MATCH-B", item_report_masters["other"])
+    _make_import_item(lic_a, item_report_masters["hs_code"], available_value=Decimal("500.00"), available_quantity=Decimal("50.000"))
+    _make_import_item(lic_b, item_report_masters["hs_code"], available_value=Decimal("300.00"), available_quantity=Decimal("20.000"))
+
+    json_response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+    json_items = json_response.json()["items"]
+    assert len(json_items) == 2
+
+    excel_response = report_viewer_client.get(REPORT_URL, {"min_balance": 0, "format": "excel"})
+    workbook = load_workbook(BytesIO(excel_response.content), data_only=True)
+
+    assert_excel_rows_match_json_rows(
+        workbook, json_items, "Item Report",
+        column_map={"available_quantity": 12, "available_balance": 14},
+        header_row=1, key_field="license_number", key_column=2,
+    )

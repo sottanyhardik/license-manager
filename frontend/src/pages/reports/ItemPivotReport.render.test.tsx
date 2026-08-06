@@ -90,6 +90,9 @@ const REPORT_DATA = {
                             planned_cif: 750,
                             plan_quantity: 0,
                             plan_cif: 0,
+                            // Backend-resolved manual-vs-norm selection (Phase 2B.2A) —
+                            // no manual plan here, so this equals planned_cif.
+                            effective_planned_cif: 750,
                             splits: [],
                             condition_type: "",
                         },
@@ -150,12 +153,43 @@ const REPORT_DATA = {
                             planned_cif: 378,
                             plan_quantity: 270,
                             plan_cif: 378,
+                            // Backend-resolved manual-vs-norm selection (Phase 2B.2A) —
+                            // manually planned, so this equals plan_cif, not planned_cif.
+                            effective_planned_cif: 378,
                             splits: [],
                             condition_type: "",
                         },
                     },
+                    // License-level Planned CIF total — backend sum of every item
+                    // column's own effective_planned_cif (750 + 378).
+                    total_effective_planned_cif: 1128,
                 },
             ],
+        },
+    },
+    // Backend-computed grand totals for this (norm, notification) group
+    // (Phase 2B.2A) — the footer TOTAL row reads these directly.
+    notification_totals: {
+        E1: {
+            "Global Exim — NOTIF-1": {
+                total_cif: 1000,
+                debited_cif: 0,
+                alloted_cif: 0,
+                balance_cif: 1000,
+                total_effective_planned_cif: 1128,
+                items: {
+                    "FRUIT JUICE - E1": {
+                        quantity: 300, allotted_quantity: 0, debited_quantity: 0,
+                        available_quantity: 300, restriction_value: 0,
+                        plan_quantity: 0, effective_planned_cif: 750,
+                    },
+                    "PP - E1": {
+                        quantity: 333, allotted_quantity: 33, debited_quantity: 3,
+                        available_quantity: 350, restriction_value: 0,
+                        plan_quantity: 270, effective_planned_cif: 378,
+                    },
+                },
+            },
         },
     },
     norm_notes_conditions: { E1: { notes: [], conditions: [] } },

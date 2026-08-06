@@ -38,6 +38,20 @@ def _safe_int(value, default):
         return default
 
 
+def _effective_planned_cif(plan_quantity, plan_cif, planned_cif):
+    """The single manual-vs-norm-derived planned-CIF selection rule for one
+    license x item cell: prefer the user-authored manual plan (`plan_quantity`/
+    `plan_cif`, from `LicenseItemPlan`) when one exists, otherwise fall back
+    to the norm-derived `planned_cif` (E1/E5/E132 waterfall). Computed once
+    here and exposed per cell as `effective_planned_cif` — every consumer
+    (JSON, React, Excel) reads that field instead of re-deriving this rule
+    (Phase 2B.2A; see docs/architecture/ITEM_PIVOT_DISPLAY_DATASET_DESIGN.md).
+    """
+    pq = plan_quantity or 0
+    pc = plan_cif or 0
+    return pc if (pq or pc) else (planned_cif or 0)
+
+
 def _xlsx_safe_row(row):
     """Strip XML-illegal control characters from string cells before writing.
 
@@ -631,6 +645,71 @@ class ItemPivotReportView(APIView):
         for norm, notification_dict in licenses_by_norm_notification.items():
             result_dict[norm] = dict(notification_dict)
 
+        # Grand totals per (norm, notification) group — the single backend-
+        # owned computation of what used to be independently re-summed by
+        # both the React page and the Excel exporter's totals row (Phase
+        # 2B.2A; see docs/architecture/ITEM_PIVOT_DISPLAY_DATASET_DESIGN.md).
+        # Additive top-level key — `licenses_by_norm_notification`'s existing
+        # shape is unchanged, no API field renamed.
+        notification_totals = {}
+        for norm, notification_dict in result_dict.items():
+            notification_totals[norm] = {}
+            for notification_key, licenses_list in notification_dict.items():
+                item_totals = {}
+                for item_id, item_name in sorted_items:
+                    item_totals[item_name] = {
+                        'quantity': sum(
+                            lic['items'].get(item_name, {}).get('quantity', 0) or 0
+                            for lic in licenses_list
+                        ),
+                        'allotted_quantity': sum(
+                            lic['items'].get(item_name, {}).get('allotted_quantity', 0) or 0
+                            for lic in licenses_list
+                        ),
+                        'debited_quantity': sum(
+                            lic['items'].get(item_name, {}).get('debited_quantity', 0) or 0
+                            for lic in licenses_list
+                        ),
+                        'available_quantity': sum(
+                            lic['items'].get(item_name, {}).get('available_quantity', 0) or 0
+                            for lic in licenses_list
+                        ),
+                        'restriction_value': sum(
+                            lic['items'].get(item_name, {}).get('restriction_value', 0) or 0
+                            for lic in licenses_list
+                        ),
+                        # Literal sum of manual plan_quantity only — matches
+                        # the on-screen/Excel `totalPlanQty` convention: rows
+                        # with no manual plan (norm-derived, shown as a
+                        # unit-price rate per-row) contribute 0 here rather
+                        # than being folded into a blended rate.
+                        'plan_quantity': sum(
+                            lic['items'].get(item_name, {}).get('plan_quantity', 0) or 0
+                            for lic in licenses_list
+                        ),
+                        # Manual-vs-norm selection already resolved per cell
+                        # by _effective_planned_cif — just sum it here.
+                        'effective_planned_cif': sum(
+                            lic['items'].get(item_name, {}).get('effective_planned_cif', 0) or 0
+                            for lic in licenses_list
+                        ),
+                    }
+                notification_totals[norm][notification_key] = {
+                    'total_cif': sum(lic['total_cif'] for lic in licenses_list),
+                    'debited_cif': sum(lic.get('debited_cif', 0) for lic in licenses_list),
+                    'alloted_cif': sum(lic['alloted_cif'] for lic in licenses_list),
+                    'balance_cif': sum(lic['balance_cif'] for lic in licenses_list),
+                    # Grand Planned CIF across every item column — equals
+                    # summing `total_effective_planned_cif` across licenses,
+                    # or summing `effective_planned_cif` across items; kept
+                    # as its own field so consumers never need to reduce
+                    # either axis themselves.
+                    'total_effective_planned_cif': sum(
+                        lic.get('total_effective_planned_cif', 0) for lic in licenses_list
+                    ),
+                    'items': item_totals,
+                }
+
         # Fetch notes and conditions for all norms in a single query
         from apps.core.models import SionNormClassModel
         norm_classes_list = list(result_dict.keys())
@@ -668,6 +747,7 @@ class ItemPivotReportView(APIView):
                 for item_id, item_name in sorted_items
             ],
             'licenses_by_norm_notification': result_dict,
+            'notification_totals': notification_totals,
             'norm_notes_conditions': norm_notes_conditions,
             'report_date': today.isoformat(),
         }
@@ -1285,6 +1365,12 @@ class ItemPivotReportView(APIView):
                     # planned_cif), sourced per plan-line item_name.
                     'plan_quantity': float(_item_plan.get('q') or 0),
                     'plan_cif': float(_item_plan.get('cif') or 0),
+                    # The single manual-vs-norm selection rule — see
+                    # _effective_planned_cif's docstring. Every consumer
+                    # should read this instead of re-deriving the rule.
+                    'effective_planned_cif': _effective_planned_cif(
+                        float(_item_plan.get('q') or 0), float(_item_plan.get('cif') or 0), planned_cif,
+                    ),
                     # Raw per-line split breakdown (item_name/qty/unit_price/
                     # cif) for the "Planning Splits" sheet — same source as
                     # plan_quantity/plan_cif above, just not summed.
@@ -1323,6 +1409,7 @@ class ItemPivotReportView(APIView):
                     'planned_cif': 0,
                     'plan_quantity': 0,
                     'plan_cif': 0,
+                    'effective_planned_cif': 0,
                     'splits': [],
                     'condition_type': '',
                     'product_code': None,
@@ -1334,6 +1421,15 @@ class ItemPivotReportView(APIView):
                     'import_item_name': '',
                     'import_quantity': 0,
                 }
+
+        # This license's Planned CIF row-total — sum of each item's already-
+        # resolved `effective_planned_cif` (Phase 2B.2A). Zero-valued items
+        # (no data for this license) don't affect the sum, so this equals
+        # summing over any narrower "items with data" subset a consumer
+        # might otherwise have filtered to first.
+        row_data['total_effective_planned_cif'] = sum(
+            item.get('effective_planned_cif', 0) or 0 for item in row_data['items'].values()
+        )
 
         return row_data
 
@@ -1504,41 +1600,51 @@ class ItemPivotReportView(APIView):
                                 ])
                             # Per-product: manual plan if this product was manually
                             # planned; else norm-derived unit price / planned CIF.
+                            # First column is a display convention (quantity when
+                            # manually planned, else the unit price rate) — not a
+                            # business calculation. Second column is the CIF value
+                            # itself, using the single backend selection rule
+                            # (_effective_planned_cif / `effective_planned_cif`).
                             _s_plan_q = item_data.get('plan_quantity') or 0
                             _s_plan_c = item_data.get('plan_cif') or 0
                             if _s_plan_q or _s_plan_c:
                                 row_data.append(_s_plan_q or 0)
-                                row_data.append(_s_plan_c or 0)
                             else:
                                 row_data.append(item_data.get('unit_price') or 0)
-                                row_data.append(item_data.get('planned_cif') or 0)
+                            row_data.append(item_data.get('effective_planned_cif', 0))
 
                         worksheet.append(_xlsx_safe_row(row_data))
 
-                    # Totals row
+                    # Totals row — reads the backend-computed totals for
+                    # this (norm, notification) group; writes only, no
+                    # aggregation happens here (Phase 2B.2A; see
+                    # docs/architecture/ITEM_PIVOT_DISPLAY_DATASET_DESIGN.md).
                     # base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt',
                     #   'Exporter', 'Total CIF', 'Debited CIF', 'Alloted CIF',
                     #   'Balance CIF', 'Notes', 'Condition Sheet']
                     # 'TOTAL' lands under col 1 (Sr no); cols 2-5 (DFIA No/DFIA
                     # Dt/Expiry Dt/Exporter) are blank; cols 6-9 are the four
                     # CIF sums; cols 10-11 (Notes/Condition Sheet) are blank.
+                    group_totals = report_data.get('notification_totals', {}).get(norm_class, {}).get(notification, {})
+                    item_totals = group_totals.get('items', {})
+
                     totals_row = [WriteOnlyCell(worksheet, value='TOTAL')]
                     totals_row[0].font = Font(bold=True)
                     totals_row.extend([None, None, None, None])  # DFIA No, DFIA Dt, Expiry Dt, Exporter
 
-                    total_cif_cell = WriteOnlyCell(worksheet, value=sum(license_row['total_cif'] for license_row in licenses_list))
+                    total_cif_cell = WriteOnlyCell(worksheet, value=group_totals.get('total_cif', 0))
                     total_cif_cell.font = Font(bold=True)
                     totals_row.append(total_cif_cell)
 
-                    debited_cif_cell = WriteOnlyCell(worksheet, value=sum(license_row.get('debited_cif', 0) for license_row in licenses_list))
+                    debited_cif_cell = WriteOnlyCell(worksheet, value=group_totals.get('debited_cif', 0))
                     debited_cif_cell.font = Font(bold=True)
                     totals_row.append(debited_cif_cell)
 
-                    alloted_cif_cell = WriteOnlyCell(worksheet, value=sum(license_row['alloted_cif'] for license_row in licenses_list))
+                    alloted_cif_cell = WriteOnlyCell(worksheet, value=group_totals.get('alloted_cif', 0))
                     alloted_cif_cell.font = Font(bold=True)
                     totals_row.append(alloted_cif_cell)
 
-                    balance_cif_cell = WriteOnlyCell(worksheet, value=sum(license_row['balance_cif'] for license_row in licenses_list))
+                    balance_cif_cell = WriteOnlyCell(worksheet, value=group_totals.get('balance_cif', 0))
                     balance_cif_cell.font = Font(bold=True)
                     totals_row.append(balance_cif_cell)
 
@@ -1547,17 +1653,16 @@ class ItemPivotReportView(APIView):
                     for item in items_with_data:
                         item_name = item['name']
                         has_restriction = item.get('has_restriction', False)
+                        item_total = item_totals.get(item_name, {})
                         totals_row.extend([None, None])  # HSN, Description
                         for qty_type in ['quantity', 'allotted_quantity', 'debited_quantity', 'available_quantity']:
-                            total = sum(license_row['items'].get(item_name, {}).get(qty_type, 0) for license_row in licenses_list)
-                            cell = WriteOnlyCell(worksheet, value=total)
+                            cell = WriteOnlyCell(worksheet, value=item_total.get(qty_type, 0))
                             cell.font = Font(bold=True)
                             totals_row.append(cell)
                         totals_row.extend([None, None])  # Import Item Name, Import Qty
                         if has_restriction:
                             totals_row.append(None)  # Restriction %
-                            total_restriction = sum(license_row['items'].get(item_name, {}).get('restriction_value', 0) for license_row in licenses_list)
-                            cell = WriteOnlyCell(worksheet, value=total_restriction)
+                            cell = WriteOnlyCell(worksheet, value=item_total.get('restriction_value', 0))
                             cell.font = Font(bold=True)
                             totals_row.append(cell)
                         # Plan Qty total: a literal sum of plan_quantity only,
@@ -1566,23 +1671,14 @@ class ItemPivotReportView(APIView):
                         # with no manual plan (norm-derived, shown as a unit-price
                         # rate per-row) contribute 0 here rather than being folded
                         # into a blended rate.
-                        total_plan_qty = sum(
-                            license_row['items'].get(item_name, {}).get('plan_quantity', 0) or 0
-                            for license_row in licenses_list
-                        )
-                        cell = WriteOnlyCell(worksheet, value=total_plan_qty)
+                        cell = WriteOnlyCell(worksheet, value=item_total.get('plan_quantity', 0))
                         cell.font = Font(bold=True)
                         totals_row.append(cell)
 
-                        # Planned CIF total: per-product source (manual plan when
-                        # the product was manually planned, else norm-derived).
-                        def _planned_cif_for(item_d):
-                            pq = item_d.get('plan_quantity') or 0
-                            pc = item_d.get('plan_cif') or 0
-                            return pc if (pq or pc) else (item_d.get('planned_cif') or 0)
-
-                        total_planned = sum(_planned_cif_for(license_row['items'].get(item_name, {})) for license_row in licenses_list)
-                        cell = WriteOnlyCell(worksheet, value=total_planned)
+                        # Planned CIF total: the single manual-vs-norm selection
+                        # rule (_effective_planned_cif), already resolved per
+                        # cell and summed by the backend.
+                        cell = WriteOnlyCell(worksheet, value=item_total.get('effective_planned_cif', 0))
                         cell.font = Font(bold=True)
                         totals_row.append(cell)
 

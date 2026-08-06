@@ -787,6 +787,11 @@ export default function ItemPivotReport() {
                         <div>
                             {/* Notifications within active norm */}
                             {(Object.entries(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}) as [string, any][]).sort().map(([groupKey, licenses]: [string, any]) => {
+                                // Backend-computed grand totals for this (norm, notification)
+                                // group — the footer TOTAL row reads these directly instead of
+                                // reducing `licenses` itself (Phase 2B.2A; see
+                                // docs/architecture/ITEM_PIVOT_DISPLAY_DATASET_DESIGN.md).
+                                const groupTotals = reportData?.notification_totals?.[activeNormTab]?.[groupKey] || {};
                                 // Group key is "<Purchase Status> — <notification>" (see backend).
                                 // Split it so the table header shows purchase status as a chip
                                 // and the notification on its own.
@@ -1123,16 +1128,12 @@ export default function ItemPivotReport() {
                                                             <td className="text-right font-semibold text-warning">{(license.debited_cif || 0).toFixed(2)}</td>
                                                             <td className="text-right font-semibold text-info">{(license.alloted_cif || 0).toFixed(2)}</td>
                                                             <td className="text-right font-semibold text-secondary">
-                                                                {/* Planned CIF for this license — sum across every item
-                                                                    column's own effective planned CIF (manual plan when
-                                                                    the product was manually planned, else norm-derived),
-                                                                    same per-item formula the "Planned CIF" cells and the
-                                                                    notification-level total below both use. */}
-                                                                {groupItems.reduce((sum, it) => {
-                                                                    const itData = license.items[it.name] || {};
-                                                                    const hasManual = (itData.plan_quantity || 0) > 0 || (itData.plan_cif || 0) > 0;
-                                                                    return sum + (hasManual ? (itData.plan_cif || 0) : (itData.planned_cif || 0));
-                                                                }, 0).toFixed(2)}
+                                                                {/* Planned CIF for this license — backend-computed sum of
+                                                                    every item column's own effective planned CIF (manual
+                                                                    plan when the product was manually planned, else
+                                                                    norm-derived). See `total_effective_planned_cif` in
+                                                                    item_pivot_report.py's `_build_license_row`. */}
+                                                                {(license.total_effective_planned_cif || 0).toFixed(2)}
                                                             </td>
                                                             </>)}
                                                             <td className="text-right font-semibold text-success" style={{
@@ -1251,9 +1252,15 @@ export default function ItemPivotReport() {
                                                                                 : (itemData.unit_price != null ? Number(itemData.unit_price).toFixed(2) : '-')}
                                                                         </td>
                                                                         <td className={cn('text-right', hasData && 'font-semibold')} style={{backgroundColor: itemBg}}>
+                                                                            {/* Value is the backend's single manual-vs-norm
+                                                                                selection (`effective_planned_cif`) — the
+                                                                                manual/hasManual check here is display-only
+                                                                                (a manually-planned $0 CIF still shows "0.00",
+                                                                                a norm-derived $0 shows "-"), not a re-derivation
+                                                                                of which figure is authoritative. */}
                                                                             {(Number(itemData.plan_quantity || 0) > 0 || Number(itemData.plan_cif || 0) > 0)
-                                                                                ? Number(itemData.plan_cif || 0).toFixed(2)
-                                                                                : (itemData.planned_cif ? Number(itemData.planned_cif).toFixed(2) : '-')}
+                                                                                ? Number(itemData.effective_planned_cif || 0).toFixed(2)
+                                                                                : (itemData.effective_planned_cif ? Number(itemData.effective_planned_cif).toFixed(2) : '-')}
                                                                         </td>
                                                                         {item.name === 'RUTILE - A3627' && (
                                                                             <td className={cn('text-right', hasData && 'font-semibold text-warning')} style={{backgroundColor: itemBg}}>
@@ -1285,20 +1292,16 @@ export default function ItemPivotReport() {
                                                         {!isCompact && (<>
                                                         <td style={{backgroundColor: 'var(--warning-bg)'}}></td>
                                                         <td className="text-right text-primary" style={{backgroundColor: 'var(--warning-bg)'}}>
-                                                            {licenses.reduce((sum, lic) => sum + lic.total_cif, 0).toFixed(2)}
+                                                            {(groupTotals.total_cif || 0).toFixed(2)}
                                                         </td>
                                                         <td className="text-right text-warning" style={{backgroundColor: 'var(--warning-bg)'}}>
-                                                            {licenses.reduce((sum, lic) => sum + (lic.debited_cif || 0), 0).toFixed(2)}
+                                                            {(groupTotals.debited_cif || 0).toFixed(2)}
                                                         </td>
                                                         <td className="text-right text-info" style={{backgroundColor: 'var(--warning-bg)'}}>
-                                                            {licenses.reduce((sum, lic) => sum + (lic.alloted_cif || 0), 0).toFixed(2)}
+                                                            {(groupTotals.alloted_cif || 0).toFixed(2)}
                                                         </td>
                                                         <td className="text-right text-secondary" style={{backgroundColor: 'var(--warning-bg)'}}>
-                                                            {licenses.reduce((sum, lic) => sum + groupItems.reduce((s, it) => {
-                                                                const itData = lic.items[it.name] || {};
-                                                                const hasManual = (itData.plan_quantity || 0) > 0 || (itData.plan_cif || 0) > 0;
-                                                                return s + (hasManual ? (itData.plan_cif || 0) : (itData.planned_cif || 0));
-                                                            }, 0), 0).toFixed(2)}
+                                                            {(groupTotals.total_effective_planned_cif || 0).toFixed(2)}
                                                         </td>
                                                         </>)}
                                                         <td className="text-right text-success" style={{
@@ -1309,41 +1312,28 @@ export default function ItemPivotReport() {
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}>
-                                                            {licenses.reduce((sum, lic) => sum + lic.balance_cif, 0).toFixed(2)}
+                                                            {(groupTotals.balance_cif || 0).toFixed(2)}
                                                         </td>
                                                         {/* DFIA Dt / Notif No totals temporarily hidden */}
                                                         {groupItems.map(item => {
-                                                            const totalQty = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.quantity || 0);
-                                                            }, 0);
-                                                            const totalAllotted = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.allotted_quantity || 0);
-                                                            }, 0);
-                                                            const totalDebited = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.debited_quantity || 0);
-                                                            }, 0);
-                                                            const totalAvail = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.available_quantity || 0);
-                                                            }, 0);
-                                                            const totalRestrictionVal = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.restriction_value || 0);
-                                                            }, 0);
-                                                            // Planned CIF + quantity per-product (matches per-row logic):
-                                                            // use manual plan values when THIS product was manually
-                                                            // planned; otherwise use norm-derived values.
-                                                            const totalPlanned = licenses.reduce((sum, lic) => {
-                                                                const it = lic.items[item.name] || {};
-                                                                const itHasManual = (it.plan_quantity || 0) > 0 || (it.plan_cif || 0) > 0;
-                                                                return sum + (itHasManual ? (it.plan_cif || 0) : (it.planned_cif || 0));
-                                                            }, 0);
+                                                            // Backend-computed per-item totals for this group — see
+                                                            // `notification_totals[...].items` in item_pivot_report.py.
+                                                            // React only reads and formats them (Phase 2B.2A).
+                                                            const itemTotals = groupTotals.items?.[item.name] || {};
+                                                            const totalQty = itemTotals.quantity || 0;
+                                                            const totalAllotted = itemTotals.allotted_quantity || 0;
+                                                            const totalDebited = itemTotals.debited_quantity || 0;
+                                                            const totalAvail = itemTotals.available_quantity || 0;
+                                                            const totalRestrictionVal = itemTotals.restriction_value || 0;
+                                                            // Planned CIF: the backend's single manual-vs-norm selection
+                                                            // rule (`effective_planned_cif`), already resolved and summed.
+                                                            const totalPlanned = itemTotals.effective_planned_cif || 0;
                                                             // Total Plan Qty: sum of the manually-planned quantity only —
                                                             // mirrors exactly what the per-row "Plan Qty" cell shows (it
                                                             // never falls back to available_quantity/unit_price), so a
                                                             // norm-driven row with no manual plan contributes 0 here
                                                             // rather than being folded into a blended rate.
-                                                            const totalPlanQty = licenses.reduce((sum, lic) => {
-                                                                return sum + Number(lic.items[item.name]?.plan_quantity || 0);
-                                                            }, 0);
+                                                            const totalPlanQty = itemTotals.plan_quantity || 0;
                                                             return (
                                                                 <React.Fragment key={`total-${item.id}`}>
                                                                     <td className="text-muted-foreground">-</td>

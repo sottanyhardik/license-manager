@@ -232,17 +232,26 @@ def _collect_unique_licenses(instance, instance_type):
     return unique_licenses
 
 
+DOC_TYPE_ORDER = {'TRANSFER LETTER': 0, 'LICENSE COPY': 1, 'OTHER': 2}
+
+
 def _copy_license_docs_to_output(unique_licenses, output_dir):
     """
     Copy all license documents from storage directly into the output directory
     so they are included as individual files in the zip alongside the TL.
     Files from the same license that share a basename are prefixed with the
     license number to prevent collisions.
+
+    Returns:
+        dict mapping each copied file's basename to its document-type order
+        weight (see DOC_TYPE_ORDER), so downstream merging can place existing
+        Transfer Letter docs before License Copy docs.
     """
     import shutil
     license_list = list(unique_licenses)
     # Batch-fetch all license documents in a single query instead of N queries.
     prefetch_related_objects(license_list, 'license_documents')
+    file_type_order = {}
     for license_obj in license_list:
         license_number = license_obj.license_number.replace('/', '_')
         for doc in license_obj.license_documents.all():
@@ -265,21 +274,28 @@ def _copy_license_docs_to_output(unique_licenses, output_dir):
             if os.path.exists(dest_path):
                 name, ext = os.path.splitext(dest_name)
                 dest_path = os.path.join(output_dir, f'{name}_dup{ext}')
+                dest_name = os.path.basename(dest_path)
             try:
                 with storage.open(file_name, 'rb') as src:
                     with open(dest_path, 'wb') as dst:
                         shutil.copyfileobj(src, dst)
+                file_type_order[dest_name] = DOC_TYPE_ORDER.get(doc.type, 2)
                 logger.info("Included license doc in zip: %s", os.path.basename(dest_path))
             except Exception as e:
                 logger.error("Failed to copy license doc %s: %s", file_name, str(e))
+    return file_type_order
 
 
-def _create_license_fs_pdfs(unique_licenses, output_dir, tl_files_before):
+def _create_license_fs_pdfs(unique_licenses, output_dir, tl_files_before, copy_file_order=None):
     """
     For each license, merge its generated TL PDF(s) with its copied license doc PDFs
     into a single {license_number}_FS.pdf, then remove the originals.
     tl_files_before: set of filenames that existed before _copy_license_docs_to_output ran.
+    copy_file_order: dict mapping copied filenames to a DOC_TYPE_ORDER weight, so the
+        merged PDF orders existing Transfer Letter docs before License Copy docs
+        (see _copy_license_docs_to_output).
     """
+    copy_file_order = copy_file_order or {}
     try:
         from pypdf import PdfWriter
     except ImportError:
@@ -299,11 +315,14 @@ def _create_license_fs_pdfs(unique_licenses, output_dir, tl_files_before):
             and os.path.exists(os.path.join(output_dir, f))
         )
 
-        # Copy PDFs for this license: added during copy step, contain license_number
+        # Copy PDFs for this license: added during copy step, contain license_number.
+        # Ordered by document type (Transfer Letter before License Copy before Other),
+        # falling back to filename for a stable order within the same type.
         copy_pdfs = sorted(
-            f for f in copy_files
-            if license_number in f and f.lower().endswith('.pdf')
-            and os.path.exists(os.path.join(output_dir, f))
+            (f for f in copy_files
+             if license_number in f and f.lower().endswith('.pdf')
+             and os.path.exists(os.path.join(output_dir, f))),
+            key=lambda f: (copy_file_order.get(f, 2), f)
         )
 
         if not tl_pdfs:
@@ -549,9 +568,10 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
         # Copy original license documents into the output dir for inclusion in zip
         if include_license_copy and unique_licenses:
-            _copy_license_docs_to_output(unique_licenses, output_root)
-            # Merge each license's TL PDF + Copy PDFs into a single {license}_FS.pdf
-            _create_license_fs_pdfs(unique_licenses, output_root, tl_files_before)
+            copy_file_order = _copy_license_docs_to_output(unique_licenses, output_root)
+            # Merge each license's TL PDF + Copy PDFs into a single {license}_FS.pdf,
+            # ordered: new TL -> existing Transfer Letter doc -> License Copy doc -> other
+            _create_license_fs_pdfs(unique_licenses, output_root, tl_files_before, copy_file_order)
 
         if not any_data_generated:
             return Response({

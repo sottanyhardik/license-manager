@@ -40,10 +40,27 @@ export default function TransferLetterForm({
     const [licenseEdits, setLicenseEdits] = useState<Record<string, any>>({});
     const [generating, setGenerating] = useState(null);
     const [selectedItems, setSelectedItems] = useState(items?.map((item) => item.id) || []);
+    const [defaultTemplate, setDefaultTemplate] = useState(null);
 
     useEffect(() => {
         setSelectedItems(items?.map((item) => item.id) || []);
     }, [items]);
+
+    // Default the Template dropdown to "GE" (Global Exim) for every recipient,
+    // while still letting the user pick a different template.
+    useEffect(() => {
+        (async () => {
+            try {
+                const { data } = await api.get(`masters/transfer-letters/?search=GE`);
+                const list = data.results || data || [];
+                const match = list.find((tl) => (tl.name || "").trim().toLowerCase() === "ge");
+                if (!match) return;
+                const opt = { value: match.id, label: match.name };
+                setDefaultTemplate(opt);
+                setParties((prev) => prev.map((p) => (p.template ? p : { ...p, template: opt })));
+            } catch { /* no default template available — leave manual selection */ }
+        })();
+    }, []);
 
     const groupedItems = useMemo(() => {
         const groups: Record<string, { license_number: string; purchase_status: any; item_ids: any[]; total_cif: number }> = {};
@@ -73,7 +90,7 @@ export default function TransferLetterForm({
     };
 
     const addParty = () =>
-        setParties((prev) => [...prev, { id: Date.now(), company: null, addressLine1: "", addressLine2: "", template: null }]);
+        setParties((prev) => [...prev, { id: Date.now(), company: null, addressLine1: "", addressLine2: "", template: defaultTemplate }]);
     const removeParty = (id) => setParties((prev) => prev.filter((p) => p.id !== id));
     const updateParty = (id, updates) => setParties((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
 

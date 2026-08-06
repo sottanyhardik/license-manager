@@ -527,8 +527,8 @@ def test_purchase_from_is_earliest_qualifying_trades_supplier(ppr_masters):
 
 
 @pytest.mark.django_db
-def test_balance_cif_equals_purchase_usd_minus_sale_usd(ppr_masters):
-    """Balance CIF ($) = Purchase $ − Sale $ (Original/acquired CIF $ minus
+def test_trade_balance_usd_equals_purchase_usd_minus_sale_usd(ppr_masters):
+    """Trade Balance ($) = Purchase $ − Sale $ (Original/acquired CIF $ minus
     Debited/utilized CIF $) — this report's OWN already-computed figures,
     never the broader `LicenseBalanceCalculator` engine (which also
     factors in BOE debits/allotments/an opening-balance anchor this report
@@ -545,7 +545,7 @@ def test_balance_cif_equals_purchase_usd_minus_sale_usd(ppr_masters):
     lic_row = next(r for r in report["licenses"] if r["license_number"] == "PPR-BALANCE")
     assert lic_row["purchase_usd"] == 500.00
     assert lic_row["sale_usd"] == 180.00
-    assert lic_row["balance_cif"] == 320.00  # 500.00 - 180.00
+    assert lic_row["trade_balance_usd"] == 320.00  # 500.00 - 180.00
 
 
 @pytest.mark.django_db
@@ -573,7 +573,7 @@ def test_summary_totals_match_sum_of_license_rows(ppr_masters):
     assert report["summary"]["total_licenses"] == len(report["licenses"])
     assert report["summary"]["purchase_amount"] == round(sum(r["purchase_amount"] for r in report["licenses"]), 2)
     assert report["summary"]["purchase_usd"] == round(sum(r["purchase_usd"] for r in report["licenses"]), 2)
-    assert report["summary"]["balance_cif"] == round(sum(r["balance_cif"] for r in report["licenses"]), 2)
+    assert report["summary"]["trade_balance_usd"] == round(sum(r["trade_balance_usd"] for r in report["licenses"]), 2)
     assert report["summary"]["total_sale_amount"] == round(sum(r["sale_amount"] for r in report["licenses"]), 2)
     assert report["summary"]["total_sale_usd"] == round(sum(r["sale_usd"] for r in report["licenses"]), 2)
 
@@ -867,14 +867,14 @@ def test_view_json_response_has_expected_top_level_keys(report_viewer_client, pp
     assert set(data.keys()) == {"summary", "licenses", "item_matrix"}
     assert isinstance(data["licenses"], list)
     assert set(data["summary"].keys()) == {
-        "total_licenses", "purchase_amount", "purchase_usd", "balance_cif",
+        "total_licenses", "purchase_amount", "purchase_usd", "trade_balance_usd",
         "total_sale_usd", "total_sale_amount", "total_profit_loss",
     }
     row = data["licenses"][0]
     assert set(row.keys()) >= {
         "license_number", "license_date", "expiry_date", "exporter", "norms",
         "purchase_from", "purchase_amount", "purchase_usd",
-        "sale_amount", "sale_usd", "profit_loss", "balance_cif",
+        "sale_amount", "sale_usd", "profit_loss", "trade_balance_usd",
     }
     assert "license_id" not in row
 
@@ -927,7 +927,7 @@ def test_view_excel_export_returns_valid_workbook(report_viewer_client, ppr_mast
 def test_view_excel_item_matrix_grand_total_row_shows_static_column_totals(report_viewer_client, ppr_masters):
     """The Item Utilization Matrix sheet's GRAND TOTAL row must show real
     values for Purchase Amount/Purchase $/Sale Amount/Sale $/Profit-Loss/
-    Balance CIF ($) (columns 7-12) — not blanks left over from a label that
+    Trade Balance ($) (columns 7-12) — not blanks left over from a label that
     used to span all 12 static columns. Cross-checked against the same
     request's JSON `summary` so a column-offset regression (e.g. `n_static`
     vs. the new `n_label` getting confused) would fail this test."""
@@ -953,7 +953,7 @@ def test_view_excel_item_matrix_grand_total_row_shows_static_column_totals(repor
     assert matrix_ws.cell(row=total_row, column=9).value == summary["total_sale_amount"]
     assert matrix_ws.cell(row=total_row, column=10).value == summary["total_sale_usd"]
     assert matrix_ws.cell(row=total_row, column=11).value == summary["total_profit_loss"]
-    assert matrix_ws.cell(row=total_row, column=12).value == summary["balance_cif"]
+    assert matrix_ws.cell(row=total_row, column=12).value == summary["trade_balance_usd"]
     # Sanity: Profit/Loss is a real, non-zero (here: negative) figure —
     # confirms this isn't accidentally reading an empty/zeroed cell.
     assert summary["total_profit_loss"] == -7000.0
@@ -1090,7 +1090,7 @@ def test_view_excel_summary_metric_table_matches_json_summary(report_viewer_clie
     assert values_by_metric["Sale Amount"] == summary["total_sale_amount"]
     assert values_by_metric["Sale $"] == summary["total_sale_usd"]
     assert values_by_metric["Profit / Loss"] == summary["total_profit_loss"]
-    assert values_by_metric["Balance CIF ($)"] == summary["balance_cif"]
+    assert values_by_metric["Trade Balance ($)"] == summary["trade_balance_usd"]
 
     # The Value column must be real numeric cells, not text baked into a
     # concatenated string — `number_format` can only apply to real numbers.

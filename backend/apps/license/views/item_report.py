@@ -3,6 +3,7 @@ Item Report - List all License Import Items with filters and inline editing supp
 """
 
 import logging
+from decimal import Decimal
 
 from django.db.models import Prefetch
 from django.http import JsonResponse, HttpResponse
@@ -314,6 +315,18 @@ class ItemReportView(APIView):
                 seen_license_ids.add(lid)
                 _eff_cache[lid] = effective_plan_for_license(it.license)
 
+        # Balance CIF must be identical everywhere in the app — read LIVE via
+        # the shared `LicenseBalanceCalculator` (same batched method the
+        # License List / Item Pivot Report views use), never the
+        # denormalized `LicenseDetailsModel.balance_cif` column directly,
+        # which is only refreshed by a background task/manual "Update
+        # Balance" trigger and can go stale relative to the live calculation.
+        # See `LicenseDetailsModel.get_balance_cif`'s docstring; must match
+        # every other "Balance CIF" in the app.
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        _report_license_ids = {it.license_id for it in item_list}
+        live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(_report_license_ids)
+
         # Build report data
         from apps.license.services.plan_grouping import plan_group_key
         report_items = []
@@ -369,7 +382,7 @@ class ItemReportView(APIView):
                 'available_quantity': available_quantity,
                 'available_balance': available_balance,
                 'unit_price': unit_price,
-                'balance_cif': float(item.license.balance_cif or 0),
+                'balance_cif': float(live_balance_by_license.get(item.license_id, Decimal('0'))),
                 'is_restricted': item.is_restricted,
                 'condition_type': item.condition_type or '',
                 'notes': item.license.balance_report_notes or '',

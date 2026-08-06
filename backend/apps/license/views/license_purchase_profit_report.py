@@ -4,7 +4,7 @@ License Purchase & Profit Report — view layer.
 Acquisition-focused report: a single flat License Summary table — License
 No. / License Date / Expiry Date / Exporter / Norm(s) / Purchase From /
 Purchase Amount / Purchase $ / Sale Amount / Sale $ / Profit / Loss /
-Balance CIF ($) — one row per qualifying license, not grouped by norm,
+Trade Balance ($) — one row per qualifying license, not grouped by norm,
 plus a `summary` grand-total block (rendered as a GRAND TOTAL row at the
 bottom of the License Summary table/sheet in Excel/PDF); and a second,
 pivot-style `item_matrix` block — the Dynamic Import Item Utilization
@@ -12,8 +12,9 @@ Matrix — with dynamic columns per Import Item name and SALE-direction
 trade-ledger debit (qty/CIF $/Bill ₹) cell values. See
 `apps.license.services.purchase_profit_report.build_purchase_profit_report`
 for the full business-rule rationale (trade-ledger-sourced Purchase Amount/
-Purchase $/Purchase From, license-selection rule, Norm(s) sourcing, the
-centralized Balance CIF engine, the separately-computed Sale Amount/
+Purchase $/Purchase From, license-selection rule, Norm(s) sourcing, why
+Trade Balance ($) is its own figure rather than the centralized (license-wide)
+Balance CIF engine, the separately-computed Sale Amount/
 Sale $/Profit-Loss figures, and the `item_matrix` headers/debit sourcing).
 Excel/PDF exports only format the `summary`/`licenses`/`item_matrix` the
 builder already computed — never recompute.
@@ -102,7 +103,7 @@ def _summary_metric_rows(summary: Dict[str, Any]) -> List[tuple]:
         ("Sale Amount", summary['total_sale_amount']),
         ("Sale $", summary['total_sale_usd']),
         ("Profit / Loss", summary['total_profit_loss']),
-        ("Balance CIF ($)", summary['balance_cif']),
+        ("Trade Balance ($)", summary['trade_balance_usd']),
     ]
 
 
@@ -268,7 +269,7 @@ class LicensePurchaseProfitReportView(APIView):
 
         headers = [
             'License No.', 'License Date', 'Expiry Date', 'Exporter', 'Norm(s)', 'Purchase From',
-            'Purchase Amount', 'Purchase $', 'Sale Amount', 'Sale $', 'Profit / Loss', 'Balance CIF ($)',
+            'Purchase Amount', 'Purchase $', 'Sale Amount', 'Sale $', 'Profit / Loss', 'Trade Balance ($)',
         ]
         n_static = 6  # 'License No.' through 'Purchase From' — spanned by the GRAND TOTAL label below.
         max_cols = len(headers)
@@ -340,7 +341,7 @@ class LicensePurchaseProfitReportView(APIView):
                 ', '.join(lic['norms']), lic['purchase_from'],
                 lic['purchase_amount'], lic['purchase_usd'],
                 lic['sale_amount'], lic['sale_usd'], lic['profit_loss'],
-                lic['balance_cif'],
+                lic['trade_balance_usd'],
             ]
             for col_num, value in enumerate(row_data, 1):
                 worksheet.cell(row=current_row, column=col_num, value=value)
@@ -357,7 +358,7 @@ class LicensePurchaseProfitReportView(APIView):
         total_row_values = [
             summary['purchase_amount'], summary['purchase_usd'],
             summary['total_sale_amount'], summary['total_sale_usd'], summary['total_profit_loss'],
-            summary['balance_cif'],
+            summary['trade_balance_usd'],
         ]
         for offset, value in enumerate(total_row_values):
             cell = worksheet.cell(row=current_row, column=n_static + 1 + offset, value=value)
@@ -407,7 +408,7 @@ class LicensePurchaseProfitReportView(APIView):
 
         static_headers = [
             'License No.', 'License Date', 'Expiry Date', 'Exporter', 'Norm(s)', 'Purchase From',
-            'Purchase Amount', 'Purchase $', 'Sale Amount', 'Sale $', 'Profit / Loss', 'Balance CIF ($)',
+            'Purchase Amount', 'Purchase $', 'Sale Amount', 'Sale $', 'Profit / Loss', 'Trade Balance ($)',
         ]
         item_headers = item_matrix['headers']
         n_static = len(static_headers)
@@ -441,7 +442,7 @@ class LicensePurchaseProfitReportView(APIView):
                 row['license_number'], row['license_date'], row['expiry_date'], row['exporter'],
                 ', '.join(row['norms']), row['purchase_from'],
                 row['purchase_amount'], row['purchase_usd'],
-                row['sale_amount'], row['sale_usd'], row['profit_loss'], row['balance_cif'],
+                row['sale_amount'], row['sale_usd'], row['profit_loss'], row['trade_balance_usd'],
             ]
             for col_idx, value in enumerate(row_values, 1):
                 matrix_ws.cell(row=data_row, column=col_idx, value=value)
@@ -466,7 +467,7 @@ class LicensePurchaseProfitReportView(APIView):
         matrix_static_totals = [
             summary['purchase_amount'], summary['purchase_usd'],
             summary['total_sale_amount'], summary['total_sale_usd'], summary['total_profit_loss'],
-            summary['balance_cif'],
+            summary['trade_balance_usd'],
         ]
         for offset, value in enumerate(matrix_static_totals):
             static_total_cell = matrix_ws.cell(row=data_row, column=n_label + 1 + offset, value=value)
@@ -606,7 +607,7 @@ class LicensePurchaseProfitReportView(APIView):
         elements.append(Paragraph("License Summary", make_section_title_style(styles)))
         lic_header = [
             'License No.', 'License Date', 'Expiry Date', 'Exporter', 'Norm(s)', 'Purchase From',
-            'Purchase Amount', 'Purchase $', 'Sale Amount', 'Sale $', 'Profit / Loss', 'Balance CIF ($)',
+            'Purchase Amount', 'Purchase $', 'Sale Amount', 'Sale $', 'Profit / Loss', 'Trade Balance ($)',
         ]
         lic_n_static = 6  # 'License No.' through 'Purchase From' — spanned by the GRAND TOTAL label below.
         lic_data = [lic_header]
@@ -623,7 +624,7 @@ class LicensePurchaseProfitReportView(APIView):
                 format_indian_number(lic['sale_amount']),
                 format_indian_number(lic['sale_usd']),
                 format_indian_number(lic['profit_loss']),
-                format_indian_number(lic['balance_cif']),
+                format_indian_number(lic['trade_balance_usd']),
             ])
 
         # GRAND TOTAL row — sourced from `report_data['summary']`, never a
@@ -636,7 +637,7 @@ class LicensePurchaseProfitReportView(APIView):
                 format_indian_number(summary['total_sale_amount']),
                 format_indian_number(summary['total_sale_usd']),
                 format_indian_number(summary['total_profit_loss']),
-                format_indian_number(summary['balance_cif']),
+                format_indian_number(summary['trade_balance_usd']),
             ]
         )
         lic_total_row_idx = len(lic_data) - 1
@@ -667,7 +668,7 @@ class LicensePurchaseProfitReportView(APIView):
 
         matrix_static_headers = [
             'License No.', 'License Date', 'Expiry Date', 'Exporter', 'Norm(s)', 'Purchase From',
-            'Purchase Amount', 'Purchase $', 'Sale Amount', 'Sale $', 'Profit / Loss', 'Balance CIF ($)',
+            'Purchase Amount', 'Purchase $', 'Sale Amount', 'Sale $', 'Profit / Loss', 'Trade Balance ($)',
         ]
         item_headers = item_matrix['headers']
         n_static = len(matrix_static_headers)
@@ -689,7 +690,7 @@ class LicensePurchaseProfitReportView(APIView):
                 format_indian_number(row['sale_amount']),
                 format_indian_number(row['sale_usd']),
                 format_indian_number(row['profit_loss']),
-                format_indian_number(row['balance_cif']),
+                format_indian_number(row['trade_balance_usd']),
             ]
             for item_name in item_headers:
                 cell_data = row['items'].get(item_name, {"qty": 0, "cif": 0.0, "bill": 0.0})
@@ -708,7 +709,7 @@ class LicensePurchaseProfitReportView(APIView):
             format_indian_number(summary['total_sale_amount']),
             format_indian_number(summary['total_sale_usd']),
             format_indian_number(summary['total_profit_loss']),
-            format_indian_number(summary['balance_cif']),
+            format_indian_number(summary['trade_balance_usd']),
         ]
         for item_name in item_headers:
             item_totals = matrix_totals.get(item_name, {"qty": 0, "cif": 0.0, "bill": 0.0})
@@ -731,7 +732,7 @@ class LicensePurchaseProfitReportView(APIView):
             *[("SPAN", (col, 0), (col, 1)) for col in range(n_static)],
             # Bolded GRAND TOTAL row, its label spanning only the leading
             # non-numeric columns — the numeric static columns (Purchase
-            # Amount through Balance CIF) show real totals, not blanks.
+            # Amount through Trade Balance ($)) show real totals, not blanks.
             ("FONTNAME", (0, total_row_idx), (-1, total_row_idx), "Helvetica-Bold"),
             ("SPAN", (0, total_row_idx), (matrix_n_label - 1, total_row_idx)),
         ]

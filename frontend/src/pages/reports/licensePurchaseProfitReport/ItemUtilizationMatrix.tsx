@@ -16,7 +16,7 @@ export type ItemMatrixCell = { qty: number; cif: number; bill: number };
 export type ItemMatrixRow = LicenseSummaryRow & { items: Record<string, ItemMatrixCell> };
 
 /** Grand-total figures for the 6 static numeric columns (Purchase Amount
- * through Balance CIF) — the SAME `summary`-derived totals the License
+ * through Trade Balance ($)) — the SAME `summary`-derived totals the License
  * Summary table's own footer/StatCards show, threaded down as a prop
  * rather than recomputed here. */
 export type ItemMatrixStaticTotals = {
@@ -25,7 +25,7 @@ export type ItemMatrixStaticTotals = {
     saleAmount: unknown;
     saleUsd: unknown;
     profitLoss: unknown;
-    balanceCif: unknown;
+    tradeBalanceUsd: unknown;
 };
 
 export interface ItemUtilizationMatrixProps {
@@ -97,7 +97,7 @@ export default function ItemUtilizationMatrix({ headers, rows, totals, staticTot
                                 <th rowSpan={2} scope="col" className="bg-muted px-3 py-2 text-right text-xs font-semibold text-muted-foreground">Sale Amount</th>
                                 <th rowSpan={2} scope="col" className="bg-muted px-3 py-2 text-right text-xs font-semibold text-muted-foreground">Sale $</th>
                                 <th rowSpan={2} scope="col" className="bg-muted px-3 py-2 text-right text-xs font-semibold text-muted-foreground">Profit / Loss</th>
-                                <th rowSpan={2} scope="col" className="bg-muted px-3 py-2 text-right text-xs font-semibold text-muted-foreground">Balance CIF</th>
+                                <th rowSpan={2} scope="col" className="bg-muted px-3 py-2 text-right text-xs font-semibold text-muted-foreground">Trade Balance ($)</th>
                                 {headers.map((header) => (
                                     <th
                                         key={header}
@@ -145,7 +145,7 @@ export default function ItemUtilizationMatrix({ headers, rows, totals, staticTot
                                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(row.sale_amount)}</td>
                                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(row.sale_usd)}</td>
                                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(row.profit_loss)}</td>
-                                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(row.balance_cif)}</td>
+                                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(row.trade_balance_usd)}</td>
                                     {headers.map((header) => {
                                         const cell = row.items[header] ?? EMPTY_CELL;
                                         return (
@@ -167,7 +167,7 @@ export default function ItemUtilizationMatrix({ headers, rows, totals, staticTot
                                 <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(staticTotals.saleAmount)}</td>
                                 <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(staticTotals.saleUsd)}</td>
                                 <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(staticTotals.profitLoss)}</td>
-                                <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(staticTotals.balanceCif)}</td>
+                                <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{money(staticTotals.tradeBalanceUsd)}</td>
                                 {headers.map((header) => {
                                     const cell = totals[header] ?? EMPTY_CELL;
                                     return (

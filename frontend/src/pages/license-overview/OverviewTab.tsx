@@ -24,6 +24,8 @@ import NoTradeActivityBanner from "./NoTradeActivityBanner";
 interface OverviewTabProps {
     licenseId: string | number | undefined;
     isActive: boolean;
+    showHiddenBoe: boolean;
+    onShowHiddenBoeChange: (value: boolean) => void;
 }
 
 /**
@@ -36,11 +38,10 @@ interface OverviewTabProps {
  * while inactive (same technique the hook already uses internally to gate
  * `enabled`, so the hook itself needed no changes).
  */
-export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
+export default function OverviewTab({ licenseId, isActive, showHiddenBoe, onShowHiddenBoeChange }: OverviewTabProps) {
     const { hasRole } = useContext(AuthContext);
     const queryClient = useQueryClient();
     const [recalculating, setRecalculating] = useState(false);
-    const [showHiddenBoe, setShowHiddenBoe] = useState(false);
     const [updatingPurchaseStatus, setUpdatingPurchaseStatus] = useState(false);
     const [editingPurchaseStatus, setEditingPurchaseStatus] = useState(false);
 
@@ -201,7 +202,7 @@ export default function OverviewTab({ licenseId, isActive }: OverviewTabProps) {
                                     summary={ledgerQuery.data.customs_ledger.summary}
                                     licenseId={licenseId}
                                     showHidden={showHiddenBoe}
-                                    onShowHiddenChange={setShowHiddenBoe}
+                                    onShowHiddenChange={onShowHiddenBoeChange}
                                 />
                             </CardContent>
                         </Card>

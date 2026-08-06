@@ -56,7 +56,7 @@ const REPORT_DATA = {
         total_licenses: 5,
         purchase_amount: "999999.00",
         purchase_usd: "8888.00",
-        balance_cif: "7777.00",
+        trade_balance_usd: "7777.00",
         total_sale_usd: "6543.21",
         total_sale_amount: "543210.99",
         total_profit_loss: "-4321.55",
@@ -74,7 +74,7 @@ const REPORT_DATA = {
             sale_amount: "90000.00",
             sale_usd: "1100.00",
             profit_loss: "-10000.00",
-            balance_cif: "300.00",
+            trade_balance_usd: "300.00",
         },
     ],
     item_matrix: {
@@ -92,7 +92,7 @@ const REPORT_DATA = {
                 sale_amount: "90000.00",
                 sale_usd: "1100.00",
                 profit_loss: "-10000.00",
-                balance_cif: "300.00",
+                trade_balance_usd: "300.00",
                 items: {
                     // Real debit for ALMOND on this license.
                     ALMOND: { qty: 150.5, cif: 400.25, bill: 30000.5 },
@@ -192,7 +192,7 @@ describe("LicensePurchaseProfitReport", () => {
         expect(screen.queryByText("Grand Summary")).not.toBeInTheDocument();
     });
 
-    it("renders the Purchase From and Balance CIF ($) columns", async () => {
+    it("renders the Purchase From and Trade Balance ($) columns", async () => {
         render(<LicensePurchaseProfitReport />);
 
         pickDateRange();
@@ -202,7 +202,7 @@ describe("LicensePurchaseProfitReport", () => {
         // Utilization Matrix's own static columns now, so these can no
         // longer assume a single match.
         expect(screen.getAllByText("Purchase From").length).toBeGreaterThan(0);
-        expect(screen.getAllByText("Balance CIF ($)").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Trade Balance ($)").length).toBeGreaterThan(0);
         expect(screen.getAllByText("Global Supplies Ltd").length).toBeGreaterThan(0);
     });
 
@@ -216,7 +216,7 @@ describe("LicensePurchaseProfitReport", () => {
         // differs from the (single-row) `licenses` totals.
         expect(screen.getByText("Total Licenses")).toBeInTheDocument();
         expect(screen.getByText("5")).toBeInTheDocument();
-        expect(screen.getAllByText("Balance CIF ($)").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Trade Balance ($)").length).toBeGreaterThan(0);
         // These also now appear a second time, verbatim, in the License
         // Summary table's own grand-total footer row — hence `getAllByText`
         // rather than `getByText` here.

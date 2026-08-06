@@ -1154,7 +1154,7 @@ def _write_audit_log_sheet(wb, license_obj):
     ws.freeze_panes = 'A2'
 
 
-def build_balance_excel(license_obj):
+def build_balance_excel(license_obj, show_hidden=False):
     """
     Generate the Licence Balance Workspace Excel export: five worksheets —
     "Financial Ledger", "Customs Ledger", "Timeline", "Reconciliation", and
@@ -1163,6 +1163,9 @@ def build_balance_excel(license_obj):
     relevant `_write_X_sheet` helper, so none of these worksheets can
     independently drift from the JSON API workspace or the PDF report —
     and no calculation happens anywhere in this module.
+
+    `show_hidden` mirrors the on-screen "show hidden BOE" toggle for the
+    Customs Ledger sheet — see `LicenseBalanceLedgerBuilder.build_customs_ledger`.
     """
     from django.http import HttpResponse
     import openpyxl
@@ -1174,7 +1177,7 @@ def build_balance_excel(license_obj):
     alloc_map = boe_invoice_allocation_map(license_obj)
     ext_map = boe_external_invoice_map(license_obj)
     financial_rows, financial_summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj, alloc_map, ext_map)
-    customs_rows, customs_summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
+    customs_rows, customs_summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj, show_hidden=show_hidden)
     timeline_events = LicenseBalanceLedgerBuilder.build_timeline(license_obj)
     reconciliation = LicenseBalanceLedgerBuilder.build_reconciliation_summary(license_obj, financial_summary, customs_summary)
 

@@ -33,23 +33,26 @@ the trade ledger:
   first-purchase-date/License Selection) — the supplier the license was
   originally acquired from. Sourced as a side-effect of the single ordered
   pass described below, never a second query.
-- **Balance CIF** — `Purchase $ − Sale $` (Original/acquired CIF $ minus
-  Debited/utilized CIF $), computed directly from this report's OWN
+- **Trade Balance ($)** — `Purchase $ − Sale $` (Original/acquired CIF $
+  minus Debited/utilized CIF $), computed directly from this report's OWN
   `purchase_usd`/`sale_usd` figures — NOT delegated to
   `LicenseBalanceCalculator.calculate_financial_balance_for_licenses`
-  (`apps.license.services.balance_calculator`). That calculator's
-  "Financial Available Balance" is a different, broader concept — it also
-  factors in Bill-of-Entry debits, allotments, and an opening-balance
-  anchor, none of which this report tracks or displays anywhere else.
-  Using it here would silently diverge from this report's own Purchase
-  $/Sale $ columns (e.g. `Purchase $ − Sale $` on screen would NOT equal
-  the "Balance CIF ($)" column next to it). Balance CIF here is
-  deliberately this report's own, narrower, self-consistent figure: the
-  same `sale_usd` (SALE-direction trade-ledger debit) already computed for
-  the Sale $ column, subtracted from the same `purchase_usd` already
-  computed for the Purchase $ column — both raw (unquantized) Decimals,
-  subtracted once, quantized once, matching this file's usual
-  double-rounding-avoidance rule.
+  (`apps.license.services.balance_calculator`). That calculator computes
+  the license-wide "Balance CIF" shown in Item Pivot Report and elsewhere —
+  a different, broader concept that also factors in Bill-of-Entry debits,
+  allotments, and an opening-balance anchor, none of which this report
+  tracks or displays anywhere else. This report's figure is deliberately
+  named and scoped differently (`trade_balance_usd`, not `balance_cif`) so
+  it is never mistaken for that license-wide balance: using the calculator
+  here would silently diverge from this report's own Purchase $/Sale $
+  columns (e.g. `Purchase $ − Sale $` on screen would NOT equal a
+  "Balance CIF" column next to it). Trade Balance ($) here is deliberately
+  this report's own, narrower, self-consistent figure: the same `sale_usd`
+  (SALE-direction trade-ledger debit) already computed for the Sale $
+  column, subtracted from the same `purchase_usd` already computed for the
+  Purchase $ column — both raw (unquantized) Decimals, subtracted once,
+  quantized once, matching this file's usual double-rounding-avoidance
+  rule.
 - **Exporter** — `LicenseDetailsModel.exporter.name`, the same company
   shown throughout the License module.
 - **Norm(s)** — every distinct `LicenseExportItemModel.norm_class.norm_class`
@@ -63,7 +66,7 @@ There is no per-item, per-norm, or grand-total breakdown in this report —
 `norm` remains a FILTER parameter only (narrows which licenses qualify via
 `_base_license_queryset`), never an output grouping. The `summary` block
 IS a grand total across the returned `licenses` rows (total_licenses/
-purchase_amount/purchase_usd/balance_cif/total_sale_usd/total_sale_amount/
+purchase_amount/purchase_usd/trade_balance_usd/total_sale_usd/total_sale_amount/
 total_profit_loss) — computed by summing the same Decimal maps used to
 build each row, quantized once at the end, so it never compounds per-row
 float rounding across many licenses.
@@ -201,7 +204,7 @@ def _empty_report() -> Dict[str, Any]:
             "total_licenses": 0,
             "purchase_amount": 0.0,
             "purchase_usd": 0.0,
-            "balance_cif": 0.0,
+            "trade_balance_usd": 0.0,
             "total_sale_usd": 0.0,
             "total_sale_amount": 0.0,
             "total_profit_loss": 0.0,
@@ -431,7 +434,7 @@ def build_purchase_profit_report(
     license_id_by_number: Dict[str, int] = {}
     total_purchase_amount = DEC_0
     total_purchase_usd = DEC_0
-    total_balance_cif = DEC_0
+    total_trade_balance_usd = DEC_0
     total_sale_amount = DEC_0
     total_sale_usd = DEC_0
     for license_id in qualifying_license_ids:
@@ -443,14 +446,14 @@ def build_purchase_profit_report(
         sale_amount = sale_amount_by_license.get(license_id, DEC_0)
         sale_usd = sale_usd_by_license.get(license_id, DEC_0)
         profit_loss = sale_amount - purchase_amount
-        # Balance CIF ($) = Purchase $ − Sale $ (Original/acquired CIF $
+        # Trade Balance ($) = Purchase $ − Sale $ (Original/acquired CIF $
         # minus Debited/utilized CIF $) — this report's OWN figures, never
         # the broader `LicenseBalanceCalculator` engine. See module
         # docstring for why.
-        balance_cif = purchase_usd - sale_usd
+        trade_balance_usd = purchase_usd - sale_usd
         total_purchase_amount += purchase_amount
         total_purchase_usd += purchase_usd
-        total_balance_cif += balance_cif
+        total_trade_balance_usd += trade_balance_usd
         total_sale_amount += sale_amount
         total_sale_usd += sale_usd
         license_id_by_number[lic.license_number] = license_id
@@ -467,7 +470,7 @@ def build_purchase_profit_report(
                 "sale_amount": float(_q2(sale_amount)),
                 "sale_usd": float(_q2(sale_usd)),
                 "profit_loss": float(_q2(profit_loss)),
-                "balance_cif": float(_q2(balance_cif)),
+                "trade_balance_usd": float(_q2(trade_balance_usd)),
             }
         )
     licenses.sort(key=lambda r: r["license_number"])
@@ -591,7 +594,7 @@ def build_purchase_profit_report(
         "total_licenses": len(licenses),
         "purchase_amount": float(_q2(total_purchase_amount)),
         "purchase_usd": float(_q2(total_purchase_usd)),
-        "balance_cif": float(_q2(total_balance_cif)),
+        "trade_balance_usd": float(_q2(total_trade_balance_usd)),
         "total_sale_usd": float(_q2(total_sale_usd)),
         "total_sale_amount": float(_q2(total_sale_amount)),
         "total_profit_loss": float(_q2(total_profit_loss)),

@@ -314,13 +314,16 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
     return elements, summary
 
 
-def _build_customs_ledger_elements(license_obj):
+def _build_customs_ledger_elements(license_obj, show_hidden=False):
     """
     "2. Customs Ledger" — the running CUSTOMS utilisation statement (see
     `LicenseBalanceLedgerBuilder.build_customs_ledger`'s docstring for why
     this deliberately debits every BOE at its FULL raw amount,
     unconditionally, unlike the Financial Ledger). Preceded by its own
     "Customs Summary" block per the report layout.
+
+    `show_hidden` mirrors the on-screen "show hidden BOE" toggle so this
+    section matches what the user is actually looking at.
 
     Returns (elements, customs_summary) — the summary feeds the Final
     Reconciliation Summary's three-way comparison.
@@ -366,7 +369,7 @@ def _build_customs_ledger_elements(license_obj):
         'customs_opening': COLOR_OPENING, 'customs_boe': COLOR_BOE, 'customs_pending_allotment': COLOR_PENDING,
     }
 
-    rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
+    rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj, show_hidden=show_hidden)
 
     def section_bar(text, bg='#0b3d59', size=12):
         bar = Table([[text]], colWidths=[275 * mm])
@@ -642,9 +645,12 @@ def _build_final_reconciliation_elements(license_obj, ledger_summary, customs_su
     return [Spacer(1, 10), header_bar, Spacer(1, 4), rec_table, Spacer(1, 4), status_table]
 
 
-def build_balance_pdf_response(license_obj, request):
+def build_balance_pdf_response(license_obj, request, show_hidden=False):
     """
     Generate PDF report for license balance details with all BOEs and Allotments.
+
+    `show_hidden` mirrors the on-screen "show hidden BOE" toggle for the
+    Customs Ledger section — see `LicenseBalanceLedgerBuilder.build_customs_ledger`.
     """
     from django.http import HttpResponse
     from reportlab.lib import colors
@@ -1336,7 +1342,7 @@ def build_balance_pdf_response(license_obj, request):
     # 4. Customs Summary + Customs Ledger (running utilisation statement —
     # separate from the itemised Export/Import/BOE/Allotment tables above,
     # which stay untouched as the item-level detail appendix).
-    customs_elements, customs_summary = _build_customs_ledger_elements(license_obj)
+    customs_elements, customs_summary = _build_customs_ledger_elements(license_obj, show_hidden=show_hidden)
     elements.extend(customs_elements)
 
     # 5. Timeline

@@ -149,6 +149,41 @@ def test_item_report_filters_min_balance_and_company_ids(report_viewer_client, i
 
 
 @pytest.mark.django_db
+def test_item_report_balance_cif_is_live_not_stale_stored_value(report_viewer_client, item_report_masters):
+    """Regression test: the report's `balance_cif` field must be computed
+    LIVE via `LicenseBalanceCalculator.calculate_financial_balance_for_
+    licenses` (the same batched calculator `item_pivot_report.py` uses),
+    never read from the denormalized `LicenseBalance.balance_cif` column —
+    that column is only refreshed by a background task/manual "Update
+    Balance" trigger and can go stale. `.update()` bypasses the post_save
+    recalculation signal, matching how the column can legitimately go
+    stale in production (e.g. right after a Balance Engine formula change).
+    """
+    from apps.license.models import LicenseBalance, LicenseExportItemModel
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+    lic = _make_license("ITEM-REPORT-LIVE-BAL", item_report_masters["parle"])
+    LicenseExportItemModel.objects.create(license=lic, cif_fc=Decimal("9000.00"))
+    item = _make_import_item(lic, item_report_masters["hs_code"], available_value=Decimal("500.00"))
+
+    live_balance = LicenseBalanceCalculator.calculate_financial_balance(lic)
+    assert live_balance == Decimal("9000.00")
+
+    # Desync the stored column from the live figure without triggering the
+    # recalculation signal, simulating a stale cache.
+    LicenseBalance.objects.filter(license=lic).update(balance_cif=Decimal("1.00"))
+    lic.refresh_from_db()
+    assert lic.balance_cif != live_balance, "fixture setup must actually desync stored vs. live to prove the fix"
+
+    response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+    assert response.status_code == 200
+    rows = {row["id"]: row for row in response.json()["items"]}
+
+    assert rows[item.id]["balance_cif"] == float(live_balance)
+    assert rows[item.id]["balance_cif"] != float(Decimal("1.00"))
+
+
+@pytest.mark.django_db
 def test_item_report_filters_is_restricted_combined_with_item_names(report_viewer_client, item_report_masters):
     lic = _make_license("ITEM-REPORT-RESTRICT", item_report_masters["parle"])
     restricted = _make_import_item(

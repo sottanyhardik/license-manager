@@ -60,6 +60,7 @@ export default function LicenseOverviewPage() {
 
     const [downloadingPdf, setDownloadingPdf] = useState(false);
     const [downloadingExcel, setDownloadingExcel] = useState(false);
+    const [showHiddenBoe, setShowHiddenBoe] = useState(false);
 
     const handleTabChange = useCallback(
         (value: string) => {
@@ -75,7 +76,10 @@ export default function LicenseOverviewPage() {
         if (!id) return;
         setDownloadingPdf(true);
         try {
-            const response = await api.get(`licenses/${id}/balance-pdf/`, { responseType: "blob" });
+            const response = await api.get(`licenses/${id}/balance-pdf/`, {
+                responseType: "blob",
+                params: showHiddenBoe ? { show_hidden: true } : undefined,
+            });
             openPdfPreview(response.data, `${summary?.license_number || id}-balance.pdf`);
         } catch (err) {
             toast.error(extractApiError(err, "Failed to generate PDF file"));
@@ -88,10 +92,11 @@ export default function LicenseOverviewPage() {
         if (!id) return;
         setDownloadingExcel(true);
         try {
-            await openAuthedFile(`licenses/${id}/balance-excel/`, `${summary?.license_number || id}-balance.xlsx`);
+            const query = showHiddenBoe ? "?show_hidden=true" : "";
+            await openAuthedFile(`licenses/${id}/balance-excel/${query}`, `${summary?.license_number || id}-balance.xlsx`);
             toast.success("Excel file downloaded successfully!");
-        } catch {
-            toast.error("Failed to generate Excel file");
+        } catch (err) {
+            toast.error(extractApiError(err, "Failed to generate Excel file"));
         } finally {
             setDownloadingExcel(false);
         }
@@ -125,7 +130,12 @@ export default function LicenseOverviewPage() {
                 </TabsList>
 
                 <TabsContent value="overview">
-                    <OverviewTab licenseId={id} isActive={activeTab === "overview"} />
+                    <OverviewTab
+                        licenseId={id}
+                        isActive={activeTab === "overview"}
+                        showHiddenBoe={showHiddenBoe}
+                        onShowHiddenBoeChange={setShowHiddenBoe}
+                    />
                 </TabsContent>
                 <TabsContent value="boes">
                     <BoesTab licenseId={id} isActive={activeTab === "boes"} />

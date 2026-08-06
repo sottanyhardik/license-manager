@@ -45,14 +45,14 @@ export type LicenseSummaryRow = {
     sale_amount: unknown;
     sale_usd: unknown;
     profit_loss: unknown;
-    balance_cif: unknown;
+    trade_balance_usd: unknown;
 };
 
 type ReportSummary = {
     total_licenses: unknown;
     purchase_amount: unknown;
     purchase_usd: unknown;
-    balance_cif: unknown;
+    trade_balance_usd: unknown;
     total_sale_usd: unknown;
     total_sale_amount: unknown;
     total_profit_loss: unknown;
@@ -70,7 +70,7 @@ type ReportData = {
     item_matrix: ItemMatrix;
 };
 
-type SortKey = "license_number" | "license_date" | "expiry_date" | "exporter" | "norms" | "purchase_from" | "purchase_amount" | "purchase_usd" | "sale_amount" | "sale_usd" | "profit_loss" | "balance_cif";
+type SortKey = "license_number" | "license_date" | "expiry_date" | "exporter" | "norms" | "purchase_from" | "purchase_amount" | "purchase_usd" | "sale_amount" | "sale_usd" | "profit_loss" | "trade_balance_usd";
 
 const COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
     { key: "license_number", label: "License No." },
@@ -84,7 +84,7 @@ const COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
     { key: "sale_amount", label: "Sale Amount", align: "right" },
     { key: "sale_usd", label: "Sale $", align: "right" },
     { key: "profit_loss", label: "Profit / Loss", align: "right" },
-    { key: "balance_cif", label: "Balance CIF ($)", align: "right" },
+    { key: "trade_balance_usd", label: "Trade Balance ($)", align: "right" },
 ];
 
 function sortValue(row: LicenseSummaryRow, key: SortKey): string | number {
@@ -94,7 +94,7 @@ function sortValue(row: LicenseSummaryRow, key: SortKey): string | number {
         case "sale_amount":
         case "sale_usd":
         case "profit_loss":
-        case "balance_cif":
+        case "trade_balance_usd":
             return toNum(row[key]);
         case "norms":
             return row.norms.join(", ").toLowerCase();
@@ -193,7 +193,7 @@ export default function LicensePurchaseProfitReport() {
         count: toNum(data?.summary?.total_licenses),
         purchaseAmount: toNum(data?.summary?.purchase_amount),
         purchaseUsd: toNum(data?.summary?.purchase_usd),
-        balanceCif: toNum(data?.summary?.balance_cif),
+        tradeBalanceUsd: toNum(data?.summary?.trade_balance_usd),
         totalSaleUsd: toNum(data?.summary?.total_sale_usd),
         totalSaleAmount: toNum(data?.summary?.total_sale_amount),
         totalProfitLoss: toNum(data?.summary?.total_profit_loss),
@@ -466,10 +466,10 @@ export default function LicensePurchaseProfitReport() {
                             compact
                         />
                         <StatCard
-                            label="Balance CIF ($)"
-                            value={money(totals.balanceCif)}
-                            secondaryValue={formatIndianCompact(totals.balanceCif)}
-                            title={money(totals.balanceCif)}
+                            label="Trade Balance ($)"
+                            value={money(totals.tradeBalanceUsd)}
+                            secondaryValue={formatIndianCompact(totals.tradeBalanceUsd)}
+                            title={money(totals.tradeBalanceUsd)}
                             icon={Wallet}
                             tone="warning"
                             compact
@@ -537,7 +537,7 @@ export default function LicensePurchaseProfitReport() {
                                                 <MoneyCell value={lic.sale_amount} />
                                                 <MoneyCell value={lic.sale_usd} />
                                                 <MoneyCell value={lic.profit_loss} />
-                                                <MoneyCell value={lic.balance_cif} />
+                                                <MoneyCell value={lic.trade_balance_usd} />
                                             </tr>
                                         ))}
                                     </tbody>
@@ -549,7 +549,7 @@ export default function LicensePurchaseProfitReport() {
                                             <MoneyCell value={totals.totalSaleAmount} />
                                             <MoneyCell value={totals.totalSaleUsd} />
                                             <MoneyCell value={totals.totalProfitLoss} />
-                                            <MoneyCell value={totals.balanceCif} />
+                                            <MoneyCell value={totals.tradeBalanceUsd} />
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -567,7 +567,7 @@ export default function LicensePurchaseProfitReport() {
                             saleAmount: totals.totalSaleAmount,
                             saleUsd: totals.totalSaleUsd,
                             profitLoss: totals.totalProfitLoss,
-                            balanceCif: totals.balanceCif,
+                            tradeBalanceUsd: totals.tradeBalanceUsd,
                         }}
                     />
                 </>

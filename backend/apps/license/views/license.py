@@ -658,10 +658,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
     @action(detail=True, methods=['get'], url_path='balance-pdf')
     def balance_pdf(self, request, pk=None):
-        """Generate PDF report for license balance details with all BOEs and Allotments."""
+        """Generate PDF report for license balance details with all BOEs and Allotments.
+
+        `?show_hidden=true` matches the on-screen "show hidden BOE" toggle —
+        see `LicenseBalanceLedgerBuilder.build_customs_ledger`'s docstring.
+        """
         from apps.license.services.exporters.license_balance_pdf import build_balance_pdf_response
         license_obj = self.get_object()
-        return build_balance_pdf_response(license_obj, request)
+        show_hidden = request.query_params.get('show_hidden', '').lower() in ('1', 'true', 'yes')
+        return build_balance_pdf_response(license_obj, request, show_hidden=show_hidden)
 
     @action(detail=False, methods=['post'], url_path='bulk-balance-excel')
     def bulk_balance_excel(self, request):
@@ -671,10 +676,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
     @action(detail=True, methods=['get'], url_path='balance-excel')
     def balance_excel(self, request, pk=None):
-        """Generate Excel summary report (BOE & Allotments + Balance Quantity)."""
+        """Generate Excel summary report (BOE & Allotments + Balance Quantity).
+
+        `?show_hidden=true` matches the on-screen "show hidden BOE" toggle —
+        see `LicenseBalanceLedgerBuilder.build_customs_ledger`'s docstring.
+        """
         from apps.license.services.exporters.license_balance_excel import build_balance_excel
         license_obj = self.get_object()
-        return build_balance_excel(license_obj)
+        show_hidden = request.query_params.get('show_hidden', '').lower() in ('1', 'true', 'yes')
+        return build_balance_excel(license_obj, show_hidden=show_hidden)
 
     @action(detail=True, methods=['get'], url_path='balance-excel-unused')
     def balance_excel_unused(self, request, pk=None):

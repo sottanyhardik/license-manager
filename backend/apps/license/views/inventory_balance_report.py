@@ -14,12 +14,14 @@ For each item, it displays:
 from decimal import Decimal
 from typing import Dict, List, Any
 
+from django.conf import settings
 from django.http import JsonResponse, HttpResponse
 from rest_framework.views import APIView
 
 from apps.core.constants import DEC_0, DEC_000
 from apps.accounts.permissions import ReportPermission
 from apps.core.models import SionNormClassModel
+from apps.core.reports.envelope import validate_envelope
 from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
 # Excel export handled inline with openpyxl
 
@@ -107,7 +109,7 @@ class InventoryBalanceReportView(APIView):
             'available_cif_value': sum(item['available_cif_value'] for item in items_data),
         }
 
-        return {
+        report_data = {
             'sion_norm': {
                 'code': norm.norm_class,
                 'description': norm.description or '',
@@ -125,6 +127,14 @@ class InventoryBalanceReportView(APIView):
             },
             'items': items_data,
         }
+        if settings.DEBUG:
+            # Debug/test-only shape guard — never raises for a real
+            # production request. See apps/core/reports/envelope.py.
+            validate_envelope(
+                report_data, 'items',
+                required_summary_keys={'total_licenses', 'total_items'},
+            )
+        return report_data
 
     def _aggregate_by_items(self, import_items_query) -> List[Dict[str, Any]]:
         """

@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict, List, Any
 
+from django.conf import settings
 from django.db.models import Sum, DecimalField, Value
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
@@ -19,6 +20,7 @@ from rest_framework.views import APIView
 from apps.accounts.permissions import ReportPermission
 
 from apps.core.constants import DEC_0, DEC_000, GE, MI, IP, SM
+from apps.core.reports.envelope import validate_envelope
 from apps.license.models import LicenseDetailsModel
 
 
@@ -103,7 +105,7 @@ class ExpiringLicensesReportView(APIView):
             total_balance_cif += Decimal(str(license_data['balance_cif']))
             total_items += len(license_data['items'])
 
-        return {
+        report_data = {
             'report_period': {
                 'from_date': today.isoformat(),
                 'to_date': expiry_date.isoformat(),
@@ -116,6 +118,14 @@ class ExpiringLicensesReportView(APIView):
             },
             'licenses': licenses_data,
         }
+        if settings.DEBUG:
+            # Debug/test-only shape guard — never raises for a real
+            # production request. See apps/core/reports/envelope.py.
+            validate_envelope(
+                report_data, 'licenses',
+                required_summary_keys={'total_licenses', 'total_items', 'total_balance_cif'},
+            )
+        return report_data
 
     def _build_license_data(self, license_obj: LicenseDetailsModel) -> Dict[str, Any]:
         """

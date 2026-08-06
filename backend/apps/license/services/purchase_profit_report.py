@@ -164,11 +164,13 @@ from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional
 
+from django.conf import settings
 from django.db.models import DecimalField, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.core.constants import DEC_0
 from apps.core.models import ItemNameModel
+from apps.core.reports.envelope import validate_envelope
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 from apps.trade.models import LicenseTrade, LicenseTradeLine
 
@@ -599,4 +601,12 @@ def build_purchase_profit_report(
         "total_sale_amount": float(_q2(total_sale_amount)),
         "total_profit_loss": float(_q2(total_profit_loss)),
     }
-    return {"summary": summary, "licenses": licenses, "item_matrix": item_matrix}
+    report_data = {"summary": summary, "licenses": licenses, "item_matrix": item_matrix}
+    if settings.DEBUG:
+        # Debug/test-only shape guard — never raises for a real production
+        # request. See apps/core/reports/envelope.py.
+        validate_envelope(
+            report_data, 'licenses',
+            required_summary_keys={'total_licenses', 'purchase_usd', 'trade_balance_usd'},
+        )
+    return report_data

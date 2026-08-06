@@ -15,6 +15,7 @@ from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from apps.accounts.permissions import ReportPermission
@@ -22,6 +23,7 @@ from apps.accounts.permissions import ReportPermission
 from apps.core.constants import DEC_0, DEC_000, GE, MI, IP, SM
 from apps.core.reports.envelope import validate_envelope
 from apps.core.reports.export_naming import build_export_filename
+from apps.core.reports.renderers import ExcelPassthroughRenderer
 from apps.license.models import LicenseDetailsModel
 
 
@@ -35,6 +37,10 @@ class ExpiringLicensesReportView(APIView):
         - sion_norm: Filter by SION norm (optional)
     """
     permission_classes = [ReportPermission]
+    # Register the excel "format" so DRF content negotiation accepts
+    # ?format=excel without raising Http404 before get() ever runs — see
+    # apps/core/reports/renderers.py.
+    renderer_classes = [JSONRenderer, ExcelPassthroughRenderer]
 
     def get(self, request, *args, **kwargs):
         days = int(request.GET.get('days', 30))

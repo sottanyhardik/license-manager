@@ -16,6 +16,7 @@ from typing import Dict, List, Any
 
 from django.conf import settings
 from django.http import JsonResponse, HttpResponse
+from rest_framework.renderers import JSONRenderer
 from rest_framework.views import APIView
 
 from apps.core.constants import DEC_0, DEC_000
@@ -23,6 +24,7 @@ from apps.accounts.permissions import ReportPermission
 from apps.core.models import SionNormClassModel
 from apps.core.reports.envelope import validate_envelope
 from apps.core.reports.export_naming import build_export_filename
+from apps.core.reports.renderers import ExcelPassthroughRenderer
 from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
 # Excel export handled inline with openpyxl
 
@@ -37,6 +39,10 @@ class InventoryBalanceReportView(APIView):
         - include_zero: Include items with zero balance (default: false)
     """
     permission_classes = [ReportPermission]
+    # Register the excel "format" so DRF content negotiation accepts
+    # ?format=excel without raising Http404 before get() ever runs — see
+    # apps/core/reports/renderers.py.
+    renderer_classes = [JSONRenderer, ExcelPassthroughRenderer]
 
     def get(self, request, *args, **kwargs):
         sion_norm = request.GET.get('sion_norm')

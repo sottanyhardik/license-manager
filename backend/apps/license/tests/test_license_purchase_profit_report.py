@@ -37,6 +37,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.core.constants import DEC_0
 from apps.core.models import CompanyModel, HSCodeModel, HeadSIONNormsModel, ItemNameModel, SionNormClassModel
+from apps.core.tests.report_assertions import assert_excel_matches_json
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 from apps.license.services.purchase_profit_report import build_purchase_profit_report
 from apps.trade.models import LicenseTrade, LicenseTradeLine
@@ -1072,28 +1073,30 @@ def test_view_excel_summary_metric_table_matches_json_summary(report_viewer_clie
     workbook = load_workbook(BytesIO(response.content))
     worksheet = workbook["License Summary"]
 
-    # Find the "Metric" / "Value" header row and read the 7 rows under it.
+    # Generalized via apps.core.tests.report_assertions (Phase 2A shared
+    # helper) — same Metric/Value-table pattern this test always used, now
+    # reusable by other reports' Excel exports instead of each hand-rolling
+    # its own header-row search + cell comparison loop.
+    assert_excel_matches_json(
+        workbook, summary, "License Summary",
+        {
+            "Total Licenses": "total_licenses",
+            "Purchase Amount": "purchase_amount",
+            "Purchase $": "purchase_usd",
+            "Sale Amount": "total_sale_amount",
+            "Sale $": "total_sale_usd",
+            "Profit / Loss": "total_profit_loss",
+            "Trade Balance ($)": "trade_balance_usd",
+        },
+    )
+
+    # The Value column must be real numeric cells, not text baked into a
+    # concatenated string — `number_format` can only apply to real numbers.
     metric_header_row = next(
         r for r in range(1, 15)
         if worksheet.cell(row=r, column=1).value == "Metric"
         and worksheet.cell(row=r, column=2).value == "Value"
     )
-    values_by_metric = {}
-    for offset in range(1, 8):
-        row = metric_header_row + offset
-        metric = worksheet.cell(row=row, column=1).value
-        values_by_metric[metric] = worksheet.cell(row=row, column=2).value
-
-    assert values_by_metric["Total Licenses"] == summary["total_licenses"]
-    assert values_by_metric["Purchase Amount"] == summary["purchase_amount"]
-    assert values_by_metric["Purchase $"] == summary["purchase_usd"]
-    assert values_by_metric["Sale Amount"] == summary["total_sale_amount"]
-    assert values_by_metric["Sale $"] == summary["total_sale_usd"]
-    assert values_by_metric["Profit / Loss"] == summary["total_profit_loss"]
-    assert values_by_metric["Trade Balance ($)"] == summary["trade_balance_usd"]
-
-    # The Value column must be real numeric cells, not text baked into a
-    # concatenated string — `number_format` can only apply to real numbers.
     value_cell = worksheet.cell(row=metric_header_row + 2, column=2)  # "Purchase Amount" row
     assert value_cell.number_format == '#,##0.00'
 

@@ -48,6 +48,9 @@ export type LicenseSummaryRow = {
     trade_balance_usd: unknown;
 };
 
+// Matches the Display Dataset envelope convention (see
+// src/types/reportEnvelope.ts / backend/apps/core/reports/envelope.py) —
+// `summary` here, `licenses` as this report's own row-list key below.
 type ReportSummary = {
     total_licenses: unknown;
     purchase_amount: unknown;

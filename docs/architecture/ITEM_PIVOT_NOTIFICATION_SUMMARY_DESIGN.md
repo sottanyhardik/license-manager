@@ -479,23 +479,74 @@ This gate exists because this phase is rated Critical risk (§0) — the cost
 of pausing here is a review meeting; the cost of getting the restriction
 pool math wrong in a financial report is much higher.
 
-- [ ] Design document committed (this document).
-- [ ] DTO (§2) finalized — no further shape changes expected.
-- [ ] Restriction pooling rule (§3, §10 Q2/Q3) explicitly marked
-      "preserve current behavior" by the business owner, or an approved
-      replacement rule is specified in writing.
-- [ ] Blended unit-price formula (§4) approved, including the
-      backend-rounds-to-2dp decision.
-- [ ] `effective_planned_quantity` (§5) accepted as a required new
-      backend field.
+- [x] Design document committed (this document — `3b4fc0a8`).
+- [x] DTO (§2) finalized — no further shape changes expected.
+- [x] Restriction pooling rule (§3, §10 Q2/Q3) explicitly marked
+      "preserve current behavior" by the business owner — see §12.
+- [x] Blended unit-price formula (§4) approved, including the
+      backend-rounds-to-2dp decision — see §12.
+- [x] `effective_planned_quantity` (§5) accepted as a required new
+      backend field — see §12.
 - [ ] Parity test fixtures (§7 step 1) drafted and reviewed.
-- [ ] §10 Q4/Q5 (Category C items) have an explicit "preserve, file
-      follow-up" or "fix now" decision recorded.
+- [x] §10 Q4/Q5 (Category C items) have an explicit "preserve, file
+      follow-up" decision recorded — see §12.
 
-Only once all seven are checked does §7 step 4's business-review gate
-become a formality rather than the first time these questions are asked.
+Six of seven boxes are checked as of §12's decision. The remaining box —
+parity fixtures — is the next concrete step, not a review gate: it is
+produced *during* §7 step 1 (the hand-computed fixtures in §3/§4 are the
+starting point) and should be reviewed for correctness before the
+backend implementation is trusted, but no further business sign-off is
+required to write it.
 
 ---
 
-**No code has been changed as part of this document.** Awaiting explicit
-approval before starting step 1 of §7.
+## 12. Business decision — approved 2026-08-07
+
+**Decision: Option A — Preserve current behavior exactly.** The objective
+of Phase 2B.2B is architectural consolidation (single backend owner), not
+a change to business behavior. Recorded rules, verbatim intent:
+
+- The backend becomes the single authoritative owner of the Restriction
+  Pool calculation (§3) and the Notification/Norm Summary (§2) as a whole.
+- The backend implementation must match the current frontend output
+  exactly — including quirks §9(a) (last-license-wins restriction %),
+  §9(b) (footer `totalAvailable` vs. fallback-adjusted row value), and
+  §9(c) (redundant opening-balance computation). None of the three are to
+  be corrected as part of this migration.
+- §10 Q2/Q3 (Category B — restriction-pool dedup rule, last-license-wins)
+  resolved as: reproduce exactly; any change to the algorithm itself is a
+  separate, future, explicitly-approved phase (design update + regression
+  analysis + its own implementation), not part of 2B.2B.
+- §10 Q4/Q5 (Category C — footer inconsistency, redundant opening-balance
+  sum) resolved as: preserve for parity. §9(b) may get a separate
+  follow-up issue if the business later wants it corrected; §9(c) needs
+  no follow-up since consolidating *how* the sum is computed doesn't
+  change the displayed value (per §9(c)'s own note — `notification_summary`
+  can share `notification_totals['balance_cif']` for the per-notification
+  scope with zero behavior difference).
+- The frontend (`ItemPivotReport.tsx`) stays unchanged until backend/
+  frontend parity is demonstrated on the approved regression fixtures —
+  do not delete `calculateNotificationSummary` in the same change that
+  adds the backend fields.
+- Excel must consume `notification_summary`/`norm_summary` verbatim (§8)
+  with no independent arithmetic, once added — no fourth implementation.
+- The §4 backend-rounds-to-2dp decision is compatible with "match current
+  frontend output exactly" because the frontend already displays
+  `unit_price`/`blended_unit_price` via `.toFixed(2)` at render — rounding
+  one step earlier, server-side, does not change what a user sees. Noted
+  here explicitly since it is a stored-precision change even though it is
+  not a displayed-value change.
+
+**Explicitly deferred (not part of 2B.2B):** changing the restriction-pool
+algorithm; correcting §9(a)/(b)/(c); altering any report value; any new
+business calculation beyond relocating existing logic to the backend;
+any user-visible change to Notification Summary numbers.
+
+This decision clears gate items 1, 2, 3, 4, 5, and 7 in §11. Item 6
+(parity fixtures) remains open and is the next step (§7 step 1).
+
+---
+
+**No code has been changed as part of this document.** §7 step 1
+(backend implementation, additive to JSON only — no frontend or Excel
+changes) may now begin.

@@ -80,6 +80,14 @@ def _build_notification_summary(licenses, items):
     (quirks, preserved on purpose per the §12 business decision — do NOT
     "improve" this logic without a corresponding product decision).
 
+    One exception, approved via the Calculation Ownership audit
+    (`docs/architecture/CALCULATION_OWNERSHIP.md`, 2026-08-07): Pass 3's
+    manual-vs-norm CIF/quantity selection reads the already-resolved
+    `effective_planned_cif`/`effective_planned_quantity` fields instead of
+    re-deriving the same branch inline. This is not a quirk or a business
+    rule — it's plumbing — so consuming the canonical field instead of a
+    second copy of the rule is a pure cleanup, not a behavior change.
+
     `licenses` — already-built license row dicts (as returned by
     `_build_license_row`) for this scope: either one notification group's
     license list, or every license under a norm flattened across its
@@ -137,12 +145,16 @@ def _build_notification_summary(licenses, items):
                 available_quantity = float(item_data.get('available_quantity', 0) or 0)
                 item_available += available_quantity
 
-                plan_cif = float(item_data.get('plan_cif', 0) or 0)
-                plan_quantity = float(item_data.get('plan_quantity', 0) or 0)
-                item_has_manual = plan_cif > 0 or plan_quantity > 0
-                planned_cif = float(item_data.get('planned_cif', 0) or 0)
-                item_planned += plan_cif if item_has_manual else planned_cif
-                item_planned_qty += plan_quantity if item_has_manual else available_quantity
+                # Manual-vs-norm selection already resolved once, per cell,
+                # by `_effective_planned_cif`/`_effective_planned_quantity`
+                # in `_build_license_row` — read those fields directly
+                # rather than re-deriving the same branch here. (This used
+                # to recompute it inline; fixed 2026-08-07 per the
+                # Calculation Ownership audit — see
+                # docs/architecture/CALCULATION_OWNERSHIP.md. Behavior is
+                # unchanged: same rule, one fewer copy of it.)
+                item_planned += float(item_data.get('effective_planned_cif', 0) or 0)
+                item_planned_qty += float(item_data.get('effective_planned_quantity', 0) or 0)
 
                 if item_data.get('restriction') is not None:
                     has_restriction = True

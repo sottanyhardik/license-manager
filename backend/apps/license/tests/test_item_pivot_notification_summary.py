@@ -18,6 +18,7 @@ import pytest
 
 from apps.license.views.item_pivot_report import (
     _build_notification_summary,
+    _effective_planned_cif,
     _effective_planned_quantity,
 )
 
@@ -45,6 +46,22 @@ def _item_cell(**overrides):
         "restriction_value": 0,
     }
     cell.update(overrides)
+    # `_build_license_row` always attaches these two fields (Phase 2B.2A/
+    # 2B.2B); `_build_notification_summary` now reads them directly rather
+    # than re-deriving the manual-vs-norm branch (see the Calculation
+    # Ownership audit fix, 2026-08-07). Auto-derive them here from the raw
+    # fields above so these hand-built fixtures match real report rows —
+    # `setdefault` so a test can still override one explicitly to prove the
+    # builder reads the field rather than recomputing it (see
+    # test_notification_summary_reads_effective_fields_not_raw_inputs).
+    cell.setdefault(
+        "effective_planned_cif",
+        _effective_planned_cif(cell["plan_quantity"], cell["plan_cif"], cell["planned_cif"]),
+    )
+    cell.setdefault(
+        "effective_planned_quantity",
+        _effective_planned_quantity(cell["plan_quantity"], cell["plan_cif"], cell["available_quantity"]),
+    )
     return cell
 
 
@@ -220,3 +237,42 @@ def test_effective_planned_quantity_manual_cif_only_still_selects_manual_branch(
     # branch -> returns plan_quantity (0), not available_quantity, mirroring
     # _effective_planned_cif's `pq or pc` truthy check.
     assert _effective_planned_quantity(0, 400.0, 999.0) == 0
+
+
+# ---------------------------------------------------------------------------
+# Calculation Ownership audit fix (2026-08-07): _build_notification_summary
+# must READ effective_planned_cif/effective_planned_quantity, not re-derive
+# the manual-vs-norm branch from plan_cif/plan_quantity/planned_cif/
+# available_quantity. This test sets the raw fields to values that would
+# produce a DIFFERENT result if the branch were recomputed inline, so it
+# fails loudly if the duplicated selection-rule copy is ever reintroduced.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_notification_summary_reads_effective_fields_not_raw_inputs():
+    lic = _license(
+        "LIC-A",
+        items={
+            "ITEM A": _item_cell(
+                # If the builder recomputed the manual-vs-norm branch from
+                # these raw fields, item_has_manual would be True (plan_cif
+                # > 0) and it would select plan_cif=100/plan_quantity=10 —
+                # deliberately different from the overridden effective_*
+                # values below, so a regression shows up as a wrong number,
+                # not a coincidentally-matching one.
+                plan_cif=100.0,
+                plan_quantity=10.0,
+                planned_cif=5.0,
+                available_quantity=1.0,
+                effective_planned_cif=999.0,
+                effective_planned_quantity=77.0,
+            ),
+        },
+    )
+    summary = _build_notification_summary([lic], ITEMS_SINGLE)
+
+    item = summary["regular_items"]["ITEM A"]
+    assert item["planned_cif"] == pytest.approx(999.0)
+    assert item["planned_qty"] == pytest.approx(77.0)
+    assert summary["total_planned_cif"] == pytest.approx(999.0)
+    assert summary["total_planned_qty"] == pytest.approx(77.0)

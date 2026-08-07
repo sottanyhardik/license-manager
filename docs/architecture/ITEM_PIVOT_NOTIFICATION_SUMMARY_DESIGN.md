@@ -547,6 +547,56 @@ This decision clears gate items 1, 2, 3, 4, 5, and 7 in §11. Item 6
 
 ---
 
-**No code has been changed as part of this document.** §7 step 1
-(backend implementation, additive to JSON only — no frontend or Excel
-changes) may now begin.
+## 13. Backend implementation and real-data parity verification (2026-08-07)
+
+**§7 step 1 complete:** `_effective_planned_quantity` and
+`_build_notification_summary` implemented in `item_pivot_report.py`,
+wired into `generate_report()` as additive `notification_summary`/
+`norm_summary` keys. 12 new hand-fixture unit tests pass (restriction-pool
+worked example, blended-unit-price table, both §9 quirks, opening balance,
+`_effective_planned_quantity` branches); all 47 pre-existing Item Pivot
+tests still pass (59/59 total); `manage.py check` clean. Frontend and
+Excel exporter untouched. Committed as `fd35afa7`.
+
+**§7 step 3 complete:** real-data parity check against the live dev DB
+(`lmanagement`, 228 licenses), comparing the backend output field-by-field
+against a literal, unmodified port of `calculateNotificationSummary` run
+independently in Node. Scripts (left uncommitted pending review):
+`backend/scripts/notification_summary_parity_check.py` (fetches real
+scopes via `APIRequestFactory`, same pattern as
+`golden_master_balance_exporters.py`) and
+`notification_summary_parity_check.mjs` (the Node-side port).
+
+- **152/152 field comparisons pass, 0 failures**, independently re-run
+  and confirmed — across 5 real scopes: a 19-license notification group
+  hitting both `manual_plan_present` and `mixed_restricted_and_regular`,
+  a 1-license `norm_fallback_only` group, and both norm-level
+  (flattened) `norm_summary` paths, one of which spans multiple
+  notification groups.
+- **Coverage gap (data, not code):** no scope in the current live DB has
+  more than one distinct restriction percentage, so
+  `multi_percentage_restriction` — the §3 worked-example branch of the
+  restriction-pool dedup logic — is validated only by the hand-built unit
+  test fixture, not by live data. Not blocking (the unit test is exactly
+  the §3 worked example), but worth re-running this script if/when data
+  with multiple restriction percentages in one scope becomes available.
+- **Percentage-key-format finding, confirmed, not a parity bug:**
+  frontend's JS object key for a restriction percentage stringifies as
+  `"10"`; the backend's `str(python_float)` produces `"10.0"` for the same
+  value. Values match exactly; only the string key format differs. **Must
+  be handled by comparing/matching on numeric percentage, not exact string
+  key, when §7 step 5 (frontend cutover) reads `restricted_items_by_percentage`
+  from the backend** — otherwise a percentage group could silently fail to
+  match between what the frontend expects and what it receives.
+
+**Recommendation: proceed to §7 step 5 (frontend cutover) and step 6
+(Excel sheet).** No translation bugs found; the one open item (multi-
+percentage live coverage) is a data-availability gap already covered by
+unit tests, not a reason to hold.
+
+---
+
+**No code has been changed as part of this document.** §7 step 1 and
+step 3 are complete (see §13). Awaiting go-ahead for step 5 (frontend
+cutover, deleting `calculateNotificationSummary`) and step 6 (Excel
+Summary sheet).

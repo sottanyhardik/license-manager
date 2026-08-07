@@ -52,6 +52,154 @@ def _effective_planned_cif(plan_quantity, plan_cif, planned_cif):
     return pc if (pq or pc) else (planned_cif or 0)
 
 
+def _effective_planned_quantity(plan_quantity, plan_cif, available_quantity):
+    """Quantity counterpart to `_effective_planned_cif` — same manual-vs-norm
+    branch (see that docstring), applied to quantity instead of CIF. The
+    norm-derived branch falls back to `available_quantity` (not a
+    `planned_quantity` field) because the E1/E5/E132 waterfall always plans
+    against the full available balance; there is no separate norm-derived
+    planned-quantity field to select instead. Computed once here and exposed
+    per cell as `effective_planned_quantity` (Phase 2B.2B; see
+    docs/architecture/ITEM_PIVOT_NOTIFICATION_SUMMARY_DESIGN.md §5).
+
+    Note: the design doc's reference signature carries an extra unused
+    `planned_quantity` parameter for symmetry with `_effective_planned_cif`;
+    it is omitted here since it can never affect the return value — this is
+    a signature-only deviation with zero output difference.
+    """
+    pq = plan_quantity or 0
+    pc = plan_cif or 0
+    return pq if (pq or pc) else (available_quantity or 0)
+
+
+def _build_notification_summary(licenses, items):
+    """Translates `ItemPivotReport.tsx:507-621` (`calculateNotificationSummary`)
+    verbatim, including its quirks — see
+    docs/architecture/ITEM_PIVOT_NOTIFICATION_SUMMARY_DESIGN.md §1 (spec),
+    §3 (restriction-pool worked example), §4 (blended unit price), §9
+    (quirks, preserved on purpose per the §12 business decision — do NOT
+    "improve" this logic without a corresponding product decision).
+
+    `licenses` — already-built license row dicts (as returned by
+    `_build_license_row`) for this scope: either one notification group's
+    license list, or every license under a norm flattened across its
+    notification groups.
+    `items` — the report's ordered item catalogue as `(item_id, item_name)`
+    tuples, same order as `sorted_items` / the response's top-level `items`
+    list.
+    """
+    # Pass 1 — opening balance. This is the same sum as
+    # `notification_totals[norm][notification_key]['balance_cif']`
+    # (Phase 2B.2A) for the per-notification scope, and intentionally kept
+    # in sync rather than reused via a shared variable — see design doc
+    # §9(c)/§12: consolidating *how* the sum is computed doesn't change the
+    # displayed value, so no special-casing is needed here.
+    opening_balance = sum(float(lic.get('balance_cif', 0) or 0) for lic in licenses)
+
+    # Pass 2 — restriction pool dedup: a license's `restriction_value` is a
+    # shared quota against its restriction percentage, not a per-item value.
+    # Dedup key is license_number + percentage, NOT license + item — see
+    # design doc §3 for the worked example this reproduces exactly.
+    restricted_items_by_percentage = {}
+    processed_restrictions = set()
+    for lic in licenses:
+        lic_number = lic.get('license_number')
+        for item_id, item_name in items:
+            item_data = (lic.get('items') or {}).get(item_name)
+            if item_data and item_data.get('restriction') is not None:
+                pct = float(item_data.get('restriction') or 0)
+                key = f"{lic_number}_{pct}"
+                if key not in processed_restrictions:
+                    processed_restrictions.add(key)
+                    bucket = restricted_items_by_percentage.setdefault(
+                        pct, {'shared_restriction_value': 0.0, 'items': {}}
+                    )
+                    bucket['shared_restriction_value'] += float(
+                        item_data.get('restriction_value', 0) or 0
+                    )
+
+    # Pass 3 — per-item aggregation across licenses, in report item order.
+    regular_items = {}
+    total_available = 0.0
+    total_planned_cif = 0.0
+    total_planned_qty = 0.0
+
+    for item_id, item_name in items:
+        item_available = 0.0
+        item_planned = 0.0
+        item_planned_qty = 0.0
+        has_restriction = False
+        restriction_percentage = 0.0
+
+        for lic in licenses:
+            item_data = (lic.get('items') or {}).get(item_name)
+            if item_data:
+                available_quantity = float(item_data.get('available_quantity', 0) or 0)
+                item_available += available_quantity
+
+                plan_cif = float(item_data.get('plan_cif', 0) or 0)
+                plan_quantity = float(item_data.get('plan_quantity', 0) or 0)
+                item_has_manual = plan_cif > 0 or plan_quantity > 0
+                planned_cif = float(item_data.get('planned_cif', 0) or 0)
+                item_planned += plan_cif if item_has_manual else planned_cif
+                item_planned_qty += plan_quantity if item_has_manual else available_quantity
+
+                if item_data.get('restriction') is not None:
+                    has_restriction = True
+                    # Last license wins if licenses in this scope disagree
+                    # on the percentage for this item — deliberate quirk,
+                    # preserve verbatim, do not dedupe/reconcile. See design
+                    # doc §9(a).
+                    restriction_percentage = float(item_data.get('restriction') or 0)
+
+        if item_available > 0 or item_planned > 0:
+            item_summary = {
+                # Split-planned items with no import counterpart have
+                # item_available == 0; fall back to planned qty so the row
+                # shows the correct balance quantity instead of 0. See
+                # design doc §9(b) — the grand total below intentionally
+                # does NOT use this fallback-adjusted value.
+                'available': item_available if item_available > 0 else item_planned_qty,
+                'planned_cif': item_planned,
+                'planned_qty': item_planned_qty,
+                'unit_price': (
+                    round(item_planned / item_planned_qty, 2) if item_planned_qty > 0 else 0.0
+                ),
+            }
+
+            if has_restriction:
+                bucket = restricted_items_by_percentage.setdefault(
+                    restriction_percentage, {'shared_restriction_value': 0.0, 'items': {}}
+                )
+                bucket['items'][item_name] = item_summary
+            else:
+                regular_items[item_name] = item_summary
+
+            # Quirk (design doc §9(b)): the grand total sums the RAW
+            # per-license `item_available` contribution, NOT the
+            # fallback-adjusted `item_summary['available']` value set just
+            # above — preserved verbatim from the frontend; do not "fix".
+            total_available += item_available
+            total_planned_cif += item_planned
+            total_planned_qty += item_planned_qty
+
+    blended_unit_price = (
+        round(total_planned_cif / total_planned_qty, 2) if total_planned_qty > 0 else 0.0
+    )
+
+    return {
+        'opening_balance': opening_balance,
+        'total_available': total_available,
+        'total_planned_cif': total_planned_cif,
+        'total_planned_qty': total_planned_qty,
+        'blended_unit_price': blended_unit_price,
+        'regular_items': regular_items,
+        'restricted_items_by_percentage': {
+            str(pct): bucket for pct, bucket in restricted_items_by_percentage.items()
+        },
+    }
+
+
 def _xlsx_safe_row(row):
     """Strip XML-illegal control characters from string cells before writing.
 
@@ -651,9 +799,19 @@ class ItemPivotReportView(APIView):
         # 2B.2A; see docs/architecture/ITEM_PIVOT_DISPLAY_DATASET_DESIGN.md).
         # Additive top-level key — `licenses_by_norm_notification`'s existing
         # shape is unchanged, no API field renamed.
+        # Notification/Norm Summary — the backend-owned translation of the
+        # frontend's `calculateNotificationSummary` (Phase 2B.2B; see
+        # docs/architecture/ITEM_PIVOT_NOTIFICATION_SUMMARY_DESIGN.md).
+        # Built in the same pass over the same `licenses_list`s as
+        # `notification_totals` above — no second full iteration needed.
+        # Purely additive: nothing in `ItemPivotReport.tsx` reads these keys
+        # yet (that is a later, separate phase per the design doc's §7).
         notification_totals = {}
+        notification_summary = {}
+        norm_summary = {}
         for norm, notification_dict in result_dict.items():
             notification_totals[norm] = {}
+            notification_summary[norm] = {}
             for notification_key, licenses_list in notification_dict.items():
                 item_totals = {}
                 for item_id, item_name in sorted_items:
@@ -710,6 +868,18 @@ class ItemPivotReportView(APIView):
                     'items': item_totals,
                 }
 
+                notification_summary[norm][notification_key] = _build_notification_summary(
+                    licenses_list, sorted_items,
+                )
+
+            # Norm-level summary: same builder, flattened across every
+            # notification group under this norm — mirrors the frontend's
+            # `:1531` call site (`Object.values(...).flat()`).
+            norm_summary[norm] = _build_notification_summary(
+                [lic for licenses_list in notification_dict.values() for lic in licenses_list],
+                sorted_items,
+            )
+
         # Fetch notes and conditions for all norms in a single query
         from apps.core.models import SionNormClassModel
         norm_classes_list = list(result_dict.keys())
@@ -748,6 +918,8 @@ class ItemPivotReportView(APIView):
             ],
             'licenses_by_norm_notification': result_dict,
             'notification_totals': notification_totals,
+            'notification_summary': notification_summary,
+            'norm_summary': norm_summary,
             'norm_notes_conditions': norm_notes_conditions,
             'report_date': today.isoformat(),
         }
@@ -1371,6 +1543,13 @@ class ItemPivotReportView(APIView):
                     'effective_planned_cif': _effective_planned_cif(
                         float(_item_plan.get('q') or 0), float(_item_plan.get('cif') or 0), planned_cif,
                     ),
+                    # Quantity counterpart to effective_planned_cif — see
+                    # _effective_planned_quantity's docstring. First consumer
+                    # is _build_notification_summary's Pass 3 (Phase 2B.2B).
+                    'effective_planned_quantity': _effective_planned_quantity(
+                        float(_item_plan.get('q') or 0), float(_item_plan.get('cif') or 0),
+                        _available_quantity,
+                    ),
                     # Raw per-line split breakdown (item_name/qty/unit_price/
                     # cif) for the "Planning Splits" sheet — same source as
                     # plan_quantity/plan_cif above, just not summed.
@@ -1410,6 +1589,7 @@ class ItemPivotReportView(APIView):
                     'plan_quantity': 0,
                     'plan_cif': 0,
                     'effective_planned_cif': 0,
+                    'effective_planned_quantity': 0,
                     'splits': [],
                     'condition_type': '',
                     'product_code': None,

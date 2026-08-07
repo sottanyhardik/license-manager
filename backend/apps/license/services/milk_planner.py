@@ -34,7 +34,7 @@ class MilkConfig:
 
 
 MILK_CONFIG = MilkConfig(
-    dwp_price=Decimal('5'),
+    dwp_price=Decimal('6.5'),
     dwp_min_price=Decimal('4.40'),
     swp_price=Decimal('1.5'),
     wpc_price=Decimal('25'),

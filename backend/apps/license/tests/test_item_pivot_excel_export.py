@@ -203,14 +203,58 @@ def _download_excel(superuser_client):
     return content
 
 
+def _fetch_report_json(superuser_client):
+    # Same params as `_download_excel`, minus `format=excel`, so this hits
+    # exactly the same `generate_report()` call and therefore the same
+    # `notification_summary`/`norm_summary` values the Excel export reads —
+    # used as the independent source of truth the Excel cells are compared
+    # against, without re-deriving any aggregation in the test itself.
+    response = superuser_client.get(
+        reverse("license:item-pivot-report"),
+        {"min_balance": 200, "license_status": "active"},
+    )
+    assert response.status_code == 200, getattr(response, "data", response.content[:300])
+    return response.json()
+
+
+def _rows_from(sheet, first_cell_label):
+    """All rows from (and including) the first row whose first cell equals
+    `first_cell_label`, to the end of the sheet — used to slice out the
+    Notification/Norm Summary block appended after a section-header cell."""
+    rows = list(sheet.iter_rows())
+    for idx, row in enumerate(rows):
+        if row[0].value == first_cell_label:
+            return [[cell.value for cell in r] for r in rows[idx:]]
+    raise AssertionError(f"{first_cell_label!r} not found in sheet {sheet.title!r}")
+
+
 def _first_report_sheet(workbook):
     # Only one norm/notification combination is present in this fixture set,
     # so there should be exactly one norm/notification report sheet, plus the
     # always-appended "Planning Splits" sheet (see
-    # test_item_pivot_excel_has_planning_splits_sheet below).
-    report_sheets = [ws for ws in workbook.worksheets if ws.title != "Planning Splits"]
+    # test_item_pivot_excel_has_planning_splits_sheet below) and, since Phase
+    # 2B.2B, one "<norm>_Summary" sheet per norm (see
+    # test_item_pivot_excel_notification_summary* below) — neither of which
+    # is the main pivot-table report sheet this helper looks for.
+    report_sheets = [
+        ws for ws in workbook.worksheets
+        if ws.title != "Planning Splits" and not ws.title.endswith("_Summary")
+    ]
     assert len(report_sheets) == 1, [ws.title for ws in workbook.worksheets]
     return report_sheets[0]
+
+
+def _totals_row(sheet):
+    # Since Phase 2B.2B, the "Notification Summary" block is appended to
+    # this same sheet directly after the TOTAL row (see
+    # test_item_pivot_excel_notification_summary* below), so the TOTAL row
+    # is no longer necessarily `sheet[sheet.max_row]`. Locate it by its own
+    # first-cell label instead of by position — the row's own content is
+    # unaffected by what gets appended after it.
+    for row in sheet.iter_rows():
+        if row[0].value == "TOTAL":
+            return [cell.value for cell in row]
+    raise AssertionError("No TOTAL row found in sheet")
 
 
 @pytest.mark.django_db
@@ -223,7 +267,7 @@ def test_item_pivot_excel_totals_row_matches_header_column_count(superuser_clien
     sheet = _first_report_sheet(workbook)
 
     header_row = [cell.value for cell in sheet[3]]  # row1=title, row2=blank, row3=headers
-    totals_row = [cell.value for cell in sheet[sheet.max_row]]
+    totals_row = _totals_row(sheet)
 
     assert totals_row[0] == "TOTAL"
     assert len(totals_row) == len(header_row), (
@@ -243,7 +287,7 @@ def test_item_pivot_excel_base_cif_totals_land_under_correct_headers(superuser_c
     sheet = _first_report_sheet(workbook)
 
     header_row = [cell.value for cell in sheet[3]]
-    totals_row = [cell.value for cell in sheet[sheet.max_row]]
+    totals_row = _totals_row(sheet)
 
     base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter',
                      'Total CIF', 'Debited CIF', 'Alloted CIF', 'Balance CIF',
@@ -291,7 +335,7 @@ def test_item_pivot_excel_plan_qty_total_is_literal_sum(superuser_client, pivot_
     sheet = _first_report_sheet(workbook)
 
     header_row = [cell.value for cell in sheet[3]]
-    totals_row = [cell.value for cell in sheet[sheet.max_row]]
+    totals_row = _totals_row(sheet)
 
     item_name = "PIVOT TEST ITEM - PIVOTTEST"
     plan_qty_idx = header_row.index(f"{item_name} Plan Qty")
@@ -359,3 +403,148 @@ def test_item_pivot_excel_planning_splits_sheet_lists_single_split_license(
     assert data_rows == [
         ["PIVOT-EXCEL-001", item_name, item_name, "Split 1", 0.0, 40.0, 400.0],
     ]
+
+
+# ---------------------------------------------------------------------------
+# Phase 2B.2B — Notification/Norm Summary in the Excel export
+# (docs/architecture/ITEM_PIVOT_NOTIFICATION_SUMMARY_DESIGN.md §7 step 6, §8).
+#
+# The backend builder (`_build_notification_summary`) and its own unit tests
+# live in test_item_pivot_notification_summary.py — these tests do NOT
+# re-verify that builder's business logic (restriction-pool dedup, blended
+# unit price, etc.). They only verify that `export_to_excel_streaming`
+# transcribes `report_data['notification_summary']` / `['norm_summary']`
+# onto the worksheet verbatim, with no independent arithmetic.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_item_pivot_excel_notification_summary_matches_backend_json(
+    superuser_client, pivot_license
+):
+    """The 'Notification Summary' block appended directly after the TOTAL
+    row on the per-(norm,notification) sheet must be a direct transcription
+    of `report_data['notification_summary'][norm][notification]` — the same
+    object served as JSON and consumed by React."""
+    report_data = _fetch_report_json(superuser_client)
+    licenses_by_norm_notif = report_data["licenses_by_norm_notification"]
+    norm_class = next(iter(licenses_by_norm_notif))
+    notification = next(iter(licenses_by_norm_notif[norm_class]))
+    summary = report_data["notification_summary"][norm_class][notification]
+
+    content = _download_excel(superuser_client)
+    workbook = load_workbook(BytesIO(content), data_only=True)
+    sheet = _first_report_sheet(workbook)
+
+    block = _rows_from(sheet, "Notification Summary")
+    assert block[1][:5] == ["Item", "Available", "Planned Qty", "Unit Price", "Planned CIF"]
+    assert block[2][0] == "Opening Balance"
+    assert block[2][1] == pytest.approx(summary["opening_balance"])
+
+    item_name = "PIVOT TEST ITEM - PIVOTTEST"
+    item_row = next(row for row in block[3:] if row[0] == item_name)
+    expected_item = summary["regular_items"][item_name]
+    assert item_row[1] == pytest.approx(expected_item["available"])
+    assert item_row[2] == pytest.approx(expected_item["planned_qty"])
+    assert item_row[3] == pytest.approx(expected_item["unit_price"])
+    assert item_row[4] == pytest.approx(expected_item["planned_cif"])
+
+    grand_total_row = next(row for row in block if row[0] == "GRAND TOTAL")
+    assert grand_total_row[1] == pytest.approx(summary["total_available"])
+    assert grand_total_row[2] == pytest.approx(summary["total_planned_qty"])
+    assert grand_total_row[3] == pytest.approx(summary["blended_unit_price"])
+    assert grand_total_row[4] == pytest.approx(summary["total_planned_cif"])
+
+
+@pytest.mark.django_db
+def test_item_pivot_excel_norm_summary_sheet_matches_backend_json(
+    superuser_client, pivot_license
+):
+    """A dedicated '<norm>_Summary' sheet must exist per norm and transcribe
+    `report_data['norm_summary'][norm]` verbatim — the flattened-across-
+    notifications counterpart to the per-notification block, on its own
+    sheet since (unlike the per-notification case) there is no single
+    existing sheet per norm to append it to."""
+    report_data = _fetch_report_json(superuser_client)
+    licenses_by_norm_notif = report_data["licenses_by_norm_notification"]
+    norm_class = next(iter(licenses_by_norm_notif))
+    summary = report_data["norm_summary"][norm_class]
+
+    content = _download_excel(superuser_client)
+    workbook = load_workbook(BytesIO(content), data_only=True)
+
+    summary_sheet_name = f"{norm_class}_Summary"[:31]
+    assert summary_sheet_name in workbook.sheetnames, workbook.sheetnames
+    sheet = workbook[summary_sheet_name]
+
+    block = _rows_from(sheet, "Norm Summary")
+    assert block[1][:5] == ["Item", "Available", "Planned Qty", "Unit Price", "Planned CIF"]
+    assert block[2][0] == "Opening Balance"
+    assert block[2][1] == pytest.approx(summary["opening_balance"])
+
+    item_name = "PIVOT TEST ITEM - PIVOTTEST"
+    item_row = next(row for row in block[3:] if row[0] == item_name)
+    expected_item = summary["regular_items"][item_name]
+    assert item_row[1] == pytest.approx(expected_item["available"])
+    assert item_row[2] == pytest.approx(expected_item["planned_qty"])
+    assert item_row[3] == pytest.approx(expected_item["unit_price"])
+    assert item_row[4] == pytest.approx(expected_item["planned_cif"])
+
+    grand_total_row = next(row for row in block if row[0] == "GRAND TOTAL")
+    assert grand_total_row[1] == pytest.approx(summary["total_available"])
+    assert grand_total_row[2] == pytest.approx(summary["total_planned_qty"])
+    assert grand_total_row[3] == pytest.approx(summary["blended_unit_price"])
+    assert grand_total_row[4] == pytest.approx(summary["total_planned_cif"])
+
+
+def test_notification_summary_block_formats_percentage_key_without_trailing_zero():
+    """Design doc §13's percentage-key-format finding: the DTO's restriction-
+    percentage dict key is `str(python_float)` (e.g. "10.0"), but the Excel
+    label must read "RESTRICTED ITEMS - 10%", not "...- 10.0%" — a pure
+    display-formatting fix (`f"{float(pct_str):g}"`), not a recomputation of
+    the percentage. Exercises `_write_notification_summary_block` directly,
+    independent of the DB-backed fixtures above."""
+    import tempfile
+
+    from openpyxl import Workbook
+
+    from apps.license.views.item_pivot_report import _write_notification_summary_block
+
+    summary = {
+        "opening_balance": 100.0,
+        "total_available": 10.0,
+        "total_planned_cif": 50.0,
+        "total_planned_qty": 5.0,
+        "blended_unit_price": 10.0,
+        "regular_items": {},
+        "restricted_items_by_percentage": {
+            "10.0": {
+                "shared_restriction_value": 999.0,
+                "items": {
+                    "RESTRICTED ITEM": {
+                        "available": 10.0,
+                        "planned_cif": 50.0,
+                        "planned_qty": 5.0,
+                        "unit_price": 10.0,
+                    },
+                },
+            },
+        },
+    }
+
+    workbook = Workbook(write_only=True)
+    worksheet = workbook.create_sheet(title="Test")
+    _write_notification_summary_block(worksheet, summary, "Notification Summary")
+
+    with tempfile.NamedTemporaryFile(suffix=".xlsx") as tmp:
+        workbook.save(tmp.name)
+        workbook.close()
+        loaded = load_workbook(tmp.name)
+        sheet = loaded["Test"]
+        values = [
+            cell.value for row in sheet.iter_rows() for cell in row if cell.value is not None
+        ]
+
+    assert "RESTRICTED ITEMS - 10%" in values
+    assert "Balance 10%" in values
+    assert "RESTRICTED ITEMS - 10.0%" not in values
+    assert "Balance 10.0%" not in values

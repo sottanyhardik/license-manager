@@ -261,6 +261,94 @@ def _planning_split_sheet_rows(licenses_by_norm_notification, item_names):
     return rows
 
 
+def _write_notification_summary_block(worksheet, summary, title):
+    """Append the Notification/Norm Summary block (Phase 2B.2B, §7 step 6 —
+    docs/architecture/ITEM_PIVOT_NOTIFICATION_SUMMARY_DESIGN.md §8) to
+    `worksheet`, directly transcribing `summary` — the exact
+    `_build_notification_summary` DTO (design doc §2), the same object the
+    JSON response and React already render. Pure formatting: every value
+    written is a direct dict read off `summary`; no aggregation happens
+    here (do not add sum()/reduce() to this function).
+
+    `summary` — one `notification_summary[norm][notification]` or
+    `norm_summary[norm]` dict. `title` — the section header text.
+    """
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.cell import WriteOnlyCell
+
+    worksheet.append([])  # blank separator row
+
+    section_header_cell = WriteOnlyCell(worksheet, value=title)
+    section_header_cell.font = Font(bold=True, color='FFFFFF')
+    section_header_cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    worksheet.append(_xlsx_safe_row([section_header_cell]))
+
+    column_header_row = []
+    for header in ('Item', 'Available', 'Planned Qty', 'Unit Price', 'Planned CIF'):
+        cell = WriteOnlyCell(worksheet, value=header)
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        column_header_row.append(cell)
+    worksheet.append(_xlsx_safe_row(column_header_row))
+
+    opening_label_cell = WriteOnlyCell(worksheet, value='Opening Balance')
+    opening_label_cell.font = Font(bold=True)
+    worksheet.append(_xlsx_safe_row(
+        [opening_label_cell, summary.get('opening_balance', 0), None, None, None]
+    ))
+
+    for item_name, item_summary in summary.get('regular_items', {}).items():
+        worksheet.append(_xlsx_safe_row([
+            item_name,
+            item_summary.get('available', 0),
+            item_summary.get('planned_qty', 0),
+            item_summary.get('unit_price', 0),
+            item_summary.get('planned_cif', 0),
+        ]))
+
+    for pct_str, bucket in summary.get('restricted_items_by_percentage', {}).items():
+        # Display-only fix (design doc §13): the dict key is `str(float)`
+        # ("10.0"); format without the trailing ".0" for the sheet label.
+        # This is string formatting, not a calculation.
+        pct_display = f"{float(pct_str):g}"
+
+        group_header_cell = WriteOnlyCell(worksheet, value=f"RESTRICTED ITEMS - {pct_display}%")
+        group_header_cell.font = Font(bold=True)
+        worksheet.append(_xlsx_safe_row([group_header_cell]))
+
+        for item_name, item_summary in bucket.get('items', {}).items():
+            worksheet.append(_xlsx_safe_row([
+                item_name,
+                item_summary.get('available', 0),
+                item_summary.get('planned_qty', 0),
+                item_summary.get('unit_price', 0),
+                item_summary.get('planned_cif', 0),
+            ]))
+
+        balance_label_cell = WriteOnlyCell(worksheet, value=f"Balance {pct_display}%")
+        balance_label_cell.font = Font(bold=True)
+        worksheet.append(_xlsx_safe_row([
+            balance_label_cell, bucket.get('shared_restriction_value', 0), None, None, None
+        ]))
+
+    grand_total_label_cell = WriteOnlyCell(worksheet, value='GRAND TOTAL')
+    grand_total_label_cell.font = Font(bold=True)
+    grand_total_available_cell = WriteOnlyCell(worksheet, value=summary.get('total_available', 0))
+    grand_total_available_cell.font = Font(bold=True)
+    grand_total_qty_cell = WriteOnlyCell(worksheet, value=summary.get('total_planned_qty', 0))
+    grand_total_qty_cell.font = Font(bold=True)
+    grand_total_price_cell = WriteOnlyCell(worksheet, value=summary.get('blended_unit_price', 0))
+    grand_total_price_cell.font = Font(bold=True)
+    grand_total_cif_cell = WriteOnlyCell(worksheet, value=summary.get('total_planned_cif', 0))
+    grand_total_cif_cell.font = Font(bold=True)
+    worksheet.append(_xlsx_safe_row([
+        grand_total_label_cell,
+        grand_total_available_cell,
+        grand_total_qty_cell,
+        grand_total_price_cell,
+        grand_total_cif_cell,
+    ]))
+
 
 logger = logging.getLogger(__name__)
 
@@ -1863,6 +1951,33 @@ class ItemPivotReportView(APIView):
                         totals_row.append(cell)
 
                     worksheet.append(_xlsx_safe_row(totals_row))
+
+                    # Notification Summary (Phase 2B.2B, §7 step 6) — appended
+                    # directly after the TOTAL row on this same sheet, reading
+                    # verbatim off `report_data['notification_summary']` (no
+                    # new backend computation; see design doc §8).
+                    notif_summary = report_data.get('notification_summary', {}).get(
+                        norm_class, {}
+                    ).get(notification, {})
+                    _write_notification_summary_block(
+                        worksheet, notif_summary, 'Notification Summary'
+                    )
+
+                # Norm Summary (Phase 2B.2B, §7 step 6) — one additional
+                # sheet per norm, flattened across that norm's notification
+                # groups, reading verbatim off `report_data['norm_summary']`.
+                # Sheet-per-(norm,notification) is this exporter's existing
+                # layout; there is no single existing sheet to append a
+                # norm-level summary to, so a dedicated `{norm}_Summary`
+                # sheet is created once the inner notification loop finishes.
+                norm_summary_data = report_data.get('norm_summary', {}).get(norm_class, {})
+                norm_summary_sheet_name = f"{norm_class}_Summary"[:31].replace(
+                    '/', '-'
+                ).replace('\\', '-').replace('*', '-')
+                norm_summary_ws = workbook.create_sheet(title=norm_summary_sheet_name)
+                _write_notification_summary_block(
+                    norm_summary_ws, norm_summary_data, 'Norm Summary'
+                )
 
             # "Planning Splits" — a separate sheet listing every visible
             # LicenseItemPlan split (flat, one row each) across all licenses

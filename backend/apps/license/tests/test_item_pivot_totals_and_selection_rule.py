@@ -21,6 +21,7 @@ from apps.license.models import LicenseImportItemsModel
 from apps.license.tests.test_item_pivot_excel_export import (
     _download_excel,
     _first_report_sheet,
+    _totals_row,
     pivot_license,
     pivot_masters,
     superuser_client,
@@ -167,7 +168,11 @@ def test_excel_totals_row_matches_json_notification_totals(superuser_client, piv
     sheet = _first_report_sheet(workbook)
 
     header_row = [cell.value for cell in sheet[3]]
-    totals_row = [cell.value for cell in sheet[sheet.max_row]]
+    # Since Phase 2B.2B, the "Notification Summary" block is appended
+    # directly after the TOTAL row on this same sheet, so it is no longer
+    # necessarily `sheet[sheet.max_row]` — locate it by its own "TOTAL"
+    # label instead (see `_totals_row` in test_item_pivot_excel_export.py).
+    totals_row = _totals_row(sheet)
 
     assert totals_row[header_row.index("Total CIF")] == pytest.approx(totals["total_cif"])
     assert totals_row[header_row.index("Debited CIF")] == pytest.approx(totals["debited_cif"])

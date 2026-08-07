@@ -192,6 +192,62 @@ const REPORT_DATA = {
             },
         },
     },
+    // Backend-owned Notification/Norm Summary (Phase 2B.2B) — deliberately
+    // distinct from anything derivable from `licenses` above (which has
+    // balance_cif 1000, planned_cif 750/378, etc.) so the render tests below
+    // can prove these panels are sourced from these fields, not recomputed
+    // locally. "10.0" uses the backend's Python str(float) key format (see
+    // design doc §13) to exercise the percentage-key display fix.
+    notification_summary: {
+        E1: {
+            "Global Exim — NOTIF-1": {
+                opening_balance: 555.55,
+                total_available: 444.44,
+                total_planned_cif: 333.33,
+                total_planned_qty: 22.22,
+                blended_unit_price: 15,
+                regular_items: {
+                    "FRUIT JUICE - E1": {
+                        available: 111.11,
+                        planned_cif: 222.22,
+                        planned_qty: 10,
+                        unit_price: 22.22,
+                    },
+                },
+                restricted_items_by_percentage: {
+                    "10.0": {
+                        shared_restriction_value: 999.99,
+                        items: {
+                            "PP - E1": {
+                                available: 50,
+                                planned_cif: 60,
+                                planned_qty: 5,
+                                unit_price: 12,
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+    norm_summary: {
+        E1: {
+            opening_balance: 777.77,
+            total_available: 666.66,
+            total_planned_cif: 888.88,
+            total_planned_qty: 33.33,
+            blended_unit_price: 16.67,
+            regular_items: {
+                "FRUIT JUICE - E1": {
+                    available: 121.21,
+                    planned_cif: 232.32,
+                    planned_qty: 11,
+                    unit_price: 21.12,
+                },
+            },
+            restricted_items_by_percentage: {},
+        },
+    },
     norm_notes_conditions: { E1: { notes: [], conditions: [] } },
     report_date: "2026-01-08",
 };
@@ -360,4 +416,93 @@ describe("ItemPivotReport — Compact Scroll Mode", () => {
             expect(el.style.left).toMatch(/^-?\d+(\.\d+)?px$/);
         }
     });
+});
+
+// Phase 2B.2B (frontend cutover) — the per-notification "Summary" panel and
+// the "Norms Total Summary" card must be pure rendering of the backend's
+// notification_summary/norm_summary objects, with zero local aggregation.
+// REPORT_DATA's notification_summary/norm_summary fixtures above are
+// deliberately different from anything derivable from `licenses` (which has
+// its own balance_cif/planned_cif numbers) so these tests fail loudly if the
+// panel ever goes back to recomputing from `licenses` instead of reading the
+// backend fields directly.
+describe("ItemPivotReport — Notification/Norm Summary panel (Phase 2B.2B backend cutover)", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockApi();
+    });
+
+    it("renders the per-notification Summary panel from reportData.notification_summary, not from `licenses`", async () => {
+        await renderAndSelectNorm();
+
+        const panel = screen.getByText("Summary").closest("div.mt-4") as HTMLElement;
+        expect(panel).not.toBeNull();
+
+        // Opening balance comes straight from notification_summary.opening_balance
+        // (555.55), not the license's own balance_cif (1000).
+        const openingRow = within(panel).getByText("OPENING BALANCE").closest("tr") as HTMLElement;
+        expect(within(openingRow).getByText("555.55")).toBeInTheDocument();
+
+        // Regular item row: available/planned_qty/unit_price/planned_cif all
+        // read from notification_summary.regular_items["FRUIT JUICE - E1"].
+        const fruitRow = within(panel).getByText("FRUIT JUICE - E1").closest("tr") as HTMLElement;
+        expect(within(fruitRow).getByText("111.11")).toBeInTheDocument();
+        expect(within(fruitRow).getByText("10.00")).toBeInTheDocument();
+        expect(within(fruitRow).getByText("22.22")).toBeInTheDocument();
+        expect(within(fruitRow).getByText("222.22")).toBeInTheDocument();
+
+        // Restricted-items group header: backend key is "10.0" (Python
+        // str(float)) — display must still read "10%", matching today's UI,
+        // not the raw "10.0%" backend key string.
+        expect(within(panel).getByText("RESTRICTED ITEMS - 10%")).toBeInTheDocument();
+        expect(within(panel).queryByText(/RESTRICTED ITEMS - 10\.0%/)).not.toBeInTheDocument();
+        expect(within(panel).getByText("Balance 10%")).toBeInTheDocument();
+
+        const restrictedRow = within(panel).getByText("PP - E1").closest("tr") as HTMLElement;
+        expect(within(restrictedRow).getByText("50.00")).toBeInTheDocument();
+        expect(within(restrictedRow).getByText("5.00")).toBeInTheDocument();
+        expect(within(restrictedRow).getByText("12.00")).toBeInTheDocument();
+        expect(within(restrictedRow).getByText("60.00")).toBeInTheDocument();
+        expect(within(panel).getByText("999.99")).toBeInTheDocument();
+
+        // Grand-total row: total_available/total_planned_qty/blended_unit_price/
+        // total_planned_cif, all read directly (blended_unit_price is not
+        // recomputed client-side as planned/qty).
+        const totalRow = within(panel).getByText("TOTAL PLANNED CIF ($)").closest("tr") as HTMLElement;
+        expect(within(totalRow).getByText("444.44")).toBeInTheDocument();
+        expect(within(totalRow).getByText("22.22")).toBeInTheDocument();
+        expect(within(totalRow).getByText("15.00")).toBeInTheDocument();
+        expect(within(totalRow).getByText("333.33")).toBeInTheDocument();
+    });
+
+    it("renders the Norms Total Summary card from reportData.norm_summary, not a client-side flatten+reduce of `licenses`", async () => {
+        await renderAndSelectNorm();
+
+        const heading = screen.getByText(/Norms Total Summary/);
+        const card = heading.closest('[data-slot="card"]') as HTMLElement;
+        expect(card).not.toBeNull();
+
+        // Opening balance comes from norm_summary.opening_balance (777.77),
+        // not a `licenses.reduce((s, l) => s + l.balance_cif, 0)` (1000).
+        const openingRow = within(card).getByText("OPENING BALANCE").closest("tr") as HTMLElement;
+        expect(within(openingRow).getByText("777.77")).toBeInTheDocument();
+
+        const fruitRow = within(card).getByText("FRUIT JUICE - E1").closest("tr") as HTMLElement;
+        expect(within(fruitRow).getByText("121.21")).toBeInTheDocument();
+        expect(within(fruitRow).getByText("11.00")).toBeInTheDocument();
+        expect(within(fruitRow).getByText("21.12")).toBeInTheDocument();
+        expect(within(fruitRow).getByText("232.32")).toBeInTheDocument();
+
+        const totalRow = within(card).getByText("TOTAL PLANNED CIF ($)").closest("tr") as HTMLElement;
+        expect(within(totalRow).getByText("666.66")).toBeInTheDocument();
+        expect(within(totalRow).getByText("33.33")).toBeInTheDocument();
+        expect(within(totalRow).getByText("16.67")).toBeInTheDocument();
+        expect(within(totalRow).getByText("888.88")).toBeInTheDocument();
+    });
+
+    // No separate "calculateNotificationSummary is gone" test: the two
+    // render tests above only pass if both panels render entirely from the
+    // mocked notification_summary/norm_summary fixtures (which deliberately
+    // diverge from what `licenses` would produce) — a local aggregation
+    // engine reading `licenses` instead would fail these assertions.
 });

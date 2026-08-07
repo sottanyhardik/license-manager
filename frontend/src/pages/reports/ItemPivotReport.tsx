@@ -503,124 +503,6 @@ export default function ItemPivotReport() {
         return total;
     };
 
-    // Calculate summary for a notification
-    const calculateNotificationSummary = (licenses) => {
-        const summary: Record<string, any> = {
-            openingBalance: 0,
-            regularItems: {},
-            restrictedItemsByPercentage: {},
-            totalAvailable: 0
-        };
-
-        // Calculate opening balance (sum of all license balances)
-        licenses.forEach(license => {
-            const balance = toFiniteNumber(license.balance_cif);
-            summary.openingBalance += balance;
-        });
-
-        // First pass: Calculate restriction values per license (not per item, as it's shared)
-        const processedRestrictions = new Set(); // Track processed license+percentage combinations
-        licenses.forEach(license => {
-            if (reportData?.items) {
-                reportData.items.forEach(item => {
-                    const itemData = license.items?.[item.name];
-                    if (itemData && itemData.restriction !== null && itemData.restriction !== undefined) {
-                        const restrictionPercentage = toFiniteNumber(itemData.restriction);
-                        const restrictionKey = `${license.license_number}_${restrictionPercentage}`;
-
-                        // Only add restriction value once per license per percentage
-                        if (!processedRestrictions.has(restrictionKey)) {
-                            processedRestrictions.add(restrictionKey);
-
-                            if (!summary.restrictedItemsByPercentage[restrictionPercentage]) {
-                                summary.restrictedItemsByPercentage[restrictionPercentage] = {
-                                    items: {},
-                                    sharedRestrictionValue: 0
-                                };
-                            }
-                            summary.restrictedItemsByPercentage[restrictionPercentage].sharedRestrictionValue += toFiniteNumber(itemData.restriction_value);
-                        }
-                    }
-                });
-            }
-        });
-
-        // Second pass: Calculate item quantities
-        if (reportData?.items) {
-            reportData.items.forEach(item => {
-                let itemAvailable  = 0;
-                let itemPlanned    = 0;   // planned CIF (manual plan if present, else norm)
-                let itemPlannedQty = 0;   // planned quantity backing that CIF
-                let hasRestriction = false;
-                let restrictionPercentage = 0;
-
-                licenses.forEach(license => {
-                    const itemData = license.items?.[item.name];
-                    if (itemData) {
-                        // Available quantity
-                        itemAvailable += toFiniteNumber(itemData.available_quantity);
-                        // Planned CIF + quantity evaluated per-product: use manual
-                        // plan values when this product was manually planned;
-                        // otherwise fall back to norm-derived planned_cif / qty.
-                        const itemHasManual =
-                            toFiniteNumber(itemData.plan_cif) > 0 ||
-                            toFiniteNumber(itemData.plan_quantity) > 0;
-                        itemPlanned    += itemHasManual
-                            ? toFiniteNumber(itemData.plan_cif)
-                            : toFiniteNumber(itemData.planned_cif);
-                        itemPlannedQty += itemHasManual
-                            ? toFiniteNumber(itemData.plan_quantity)
-                            : toFiniteNumber(itemData.available_quantity);
-
-                        // Check if item has restriction
-                        if (itemData.restriction !== null && itemData.restriction !== undefined) {
-                            hasRestriction = true;
-                            restrictionPercentage = toFiniteNumber(itemData.restriction);
-                        }
-                    }
-                });
-
-                // Include an item in the summary when it has import balance *or*
-                // has planned CIF — the latter handles manually-planned split items
-                // (e.g. "DWP - E1") whose planned item name has no corresponding
-                // import item and therefore available_quantity = 0.
-                if (itemAvailable > 0 || itemPlanned > 0) {
-                    const itemSummary = {
-                        // For split-planned items (DWP, WPC …) that have no direct
-                        // import counterpart, available_quantity is 0 from the backend.
-                        // Fall back to the planned qty so the column shows the correct
-                        // balance quantity instead of 0.
-                        available:    itemAvailable > 0 ? itemAvailable : itemPlannedQty,
-                        planned_cif:  itemPlanned,
-                        planned_qty:  itemPlannedQty,
-                        // Unit price = Total Planned CIF / Total Planned QTY.
-                        unit_price:   itemPlannedQty > 0 ? itemPlanned / itemPlannedQty : 0,
-                    };
-
-                    if (hasRestriction) {
-                        // Add item to its restriction percentage group
-                        if (!summary.restrictedItemsByPercentage[restrictionPercentage]) {
-                            summary.restrictedItemsByPercentage[restrictionPercentage] = {
-                                items: {},
-                                sharedRestrictionValue: 0
-                            };
-                        }
-                        summary.restrictedItemsByPercentage[restrictionPercentage].items[item.name] = itemSummary;
-                    } else {
-                        summary.regularItems[item.name] = itemSummary;
-                    }
-
-                    summary.totalAvailable += itemAvailable;
-                    summary.totalPlanned = (summary.totalPlanned || 0) + itemPlanned;
-                    summary.totalPlannedQty = (summary.totalPlannedQty || 0) + itemPlannedQty;
-                }
-            });
-        }
-
-        return summary;
-    };
-
-
     return (
         <div className="min-h-screen bg-background">
             {/* Tabler-style page header */}
@@ -1383,7 +1265,10 @@ export default function ItemPivotReport() {
 
                                             {/* Summary Table */}
                                             {(() => {
-                                                const summary = calculateNotificationSummary(licenses);
+                                                // Backend-computed Notification Summary (Phase 2B.2B) — pure
+                                                // rendering layer, no local aggregation. See
+                                                // docs/architecture/ITEM_PIVOT_NOTIFICATION_SUMMARY_DESIGN.md.
+                                                const summary = reportData?.notification_summary?.[activeNormTab]?.[groupKey] || {};
                                                 return (
                                                     <div className="mt-4 px-3 pb-3">
                                                         <h6 className="mb-3 text-primary">
@@ -1407,7 +1292,7 @@ export default function ItemPivotReport() {
                                                                 <tr className="table-info">
                                                                     <td colSpan={2} className="text-center font-bold">OPENING BALANCE</td>
                                                                     <td className="text-right font-bold">
-                                                                        {formatIndianNumber(summary.openingBalance, 2)}
+                                                                        {formatIndianNumber(summary.opening_balance || 0, 2)}
                                                                     </td>
                                                                     <td className="text-right font-bold">-</td>
                                                                     <td className="text-right font-bold">-</td>
@@ -1415,7 +1300,7 @@ export default function ItemPivotReport() {
                                                                 </tr>
 
                                                                 {/* Regular Items */}
-                                                                {(Object.entries(summary.regularItems) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
+                                                                {(Object.entries(summary.regular_items || {}) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
                                                                     <tr key={itemName}>
                                                                         <td className="text-center">{idx + 1}</td>
                                                                         <td className="font-bold">{itemName}</td>
@@ -1435,13 +1320,13 @@ export default function ItemPivotReport() {
                                                                 ))}
 
                                                                 {/* Restricted Items Grouped by Percentage */}
-                                                                {Object.keys(summary.restrictedItemsByPercentage).length > 0 && (
+                                                                {Object.keys(summary.restricted_items_by_percentage || {}).length > 0 && (
                                                                     <>
-                                                                        {Object.entries(summary.restrictedItemsByPercentage)
+                                                                        {Object.entries(summary.restricted_items_by_percentage || {})
                                                                             .sort(([pctA], [pctB]) => parseFloat(pctA) - parseFloat(pctB))
                                                                             .map(([percentage, groupData], groupIdx) => {
-                                                                                const startIdx = Object.keys(summary.regularItems).length +
-                                                                                    Object.entries(summary.restrictedItemsByPercentage)
+                                                                                const startIdx = Object.keys(summary.regular_items || {}).length +
+                                                                                    Object.entries(summary.restricted_items_by_percentage || {})
                                                                                         .slice(0, groupIdx)
                                                                                         .reduce((acc: number, [, data]: [string, any]) => acc + Object.keys((data as any).items || {}).length, 0);
 
@@ -1450,7 +1335,7 @@ export default function ItemPivotReport() {
                                                                                         <tr className="table-warning">
                                                                                             <td colSpan={6} className="text-center font-bold">
                                                                                                 <TriangleAlert className="size-4" aria-hidden="true" />
-                                                                                                RESTRICTED ITEMS - {percentage}%
+                                                                                                RESTRICTED ITEMS - {parseFloat(percentage)}%
                                                                                             </td>
                                                                                         </tr>
                                                                                         {(Object.entries((groupData as any).items || {}) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
@@ -1473,9 +1358,9 @@ export default function ItemPivotReport() {
                                                                                         ))}
                                                                                         {/* Balance for this restriction percentage (shared across all items) */}
                                                                                         <tr className="table-warning">
-                                                                                            <td colSpan={2} className="text-center font-bold">Balance {percentage}%</td>
+                                                                                            <td colSpan={2} className="text-center font-bold">Balance {parseFloat(percentage)}%</td>
                                                                                             <td className="text-right font-bold">
-                                                                                                {formatIndianNumber((groupData as any).sharedRestrictionValue, 2)}
+                                                                                                {formatIndianNumber((groupData as any).shared_restriction_value, 2)}
                                                                                             </td>
                                                                                             <td className="text-right font-bold">-</td>
                                                                                             <td className="text-right font-bold">-</td>
@@ -1490,18 +1375,18 @@ export default function ItemPivotReport() {
                                                                 <tr className="table-success">
                                                                     <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
                                                                     <td className="text-right font-bold">
-                                                                        {formatIndianNumber(summary.totalAvailable || 0, 2)}
+                                                                        {formatIndianNumber(summary.total_available || 0, 2)}
                                                                     </td>
                                                                     <td className="text-right font-bold">
-                                                                        {formatIndianNumber(summary.totalPlannedQty || 0, 2)}
+                                                                        {formatIndianNumber(summary.total_planned_qty || 0, 2)}
                                                                     </td>
                                                                     <td className="text-right font-bold">
-                                                                        {summary.totalPlannedQty > 0
-                                                                            ? (summary.totalPlanned / summary.totalPlannedQty).toFixed(2)
+                                                                        {summary.total_planned_qty > 0
+                                                                            ? summary.blended_unit_price.toFixed(2)
                                                                             : '-'}
                                                                     </td>
                                                                     <td className="text-right font-bold">
-                                                                        {formatIndianNumber(summary.totalPlanned || 0, 2)}
+                                                                        {formatIndianNumber(summary.total_planned_cif || 0, 2)}
                                                                     </td>
                                                                 </tr>
                                                                 </tbody>
@@ -1519,19 +1404,18 @@ export default function ItemPivotReport() {
                             {/* ── Norms Total Summary ────────────────────────── */}
                             {(() => {
                                 // Flatten all licenses across every notification group
-                                // for the active norm, then reuse the existing summary engine.
+                                // for the active norm — used only to gate rendering and
+                                // show the license count; the summary numbers themselves
+                                // come from the backend-owned norm_summary (Phase 2B.2B).
                                 const allNormLicenses: any[] = Object.values(
                                     reportData?.licenses_by_norm_notification?.[activeNormTab] || {}
                                 ).flat();
                                 if (allNormLicenses.length === 0) return null;
                                 const totalLicenses = allNormLicenses.length;
-                                const totalBalanceCif = allNormLicenses.reduce(
-                                    (s, l) => s + (l.balance_cif || 0), 0
-                                );
-                                const ns = calculateNotificationSummary(allNormLicenses);
+                                const ns = reportData?.norm_summary?.[activeNormTab] || {};
                                 const itemRows = [
-                                    ...Object.entries(ns.regularItems as Record<string, any>),
-                                    ...Object.values(ns.restrictedItemsByPercentage as Record<string, any>)
+                                    ...Object.entries((ns.regular_items || {}) as Record<string, any>),
+                                    ...Object.values((ns.restricted_items_by_percentage || {}) as Record<string, any>)
                                         .flatMap((g: any) => Object.entries(g.items || {})),
                                 ] as [string, any][];
 
@@ -1563,7 +1447,7 @@ export default function ItemPivotReport() {
                                                         {/* Opening Balance */}
                                                         <tr className="table-info">
                                                             <td colSpan={2} className="text-center font-bold">OPENING BALANCE</td>
-                                                            <td className="text-right font-bold">{formatIndianNumber(totalBalanceCif, 2)}</td>
+                                                            <td className="text-right font-bold">{formatIndianNumber(ns.opening_balance || 0, 2)}</td>
                                                             <td className="text-right font-bold">-</td>
                                                             <td className="text-right font-bold">-</td>
                                                             <td className="text-right font-bold">-</td>
@@ -1593,18 +1477,18 @@ export default function ItemPivotReport() {
                                                         <tr className="table-primary font-bold">
                                                             <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
                                                             <td className="text-right font-bold">
-                                                                {formatIndianNumber(ns.totalAvailable || 0, 2)}
+                                                                {formatIndianNumber(ns.total_available || 0, 2)}
                                                             </td>
                                                             <td className="text-right font-bold">
-                                                                {formatIndianNumber(ns.totalPlannedQty || 0, 2)}
+                                                                {formatIndianNumber(ns.total_planned_qty || 0, 2)}
                                                             </td>
                                                             <td className="text-right font-bold">
-                                                                {(ns.totalPlannedQty || 0) > 0
-                                                                    ? ((ns.totalPlanned || 0) / (ns.totalPlannedQty || 1)).toFixed(2)
+                                                                {(ns.total_planned_qty || 0) > 0
+                                                                    ? (ns.blended_unit_price || 0).toFixed(2)
                                                                     : '-'}
                                                             </td>
                                                             <td className="text-right font-bold">
-                                                                {formatIndianNumber(ns.totalPlanned || 0, 2)}
+                                                                {formatIndianNumber(ns.total_planned_cif || 0, 2)}
                                                             </td>
                                                         </tr>
                                                     </tbody>

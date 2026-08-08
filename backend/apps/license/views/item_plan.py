@@ -26,6 +26,76 @@ from apps.license.models import (
 from apps.license.serializers import LicenseItemPlanSerializer
 
 
+def _validate_plan_line_cap(item, planned_quantity, planned_cif_fc, *, exclude_plan_id=None):
+    """
+    Enforce the same capacity / CIF-pool caps `bulk_upsert` enforces (see its
+    docstring) for a SINGLE plan line created/edited via the plain CRUD
+    endpoints — the only write path that previously had no cross-line
+    validation at all (capacity + CIF pool are cross-line checks; see
+    `LicenseItemPlanSerializer`'s docstring).
+
+    Locks the licence and the item's plan-group rows for the duration of the
+    check (must be called inside `transaction.atomic()`) so two concurrent
+    requests against the same licence can't each read a stale total and
+    collectively overcommit it — mirrors `allocate_items`'s
+    `select_for_update` pattern in `apps/allotment/views_actions.py`.
+
+    `exclude_plan_id` excludes the row being edited from the "already
+    planned" sums so an update compares the NEW value against every OTHER
+    line for the group/licence, never the old value plus the new one.
+    """
+    from django.db.models import DecimalField, Sum, Value
+    from django.db.models.functions import Coalesce
+    from rest_framework.exceptions import ValidationError
+
+    from apps.core.constants import DEC_0, DEC_000
+    from apps.license.services.plan_enforcement import live_allotted_qty_for
+    from apps.license.services.plan_grouping import group_ids_of
+
+    planned_quantity = Decimal(str(planned_quantity or 0))
+    planned_cif_fc = Decimal(str(planned_cif_fc or 0))
+
+    license_obj = LicenseDetailsModel.objects.select_for_update().get(pk=item.license_id)
+
+    gids = group_ids_of(item)
+    group_items = LicenseImportItemsModel.objects.select_for_update().filter(id__in=gids)
+    avail_sum = sum(
+        (Decimal(str(it.available_quantity or 0)) for it in group_items), Decimal("0"),
+    )
+    capacity = live_allotted_qty_for(gids) + avail_sum
+
+    group_plans = LicenseItemPlan.objects.filter(import_item_id__in=gids)
+    if exclude_plan_id is not None:
+        group_plans = group_plans.exclude(pk=exclude_plan_id)
+    existing_group_qty = group_plans.aggregate(
+        t=Coalesce(Sum("planned_quantity"), Value(DEC_000), output_field=DecimalField()),
+    )["t"]
+    new_group_qty = existing_group_qty + planned_quantity
+    if new_group_qty > capacity:
+        raise ValidationError({
+            "planned_quantity": (
+                f"Planned quantity {new_group_qty} exceeds available capacity "
+                f"{capacity} for this item group (Quantity Exceeded)."
+            ),
+        })
+
+    license_plans = LicenseItemPlan.objects.filter(license_id=license_obj.pk)
+    if exclude_plan_id is not None:
+        license_plans = license_plans.exclude(pk=exclude_plan_id)
+    existing_license_cif = license_plans.aggregate(
+        t=Coalesce(Sum("planned_cif_fc"), Value(DEC_0), output_field=DecimalField()),
+    )["t"]
+    new_license_cif = existing_license_cif + planned_cif_fc
+    balance_cif = Decimal(str(license_obj.get_balance_cif or 0))
+    if new_license_cif > balance_cif:
+        raise ValidationError({
+            "planned_cif_fc": (
+                f"Planned CIF total {new_license_cif:.2f} exceeds licence balance "
+                f"{balance_cif:.2f} (Value Exceeded)."
+            ),
+        })
+
+
 class LicenseItemPlanViewSet(viewsets.ModelViewSet):
     """Manage a licence's per-item utilization plan."""
     queryset = (
@@ -37,6 +107,23 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
     permission_classes = [LicensePermission]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["license", "import_item"]
+
+    def perform_create(self, serializer):
+        item = serializer.validated_data["import_item"]
+        planned_quantity = serializer.validated_data.get("planned_quantity", 0)
+        planned_cif_fc = serializer.validated_data.get("planned_cif_fc", 0)
+        with transaction.atomic():
+            _validate_plan_line_cap(item, planned_quantity, planned_cif_fc)
+            serializer.save()
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        item = serializer.validated_data.get("import_item", instance.import_item)
+        planned_quantity = serializer.validated_data.get("planned_quantity", instance.planned_quantity)
+        planned_cif_fc = serializer.validated_data.get("planned_cif_fc", instance.planned_cif_fc)
+        with transaction.atomic():
+            _validate_plan_line_cap(item, planned_quantity, planned_cif_fc, exclude_plan_id=instance.pk)
+            serializer.save()
 
     @action(detail=False, methods=["get"], url_path="norm-prefill")
     def norm_prefill(self, request):
@@ -98,80 +185,86 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         if not isinstance(lines, list):
             return Response({"error": "lines must be a list"}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            license_obj = LicenseDetailsModel.objects.get(pk=license_id)
-        except LicenseDetailsModel.DoesNotExist:
-            return Response({"error": "License not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        # Pre-load the licence's items for validation.
-        items_by_id = {
-            it.id: it for it in LicenseImportItemsModel.objects.filter(license_id=license_id)
-        }
-
-        # --- Validate line membership + accumulate per-item qty / total CIF ---
-        errors = []
-        qty_by_item = defaultdict(lambda: Decimal("0"))
-        total_planned_cif = Decimal("0")
-        for idx, ln in enumerate(lines):
-            item_id = ln.get("import_item")
-            if item_id not in items_by_id:
-                errors.append({"index": idx, "import_item": item_id,
-                               "error": "Item not found for this licence"})
-                continue
-            qty_by_item[item_id] += Decimal(str(ln.get("planned_quantity", 0) or 0))
-            total_planned_cif += Decimal(str(ln.get("planned_cif_fc", 0) or 0))
-        if errors:
-            return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Per-group capacity: Σ split qty for the item's description-group ≤
-        # (available + live-allotted) summed across the whole group.
         from apps.license.services.plan_grouping import group_ids_of
-        from apps.license.services.plan_enforcement import live_allotted_qty_for
-        for item_id, planned_qty in qty_by_item.items():
-            item = items_by_id[item_id]
-            gids = group_ids_of(item)
-            avail_sum = sum(
-                (Decimal(str(items_by_id[i].available_quantity or 0)) for i in gids if i in items_by_id),
-                Decimal("0"),
-            )
-            capacity = live_allotted_qty_for(gids) + avail_sum
-            if planned_qty > capacity:
+        from apps.license.services.plan_enforcement import group_used_snapshot, live_allotted_qty_for
+
+        # Everything below — the capacity/CIF-pool check AND the write — runs
+        # under one transaction with the licence + its items row-locked, so
+        # two concurrent bulk_upsert calls for the same licence serialize on
+        # these locks instead of each reading a stale available_quantity/
+        # balance_cif and collectively overcommitting it.
+        with transaction.atomic():
+            try:
+                license_obj = LicenseDetailsModel.objects.select_for_update().get(pk=license_id)
+            except LicenseDetailsModel.DoesNotExist:
+                return Response({"error": "License not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            # Pre-load + lock the licence's items for validation.
+            items_by_id = {
+                it.id: it for it in
+                LicenseImportItemsModel.objects.select_for_update().filter(license_id=license_id)
+            }
+
+            # --- Validate line membership + accumulate per-item qty / total CIF ---
+            errors = []
+            qty_by_item = defaultdict(lambda: Decimal("0"))
+            total_planned_cif = Decimal("0")
+            for idx, ln in enumerate(lines):
+                item_id = ln.get("import_item")
+                if item_id not in items_by_id:
+                    errors.append({"index": idx, "import_item": item_id,
+                                   "error": "Item not found for this licence"})
+                    continue
+                qty_by_item[item_id] += Decimal(str(ln.get("planned_quantity", 0) or 0))
+                total_planned_cif += Decimal(str(ln.get("planned_cif_fc", 0) or 0))
+            if errors:
+                return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Per-group capacity: Σ split qty for the item's description-group ≤
+            # (available + live-allotted) summed across the whole group.
+            for item_id, planned_qty in qty_by_item.items():
+                item = items_by_id[item_id]
+                gids = group_ids_of(item)
+                avail_sum = sum(
+                    (Decimal(str(items_by_id[i].available_quantity or 0)) for i in gids if i in items_by_id),
+                    Decimal("0"),
+                )
+                capacity = live_allotted_qty_for(gids) + avail_sum
+                if planned_qty > capacity:
+                    return Response({
+                        "error": (
+                            f"Item S.No {item.serial_number}: planned split quantity "
+                            f"{planned_qty} exceeds capacity {capacity}."
+                        ),
+                        "import_item": item_id,
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Shared CIF pool: Σ planned_cif_fc ≤ licence balance.
+            balance_cif = Decimal(str(license_obj.get_balance_cif or 0))
+            if total_planned_cif > balance_cif:
                 return Response({
                     "error": (
-                        f"Item S.No {item.serial_number}: planned split quantity "
-                        f"{planned_qty} exceeds capacity {capacity}."
+                        f"Planned CIF total {total_planned_cif:.2f} exceeds licence "
+                        f"balance {balance_cif:.2f}."
                     ),
-                    "import_item": item_id,
+                    "planned_cif_total": str(total_planned_cif),
+                    "balance_cif": str(balance_cif),
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Shared CIF pool: Σ planned_cif_fc ≤ licence balance.
-        balance_cif = Decimal(str(license_obj.get_balance_cif or 0))
-        if total_planned_cif > balance_cif:
-            return Response({
-                "error": (
-                    f"Planned CIF total {total_planned_cif:.2f} exceeds licence "
-                    f"balance {balance_cif:.2f}."
-                ),
-                "planned_cif_total": str(total_planned_cif),
-                "balance_cif": str(balance_cif),
-            }, status=status.HTTP_400_BAD_REQUEST)
+            # --- Full replace ----------------------------------------------
+            # Compute each line's usage baseline (live-allotted total for its
+            # group, right now) BEFORE deleting the old plan rows — deleting a
+            # LicenseItemPlan row never touches AllotmentItems, so this is safe
+            # either way, but computing it upfront keeps the intent obvious.
+            baseline_cache: dict = {}
 
-        # --- Full replace in one transaction --------------------------------
-        # Compute each line's usage baseline (live-allotted total for its
-        # group, right now) BEFORE deleting the old plan rows — deleting a
-        # LicenseItemPlan row never touches AllotmentItems, so this is safe
-        # either way, but computing it upfront keeps the intent obvious.
-        from apps.license.services.plan_enforcement import group_used_snapshot
-        baseline_cache: dict = {}
+            def _baseline(item_id):
+                if item_id not in baseline_cache:
+                    item = items_by_id.get(item_id)
+                    baseline_cache[item_id] = group_used_snapshot(item) if item is not None else (Decimal("0"), Decimal("0"))
+                return baseline_cache[item_id]
 
-        def _baseline(item_id):
-            if item_id not in baseline_cache:
-                item = items_by_id.get(item_id)
-                baseline_cache[item_id] = group_used_snapshot(item) if item is not None else (Decimal("0"), Decimal("0"))
-            return baseline_cache[item_id]
-
-        results = []
-        with transaction.atomic():
+            results = []
             LicenseItemPlan.objects.filter(license_id=license_id).delete()
             for ln in lines:
                 baseline_qty, baseline_val = _baseline(ln.get("import_item"))

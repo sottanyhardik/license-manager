@@ -670,6 +670,20 @@ class AllotmentActionViewSet(ViewSet):
                 # allocations cannot both pass the plan/availability cap.
                 license_item = LicenseImportItemsModel.objects.select_for_update().get(id=item_id)
 
+                # Reject allocations against an already-expired license. Computed
+                # directly off license_expiry_date (the same comparison the
+                # license_status=active/expired filters above use) rather than
+                # the cached LicenseFlags.is_expired column, so this can't be
+                # fooled by a stale flag between nightly recalculation runs.
+                from django.utils import timezone
+                license_expiry_date = license_item.license.license_expiry_date
+                if license_expiry_date and license_expiry_date < timezone.now().date():
+                    errors.append({
+                        'item_id': item_id,
+                        'error': f'License has expired on {license_expiry_date}. Cannot allocate against an expired license.'
+                    })
+                    continue
+
                 # Use the stored available_quantity field — this is the value the
                 # user sees in the Available License Items list (AVAIL QTY column)
                 # and is kept in sync by update_balance_values() via post_save

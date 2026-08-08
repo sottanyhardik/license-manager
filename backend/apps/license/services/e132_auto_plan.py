@@ -250,7 +250,15 @@ def compute_e132_auto_plan(license_obj) -> tuple[list[dict], float]:
                     continue
 
                 fqty = _floor_qty(planned_qty)
-                cif  = _r2(planned_cif)
+                price = _r2(unit_price) if unit_price is not None else 0.0
+                # Recompute the saved value from the FLOORED quantity — never
+                # from the engine's original, un-floored planned_qty — so the
+                # persisted planned_cif_fc always satisfies
+                # planned_cif_fc == planned_quantity * unit_price. Using the
+                # un-floored planned_cif here would bill balance_cif for a
+                # fractional unit that never appears in any recorded
+                # planned_quantity.
+                cif = _r2(fqty * price)
 
                 if fqty <= 0 or cif <= 0:
                     continue
@@ -259,7 +267,7 @@ def compute_e132_auto_plan(license_obj) -> tuple[list[dict], float]:
                     'import_item':      rid,
                     'item_name':        name_ids.get(planning_item),
                     'planned_quantity': fqty,
-                    'unit_price':       _r2(unit_price) if unit_price is not None else 0.0,
+                    'unit_price':       price,
                     'planned_cif_fc':   cif,
                     'note': (
                         f"Auto-planned (E132 — {planning_item or 'Unclassified'})"

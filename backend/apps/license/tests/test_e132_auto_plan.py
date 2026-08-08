@@ -509,7 +509,21 @@ class TestVegOilWastageRebalanceAutoPlan:
             assert by_name_id[item_names[NUT_NUTS].id]['planned_cif_fc'] == 300.0
             assert by_name_id[item_names[PKO].id]['planned_quantity'] < 40.0
             assert by_name_id[item_names[CHEESE].id]['planned_quantity'] > 60.0
-            assert remaining_cif == pytest.approx(0.0, abs=0.01)
+            # The rebalanced split's exact quantities (26.486... / 73.513...)
+            # are fractional, so each side is floored to a whole unit before
+            # being saved (26 / 73). planned_cif_fc must always equal
+            # planned_quantity * unit_price, so the value of the fractional
+            # remainder is genuinely unspent — it must show up here as
+            # leftover, not be silently absorbed.
+            pko_line = by_name_id[item_names[PKO].id]
+            cheese_line = by_name_id[item_names[CHEESE].id]
+            assert pko_line['planned_cif_fc'] == pytest.approx(
+                pko_line['planned_quantity'] * pko_line['unit_price'], abs=0.01
+            )
+            assert cheese_line['planned_cif_fc'] == pytest.approx(
+                cheese_line['planned_quantity'] * cheese_line['unit_price'], abs=0.01
+            )
+            assert remaining_cif == pytest.approx(3.7, abs=0.01)
         finally:
             patcher.stop()
 
@@ -712,5 +726,201 @@ class TestCorruptedPreservedPlanIsRejected:
 
             assert by_name_id[item_names[PKO].id]['planned_quantity'] == 40.0
             assert by_name_id[item_names[CHEESE].id]['planned_quantity'] == 60.0
+        finally:
+            patcher.stop()
+
+
+@pytest.mark.django_db
+class TestFractionalQuantityCifInvariant:
+    """Regression coverage: every FRESH (non-preserved)
+    LicenseItemPlan line's `planned_cif_fc` must equal
+    `planned_quantity * unit_price` using the FLOORED planned_quantity —
+    never the engine's original, un-floored quantity — whenever a group's
+    classified/split quantity is fractional. Mirrors
+    test_e126_auto_plan.py's equivalent class exactly (PKO/Cheese 40%/60%
+    replacing PKO/Olive-Oil 50%/50%). Covers the split-eligible path AND the
+    plain (non-split) fixed-price path, since both flow through the exact
+    same fresh-generation branch in `compute_e132_auto_plan`."""
+
+    def test_split_with_non_multiple_of_5_available_quantity(self, item_names):
+        # E132's 40/60 split needs available_quantity divisible by 5 to stay
+        # whole-numbered (per the finding's evidence) — 63 is not: 40%=25.2,
+        # 60%=37.8. balance_cif is pinned to exactly that UN-floored split's
+        # value (253.26) so the wastage-rebalance pass has nothing to shift.
+        license_obj, patcher = _make_license("LIC-E132-FRACTIONAL-63", Decimal('253.26'))
+        try:
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('63'), available_quantity=Decimal('63'),
+            )
+            lines, remaining_cif = compute_e132_auto_plan(license_obj)
+            by_name_id = {l['item_name']: l for l in lines}
+            pko_line = by_name_id[item_names[PKO].id]
+            cheese_line = by_name_id[item_names[CHEESE].id]
+
+            assert pko_line['planned_quantity'] == 25.0
+            assert cheese_line['planned_quantity'] == 37.0
+            # Old (buggy) behavior would have saved cif=45.36/207.90 (from
+            # the un-floored 25.2/37.8 quantities).
+            assert pko_line['planned_cif_fc'] == pytest.approx(45.00, abs=0.001)
+            assert cheese_line['planned_cif_fc'] == pytest.approx(203.50, abs=0.001)
+            assert pko_line['planned_cif_fc'] == pytest.approx(
+                pko_line['planned_quantity'] * pko_line['unit_price'], abs=0.001
+            )
+            assert cheese_line['planned_cif_fc'] == pytest.approx(
+                cheese_line['planned_quantity'] * cheese_line['unit_price'], abs=0.001
+            )
+            assert remaining_cif == pytest.approx(4.76, abs=0.01)
+        finally:
+            patcher.stop()
+
+    def test_plain_fixed_price_category_with_fractional_available_quantity(self, item_names):
+        # Same root-cause code path also applies to a PLAIN (non-split)
+        # category — Nuts here — whenever the group's available_quantity
+        # itself is fractional.
+        license_obj, patcher = _make_license("LIC-E132-PLAIN-FRACTIONAL", Decimal('100000'))
+        try:
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description="Cashew Nuts",
+                hs_code=_hs('08021100'),
+                quantity=Decimal('100.7'), available_quantity=Decimal('100.7'),
+            )
+            lines, _ = compute_e132_auto_plan(license_obj)
+            by_name_id = {l['item_name']: l for l in lines}
+            nuts_line = by_name_id[item_names[NUT_NUTS].id]
+
+            assert nuts_line['planned_quantity'] == 100.0
+            # Old (buggy) behavior would have saved 100.7 * 3.00 = 302.10.
+            assert nuts_line['planned_cif_fc'] == pytest.approx(300.00, abs=0.001)
+            assert nuts_line['planned_cif_fc'] == pytest.approx(
+                nuts_line['planned_quantity'] * nuts_line['unit_price'], abs=0.001
+            )
+        finally:
+            patcher.stop()
+
+    @pytest.mark.parametrize("avail", ["51.3", "83", "119.4"])
+    def test_invariant_holds_across_a_range_of_fractional_available_quantities(self, item_names, avail):
+        # Boundary sweep: the qty*price=value invariant must hold across
+        # multiple available_quantity values whose 40%/60% split is
+        # fractional, not just a single reproduction value. balance_cif is
+        # pinned to the exact (un-floored) default split value for each so
+        # the wastage-rebalance pass never engages here.
+        avail_dec = Decimal(avail)
+        balance_cif = avail_dec * Decimal('4.02')  # 0.4*1.80 + 0.6*5.50 = 4.02/unit
+        license_obj, patcher = _make_license(f"LIC-E132-FRACTIONAL-SWEEP-{avail}", balance_cif)
+        try:
+            LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=avail_dec, available_quantity=avail_dec,
+            )
+            lines, remaining_cif = compute_e132_auto_plan(license_obj)
+            by_name_id = {l['item_name']: l for l in lines}
+            pko_line = by_name_id[item_names[PKO].id]
+            cheese_line = by_name_id[item_names[CHEESE].id]
+
+            assert pko_line['planned_cif_fc'] == pytest.approx(
+                pko_line['planned_quantity'] * pko_line['unit_price'], abs=0.001
+            )
+            assert cheese_line['planned_cif_fc'] == pytest.approx(
+                cheese_line['planned_quantity'] * cheese_line['unit_price'], abs=0.001
+            )
+            assert remaining_cif >= -0.001  # never a negative "leftover"
+        finally:
+            patcher.stop()
+
+    def test_fix_applies_identically_across_different_companies(self, item_names):
+        # The defect and its fix are purely a function of available_quantity
+        # / unit_price — company/exporter identity must never matter. Runs
+        # two INDEPENDENT licenses (each `_create_license` call creates its
+        # own CompanyModel) with different fractional available_quantity and
+        # confirms both are corrected independently with no cross-talk.
+        # A single patcher covering BOTH license ids — `get_balance_cif` is
+        # patched at the CLASS level, so two independent `_make_license`
+        # calls would stack and each would clobber the other's dict the
+        # moment a signal (e.g. on import-item save) re-reads the property
+        # for the "wrong" license.
+        license_a = _create_license("LIC-E132-FRACTIONAL-COMPANY-A")
+        license_b = _create_license("LIC-E132-FRACTIONAL-COMPANY-B")
+        patcher = _patch_balances({license_a.id: Decimal('253.26'), license_b.id: Decimal('205.02')})
+        patcher.start()
+        try:
+            assert license_a.exporter_id != license_b.exporter_id
+
+            LicenseImportItemsModel.objects.create(
+                license=license_a, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('63'), available_quantity=Decimal('63'),
+            )
+            LicenseImportItemsModel.objects.create(
+                license=license_b, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('51'), available_quantity=Decimal('51'),
+            )
+
+            lines_a, remaining_a = compute_e132_auto_plan(license_a)
+            lines_b, remaining_b = compute_e132_auto_plan(license_b)
+
+            by_a = {l['item_name']: l for l in lines_a}
+            by_b = {l['item_name']: l for l in lines_b}
+
+            # License A: 63 units -> 25/37, cif 45.00/203.50, remaining 4.76
+            assert by_a[item_names[PKO].id]['planned_cif_fc'] == pytest.approx(45.00, abs=0.001)
+            assert by_a[item_names[CHEESE].id]['planned_cif_fc'] == pytest.approx(203.50, abs=0.001)
+            assert remaining_a == pytest.approx(4.76, abs=0.01)
+
+            # License B: 51 units -> 20.4/30.6 -> floors to 20/30, cif
+            # 36.00/165.00, remaining 4.02 (independent of License A).
+            assert by_b[item_names[PKO].id]['planned_quantity'] == 20.0
+            assert by_b[item_names[CHEESE].id]['planned_quantity'] == 30.0
+            assert by_b[item_names[PKO].id]['planned_cif_fc'] == pytest.approx(36.00, abs=0.001)
+            assert by_b[item_names[CHEESE].id]['planned_cif_fc'] == pytest.approx(165.00, abs=0.001)
+            assert remaining_b == pytest.approx(4.02, abs=0.01)
+        finally:
+            patcher.stop()
+
+    def test_preserved_branch_is_deliberately_untouched_by_this_fix(self, item_names):
+        # Characterization test (NOT a defect assertion): the fix explicitly
+        # only touches the FRESH (non-preserved) branch. A preserved plan
+        # line's `remaining_cif_fc` is re-emitted VERBATIM from the stored
+        # row (never recomputed from the floored `remaining_quantity`), per
+        # the "never regenerate or recalculate a preserved split" business
+        # rule. This pins that documented, intentional scope boundary.
+        license_obj, patcher = _make_license("LIC-E132-PRESERVED-UNTOUCHED-FRACTIONAL", Decimal('100000'))
+        try:
+            import_item = LicenseImportItemsModel.objects.create(
+                license=license_obj, serial_number=1, description=VEG_OIL_DESC,
+                hs_code=_hs('15132900'),
+                quantity=Decimal('100'), available_quantity=Decimal('100'),
+            )
+            # A pre-existing (already committed) preserved row whose
+            # value-weighted rate (remaining_cif_fc / remaining_quantity =
+            # 49.23 / 27.5 = 1.79, comfortably within the $1.80 ceiling) does
+            # NOT equal floor(remaining_quantity) * that rate (27 * 1.79 =
+            # 48.33), so the test actually exercises the "re-emitted
+            # verbatim, not recomputed from the floored quantity" behavior
+            # (`existing_split_balances_for_groups` derives `unit_price` as
+            # this value-weighted rate, not the stored `unit_price` column —
+            # see its docstring).
+            LicenseItemPlan.objects.create(
+                license=license_obj, import_item=import_item, item_name=item_names[PKO],
+                planned_quantity=Decimal('40'), unit_price=Decimal('1.80'), planned_cif_fc=Decimal('72'),
+                remaining_quantity=Decimal('27.5'), remaining_cif_fc=Decimal('49.23'),
+            )
+            LicenseItemPlan.objects.create(
+                license=license_obj, import_item=import_item, item_name=item_names[CHEESE],
+                planned_quantity=Decimal('60'), unit_price=Decimal('5.50'), planned_cif_fc=Decimal('330'),
+                remaining_quantity=Decimal('60'), remaining_cif_fc=Decimal('330'),
+            )
+
+            lines, _ = compute_e132_auto_plan(license_obj)
+            by_name_id = {l['item_name']: l for l in lines}
+            pko_line = by_name_id[item_names[PKO].id]
+
+            # Quantity is floored for display (existing, unrelated behavior)...
+            assert pko_line['planned_quantity'] == 27.0
+            # ...but cif is preserved VERBATIM — NOT recomputed as 27*1.79=48.33.
+            assert pko_line['planned_cif_fc'] == pytest.approx(49.23, abs=0.001)
         finally:
             patcher.stop()

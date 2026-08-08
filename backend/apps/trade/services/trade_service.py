@@ -203,11 +203,28 @@ def stamp_boe_invoice_from_trade(trade, boe) -> None:
     paths that "attach a BOE to a trade" apply the exact same stamping
     rule and can't drift apart.
 
+    A BOE that is currently genuinely hidden (previous-owner utilisation —
+    see `apps.bill_of_entry.models.OTH_INVOICE_MARKER` /
+    `genuinely_hidden_boe_ids`) is left untouched: overwriting its
+    `invoice_no` here would silently un-hide it with no audit trail and no
+    balance recompute. Hidden/visible state may only change through the
+    audited `hide_boe`/`restore_boe` workflow
+    (`apps.bill_of_entry.services.boe_service`); attaching a BOE to a trade
+    purely for invoicing must not have that side effect. Restore the BOE
+    first if it genuinely needs to be re-linked as visible.
+
     Args:
         trade: LicenseTrade instance.
         boe: BillOfEntryModel instance to stamp.
     """
-    if trade.invoice_number:
-        boe.invoice_no = trade.invoice_number
-        boe.invoice_date = trade.invoice_date
-        boe.save(update_fields=["invoice_no", "invoice_date"])
+    if not trade.invoice_number:
+        return
+
+    from apps.bill_of_entry.models import genuinely_hidden_boe_ids
+
+    if boe.id in genuinely_hidden_boe_ids(boe_ids=[boe.id]):
+        return
+
+    boe.invoice_no = trade.invoice_number
+    boe.invoice_date = trade.invoice_date
+    boe.save(update_fields=["invoice_no", "invoice_date"])

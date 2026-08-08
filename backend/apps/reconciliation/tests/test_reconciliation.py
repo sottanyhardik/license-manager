@@ -375,6 +375,54 @@ class ReconciliationWriteActionTests(ReconciliationFixtureMixin, TestCase):
         self.assertEqual(log.after["boe_ids"], [boe.id])
         self.assertEqual(log.user_id, self.user.id)
 
+    def test_link_does_not_unhide_a_genuinely_hidden_boe(self):
+        """Linking a genuinely-hidden BOE to an unrelated trade for invoicing,
+        exercised through the real HTTP endpoint (POST /reconciliation/link/).
+        Uses its own company/license/BOE/date range, independent of any
+        other test, to confirm the guard is general and not special-cased
+        to a single license."""
+        from apps.bill_of_entry.services.boe_service import hide_boe
+        from apps.bill_of_entry.models import genuinely_hidden_boe_ids
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+        company = self.make_company("Link Endpoint Hidden Co")
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        from apps.license.models import LicenseExportItemModel
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("80000.00"))
+
+        boe = self.make_boe(company, invoice_no="LGL/2026-27/0080",
+                            boe_date=datetime(2025, 3, 1).date())
+        self.make_debit_row(boe, item, cif_fc=Decimal("6000.00"), qty=Decimal("60.000"))
+
+        hide_result = hide_boe(boe, user=None, reason="Previous owner utilisation")
+        self.assertTrue(hide_result["is_hidden"])
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, "OTH")
+
+        license_obj.refresh_from_db()
+        balance_before = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
+
+        # An unrelated Sale trade, own invoice number, own (later) invoice date.
+        trade = self.make_sale_trade(company, boes=None, invoice_number="PUR/2026-27/0088")
+
+        url = reverse("reconciliation:reconciliation-link")
+        response = self.client.post(url, {"trade_id": trade.id, "boe_id": boe.id}, format="json")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        trade.refresh_from_db()
+        boe.refresh_from_db()
+        self.assertIn(boe.id, trade.boes.values_list("id", flat=True),
+                      "the link itself (trade.boes.add) must still succeed")
+        self.assertEqual(boe.invoice_no, "OTH",
+                          "hidden BOE's invoice_no must not be overwritten by the link action")
+        self.assertIn(boe.id, genuinely_hidden_boe_ids(boe_ids=[boe.id]))
+
+        license_obj.refresh_from_db()
+        balance_after = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
+        self.assertEqual(balance_after, balance_before,
+                          "live balance must not move when linking a hidden BOE for invoicing")
+
     def test_note_creates_reconciliation_note_and_log(self):
         company = self.make_company()
         trade = self.make_sale_trade(company, boes=None)

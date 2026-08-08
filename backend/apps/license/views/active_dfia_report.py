@@ -29,9 +29,37 @@ def add_active_dfia_report_action(viewset_class):
             - notification: filter by specific notification number (optional)
         """
         from apps.core.models import CompanyModel
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
-        # Get filtered queryset
-        queryset = self.filter_queryset(self.get_queryset())
+        # Get filtered queryset.
+        #
+        # IMPORTANT: `LicenseDetailsViewSet.get_queryset()` (via the shared
+        # `MasterViewSet` base, `apps/core/views/master_view.py`) calls
+        # `self.apply_advanced_filters(qs, request.query_params,
+        # filter_config)` UNCONDITIONALLY -- not only from `list()` -- and
+        # `LicenseDetailsViewSet.apply_advanced_filters` independently
+        # re-applies its OWN `is_null` filter straight against the cached
+        # `balance__balance_cif__gte`/`__lt` column whenever `is_null` is
+        # present in the request's query params (`license.py`'s
+        # `apply_advanced_filters` override). Since this action reads and
+        # resolves `is_null` itself (against the LIVE balance, see below),
+        # that generic pass would otherwise silently re-introduce the exact
+        # stale-cache bug this fix resolves -- e.g. a license whose cache
+        # is stale-low would be wrongly dropped here before ever reaching
+        # the live-balance check below. Temporarily hide `is_null` from
+        # `request.query_params` for this one call so the generic filter
+        # sees no value for it (-> no-op, since this viewset's
+        # `default_filters` has no bare `is_null` key either) -- restored
+        # immediately after. Scoped to this file/action only; the shared
+        # `apply_advanced_filters`/main list view are untouched.
+        _get_params = request._request.GET
+        _filtered_params = _get_params.copy()
+        _filtered_params.pop('is_null', None)
+        request._request.GET = _filtered_params
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+        finally:
+            request._request.GET = _get_params
 
         # Filter for Parle companies if not specified
         exporter_id = request.query_params.get('exporter')
@@ -62,26 +90,54 @@ def add_active_dfia_report_action(viewset_class):
         elif is_expired == 'True' or is_expired == 'true':
             queryset = queryset.filter(license_expiry_date__lt=date.today())
 
-        # Apply is_null filter - default to False (balance >= 200)
-        is_null = request.query_params.get('is_null', 'False')
-        if is_null == 'False' or is_null == 'false':
-            queryset = queryset.filter(balance__balance_cif__gte=200)
-        elif is_null == 'True' or is_null == 'true':
-            queryset = queryset.filter(balance__balance_cif__lt=200)
-
         # Prefetch related data for performance
+        # NOTE: `current_owner` lives on the `LicenseOwnership` sub-table
+        # (see `LicenseDetailsModel.current_owner`'s `_sub("ownership", ...)`
+        # accessor), not as a direct FK on this model -- `select_related
+        # ('current_owner')` was raising `FieldError` on every request
+        # before this fix (pre-existing, unrelated to BL-LEDGER-02; fixed
+        # incidentally here because it made this view impossible to
+        # exercise at all, including for the regression tests this task
+        # requires).
         queryset = queryset.select_related(
-            'exporter', 'port', 'current_owner'
+            'exporter', 'port', 'ownership__current_owner'
         ).prefetch_related(
             'export_license', 'export_license__norm_class',
             'import_license', 'import_license__items', 'import_license__hs_code'
         ).order_by('license_expiry_date', 'license_date')
 
+        license_list = list(queryset)
+
+        # `is_null` used to filter at the DB level against the cached
+        # `LicenseBalance.balance_cif` column (`balance__balance_cif__gte`/
+        # `__lt`), default False meaning "balance >= 200". That column is
+        # only refreshed by a background task/manual "Update Balance"
+        # trigger and can silently drift from the true live balance -- the
+        # reconciliation allocation functions never touch it (BL-LEDGER-02).
+        # Resolve it against the LIVE, batched-computed balance instead:
+        # compute the live balance for every candidate license once (same
+        # batched method used for display below), then filter in Python.
+        is_null = request.query_params.get('is_null', 'False')
+        license_ids = [lic.id for lic in license_list]
+        live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids)
+
+        if is_null == 'False' or is_null == 'false':
+            license_list = [
+                lic for lic in license_list
+                if live_balance_by_license.get(lic.id, Decimal('0')) >= 200
+            ]
+        elif is_null == 'True' or is_null == 'true':
+            license_list = [
+                lic for lic in license_list
+                if live_balance_by_license.get(lic.id, Decimal('0')) < 200
+            ]
+
         # Group licenses by SION norm class, then by notification
         # Structure: {sion_norm: {notification: [licenses]}}
         grouped_data = defaultdict(lambda: defaultdict(list))
 
-        for license_obj in queryset:
+        for license_obj in license_list:
+            live_balance = live_balance_by_license.get(license_obj.id, Decimal('0'))
             # Get SION norm class (CSV of all norm classes)
             norm_class = license_obj.get_norm_class or 'Unknown'
             # For grouping, use the first norm class if multiple
@@ -105,10 +161,10 @@ def add_active_dfia_report_action(viewset_class):
                 total=Sum('cif_fc')
             )['total'] or Decimal('0')
             license_data['total_cif'] = float(total_cif)
-            license_data['balance_cif'] = float(license_obj.balance_cif) if license_obj.balance_cif else 0.0
+            license_data['balance_cif'] = float(live_balance)
 
             # Calculate total debits (total_cif - balance_cif)
-            total_debits = total_cif - (license_obj.balance_cif or Decimal('0'))
+            total_debits = total_cif - live_balance
             license_data['total_debits'] = float(total_debits)
 
             # Helper to get item data by name (case-insensitive)
@@ -176,7 +232,14 @@ def add_active_dfia_report_action(viewset_class):
             }
 
             # 10% Balance (restriction)
-            per_cif = license_obj.get_per_cif or {}
+            # NOTE: `get_per_cif` is a plain method (its own docstring:
+            # "Removed @cached_property to ensure fresh calculation after
+            # updates"), not a property -- `license_obj.get_per_cif`
+            # (no call) always evaluated truthy as a bound method object,
+            # crashing on `.get(...)` below. Pre-existing, unrelated to
+            # BL-LEDGER-02; fixed incidentally here (local to this file)
+            # because it made this view impossible to exercise at all.
+            per_cif = license_obj.get_per_cif() or {}
             ten_restriction = per_cif.get('tenRestriction', Decimal('0'))
             license_data['ten_percent_balance'] = float(ten_restriction)
 
@@ -296,7 +359,7 @@ def add_active_dfia_report_action(viewset_class):
             }
 
             # Wastage CIF (10% of balance)
-            wastage_cif = float(license_obj.balance_cif) * 0.10 if license_obj.balance_cif else 0.0
+            wastage_cif = float(live_balance) * 0.10
             license_data['wastage_cif'] = wastage_cif
 
             # Add to grouped structure

@@ -68,6 +68,19 @@ def add_license_balance_ledger_actions(viewset_class):
         from apps.reconciliation.models import ReconciliationLog
 
         license_obj = self.get_object()
+        # BL-LEDGER-02 (audit finding): report/list views were switched to
+        # read LIVE balance via `LicenseBalanceCalculator.
+        # calculate_financial_balance_for_licenses()` instead of this cached
+        # `LicenseBalance.balance_cif` column, because reconciliation
+        # allocation writes never refresh it. This log is the ONE place we
+        # deliberately keep reading the CACHED column here, on purpose: its
+        # entire job is to record how far the cache had drifted from live
+        # before this recalculation corrected it. If `before_balance` were
+        # switched to the live figure too, it would always equal (or nearly
+        # equal) `new_balance` below -- since `new_balance` is itself freshly
+        # derived from the live calculation -- silently erasing the exact
+        # drift this audit trail exists to capture. So: historical cached
+        # snapshot here is intentional, not an oversight.
         before_balance = license_obj.balance_cif
 
         for item in license_obj.import_license.all():

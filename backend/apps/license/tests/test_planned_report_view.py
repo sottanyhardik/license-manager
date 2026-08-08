@@ -240,3 +240,98 @@ def test_planned_report_excel_rows_match_json_rows(report_viewer_client, planned
         },
         header_row=1, key_field="license_number", key_column=2,
     )
+
+
+@pytest.mark.django_db
+def test_planned_report_balance_cif_matches_live_calc_with_allocation(report_viewer_client, planned_report_masters):
+    """BL-LEDGER-02 regression: `balance_cif` in the planned-report rows
+    must match the LIVE-computed Financial Available Balance -- including
+    when a reconciliation allocation exists (`create_invoice_boe_allocation`),
+    which never refreshes the cached `LicenseBalance.balance_cif` column."""
+    from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+    from apps.core.constants import DEBIT
+    from apps.license.models import LicenseExportItemModel
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
+    from apps.reconciliation.services import allocation_service
+    from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+    lic = _make_license("PLANNED-REPORT-ALLOC", planned_report_masters["parle"])
+    LicenseExportItemModel.objects.create(
+        license=lic, description="Export item", cif_fc=Decimal("151.00"), cif_inr=Decimal("12758.50"),
+    )
+    item = _make_import_item(lic, planned_report_masters["hs_code"], item_names=[planned_report_masters["wheat"]])
+    LicenseItemPlan.objects.create(
+        import_item=item, item_name=planned_report_masters["wheat"],
+        planned_quantity=Decimal("10.000"), unit_price=Decimal("5.00"), planned_cif_fc=Decimal("50.00"),
+    )
+    lic.balance.balance_cif = Decimal("999.99")  # deliberately stale
+    lic.balance.save(update_fields=["balance_cif"])
+
+    boe = BillOfEntryModel.objects.create(
+        company=planned_report_masters["parle"], bill_of_entry_number="BOE-PLANNED-ALLOC-001",
+        bill_of_entry_date=date.today(), exchange_rate=Decimal("84.50"),
+    )
+    row = RowDetails.objects.create(
+        bill_of_entry=boe, sr_number=item, transaction_type=DEBIT,
+        cif_fc=Decimal("100.00"), cif_inr=Decimal("8450.00"), qty=Decimal("1.000"),
+    )
+    trade = LicenseTrade.objects.create(
+        direction=LicenseTrade.DIR_SALE, from_company=planned_report_masters["parle"],
+        invoice_number="INV-PLANNED-ALLOC-001", invoice_date=date.today(),
+    )
+    trade_line = LicenseTradeLine.objects.create(
+        trade=trade, sr_number=item, description="Sale line",
+        mode=LicenseTradeLine.MODE_CIF_INR, cif_fc=Decimal("100.00"),
+        cif_inr=Decimal("8450.00"), qty_kg=Decimal("1.0000"),
+    )
+    allocation_service.create_invoice_boe_allocation(
+        trade_line, row, qty=Decimal("0"), cif_fc=Decimal("100.00"), cif_inr=Decimal("8450.00"), user=None,
+    )
+
+    expected_live_balance = LicenseBalanceCalculator.calculate_financial_balance(lic)
+    assert expected_live_balance == Decimal("51.00")
+
+    response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+    assert response.status_code == 200
+    row_data = next(r for r in response.json()["items"] if r["license_id"] == lic.id)
+    assert row_data["balance_cif"] == pytest.approx(float(expected_live_balance))
+
+
+@pytest.mark.django_db
+def test_planned_report_query_count_stays_flat(report_viewer_client, planned_report_masters):
+    """BL-LEDGER-02 regression: the batched `calculate_financial_balance_
+    for_licenses()` swap must not reintroduce an N+1 -- query count should
+    stay flat as the number of plan rows/licenses grows."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    for i in range(5):
+        lic = _make_license(f"PLANNED-QCOUNT-{i:03d}", planned_report_masters["parle"])
+        item = _make_import_item(lic, planned_report_masters["hs_code"], item_names=[planned_report_masters["wheat"]])
+        LicenseItemPlan.objects.create(
+            import_item=item, item_name=planned_report_masters["wheat"],
+            planned_quantity=Decimal("10.000"), unit_price=Decimal("5.00"), planned_cif_fc=Decimal("50.00"),
+        )
+
+    with CaptureQueriesContext(connection) as ctx:
+        response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+    assert response.status_code == 200
+    small_query_count = len(ctx.captured_queries)
+
+    for i in range(5, 15):
+        lic = _make_license(f"PLANNED-QCOUNT-{i:03d}", planned_report_masters["parle"])
+        item = _make_import_item(lic, planned_report_masters["hs_code"], item_names=[planned_report_masters["wheat"]])
+        LicenseItemPlan.objects.create(
+            import_item=item, item_name=planned_report_masters["wheat"],
+            planned_quantity=Decimal("10.000"), unit_price=Decimal("5.00"), planned_cif_fc=Decimal("50.00"),
+        )
+
+    with CaptureQueriesContext(connection) as ctx:
+        response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+    assert response.status_code == 200
+    larger_query_count = len(ctx.captured_queries)
+
+    assert larger_query_count <= small_query_count + 3, (
+        f"query count grew from {small_query_count} (5 plans) to "
+        f"{larger_query_count} (15 plans) -- looks like an N+1"
+    )

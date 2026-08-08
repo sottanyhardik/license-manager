@@ -95,6 +95,7 @@ class PlannedReportView(APIView):
         """
         from datetime import date, timedelta
         from apps.license.models import LicenseItemPlan, LicenseTransferModel
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
         today = date.today()
 
@@ -203,6 +204,22 @@ class PlannedReportView(APIView):
             'item_name__name',
         )
 
+        # Materialise once so the batched live-balance lookup below and the
+        # row-building loop don't each re-issue the query.
+        plans = list(plans)
+
+        # Balance CIF must be identical everywhere in the app — read LIVE via
+        # the shared `LicenseBalanceCalculator` (same batched method the
+        # License List / Item Report / Item Pivot Report views use), never
+        # the denormalized `LicenseDetailsModel.balance_cif` column directly,
+        # which is only refreshed by a background task/manual "Update
+        # Balance" trigger and can go stale relative to the live calculation
+        # -- in particular, the reconciliation allocation functions never
+        # touch it (BL-LEDGER-02). See `LicenseDetailsModel.get_balance_cif`'s
+        # docstring; must match every other "Balance CIF" in the app.
+        _plan_license_ids = {plan.import_item.license_id for plan in plans}
+        live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(_plan_license_ids)
+
         # ── Build report rows ─────────────────────────────────────────────────
         report_items = []
         for plan in plans:
@@ -240,7 +257,7 @@ class PlannedReportView(APIView):
                 'quantity':             float(ii.quantity or 0),
                 'available_quantity':   float(ii.available_quantity or 0),
                 'available_balance':    float(ii.available_value or 0),
-                'balance_cif':          float(lic.balance_cif or 0),
+                'balance_cif':          float(live_balance_by_license.get(lic.id, 0)),
                 # Import item names (M2M tags on the import item row)
                 'item_names':           import_item_names,
                 # ── Plan data (primary output) ────────────────────────────────

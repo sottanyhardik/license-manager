@@ -43,6 +43,7 @@ def add_license_report_action(viewset_class):
         """
         from apps.core.models import CompanyModel
         from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
         params = ParleLicenseReportQuerySerializer(data=request.query_params)
         if not params.is_valid():
@@ -81,10 +82,6 @@ def add_license_report_action(viewset_class):
             queryset = queryset.filter(license_expiry_date__lt=today)
 
         is_null = filters.get("is_null")
-        if is_null is False:
-            queryset = queryset.filter(balance__balance_cif__gte=200)
-        elif is_null is True:
-            queryset = queryset.filter(balance__balance_cif__lt=200)
 
         # Prefetch related data for performance
         export_items_qs = LicenseExportItemModel.objects.select_related("norm_class")
@@ -95,15 +92,42 @@ def add_license_report_action(viewset_class):
             "notification_number",
             "scheme_code",
             "purchase_status",
-            "balance",
             Prefetch("export_license", queryset=export_items_qs, to_attr="prefetched_export_items"),
             Prefetch("import_license", queryset=import_items_qs, to_attr="prefetched_import_items"),
         ).order_by("license_expiry_date", "license_date")
 
+        license_list = list(queryset)
+
+        # `is_null` used to filter at the DB level against the cached
+        # `LicenseBalance.balance_cif` column (`balance__balance_cif__gte`/
+        # `__lt`). That column is only refreshed by a background task/manual
+        # "Update Balance" trigger and can silently drift from the true live
+        # balance -- in particular, the reconciliation allocation functions
+        # (`create_invoice_boe_allocation` etc.) never touch it (BL-LEDGER-02).
+        # Resolve the filter against the LIVE, batched-computed balance
+        # instead, so its correctness never depends on the cache being
+        # fresh: compute the live balance for every candidate license once
+        # (same batched method used for display below), then filter in
+        # Python against that.
+        license_ids = [lic.id for lic in license_list]
+        live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids)
+
+        if is_null is False:
+            license_list = [
+                lic for lic in license_list
+                if live_balance_by_license.get(lic.id, DECIMAL_ZERO) >= 200
+            ]
+        elif is_null is True:
+            license_list = [
+                lic for lic in license_list
+                if live_balance_by_license.get(lic.id, DECIMAL_ZERO) < 200
+            ]
+
         # Group licenses by notification number
         grouped_licenses = defaultdict(list)
 
-        for license_obj in queryset:
+        for license_obj in license_list:
+            live_balance = live_balance_by_license.get(license_obj.id, DECIMAL_ZERO)
             license_data = {
                 "id": license_obj.id,
                 "license_number": license_obj.license_number,
@@ -113,7 +137,7 @@ def add_license_report_action(viewset_class):
                 "port_name": license_obj.port.name if license_obj.port else "",
                 "purchase_status": license_obj.purchase_status.code if license_obj.purchase_status_id else "",
                 "purchase_status_label": license_obj.purchase_status.label if license_obj.purchase_status_id else "",
-                "balance_cif": float(license_obj.balance_cif) if license_obj.balance_cif else 0.0,
+                "balance_cif": float(live_balance),
                 "notification_number": license_obj.notification_number.code if license_obj.notification_number_id else "",
                 "scheme_code": license_obj.scheme_code.code if license_obj.scheme_code_id else "",
                 "file_number": license_obj.file_number,

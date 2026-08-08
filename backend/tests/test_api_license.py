@@ -70,7 +70,16 @@ class TestLicenseAPI:
         }
 
     def test_balance_excel_returns_expected_workbook_shape(self, authenticated_client, test_license):
-        """Single-license balance Excel keeps its public workbook contract."""
+        """Single-license balance Excel keeps its public workbook contract.
+
+        Rewritten for the current 5-sheet `build_balance_excel` design (see
+        `apps/license/services/exporters/license_balance_excel.py` and
+        `apps/license/tests/test_balance_excel_export.py`'s
+        `EXPECTED_SHEET_NAMES_NO_TRADING`) — the old 1-sheet 'Summary'
+        contract this test asserted no longer exists. `test_license` has
+        import items but no BOEs/allotments/trades, i.e. the same
+        no-trading minimal shape covered there.
+        """
         url = reverse('license:licenses-balance-excel', kwargs={'pk': test_license.id})
         response = authenticated_client.get(url)
 
@@ -85,15 +94,22 @@ class TestLicenseAPI:
 
         workbook = load_workbook(BytesIO(response.content), data_only=False)
 
-        assert workbook.sheetnames == ['Summary']
-        sheet = workbook['Summary']
-        assert sheet['A1'].value.startswith(f'License No: {test_license.license_number}')
-        assert sheet['A2'].value == 'Summary (BOE & Allotments)'
-        assert any(
-            cell.value == 'Summary (Balance Quantity)'
-            for row in sheet.iter_rows()
-            for cell in row
+        assert workbook.sheetnames == [
+            'Financial Ledger', 'Customs Ledger', 'Timeline', 'Reconciliation', 'Audit Log',
+        ]
+        # Preserves the original intent of the old A1 check: the export
+        # clearly identifies which license it's for. Observed directly from
+        # a real generated workbook: the Reconciliation sheet's header row
+        # leads with "License No: <number>".
+        reconciliation_sheet = workbook['Reconciliation']
+        assert reconciliation_sheet['A1'].value.startswith(
+            f'License No: {test_license.license_number}'
         )
+        # The license number also anchors the Financial Ledger's opening
+        # balance row (Doc Number column), so the identifying license
+        # number is not confined to a single sheet.
+        financial_ledger_sheet = workbook['Financial Ledger']
+        assert financial_ledger_sheet['D3'].value == test_license.license_number
 
     def test_bulk_balance_excel_returns_summary_and_license_sheets(
         self,

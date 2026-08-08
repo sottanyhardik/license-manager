@@ -33,7 +33,7 @@ def test_update_balance_cif_updates_split_balance_row(monkeypatch):
     license_obj.balance.save(update_fields=["balance_cif"])
     monkeypatch.setattr(
         "apps.license.management.commands.update_balance_cif."
-        "LicenseBalanceCalculator.calculate_balance",
+        "LicenseBalanceCalculator.calculate_financial_balance",
         lambda license_obj: Decimal("25.50"),
     )
 
@@ -55,20 +55,26 @@ def test_update_balance_cif_dry_run_does_not_write(monkeypatch):
     license_obj.balance.save(update_fields=["balance_cif"])
     monkeypatch.setattr(
         "apps.license.management.commands.update_balance_cif."
-        "LicenseBalanceCalculator.calculate_balance",
+        "LicenseBalanceCalculator.calculate_financial_balance",
         lambda license_obj: Decimal("25.50"),
     )
 
+    out = StringIO()
     call_command(
         "update_balance_cif",
         "--license-number",
         "BAL-LIC-002",
         "--dry-run",
-        stdout=StringIO(),
+        stdout=out,
     )
 
     license_obj.balance.refresh_from_db()
     assert license_obj.balance.balance_cif == Decimal("1.00")
+    # Confirms the patch actually intercepted the calculation: the command's
+    # own summary line echoes the patched value. Without this, the assertion
+    # above would hold trivially regardless of whether the patch took effect,
+    # since dry-run never writes.
+    assert "25.50" in out.getvalue()
 
 
 @pytest.mark.django_db
@@ -77,7 +83,7 @@ def test_update_balance_cif_recreates_missing_balance_row(monkeypatch):
     LicenseBalance.objects.filter(license=license_obj).delete()
     monkeypatch.setattr(
         "apps.license.management.commands.update_balance_cif."
-        "LicenseBalanceCalculator.calculate_balance",
+        "LicenseBalanceCalculator.calculate_financial_balance",
         lambda license_obj: Decimal("42.00"),
     )
 

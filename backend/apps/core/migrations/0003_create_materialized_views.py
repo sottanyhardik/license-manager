@@ -40,6 +40,19 @@ class Migration(migrations.Migration):
         # addition shifted the sort order and surfaced it as
         # `column rd.sr_number_id does not exist` on a fresh/test database).
         ("bill_of_entry", "0002_initial"),
+        # Same missing-dependency shape as above: the view SQL also joins on
+        # allotment_allotmentitems.item_id, which only exists from
+        # allotment/0002_initial on. There was no explicit edge to that
+        # migration either, so a fresh/test database's topological sort could
+        # (and eventually did, once other apps grew enough leaf migrations to
+        # shift the tie-break order) schedule this migration before
+        # allotment's chain finished, surfacing
+        # `column ai.item_id does not exist` on migrate/test-db creation.
+        # This dependency is metadata-only (no operations changed) and both
+        # sides are already applied together on every database that has run
+        # this migration, so it is a no-op there and only affects the
+        # ordering used when building a database from scratch.
+        ("allotment", "0002_initial"),
     ]
 
     operations = [

@@ -123,7 +123,7 @@ class LicenseDetailsModel(AuditModel):
     # Snapshot of the exporter's name at the time it was deleted, so historical
     # licenses still show a meaningful exporter even after the company is gone.
     archived_exporter_name = models.CharField(max_length=255, blank=True, default="")
-    port = models.ForeignKey("core.PortModel", on_delete=models.CASCADE, null=True, blank=True)
+    port = models.ForeignKey("core.PortModel", on_delete=models.PROTECT, null=True, blank=True)
 
     registration_number = models.CharField(max_length=10, null=True, blank=True)
     registration_date = models.DateField(null=True, blank=True)

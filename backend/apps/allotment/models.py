@@ -47,7 +47,7 @@ class AllotmentModel(AuditModel):
     company = models.ForeignKey(
         "core.CompanyModel",
         related_name="company_allotments",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
     type = models.CharField(max_length=2, choices=ROW_TYPE_CHOICES, default=ROW_TYPE_CHOICES[1][0])
     required_quantity = models.DecimalField(
@@ -94,7 +94,7 @@ class AllotmentModel(AuditModel):
     bl_detail = models.CharField(max_length=255, null=True, blank=True)
     port = models.ForeignKey(
         "core.PortModel",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="allotments",
@@ -102,7 +102,7 @@ class AllotmentModel(AuditModel):
     related_company = models.ForeignKey(
         "core.CompanyModel",
         related_name="related_company",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
     )

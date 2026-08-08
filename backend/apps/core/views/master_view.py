@@ -175,8 +175,27 @@ class MasterViewSet(viewsets.ModelViewSet):
             delete_through_mds(instance)
             return
 
-        # Local-only (default): unchanged DRF behavior.
-        instance.delete()
+        # Local-only (default): unchanged DRF behavior, except that master-data
+        # rows still referenced elsewhere (e.g. a Port/Company used by licenses,
+        # bills of entry, or allotments) are protected at the model level and
+        # raise ProtectedError instead of being deleted. Surface that as a
+        # normal DRF validation error rather than an unhandled 500.
+        from django.db.models import ProtectedError
+        from rest_framework.exceptions import ValidationError
+
+        try:
+            instance.delete()
+        except ProtectedError as exc:
+            referencing = sorted({obj._meta.label for obj in exc.protected_objects})
+            raise ValidationError(
+                {
+                    "detail": (
+                        f"Cannot delete this {instance._meta.verbose_name}: it is still "
+                        f"referenced by existing records ({', '.join(referencing)}). "
+                        "Reassign or remove those records first."
+                    )
+                }
+            ) from exc
 
     # --- Factory Method ---
     @classmethod

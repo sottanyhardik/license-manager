@@ -186,7 +186,7 @@ class BillOfEntryModel(AuditModel):
     company = models.ForeignKey(
         CompanyModel,
         related_name="bill_of_entry",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
     )
@@ -194,7 +194,7 @@ class BillOfEntryModel(AuditModel):
     bill_of_entry_date = models.DateField(null=True, blank=True)
     port = models.ForeignKey(
         "core.PortModel",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="boe_port",
         null=True,
         blank=True,

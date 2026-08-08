@@ -1,5 +1,7 @@
 from django.db import models as dj_models
 
+from apps.accounts.permissions import CompanyPermission
+
 from .master_view import MasterViewSet
 from ..models import (
     CompanyModel,
@@ -185,7 +187,14 @@ def enhance_config_with_fk(model_cls, config=None):
 # ------------------------------
 # ViewSet registrations
 # ------------------------------
-CompanyViewSet = MasterViewSet.create_viewset(
+class CompanyViewSetClass(MasterViewSet):
+    """Company master data — narrower read scope than the other masters
+    because company records carry banking/PAN/GST fields (see
+    CompanyPermission)."""
+    permission_classes = [CompanyPermission]
+
+
+CompanyViewSet = CompanyViewSetClass.create_viewset(
     CompanyModel,
     CompanySerializer,
     config=enhance_config_with_fk(

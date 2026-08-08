@@ -181,6 +181,56 @@ class TransferLetterPermission(permissions.BasePermission):
         return request.user.has_any_role(self._allowed)
 
 
+class CompanyPermission(BaseRolePermission):
+    """
+    Permission class for the Company master-data endpoint
+    (`apps/core/views/views.py::CompanyViewSet`).
+
+    Company records double as counterparty master data (name/address) *and*
+    sensitive banking/PAN/GST fields, so — unlike the other master-data
+    entities that share `MasterDataPermission` (ports, HS codes, item
+    names, ...) — read access here is scoped to the roles that actually
+    consume company data elsewhere in the app: license and ledger views,
+    trade invoicing, bill-of-entry/accounts work, allotments, incentive
+    licenses, reporting filters, and transfer-letter generation. This
+    closes read access for accounts with no matching business role (e.g. a
+    newly created user with no group assigned yet) while leaving every
+    existing legitimate lookup (dropdowns, filters, the masters admin page)
+    working exactly as before for the roles that already use it.
+
+    Write access remains superuser-only, matching the existing behavior for
+    every other master-data entity.
+    """
+
+    required_roles_for_read = [
+        'LICENSE_MANAGER', 'LICENSE_VIEWER',
+        'TRADE_MANAGER', 'TRADE_VIEWER',
+        'BOE_MANAGER', 'BOE_VIEWER',
+        'ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER',
+        'INCENTIVE_LICENSE_MANAGER', 'INCENTIVE_LICENSE_VIEWER',
+        'REPORT_VIEWER',
+        'ACCOUNT_ACCESS',
+        'TL_GENERATE',
+    ]
+    required_roles_for_write = []
+
+    # SEC-02: of the roles above, only these four have a legitimate business
+    # need to see banking/PAN/GST data (they manage the money/compliance side
+    # of licenses, trade invoicing, and BOE/accounts work). Every other role
+    # in `required_roles_for_read` can still read companies for id/name/
+    # address lookups (dropdowns, filters, master-data listing) but must not
+    # receive the sensitive fields — see
+    # `CompanySerializer.SENSITIVE_FIELDS`/`to_representation` in
+    # `apps/core/serializers/models.py`, which is the single enforcement
+    # point for this narrowing.
+    full_access_roles_for_sensitive_fields = [
+        'LICENSE_MANAGER',
+        'TRADE_MANAGER',
+        'BOE_MANAGER',
+        'ACCOUNT_ACCESS',
+    ]
+
+
 class LicenseBalanceLedgerPermission(permissions.BasePermission):
     """
     Permission class for the per-licence Balance & Financial Reconciliation

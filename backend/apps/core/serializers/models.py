@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.accounts.permissions import CompanyPermission
 from apps.core.helpers import _sync_nested
 from apps.core.models import (
     CompanyModel, PortModel, HSCodeModel,
@@ -21,9 +22,44 @@ class AuditSerializerMixin(serializers.ModelSerializer):
 
 # ---- Company ----
 class CompanySerializer(AuditSerializerMixin):
+    """
+    SEC-02: CompanyModel carries counterparty banking/PAN/GST fields
+    alongside plain master-data (name/address/etc). `CompanyPermission`
+    grants *read* access to a wide set of roles that legitimately need the
+    non-sensitive fields for dropdowns/filters/master-data listing, but only
+    `CompanyPermission.full_access_roles_for_sensitive_fields` (and
+    superusers) have a real business need to see banking/PAN/GST data.
+    `to_representation` trims `SENSITIVE_FIELDS` out of the payload for
+    every other role, without changing the response for the roles that do
+    need them. Write access is superuser-only already (see
+    `CompanyPermission.required_roles_for_write`), so this only affects
+    reads.
+    """
+
+    SENSITIVE_FIELDS = (
+        "pan", "gst_number",
+        "bank_account_number", "bank_name", "ifsc_code", "account_type",
+    )
+
     class Meta(AuditSerializerMixin.Meta):
         model = CompanyModel
         fields = "__all__"
+
+    def _user_has_sensitive_field_access(self, request):
+        user = getattr(request, "user", None) if request is not None else None
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        if user.is_superuser:
+            return True
+        return user.has_any_role(CompanyPermission.full_access_roles_for_sensitive_fields)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if not self._user_has_sensitive_field_access(request):
+            for field in self.SENSITIVE_FIELDS:
+                data.pop(field, None)
+        return data
 
 
 # ---- Port ----

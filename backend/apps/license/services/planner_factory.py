@@ -36,10 +36,12 @@ def _load_defaults() -> None:
     from apps.license.services.e5_auto_plan import compute_e5_auto_plan
     from apps.license.services.e126_auto_plan import compute_e126_auto_plan
     from apps.license.services.e132_auto_plan import compute_e132_auto_plan
+    from apps.license.services.a3627_auto_plan import compute_a3627_auto_plan
     _REGISTRY['E1']  = compute_e1_auto_plan
     _REGISTRY['E5']  = compute_e5_auto_plan
     _REGISTRY['E126'] = compute_e126_auto_plan
     _REGISTRY['E132'] = compute_e132_auto_plan
+    _REGISTRY['A3627'] = compute_a3627_auto_plan
 
 
 class PlannerFactory:

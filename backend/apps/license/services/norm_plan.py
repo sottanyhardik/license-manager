@@ -21,7 +21,8 @@ from __future__ import annotations
 
 
 def detect_norm(license_obj) -> str:
-    """Return 'E1' | 'E5' | 'E126' | 'E132' | '' for the license's primary export norm."""
+    """Return 'E1' | 'E5' | 'E126' | 'E132' | 'A3627' | '' for the license's
+    primary export norm."""
     if not license_obj.export_license.exists():
         return ""
     first = license_obj.export_license.first()
@@ -33,6 +34,8 @@ def detect_norm(license_obj) -> str:
         return "E126"
     if code == "E5":
         return "E5"
+    if code == "A3627":
+        return "A3627"
     # E1 family (but not E126 / E132).
     if "E1" in code and "E126" not in code and "E132" not in code:
         return "E1"

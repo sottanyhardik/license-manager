@@ -10,9 +10,9 @@
 | Field | Value |
 |-------|-------|
 | **Module** | Module 1: Ledger / Balance |
-| **Phase** | 4E-D: Excel Canonical Migration |
-| **Sub-Phase** | Implementation (Canonical Service Integration) |
-| **Gate** | 4E-D (ACTIVE) |
+| **Phase** | 4E-E: Cross-Output Parity Verification |
+| **Sub-Phase** | Testing (API ↔ PDF ↔ Excel Parity) |
+| **Gate** | 4E-E (ACTIVE) |
 | **Status** | IN PROGRESS |
 
 ---

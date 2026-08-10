@@ -34,7 +34,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.allotment.models import AllotmentModel
 from apps.core.models import CompanyModel, ItemNameModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
 from apps.license.services.e132_auto_plan import compute_e132_auto_plan
 from apps.license.services.e132_plan import CHEESE, PKO
 from apps.license.services.plan_enforcement import save_plan_lines_for_license
@@ -83,6 +83,7 @@ def resynced_group_with_legacy_split(db):
         license_expiry_date=date.today() + timedelta(days=90),
         exporter=company,
     )
+    LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
     pko_name, _ = ItemNameModel.objects.get_or_create(name=PKO)
     cheese_name, _ = ItemNameModel.objects.get_or_create(name=CHEESE)
 

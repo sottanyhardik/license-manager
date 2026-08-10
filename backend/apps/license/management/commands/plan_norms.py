@@ -41,9 +41,17 @@ def _fmt_duration(seconds: float) -> str:
     return str(timedelta(seconds=int(seconds)))
 
 
-def _is_fully_planned(license_obj, threshold: float = 0.99) -> bool:
-    """Return True when the existing plan covers ≥ *threshold* of balance CIF."""
-    bal = float(license_obj.balance_cif or 0)
+def _is_fully_planned(license_obj, threshold: float = 0.99, *, live_balance=None) -> bool:
+    """Return True when the existing plan covers ≥ *threshold* of the LIVE
+    balance CIF. BL-LEDGER-02: `license_obj.balance_cif` (the denormalized
+    `LicenseBalance` cache) has no signal on reconciliation-allocation
+    changes and can go stale; `live_balance` is pre-batched by the caller
+    when available (a fixed number of queries for the whole run, not one
+    per license), falling back to a single live call only if not supplied."""
+    if live_balance is None:
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        live_balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
+    bal = float(live_balance or 0)
     if bal <= 0:
         return False
     from django.db.models import Sum
@@ -125,10 +133,15 @@ class Command(BaseCommand):
             )
         self.stdout.write("")
 
-        # Build queryset.
+        # Build queryset. BL-LEDGER-02: eligibility used to be filtered at
+        # the DB level against the cached `balance__balance_cif` column
+        # (`balance__balance_cif__gt=0`), which can be stale. Fetch every
+        # active license instead and resolve eligibility against the LIVE,
+        # batched-computed balance below (a fixed number of queries for the
+        # whole run, not one live call per license).
         qs = (
             LicenseDetailsModel.objects
-            .filter(flags__is_active=True, balance__balance_cif__gt=0)
+            .filter(flags__is_active=True)
             .prefetch_related(
                 "export_license__norm_class",
                 "import_license__items",
@@ -142,13 +155,25 @@ class Command(BaseCommand):
             if not qs.exists():
                 raise CommandError(f"License '{license_number}' not found.")
 
+        qs = list(qs)  # prefetch_related is incompatible with iterator(); materialize once
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
+            [lic.id for lic in qs]
+        )
+
         # Counters.
         total = skipped_norm = already_planned = succeeded = failed = 0
         failures: list[tuple[str, str]] = []
 
         start = time.monotonic()
 
-        for lic in qs:  # prefetch_related is incompatible with iterator(); plain loop is correct
+        for lic in qs:
+            live_balance = live_balance_by_license.get(lic.id, 0)
+            if live_balance <= 0:
+                # Same effect as the old `balance__balance_cif__gt=0` DB
+                # filter: not eligible at all, not counted anywhere below.
+                continue
+
             # Verify norm at runtime.
             detected = detect_norm(lic)
             if detected != norms_class:
@@ -160,7 +185,7 @@ class Command(BaseCommand):
 
             # Default: skip already-planned licenses.
             # --all: re-plan everything regardless of current plan status.
-            if not replan_all and _is_fully_planned(lic):
+            if not replan_all and _is_fully_planned(lic, live_balance=live_balance):
                 already_planned += 1
                 self.stdout.write(
                     f"  Processing License : {num} … "

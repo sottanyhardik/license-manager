@@ -142,8 +142,11 @@ interface LedgerData {
     exporter: string;
     port: string;
     total_value: number;
-    available_balance: number;
-    db_balance: number;
+    // Canonical API field (Phase 4C+)
+    license_running_balance: number;
+    // Deprecated fields (backward compat only)
+    available_balance?: number;
+    db_balance?: number;
     transactions: LedgerTransaction[];
 }
 
@@ -561,8 +564,8 @@ function TransactionsTab({
                     <div className="font-semibold tabular-nums">${fmtNum(ledger.total_value)}</div>
                 </div>
                 <div>
-                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Available Balance</span>
-                    <div className="font-semibold tabular-nums text-primary">${fmtNum(ledger.available_balance)}</div>
+                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">License Balance</span>
+                    <div className="font-semibold tabular-nums text-primary">${fmtNum(ledger.license_running_balance ?? ledger.available_balance ?? 0)}</div>
                 </div>
                 <div>
                     <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Transactions</span>

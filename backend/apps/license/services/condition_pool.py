@@ -247,7 +247,7 @@ def remaining_for_condition(license_obj, condition_type: str) -> Decimal | None:
     return pools.get(condition_type, license_obj._calculate_license_credit() * pct / Decimal("100"))
 
 
-def _resolve_available_value(item, balance_map: dict, pools_map: dict) -> Decimal:
+def _resolve_available_value(item, balance_map: dict, pools_map: dict, attributed_map: dict) -> Decimal:
     """
     Per-item resolver shared by `available_value_bulk_map` — mirrors
     `LicenseImportItemsModel.available_value_calculated`'s branches EXACTLY
@@ -283,8 +283,10 @@ def _resolve_available_value(item, balance_map: dict, pools_map: dict) -> Decima
             remaining = item.license._calculate_license_credit() * pct / Decimal("100")
         return min(remaining, license_balance)
 
-    # "AU" or open: track licence balance directly.
-    return license_balance
+    # A positive import-credit CIF is item-attributed. Absence from this map
+    # means the row has no individual CIF and retains the live licence-level
+    # Financial Ledger fallback.
+    return attributed_map.get(item.id, license_balance)
 
 
 def available_value_bulk_map(items) -> dict[int, Decimal]:
@@ -315,7 +317,10 @@ def available_value_bulk_map(items) -> dict[int, Decimal]:
     if not items:
         return {}
 
-    from apps.license.services.balance_calculator import LicenseBalanceCalculator
+    from apps.license.services.balance_calculator import (
+        ItemBalanceCalculator,
+        LicenseBalanceCalculator,
+    )
 
     license_ids = list({item.license_id for item in items if item.license_id})
     # Financial Ledger formula — must match `available_value_calculated`'s
@@ -323,5 +328,9 @@ def available_value_bulk_map(items) -> dict[int, Decimal]:
     # in lock-step... never duplicate the branching logic elsewhere").
     balance_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids) if license_ids else {}
     pools_map = compute_condition_pools_bulk(license_ids) if license_ids else {}
+    attributed_map = ItemBalanceCalculator.calculate_item_attributed_balances_for_items(items)
 
-    return {item.id: _resolve_available_value(item, balance_map, pools_map) for item in items}
+    return {
+        item.id: _resolve_available_value(item, balance_map, pools_map, attributed_map)
+        for item in items
+    }

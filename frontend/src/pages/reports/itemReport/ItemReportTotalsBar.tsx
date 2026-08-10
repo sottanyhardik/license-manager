@@ -29,7 +29,8 @@ export default function ItemReportTotalsBar({ items }: ItemReportTotalsBarProps)
                                         const uniqueLicenses: Record<string, number> = {};
                                         items.forEach((item: any) => {
                                             if (!uniqueLicenses[item.license_id]) {
-                                                uniqueLicenses[item.license_id] = item.available_balance || 0;
+                                                // Use canonical license_running_balance, fallback to deprecated available_balance
+                                                uniqueLicenses[item.license_id] = item.license_running_balance || item.available_balance || 0;
                                             }
                                         });
                                         return Object.values(uniqueLicenses).reduce((sum: number, val: number) => sum + val, 0).toLocaleString('en-IN', {

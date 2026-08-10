@@ -17,6 +17,7 @@
       <sourceFolder url="file://$MODULE_DIR$/backend" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/master-data-service" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/backend/.venv" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.14 (license-manager)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

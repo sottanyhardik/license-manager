@@ -1664,6 +1664,81 @@ class ItemBalanceCalculator:
     """
 
     @staticmethod
+    def has_item_attributed_cif(import_item) -> bool:
+        """Whether an import-credit row supplies an item-level CIF basis.
+
+        ``LicenseImportItemsModel.cif_fc`` is the FC/USD CIF recorded on the
+        import item's own credit-ledger row.  The Financial Ledger and the
+        availability UI are FC/USD based, so this is deliberately the
+        attribution signal (``cif_inr`` is its converted companion, not an
+        independent availability basis).  A non-positive FC value means the
+        item's individual credit is unavailable and callers must use their
+        established licence-level fallback.
+
+        The 0.01 marker is handled by the availability resolver before this
+        helper is consulted.
+        """
+        return to_decimal(getattr(import_item, "cif_fc", None), DEC_0) > DEC_0
+
+    @staticmethod
+    def calculate_debited_cif_for_items(item_ids) -> dict:
+        """Batched visible BOE debit CIF totals, keyed by import item id."""
+        ids = list(item_ids)
+        if not ids:
+            return {}
+        rows = (
+            exclude_hidden(
+                RowDetails.objects.filter(sr_number_id__in=ids, transaction_type=DEBIT)
+            )
+            .values("sr_number_id")
+            .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
+        )
+        return {row["sr_number_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
+    @classmethod
+    def calculate_item_attributed_balance(cls, import_item) -> Decimal:
+        """Available CIF from an import item's positive, attributed CIF.
+
+        This is intentionally item-scoped: its own visible BOE debits plus
+        its own outstanding AT allotment contribution reduce its own credit.
+        It does not use ``LicenseBalance.balance_cif`` and never lets a
+        sibling item's utilisation consume this item's attributed CIF.
+        """
+        credit = to_decimal(import_item.cif_fc, DEC_0)
+        debit = to_decimal(
+            exclude_hidden(
+                RowDetails.objects.filter(sr_number=import_item, transaction_type=DEBIT)
+            ).aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+            DEC_0,
+        )
+        _qty, outstanding_cif = LicenseBalanceCalculator.get_outstanding_allotment_totals(import_item)
+        balance = credit - debit - outstanding_cif
+        return balance if balance >= DEC_0 else DEC_0
+
+    @classmethod
+    def calculate_item_attributed_balances_for_items(cls, items) -> dict:
+        """Batched counterpart of :meth:`calculate_item_attributed_balance`.
+
+        Only positive-CIF items are returned.  Callers use the absence of an
+        id to select their licence-level live-balance fallback.  The method
+        deliberately reuses the Balance Engine's batched outstanding-AT
+        helper, preserving BOE-link and partial-reconciliation netting.
+        """
+        attributed = [item for item in items if cls.has_item_attributed_cif(item)]
+        if not attributed:
+            return {}
+        item_ids = [item.id for item in attributed]
+        license_ids = list({item.license_id for item in attributed if item.license_id})
+        debit_map = cls.calculate_debited_cif_for_items(item_ids)
+        outstanding_map = LicenseBalanceCalculator.get_outstanding_allotment_totals_for_items(license_ids)
+        result = {}
+        for item in attributed:
+            _qty, outstanding_cif = outstanding_map.get(item.id, (DEC_0, DEC_0))
+            balance = to_decimal(item.cif_fc, DEC_0) - debit_map.get(item.id, DEC_0) - outstanding_cif
+            result[item.id] = balance if balance >= DEC_0 else DEC_0
+        return result
+
+    @staticmethod
     def calculate_item_credit_debit(import_item) -> tuple[Decimal, Decimal]:
         """
         Calculate credit and debit for an import item.
@@ -1739,13 +1814,102 @@ class ItemBalanceCalculator:
         return balance if balance >= DEC_0 else DEC_0
 
     @staticmethod
+    def _direct_sale_quantity_rows(item_ids=None, import_item=None):
+        """SALE lines' quantity contribution after BOE representation.
+
+        A legacy ``trade.boes`` attachment represents the whole line.  A
+        formal InvoiceBOEAllocation represents only its allocated quantity,
+        leaving any unallocated portion as direct final consumption.  This
+        mirrors the reconciliation ledger's partial-allocation semantics.
+        """
+        from apps.reconciliation.models import InvoiceBOEAllocation
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        allocation_total = (
+            InvoiceBOEAllocation.objects.filter(
+                trade_line_id=OuterRef('pk'),
+                status=InvoiceBOEAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+            .order_by()
+            .values('trade_line_id')
+            .annotate(total=Sum('allocated_qty'))
+            .values('total')
+        )
+        # A legacy BOE attachment represents a sale quantity only when that
+        # physical BOE actually debits the same import item.  Quantity is
+        # item-specific, so a BOE row on a sibling item cannot suppress this
+        # line's final SALE consumption.
+        has_linked_boe = Exists(RowDetails.objects.filter(
+            bill_of_entry__license_trades=OuterRef('trade_id'),
+            sr_number_id=OuterRef('sr_number_id'),
+            transaction_type=DEBIT,
+        ))
+        rows = LicenseTradeLine.objects.filter(trade__direction=LicenseTrade.DIR_SALE)
+        if import_item is not None:
+            rows = rows.filter(sr_number=import_item)
+        elif item_ids is not None:
+            rows = rows.filter(sr_number_id__in=list(item_ids))
+        return (
+            rows
+            .annotate(
+                allocated_qty=Coalesce(
+                    Subquery(allocation_total, output_field=_ALLOCATION_DECIMAL_FIELD),
+                    Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD,
+                ),
+                has_linked_boe=has_linked_boe,
+            )
+            .annotate(
+                contributed_qty=Case(
+                    When(has_linked_boe=True, then=Value(DEC_0)),
+                    default=Greatest(
+                        F('qty_kg') - F('allocated_qty'), Value(DEC_0),
+                        output_field=_ALLOCATION_DECIMAL_FIELD,
+                    ),
+                    output_field=_ALLOCATION_DECIMAL_FIELD,
+                )
+            )
+        )
+
+    @staticmethod
+    def calculate_direct_sale_quantity(import_item) -> Decimal:
+        """Quantity finally consumed by SALE lines that have no BOE.
+
+        A BOE remains the physical quantity debit when a sale is represented
+        by a BOE.  A SALE line without a BOE is the approved bypass path and
+        therefore consumes its own ``qty_kg``.  Keeping this predicate in the
+        balance engine makes the two paths mutually exclusive.
+        """
+        return to_decimal(
+            ItemBalanceCalculator._direct_sale_quantity_rows(import_item=import_item).aggregate(
+                total=Coalesce(Sum("contributed_qty"), Value(DEC_0), output_field=DecimalField())
+            )["total"],
+            DEC_0,
+        )
+
+    @staticmethod
+    def calculate_direct_sale_quantity_for_items(item_ids) -> dict:
+        """Bulk counterpart of :meth:`calculate_direct_sale_quantity`."""
+        ids = list(item_ids)
+        if not ids:
+            return {}
+        rows = (
+            ItemBalanceCalculator._direct_sale_quantity_rows(item_ids=ids)
+            .values("sr_number_id")
+            .annotate(total=Coalesce(Sum("contributed_qty"), Value(DEC_0), output_field=DecimalField()))
+        )
+        return {row["sr_number_id"]: to_decimal(row["total"], DEC_0) for row in rows}
+
+    @staticmethod
     def calculate_available_quantity(import_item) -> Decimal:
         """
         Available Quantity for an import item = current stored `quantity`
         (NEVER `old_quantity` — see `apps.core.scripts.calculate_balance.
         calculate_available_quantity`'s docstring for why that legacy
-        substitution was removed) − Debited − Outstanding (BOE-unlinked)
-        Allotted. The allotted term reuses `LicenseBalanceCalculator.
+        substitution was removed) − BOE Debited − Outstanding (BOE-unlinked)
+        Allotted − direct SALE quantity.  A SALE line with a BOE is excluded
+        from the final term because its BOE is already the physical debit.
+        The allotted term reuses `LicenseBalanceCalculator.
         get_outstanding_allotment_totals` — the same Balance Engine
         exclusion (`Exists()` against the real BOE↔allotment relationship,
         plus `BOEAllotmentAllocation` partial-allocation netting) every
@@ -1772,8 +1936,9 @@ class ItemBalanceCalculator:
         )
 
         allotted, _allotted_cif = LicenseBalanceCalculator.get_outstanding_allotment_totals(import_item)
+        direct_sale_qty = ItemBalanceCalculator.calculate_direct_sale_quantity(import_item)
 
-        available = total_quantity - debited - allotted
+        available = total_quantity - debited - allotted - direct_sale_qty
         return available if available >= DEC_0 else DEC_0
 
     @staticmethod
@@ -1809,7 +1974,8 @@ class ItemBalanceCalculator:
     def calculate_available_quantity_for_items(items) -> dict:
         """
         Batched sibling of `calculate_available_quantity` — same formula
-        (`quantity - debited - outstanding AT-type allotted`, floored at 0),
+        (`quantity - BOE debited - outstanding AT-type allotted - direct SALE
+        quantity`, floored at 0),
         for MANY import items, possibly spanning MANY licenses, in a fixed
         small number of queries. Composes
         `calculate_debited_quantity_for_items` and `LicenseBalanceCalculator.
@@ -1841,6 +2007,7 @@ class ItemBalanceCalculator:
         license_ids = list({item.license_id for item in items if item.license_id})
 
         debited_map = ItemBalanceCalculator.calculate_debited_quantity_for_items(item_ids)
+        direct_sale_map = ItemBalanceCalculator.calculate_direct_sale_quantity_for_items(item_ids)
         outstanding_map = (
             LicenseBalanceCalculator.get_outstanding_allotment_totals_for_items(license_ids)
             if license_ids else {}
@@ -1851,7 +2018,8 @@ class ItemBalanceCalculator:
             total_quantity = to_decimal(item.quantity, DEC_0)
             debited = debited_map.get(item.id, DEC_0)
             outstanding_qty, _outstanding_cif = outstanding_map.get(item.id, (DEC_0, DEC_0))
-            available = total_quantity - debited - outstanding_qty
+            direct_sale_qty = direct_sale_map.get(item.id, DEC_0)
+            available = total_quantity - debited - outstanding_qty - direct_sale_qty
             result[item.id] = available if available >= DEC_0 else DEC_0
         return result
 

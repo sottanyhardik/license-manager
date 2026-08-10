@@ -29,7 +29,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.allotment.models import AllotmentModel, AllotmentItems
 from apps.core.models import CompanyModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 
 User = get_user_model()
 
@@ -59,13 +59,16 @@ def _make_license(license_number, exporter, expiry_date):
 
 
 def _set_live_balance(license_obj, balance_cif):
-    """Set the license's live balance_cif. MUST be called AFTER every
-    LicenseImportItemsModel on this license is created -- creating an
-    import item fires a signal that recalculates balance_cif from the
-    (empty, in these tests) real ledger chain, overwriting any value set
-    beforehand back to 0."""
-    license_obj.balance.balance_cif = balance_cif
-    license_obj.balance.save(update_fields=["balance_cif"])
+    """Give the license genuine export-item credit so its LIVE Financial
+    Ledger balance equals `balance_cif`. BL-AVAIL-01 made `available_value_
+    calculated`'s fallback read `LicenseBalanceCalculator.
+    calculate_financial_balance` directly, so writing to the (now-bypassed)
+    cached `LicenseBalance.balance_cif` column no longer has any effect --
+    genuine ledger data is required. Idempotent per license (update_or_create)
+    so re-calling it after an intervening allocation is harmless."""
+    LicenseExportItemModel.objects.update_or_create(
+        license=license_obj, defaults={"cif_fc": balance_cif},
+    )
 
 
 @pytest.fixture

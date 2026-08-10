@@ -27,6 +27,26 @@ TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 DECIMAL_ZERO = Decimal("0")
 
 
+def _live_dfia_balance_map(dfia_qs) -> dict:
+    """
+    Live, batched-computed ``{license_id: Decimal}`` balance for every id
+    currently in ``dfia_qs`` (a fixed number of queries, not one per
+    license). BL-LEDGER-02: ``balance__balance_cif`` is a denormalized
+    cache with no signal on reconciliation-allocation changes, so it can be
+    stale -- every filter/aggregate/sort by DFIA balance in this module
+    reads from this instead.
+    """
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
+    ids = list(dfia_qs.values_list('id', flat=True))
+    return LicenseBalanceCalculator.calculate_financial_balance_for_licenses(ids)
+
+
+def _dfia_ids_with_min_live_balance(dfia_qs, min_balance) -> list:
+    """Subset of ``dfia_qs``'s ids whose LIVE balance is >= ``min_balance``."""
+    live_map = _live_dfia_balance_map(dfia_qs)
+    return [lid for lid, bal in live_map.items() if bal >= min_balance]
+
+
 def _get_text_param(query_params, name: str, default: str = "") -> str:
     value = query_params.get(name, default)
     if value is None:
@@ -343,7 +363,7 @@ def build_license_queryset(query_params) -> list:
         incentive_qs = incentive_qs.filter(exporter_id=exporter_id)
 
     if min_balance is not None:
-        dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_balance)
+        dfia_qs = dfia_qs.filter(id__in=_dfia_ids_with_min_live_balance(dfia_qs, min_balance))
         incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
 
     if norm:
@@ -438,7 +458,7 @@ def get_ledger_summary(query_params) -> dict:
         incentive_qs = IncentiveLicense.objects.all()
 
     if min_balance is not None:
-        dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_balance)
+        dfia_qs = dfia_qs.filter(id__in=_dfia_ids_with_min_live_balance(dfia_qs, min_balance))
         incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
 
     if norm:
@@ -497,7 +517,7 @@ def get_ledger_summary(query_params) -> dict:
         _opening=Coalesce(Sum('export_license__cif_fc'), Value(DECIMAL_ZERO), output_field=DecimalField())
     ).values_list('_opening', flat=True)
     dfia_total = sum(float(v or 0) for v in _opening_rows)
-    dfia_balance = float(dfia_qs.aggregate(balance=Sum('balance__balance_cif'))['balance'] or 0)
+    dfia_balance = float(sum(_live_dfia_balance_map(dfia_qs).values()))
     dfia_sold = dfia_total - dfia_balance
 
     # Incentive aggregates
@@ -592,7 +612,7 @@ def search_licenses(query_params) -> dict:
         if active_only:
             dfia_qs = dfia_qs.filter(flags__is_expired=False)
         if min_balance is not None:
-            dfia_qs = dfia_qs.filter(balance__balance_cif__gte=min_balance)
+            dfia_qs = dfia_qs.filter(id__in=_dfia_ids_with_min_live_balance(dfia_qs, min_balance))
         results.extend(prepare_dfia_data(dfia_qs[:50]))
 
     if license_type in {'ALL', *INCENTIVE_LICENSE_TYPES}:
@@ -886,12 +906,20 @@ def get_license_wise_trades(query_params) -> dict:
             or (ld['license_type'] != DFIA_LICENSE_TYPE and lid in active_inc_ids)
         }
 
-    # Post-filter: min_balance
+    # Post-filter: min_balance. BL-LEDGER-02: resolve DFIA balance LIVE,
+    # scoped to only the DFIA ids already present in `licenses_dict` (not
+    # the whole table) -- fixed number of queries either way, but a
+    # smaller, more relevant candidate set.
     if min_balance is not None and licenses_dict:
-        dfia_ids_above = set(
-            LicenseDetailsModel.objects.filter(balance__balance_cif__gte=min_balance)
-            .values_list('id', flat=True)
-        )
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        dfia_ids_in_result = [
+            lid for lid, ld in licenses_dict.items() if ld['license_type'] == DFIA_LICENSE_TYPE
+        ]
+        live_balance_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(dfia_ids_in_result)
+        dfia_ids_above = {
+            lid for lid in dfia_ids_in_result
+            if live_balance_map.get(lid, DECIMAL_ZERO) >= min_balance
+        }
         inc_ids_above = set(
             IncentiveLicense.objects.filter(balance_value__gte=min_balance)
             .values_list('id', flat=True)
@@ -931,10 +959,13 @@ def get_license_wise_trades(query_params) -> dict:
     order_field = ordering.lstrip('-')
 
     if order_field == 'balance_value' and licenses_dict:
-        dfia_bal = dict(
-            LicenseDetailsModel.objects.filter(id__in=licenses_dict)
-            .values_list('id', 'balance__balance_cif')
-        )
+        # BL-LEDGER-02: sort key must use the LIVE DFIA balance, not the
+        # cached column -- scoped to only the DFIA ids in this result set.
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        dfia_ids_in_result = [
+            lid for lid, ld in licenses_dict.items() if ld['license_type'] == DFIA_LICENSE_TYPE
+        ]
+        dfia_bal = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(dfia_ids_in_result)
         inc_bal = dict(
             IncentiveLicense.objects.filter(id__in=licenses_dict)
             .values_list('id', 'balance_value')

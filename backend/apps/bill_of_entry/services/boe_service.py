@@ -219,9 +219,12 @@ def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
         dict with: success, message, boe (serialized target).
 
     Raises:
-        ValueError: When source_boe_id is not provided, source == target, or source not found.
+        ValueError: When source_boe_id is not provided, source == target,
+            source not found, or a skipped duplicate row is protected by a
+            reconciliation record.
     """
     from django.db import transaction as db_transaction
+    from django.db.models import Q
     from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
     from apps.bill_of_entry.serializers import BillOfEntrySerializer
 
@@ -245,14 +248,40 @@ def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
         )
 
         rows_to_move = []
-        skipped_count = 0
+        skipped_row_ids = []
         for row in source_boe.item_details.values("id", "sr_number_id", "transaction_type"):
             combo = (row["sr_number_id"], row["transaction_type"])
             if combo not in existing_combos:
                 rows_to_move.append(row["id"])
                 existing_combos.add(combo)
             else:
-                skipped_count += 1
+                skipped_row_ids.append(row["id"])
+
+        # A skipped duplicate remains attached to the source BOE and would
+        # therefore be cascade-deleted with it.  Reconciliation annotations
+        # deliberately protect their RowDetails FK, so reject the entire
+        # merge *before* any row move, allotment transfer, or deletion.  This
+        # is a single bounded query across all duplicate rows, not N+1
+        # relation checks.
+        protected_duplicates = list(
+            RowDetails.objects.filter(id__in=skipped_row_ids)
+            .filter(
+                Q(invoice_allocations__isnull=False)
+                | Q(allotment_allocations__isnull=False)
+                | Q(external_invoice_links__isnull=False)
+            )
+            .values("id", "sr_number_id", "transaction_type")
+            .distinct()
+        )
+        if protected_duplicates:
+            row_ids = ", ".join(str(row["id"]) for row in protected_duplicates)
+            raise ValueError(
+                "BOE merge cannot be completed because duplicate source row(s) "
+                f"{row_ids} are referenced by reconciliation/allocation records. "
+                "Resolve those references before merging."
+            )
+
+        skipped_count = len(skipped_row_ids)
 
         # Use queryset .update() to bypass RowDetails.save() frozen-row guard —
         # we are only reassigning the BOE FK, not editing financial data.

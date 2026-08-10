@@ -1,0 +1,34 @@
+-- query 1: Postgres default NULL ordering for DESC
+     d
+------------
+
+ 2025-06-01
+ 2025-01-01
+(3 rows)
+-- CONFIRMED: NULL sorts FIRST in a plain "ORDER BY ... DESC" on this DB.
+
+-- query 2: license_id 1955 (license_number 0311043123), real transfer history
+  id  | transfer_date |        transfer_status        | transfer_initiation_date
+------+---------------+--------------------------------+---------------------------
+ 2076 |               | Transfer - Pending Acceptance | 2025-05-13 18:00:56+05:30
+ 2078 | 2025-05-12    | Approved                       | 2025-05-12 17:43:08+05:30
+ 2077 | 2025-05-12    | Approved                       | 2025-05-12 22:33:44+05:30
+(3 rows)
+-- `latest_transfer` (order_by("-transfer_date","-id")) returns row 2076 (the
+-- pending, transfer_date=NULL row) because NULL sorts first, ahead of the two
+-- Approved rows with real dates. In THIS case it happens to also be the
+-- chronologically latest transfer by initiation date, so the displayed text
+-- is coincidentally correct for this particular license today.
+
+-- query 3: rows where the (-transfer_date) pick differs from the
+-- (-transfer_initiation_date) pick, across all 27 transfer rows / license_ids
+-- currently in the DB
+(0 rows)
+-- No license in the CURRENT 27-row sample exercises the failure sequence
+-- (an older abandoned/rejected transfer_date=NULL row sitting behind a LATER
+-- approved, dated transfer). The only NULL-dated row in the dataset (id 2076)
+-- is also genuinely the most recent transfer for its license, so the ordering
+-- bug does not currently produce a visibly wrong answer — but the mechanism
+-- (NULLS FIRST on a nullable date used as the sort key) is proven, and the
+-- moment a license accumulates a stale/abandoned pending transfer followed by
+-- a later completed one, latest_transfer will surface the stale one.

@@ -224,9 +224,13 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         Auto-searches both tables if license_type not specified.
 
         Optional company parameter: If provided, only shows transactions involving that company.
+
+        **Phase 4C:** API consumes CanonicalLedgerService as the single source of truth.
+        All financial calculations are performed by CanonicalLedgerService; the API layer
+        is a transparent serialization layer with no business logic.
         """
-        from apps.trade.models import LicenseTrade
-        from django.db.models import Q
+        from apps.license.services.canonical_ledger_service import CanonicalLedgerService
+        from apps.license.serializers import CanonicalLedgerSerializer
 
         license_type = request.query_params.get('license_type', 'AUTO')
         company_id = request.query_params.get('company')  # Optional company filter
@@ -246,17 +250,16 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'searched_in': 'DFIA only' if license_type == 'DFIA' else 'Incentive only' if license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'] else 'both DFIA and Incentive'
             }, status=404)
 
-        # Delegate transaction building to the ledger_pdf service — keeps the
-        # view thin and the business logic testable in isolation.
-        from apps.license.services.exporters.ledger_pdf import (
-            build_dfia_ledger_detail,
-            build_incentive_ledger_detail,
+        # Delegate all calculation to CanonicalLedgerService (single source of truth).
+        # The API is a transparent serialization layer with NO business logic.
+        dataset = CanonicalLedgerService.build_canonical_ledger_dataset(
+            license_id=license.id,
+            license_type=found_type
         )
 
-        if found_type == 'DFIA':
-            return Response(build_dfia_ledger_detail(license, company_id=company_id))
-        else:  # INCENTIVE
-            return Response(build_incentive_ledger_detail(license, company_id=company_id))
+        # Serialize for response (representation only; no calculations)
+        serializer = CanonicalLedgerSerializer(dataset)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def available_for_sale(self, request):
@@ -266,12 +269,13 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         """
         min_balance = Decimal(request.query_params.get('min_balance', '100'))
 
-        # DFIA with balance
+        # DFIA with balance. BL-LEDGER-02: the cached `balance__balance_cif`
+        # column can be stale, so resolve `min_balance` against the LIVE,
+        # batched-computed balance instead of filtering the DB column.
+        from apps.license.services.ledger_service import _dfia_ids_with_min_live_balance
+        active_dfia_qs = LicenseDetailsModel.objects.filter(flags__is_expired=False).select_related('exporter', 'port')
         dfia_data = self._prepare_dfia_data(
-            LicenseDetailsModel.objects.filter(
-                flags__is_expired=False,
-                balance__balance_cif__gte=min_balance
-            ).select_related('exporter', 'port')
+            active_dfia_qs.filter(id__in=_dfia_ids_with_min_live_balance(active_dfia_qs, min_balance))
         )
 
         # Incentive with balance

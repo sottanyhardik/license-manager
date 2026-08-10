@@ -100,15 +100,26 @@ class DashboardDataView(APIView):
         # Total licenses
         total_count = active_count + expired_count + null_count
 
-        # Expiring soon: licenses expiring in next 30 days
+        # Expiring soon: licenses expiring in next 30 days. BL-LEDGER-02:
+        # the cached `balance__balance_cif` column can be stale, so resolve
+        # the $100 threshold against the LIVE, batched-computed balance
+        # instead of filtering the DB column directly.
         today = date.today()
         expiry_date = today + timedelta(days=30)
-        expiring_count = LicenseDetailsModel.objects.filter(
-            license_expiry_date__gte=today,
-            license_expiry_date__lte=expiry_date,
-            flags__is_active=True,
-            balance__balance_cif__gte=Decimal('100.00')  # Only count licenses with balance >= $100
-        ).count()
+        expiring_candidate_ids = list(
+            LicenseDetailsModel.objects.filter(
+                license_expiry_date__gte=today,
+                license_expiry_date__lte=expiry_date,
+                flags__is_active=True,
+            ).values_list('id', flat=True)
+        )
+        expiring_live_balance = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
+            expiring_candidate_ids
+        )
+        expiring_count = sum(
+            1 for lid in expiring_candidate_ids
+            if expiring_live_balance.get(lid, Decimal('0')) >= Decimal('100.00')
+        )
 
         return {
             'total': total_count,
@@ -184,24 +195,35 @@ class DashboardDataView(APIView):
         today = date.today()
         expiry_date = today + timedelta(days=30)
 
-        # Get licenses expiring in next 30 days with balance >= $100
-        licenses = LicenseDetailsModel.objects.filter(
+        # BL-LEDGER-02: the cached `balance__balance_cif` column can be
+        # stale, so the $100 threshold can no longer be a DB filter. Fetch
+        # every active license in the expiry window (unsliced), compute
+        # live balance for all of them, THEN filter by balance and take the
+        # top 5 soonest-expiring -- same "top 5 among balance >= $100"
+        # semantics as before, just resolved against the live figure.
+        candidates = LicenseDetailsModel.objects.filter(
             license_expiry_date__gte=today,
             license_expiry_date__lte=expiry_date,
             flags__is_active=True,
-            balance__balance_cif__gte=Decimal('100.00')
         ).select_related(
             'exporter', 'port', 'balance', 'flags',
         ).prefetch_related(
             'export_license__norm_class'
-        ).order_by('license_expiry_date')[:5]
+        ).order_by('license_expiry_date')
+
+        candidates = list(candidates)
 
         # Financial Ledger formula -- see `LicenseDetailsModel.
         # get_balance_cif`'s docstring; every "Balance CIF" the dashboard
         # shows must match the rest of the app.
         live_balance_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
-            [license_obj.id for license_obj in licenses]
+            [license_obj.id for license_obj in candidates]
         )
+
+        licenses = [
+            license_obj for license_obj in candidates
+            if live_balance_map.get(license_obj.id, Decimal('0')) >= Decimal('100.00')
+        ][:5]
 
         licenses_data = []
         for license_obj in licenses:

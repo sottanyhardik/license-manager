@@ -1,0 +1,43 @@
+$ PGPASSWORD=lmanagement psql -h localhost -U lmanagement -d lmanagement -f sql.sql (query 2)
+
+ license_id | license_number | license_expiry_date | stored_is_expired | import_item_id | available_quantity | available_value
+------------+----------------+---------------------+--------------------+----------------+---------------------+-----------------
+       2434 | 0311046335     | 2026-08-06          | t                  |          37528 |             320.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37533 |             601.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37535 |             941.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37530 |               2.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37525 |            2399.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37534 |            1403.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37531 |               2.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37523 |            9625.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37527 |              20.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37529 |             100.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37532 |             180.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37526 |              80.00 |            6.20
+       2434 | 0311046335     | 2026-08-06          | t                  |          37524 |            3810.00 |            6.20
+       2433 | 0311046297     | 2026-08-05          | t                  |          37517 |              14.00 |         8924.00
+       2433 | 0311046297     | 2026-08-05          | t                  |          37520 |            4381.00 |         8924.00
+(15 rows)
+
+-- query 3 (total distinct expired-but-allocatable licenses)
+ count
+-------
+    41
+(1 row)
+
+-- Server "today" at time of test:
+ current_date
+--------------
+ 2026-08-07
+(1 row)
+
+-- Code-path confirmation (query 4):
+$ grep -rn "AllocationService" backend --include="*.py" | grep -v tests
+backend/apps/allotment/services/allocation_service.py:23:class AllocationService:
+backend/apps/allotment/services/__init__.py:10:from .allocation_service import AllocationService
+backend/apps/allotment/services/__init__.py:15:    'AllocationService',
+
+$ grep -rn "AllotmentItems.objects.create\|AllotmentItems(" backend --include="*.py" | grep -v tests
+backend/apps/allotment/models.py:209:class AllotmentItems(AuditModel):
+backend/apps/allotment/views_actions.py:788:                    allotment_item = AllotmentItems.objects.create(
+backend/apps/allotment/services/allocation_service.py:194:        allocation_item = AllotmentItems.objects.create(

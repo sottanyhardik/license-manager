@@ -191,6 +191,11 @@ def generate_license_ledger_pdf(license_obj):
                 ).select_related('bill_of_entry__company').order_by('bill_of_entry__bill_of_entry_date')
             )
         ).order_by('serial_number')
+        import_items = list(import_items)
+        # Resolve the live value once for every import item rather than invoke
+        # the single-item Financial Ledger calculation inside report loops.
+        from apps.license.services.condition_pool import available_value_bulk_map
+        available_value_map = available_value_bulk_map(import_items)
 
         # Group items by ItemNameModel (items field) - multiple import items can share the same ItemName
         item_groups = defaultdict(list)
@@ -637,8 +642,8 @@ def generate_license_ledger_pdf(license_obj):
                     boe_qty += Decimal(str(boe.qty or 0))
                     total_boe_cif_fc += Decimal(str(boe.cif_fc or 0))
 
-                # Balance $: Use centralized available_value_calculated property
-                balance_cif_fc = Decimal(str(item.available_value_calculated or 0))
+                # Balance $: centralized live value, batched for this report.
+                balance_cif_fc = Decimal(str(available_value_map.get(item.id, 0)))
 
             # Use Paragraph for description to allow text wrapping
             desc_paragraph = Paragraph(description if description else '-',

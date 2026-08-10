@@ -10,20 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import {
     ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, TriangleAlert,
 } from "lucide-react";
-
-// ─── Types ──────────────────────────────────────────────────────────────────────
-
-type LedgerTransaction = Record<string, unknown> & {
-    type?: string;
-    company_id?: string | number | null;
-    company_name?: string;
-};
-
-type LedgerDetail = Record<string, unknown> & {
-    license_number: string;
-    license_type: string;
-    transactions: LedgerTransaction[];
-};
+import type { CanonicalLedgerResponse, CanonicalTransaction, CompanyUtilization } from '../types/canonicalLedger';
 
 // ─── Pure utilities ─────────────────────────────────────────────────────────────
 
@@ -56,22 +43,14 @@ export function buildLedgerDetailPath(id: unknown, companyId?: unknown): string 
     return `license-ledger/${safeId}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
 }
 
-export function normalizeLedgerDetail(value: unknown): LedgerDetail | null {
+export function normalizeLedgerDetail(value: unknown): CanonicalLedgerResponse | null {
     if (!isRecord(value)) return null;
-    const transactions = Array.isArray(value.transactions)
-        ? value.transactions.flatMap((transaction) => {
-            if (!isRecord(transaction)) return [];
-            return [{ ...transaction, type: normalizeText(transaction.type, 'UNKNOWN'), company_name: normalizeText(transaction.company_name, 'N/A') }];
-        })
-        : [];
-    return {
-        ...value,
-        license_number: normalizeText(value.license_number, 'Unknown license'),
-        license_type: normalizeText(value.license_type, 'UNKNOWN'),
-        available_balance: toFiniteNumber(value.available_balance),
-        total_value: toFiniteNumber(value.total_value),
-        transactions,
-    };
+
+    // Validate required fields are present
+    if (!value.license_number || !value.license_type) return null;
+
+    // Canonical ledger response should provide all required fields
+    return value as CanonicalLedgerResponse;
 }
 
 export function sanitizeLedgerFilenamePart(value: unknown): string {
@@ -101,8 +80,8 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
     return fallback;
 }
 
-export function groupTransactionsByCompany(transactions: LedgerTransaction[]) {
-    const companiesMap: Record<string, { company_id: string | number | null; company_name: string; transactions: LedgerTransaction[] }> = {};
+function groupTransactionsByCompany(transactions: CanonicalTransaction[]) {
+    const companiesMap: Record<string, { company_id: string | number | null; company_name: string; transactions: CanonicalTransaction[] }> = {};
     transactions.forEach((txn, index) => {
         const key = txn.company_id != null ? String(txn.company_id) : `unknown-${index}`;
         if (!companiesMap[key]) {
@@ -119,7 +98,7 @@ export default function LicenseLedgerDetail() {
     const { id, companyId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
-    const [ledger, setLedger] = useState<Record<string, unknown> | null>(null);
+    const [ledger, setLedger] = useState<CanonicalLedgerResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -187,17 +166,18 @@ export default function LicenseLedgerDetail() {
     if (!ledger) return null;
 
     const isDFIA = ledger.license_type === 'DFIA';
-    const hasPurchases = (ledger.transactions as LedgerTransaction[] || []).some(
+    const hasPurchases = (ledger.transactions || []).some(
         t => t.type === 'PURCHASE' || t.type === 'OPENING',
     );
-    const currentBalance = toFiniteNumber(ledger.available_balance);
+    // Use canonical license_running_balance from API (not deprecated available_balance)
+    const currentBalance = toFiniteNumber(ledger.license_running_balance);
     const isNegativeBalance = currentBalance < 0;
     const showPurchaseWarning = !hasPurchases || isNegativeBalance;
 
     // When the ledger was opened with a company filter (companyId in the URL),
     // include the company name in the filename so downloads are clearly scoped.
     const exportCompanyPart = companyId
-        ? sanitizeLedgerFilenamePart(ledger.transactions[0]?.company_name ?? String(companyId))
+        ? sanitizeLedgerFilenamePart((ledger.transactions[0] as CanonicalTransaction)?.company_name ?? String(companyId))
         : null;
 
     const buildExportFilename = (ext: 'pdf' | 'xlsx') =>
@@ -327,29 +307,18 @@ export default function LicenseLedgerDetail() {
 
             {/* ── Company-grouped ledger tables ─────────────────── */}
             {(() => {
-                const companiesGrouped = groupTransactionsByCompany(ledger.transactions as LedgerTransaction[]);
-                const TXN_SORT_ORDER: Record<string, number> = { OPENING: 0, PURCHASE: 1, SALE: 2 };
+                // Group transactions by company (structure only)
+                const companiesGrouped = groupTransactionsByCompany(ledger.transactions);
+                // Get company utilizations from canonical API (not recalculated)
+                const companyUtilizations: Record<string, CompanyUtilization> = ledger.company_utilizations || {};
 
                 return companiesGrouped.map((company, ci) => {
-                    const rawTxns = company.transactions;
-                    const txns = [...rawTxns].sort((a, b) =>
-                        ((TXN_SORT_ORDER[a.type ?? ''] ?? 1) - (TXN_SORT_ORDER[b.type ?? ''] ?? 1))
+                    const txns = company.transactions as CanonicalTransaction[];
+                    // Get company balance from canonical API data
+                    const companyUtilization = Object.values(companyUtilizations).find(
+                        cu => cu.company_id === Number(company.company_id)
                     );
-
-                    let companyRunning = 0;
-                    const companyBalMap = new Map<LedgerTransaction, number>();
-                    for (const txn of txns) {
-                        if (txn.type === 'PURCHASE' || txn.type === 'OPENING') {
-                            companyRunning += isDFIA ? toFiniteNumber(txn.debit_cif) : toFiniteNumber(txn.debit_license_value);
-                        } else if (txn.type === 'SALE') {
-                            companyRunning -= isDFIA ? toFiniteNumber(txn.credit_cif) : toFiniteNumber(txn.credit_license_value);
-                        }
-                        companyBalMap.set(txn, companyRunning);
-                    }
-
-                    const totalDebit = txns.reduce((s, t) => s + toFiniteNumber(t.debit_amount), 0);
-                    const totalCredit = txns.reduce((s, t) => s + toFiniteNumber(t.credit_amount), 0);
-                    const companyPL = totalCredit - totalDebit;
+                    const companyBalance = companyUtilization ? toFiniteNumber(companyUtilization.utilization_balance) : 0;
 
                     const marginTop = ci === 0 ? "mt-5" : "mt-3";
                     const marginBottom = ci === companiesGrouped.length - 1 ? "mb-5" : "mb-0";
@@ -363,9 +332,14 @@ export default function LicenseLedgerDetail() {
                             )}
                         >
                             {/* Company header */}
-                            <div className="flex items-center gap-2 bg-primary px-5 py-2.5 text-[15px] font-bold text-primary-foreground">
-                                <Building2 className="size-4 shrink-0" aria-hidden="true" />
-                                {company.company_name}
+                            <div className="flex items-center justify-between bg-primary px-5 py-2.5 text-primary-foreground">
+                                <div className="flex items-center gap-2">
+                                    <Building2 className="size-4 shrink-0" aria-hidden="true" />
+                                    <span className="text-[15px] font-bold">{company.company_name}</span>
+                                </div>
+                                <div className="text-[13px] text-primary-foreground/80">
+                                    Company Balance: <span className="font-semibold">{formatCurrency(companyBalance, isDFIA ? 'USD' : 'INR')}</span>
+                                </div>
                             </div>
 
                             {/* Company ledger table */}
@@ -375,33 +349,25 @@ export default function LicenseLedgerDetail() {
                                         <tr className="border-b-2 border-primary/20 bg-primary/8">
                                             <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Date</th>
                                             <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Particulars</th>
+                                            <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Type</th>
                                             {isDFIA && <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Items</th>}
-                                            {isDFIA ? (
-                                                <>
-                                                    <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">CIF $ Dr</th>
-                                                    <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">CIF $ Cr</th>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">Value Dr</th>
-                                                    <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">Value Cr</th>
-                                                </>
-                                            )}
-                                            <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">Rate</th>
                                             <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-success">Debit (₹)</th>
                                             <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-destructive">Credit (₹)</th>
                                             <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">
-                                                {isDFIA ? 'Balance ($)' : 'Balance (₹)'}
+                                                License Balance {isDFIA ? '($)' : '(₹)'}
                                             </th>
-                                            <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">P/L</th>
+                                            <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {txns.map((txn, ti) => {
                                             const isPurchase = txn.type === 'PURCHASE' || txn.type === 'OPENING';
                                             const isSale = txn.type === 'SALE';
-                                            const rowBal = companyBalMap.get(txn) ?? 0;
-                                            const profitLoss = toFiniteNumber(txn.profit_loss);
+                                            const isCommission = txn.is_commission;
+                                            // Use canonical license_running_balance from API
+                                            const licenseBalance = toFiniteNumber(txn.license_running_balance);
+                                            const transactionAmount = toFiniteNumber(txn.amount);
+
                                             return (
                                                 <tr
                                                     key={ti}
@@ -413,90 +379,44 @@ export default function LicenseLedgerDetail() {
                                                     )}
                                                 >
                                                     <td className="whitespace-nowrap px-2.5 py-[5px] text-muted-foreground">
-                                                        {formatDate(txn.date as string)}
+                                                        {formatDate(txn.date)}
                                                     </td>
                                                     <td className="px-2.5 py-[5px] text-foreground">
-                                                        {String(txn.particular ?? '')}
-                                                        {txn.invoice_number && (
-                                                            <span className="mt-0.5 block text-[12px] text-muted-foreground">
-                                                                ({String(txn.invoice_number)})
-                                                            </span>
-                                                        )}
+                                                        {String(txn.company_name || 'N/A')}
+                                                    </td>
+                                                    <td className="px-2.5 py-[5px] text-foreground">
+                                                        <Badge variant={isCommission ? "secondary" : "outline"} className="text-[11px]">
+                                                            {txn.type}
+                                                        </Badge>
                                                     </td>
                                                     {isDFIA && (
-                                                        <td className="px-2.5 py-[5px] text-foreground">
-                                                            {String(txn.items ?? '-')}
-                                                        </td>
+                                                        <td className="px-2.5 py-[5px] text-foreground text-muted-foreground">-</td>
                                                     )}
-                                                    {isDFIA ? (
-                                                        <>
-                                                            <td className="px-2.5 py-[5px] text-right text-success">
-                                                                {txn.debit_cif ? formatIndianNumber(toFiniteNumber(txn.debit_cif), 2) : '-'}
-                                                            </td>
-                                                            <td className="px-2.5 py-[5px] text-right text-destructive">
-                                                                {txn.credit_cif ? formatIndianNumber(toFiniteNumber(txn.credit_cif), 2) : '-'}
-                                                            </td>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <td className="px-2.5 py-[5px] text-right text-success">
-                                                                {txn.debit_license_value ? formatIndianNumber(toFiniteNumber(txn.debit_license_value), 2) : '-'}
-                                                            </td>
-                                                            <td className="px-2.5 py-[5px] text-right text-destructive">
-                                                                {txn.credit_license_value ? formatIndianNumber(toFiniteNumber(txn.credit_license_value), 2) : '-'}
-                                                            </td>
-                                                        </>
-                                                    )}
-                                                    <td className="px-2.5 py-[5px] text-right text-foreground">
-                                                        {txn.rate ? formatIndianNumber(toFiniteNumber(txn.rate), 2) : '-'}
-                                                    </td>
                                                     <td className="px-2.5 py-[5px] text-right font-semibold text-success">
-                                                        {txn.debit_amount ? `₹${formatIndianNumber(toFiniteNumber(txn.debit_amount), 2)}` : '-'}
+                                                        {isPurchase ? formatCurrency(transactionAmount, isDFIA ? 'USD' : 'INR') : '-'}
                                                     </td>
                                                     <td className="px-2.5 py-[5px] text-right font-semibold text-destructive">
-                                                        {txn.credit_amount ? `₹${formatIndianNumber(toFiniteNumber(txn.credit_amount), 2)}` : '-'}
+                                                        {isSale ? formatCurrency(Math.abs(transactionAmount), isDFIA ? 'USD' : 'INR') : '-'}
                                                     </td>
                                                     <td className={cn(
-                                                        "px-2.5 py-[5px] text-right tabular-nums",
-                                                        rowBal >= 0 ? "text-success" : "text-destructive",
+                                                        "px-2.5 py-[5px] text-right tabular-nums font-medium",
+                                                        licenseBalance >= 0 ? "text-success" : "text-destructive",
                                                     )}>
-                                                        {formatIndianNumber(rowBal, 2)}
+                                                        {formatIndianNumber(licenseBalance, 2)}
                                                     </td>
-                                                    <td className={cn(
-                                                        "px-2.5 py-[5px] text-right tabular-nums",
-                                                        profitLoss >= 0 ? "text-success" : "text-destructive",
-                                                    )}>
-                                                        {txn.type === 'SALE' && txn.profit_loss != null
-                                                            ? formatIndianNumber(Math.abs(profitLoss), 2)
-                                                            : '-'}
+                                                    <td className="px-2.5 py-[5px] text-right">
+                                                        {isCommission && !txn.affects_balance && (
+                                                            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                                                Excluded
+                                                            </Badge>
+                                                        )}
+                                                        {!isCommission && txn.display_status && (
+                                                            <span className="text-[11px] text-muted-foreground">{txn.display_status}</span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             );
                                         })}
-
-                                        {/* Company total row */}
-                                        <tr className="bg-primary font-bold text-primary-foreground">
-                                            <td colSpan={isDFIA ? 6 : 5} className="px-2.5 py-[7px] text-right text-[12.5px]">
-                                                Total — {company.company_name}
-                                            </td>
-                                            <td className="px-2.5 py-[7px] text-right text-emerald-300 tabular-nums">
-                                                ₹{formatIndianNumber(totalDebit, 2)}
-                                            </td>
-                                            <td className="px-2.5 py-[7px] text-right text-red-300 tabular-nums">
-                                                ₹{formatIndianNumber(totalCredit, 2)}
-                                            </td>
-                                            <td className="px-2.5 py-[7px] text-right tabular-nums text-white">
-                                                {formatIndianNumber(companyRunning, 2)}
-                                            </td>
-                                            <td className={cn(
-                                                "px-2.5 py-[7px] text-right tabular-nums",
-                                                companyPL >= 0 ? "text-emerald-300" : "text-red-300",
-                                            )}>
-                                                {companyPL !== 0
-                                                    ? `${companyPL >= 0 ? '+' : ''}₹${formatIndianNumber(Math.abs(companyPL), 2)}`
-                                                    : '-'}
-                                            </td>
-                                        </tr>
                                     </tbody>
                                 </table>
                             </div>

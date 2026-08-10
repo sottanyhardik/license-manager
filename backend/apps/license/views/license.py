@@ -462,6 +462,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     def apply_advanced_filters(self, qs, params, filter_config):
         """Override to add custom logic for is_expired and is_null with default values."""
         from datetime import date
+        from decimal import Decimal
         from django.db.models import Q
 
         # Get default filters
@@ -497,12 +498,22 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             is_null_value = default_filters.get('is_null')
 
         if is_null_value is not None and is_null_value != "":
+            # BL-LEDGER-02: `balance__balance_cif` is a denormalized cache
+            # with no signal on reconciliation-allocation changes, so it can
+            # be stale. Resolve against the LIVE, batched-computed balance
+            # instead of filtering the DB column directly (same fix already
+            # applied to active_dfia_report.py / license_report.py).
+            from apps.license.services.balance_calculator import LicenseBalanceCalculator
+            candidate_ids = list(qs.values_list('id', flat=True))
+            live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(candidate_ids)
             if is_null_value in ("True", "true", "1", True):
-                # Show null licenses: balance_cif < 200
-                qs = qs.filter(balance__balance_cif__lt=200)
+                # Show null licenses: live balance < 200
+                matching_ids = [i for i in candidate_ids if live_balance_by_license.get(i, Decimal('0')) < 200]
+                qs = qs.filter(id__in=matching_ids)
             elif is_null_value in ("False", "false", "0", False):
-                # Show non-null licenses: balance_cif >= 200
-                qs = qs.filter(balance__balance_cif__gte=200)
+                # Show non-null licenses: live balance >= 200
+                matching_ids = [i for i in candidate_ids if live_balance_by_license.get(i, Decimal('0')) >= 200]
+                qs = qs.filter(id__in=matching_ids)
 
         # Handle is_planned filter - based on whether the license has a manual
         # utilization plan (i.e. at least one LicenseItemPlan row). This mirrors
@@ -526,12 +537,34 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 # Show licenses that are not planned: no item plans
                 qs = qs.filter(~has_manual_plan)
 
+        # Handle the generic balance__balance_cif range filter (type "range"
+        # in the base viewset config, params balance__balance_cif_min/_max)
+        # live too — same stale-cache reasoning as is_null above. Resolved
+        # here, before delegating to super(), so the parent's generic range
+        # handler never sees these params and never filters the cached
+        # column directly.
+        balance_min = params.get('balance__balance_cif_min')
+        balance_max = params.get('balance__balance_cif_max')
+        if balance_min or balance_max:
+            from apps.license.services.balance_calculator import LicenseBalanceCalculator
+            candidate_ids = list(qs.values_list('id', flat=True))
+            live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(candidate_ids)
+            matching_ids = candidate_ids
+            if balance_min:
+                min_dec = Decimal(str(balance_min))
+                matching_ids = [i for i in matching_ids if live_balance_by_license.get(i, Decimal('0')) >= min_dec]
+            if balance_max:
+                max_dec = Decimal(str(balance_max))
+                matching_ids = [i for i in matching_ids if live_balance_by_license.get(i, Decimal('0')) <= max_dec]
+            qs = qs.filter(id__in=matching_ids)
+
         # Call parent method for remaining filters (exclude is_expired and is_null)
         # Create a new QueryDict-like object
         from django.http import QueryDict
         filtered_params = QueryDict(mutable=True)
         for key, value in params.items():
-            if key not in ('is_expired', 'is_null', 'is_planned'):
+            if key not in ('is_expired', 'is_null', 'is_planned',
+                           'balance__balance_cif_min', 'balance__balance_cif_max'):
                 # Handle array format for purchase_status
                 if key == 'purchase_status[]':
                     # Frontend sends purchase_status[] for multi-select

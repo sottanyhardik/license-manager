@@ -42,8 +42,12 @@ logger = logging.getLogger(__name__)
 
 def get_license_transactions(lic_data, company_id=None):
     """
-    Fetch detailed transactions for a single license.
+    Fetch detailed transactions for a single license with canonical balance values.
     Returns list of transaction dictionaries with all details.
+
+    SINGLE SOURCE OF TRUTH: Running balance comes from CanonicalLedgerService.
+    Transaction details (CIF, amounts, particulars) fetched from database.
+    No independent balance recalculation in this exporter.
 
     When company_id is provided, uses direction-aware filtering (same logic as ledger_detail):
     - PURCHASE/COMMISSION_PURCHASE: only show if company is the BUYER (to_company)
@@ -52,6 +56,7 @@ def get_license_transactions(lic_data, company_id=None):
     from apps.trade.models import LicenseTrade
     from django.utils import timezone
     from django.db.models import Q
+    from apps.license.services.canonical_ledger_service import CanonicalLedgerService
 
     license_type = lic_data.get('license_type')
     lic_id = lic_data.get('id')
@@ -68,6 +73,19 @@ def get_license_transactions(lic_data, company_id=None):
         else:
             return []
 
+        # Fetch canonical dataset for authoritative balance values
+        canonical_data = CanonicalLedgerService.build_canonical_ledger_dataset(
+            license_id=lic_id,
+            license_type=license_type
+        )
+
+        # Build map of canonical balances by transaction ID
+        canonical_balances = {}
+        for txn in canonical_data.get('transactions', []):
+            txn_id = txn.get('id')
+            if txn_id:
+                canonical_balances[txn_id] = float(txn.get('license_running_balance', 0) or 0)
+
         # Direction-aware company filter:
         # - PURCHASE: company is the BUYER (to_company)
         # - SALE: company is the SELLER (from_company)
@@ -82,6 +100,7 @@ def get_license_transactions(lic_data, company_id=None):
             except (ValueError, TypeError):
                 pass
 
+        # Fetch raw transactions for detailed information
         if license_type == 'DFIA':
             trades = LicenseTrade.objects.filter(
                 company_filter,
@@ -97,10 +116,8 @@ def get_license_transactions(lic_data, company_id=None):
             ).prefetch_related('incentive_lines').distinct().order_by('invoice_date', 'id')
 
         transactions = []
-        running_balance = 0
         total_purchase_cif = 0
         total_purchase_amount = 0
-        total_sales_amount = 0
 
         # Sort: all purchases before sales so P/L is computed correctly
         all_trans = []
@@ -113,8 +130,9 @@ def get_license_transactions(lic_data, company_id=None):
         if len(all_trans) == 0 and license_type == 'DFIA':
             opening_bal = float(license_obj.opening_balance or 0)
             if opening_bal > 0:
-                running_balance = opening_bal
                 total_purchase_cif = opening_bal
+                # Opening balance from canonical
+                opening_balance_canonical = canonical_balances.get(0, opening_bal)
                 transactions.append({
                     'date': license_obj.license_date,
                     'type': 'OPENING',
@@ -127,7 +145,7 @@ def get_license_transactions(lic_data, company_id=None):
                     'amount': 0,
                     'debit_amount': 0,
                     'credit_amount': 0,
-                    'balance': round(running_balance, 2),
+                    'balance': round(opening_balance_canonical, 2),
                     'profit_loss': 0,
                 })
 
@@ -170,7 +188,7 @@ def get_license_transactions(lic_data, company_id=None):
             if total_cif_usd == 0 and total_amount == 0:
                 continue
 
-            # Calculate rate and update balance
+            # Calculate rate
             try:
                 rate = total_amount / total_cif_usd if total_cif_usd != 0 else 0
             except (ZeroDivisionError, ValueError):
@@ -184,14 +202,11 @@ def get_license_transactions(lic_data, company_id=None):
             if trans_type in ['PURCHASE', 'COMMISSION_PURCHASE']:
                 debit_cif = total_cif_usd
                 debit_amount = total_amount
-                running_balance += total_cif_usd
                 total_purchase_cif += total_cif_usd
                 total_purchase_amount += total_amount
             elif trans_type in ['SALE', 'COMMISSION_SALE']:
                 credit_cif = total_cif_usd
                 credit_amount = total_amount
-                running_balance -= total_cif_usd
-                total_sales_amount += total_amount
 
             # Calculate profit/loss for sales
             profit_loss = 0
@@ -210,6 +225,9 @@ def get_license_transactions(lic_data, company_id=None):
             else:
                 particular = f"Sale to {to_company}"
 
+            # Get canonical balance (authoritative source of truth)
+            canonical_balance = canonical_balances.get(trans_obj.id, 0)
+
             transactions.append({
                 'date': trans_date,
                 'type': trans_type.replace('_', ' ').title(),
@@ -222,7 +240,7 @@ def get_license_transactions(lic_data, company_id=None):
                 'amount': total_amount,
                 'debit_amount': debit_amount,
                 'credit_amount': credit_amount,
-                'balance': round(running_balance, 2),
+                'balance': round(canonical_balance, 2),
                 'profit_loss': round(profit_loss, 2),
             })
 
@@ -1252,12 +1270,14 @@ def build_dfia_ledger_detail(license, company_id=None):
     # with few/no trades (the common case — most licenses are debited
     # directly via customs BOEs, not internally "purchased") this silently
     # showed $0 while the license's real balance was in the hundreds of
-    # thousands. `license.balance_cif` (exposed here as `db_balance`) is
-    # the SAME shared `LicenseBalanceCalculator.calculate_financial_
-    # balance()` figure every other module (License Overview, license
-    # list, reports, dashboard) already shows — the two fields must never
-    # diverge, so both now read from the one authoritative source.
-    real_balance = float(license.balance_cif or 0)
+    # thousands. This now calls the SAME shared `LicenseBalanceCalculator.
+    # calculate_financial_balance()` every other module (License Overview,
+    # license list, reports, dashboard) already shows directly — BL-LEDGER-02:
+    # `license.balance_cif` is a denormalized cache that can be stale, so
+    # the two fields must never diverge, and reading the live figure
+    # (rather than the cache it's supposed to mirror) is what guarantees that.
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
+    real_balance = float(LicenseBalanceCalculator.calculate_financial_balance(license))
     return {
         'license_id': license.id,
         'license_type': 'DFIA',

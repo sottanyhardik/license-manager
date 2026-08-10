@@ -493,9 +493,21 @@ class ItemPivotReportView(APIView):
             exclude_id_list = [int(cid.strip()) for cid in exclude_company_ids.split(',') if cid.strip()]
             licenses = licenses.exclude(exporter_id__in=exclude_id_list)
 
-        # Filter by min_balance at database level using stored balance_cif field
-        # This dramatically reduces the number of licenses we need to process
-        licenses = licenses.filter(balance__balance_cif__gte=min_balance)
+        # Filter by min_balance against the LIVE, batched-computed balance
+        # instead of the cached `balance__balance_cif` column (BL-LEDGER-02:
+        # the cache has no signal on reconciliation-allocation changes and
+        # can go stale) -- same fix already applied to the License List /
+        # Item Report / other report views. Still a fixed number of
+        # queries regardless of how many candidate licenses there are.
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        candidate_ids = list(licenses.values_list('id', flat=True))
+        live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(candidate_ids)
+        min_balance_dec = Decimal(str(min_balance))
+        matching_ids = [
+            i for i in candidate_ids
+            if live_balance_by_license.get(i, Decimal('0')) >= min_balance_dec
+        ]
+        licenses = licenses.filter(id__in=matching_ids)
 
         # Build filtered prefetch querysets based on sion_norm
         import_items_qs = LicenseImportItemsModel.objects.select_related('hs_code')
@@ -543,7 +555,7 @@ class ItemPivotReportView(APIView):
         # Collect all unique items across all licenses
         # Use list() with prefetch_related for optimal performance (iterator breaks prefetch)
         all_items = {}  # Changed to dict to store item object for sorting
-        valid_licenses = list(licenses)  # Licenses already filtered by balance_cif at DB level
+        valid_licenses = list(licenses)  # Licenses already filtered by LIVE balance above
 
         # Norm-specific plannable-item allow-sets: only item names the auto-planner
         # can generate are shown as columns.  Items outside the set (e.g.

@@ -1,0 +1,99 @@
+/**
+ * Canonical Ledger API Types — Phase 4C/4D
+ *
+ * These types represent the single source of truth for all Ledger financial data.
+ *
+ * IMPORTANT:
+ * - All financial values are STRINGS (Decimal representation)
+ * - Do NOT perform arithmetic on these values in React
+ * - Do NOT recalculate balances or utilizations
+ * - Use only for display and presentation formatting
+ *
+ * The API (CanonicalLedgerService) is the authoritative source.
+ */
+
+/**
+ * A single transaction in the canonical ledger dataset.
+ *
+ * `license_running_balance` = the balance at this point (authoritative)
+ * `affects_balance` = whether this transaction is included in license_running_balance
+ * `company_utilization_after` = that company's balance after this transaction (if applicable)
+ */
+export interface CanonicalTransaction {
+  date: string;
+  id: number;
+  type: string;
+  company_id: number | null;
+  company_name: string | null;
+  amount: string;
+  is_commission: boolean;
+  affects_balance: boolean;
+  license_running_balance: string;
+  company_utilization_after: string | null;
+  display_status: string;
+}
+
+/**
+ * Per-company utilization breakdown.
+ *
+ * This is the company's portion of the license (derived by CanonicalLedgerService).
+ */
+export interface CompanyUtilization {
+  company_id: number;
+  company_name: string | null;
+  utilization_balance: string;
+}
+
+/**
+ * Aggregate transaction totals.
+ */
+export interface LedgerTotals {
+  total_purchases: string;
+  total_sales: string;
+  total_commission: string;
+}
+
+/**
+ * Complete canonical ledger dataset for a license.
+ *
+ * This is the authoritative source of truth for all Ledger financial data.
+ * The UI consumes this exactly as provided by the API.
+ * No independent calculations, no transformations.
+ */
+export interface CanonicalLedgerResponse {
+  license_id: number;
+  license_type: string;
+  license_number: string;
+  license_date: string;
+  expiry_date: string;
+  exporter_id: number | null;
+  exporter_name: string | null;
+  port_id: number | null;
+  port_name: string | null;
+
+  opening_balance: string;
+  license_running_balance: string;
+  closing_balance: string;
+
+  transactions: CanonicalTransaction[];
+  company_utilizations: Record<string, CompanyUtilization>;
+  totals: LedgerTotals;
+
+  // Deprecated fields (Phase 4C backward compatibility only)
+  // DO NOT USE in Phase 4D+
+  available_balance?: string;
+  db_balance?: string;
+}
+
+/**
+ * Validated canonical ledger response.
+ *
+ * Same as CanonicalLedgerResponse, but guarantees:
+ * - All required fields are present
+ * - All values are properly typed and non-null where required
+ */
+export interface ValidatedCanonicalLedger extends CanonicalLedgerResponse {
+  license_number: string;
+  license_type: string;
+  transactions: CanonicalTransaction[];
+}

@@ -1,0 +1,135 @@
+SKEPTIC INDEPENDENT RE-VERIFICATION of DB-01 -- results
+========================================================
+
+--- 1) FK constraints targeting core_portmodel (psql -d lmanagement) ---
+              tbl               |                                          def
+---------------------------------+----------------------------------------------------------------------------------------
+ "eScrap_companylistmodel_port" | FOREIGN KEY (portmodel_id) REFERENCES core_portmodel(id) DEFERRABLE INITIALLY DEFERRED
+ allotment_allotmentmodel       | FOREIGN KEY (port_id) REFERENCES core_portmodel(id) DEFERRABLE INITIALLY DEFERRED
+ bill_of_entry_billofentrymodel | FOREIGN KEY (port_id) REFERENCES core_portmodel(id) DEFERRABLE INITIALLY DEFERRED
+ license_incentivelicense       | FOREIGN KEY (port_code_id) REFERENCES core_portmodel(id) DEFERRABLE INITIALLY DEFERRED
+ license_licensedetailsmodel    | FOREIGN KEY (port_id) REFERENCES core_portmodel(id) DEFERRABLE INITIALLY DEFERRED
+(5 rows)
+=> MATCHES the investigate-stage query_result exactly: no "ON DELETE" clause
+   on any FK targeting core_portmodel. Confirms the cascade is Django
+   ORM-side only, as claimed.
+
+--- 2) Port 513 blast radius (re-run independently) ---
+ id  |  code  |           name           | licenses | boes | allotments
+-----+--------+--------------------------+----------+------+------------
+ 513 | INNSA1 | NHAVA SHEVA SEA (INNSA1) |      171 |  436 |         37
+=> Exact match to the claimed figures (171 / 436 / 37).
+
+--- 3) Company 138 blast radius (re-run independently) ---
+ id  |              name               | boes | allotments | licenses_as_exporter
+-----+---------------------------------+------+------------+-----------------------
+ 138 | SIGMA CHEMTRADE PRIVATE LIMITED |   48 |         21 |                     0
+=> Exact match to the claimed figures (48 / 21).
+
+--- 4) Source verification (independently re-read, not trusted from the claim) ---
+backend/apps/license/models/core.py:126:
+    port = models.ForeignKey("core.PortModel", on_delete=models.CASCADE, null=True, blank=True)
+backend/apps/license/models/core.py:117-121:
+    exporter = models.ForeignKey("core.CompanyModel", on_delete=models.SET_NULL, null=True, blank=True)
+backend/apps/license/signals.py:433-437: pre_delete receiver on CompanyModel that
+    snapshots archived_exporter_name before the exporter FK is nulled -- confirms
+    the SET_NULL/CASCADE asymmetry described in the claim is real.
+backend/apps/bill_of_entry/models.py:186-192 (company) and 195-200 (port): both
+    on_delete=models.CASCADE, null=True, blank=True -- confirmed verbatim.
+backend/apps/allotment/models.py: company (47-50), port (94-99), related_company
+    (101-106): all on_delete=models.CASCADE, port/related_company also null=True,
+    blank=True (company itself is not nullable, still CASCADE though not part of
+    the "nullable FK" sub-claim for that one field) -- confirmed verbatim.
+backend/apps/core/views/master_view.py:43-52 MasterDataPermission: SAFE_METHODS
+    open to any authenticated user, else user.is_superuser -- confirmed verbatim.
+backend/apps/core/views/master_view.py:90 MasterViewSet http_method_names includes
+    'delete' -- confirmed verbatim.
+backend/apps/core/views/views.py:188, 230: CompanyViewSet / PortViewSet both built
+    via MasterViewSet.create_viewset(...) -- confirmed wired to the generic
+    CASCADE-exposing viewset.
+backend/apps/core/admin.py:56-75: loop auto-registers every core-app model with a
+    default (_MDSReadOnlyAdminMixin, admin.ModelAdmin) unless it is MDS-managed or
+    excluded; CompanyModel/PortModel are neither -- confirmed by inspection
+    (not independently re-derived from a live permissions grant, matching the
+    original finding's own "unverifiable assumption").
+
+--- 5) NEW independent check: does a real Model.delete() actually cascade-wipe
+       data today, or does it fail first? (python manage.py shell, read-only:
+       django.db.models.deletion.Collector.collect() only *walks* the
+       delete graph and raises on the first PROTECT hit -- it issues no SQL
+       DELETE. Nothing in the live "lmanagement" DB was modified.) ---
+
+>>> Collector.collect([PortModel.objects.get(id=513)])
+django.db.models.deletion.ProtectedError: ("Cannot delete some instances of
+model 'PortModel' because they are referenced through protected foreign keys:
+'LicenseDetailsModel.port', 'IncentiveLicense.port_code'.", {<InvoiceBOEAllocation ...>,
+<IncentiveTradeLine ...>, <LicenseTradeLine ...>, ...})
+
+>>> Collector.collect([CompanyModel.objects.get(id=138)])
+django.db.models.deletion.ProtectedError: ("Cannot delete some instances of
+model 'CompanyModel' because they are referenced through protected foreign
+keys: 'LicenseOwnership.current_owner'.", {<LicenseOwnership object (2460)>, ...})
+
+>>> Collector.collect([PortModel.objects.get(id=489)])  (2nd-largest port)
+ProtectedError: ... 'LicenseDetailsModel.port', 'IncentiveLicense.port_code',
+'BillOfEntryModel.port'. ...
+
+>>> Collector.collect([PortModel.objects.get(id=613)])  (3rd example)
+ProtectedError: ... 'LicenseDetailsModel.port', 'IncentiveLicense.port_code'. ...
+
+IMPORTANT CORRECTION to the claim's "Live evidence of the blast radius"
+narrative: for the two flagship examples the finding leads with (port 513,
+company 138), calling DELETE today would NOT silently cascade-delete 171
+licenses / 436 BOEs / 37 allotments (or 48 BOEs / 21 allotments) in one
+transaction as the notes.md prose states ("would cascade through Django and
+permanently remove all 171 licenses ... in one transaction"). It would
+instead raise a clean ProtectedError and roll back with ZERO rows deleted,
+because unrelated on_delete=PROTECT relations further down the same CASCADE
+graph (InvoiceBOEAllocation, IncentiveTradeLine, LicenseTradeLine,
+LicenseOwnership.current_owner) currently happen to block it. The
+investigate-stage notes.md does explicitly caveat this possibility in one
+sentence ("unless a downstream PROTECT relationship ... happens to block
+part of the chain -- which is incidental, not a deliberate safeguard") but
+the "Live evidence" section itself asserts the full 171/436/37 wipe as if it
+would actually execute, which this independent check falsifies for that
+specific example.
+
+--- 6) Does that correction defeat the underlying finding? Checked across the
+       whole real dataset (all PortModel / CompanyModel rows), read-only: ---
+
+PortModel:    would-cascade-ok=844   would-be-protected=21   (of 865 total)
+CompanyModel: would-cascade-ok=957   would-be-protected=66   (of 1023 total)
+-- i.e. only the ports/companies that happen to be referenced by a
+-- LicenseTradeLine/IncentiveTradeLine/InvoiceBOEAllocation/LicenseOwnership
+-- row are incidentally protected; the vast majority (844/865 ports,
+-- 957/1023 companies) have NO such protection and a real .delete() call on
+-- them proceeds all the way through to actual DELETE statements today.
+
+Concretely verified for one such unprotected row (CompanyModel id=839, a
+company with a blank name that has 5 BillOfEntryModel rows and no license/
+trade-line linkage): Collector.collect() succeeds cleanly and reports it
+would delete 1 CompanyModel + 5 BillOfEntryModel + 5 RowDetails rows -- i.e.
+the CASCADE genuinely executes end-to-end with no interception for this
+(realistic, currently-existing) row. This is independent, positive proof
+that the defect is not merely theoretical: for the large majority of
+Port/Company rows in the real dataset, DELETE-ing them today really would
+wipe dependent BOE/allotment/license history with no confirmation, dry-run,
+or recoverability -- exactly the mechanism the claim describes.
+
+CONCLUSION: the core defect claim (on_delete=CASCADE declared on nullable
+FKs where SET_NULL was the safer, already-precedented choice; reachable via
+superuser MasterViewSet DELETE and via Django admin delete permissions;
+Postgres-level FK carries no ON DELETE clause, so it is purely an
+ORM-collector behavior) is independently reproduced and confirmed exactly as
+described, including all cited line numbers and both blast-radius count
+queries. The single inaccuracy found is in the "Live evidence" narrative's
+two headline examples (port 513, company 138): those two specific rows would
+currently fail closed (ProtectedError, zero rows deleted) rather than
+succeed as vividly described, because of unrelated PROTECT relations
+elsewhere in the schema. The underlying architectural defect is still real,
+critical, and demonstrably exploitable today against the large majority
+(844/865 ports, 957/1023 companies) of the same master-data tables,
+including confirmed real data loss (BillOfEntryModel + RowDetails rows) for
+at least one concrete, currently-existing row (CompanyModel id=839) checked
+via the same read-only Collector.collect() mechanism, with no SQL DELETE
+executed and no modification to the live "lmanagement" database.

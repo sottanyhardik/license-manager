@@ -458,24 +458,31 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         """
         Batch Auto Plan for ALL eligible DFIA licenses (E1 / E5 / E126 / E132).
 
-        Eligible: norm in (E1, E5, E126, E132) AND balance_cif > 0.
-        "Already planned": existing plan covers ≥ 99 % of balance CIF.
+        Eligible: norm in (E1, E5, E126, E132) AND LIVE balance_cif > 0.
+        "Already planned": existing plan covers ≥ 99 % of LIVE balance CIF.
         Failures are isolated per-license; the batch always continues.
 
         Body: {}
         Returns: { total, planned, already_planned, skipped_unknown_norm,
                    failed, errors: [{license, error}] }
         """
+        from decimal import Decimal
         from django.db import models as _models
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
         from apps.license.services.norm_plan import detect_norm
         from apps.license.services.e1_auto_plan import compute_e1_auto_plan
         from apps.license.services.e5_auto_plan import compute_e5_auto_plan
         from apps.license.services.e126_auto_plan import compute_e126_auto_plan
         from apps.license.services.e132_auto_plan import compute_e132_auto_plan
 
+        # BL-LEDGER-02: eligibility used to be filtered at the DB level
+        # against the cached `balance__balance_cif` column, which can be
+        # stale. Fetch every active license instead and resolve eligibility
+        # against the LIVE, batched-computed balance below (a fixed number
+        # of queries for the whole batch, not one live call per license).
         licenses = (
             LicenseDetailsModel.objects
-            .filter(balance__balance_cif__gt=0, flags__is_active=True)
+            .filter(flags__is_active=True)
             .prefetch_related(
                 'export_license__norm_class',
                 'import_license__items',
@@ -485,10 +492,19 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
             .order_by('id')
         )
 
+        license_ids = [lic.id for lic in licenses]
+        live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids)
+
         res = dict(total=0, planned=0, already_planned=0,
                    skipped_unknown_norm=0, failed=0, errors=[])
 
         for lic in licenses:
+            bal = float(live_balance_by_license.get(lic.id, Decimal('0')) or 0)
+            if bal <= 0:
+                # Same effect as the old `balance__balance_cif__gt=0` DB
+                # filter: not eligible at all, not counted anywhere below.
+                continue
+
             norm = detect_norm(lic)
             if norm not in ('E1', 'E5', 'E126', 'E132'):
                 res["skipped_unknown_norm"] += 1
@@ -496,13 +512,12 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
 
             res["total"] += 1
             try:
-                bal = float(lic.balance_cif or 0)
                 existing = float(
                     LicenseItemPlan.objects
                     .filter(license=lic)
                     .aggregate(t=_models.Sum("planned_cif_fc"))["t"] or 0
                 )
-                if bal > 0 and existing >= bal * 0.99:
+                if existing >= bal * 0.99:
                     res["already_planned"] += 1
                     continue
 

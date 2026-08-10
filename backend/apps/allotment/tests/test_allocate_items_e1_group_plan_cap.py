@@ -25,7 +25,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.allotment.models import AllotmentModel
 from apps.core.models import CompanyModel, HSCodeModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
 from apps.license.services.e1_auto_plan import compute_e1_auto_plan
 from apps.license.services.plan_enforcement import save_plan_lines_for_license
 
@@ -59,7 +59,7 @@ def allotment_obj(db):
 
 
 @pytest.fixture
-def mixed_hsn_same_desc_license(db, monkeypatch):
+def mixed_hsn_same_desc_license(db):
     """Two import items, same description, DIFFERENT HS codes — the real
     shape of dev-DB licence 0311045101. Runs the REAL compute_e1_auto_plan
     + save_plan_lines_for_license pipeline this fix changed, not a
@@ -83,19 +83,13 @@ def mixed_hsn_same_desc_license(db, monkeypatch):
         quantity=Decimal("50.000"), available_quantity=Decimal("50.000"),
         available_value=Decimal("50000.00"), condition_type="",
     )
-    # compute_e1_auto_plan reads the LIVE `get_balance_cif` property (backed
-    # by the financial ledger), not the cached `LicenseBalance.balance_cif`
-    # field — patch it directly, matching the convention in
-    # test_e1_auto_plan.py's `_patch_balances`.
-    monkeypatch.setattr(
-        LicenseDetailsModel, "get_balance_cif", property(lambda self: Decimal("100000.00")),
-    )
-    # allocate-items itself checks `available_value_calculated`, which reads
-    # the cached `LicenseBalance.balance_cif` field (a separate, denormalized
-    # value from the live `get_balance_cif` above) — set it too so the
-    # allocation endpoint sees the same balance the plan was generated against.
-    license_obj.balance.balance_cif = Decimal("100000.00")
-    license_obj.balance.save(update_fields=["balance_cif"])
+    # Both `compute_e1_auto_plan` (via `get_balance_cif`) and the allocation
+    # endpoint's `available_value_calculated` fallback (via
+    # `LicenseBalanceCalculator.calculate_financial_balance`, BL-AVAIL-01)
+    # read the SAME live Financial Ledger now — genuine export credit is the
+    # single source both consume consistently, rather than faking two
+    # separate (and, since BL-AVAIL-01, one no-longer-read) values.
+    LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
 
     lines, _ = compute_e1_auto_plan(license_obj)
     save_plan_lines_for_license(license_obj, lines)

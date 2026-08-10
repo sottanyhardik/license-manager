@@ -24,7 +24,7 @@ def _get_aggregated_values(instance):
       unchanged business rule) stay a plain local aggregate; ARO allotments
       aren't subject to BOE-linking exclusion.
     """
-    from apps.license.services.balance_calculator import LicenseBalanceCalculator
+    from apps.license.services.balance_calculator import ItemBalanceCalculator, LicenseBalanceCalculator
 
     prefetch_cache = getattr(instance, '_prefetched_objects_cache', {})
 
@@ -55,6 +55,7 @@ def _get_aggregated_values(instance):
         aro_value=Sum('cif_fc', filter=Q(allotment__type='ARO')),
     )
     allotted_qty, allotted_value = LicenseBalanceCalculator.get_outstanding_allotment_totals(instance)
+    direct_sale_qty = ItemBalanceCalculator.calculate_direct_sale_quantity(instance)
 
     return {
         'debited_qty': debited_qty,
@@ -63,13 +64,16 @@ def _get_aggregated_values(instance):
         'aro_value': to_float(aro_agg['aro_value']),
         'allotted_qty': to_float(allotted_qty),
         'allotted_value': to_float(allotted_value),
+        'direct_sale_qty': to_float(direct_sale_qty),
     }
 
 
 def calculate_available_quantity(instance, agg_values=None):
     """
     Available Quantity = current stored licence item quantity − Debited −
-    Outstanding (unlinked) Allotted, floored at 0.
+    Outstanding (unlinked) Allotted, and direct SALE quantity (a SALE with
+    no BOE), floored at 0. A BOE-linked sale is excluded because its BOE is
+    already the physical debit.
 
     Always uses `instance.quantity` (the current, possibly-amended licence
     item quantity) — NEVER `instance.old_quantity`. A prior restricted-item/
@@ -88,14 +92,15 @@ def calculate_available_quantity(instance, agg_values=None):
     credit = to_float(instance.quantity)
     debited = agg_values['debited_qty'] + agg_values['aro_qty']
     allotted = agg_values['allotted_qty']
-    value = round_down(credit - debited - allotted, 0)
+    direct_sale_qty = agg_values['direct_sale_qty']
+    value = round_down(credit - debited - allotted - direct_sale_qty, 0)
     return max(round(value, 2), 0)
 
 
 def calculate_debited_quantity(instance, agg_values=None):
     if agg_values is None:
         agg_values = _get_aggregated_values(instance)
-    return round(agg_values['debited_qty'] + agg_values['aro_qty'], 2)
+    return round(agg_values['debited_qty'] + agg_values['aro_qty'] + agg_values['direct_sale_qty'], 2)
 
 
 def calculate_allotted_quantity(instance, agg_values=None):
@@ -126,9 +131,19 @@ def calculate_available_value(instance):
     both the pool and marker rules), which could disagree with that other
     writer for restricted/marker items. The one carve-out that ISN'T part
     of the pooled property: if every OTHER item on the licence has zero
-    CIF, serial_number 1 takes the licence's full balance_cif directly.
+    CIF, serial_number 1 takes the licence's full balance directly.
+
+    BL-LEDGER-02: that "full balance" now reads the LIVE
+    `LicenseBalanceCalculator.calculate_financial_balance()` figure rather
+    than `instance.license.balance_cif` (the denormalized `LicenseBalance`
+    cache) — the cache has no signal on reconciliation-allocation changes
+    and can go stale, while this rule's business semantics ("serial 1
+    absorbs the licence's full balance when nothing else carries CIF")
+    are unchanged; only the source of "full balance" is now guaranteed
+    live instead of potentially stale.
     """
     from apps.license.models import LicenseImportItemsModel
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
     if instance.license:
         all_import_items = LicenseImportItemsModel.objects.filter(license=instance.license)
@@ -139,7 +154,8 @@ def calculate_available_value(instance):
         ) if other_items else False
 
         if all_others_zero_cif and instance.serial_number == 1:
-            return round(to_float(instance.license.balance_cif), 2)
+            live_balance = LicenseBalanceCalculator.calculate_financial_balance(instance.license)
+            return round(to_float(live_balance), 2)
 
     return round(to_float(instance.available_value_calculated), 2)
 

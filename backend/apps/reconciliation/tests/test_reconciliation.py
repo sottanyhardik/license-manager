@@ -24,7 +24,12 @@ from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 from apps.trade.models import LicenseTrade, LicenseTradeLine
 
-from apps.reconciliation.models import ReconciliationLog, ReconciliationNote
+from apps.reconciliation.models import (
+    ExternalInvoiceLink,
+    InvoiceBOEAllocation,
+    ReconciliationLog,
+    ReconciliationNote,
+)
 from apps.reconciliation.services import queries as reconciliation_queries
 from apps.reconciliation.services.allocation_service import create_invoice_boe_allocation
 
@@ -484,3 +489,110 @@ class ReconciliationWriteActionTests(ReconciliationFixtureMixin, TestCase):
         ).first()
         self.assertIsNotNone(log)
         self.assertEqual(log.before["source_boe_id"], source_boe_id)
+
+    def test_merge_rejects_protected_duplicate_before_any_rows_move(self):
+        """A protected skipped duplicate must reject the whole merge atomically."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        duplicate_item = self.make_item(license_obj, 1)
+        movable_item = self.make_item(license_obj, 2)
+        target_boe = self.make_boe(company)
+        source_boe = self.make_boe(company)
+        self.make_debit_row(target_boe, duplicate_item, cif_fc=Decimal("100.00"))
+        protected_row = self.make_debit_row(source_boe, duplicate_item, cif_fc=Decimal("100.00"))
+        movable_row = self.make_debit_row(source_boe, movable_item, cif_fc=Decimal("200.00"))
+        trade = self.make_sale_trade(company)
+        trade_line = self.make_trade_line(trade, duplicate_item, cif_fc=Decimal("100.00"))
+        allocation = create_invoice_boe_allocation(
+            trade_line, protected_row, qty=DEC_0, cif_fc=Decimal("100.00"),
+            cif_inr=Decimal("8450.00"), user=self.user,
+        )
+
+        url = reverse("reconciliation:reconciliation-merge-boe")
+        response = self.client.post(
+            url, {"target_boe_id": target_boe.id, "source_boe_id": source_boe.id}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn(str(protected_row.id), response.data["detail"])
+        self.assertTrue(BillOfEntryModel.objects.filter(id=source_boe.id).exists())
+        self.assertEqual(RowDetails.objects.get(id=protected_row.id).bill_of_entry_id, source_boe.id)
+        self.assertEqual(RowDetails.objects.get(id=movable_row.id).bill_of_entry_id, source_boe.id)
+        self.assertFalse(RowDetails.objects.filter(bill_of_entry=target_boe, sr_number=movable_item).exists())
+        self.assertEqual(InvoiceBOEAllocation.objects.get(id=allocation.id).row_details_id, protected_row.id)
+        self.assertFalse(ReconciliationLog.objects.filter(action=ReconciliationLog.ACTION_MERGE_BOE).exists())
+
+    def test_merge_rejection_identifies_all_protected_duplicate_rows(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        items = [self.make_item(license_obj, serial) for serial in (1, 2)]
+        target_boe = self.make_boe(company)
+        source_boe = self.make_boe(company)
+        protected_rows = []
+        trade = self.make_sale_trade(company)
+        for item in items:
+            self.make_debit_row(target_boe, item, cif_fc=Decimal("100.00"))
+            row = self.make_debit_row(source_boe, item, cif_fc=Decimal("100.00"))
+            line = self.make_trade_line(trade, item, cif_fc=Decimal("100.00"))
+            create_invoice_boe_allocation(
+                line, row, qty=DEC_0, cif_fc=Decimal("100.00"),
+                cif_inr=Decimal("8450.00"), user=self.user,
+            )
+            protected_rows.append(row)
+
+        response = self.client.post(
+            reverse("reconciliation:reconciliation-merge-boe"),
+            {"target_boe_id": target_boe.id, "source_boe_id": source_boe.id}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        for row in protected_rows:
+            self.assertIn(str(row.id), response.data["detail"])
+            self.assertEqual(RowDetails.objects.get(id=row.id).bill_of_entry_id, source_boe.id)
+        self.assertTrue(BillOfEntryModel.objects.filter(id=source_boe.id).exists())
+
+    def test_merge_keeps_existing_unprotected_duplicate_behavior(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        target_boe = self.make_boe(company)
+        source_boe = self.make_boe(company)
+        self.make_debit_row(target_boe, item, cif_fc=Decimal("100.00"))
+        source_row = self.make_debit_row(source_boe, item, cif_fc=Decimal("100.00"))
+
+        response = self.client.post(
+            reverse("reconciliation:reconciliation-merge-boe"),
+            {"target_boe_id": target_boe.id, "source_boe_id": source_boe.id}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertFalse(BillOfEntryModel.objects.filter(id=source_boe.id).exists())
+        self.assertFalse(RowDetails.objects.filter(id=source_row.id).exists())
+        self.assertEqual(RowDetails.objects.filter(bill_of_entry=target_boe, sr_number=item).count(), 1)
+
+    def test_merge_rejects_duplicate_with_external_invoice_link(self):
+        """External links also PROTECT RowDetails and must block deletion."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        target_boe = self.make_boe(company)
+        source_boe = self.make_boe(company)
+        self.make_debit_row(target_boe, item, cif_fc=Decimal("100.00"))
+        source_row = self.make_debit_row(source_boe, item, cif_fc=Decimal("100.00"))
+        link = ExternalInvoiceLink.objects.create(
+            row_details=source_row,
+            invoice_number="EXT-DB-02",
+            qty=Decimal("100.0000"),
+            cif_fc=Decimal("100.000"),
+            cif_inr=Decimal("8450.000"),
+        )
+
+        response = self.client.post(
+            reverse("reconciliation:reconciliation-merge-boe"),
+            {"target_boe_id": target_boe.id, "source_boe_id": source_boe.id}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn(str(source_row.id), response.data["detail"])
+        self.assertEqual(RowDetails.objects.get(id=source_row.id).bill_of_entry_id, source_boe.id)
+        self.assertEqual(ExternalInvoiceLink.objects.get(id=link.id).row_details_id, source_row.id)

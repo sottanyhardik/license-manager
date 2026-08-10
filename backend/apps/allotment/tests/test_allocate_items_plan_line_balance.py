@@ -23,7 +23,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.allotment.models import AllotmentModel
 from apps.core.models import CompanyModel, ItemNameModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
 
 User = get_user_model()
 
@@ -50,8 +50,15 @@ def allotment_obj(db):
 
 
 def _set_live_balance(license_obj, balance_cif):
-    license_obj.balance.balance_cif = balance_cif
-    license_obj.balance.save(update_fields=["balance_cif"])
+    """Give the license genuine export-item credit so its LIVE Financial
+    Ledger balance equals `balance_cif`. BL-AVAIL-01 made `available_value_
+    calculated`'s fallback read `LicenseBalanceCalculator.
+    calculate_financial_balance` directly, so writing to the (now-bypassed)
+    cached `LicenseBalance.balance_cif` column no longer has any effect --
+    genuine ledger data is required. Idempotent per license (update_or_create)."""
+    LicenseExportItemModel.objects.update_or_create(
+        license=license_obj, defaults={"cif_fc": balance_cif},
+    )
 
 
 @pytest.fixture
@@ -122,11 +129,10 @@ class TestPlanLineBalanceDecrement:
     def test_second_allocation_drains_pko_to_zero(self, allotment_client, allotment_obj, veg_oil_split):
         _allocate(allotment_client, allotment_obj, veg_oil_split["import_item"].id,
                   "20", "36.00", plan_line_id=veg_oil_split["pko_line"].id)
-        # Creating an AllotmentItems row triggers a signal that recomputes
-        # the license's real balance_cif from its (empty, in this synthetic
-        # test) ledger data -- re-affirm the live balance before the second
-        # call, exactly as `test_allocate_items_cif_validation.py` documents
-        # for `_set_live_balance`'s ordering requirement.
+        # No-op re-affirmation: `_set_live_balance` is idempotent, and the
+        # genuine export credit it wrote is unaffected by the first
+        # allocation (the live balance already correctly nets the resulting
+        # outstanding AT allotment on its own). Kept for clarity/defensiveness.
         _set_live_balance(veg_oil_split["license"], Decimal("100000.00"))
         resp = _allocate(allotment_client, allotment_obj, veg_oil_split["import_item"].id,
                           "20", "36.00", plan_line_id=veg_oil_split["pko_line"].id)

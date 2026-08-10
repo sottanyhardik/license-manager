@@ -1,0 +1,9 @@
+-- query 1: stale-flag check across all 228 licenses
+ id | license_number | license_expiry_date | stored_is_expired | computed_is_expired | stored_is_active
+----+----------------+----------------------+--------------------+----------------------+-------------------
+(0 rows)
+
+-- No stale rows at the moment of testing (2026-08-07) -- the nightly/thrice-daily
+-- refresh jobs are healthy and caught up as of this snapshot. This confirms the
+-- flag is CURRENTLY accurate, not that the architecture is safe: it depends on
+-- Celery Beat + a worker being up and the jobs succeeding every run.

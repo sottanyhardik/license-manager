@@ -1,0 +1,186 @@
+====================================================================
+SEC-01 regression evidence — 2026-08-07T11:13:51Z
+Command note: pytest-django's default (migration-order) test-DB setup
+currently fails for ANY test in this project — pre-existing, unrelated
+migration-graph bug (core.0003_create_materialized_views has no explicit
+dependency on allotment.0002_initial, so Django schedules it before the
+allotment_allotmentitems.item_id column exists -> 
+'ProgrammingError: column ai.item_id does not exist'). Reproduced
+independently below, then all SEC-01 verification runs use pytest-django's
+--no-migrations flag (build schema straight from current models, skipping
+the broken migration-ordering step) so the DB-provisioning bug doesn't
+block verifying the actual SEC-01 fix. Not a workaround of the SEC-01 fix
+itself, only of test-DB setup; flagged separately as an out-of-scope
+infra defect, not fixed here (task scope is SEC-01 regression only).
+====================================================================
+
+---- 1) Proof the default (migration-order) test DB build is broken (pre-existing, unrelated) ----
+ERROR apps/core/tests/test_protected_media_view.py::TestLicenseDocumentAccess::test_role_without_license_access_is_blocked_like_the_rest_endpoint
+ERROR apps/core/tests/test_protected_media_view.py::TestLicenseDocumentAccess::test_license_viewer_can_still_download
+ERROR apps/core/tests/test_protected_media_view.py::TestLicenseDocumentAccess::test_superuser_can_always_download
+ERROR apps/core/tests/test_protected_media_view.py::TestBillOfEntryDocumentAccess::test_license_only_role_cannot_reach_boe_pdf
+ERROR apps/core/tests/test_protected_media_view.py::TestBillOfEntryDocumentAccess::test_boe_viewer_can_download
+ERROR apps/core/tests/test_protected_media_view.py::TestTradeDocumentAccess::test_license_only_role_cannot_reach_trade_invoice
+ERROR apps/core/tests/test_protected_media_view.py::TestTradeDocumentAccess::test_trade_viewer_can_download
+ERROR apps/core/tests/test_protected_media_view.py::TestUnaffectedAndOrphanPaths::test_prefix_outside_business_docs_keeps_authenticated_only_access
+ERROR apps/core/tests/test_protected_media_view.py::TestUnaffectedAndOrphanPaths::test_orphaned_file_under_protected_prefix_is_blocked
+ERROR apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_companies_both_gated_the_same_way
+ERROR apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_license_document_types_all_gated_the_same_way
+ERROR apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_trade_license_types_dfia_and_incentive_gated_the_same_way
+ERROR apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_date_ranges_old_and_future_boes_gated_the_same_way
+ERROR apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_license_date_ranges_gated_the_same_way
+============================== 14 errors in 2.06s ==============================
+
+---- 2) Focused SEC-01 test file (9 original + 5 new cross-company/norm/date regression tests), --no-migrations ----
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 14 items
+
+apps/core/tests/test_protected_media_view.py::TestLicenseDocumentAccess::test_role_without_license_access_is_blocked_like_the_rest_endpoint PASSED [  7%]
+apps/core/tests/test_protected_media_view.py::TestLicenseDocumentAccess::test_license_viewer_can_still_download PASSED [ 14%]
+apps/core/tests/test_protected_media_view.py::TestLicenseDocumentAccess::test_superuser_can_always_download PASSED [ 21%]
+apps/core/tests/test_protected_media_view.py::TestBillOfEntryDocumentAccess::test_license_only_role_cannot_reach_boe_pdf PASSED [ 28%]
+apps/core/tests/test_protected_media_view.py::TestBillOfEntryDocumentAccess::test_boe_viewer_can_download PASSED [ 35%]
+apps/core/tests/test_protected_media_view.py::TestTradeDocumentAccess::test_license_only_role_cannot_reach_trade_invoice PASSED [ 42%]
+apps/core/tests/test_protected_media_view.py::TestTradeDocumentAccess::test_trade_viewer_can_download PASSED [ 50%]
+apps/core/tests/test_protected_media_view.py::TestUnaffectedAndOrphanPaths::test_prefix_outside_business_docs_keeps_authenticated_only_access PASSED [ 57%]
+apps/core/tests/test_protected_media_view.py::TestUnaffectedAndOrphanPaths::test_orphaned_file_under_protected_prefix_is_blocked PASSED [ 64%]
+apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_companies_both_gated_the_same_way PASSED [ 71%]
+apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_license_document_types_all_gated_the_same_way PASSED [ 78%]
+apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_trade_license_types_dfia_and_incentive_gated_the_same_way PASSED [ 85%]
+apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_date_ranges_old_and_future_boes_gated_the_same_way PASSED [ 92%]
+apps/core/tests/test_protected_media_view.py::TestRegressionScopeBeyondTheOriginalLicense::test_unaffected_license_date_ranges_gated_the_same_way PASSED [100%]
+
+============================== 14 passed in 7.51s ==============================
+
+---- 3) Broader regression sweep: core, bill_of_entry, trade, accounts test suites, --no-migrations ----
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collected 303 items
+
+apps/core/tests/test_cache_signals.py .                                  [  0%]
+apps/core/tests/test_check_master_quality.py ..s..                       [  1%]
+apps/core/tests/test_keyless_uid.py .....                                [  3%]
+apps/core/tests/test_master_filter_types.py ..                           [  4%]
+apps/core/tests/test_masterdata_delete_protection.py ..........          [  7%]
+apps/core/tests/test_mds_write_cutover.py ...........                    [ 11%]
+apps/core/tests/test_protected_media_view.py ..............              [ 15%]
+apps/bill_of_entry/tests/test_boe_hide_service.py .........              [ 18%]
+apps/trade/tests/test_trade_export.py ..                                 [ 19%]
+apps/trade/tests/test_trade_service.py ...........................       [ 28%]
+apps/core/tests/test_cache_utils.py ....                                 [ 29%]
+apps/core/tests/test_date_utils.py ..................................... [ 41%]
+.................................                                        [ 52%]
+apps/core/tests/test_decimal_utils.py .................................. [ 64%]
+......                                                                   [ 66%]
+apps/core/tests/test_materialized_views.py ...                           [ 66%]
+apps/core/tests/test_reconcile_masters.py ................               [ 72%]
+apps/core/tests/test_validation.py ..................................... [ 84%]
+...............................................                          [100%]
+
+======================== 302 passed, 1 skipped in 8.59s ========================
+
+---- 4) Independent exploit re-check (audit's own skeptic script, unmodified) against fixed code ----
+     Script asserts the PRE-FIX vulnerability (media_resp == 200); it is EXPECTED to FAIL post-fix.
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 1 item
+
+../audit_evidence/pass1/SEC-01/skeptic_check_test.py::test_low_privilege_user_blocked_on_license_endpoint_but_not_on_media FAILED [100%]
+
+=================================== FAILURES ===================================
+_____ test_low_privilege_user_blocked_on_license_endpoint_but_not_on_media _____
+
+tmp_path = PosixPath('/private/var/folders/0r/tmm964h12fggvf2mm6bsvrz40000gn/T/pytest-of-drushahardiksottany/pytest-2/test_low_privilege_user_blocke0')
+settings = <pytest_django.fixtures.SettingsWrapper object at 0x10d8c6f90>
+
+    def test_low_privilege_user_blocked_on_license_endpoint_but_not_on_media(tmp_path, settings):
+        # Point MEDIA_ROOT at a throwaway tmp dir so we don't touch any real file.
+        settings.MEDIA_ROOT = tmp_path
+        settings.MEDIA_X_ACCEL_REDIRECT = ""  # force the direct-stream (dev) branch
+    
+        # A minimal real License row so the /api/licenses/<id>/ round trip is realistic
+        # (only fields required by the model / serializer are set here for the check;
+        # if the model requires more, this will raise and the skeptic result records that).
+        from apps.license.models.core import LicenseDetailsModel
+    
+        license_number = "0510099999"
+        license_dir = tmp_path / "licenses" / license_number
+        license_dir.mkdir(parents=True)
+        doc_path = license_dir / f"{license_number} Copy.pdf"
+        doc_path.write_bytes(b"%PDF-1.4 fake licence copy contents\n")
+    
+        user = _make_user("incentive_only_user", roles=["INCENTIVE_LICENSE_VIEWER"])
+    
+        client = APIClient()
+        client.force_authenticate(user=user)
+    
+        # 1. Confirm normal license list endpoint enforces LicensePermission for this user.
+        #    (Use the list endpoint — it requires no existing object and is guaranteed to
+        #    hit LicensePermission.has_permission for a GET.)
+        license_list_resp = client.get("/api/licenses/")
+    
+        # 2. Same user, same session, hits the media endpoint for the predictable path.
+        media_resp = client.get(f"/api/media/licenses/{license_number}/{license_number}%20Copy.pdf")
+    
+        result_lines = [
+            f"MEDIA_ROOT (test) = {settings.MEDIA_ROOT}",
+            f"file exists on disk = {doc_path.exists()}",
+            f"user roles = {user.get_role_codes()}",
+            f"GET /api/licenses/  -> status {license_list_resp.status_code}",
+            f"GET /api/media/licenses/{license_number}/{license_number}%20Copy.pdf -> status {media_resp.status_code}",
+        ]
+        if media_resp.status_code == 200:
+            result_lines.append(f"media response body (first 40 bytes) = {media_resp.getvalue()[:40]!r}")
+        print("\n".join(result_lines))
+    
+        # Write results to a sibling file for evidence capture regardless of assertion outcome.
+        out_path = os.path.join(os.path.dirname(__file__), "_skeptic_run_result.txt")
+        with open(out_path, "w") as f:
+            f.write("\n".join(result_lines) + "\n")
+    
+        assert license_list_resp.status_code == 403, (
+            f"expected LicensePermission to block this low-privilege user on /api/licenses/, "
+            f"got {license_list_resp.status_code}"
+        )
+>       assert media_resp.status_code == 200, (
+            f"expected ProtectedMediaView to (per the claim) NOT block this same user, "
+            f"got {media_resp.status_code}"
+        )
+E       AssertionError: expected ProtectedMediaView to (per the claim) NOT block this same user, got 404
+E       assert 404 == 200
+E        +  where 404 = <Response status_code=404, "application/json">.status_code
+
+../audit_evidence/pass1/SEC-01/skeptic_check_test.py:92: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+Creating test database for alias 'default'...
+----------------------------- Captured stdout call -----------------------------
+MEDIA_ROOT (test) = /private/var/folders/0r/tmm964h12fggvf2mm6bsvrz40000gn/T/pytest-of-drushahardiksottany/pytest-2/test_low_privilege_user_blocke0
+file exists on disk = True
+user roles = ['INCENTIVE_LICENSE_VIEWER']
+GET /api/licenses/  -> status 403
+GET /api/media/licenses/0510099999/0510099999%20Copy.pdf -> status 404
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/licenses/
+WARNING  django.request:log.py:249 Not Found: /api/media/licenses/0510099999/0510099999 Copy.pdf
+--------------------------- Captured stderr teardown ---------------------------
+Destroying test database for alias 'default'...
+=============================== warnings summary ===============================
+audit_evidence/pass1/SEC-01/skeptic_check_test.py::test_low_privilege_user_blocked_on_license_endpoint_but_not_on_media
+  /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/lib/python3.14/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /Users/drushahardiksottany/PycharmProjects/license-manager/backend/staticfiles/
+    mw_instance = middleware(adapted_handler)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../audit_evidence/pass1/SEC-01/skeptic_check_test.py::test_low_privilege_user_blocked_on_license_endpoint_but_not_on_media
+========================= 1 failed, 1 warning in 6.47s =========================

@@ -1,0 +1,5 @@
+MEDIA_ROOT (test) = /private/var/folders/0r/tmm964h12fggvf2mm6bsvrz40000gn/T/pytest-of-drushahardiksottany/pytest-2/test_low_privilege_user_blocke0
+file exists on disk = True
+user roles = ['INCENTIVE_LICENSE_VIEWER']
+GET /api/licenses/  -> status 403
+GET /api/media/licenses/0510099999/0510099999%20Copy.pdf -> status 404

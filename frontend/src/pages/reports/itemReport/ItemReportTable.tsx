@@ -240,7 +240,7 @@ export default function ItemReportTable({
                                                 rowSpan={rowSpan} style={{
                                                 verticalAlign: 'middle',
                                                 backgroundColor: 'var(--tb-sunken)'
-                                            }}>{formatCif(firstItem.available_balance)}</td>
+                                            }}>{formatCif(firstItem.license_running_balance ?? firstItem.available_balance)}</td>
                                         )}
                                         <td className="text-right" title={(item.planned_splits || []).map((s: any) => `${s.item_name || '—'}: ${Number(s.planned_quantity).toFixed(3)} @ ${Number(s.unit_price).toFixed(2)} = ${Number(s.planned_cif_fc).toFixed(2)}`).join('\n')}>
                                             {Number(item.planned_quantity || 0) > 0 ? formatQty(item.planned_quantity) : '-'}
@@ -383,12 +383,13 @@ export default function ItemReportTable({
                             <td></td>
                             <td className="text-right text-success" style={{fontWeight: '600'}}>
                                 {(() => {
-                                    // Available Balance is license-level (repeated per item) —
+                                    // License Balance is license-level (repeated per item) —
                                     // sum once per license, not once per raw row.
                                     const uniqueLicenses: Record<string, number> = {};
                                     totalsSource.forEach((item: any) => {
                                         if (!(item.license_id in uniqueLicenses)) {
-                                            uniqueLicenses[item.license_id] = item.available_balance || 0;
+                                            // Use canonical license_running_balance, fallback to deprecated available_balance
+                                            uniqueLicenses[item.license_id] = item.license_running_balance || item.available_balance || 0;
                                         }
                                     });
                                     return formatCif(Object.values(uniqueLicenses).reduce((sum: number, val: number) => sum + val, 0));

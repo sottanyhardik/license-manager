@@ -84,6 +84,47 @@ class ItemPivotBalanceConsistencyTests(TestCase):
         self.assertIsNotNone(found, "license must appear in the report output")
         self.assertEqual(Decimal(str(found["balance_cif"])), live_balance)
 
+    def test_min_balance_filter_uses_live_balance_not_stale_cache(self):
+        """BL-LEDGER-02: `generate_report`'s `min_balance` filter used to
+        run at the DB level against the cached `balance__balance_cif`
+        column (`licenses.filter(balance__balance_cif__gte=min_balance)`),
+        independent of the already-fixed DISPLAY value above. A license
+        whose live balance clears the threshold but whose cache doesn't
+        (or vice versa) would be wrongly excluded/included."""
+        included = self._make_license_with_stale_balance(Decimal("0.00"))
+        live_included = LicenseBalanceCalculator.calculate_financial_balance(included)
+        self.assertGreater(live_included, Decimal("0"))
+
+        excluded_company = CompanyModel.objects.create(iec="9990002223", name="Pivot Balance Exporter 2")
+        purchase_status, _ = PurchaseStatus.objects.get_or_create(code=GE, defaults={"label": "Global Exim"})
+        excluded = LicenseDetailsModel.objects.create(
+            license_number="PIVOT-BAL-002",
+            license_date=date.today() - timedelta(days=30),
+            license_expiry_date=date.today() + timedelta(days=30),
+            exporter=excluded_company,
+            purchase_status=purchase_status,
+        )
+        # No export/import items at all -> live balance is 0.
+        from apps.license.models.core import LicenseBalance
+        LicenseBalance.objects.filter(license=excluded).update(balance_cif=Decimal("999999.00"))
+        excluded.refresh_from_db()
+        live_excluded = LicenseBalanceCalculator.calculate_financial_balance(excluded)
+        self.assertEqual(live_excluded, Decimal("0.00"))
+
+        threshold = (live_included + live_excluded) / 2
+
+        view = ItemPivotReportView()
+        report = view.generate_report(min_balance=int(threshold), license_status="all")
+
+        numbers_in_report = set()
+        for _norm, notifs in report["licenses_by_norm_notification"].items():
+            for _notif, licenses_list in notifs.items():
+                for lic_row in licenses_list:
+                    numbers_in_report.add(lic_row["license_number"])
+
+        self.assertIn(included.license_number, numbers_in_report, "Live balance above threshold must be included")
+        self.assertNotIn(excluded.license_number, numbers_in_report, "Live balance below threshold (despite stale-high cache) must be excluded")
+
     def test_never_returns_null_balance_cif_for_standalone_caller(self):
         """Standalone callers that don't pass a pre-batched `balance_cif`
         (e.g. code outside `generate_report`'s batched pipeline) must still

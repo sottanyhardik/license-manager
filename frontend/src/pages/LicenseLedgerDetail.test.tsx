@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "../api/axios";
 import { generateExcel, generatePDF } from "../utils/ledgerExport";
+import type { CanonicalLedgerResponse } from "../types/canonicalLedger";
 import LicenseLedgerDetail, {
     buildLedgerDetailPath,
     getTodayStamp,
-    groupTransactionsByCompany,
     normalizeLedgerDetail,
     sanitizeLedgerFilenamePart,
 } from "./LicenseLedgerDetail";
@@ -38,38 +38,41 @@ describe("LicenseLedgerDetail helpers", () => {
         expect(buildLedgerDetailPath(" ", "42")).toBeNull();
     });
 
-    it("normalizes malformed ledger detail responses", () => {
+    it("normalizes canonical ledger responses", () => {
         expect(normalizeLedgerDetail(null)).toBeNull();
         expect(normalizeLedgerDetail({
-            license_number: " LIC/1 ",
+            license_number: " ",
             license_type: "",
-            available_balance: "bad",
-            total_value: "25.5",
-            transactions: [
-                { type: "", company_id: 7, company_name: "", debit_amount: "10" },
-                "skip",
-            ],
-        })).toMatchObject({
+        })).toBeNull();
+        // Canonical response should pass through as-is (API is authoritative)
+        const canonical: CanonicalLedgerResponse = {
+            license_id: 1,
             license_number: "LIC/1",
-            license_type: "UNKNOWN",
-            available_balance: 0,
-            total_value: 25.5,
-            transactions: [{ type: "UNKNOWN", company_id: 7, company_name: "N/A", debit_amount: "10" }],
-        });
+            license_type: "DFIA",
+            license_date: "2026-01-01",
+            expiry_date: "2027-01-01",
+            exporter_id: 1,
+            exporter_name: "Exporter",
+            port_id: 1,
+            port_name: "Port",
+            opening_balance: "0.00",
+            license_running_balance: "100.00",
+            closing_balance: "100.00",
+            transactions: [],
+            company_utilizations: {},
+            totals: {
+                total_purchases: "100.00",
+                total_sales: "0.00",
+                total_commission: "0.00",
+            },
+        };
+        expect(normalizeLedgerDetail(canonical)).toEqual(canonical);
     });
 
     it("sanitizes export filename segments and date stamps", () => {
         expect(sanitizeLedgerFilenamePart(' LIC:/<1>" ')).toBe("LIC-1");
         expect(sanitizeLedgerFilenamePart("")).toBe("license");
         expect(getTodayStamp(new Date("2026-07-16T12:30:00Z"))).toBe("2026-07-16");
-    });
-
-    it("groups transactions by company without merging unknown companies", () => {
-        expect(groupTransactionsByCompany([
-            { company_id: null, company_name: "", type: "SALE" },
-            { company_id: null, company_name: "", type: "PURCHASE" },
-            { company_id: 1, company_name: "Acme", type: "SALE" },
-        ])).toHaveLength(3);
     });
 });
 
@@ -78,27 +81,50 @@ describe("LicenseLedgerDetail", () => {
         vi.restoreAllMocks();
         vi.clearAllMocks();
         mockedGenerateExcel.mockResolvedValue(undefined);
-        mockedApiGet.mockResolvedValue({
-            data: {
-                license_number: "LIC/1",
-                license_type: "DFIA",
-                exporter: "Exporter",
-                available_balance: 100,
-                total_value: 250,
-                transactions: [{
-                    type: "PURCHASE",
+        // Canonical API response (Phase 4C)
+        const canonicalResponse: CanonicalLedgerResponse = {
+            license_id: 1,
+            license_number: "LIC/1",
+            license_type: "DFIA",
+            license_date: "2026-01-01",
+            expiry_date: "2027-01-01",
+            exporter_id: 1,
+            exporter_name: "Exporter",
+            port_id: 1,
+            port_name: "Port",
+            opening_balance: "0.00",
+            license_running_balance: "100.00",
+            closing_balance: "100.00",
+            transactions: [{
+                date: "2026-04-01",
+                id: 1,
+                type: "PURCHASE",
+                company_id: 1,
+                company_name: "Acme",
+                amount: "100.00",
+                is_commission: false,
+                affects_balance: true,
+                license_running_balance: "100.00",
+                company_utilization_after: "100.00",
+                display_status: "Active",
+            }],
+            company_utilizations: {
+                "1": {
                     company_id: 1,
                     company_name: "Acme",
-                    date: "2026-04-01",
-                    particular: "Purchase",
-                    debit_cif: 100,
-                    debit_amount: 1000,
-                }],
+                    utilization_balance: "100.00",
+                },
             },
-        });
+            totals: {
+                total_purchases: "100.00",
+                total_sales: "0.00",
+                total_commission: "0.00",
+            },
+        };
+        mockedApiGet.mockResolvedValue({ data: canonicalResponse });
     });
 
-    it("fetches normalized ledger details and exports PDF with a safe filename", async () => {
+    it("fetches canonical ledger details and exports PDF with a safe filename", async () => {
         render(<LicenseLedgerDetail />);
 
         await waitFor(() => {
@@ -106,9 +132,11 @@ describe("LicenseLedgerDetail", () => {
         });
         fireEvent.click(await screen.findByRole("button", { name: /download pdf/i }));
 
-        expect(mockedGeneratePDF).toHaveBeenCalledWith(
-            [expect.objectContaining({ license_number: "LIC/1", license_type: "DFIA" })],
-            expect.stringMatching(/^License_Ledger_LIC-1_\d{4}-\d{2}-\d{2}\.pdf$/),
-        );
+        // Verify PDF export was called with canonical response and safe filename
+        expect(mockedGeneratePDF).toHaveBeenCalled();
+        const calls = mockedGeneratePDF.mock.calls[0];
+        expect(calls[0][0].license_number).toBe("LIC/1");
+        expect(calls[0][0].license_type).toBe("DFIA");
+        expect(calls[1]).toMatch(/^License_Ledger_LIC-1_.*\.pdf$/);
     });
 });

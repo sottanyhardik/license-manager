@@ -4,7 +4,7 @@ import threading
 from contextlib import contextmanager
 from decimal import Decimal
 
-from django.db.models.signals import post_delete, post_save, pre_delete
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -12,7 +12,7 @@ from apps.allotment.models import AllotmentItems
 from apps.bill_of_entry.models import RowDetails
 from apps.core.models import CompanyModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
-from apps.trade.models import LicenseTradeLine
+from apps.trade.models import LicenseTrade, LicenseTradeLine
 
 
 logger = logging.getLogger(__name__)
@@ -423,9 +423,37 @@ def update_license_on_trade_line_change(sender, instance, **kwargs):
     if kwargs.get('raw', False):
         return
 
+    # Keep the stored Available Quantity column (used by allocation filters
+    # and plan capacity) in the same lineage as the live calculator.  A
+    # direct SALE is a final quantity debit; a BOE-linked SALE is excluded by
+    # the calculator because the BOE supplies that debit.
+    if instance.sr_number_id:
+        from apps.core.scripts.calculate_balance import update_balance_values
+        update_balance_values(instance.sr_number)
+
     license_obj = _related_license(instance, "sr_number")
     if license_obj:
         update_license_flags(license_obj)
+
+
+@receiver(m2m_changed, sender=LicenseTrade.boes.through)
+def update_trade_line_quantity_after_boe_link_change(sender, instance, action, **kwargs):
+    """Recompute quantity when a SALE switches between direct and BOE paths."""
+    if action not in {'post_add', 'post_remove', 'post_clear'} or instance.direction != LicenseTrade.DIR_SALE:
+        return
+    from apps.core.scripts.calculate_balance import update_balance_values
+
+    for item in LicenseImportItemsModel.objects.filter(trade_lines__trade=instance).distinct():
+        update_balance_values(item)
+
+
+@receiver(post_save, sender='reconciliation.InvoiceBOEAllocation')
+def update_trade_line_quantity_after_invoice_boe_allocation(sender, instance, **kwargs):
+    """A formal invoice↔BOE allocation replaces direct SALE quantity usage."""
+    if not instance.trade_line_id or not instance.trade_line.sr_number_id:
+        return
+    from apps.core.scripts.calculate_balance import update_balance_values
+    update_balance_values(instance.trade_line.sr_number)
 
 
 # Snapshot the exporter name onto each license BEFORE the company is deleted.

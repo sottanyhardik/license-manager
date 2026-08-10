@@ -280,6 +280,34 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         # once the trade instance exists.
         boes_data = validated_data.pop('boes', [])
 
+        # A BOE represents the physical quantity when one is attached.  In
+        # the approved bypass workflow, however, a SALE line with no BOE is
+        # itself final physical consumption and must fit the item's remaining
+        # quantity.  Check the complete request cumulatively while holding
+        # item locks so two concurrent direct sales cannot both over-consume.
+        from collections import defaultdict
+        from decimal import Decimal
+        from rest_framework.exceptions import ValidationError
+        from apps.license.models import LicenseImportItemsModel
+        from apps.license.services.balance_calculator import ItemBalanceCalculator
+        from apps.trade.models import LicenseTrade
+
+        if validated_data.get('direction') == LicenseTrade.DIR_SALE and not boes_data:
+            requested_by_item = defaultdict(lambda: Decimal('0'))
+            for line_data in lines_data:
+                requested_by_item[line_data['sr_number'].pk] += Decimal(str(line_data.get('qty_kg') or 0))
+            for item_id in sorted(requested_by_item):
+                item = LicenseImportItemsModel.objects.select_for_update().get(pk=item_id)
+                requested = requested_by_item[item_id]
+                available = ItemBalanceCalculator.calculate_available_quantity(item)
+                if requested > available:
+                    raise ValidationError({
+                        'lines': (
+                            f'SALE quantity {requested} exceeds available quantity '
+                            f'{available} for import item {item_id}.'
+                        ),
+                    })
+
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("CREATE: lines=%d, incentive=%d, payments=%d", len(lines_data), len(incentive_lines_data), len(payments_data))
 

@@ -12,6 +12,15 @@ def build_balance_excel_unused(license_obj):
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from io import BytesIO
 
+    # BL-LEDGER-02: `license_obj.balance_cif` is a denormalized cache that
+    # can be stale -- compute the live figure once and reuse it everywhere
+    # this function shows "Balance CIF", matching every other module.
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
+    from apps.license.services.condition_pool import available_value_bulk_map
+    live_balance_cif = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
+    import_items = list(license_obj.import_license.all())
+    available_value_map = available_value_bulk_map(import_items)
+
 
     # Create workbook
     wb = openpyxl.Workbook()
@@ -80,7 +89,7 @@ def build_balance_excel_unused(license_obj):
     # Row 2 Values
     values_row2 = [
         str(license_obj.purchase_status) if license_obj.purchase_status else '-',
-        f"{float(license_obj.balance_cif or 0):.2f}",
+        f"{float(live_balance_cif):.2f}",
         license_obj.get_norm_class or '-',
         str(license_obj.latest_transfer) if license_obj.latest_transfer else '-'
     ]
@@ -117,7 +126,7 @@ def build_balance_excel_unused(license_obj):
             values = [
                 item_desc,
                 f"{float(item.cif_fc or item.fob_fc or 0):.2f}",
-                f"{float(license_obj.balance_cif or 0):.2f}"
+                f"{float(live_balance_cif):.2f}"
             ]
             for col_num, value in enumerate(values, 1):
                 cell = ws.cell(row=current_row, column=col_num, value=value)
@@ -127,7 +136,7 @@ def build_balance_excel_unused(license_obj):
         current_row += 1
 
     # Import Items Section
-    if license_obj.import_license.exists():
+    if import_items:
         from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
         from apps.allotment.models import AllotmentItems
 
@@ -140,7 +149,7 @@ def build_balance_excel_unused(license_obj):
         section_cell.alignment = Alignment(horizontal='center', vertical='center')
         current_row += 1
 
-        for item in license_obj.import_license.all():
+        for item in import_items:
             # Item headers
             item_headers = ['Sr', 'HS Code', 'Description', 'Item', 'Total Qty',
                            'Allotted', 'Debited', 'Available', 'CIF FC', 'Bal CIF']
@@ -165,7 +174,7 @@ def build_balance_excel_unused(license_obj):
                 f"{float(item.debited_quantity or 0):.2f}",
                 f"{float(item.available_quantity or 0):.2f}",
                 f"{float(item.cif_fc or 0):.2f}",
-                f"{float(item.balance_cif_fc or 0):.2f}"
+                f"{float(available_value_map.get(item.id, 0)):.2f}"
             ]
             from apps.license.utils.condition_excel import annotate_cell as _annotate_cond_unused
             for col_num, value in enumerate(item_values, 1):

@@ -1,0 +1,80 @@
+Raw output captured from the Django shell (read-only; ItemBalanceCalculator
+and LicenseBalanceCalculator methods called directly against the real
+"lmanagement" data, no writes performed).
+
+Command 1 -- scale of the trigger condition:
+  from apps.license.models import LicenseImportItemsModel
+  print('total import items', LicenseImportItemsModel.objects.count())
+  print('items with cif_fc = 0', LicenseImportItemsModel.objects.filter(cif_fc=0).count())
+Output:
+  total import items 2401
+  items with cif_fc = 0 2093
+
+Command 2 -- scan for licenses with >=2 import items, ALL cif_fc = 0, where
+an AT-type outstanding allotment exists on some but not all items:
+Output (license internal pks; license_number resolved separately):
+  [(2666, 2, 1), (2667, 2, 1), (2669, 2, 1), (2668, 2, 1)]
+  (2 import items each, allotment present on exactly 1 of the 2)
+
+Command 3 -- full detail for license pk 2666 (license_number 0911012707):
+  from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
+  from apps.allotment.models import AllotmentItems
+  from apps.license.services.balance_calculator import ItemBalanceCalculator, LicenseBalanceCalculator
+
+  lic = LicenseDetailsModel.objects.get(pk=2666)
+  for it in LicenseImportItemsModel.objects.filter(license_id=2666):
+      alloc = AllotmentItems.objects.filter(item=it, allotment__type='AT')
+      print(it.id, it.serial_number, it.cif_fc, it.quantity, alloc.count(), sum(a.cif_fc for a in alloc))
+      print('  calculate_item_balance =', ItemBalanceCalculator.calculate_item_balance(it))
+  print('license credit', LicenseBalanceCalculator.calculate_credit(lic))
+  print('license boe_debit', LicenseBalanceCalculator.calculate_boe_debit_total(lic))
+  print('license allotment_total', LicenseBalanceCalculator.calculate_allotment(lic))
+  print('license financial_balance', LicenseBalanceCalculator.calculate_financial_balance(lic))
+  print('license customs_balance', LicenseBalanceCalculator.calculate_balance(lic))
+
+Output:
+  license 0911012707 pk 2666 num items 2
+    item 39613 sr 15 cif_fc 0.00 qty 19284.00 alloc count 0 alloc cif sum 0
+      calculate_item_balance = 23565.09999999999854480847716
+    item 39614 sr 16 cif_fc 0.00 qty 16970.00 alloc count 1 alloc cif sum 13915.40
+      calculate_item_balance = 9649.699999999998544808477163
+    license credit 23565.0999999999985448084771633148193359375
+    license boe_debit 0.00
+    license allotment_total 13915.40
+    license financial_balance 9649.70
+    license customs_balance 9649.70
+
+  Three more licenses reproduce the identical pattern:
+  license 0911012708 pk 2667: item 39615 (no alloc) -> item_balance 23967.50;
+     item 39616 (alloc 14153.20) -> item_balance 9814.30; license balance 9814.30
+  license 0911012714 pk 2669: item 39619 (no alloc) -> item_balance 32294.00;
+     item 39620 (alloc 18662.37) -> item_balance 13631.63; license balance 13631.63
+  license 0911012709 pk 2668: item 39617 (no alloc) -> item_balance 12754.95...;
+     item 39618 (alloc 7531.70) -> item_balance 5223.25...; license balance 5223.25
+
+Interpretation:
+  For the un-allotted item on each of these 4 licenses,
+  ItemBalanceCalculator.calculate_item_balance() reports the item's
+  available CIF as the license's FULL original credit (23565.10 / 23967.50
+  / 32294.00 / 12754.95) -- identical to calculate_credit(license) -- even
+  though the license's own authoritative Balance CIF
+  (calculate_financial_balance / calculate_balance, i.e. what
+  LicenseDetailsModel.get_balance_cif returns and the UI shows) is already
+  reduced to 9649.70 / 9814.30 / 13631.63 / 5223.25 by the allotment
+  committed to the SIBLING item. The per-item figure overstates the item's
+  real remaining CIF by exactly the sibling item's outstanding allotment
+  amount in every one of the 4 cases found.
+
+Reachability check (confirms no LIVE view/serializer currently calls this
+path -- see notes.md for the full reachability analysis):
+  $ grep -rn "calculate_item_balance\|calculate_max_allocation\|calculate_available_value_for_allocation" backend/apps --include="*.py" | grep -v "/tests/"
+  apps/license/services/balance_calculator.py:1727:    def calculate_item_balance(import_item) -> Decimal:
+  apps/license/services/balance_calculator.py:1898:        balance_cif = ItemBalanceCalculator.calculate_item_balance(import_item)
+  apps/license/services/validation_service.py: (no match)
+  apps/allotment/services/allocation_service.py:72:        balance_cif_fc = ItemBalanceCalculator.calculate_item_balance(import_item)
+
+  $ grep -rn "AllocationService" backend --include="*.py" | grep -v "/tests/\|allocation_service.py:"
+  backend/apps/allotment/services/__init__.py:10:from .allocation_service import AllocationService
+  backend/apps/allotment/services/__init__.py:15:    'AllocationService',
+  (exported from the package __init__ but never imported/called by any
+   view, serializer, or other service module)

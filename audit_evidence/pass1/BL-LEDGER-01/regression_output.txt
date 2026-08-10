@@ -1,0 +1,296 @@
+==================================================================
+BL-LEDGER-01 REGRESSION TEST EVIDENCE
+Generated: Fri Aug  7 16:48:51 IST 2026
+Fix under test: backend/apps/trade/services/trade_service.py::stamp_boe_invoice_from_trade
+Command base: pytest --no-cov --no-migrations -p no:cacheprovider
+==================================================================
+
+ENVIRONMENT NOTE (pre-existing, unrelated to BL-LEDGER-01, same as
+BL-EXP-01's evidence): a fresh migration-built test DB fails on
+apps/core/migrations/0003_create_materialized_views.py regardless of
+this change, so --no-migrations is used to build schema from current
+models instead.
+
+This working tree is shared with other concurrent Claude sessions
+(per project memory 'Concurrent-sessions data loss risk'); earlier
+attempts transiently hit 'database test_lmanagement does not exist'
+because another session's pytest run recreated it mid-test (confirmed
+via 'ps aux' showing concurrent pytest processes at the time). Those
+runs were discarded and re-run once no other pytest process was
+active. All output below is from clean, single-writer runs.
+
+==================================================================
+1) NEW regression tests added for BL-LEDGER-01, run alone
+   - apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests (7 tests)
+   - apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_link_does_not_unhide_a_genuinely_hidden_boe (1 test)
+==================================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 7 items
+
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_coincidental_oth_invoice_no_without_hide_log_is_still_stamped PASSED [ 14%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_genuinely_hidden_boe_is_not_restamped PASSED [ 28%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_non_hidden_boe_is_still_stamped_normally PASSED [ 42%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_restored_boe_is_stamped_normally_afterwards PASSED [ 57%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_serializer_update_call_site_does_not_unhide_boe PASSED [ 71%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_trade_without_invoice_number_is_noop_regardless_of_hidden_state PASSED [ 85%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_link_does_not_unhide_a_genuinely_hidden_boe PASSED [100%]
+
+============================== 7 passed in 1.49s ===============================
+
+==================================================================
+2) Full blast-radius suite: apps/trade, apps/reconciliation,
+   apps/bill_of_entry (both call sites of stamp_boe_invoice_from_trade,
+   hide/restore audit-trail behaviour, all detection queries,
+   allocation service, external invoice service)
+==================================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 109 items
+
+apps/trade/tests/test_trade_export.py::TradeExportColumnsTests::test_excel_export_resolves_company_labels_and_incentive_license PASSED [  0%]
+apps/trade/tests/test_trade_export.py::TradeExportColumnsTests::test_pdf_export_succeeds PASSED [  1%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_empty_string_returns_none PASSED [  2%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_garbage_string_raises_value_error PASSED [  3%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_invalid_format_raises_value_error PASSED [  4%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_none_returns_none PASSED [  5%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_partial_date_raises_value_error PASSED [  6%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_valid_iso_date PASSED [  7%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_commission_purchase_has_com_p_prefix PASSED [  8%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_commission_sale_has_com_prefix PASSED [  9%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_invalid_direction_raises_value_error PASSED [ 10%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_missing_company_raises_does_not_exist PASSED [ 11%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_purchase_result_has_p_prefix PASSED [ 11%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_sale_returns_formatted_number PASSED [ 12%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_sequence_increments PASSED [ 13%]
+apps/trade/tests/test_trade_service.py::BuildTradeSummaryTests::test_numeric_fields_are_strings PASSED [ 14%]
+apps/trade/tests/test_trade_service.py::BuildTradeSummaryTests::test_summary_contains_expected_keys PASSED [ 15%]
+apps/trade/tests/test_trade_service.py::BuildTradeSummaryTests::test_summary_values_match_model PASSED [ 16%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_link_two_trades PASSED [ 17%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_missing_partner_raises_partner_not_found PASSED [ 18%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_relinking_clears_old_partner PASSED [ 19%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_self_link_raises_value_error PASSED [ 20%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_unlink_trades PASSED [ 21%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_coincidental_oth_invoice_no_without_hide_log_is_still_stamped PASSED [ 22%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_genuinely_hidden_boe_is_not_restamped PASSED [ 22%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_non_hidden_boe_is_still_stamped_normally PASSED [ 23%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_restored_boe_is_stamped_normally_afterwards PASSED [ 24%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_serializer_update_call_site_does_not_unhide_boe PASSED [ 25%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_trade_without_invoice_number_is_noop_regardless_of_hidden_state PASSED [ 26%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_cross_licence_allocation_rejected PASSED [ 27%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_duplicate_active_allocation_rejected PASSED [ 28%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_edit_supersedes_rather_than_mutates PASSED [ 29%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_full_many_to_many_chain PASSED [ 30%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_many_invoice_lines_matched_to_one_boe_row PASSED [ 31%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_one_invoice_line_split_across_many_boe_rows PASSED [ 32%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_over_allocation_rejected_exceeds_row_details_remaining PASSED [ 33%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_over_allocation_rejected_exceeds_trade_line_remaining PASSED [ 33%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_partial_allocation_leaves_correct_unmatched_remainder PASSED [ 34%]
+apps/reconciliation/tests/test_allocation_service.py::InvoiceBOEAllocationTests::test_reversal_makes_amount_count_again_and_never_deletes PASSED [ 35%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_allotment_item_with_no_item_rejected_cleanly PASSED [ 36%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_cross_licence_allocation_rejected PASSED [ 37%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_duplicate_active_allocation_rejected PASSED [ 38%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_edit_supersedes_rather_than_mutates PASSED [ 39%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_full_many_to_many_chain PASSED [ 40%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_many_allotment_items_matched_to_one_boe_row PASSED [ 41%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_one_allotment_item_split_across_many_boe_rows PASSED [ 42%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_over_allocation_rejected_exceeds_allotment_item_remaining PASSED [ 43%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_over_allocation_rejected_exceeds_row_details_remaining PASSED [ 44%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_partial_allocation_leaves_correct_unmatched_remainder PASSED [ 44%]
+apps/reconciliation/tests/test_allocation_service.py::BOEAllotmentAllocationTests::test_reversal_makes_amount_count_again_and_never_deletes PASSED [ 45%]
+apps/reconciliation/tests/test_allocation_service.py::ReverseAllocationDispatcherTests::test_dispatches_to_allotment_side PASSED [ 46%]
+apps/reconciliation/tests/test_allocation_service.py::ReverseAllocationDispatcherTests::test_dispatches_to_invoice_side PASSED [ 47%]
+apps/reconciliation/tests/test_allocation_service.py::ReverseAllocationDispatcherTests::test_rejects_unknown_type PASSED [ 48%]
+apps/reconciliation/tests/test_backfill_boe_allocations_command.py::BackfillBoeAllocationsCommandTests::test_apply_creates_expected_allocation_only PASSED [ 49%]
+apps/reconciliation/tests/test_backfill_boe_allocations_command.py::BackfillBoeAllocationsCommandTests::test_dry_run_makes_zero_writes PASSED [ 50%]
+apps/reconciliation/tests/test_backfill_boe_allocations_command.py::BackfillBoeAllocationsCommandTests::test_report_covers_all_status_buckets PASSED [ 51%]
+apps/reconciliation/tests/test_backfill_boe_allocations_command.py::BackfillBoeAllocationsCommandTests::test_rerun_after_apply_is_idempotent PASSED [ 52%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_already_allocated_line_is_skipped PASSED [ 53%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_ambiguous_multiple_candidates_is_not_migrated PASSED [ 54%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_cif_mismatch_beyond_tolerance_is_not_migrated PASSED [ 55%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_dry_run_reports_without_writing PASSED [ 55%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_exact_one_to_one_match_is_auto_migrated PASSED [ 56%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_find_candidates_excludes_rows_on_other_items PASSED [ 57%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_no_candidate_is_reported_not_migrated PASSED [ 58%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_purchase_trade_is_never_reconciled PASSED [ 59%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_qty_mismatch_beyond_tolerance_is_not_migrated PASSED [ 60%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_rerun_is_idempotent_single_allocation PASSED [ 61%]
+apps/reconciliation/tests/test_boe_link_reconciler.py::BoeLinkReconcilerTests::test_reversed_allocation_is_reconsidered PASSED [ 62%]
+apps/reconciliation/tests/test_check_allocation_health_command.py::CheckAllocationHealthCommandTests::test_auto_migratable_link_is_not_reported_as_unresolved PASSED [ 63%]
+apps/reconciliation/tests/test_check_allocation_health_command.py::CheckAllocationHealthCommandTests::test_command_is_read_only PASSED [ 64%]
+apps/reconciliation/tests/test_check_allocation_health_command.py::CheckAllocationHealthCommandTests::test_service_layer_prevents_the_over_allocation_case_going_forward PASSED [ 65%]
+apps/reconciliation/tests/test_check_allocation_health_command.py::CheckAllocationHealthCommandTests::test_surfaces_boe_over_allocation PASSED [ 66%]
+apps/reconciliation/tests/test_check_allocation_health_command.py::CheckAllocationHealthCommandTests::test_surfaces_duplicate_active_allocation PASSED [ 66%]
+apps/reconciliation/tests/test_check_allocation_health_command.py::CheckAllocationHealthCommandTests::test_surfaces_unresolved_boe_link PASSED [ 67%]
+apps/reconciliation/tests/test_external_invoice_service.py::ExternalInvoiceLinkTests::test_blank_invoice_number_rejected PASSED [ 68%]
+apps/reconciliation/tests/test_external_invoice_service.py::ExternalInvoiceLinkTests::test_mark_creates_active_link_and_reduces_remaining PASSED [ 69%]
+apps/reconciliation/tests/test_external_invoice_service.py::ExternalInvoiceLinkTests::test_mark_does_not_affect_licence_balance PASSED [ 70%]
+apps/reconciliation/tests/test_external_invoice_service.py::ExternalInvoiceLinkTests::test_missing_invoice_excludes_boe_once_marked_and_reincludes_after_reversal PASSED [ 71%]
+apps/reconciliation/tests/test_external_invoice_service.py::ExternalInvoiceLinkTests::test_over_allocation_rejected PASSED [ 72%]
+apps/reconciliation/tests/test_external_invoice_service.py::ExternalInvoiceLinkTests::test_reverse_makes_amount_available_again PASSED [ 73%]
+apps/reconciliation/tests/test_external_invoice_service.py::ExternalInvoiceLinkTests::test_shares_invoice_side_capacity_with_system_allocation PASSED [ 74%]
+apps/reconciliation/tests/test_reconciliation.py::MissingBoeQueryTests::test_detects_sale_line_with_no_boe_linked PASSED [ 75%]
+apps/reconciliation/tests/test_reconciliation.py::MissingBoeQueryTests::test_excludes_purchase_direction PASSED [ 76%]
+apps/reconciliation/tests/test_reconciliation.py::MissingBoeQueryTests::test_excludes_sale_line_when_boe_is_linked PASSED [ 77%]
+apps/reconciliation/tests/test_reconciliation.py::MissingInvoiceQueryTests::test_detects_boe_with_blank_invoice_no PASSED [ 77%]
+apps/reconciliation/tests/test_reconciliation.py::MissingInvoiceQueryTests::test_excludes_boe_with_invoice_no_set PASSED [ 78%]
+apps/reconciliation/tests/test_reconciliation.py::DuplicateDebitsQueryTests::test_detects_the_double_debit_bug_scenario PASSED [ 79%]
+apps/reconciliation/tests/test_reconciliation.py::DuplicateDebitsQueryTests::test_line_level_fix_excludes_matched_boe PASSED [ 80%]
+apps/reconciliation/tests/test_reconciliation.py::CifComparisonQueryTests::test_flags_mismatch_beyond_tolerance PASSED [ 81%]
+apps/reconciliation/tests/test_reconciliation.py::CifComparisonQueryTests::test_no_flag_when_within_tolerance PASSED [ 82%]
+apps/reconciliation/tests/test_reconciliation.py::MultiBoeMultiInvoiceQueryTests::test_multi_boe_per_invoice_detects_trade_with_two_boes PASSED [ 83%]
+apps/reconciliation/tests/test_reconciliation.py::MultiBoeMultiInvoiceQueryTests::test_multi_invoice_per_boe_detects_boe_with_two_trades PASSED [ 84%]
+apps/reconciliation/tests/test_reconciliation.py::DuplicateBoesQueryTests::test_detects_near_duplicate_boes PASSED [ 85%]
+apps/reconciliation/tests/test_reconciliation.py::DuplicateBoesQueryTests::test_no_flag_when_cif_far_apart PASSED [ 86%]
+apps/reconciliation/tests/test_reconciliation.py::SummaryQueryTests::test_summary_returns_expected_keys PASSED [ 87%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_link_adds_boe_to_trade_and_logs PASSED [ 88%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_link_does_not_unhide_a_genuinely_hidden_boe PASSED [ 88%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_merge_boe_delegates_to_boe_service_and_logs PASSED [ 89%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_note_creates_reconciliation_note_and_log PASSED [ 90%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_note_rejects_multiple_targets PASSED [ 91%]
+apps/bill_of_entry/tests/test_boe_hide_service.py::HideBoeSpansMultipleLicensesTests::test_hide_and_restore_both_recompute_every_touched_license PASSED [ 92%]
+apps/bill_of_entry/tests/test_boe_hide_service.py::HideBoeBalanceImmediacyTests::test_hide_and_restore_round_trip_with_purchase PASSED [ 93%]
+apps/bill_of_entry/tests/test_boe_hide_service.py::HideBoeBalanceImmediacyTests::test_hide_with_no_purchase_leaves_balance_unchanged PASSED [ 94%]
+apps/bill_of_entry/tests/test_boe_hide_service.py::HideBoeIdempotencyTests::test_hide_is_idempotent PASSED [ 95%]
+apps/bill_of_entry/tests/test_boe_hide_service.py::HideBoeIdempotencyTests::test_restore_is_idempotent_reports_none_restored_at_on_second_call PASSED [ 96%]
+apps/bill_of_entry/tests/test_boe_hide_service.py::HideBoeReconciliationLogTests::test_hide_and_restore_each_write_a_reconciliation_log_entry PASSED [ 97%]
+apps/bill_of_entry/tests/test_boe_hide_service.py::HideBoeReconciliationLogTests::test_restore_preserves_real_invoice_no_round_trip PASSED [ 98%]
+apps/bill_of_entry/tests/test_boe_hide_service.py::HideBoesBulkTests::test_bulk_hide_recomputes_each_affected_license_once PASSED [ 99%]
+apps/bill_of_entry/tests/test_boe_hide_service.py::HideBoesBulkTests::test_bulk_restore_skips_boe_that_is_not_hidden PASSED [100%]
+
+============================= 109 passed in 11.35s =============================
+
+==================================================================
+3) Broader sweep (apps/license, apps/allotment) -- checked to see
+   whether the fix has any effect outside the trade/reconciliation/
+   bill_of_entry blast radius. Result: 15 pre-existing, UNRELATED
+   failures (milk-planner pricing config constants, and
+   update_balance_cif command tests) reproduce identically in total
+   isolation (single file, no other test run active) -- they never
+   touch BillOfEntryModel.invoice_no, ReconciliationLog,
+   genuinely_hidden_boe_ids, LicenseTrade, or
+   stamp_boe_invoice_from_trade at all, so they cannot be caused by
+   this fix. Reported as a pre-existing, out-of-scope environment
+   issue, not investigated further here (same posture as the
+   materialized_views migration bug noted above).
+==================================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collected 134 items
+
+apps/license/tests/test_update_balance_cif_command.py .F.F               [  2%]
+apps/license/tests/test_milk_planner.py FF......F...F.                   [ 13%]
+apps/license/tests/test_e1_plan.py ..................................... [ 41%]
+............F.FF...........                                              [ 61%]
+apps/license/tests/test_e5_plan.py ...........................F....F...F [ 88%]
+FF...........                                                            [ 98%]
+apps/license/tests/test_update_balance_cif_command.py ..                 [100%]
+
+=================================== FAILURES ===================================
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_update_balance_cif_command.py:48: AssertionError: assert Decimal('0.00') == Decimal('25.50')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_update_balance_cif_command.py:91: AssertionError: assert Decimal('0.00') == Decimal('42.00')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_milk_planner.py:15: AssertionError: assert Decimal('6.5') == Decimal('5')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_milk_planner.py:31: AssertionError: assert Decimal('300') == Decimal('250')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_milk_planner.py:101: AssertionError: assert Decimal('325.0') == Decimal('250')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_milk_planner.py:120: AssertionError: assert Decimal('325.0') == Decimal('250')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_e1_plan.py:287: AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_e1_plan.py:311: AssertionError: assert Decimal('6.5000') == Decimal('5.0000')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_e1_plan.py:300: AssertionError: assert set() == {'SWP'}
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_e5_plan.py:165: AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_e5_plan.py:222: AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_e5_plan.py:270: AssertionError: assert Decimal('685.0') == Decimal('700')
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_e5_plan.py:254: AssertionError: assert ([E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000'))] and 'm' == 'm'
+/Users/drushahardiksottany/PycharmProjects/license-manager/backend/apps/license/tests/test_e5_plan.py:285: AssertionError: assert Decimal('300.0000') == Decimal('250.0000')
+=========================== short test summary info ============================
+FAILED apps/license/tests/test_update_balance_cif_command.py::test_update_balance_cif_updates_split_balance_row
+FAILED apps/license/tests/test_update_balance_cif_command.py::test_update_balance_cif_recreates_missing_balance_row
+FAILED apps/license/tests/test_milk_planner.py::TestMilkConfigConstants::test_e1_config_prices
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilk0404Only::test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilkMixedRunsSequentially::test_runs_0404_then_3502_sequentially
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilkEdgeCases::test_tolerant_type_coercion
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_milk_avg_above_ceiling_all_dwp_no_swp
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_multiple_milk_items_planned_independently_in_order
+FAILED apps/license/tests/test_e5_plan.py::TestSpecialValidation::test_not_triggered_runs_oils_before_milk
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_0404_avg_above_ceiling_all_dwp_no_swp
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_all_0404_items_processed_before_any_3502_item
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_mixed_licence_items_never_blended_into_one_rate
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_multiple_0404_items_planned_independently_in_input_order
+======================== 14 failed, 120 passed in 0.63s ========================
+
+-- Confirms these failures are unrelated to any BOE/trade/reconciliation code:
+(no matches -- confirmed unrelated to BL-LEDGER-01's domain)
+
+==================================================================
+4) Post-edit re-confirmation (after removing finding-ID references
+   from test docstrings/comments per project constraints -- no
+   behavioral change, comment text only)
+==================================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 46 items
+
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_empty_string_returns_none PASSED [  2%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_garbage_string_raises_value_error PASSED [  4%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_invalid_format_raises_value_error PASSED [  6%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_none_returns_none PASSED [  8%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_partial_date_raises_value_error PASSED [ 10%]
+apps/trade/tests/test_trade_service.py::ParseDateStrictTests::test_valid_iso_date PASSED [ 13%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_commission_purchase_has_com_p_prefix PASSED [ 15%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_commission_sale_has_com_prefix PASSED [ 17%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_invalid_direction_raises_value_error PASSED [ 19%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_missing_company_raises_does_not_exist PASSED [ 21%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_purchase_result_has_p_prefix PASSED [ 23%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_sale_returns_formatted_number PASSED [ 26%]
+apps/trade/tests/test_trade_service.py::GetPrefilledInvoiceNumberTests::test_sequence_increments PASSED [ 28%]
+apps/trade/tests/test_trade_service.py::BuildTradeSummaryTests::test_numeric_fields_are_strings PASSED [ 30%]
+apps/trade/tests/test_trade_service.py::BuildTradeSummaryTests::test_summary_contains_expected_keys PASSED [ 32%]
+apps/trade/tests/test_trade_service.py::BuildTradeSummaryTests::test_summary_values_match_model PASSED [ 34%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_link_two_trades PASSED [ 36%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_missing_partner_raises_partner_not_found PASSED [ 39%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_relinking_clears_old_partner PASSED [ 41%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_self_link_raises_value_error PASSED [ 43%]
+apps/trade/tests/test_trade_service.py::LinkTradesTests::test_unlink_trades PASSED [ 45%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_coincidental_oth_invoice_no_without_hide_log_is_still_stamped PASSED [ 47%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_genuinely_hidden_boe_is_not_restamped PASSED [ 50%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_non_hidden_boe_is_still_stamped_normally PASSED [ 52%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_restored_boe_is_stamped_normally_afterwards PASSED [ 54%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_serializer_update_call_site_does_not_unhide_boe PASSED [ 56%]
+apps/trade/tests/test_trade_service.py::StampBoeInvoiceFromTradeHiddenGuardTests::test_trade_without_invoice_number_is_noop_regardless_of_hidden_state PASSED [ 58%]
+apps/reconciliation/tests/test_reconciliation.py::MissingBoeQueryTests::test_detects_sale_line_with_no_boe_linked PASSED [ 60%]
+apps/reconciliation/tests/test_reconciliation.py::MissingBoeQueryTests::test_excludes_purchase_direction PASSED [ 63%]
+apps/reconciliation/tests/test_reconciliation.py::MissingBoeQueryTests::test_excludes_sale_line_when_boe_is_linked PASSED [ 65%]
+apps/reconciliation/tests/test_reconciliation.py::MissingInvoiceQueryTests::test_detects_boe_with_blank_invoice_no PASSED [ 67%]
+apps/reconciliation/tests/test_reconciliation.py::MissingInvoiceQueryTests::test_excludes_boe_with_invoice_no_set PASSED [ 69%]
+apps/reconciliation/tests/test_reconciliation.py::DuplicateDebitsQueryTests::test_detects_the_double_debit_bug_scenario PASSED [ 71%]
+apps/reconciliation/tests/test_reconciliation.py::DuplicateDebitsQueryTests::test_line_level_fix_excludes_matched_boe PASSED [ 73%]
+apps/reconciliation/tests/test_reconciliation.py::CifComparisonQueryTests::test_flags_mismatch_beyond_tolerance PASSED [ 76%]
+apps/reconciliation/tests/test_reconciliation.py::CifComparisonQueryTests::test_no_flag_when_within_tolerance PASSED [ 78%]
+apps/reconciliation/tests/test_reconciliation.py::MultiBoeMultiInvoiceQueryTests::test_multi_boe_per_invoice_detects_trade_with_two_boes PASSED [ 80%]
+apps/reconciliation/tests/test_reconciliation.py::MultiBoeMultiInvoiceQueryTests::test_multi_invoice_per_boe_detects_boe_with_two_trades PASSED [ 82%]
+apps/reconciliation/tests/test_reconciliation.py::DuplicateBoesQueryTests::test_detects_near_duplicate_boes PASSED [ 84%]
+apps/reconciliation/tests/test_reconciliation.py::DuplicateBoesQueryTests::test_no_flag_when_cif_far_apart PASSED [ 86%]
+apps/reconciliation/tests/test_reconciliation.py::SummaryQueryTests::test_summary_returns_expected_keys PASSED [ 89%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_link_adds_boe_to_trade_and_logs PASSED [ 91%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_link_does_not_unhide_a_genuinely_hidden_boe PASSED [ 93%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_merge_boe_delegates_to_boe_service_and_logs PASSED [ 95%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_note_creates_reconciliation_note_and_log PASSED [ 97%]
+apps/reconciliation/tests/test_reconciliation.py::ReconciliationWriteActionTests::test_note_rejects_multiple_targets PASSED [100%]
+
+============================== 46 passed in 3.35s ==============================

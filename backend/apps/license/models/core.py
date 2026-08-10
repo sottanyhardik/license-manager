@@ -1030,10 +1030,12 @@ class LicenseImportItemsModel(models.Model):
               All items on this licence sharing the same condition_type share
               that pool. available_value = min(pool_remaining, license_balance).
               (Computed via `license.services.condition_pool`.)
-        3. If condition_type == "AU": item is non-transferable; available_value
-              still tracks license_balance (the restriction is on transfer of
-              the licence, not on use of the item).
-        4. Otherwise (empty condition_type / "open"): available_value = license_balance.
+        3. If the import credit row carries a positive FC CIF, non-% items
+              use that item's own CIF less its own applicable BOE/allotment
+              usage.  A zero-CIF item instead uses the live licence balance.
+        4. If condition_type == "AU": the same CIF-source hierarchy applies;
+              AU remains non-transferable, not a separate CIF pool.
+        5. Otherwise (empty condition_type / "open"): use the same hierarchy.
 
         For BULK contexts (many items on the same licence) prefer
         `condition_pool.compute_condition_pools(license)` once and reuse the
@@ -1051,26 +1053,37 @@ class LicenseImportItemsModel(models.Model):
         `condition_pool._resolve_available_value`'s docstring) — never let
         the two drift apart.
         """
-        if not self.license:
+        if not self.license_id:
             return DEC_0
 
         # Special marker value
         if self.cif_inr == Decimal("0.01") or self.cif_fc == Decimal("0.01"):
             return Decimal("0.01")
 
-        license_balance = self.license.balance_cif or DEC_0
+        # `LicenseBalance.balance_cif` is a denormalized cache. Reconciliation
+        # allocations can change the Financial Ledger without refreshing that
+        # cache, so this foundational single-item calculation must read the
+        # authoritative live balance. Bulk callers use
+        # `condition_pool.available_value_bulk_map()` instead.
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
         cond = (self.condition_type or "").strip()
 
         # Percentage condition — pool-based shared limit.
         if cond.endswith("%"):
+            license_balance = LicenseBalanceCalculator.calculate_financial_balance(self.license)
             from apps.license.services.condition_pool import remaining_for_condition
             remaining = remaining_for_condition(self.license, cond)
             if remaining is None:
                 return license_balance
             return min(remaining, license_balance)
 
-        # "AU" or open: track licence balance directly.
-        return license_balance
+        # Positive import-credit CIF is an item-level attribution.  A missing
+        # (zero) item CIF retains the authoritative live Financial Ledger
+        # fallback; never use the denormalized LicenseBalance cache here.
+        from apps.license.services.balance_calculator import ItemBalanceCalculator
+        if ItemBalanceCalculator.has_item_attributed_cif(self):
+            return ItemBalanceCalculator.calculate_item_attributed_balance(self)
+        return LicenseBalanceCalculator.calculate_financial_balance(self.license)
 
     @cached_property
     def license_expiry(self) -> Optional[date]:

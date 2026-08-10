@@ -26,7 +26,7 @@ from decimal import Decimal
 from django.test import TestCase
 
 from apps.core.scripts.calculate_balance import calculate_available_value, update_balance_values
-from apps.license.models import LicenseExportItemModel
+from apps.license.models import LicenseExportItemModel, LicenseImportItemsModel
 
 from .test_balance_ledger_views import LicenseBalanceLedgerFixtureMixin
 
@@ -99,6 +99,39 @@ class WriterSplitConsolidationTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.assertEqual(calculate_available_value(item1), round(float(license_obj.balance_cif), 2))
         self.assertEqual(calculate_available_value(item1), 7777.00)
 
+    def test_serial_one_fallback_uses_live_balance_not_stale_cache(self):
+        """BL-LEDGER-02: the serial-1 fallback used to read
+        `instance.license.balance_cif` (the denormalized `LicenseBalance`
+        cache, which has no signal on reconciliation-allocation changes and
+        can go stale) directly. It now reads the LIVE
+        `LicenseBalanceCalculator.calculate_financial_balance()` figure —
+        same "serial 1 absorbs the full balance" rule, just no longer
+        vulnerable to a stale cache."""
+        from apps.license.models.core import LicenseBalance
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("7777.00"))
+
+        item1 = self.make_item(license_obj, 1)
+        item1.cif_fc = Decimal("0.00")
+        item1.save()
+        item2 = self.make_item(license_obj, 2)
+        item2.cif_fc = Decimal("0.00")
+        item2.save()
+
+        live_balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
+        self.assertEqual(live_balance, Decimal("7777.00"))
+
+        # Deliberately desynchronize the cache from the live value (bypasses
+        # the item-save signal that would otherwise keep it fresh here).
+        LicenseBalance.objects.filter(license=license_obj).update(balance_cif=Decimal("0.00"))
+        item1.refresh_from_db()
+
+        self.assertEqual(calculate_available_value(item1), round(float(live_balance), 2))
+        self.assertEqual(calculate_available_value(item1), 7777.00)
+
     def test_update_balance_values_writer_matches_signal_writer_property(self):
         """End-to-end: after `update_balance_values(item)` runs (the
         BOE/Allotment-save path), the stored `available_value` matches
@@ -128,6 +161,118 @@ class BalanceCifFcPropertyCollapseTests(LicenseBalanceLedgerFixtureMixin, TestCa
         self.assertEqual(item.balance_cif_fc, item.available_value_calculated)
         self.assertEqual(item.balance_cif_fc, Decimal("3000.00"))
 
+
+class AvailableValueCalculatedLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCase):
+    """BL-AVAIL-01: the property must never use LicenseBalance's cache."""
+
+    @staticmethod
+    def _set_cached_balance(license_obj, value):
+        from apps.license.models.core import LicenseBalance
+        LicenseBalance.objects.filter(license=license_obj).update(balance_cif=value)
+
+    def test_no_license_returns_decimal_zero(self):
+        self.assertEqual(LicenseImportItemsModel().available_value_calculated, Decimal("0"))
+
+    def test_open_and_au_items_use_live_balance_when_cache_is_stale_low(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("1000.00"))
+        open_item = self.make_item(license_obj, 1)
+        au_item = self.make_item(license_obj, 2)
+        au_item.condition_type = "AU"
+        au_item.save()
+
+        self._set_cached_balance(license_obj, Decimal("1.00"))
+
+        self.assertEqual(open_item.available_value_calculated, Decimal("1000.00"))
+        self.assertEqual(au_item.available_value_calculated, Decimal("1000.00"))
+        self.assertEqual(open_item.balance_cif_fc, open_item.available_value_calculated)
+        self.assertIsInstance(open_item.available_value_calculated, Decimal)
+
+    def test_open_item_uses_live_balance_when_cache_is_stale_high(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("1000.00"))
+        item = self.make_item(license_obj, 1)
+        boe = self.make_boe(company)
+        self.make_debit_row(boe, item, cif_fc=Decimal("600.00"))
+
+        self._set_cached_balance(license_obj, Decimal("1000.00"))
+
+        self.assertEqual(item.available_value_calculated, Decimal("400.00"))
+
+    def test_percent_pool_uses_live_balance_when_it_is_the_limit(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("1000.00"))
+        percent_item = self.make_item(license_obj, 1)
+        percent_item.condition_type = "10%"
+        percent_item.save()
+        open_item = self.make_item(license_obj, 2)
+        boe = self.make_boe(company)
+        self.make_debit_row(boe, open_item, cif_fc=Decimal("950.00"))
+
+        self._set_cached_balance(license_obj, Decimal("1000.00"))
+
+        # Pool is 100.00, but the live licence balance is only 50.00.
+        self.assertEqual(percent_item.available_value_calculated, Decimal("50.00"))
+
+    def test_percent_pool_remains_the_limit_when_live_balance_is_higher(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("1000.00"))
+        item = self.make_item(license_obj, 1)
+        item.condition_type = "10%"
+        item.save()
+
+        self._set_cached_balance(license_obj, Decimal("0.00"))
+
+        self.assertEqual(item.available_value_calculated, Decimal("100.00"))
+
+    def test_marker_remains_exact_decimal_marker(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        item.cif_fc = Decimal("0.01")
+        item.save()
+        self.assertEqual(item.available_value_calculated, Decimal("0.01"))
+
+    def test_standalone_serializer_fallback_uses_live_balance(self):
+        from apps.license.serializers.license import LicenseImportItemSerializer
+
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("1000.00"))
+        item = self.make_item(license_obj, 1)
+        self._set_cached_balance(license_obj, Decimal("1.00"))
+
+        serializer = LicenseImportItemSerializer()
+        self.assertEqual(serializer.get_available_value(item), 1000.0)
+        self.assertEqual(serializer.get_balance_cif_fc(item), 1000.0)
+
+    def test_bulk_live_value_query_count_is_flat_for_more_items_and_licenses(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from apps.license.services.condition_pool import available_value_bulk_map
+
+        company = self.make_company()
+        first_license = self.make_license(company)
+        LicenseExportItemModel.objects.create(license=first_license, cif_fc=Decimal("1000.00"))
+        first_item = self.make_item(first_license, 1)
+        with CaptureQueriesContext(connection) as one_item_queries:
+            available_value_bulk_map([first_item])
+
+        second_license = self.make_license(company)
+        LicenseExportItemModel.objects.create(license=second_license, cif_fc=Decimal("1000.00"))
+        more_items = [first_item, self.make_item(first_license, 2)]
+        more_items.extend([self.make_item(second_license, serial) for serial in (1, 2)])
+        with CaptureQueriesContext(connection) as many_item_queries:
+            available_value_bulk_map(more_items)
+
+        self.assertEqual(len(many_item_queries), len(one_item_queries))
+
+
+class BalanceCifFcPropertyCollapseRegressionTests(LicenseBalanceLedgerFixtureMixin, TestCase):
     def test_balance_cif_fc_equals_available_value_calculated_for_marker_item(self):
         """Before the collapse, `balance_cif_fc` was missing the 0.01
         marker check that `available_value_calculated` has — the two would

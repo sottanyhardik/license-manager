@@ -28,7 +28,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.allotment.models import AllotmentModel
 from apps.core.models import CompanyModel, HeadSIONNormsModel, ItemNameModel, SionNormClassModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 
 User = get_user_model()
 
@@ -100,6 +100,39 @@ def _allocate(client, allotment_obj, item_id, qty, cif_fc):
 
 
 class TestAllocateItemsUsesLiveBalance:
+    def test_stale_low_cached_balance_does_not_reject_live_valid_allocation(
+        self, allotment_client, allotment_obj,
+    ):
+        company = CompanyModel.objects.create(iec="4044444444", name="Allocate Items Live Low Cache Co")
+        license_obj = _make_license("ALLOC-LIVE-LOW-CACHE", company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("500.00"))
+        item = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, quantity=Decimal("500.000"),
+            available_quantity=Decimal("500.000"), condition_type="",
+        )
+        _set_live_balance(license_obj, Decimal("1.00"))
+
+        response = _allocate(allotment_client, allotment_obj, item.id, "100", "400.00")
+
+        assert response.status_code == 201, response.data
+
+    def test_stale_high_cached_balance_does_not_allow_excess_allocation(
+        self, allotment_client, allotment_obj,
+    ):
+        company = CompanyModel.objects.create(iec="4055555555", name="Allocate Items Live High Cache Co")
+        license_obj = _make_license("ALLOC-LIVE-HIGH-CACHE", company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100.00"))
+        item = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, quantity=Decimal("500.000"),
+            available_quantity=Decimal("500.000"), condition_type="",
+        )
+        _set_live_balance(license_obj, Decimal("500.00"))
+
+        response = _allocate(allotment_client, allotment_obj, item.id, "100", "200.00")
+
+        assert response.status_code == 400, response.data
+        assert "Insufficient available CIF FC" in response.data["errors"][0]["error"]
+
     def test_succeeds_despite_stale_is_restricted_flag_and_stale_stored_available_value(
         self, allotment_client, allotment_obj,
     ):
@@ -109,6 +142,7 @@ class TestAllocateItemsUsesLiveBalance:
         # (154802.90). The fix must ignore both and use the live value.
         company = CompanyModel.objects.create(iec="4011050782", name="Allocate Items Stale Flag Co")
         license_obj = _make_license("0311050782-ALLOC-TEST", company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("154802.90"))
         item = LicenseImportItemsModel.objects.create(
             license=license_obj,
             serial_number=13,
@@ -135,6 +169,7 @@ class TestAllocateItemsUsesLiveBalance:
     def test_rejects_when_live_balance_genuinely_insufficient(self, allotment_client, allotment_obj):
         company = CompanyModel.objects.create(iec="4022222222", name="Allocate Items Insufficient Co")
         license_obj = _make_license("ALLOC-INSUFFICIENT-TEST", company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100.00"))
         item = LicenseImportItemsModel.objects.create(
             license=license_obj,
             serial_number=1,
@@ -157,6 +192,7 @@ class TestAllocateItemsUsesLiveBalance:
     def test_succeeds_at_exactly_the_live_balance_boundary(self, allotment_client, allotment_obj):
         company = CompanyModel.objects.create(iec="4033333333", name="Allocate Items Boundary Co")
         license_obj = _make_license("ALLOC-BOUNDARY-TEST", company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("500.00"))
         item = LicenseImportItemsModel.objects.create(
             license=license_obj,
             serial_number=1,

@@ -103,7 +103,9 @@ def test_pooling_two_different_hsn_items_under_one_plan_line_is_rejected(
     }, format="json")
 
     assert resp.status_code == 400, resp.data
-    assert "exceeds capacity" in resp.data.get("error", "")
+    # CanonicalPlanningService returns structured error: {code, message, details}
+    assert resp.data.get("code") == "INSUFFICIENT_QUANTITY"
+    assert "exceeds" in resp.data.get("message", "").lower()
 
 
 @pytest.mark.django_db

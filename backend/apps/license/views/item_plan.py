@@ -175,7 +175,10 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
           * Σ planned_cif_fc across the licence ≤ licence balance (shared pool).
         Passing an empty `lines` list clears the plan.
         """
-        from collections import defaultdict
+        from apps.license.services.canonical_planning_service import (
+            CanonicalPlanningService,
+            PlanningError,
+        )
 
         license_id = request.data.get("license")
         lines = request.data.get("lines", [])
@@ -185,111 +188,64 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         if not isinstance(lines, list):
             return Response({"error": "lines must be a list"}, status=status.HTTP_400_BAD_REQUEST)
 
-        from apps.license.services.plan_grouping import group_ids_of
-        from apps.license.services.plan_enforcement import group_used_snapshot, live_allotted_qty_for
-
-        # Everything below — the capacity/CIF-pool check AND the write — runs
-        # under one transaction with the licence + its items row-locked, so
-        # two concurrent bulk_upsert calls for the same licence serialize on
-        # these locks instead of each reading a stale available_quantity/
-        # balance_cif and collectively overcommitting it.
-        with transaction.atomic():
-            try:
-                license_obj = LicenseDetailsModel.objects.select_for_update().get(pk=license_id)
-            except LicenseDetailsModel.DoesNotExist:
-                return Response({"error": "License not found"}, status=status.HTTP_404_NOT_FOUND)
-
-            # Pre-load + lock the licence's items for validation.
-            items_by_id = {
-                it.id: it for it in
-                LicenseImportItemsModel.objects.select_for_update().filter(license_id=license_id)
+        # Normalize request lines to CanonicalPlanningService input format.
+        # The service expects import_item_id and requested_quantity keys;
+        # the API uses import_item and planned_quantity for compatibility.
+        items_input = [
+            {
+                "import_item_id": ln.get("import_item"),
+                "item_name_id": ln.get("item_name"),
+                "requested_quantity": ln.get("planned_quantity", 0) or 0,
+                "unit_price": ln.get("unit_price", 0) or 0,
+                "note": ln.get("note", ""),
             }
+            for ln in lines
+        ]
 
-            # --- Validate line membership + accumulate per-item qty / total CIF ---
-            errors = []
-            qty_by_item = defaultdict(lambda: Decimal("0"))
-            total_planned_cif = Decimal("0")
-            for idx, ln in enumerate(lines):
-                item_id = ln.get("import_item")
-                if item_id not in items_by_id:
-                    errors.append({"index": idx, "import_item": item_id,
-                                   "error": "Item not found for this licence"})
-                    continue
-                qty_by_item[item_id] += Decimal(str(ln.get("planned_quantity", 0) or 0))
-                total_planned_cif += Decimal(str(ln.get("planned_cif_fc", 0) or 0))
-            if errors:
-                return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            # The service handles all validation (license exists, items belong,
+            # capacity check, CIF pool check) and persistence inside one atomic
+            # transaction with row locks, so concurrent calls serialize safely.
+            result = CanonicalPlanningService.build_canonical_plan(
+                license_id=license_id,
+                items=items_input,
+                force_replan=True,
+                company_id=request.user.company_id if hasattr(request.user, 'company_id') else None,
+            )
 
-            # Per-group capacity: Σ split qty for the item's description-group ≤
-            # (available + live-allotted) summed across the whole group.
-            for item_id, planned_qty in qty_by_item.items():
-                item = items_by_id[item_id]
-                gids = group_ids_of(item)
-                avail_sum = sum(
-                    (Decimal(str(items_by_id[i].available_quantity or 0)) for i in gids if i in items_by_id),
-                    Decimal("0"),
-                )
-                capacity = live_allotted_qty_for(gids) + avail_sum
-                if planned_qty > capacity:
-                    return Response({
-                        "error": (
-                            f"Item S.No {item.serial_number}: planned split quantity "
-                            f"{planned_qty} exceeds capacity {capacity}."
-                        ),
-                        "import_item": item_id,
-                    }, status=status.HTTP_400_BAD_REQUEST)
+            # Translate the service result back to the API response format.
+            # Map allocated_items to the expected response structure.
+            response_lines = []
+            for allocated in result["allocated_items"]:
+                # Only include lines with allocated quantity > 0 (the service
+                # returns all requested items, but we only persist non-zero rows)
+                if allocated.get("allocated_quantity", 0) > 0:
+                    response_lines.append({
+                        "import_item": allocated["import_item_id"],
+                        "item_name": allocated.get("item_name_id"),
+                        "planned_quantity": allocated["allocated_quantity"],
+                        "unit_price": allocated["unit_price"],
+                        "planned_cif_fc": allocated["planned_cif_fc"],
+                        "note": allocated.get("note", ""),
+                    })
 
-            # Shared CIF pool: Σ planned_cif_fc ≤ licence balance.
-            balance_cif = Decimal(str(license_obj.get_balance_cif or 0))
-            if total_planned_cif > balance_cif:
-                return Response({
-                    "error": (
-                        f"Planned CIF total {total_planned_cif:.2f} exceeds licence "
-                        f"balance {balance_cif:.2f}."
-                    ),
-                    "planned_cif_total": str(total_planned_cif),
-                    "balance_cif": str(balance_cif),
-                }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"saved": len(response_lines), "lines": response_lines},
+                status=status.HTTP_200_OK,
+            )
 
-            # --- Full replace ----------------------------------------------
-            # Compute each line's usage baseline (live-allotted total for its
-            # group, right now) BEFORE deleting the old plan rows — deleting a
-            # LicenseItemPlan row never touches AllotmentItems, so this is safe
-            # either way, but computing it upfront keeps the intent obvious.
-            baseline_cache: dict = {}
-
-            def _baseline(item_id):
-                if item_id not in baseline_cache:
-                    item = items_by_id.get(item_id)
-                    baseline_cache[item_id] = group_used_snapshot(item) if item is not None else (Decimal("0"), Decimal("0"))
-                return baseline_cache[item_id]
-
-            results = []
-            LicenseItemPlan.objects.filter(license_id=license_id).delete()
-            for ln in lines:
-                baseline_qty, baseline_val = _baseline(ln.get("import_item"))
-                payload = {
-                    "import_item": ln.get("import_item"),
-                    "item_name": ln.get("item_name"),
-                    "planned_quantity": ln.get("planned_quantity", 0) or 0,
-                    "unit_price": ln.get("unit_price", 0) or 0,
-                    "planned_cif_fc": ln.get("planned_cif_fc", 0) or 0,
-                    "planned_cif_inr": ln.get("planned_cif_inr", 0) or 0,
-                    "note": ln.get("note", ""),
-                }
-                serializer = LicenseItemPlanSerializer(data=payload)
-                serializer.is_valid(raise_exception=True)
-                # baseline_used_* aren't user-facing serializer fields — passed
-                # as save() kwargs so they land on the model instance without
-                # needing to be exposed/writable via the API payload.
-                serializer.save(
-                    license=license_obj,
-                    baseline_used_quantity=baseline_qty,
-                    baseline_used_cif_fc=baseline_val,
-                )
-                results.append(serializer.data)
-
-        return Response({"saved": len(results), "lines": results}, status=status.HTTP_200_OK)
+        except PlanningError as exc:
+            # Translate service errors to API response format, preserving the
+            # error code and details for client-side error handling.
+            error_dict = exc.as_dict()
+            # Map specific error codes to HTTP status codes.
+            if error_dict["code"] == "LICENSE_NOT_FOUND":
+                http_status = status.HTTP_404_NOT_FOUND
+            elif error_dict["code"] in ("COMPANY_MISMATCH", "LICENSE_MISMATCH"):
+                http_status = status.HTTP_403_FORBIDDEN
+            else:  # INVALID_INPUT, INSUFFICIENT_QUANTITY
+                http_status = status.HTTP_400_BAD_REQUEST
+            return Response(error_dict, status=http_status)
 
     @action(detail=False, methods=["post"], url_path="e1-auto-plan")
     def e1_auto_plan(self, request):
@@ -381,6 +337,10 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         Body:  {"license": <id>}
         Returns: {"norm": "E1"|"E5"|"E126"|"E132", "planned": N, "remaining_cif": X, "lines": [...]}
         """
+        from apps.license.services.canonical_planning_service import (
+            CanonicalPlanningService,
+            PlanningError,
+        )
         from apps.license.services.norm_plan import detect_norm
 
         license_id = request.data.get("license")
@@ -430,28 +390,67 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from apps.license.services.plan_enforcement import save_plan_lines_for_license
-        with transaction.atomic():
-            save_plan_lines_for_license(license_obj, lines)
-
-        return Response(
+        # Convert the legacy compute_*_auto_plan output to CanonicalPlanningService input format.
+        # The compute functions return dicts with: import_item, item_name, planned_quantity,
+        # unit_price, planned_cif_fc, note.
+        items_input = [
             {
-                "norm": norm,
-                "planned": len(lines),
-                "remaining_cif": remaining_cif,
-                "lines": [
-                    {
-                        "import_item":      ln["import_item"],
-                        "item_name_label":  (ln.get("note", "").split("— ")[-1].rstrip(")") or ""),
-                        "planned_quantity":  ln["planned_quantity"],
-                        "unit_price":        ln["unit_price"],
-                        "planned_cif_fc":    ln["planned_cif_fc"],
-                    }
-                    for ln in lines
-                ],
-            },
-            status=status.HTTP_200_OK,
-        )
+                "import_item_id": ln["import_item"],
+                "item_name_id": ln.get("item_name"),
+                "requested_quantity": ln["planned_quantity"],
+                "unit_price": ln["unit_price"],
+                "note": ln.get("note", ""),
+            }
+            for ln in lines
+        ]
+
+        try:
+            # Use CanonicalPlanningService as the authoritative persistence engine.
+            # force_replan=True because auto-plan always replaces the existing plan.
+            result = CanonicalPlanningService.build_canonical_plan(
+                license_id=license_id,
+                norm_class=norm,
+                items=items_input,
+                force_replan=True,
+                company_id=request.user.company_id if hasattr(request.user, 'company_id') else None,
+            )
+
+            # Build the response with the same format as before for backward compatibility.
+            # Extract item_name_label from the note field (format: "Auto-planned (E1 Step X – ...)")
+            response_lines = []
+            for allocated in result["allocated_items"]:
+                if allocated.get("allocated_quantity", 0) > 0:
+                    note = allocated.get("note", "")
+                    # Extract label from note: "Auto-planned (E1 Step X – Label)" → "Label"
+                    item_name_label = (note.split("— ")[-1].rstrip(")") or "") if note else ""
+                    response_lines.append({
+                        "import_item": allocated["import_item_id"],
+                        "item_name_label": item_name_label,
+                        "planned_quantity": allocated["allocated_quantity"],
+                        "unit_price": allocated["unit_price"],
+                        "planned_cif_fc": allocated["planned_cif_fc"],
+                    })
+
+            summary = result["allocation_summary"]
+            return Response(
+                {
+                    "norm": norm,
+                    "planned": len(response_lines),
+                    "remaining_cif": float(summary["remaining_balance_cif"]),
+                    "lines": response_lines,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except PlanningError as exc:
+            error_dict = exc.as_dict()
+            if error_dict["code"] == "LICENSE_NOT_FOUND":
+                http_status = status.HTTP_404_NOT_FOUND
+            elif error_dict["code"] in ("COMPANY_MISMATCH", "LICENSE_MISMATCH"):
+                http_status = status.HTTP_403_FORBIDDEN
+            else:  # INVALID_INPUT, INSUFFICIENT_QUANTITY
+                http_status = status.HTTP_400_BAD_REQUEST
+            return Response(error_dict, status=http_status)
 
     @action(detail=False, methods=["post"], url_path="auto-plan-all")
     def auto_plan_all(self, request):
@@ -468,6 +467,10 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         """
         from decimal import Decimal
         from django.db import models as _models
+        from apps.license.services.canonical_planning_service import (
+            CanonicalPlanningService,
+            PlanningError,
+        )
         from apps.license.services.balance_calculator import LicenseBalanceCalculator
         from apps.license.services.norm_plan import detect_norm
         from apps.license.services.e1_auto_plan import compute_e1_auto_plan
@@ -512,6 +515,7 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
 
             res["total"] += 1
             try:
+                # Check if already planned (existing plan covers >= 99% of LIVE balance)
                 existing = float(
                     LicenseItemPlan.objects
                     .filter(license=lic)
@@ -521,25 +525,49 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
                     res["already_planned"] += 1
                     continue
 
+                # Compute the plan lines using the appropriate norm engine
                 if norm == 'E1':
                     lines, _ = compute_e1_auto_plan(lic)
                 elif norm == 'E5':
                     lines, _ = compute_e5_auto_plan(lic)
                 elif norm == 'E126':
                     lines, _ = compute_e126_auto_plan(lic)
-                else:
+                else:  # E132
                     lines, _ = compute_e132_auto_plan(lic)
 
                 if not lines:
                     res["already_planned"] += 1
                     continue
 
-                from apps.license.services.plan_enforcement import save_plan_lines_for_license
-                with transaction.atomic():
-                    save_plan_lines_for_license(lic, lines)
+                # Convert the legacy compute_*_auto_plan output to CanonicalPlanningService input format
+                items_input = [
+                    {
+                        "import_item_id": ln["import_item"],
+                        "item_name_id": ln.get("item_name"),
+                        "requested_quantity": ln["planned_quantity"],
+                        "unit_price": ln["unit_price"],
+                        "note": ln.get("note", ""),
+                    }
+                    for ln in lines
+                ]
+
+                # Use CanonicalPlanningService as the authoritative persistence engine.
+                # force_replan=True because auto-plan always replaces the existing plan.
+                CanonicalPlanningService.build_canonical_plan(
+                    license_id=lic.id,
+                    norm_class=norm,
+                    items=items_input,
+                    force_replan=True,
+                    company_id=None,  # Trusted internal batch operation
+                )
                 res["planned"] += 1
 
+            except PlanningError as exc:
+                # Isolate failures per-license; batch continues
+                res["failed"] += 1
+                res["errors"].append({"license": lic.license_number, "error": exc.message})
             except Exception as exc:
+                # Catch other unexpected errors and report them
                 res["failed"] += 1
                 res["errors"].append({"license": lic.license_number, "error": str(exc)})
 

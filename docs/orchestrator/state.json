@@ -1,0 +1,56 @@
+{
+  "program": "license-manager-modernization",
+  "status": "RUNNING",
+  "current_module": 2,
+  "current_phase": "DISCOVERY",
+  "started_at": "2026-08-10T17:41:22.098624",
+  "last_checkpoint": null,
+  "modules": {
+    "1": {
+      "state": "FROZEN",
+      "phase": null
+    },
+    "2": {
+      "state": "QUEUED",
+      "phase": null
+    },
+    "3": {
+      "state": "QUEUED",
+      "phase": null
+    },
+    "4": {
+      "state": "QUEUED",
+      "phase": null
+    },
+    "5": {
+      "state": "QUEUED",
+      "phase": null
+    },
+    "6": {
+      "state": "QUEUED",
+      "phase": null
+    },
+    "7": {
+      "state": "QUEUED",
+      "phase": null
+    },
+    "8": {
+      "state": "QUEUED",
+      "phase": null
+    },
+    "9": {
+      "state": "QUEUED",
+      "phase": null
+    },
+    "10": {
+      "state": "QUEUED",
+      "phase": null
+    },
+    "11": {
+      "state": "QUEUED",
+      "phase": null
+    }
+  },
+  "agents": {},
+  "final_gate": false
+}

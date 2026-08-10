@@ -243,12 +243,75 @@ class AllotmentItems(AuditModel):
     )
     is_boe = models.BooleanField(default=False)
 
+    # Allocation lifecycle (Phase A.1)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('CREATED', 'Created'),
+            ('RELEASED', 'Released'),
+            ('REACTIVATED', 'Reactivated'),
+            ('COMPLETED', 'Completed'),
+        ],
+        default='CREATED',
+        db_index=True,
+    )
+
+    # Release tracking
+    released_quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        default=DEC_0,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(DEC_0)],
+    )
+    released_date = models.DateTimeField(null=True, blank=True)
+    release_reason = models.CharField(max_length=500, null=True, blank=True)
+
+    # Reactivation tracking
+    reactivated_quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        default=DEC_0,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(DEC_0)],
+    )
+    reactivated_date = models.DateTimeField(null=True, blank=True)
+    reactivated_from_company = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text='Audit label of previous company (if changed during reactivation)',
+    )
+
+    # Version history
+    previous_version = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='next_version',
+    )
+
     class Meta:
         ordering = ["qty"]
         unique_together = ("item", "allotment")
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['allotment', 'status']),
+        ]
 
     def __str__(self):
         return getattr(self.item, "description", "Unknown Item")
+
+    @property
+    def is_released(self):
+        return self.status in ['RELEASED', 'COMPLETED']
+
+    @property
+    def is_reactivated(self):
+        return self.status == 'REACTIVATED'
 
     # `item` is nullable on this model, so every walk through self.item.license
     # must short-circuit on a missing item or license. Bare

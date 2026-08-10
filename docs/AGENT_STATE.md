@@ -9,21 +9,22 @@
 
 ### ACTIVE AGENTS (Running)
 
-#### Agent: QA_TEST_ENGINEER_4EE
+#### Agent: REFACTOR_SPECIALIST_4EF
 | Field | Value |
 |-------|-------|
-| **Role** | QA Test Engineer |
-| **Task** | Phase 4E-E: Cross-Output Parity Verification |
+| **Role** | Refactor Specialist |
+| **Task** | Phase 4E-F: Legacy Code Cleanup |
 | **Status** | 🔄 RUNNING |
-| **Assigned Work** | Test API ↔ PDF ↔ Excel parity (14 scenarios × 3 outputs) |
+| **Assigned Work** | Remove dead functions, update tests, verify regression |
 | **Start Time** | 2026-08-10 (just launched) |
-| **Expected Duration** | ~20 minutes |
-| **Output Location** | /private/tmp/claude-501/tasks/a964b19213ebbc4af.output |
-| **Dependencies** | 4E-D PASS ✅ (assumed, following continuous execution) |
+| **Expected Duration** | ~15 minutes |
+| **Output Location** | /private/tmp/claude-501/tasks/a77c0e94b14fb1012.output |
+| **Dependencies** | 4E-E PASS ✅ (received) |
 | **Blockers** | None |
-| **Next Action** | Report 4E-E completion + gate decision |
+| **Next Action** | Report 4E-F completion + gate decision |
 
 **Completed Agents:**
+- QA_TEST_ENGINEER_4EE: ✅ COMPLETED (4E-E gate PASS ✓ + bug fix)
 - BACKEND_ENGINEER_4ED: ✅ COMPLETED (4E-D gate PASS ✓)
 - FRONTEND_ENGINEER_4EC: ✅ COMPLETED (4E-C gate PASS ✓)
 - BACKEND_ENGINEER_4EB_VERIFY: ✅ COMPLETED (4E-B gate PASS ✓)

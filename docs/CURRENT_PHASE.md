@@ -10,9 +10,9 @@
 | Field | Value |
 |-------|-------|
 | **Module** | Module 1: Ledger / Balance |
-| **Phase** | 4E-E: Cross-Output Parity Verification |
-| **Sub-Phase** | Testing (API ↔ PDF ↔ Excel Parity) |
-| **Gate** | 4E-E (ACTIVE) |
+| **Phase** | 4E-F: Legacy Code Cleanup |
+| **Sub-Phase** | Removal (Dead Code Deletion + Testing) |
+| **Gate** | 4E-F (ACTIVE) |
 | **Status** | IN PROGRESS |
 
 ---

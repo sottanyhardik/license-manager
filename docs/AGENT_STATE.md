@@ -9,19 +9,22 @@
 
 ### ACTIVE AGENTS (Running)
 
-#### Agent: BACKEND_ENGINEER_4EB_VERIFY
+#### Agent: FRONTEND_ENGINEER_4EC
 | Field | Value |
 |-------|-------|
-| **Role** | Backend Verification + Performance |
-| **Task** | Phase 4E-B Final Verification |
+| **Role** | Frontend Engineer + Implementation |
+| **Task** | Phase 4E-C: Frontend PDF Canonical Migration |
 | **Status** | 🔄 RUNNING |
-| **Assigned Work** | Authorization, Performance, Semantic Parity |
-| **Start Time** | 2026-08-10 (during this session) |
-| **Expected Duration** | ~15 minutes |
-| **Output Location** | /private/tmp/claude-501/tasks/ad92ba4fbf01b09e5.output |
-| **Dependencies** | None (read-only verification) |
+| **Assigned Work** | Migrate ledgerExport.js to canonical API |
+| **Start Time** | 2026-08-10 (just launched) |
+| **Expected Duration** | ~30 minutes |
+| **Output Location** | /private/tmp/claude-501/tasks/a683cd356f82a95e0.output |
+| **Dependencies** | 4E-B PASS ✅ (received) |
 | **Blockers** | None |
-| **Next Action** | Return Phase 4E-B gate decision |
+| **Next Action** | Report 4E-C completion + gate decision |
+
+**Previous Agent (Completed):**
+- BACKEND_ENGINEER_4EB_VERIFY: ✅ COMPLETED (4E-B gate PASS ✓)
 
 ---
 

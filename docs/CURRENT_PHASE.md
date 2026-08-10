@@ -10,9 +10,9 @@
 | Field | Value |
 |-------|-------|
 | **Module** | Module 1: Ledger / Balance |
-| **Phase** | 4E-B: Backend PDF Canonical Migration |
-| **Sub-Phase** | Final Verification (Auth, Performance, Parity) |
-| **Gate** | 4E-B (PENDING COMPLETION) |
+| **Phase** | 4E-C: Frontend PDF Canonical Migration |
+| **Sub-Phase** | Implementation (Canonical API Integration) |
+| **Gate** | 4E-C (ACTIVE) |
 | **Status** | IN PROGRESS |
 
 ---

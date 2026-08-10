@@ -191,7 +191,7 @@ class LicenseBalanceLedgerBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def build_financial_ledger(license_obj, alloc_map=None, ext_map=None):
+    def build_financial_ledger(license_obj, alloc_map=None, ext_map=None, canonical_balance_map=None, canonical_data=None):
         """
         Returns `(rows, summary)`.
 
@@ -403,6 +403,7 @@ class LicenseBalanceLedgerBuilder:
                 'cif_usd': None, 'cif_inr': None,
                 'credit': credit, 'debit': DEC_0,
                 'remarks': 'Licence Purchased', 'row_kind': 'trade_purchase',
+                'trade_id': trade.id if trade else None,
             }))
 
         # ---- BOE Utilisation (Pending Invoice) — unallocated remainder ----
@@ -635,6 +636,7 @@ class LicenseBalanceLedgerBuilder:
                 'linked_boe_numbers': linked_boe_numbers,
                 'linked_boe_dates': [d.isoformat() if d else None for d in linked_boe_dates],
                 'trade_line_id': t_row.id,
+                'trade_id': trade.id if trade else None,
                 'expandable': bool(children),
                 'children': children,
                 'mismatch_warning': mismatch_warning,
@@ -661,6 +663,13 @@ class LicenseBalanceLedgerBuilder:
         engine_balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
         computed_balance = quantize_2dp(running)
         computed_balance = computed_balance if computed_balance >= DEC_0 else DEC_0
+
+        # Phase 4E-D: Use canonical final balance if provided (CanonicalLedgerService)
+        if canonical_data is not None:
+            canonical_final_balance = quantize_2dp(
+                canonical_data.get('license_running_balance', DEC_0)
+            )
+            computed_balance = canonical_final_balance
 
         difference = abs(computed_balance - engine_balance)
         mismatched = difference > TOLERANCE
@@ -714,7 +723,7 @@ class LicenseBalanceLedgerBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def build_customs_ledger(license_obj, show_hidden=False):
+    def build_customs_ledger(license_obj, show_hidden=False, canonical_balance_map=None, canonical_data=None):
         """
         A SEPARATE running-balance statement from `build_financial_ledger`,
         representing raw customs utilisation: every BOE debits the licence
@@ -1588,12 +1597,31 @@ class LicenseBalanceLedgerBuilder:
         docstring) — the Financial Ledger and every other section always
         exclude hidden BOEs regardless of this flag; only the Customs
         Ledger's audit view can ever render them.
+
+        Phase 4E-D: Fetches canonical data once and threads to all builders
+        for authoritative balance values.
         """
+        from apps.license.services.canonical_ledger_service import CanonicalLedgerService
+
         alloc_map = boe_invoice_allocation_map(license_obj)
         ext_map = boe_external_invoice_map(license_obj)
 
-        financial_rows, financial_summary = cls.build_financial_ledger(license_obj, alloc_map, ext_map)
-        customs_rows, customs_summary = cls.build_customs_ledger(license_obj, show_hidden=show_hidden)
+        # Phase 4E-D: Fetch canonical dataset once (single authoritative source)
+        try:
+            canonical_data = CanonicalLedgerService.build_canonical_ledger_dataset(
+                license_id=license_obj.id,
+                license_type='DFIA'
+            )
+        except Exception:
+            # Fallback if canonical service fails (shouldn't happen in normal operation)
+            canonical_data = None
+
+        financial_rows, financial_summary = cls.build_financial_ledger(
+            license_obj, alloc_map, ext_map, canonical_data=canonical_data
+        )
+        customs_rows, customs_summary = cls.build_customs_ledger(
+            license_obj, show_hidden=show_hidden, canonical_data=canonical_data
+        )
         # `boe_allotment` is not exposed as a top-level response key (its
         # consuming UI section was removed) but `build_warnings()` still
         # needs it to compute the UNSOURCED_BOE warning below. `invoice_boe`

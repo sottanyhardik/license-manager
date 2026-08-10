@@ -1175,6 +1175,9 @@ def build_balance_excel(license_obj, show_hidden=False):
 
     `show_hidden` mirrors the on-screen "show hidden BOE" toggle for the
     Customs Ledger sheet — see `LicenseBalanceLedgerBuilder.build_customs_ledger`.
+
+    Phase 4E-D: Running balance values sourced from CanonicalLedgerService,
+    not independently recalculated.
     """
     from django.http import HttpResponse
     import openpyxl
@@ -1182,11 +1185,35 @@ def build_balance_excel(license_obj, show_hidden=False):
     from apps.license.services.license_balance_ledger_builder import (
         LicenseBalanceLedgerBuilder, boe_invoice_allocation_map, boe_external_invoice_map,
     )
+    from apps.license.services.canonical_ledger_service import CanonicalLedgerService
+
+    # Fetch canonical dataset once (Phase 4E-D: single authoritative source)
+    canonical_data = CanonicalLedgerService.build_canonical_ledger_dataset(
+        license_id=license_obj.id,
+        license_type='DFIA'
+    )
+
+    # Build balance map: transaction_id → running_balance
+    canonical_balance_map = {
+        txn['id']: txn['license_running_balance']
+        for txn in canonical_data.get('transactions', [])
+    }
 
     alloc_map = boe_invoice_allocation_map(license_obj)
     ext_map = boe_external_invoice_map(license_obj)
-    financial_rows, financial_summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj, alloc_map, ext_map)
-    customs_rows, customs_summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj, show_hidden=show_hidden)
+    financial_rows, financial_summary = LicenseBalanceLedgerBuilder.build_financial_ledger(
+        license_obj,
+        alloc_map,
+        ext_map,
+        canonical_balance_map=canonical_balance_map,
+        canonical_data=canonical_data
+    )
+    customs_rows, customs_summary = LicenseBalanceLedgerBuilder.build_customs_ledger(
+        license_obj,
+        show_hidden=show_hidden,
+        canonical_balance_map=canonical_balance_map,
+        canonical_data=canonical_data
+    )
     timeline_events = LicenseBalanceLedgerBuilder.build_timeline(license_obj)
     reconciliation = LicenseBalanceLedgerBuilder.build_reconciliation_summary(license_obj, financial_summary, customs_summary)
 

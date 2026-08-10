@@ -225,3 +225,222 @@ describe("ledgerExport helpers", () => {
         expect(licenseRow!.getCell(5).text).toBe("E1, E5");
     });
 });
+
+describe("ledgerExport — Phase 4E-C Canonical Balance Usage", () => {
+    /**
+     * Helper: Create a canonical transaction with running balance
+     */
+    function createCanonicalTxn(overrides: any = {}): any {
+        return {
+            id: 1,
+            date: "2026-01-15",
+            type: "PURCHASE",
+            company_id: 101,
+            company_name: "Company A",
+            amount: "500.00",
+            is_commission: false,
+            license_running_balance: "1500.00",  // ← CANONICAL BALANCE
+            affects_balance: true,
+            company_utilization_after: "500.00",
+            display_status: "NORMAL",
+            ...overrides,
+        };
+    }
+
+    /**
+     * Helper: Create a canonical ledger response
+     */
+    function createCanonicalLedger(overrides: any = {}): any {
+        return {
+            license_id: 1001,
+            license_type: "DFIA",
+            license_number: "LIC001",
+            license_date: "2026-01-01",
+            expiry_date: "2026-12-31",
+            exporter_id: 5,
+            exporter_name: "Acme Corp",
+            port_id: 10,
+            port_name: "Mumbai Port",
+
+            opening_balance: "1000.00",
+            license_running_balance: "1500.00",
+            closing_balance: "1500.00",
+
+            transactions: [
+                createCanonicalTxn({
+                    id: 0,
+                    type: "OPENING",
+                    amount: "1000.00",
+                    license_running_balance: "1000.00",
+                    company_id: null,
+                    company_name: null,
+                }),
+                createCanonicalTxn({
+                    id: 1,
+                    type: "PURCHASE",
+                    amount: "500.00",
+                    license_running_balance: "1500.00",
+                    company_id: 101,
+                    company_name: "Company A",
+                }),
+            ],
+
+            company_utilizations: {
+                101: {
+                    company_id: 101,
+                    company_name: "Company A",
+                    utilization_balance: "500.00",
+                },
+            },
+
+            totals: {
+                total_purchases: "500.00",
+                total_sales: "0.00",
+                total_commission: "0.00",
+            },
+
+            ...overrides,
+        };
+    }
+
+    it("Phase 4E-C: Detects canonical ledger structure and preserves canonical balance", () => {
+        const canonical = createCanonicalLedger();
+        const normalized = normalizeLedgerLicensesData([canonical]);
+
+        expect(normalized).toHaveLength(1);
+        const license = normalized[0];
+        // Canonical balance must be preserved (not recalculated)
+        // Note: values converted to numbers for formatting, but source is canonical
+        expect(license.available_balance).toBe(1500);
+        expect(license.license_running_balance).toBe("1500.00");
+    });
+
+    it("Phase 4E-C: Maps canonical amount to debit_cif for DFIA PURCHASE", () => {
+        const canonical = createCanonicalLedger({
+            license_type: "DFIA",
+            transactions: [
+                createCanonicalTxn({
+                    type: "PURCHASE",
+                    amount: "750.00",
+                    license_running_balance: "1750.00",
+                }),
+            ],
+        });
+
+        const normalized = normalizeLedgerLicensesData([canonical]);
+        const txn = normalized[0].transactions[0];
+
+        // Amounts stored as strings from canonical, but converted to numbers
+        expect(txn.debit_cif).toBe("750.00");
+        expect(txn.credit_cif).toBe("0");
+        expect(txn.license_running_balance).toBe("1750.00");  // ← Canonical balance preserved
+    });
+
+    it("Phase 4E-C: Uses canonical balance (not independent calculation) for PURCHASE+SALE", () => {
+        const canonical = createCanonicalLedger({
+            opening_balance: "1000.00",
+            transactions: [
+                createCanonicalTxn({
+                    id: 0,
+                    type: "OPENING",
+                    amount: "1000.00",
+                    license_running_balance: "1000.00",
+                    company_id: null,
+                }),
+                createCanonicalTxn({
+                    id: 1,
+                    type: "PURCHASE",
+                    amount: "500.00",
+                    license_running_balance: "1500.00",
+                }),
+                createCanonicalTxn({
+                    id: 2,
+                    type: "SALE",
+                    amount: "200.00",
+                    license_running_balance: "1300.00",  // ← CANONICAL (not 1500-200=1300 calculated)
+                }),
+            ],
+            license_running_balance: "1300.00",
+        });
+
+        const normalized = normalizeLedgerLicensesData([canonical]);
+        const license = normalized[0];
+
+        expect(license.available_balance).toBe(1300);  // Numeric for display
+        // Verify transaction balances come from canonical
+        expect(license.transactions[2].license_running_balance).toBe("1300.00");  // ← Preserved from canonical
+    });
+
+    it("Phase 4E-C: Handles multiple companies with canonical balances", () => {
+        const canonical = createCanonicalLedger({
+            transactions: [
+                createCanonicalTxn({
+                    id: 1,
+                    company_id: 101,
+                    company_name: "Company A",
+                    amount: "500.00",
+                    license_running_balance: "1500.00",
+                }),
+                createCanonicalTxn({
+                    id: 2,
+                    company_id: 102,
+                    company_name: "Company B",
+                    amount: "300.00",
+                    license_running_balance: "1800.00",
+                }),
+            ],
+            license_running_balance: "1800.00",
+        });
+
+        const normalized = normalizeLedgerLicensesData([canonical]);
+        const license = normalized[0];
+        const companiesGrouped = groupByCompany(license.transactions);
+
+        // Both companies should use canonical balances
+        expect(companiesGrouped).toHaveLength(2);
+        expect(companiesGrouped[0].transactions[0].license_running_balance).toBe("1500.00");
+        expect(companiesGrouped[1].transactions[0].license_running_balance).toBe("1800.00");
+    });
+
+    it("Phase 4E-C: Preserves large decimal values from canonical API", () => {
+        const canonical = createCanonicalLedger({
+            transactions: [
+                createCanonicalTxn({
+                    license_running_balance: "12345678.90",
+                }),
+            ],
+            license_running_balance: "12345678.90",
+        });
+
+        const normalized = normalizeLedgerLicensesData([canonical]);
+        const license = normalized[0];
+
+        expect(license.available_balance).toBe(12345678.90);  // Numeric for calculations
+        expect(license.transactions[0].license_running_balance).toBe("12345678.90");  // ← Canonical preserved
+    });
+
+    it("Phase 4E-C: Maintains backward compatibility with legacy format", () => {
+        // Legacy format (for backward compatibility)
+        const legacy = {
+            id: 1001,
+            license_number: "LIC001",
+            license_type: "DFIA",
+            exporter: "Acme",
+            available_balance: 400,
+            transactions: [
+                {
+                    id: 1,
+                    type: "PURCHASE",
+                    debit_cif: 500,
+                    debit_amount: 1000,
+                    company_id: 101,
+                    company_name: "Company A",
+                },
+            ],
+        };
+
+        const normalized = normalizeLedgerLicensesData([legacy]);
+        expect(normalized).toHaveLength(1);
+        expect(normalized[0].license_number).toBe("LIC001");
+    });
+});

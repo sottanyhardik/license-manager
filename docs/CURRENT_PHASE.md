@@ -10,9 +10,9 @@
 | Field | Value |
 |-------|-------|
 | **Module** | Module 1: Ledger / Balance |
-| **Phase** | 4E-C: Frontend PDF Canonical Migration |
-| **Sub-Phase** | Implementation (Canonical API Integration) |
-| **Gate** | 4E-C (ACTIVE) |
+| **Phase** | 4E-D: Excel Canonical Migration |
+| **Sub-Phase** | Implementation (Canonical Service Integration) |
+| **Gate** | 4E-D (ACTIVE) |
 | **Status** | IN PROGRESS |
 
 ---

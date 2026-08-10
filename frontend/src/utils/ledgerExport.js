@@ -43,11 +43,87 @@ function normalizeTransaction(txn, index) {
     };
 }
 
+/**
+ * Check if data is from canonical ledger API (CanonicalLedgerResponse).
+ * Canonical data has license_running_balance field and transactions with amount field.
+ */
+function isCanonicalLedger(license) {
+    return license.license_running_balance !== undefined
+        && Array.isArray(license.transactions)
+        && license.transactions.length > 0
+        && license.transactions[0].amount !== undefined;
+}
+
+/**
+ * Adapt canonical transaction to internal format for PDF/Excel.
+ * This bridges the canonical API structure to the existing export code.
+ */
+function adaptCanonicalTransaction(txn, isDFIA, index) {
+    // Preserve canonical amount as string (from API)
+    const amountStr = String(txn.amount || '0');
+
+    return {
+        type: normalizeText(txn.type, 'UNKNOWN'),
+        company_id: txn.company_id ?? null,
+        company_name: normalizeText(txn.company_name, 'N/A'),
+        date: txn.date ?? null,
+        particular: normalizeText(txn.particular, '-'),
+        invoice_number: normalizeText(txn.invoice_number),
+        items: normalizeText(txn.items),
+
+        // Canonical balance (DO NOT RECALCULATE)
+        license_running_balance: txn.license_running_balance,
+
+        // Map amounts based on transaction type (for display columns)
+        // Preserve canonical values as strings
+        debit_cif: isDFIA && (txn.type === 'PURCHASE' || txn.type === 'OPENING') ? amountStr : '0',
+        credit_cif: isDFIA && txn.type === 'SALE' ? amountStr : '0',
+        debit_license_value: !isDFIA && (txn.type === 'PURCHASE' || txn.type === 'OPENING') ? amountStr : '0',
+        credit_license_value: !isDFIA && txn.type === 'SALE' ? amountStr : '0',
+
+        debit_amount: (txn.type === 'PURCHASE' || txn.type === 'OPENING') ? amountStr : '0',
+        credit_amount: txn.type === 'SALE' ? amountStr : '0',
+
+        rate: toFiniteNumber(txn.rate ?? 0),
+        profit_loss: txn.profit_loss == null ? null : toFiniteNumber(txn.profit_loss),
+        is_commission: txn.is_commission || false,
+        _row_key: txn.id ?? index,
+    };
+}
+
+/**
+ * Normalize ledger data, handling both canonical API and legacy formats.
+ */
 export function normalizeLedgerLicensesData(licensesData) {
     if (!Array.isArray(licensesData)) return [];
 
     return licensesData.flatMap((license, index) => {
         if (!isRecord(license)) return [];
+
+        const isDFIA = license.license_type === 'DFIA';
+
+        // CANONICAL DATA: Adapt directly without recalculation
+        if (isCanonicalLedger(license)) {
+            const transactions = license.transactions
+                .map((txn, idx) => adaptCanonicalTransaction(txn, isDFIA, idx))
+                .filter(Boolean);
+
+            return [{
+                ...license,
+                id: license.id ?? license.license_id ?? index,
+                license_number: normalizeText(license.license_number, `License ${index + 1}`),
+                license_type: normalizeText(license.license_type, 'UNKNOWN'),
+                license_date: license.license_date ?? null,
+                expiry_date: license.expiry_date ?? null,
+                exporter: normalizeText(license.exporter ?? license.exporter_name, 'N/A'),
+                total_value: toFiniteNumber(license.total_value),
+                // Use canonical balance (not recalculated)
+                available_balance: toFiniteNumber(license.license_running_balance ?? license.available_balance),
+                transactions,
+            }];
+        }
+
+        // LEGACY DATA: Process as before (for backward compatibility)
         const transactions = Array.isArray(license.transactions)
             ? license.transactions.map(normalizeTransaction).filter(Boolean)
             : [];
@@ -142,7 +218,7 @@ function getFirstPurchaseDate(license) {
 // This license's distinct SION norm classes (e.g. "E1", "E5, E132") — a
 // DFIA-only concept (Incentive licenses carry no norm class). Sourced from
 // each transaction's own `sion_norms` field (comma-separated, already
-// resolved server-side in `build_dfia_ledger_detail`), deduped across every
+// resolved server-side in the canonical ledger service), deduped across every
 // transaction on the license.
 function getLicenseSionNorms(license) {
     if (license.license_type !== 'DFIA') return null;
@@ -161,11 +237,6 @@ function buildPdfBody(license, companiesGrouped) {
     const colCount = isDFIA ? 10 : 9;
     const labelColSpan = isDFIA ? 6 : 5;
     const body = [];
-    // NOTE: computeBalanceMap is intentionally NOT used here.
-    // It keys the balance Map by object reference; buildPdfBody receives normalised
-    // copies of the same transactions (via groupByCompany → normalizeTransaction),
-    // so every Map lookup missed and returned undefined → fmtNum(0) → '–'.
-    // We compute the running balance inline instead.
 
     const chStyle = {
         fillColor: [30, 58, 95], textColor: [255, 255, 255],
@@ -181,13 +252,25 @@ function buildPdfBody(license, companiesGrouped) {
         body.push([{ content: company.company_name, colSpan: colCount, styles: chStyle }]);
 
         const sortedTxns = sortTxns(company.transactions);
-        // Running CIF-$ (DFIA) or license-value (Incentive) balance for this company.
-        let running = 0;
+
+        // Check if we have canonical balances (license_running_balance field)
+        const hasCanonicalBalances = sortedTxns.length > 0 && sortedTxns[0].license_running_balance !== undefined;
+
+        let lastBalance = 0;
         sortedTxns.forEach(txn => {
-            if (txn.type === 'PURCHASE' || txn.type === 'OPENING') {
-                running += isDFIA ? (txn.debit_cif || 0) : (txn.debit_license_value || 0);
-            } else if (txn.type === 'SALE') {
-                running -= isDFIA ? (txn.credit_cif || 0) : (txn.credit_license_value || 0);
+            // Use canonical balance if available, otherwise calculate inline
+            let displayBalance;
+            if (hasCanonicalBalances) {
+                // CANONICAL DATA: Use license_running_balance directly from API
+                displayBalance = toFiniteNumber(txn.license_running_balance);
+            } else {
+                // LEGACY DATA: Calculate inline
+                if (txn.type === 'PURCHASE' || txn.type === 'OPENING') {
+                    lastBalance += isDFIA ? toFiniteNumber(txn.debit_cif || 0) : toFiniteNumber(txn.debit_license_value || 0);
+                } else if (txn.type === 'SALE') {
+                    lastBalance -= isDFIA ? toFiniteNumber(txn.credit_cif || 0) : toFiniteNumber(txn.credit_license_value || 0);
+                }
+                displayBalance = lastBalance;
             }
 
             const row = [
@@ -211,16 +294,16 @@ function buildPdfBody(license, companiesGrouped) {
                 fmtNum(txn.rate),
                 txn.debit_amount ? fmtNum(txn.debit_amount) : '-',
                 txn.credit_amount ? fmtNum(txn.credit_amount) : '-',
-                fmtNum(running),   // ← inline running balance (fixes the '–' bug)
+                fmtNum(displayBalance),   // ← Balance from API or calculated
                 rowPL,
             );
             body.push(row);
+            lastBalance = displayBalance;
         });
-        // After forEach, `running` = final balance for this company (= lastBal).
 
         const txns = company.transactions;
-        const totalDebit  = txns.reduce((s, t) => s + (t.debit_amount  || 0), 0);
-        const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
+        const totalDebit  = txns.reduce((s, t) => s + toFiniteNumber(t.debit_amount || 0), 0);
+        const totalCredit = txns.reduce((s, t) => s + toFiniteNumber(t.credit_amount || 0), 0);
         // Net P/L: credits (sale receipts) minus debits (purchase costs).
         // Positive = more received than spent (net profit).
         // Negative = more spent than received so far; remaining balance is an asset, not a loss.
@@ -235,7 +318,7 @@ function buildPdfBody(license, companiesGrouped) {
             { content: `Total — ${company.company_name}`, colSpan: labelColSpan, styles: trStyle },
             { content: fmtNum(totalDebit),  styles: trStyle },
             { content: fmtNum(totalCredit), styles: trStyle },
-            { content: fmtNum(running),     styles: trStyle },   // ← correct final balance
+            { content: fmtNum(lastBalance),     styles: trStyle },   // ← Final balance
             { content: totalPLLabel,        styles: trStyle },
         ]);
     });
@@ -719,24 +802,29 @@ export async function generateExcel(licensesData, filename) {
             });
             ws.getRow(rowNum).height = 22;
 
-            // Transaction rows — running CIF-$ (DFIA) or license-value
-            // (Incentive) balance computed inline, matching `buildPdfBody`'s
-            // PDF logic exactly. NOT `computeBalanceMap`/a Map keyed by
-            // transaction object reference: `groupByCompany` re-runs
-            // `normalizeTransaction` internally, producing brand-new object
-            // references for `txns` here — a reference-keyed Map never
-            // matches, every lookup misses, and the Balance column always
-            // silently rendered as 0/'-' (see the PDF path's identical fix).
-            let running = 0;
+            // Transaction rows — Balance from API (canonical) or calculated (legacy)
+            let lastBalance = 0;
+            // Check if we have canonical balances
+            const hasCanonicalBalances = txns.length > 0 && txns[0].license_running_balance !== undefined;
+
             for (const txn of txns) {
                 rowNum = ws.rowCount + 1;
                 const isPurchase = txn.type === 'PURCHASE' || txn.type === 'OPENING';
                 const isSale = txn.type === 'SALE';
 
-                if (isPurchase) {
-                    running += isDFIA ? (txn.debit_cif || 0) : (txn.debit_license_value || 0);
-                } else if (isSale) {
-                    running -= isDFIA ? (txn.credit_cif || 0) : (txn.credit_license_value || 0);
+                // Use canonical balance if available, otherwise calculate inline
+                let displayBalance;
+                if (hasCanonicalBalances) {
+                    // CANONICAL DATA: Use license_running_balance directly from API
+                    displayBalance = toFiniteNumber(txn.license_running_balance);
+                } else {
+                    // LEGACY DATA: Calculate inline
+                    if (isPurchase) {
+                        lastBalance += isDFIA ? toFiniteNumber(txn.debit_cif || 0) : toFiniteNumber(txn.debit_license_value || 0);
+                    } else if (isSale) {
+                        lastBalance -= isDFIA ? toFiniteNumber(txn.credit_cif || 0) : toFiniteNumber(txn.credit_license_value || 0);
+                    }
+                    displayBalance = lastBalance;
                 }
 
                 const row = [
@@ -749,7 +837,7 @@ export async function generateExcel(licensesData, filename) {
                     fmtNum(txn.rate),
                     txn.debit_amount ? fmtNum(txn.debit_amount) : '-',
                     txn.credit_amount ? fmtNum(txn.credit_amount) : '-',
-                    fmtNum(running),
+                    fmtNum(displayBalance),  // ← Balance from API or calculated
                     isSale && txn.profit_loss != null ? fmtNum(Math.abs(txn.profit_loss)) : '-',
                 );
 
@@ -764,15 +852,16 @@ export async function generateExcel(licensesData, filename) {
                 }
                 if (isPurchase) ws.getCell(rowNum, numCols - 2).font = { color: { argb: 'FF065F46' } };
                 if (isSale) ws.getCell(rowNum, numCols - 1).font = { color: { argb: 'FF991B1B' } };
+                lastBalance = displayBalance;
             }
 
             // Company total row
             rowNum = ws.rowCount + 1;
-            const totalDebit = txns.reduce((s, t) => s + (t.debit_amount || 0), 0);
-            const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
+            const totalDebit = txns.reduce((s, t) => s + toFiniteNumber(t.debit_amount || 0), 0);
+            const totalCredit = txns.reduce((s, t) => s + toFiniteNumber(t.credit_amount || 0), 0);
             // Bottom-line P/L = all credits (sales) − all debits (purchases/costs).
             const companyPL = totalCredit - totalDebit;
-            const lastBal = running;
+            const lastBal = lastBalance;  // ← CANONICAL FINAL BALANCE
 
             const labelMergeCols = isDFIA ? 6 : 5; // 1-indexed: merge cols 1..labelMergeCols
             const totalRowData = new Array(numCols).fill('');

@@ -184,7 +184,7 @@ def prepare_dfia_data(queryset) -> list:
     # other module shows — NOT `purchase CIF - sale CIF` (a trade-only sum
     # that ignores BOE debits/allotments/opening balance and silently
     # shows $0 for any license with few/no internal purchase trades, the
-    # common case). See `build_dfia_ledger_detail`'s identical fix.
+    # common case). Verified by CanonicalLedgerService golden scenarios.
     balance_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids)
 
     data = []

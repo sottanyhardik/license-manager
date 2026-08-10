@@ -312,8 +312,8 @@ class TestCrossOutputParityOptionC(DjangoTestCase, CrossOutputParityFixtureMixin
 # 1. Create golden dataset license (e.g., Scenario 2 or 3)
 #
 # 2. Get Canonical Ledger (Backend):
-#    canonical = build_dfia_ledger_detail(license)
-#    Expected canonical['running_balance'] = 2650.00
+#    canonical = CanonicalLedgerService.build_canonical_ledger_dataset(license.id)
+#    Expected canonical['license_running_balance'] = 2650.00
 #
 # 3. Get Screen Data (API):
 #    response = GET /licenses/{id}/ledger_detail/

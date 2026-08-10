@@ -1,6 +1,6 @@
 # D1 FINDINGS: Company Boundary
 
-## Current Company Model
+## Current Company Model (CORRECTED)
 
 **Model:** `backend/apps/core/models.py::CompanyModel` (line 224)
 
@@ -18,24 +18,29 @@
 
 ---
 
-## Current Allocation Relationship
+## Current Allocation Relationship (CANONICAL)
 
 **AllotmentModel (backend/apps/allotment/models.py:46)**
 ```
-company: FK to CompanyModel (PROTECT)
+company: FK to CompanyModel (PROTECT) ← CANONICAL location
 ```
 
 **AllotmentItems (backend/apps/allotment/models.py:209)**
 ```
-No company field
+No company field ✅ CORRECT, DO NOT ADD
 ├─ Links to LicenseImportItemsModel via item
-└─ Links to AllotmentModel via allotment
+└─ Links to AllotmentModel via allotment (inherits company from allotment)
 ```
 
-**Finding:** Allocations are assigned to an allotment (which has a company), but individual AllotmentItems do NOT have an explicit company field. This means:
-- An allocation inherits its company from `allotment.company`
-- No way to assign an allocation to a DIFFERENT company than the allotment
-- No way to split an allocation across multiple companies (Req 5 asks for this)
+**Finding:** Company belongs at the ALLOTMENT level, NOT on individual AllotmentItems.
+
+Structure:
+```
+Allotment (Company A) → AllotmentItems (item1, item2, item3)
+Allotment (Company B) → AllotmentItems (item4, item5)
+```
+
+This is correct. Do NOT add company field to AllotmentItems.
 
 ---
 

@@ -82,6 +82,15 @@ def checkpoint(state, reason):
 
 def status_dashboard(state):
     """Display current orchestrator status."""
+    modules_str = "  1. Ledger          🔒 FROZEN\n"
+    for i in range(2, 12):
+        m = state['modules'].get(i, {})
+        if m.get('state') == 'QUEUED':
+            modules_str += f"  {i}. " + ["", "Ledger", "Planning", "Allocation", "BOE", "Invoice", "Transfers", "Reporting", "DFIA", "Incentive", "Documents", "Admin"][i] + " 🔵 QUEUED\n"
+        else:
+            modules_str += f"  {i}. " + ["", "Ledger", "Planning", "Allocation", "BOE", "Invoice", "Transfers", "Reporting", "DFIA", "Incentive", "Documents", "Admin"][i] + f" 🟡 {m.get('phase', 'UNKNOWN')}\n"
+
+    blockers = len(json.load(open(BLOCKERS_FILE)) if BLOCKERS_FILE.exists() else [])
     print(f"""
 LICENSE MANAGER MODERNIZATION ORCHESTRATOR
 ==========================================
@@ -91,21 +100,10 @@ Current Module: {state['current_module']}
 Current Phase: {state['current_phase']}
 
 Module Status:
-  1. Ledger          🔒 FROZEN
-  2. Planning        {('🟡 ' + state['modules'][2]['phase']) if state['modules'][2]['state'] != 'QUEUED' else '🔵 QUEUED'}
-  3. Allocation      {'🟡 ' + state['modules'][3]['phase'] if state['modules'][3]['state'] != 'QUEUED' else '🔵 QUEUED'}
-  4. BOE             {'🟡 ' + state['modules'][4]['phase'] if state['modules'][4]['state'] != 'QUEUED' else '🔵 QUEUED'}
-  5. Invoice         {'🟡 ' + state['modules'][5]['phase'] if state['modules'][5]['state'] != 'QUEUED' else '🔵 QUEUED'}
-  6. Transfers       {'🟡 ' + state['modules'][6]['phase'] if state['modules'][6]['state'] != 'QUEUED' else '🔵 QUEUED'}
-  7. Reporting       {'🟡 ' + state['modules'][7]['phase'] if state['modules'][7]['state'] != 'QUEUED' else '🔵 QUEUED'}
-  8. DFIA            {'🟡 ' + state['modules'][8]['phase'] if state['modules'][8]['state'] != 'QUEUED' else '🔵 QUEUED'}
-  9. Incentive       {'🟡 ' + state['modules'][9]['phase'] if state['modules'][9]['state'] != 'QUEUED' else '🔵 QUEUED'}
- 10. Documents       {'🟡 ' + state['modules'][10]['phase'] if state['modules'][10]['state'] != 'QUEUED' else '🔵 QUEUED'}
- 11. Admin           {'🟡 ' + state['modules'][11]['phase'] if state['modules'][11]['state'] != 'QUEUED' else '🔵 QUEUED'}
-
+{modules_str}
 Git Status: {git_status() or 'Clean'}
 
-Blockers: {len(json.load(open(BLOCKERS_FILE)) if BLOCKERS_FILE.exists() else [])}
+Blockers: {blockers}
 
 Last Checkpoint: {state.get('last_checkpoint', 'None')}
 """)

@@ -809,12 +809,24 @@ export default function MasterList() {
                                             ))
                                         : null;
 
+                                    const boeTitleEl = item.bill_of_entry_number ? (
+                                        <Link
+                                            to={`/bill-of-entries/${item.id}/edit`}
+                                            onClick={(e) => {
+                                                saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
+                                            }}
+                                            className="font-mono text-[16px] font-bold tracking-tight text-inherit underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded"
+                                        >
+                                            {item.bill_of_entry_number}
+                                        </Link>
+                                    ) : '—';
+
                                     return (
                                         <EntityCard
                                             key={item.id}
                                             className={hasDispute ? 'is-dispute' : ''}
                                             accent={hasDispute ? 'danger' : 'primary'}
-                                            title={item.bill_of_entry_number || '—'}
+                                            title={boeTitleEl}
                                             headerChips={[
                                                 item.bill_of_entry_date && { icon: 'calendar3', label: item.bill_of_entry_date },
                                                 item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
@@ -830,6 +842,7 @@ export default function MasterList() {
                                                 { label: 'CIF (INR)', value: fmtInr(item.total_inr) },
                                                 { label: 'CIF (FC)',  value: item.total_fc ? Number(item.total_fc).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
                                                 { label: 'Qty (MT)',  value: fmtQty(item.total_quantity) },
+                                                { label: 'Unit Price', value: item.unit_price ? Number(item.unit_price).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
                                             ]}
                                             actions={[
                                                 hasDispute && {
@@ -879,9 +892,17 @@ export default function MasterList() {
                                                                 ? <span title="Not found in latest ledger upload — dispute" className="text-destructive text-sm"><TriangleAlert className="size-4" aria-hidden="true" /></span>
                                                                 : null },
                                                         { key: 'license_number',   label: 'License',   bold: true, nowrap: true,
-                                                            render: (v, row) => v
-                                                                ? <span className={cn(row.is_dispute ? 'text-destructive' : 'text-primary')}>{v}</span>
-                                                                : '—' },
+                                                            render: (v, row) => v && row.license_id
+                                                                ? <Link
+                                                                    to={`/licenses/${row.license_id}/edit`}
+                                                                    onClick={(e) => {
+                                                                        saveFilterState('licenses', { filters: {}, pagination: { currentPage: 1, pageSize }, search: '' });
+                                                                    }}
+                                                                    className={cn(row.is_dispute ? 'text-destructive' : 'text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring')}
+                                                                  >
+                                                                    {v}
+                                                                  </Link>
+                                                                : <span className={cn(row.is_dispute ? 'text-destructive' : 'text-primary')}>{v || '—'}</span> },
                                                         { key: 'item_description', label: 'Item',      muted: true },
                                                         { key: 'hs_code',          label: 'HS Code',   nowrap: true,
                                                             render: v => v ? <code>{v}</code> : '—' },

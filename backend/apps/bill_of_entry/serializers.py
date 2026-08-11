@@ -32,6 +32,7 @@ class RowDetailsSerializer(serializers.ModelSerializer):
     )
 
     license_number = serializers.CharField(source='sr_number.license.license_number', read_only=True)
+    license_id = serializers.IntegerField(source='sr_number.license.id', read_only=True)
     item_description = serializers.CharField(source='sr_number.description', read_only=True)
     hs_code = serializers.CharField(source='sr_number.hs_code.hs_code', read_only=True)
     item_serial_number = serializers.IntegerField(source='sr_number.serial_number', read_only=True)
@@ -73,6 +74,7 @@ class RowDetailsSerializer(serializers.ModelSerializer):
             'is_frozen',
             'is_dispute',
             'license_number',
+            'license_id',
             'item_description',
             'hs_code',
             'item_serial_number',

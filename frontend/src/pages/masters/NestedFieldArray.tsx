@@ -91,12 +91,16 @@ export default function NestedFieldArray({
         const newArray = [...value];
         const updates: Record<string, any> = {[fieldName]: fieldValue};
 
-        // Enforce max 3 decimal places for BOE numeric fields
+        // Enforce decimal precision for BOE numeric fields using ROUND_HALF_UP strategy
         if (fieldKey === 'item_details' && ['cif_inr', 'cif_fc', 'qty'].includes(fieldName) && fieldValue !== '' && fieldValue !== null) {
-            const strVal = String(fieldValue);
-            const dotIdx = strVal.indexOf('.');
-            if (dotIdx !== -1 && strVal.length - dotIdx - 1 > 3) {
-                updates[fieldName] = parseFloat(fieldValue).toFixed(3);
+            const numVal = parseFloat(fieldValue);
+            if (!isNaN(numVal)) {
+                // Determine decimal places: cif_inr and cif_fc use 2dp, qty uses 3dp
+                const decimalPlaces = (fieldName === 'qty') ? 3 : 2;
+                // ROUND_HALF_UP: Math.round() in JavaScript rounds 0.5 away from zero
+                const factor = Math.pow(10, decimalPlaces);
+                const rounded = Math.round(numVal * factor) / factor;
+                updates[fieldName] = rounded.toFixed(decimalPlaces);
             }
         }
 

@@ -16,6 +16,7 @@ import EntityCard from "../../components/primitives/EntityCard";
 import DetailTable from "../../components/primitives/DetailTable";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
 import {openPdfPreview} from "../../utils/pdfPreview";
+import {openLicenseCopyPdf} from "../../utils/licenseCopyPdf";
 import {clickable} from "../../utils/clickable";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
@@ -892,17 +893,19 @@ export default function MasterList() {
                                                                 ? <span title="Not found in latest ledger upload — dispute" className="text-destructive text-sm"><TriangleAlert className="size-4" aria-hidden="true" /></span>
                                                                 : null },
                                                         { key: 'license_number',   label: 'License',   bold: true, nowrap: true,
-                                                            render: (v, row) => v && row.license_id
-                                                                ? <Link
-                                                                    to={`/licenses/${row.license_id}/edit`}
-                                                                    onClick={(e) => {
-                                                                        saveFilterState('licenses', { filters: {}, pagination: { currentPage: 1, pageSize }, search: '' });
-                                                                    }}
-                                                                    className={cn(row.is_dispute ? 'text-destructive' : 'text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring')}
-                                                                  >
+                                                            render: (v, row) => v && row.license_id ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openLicenseCopyPdf(row.license_id, v)}
+                                                                    className={cn(row.is_dispute ? 'text-destructive' : 'text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer')}
+                                                                    title="Open License Copy PDF"
+                                                                    aria-label={`Open License Copy PDF for ${v}`}
+                                                                >
                                                                     {v}
-                                                                  </Link>
-                                                                : <span className={cn(row.is_dispute ? 'text-destructive' : 'text-primary')}>{v || '—'}</span> },
+                                                                </button>
+                                                            ) : (
+                                                                <span className={cn(row.is_dispute ? 'text-destructive' : 'text-primary')}>{v || '—'}</span>
+                                                            ) },
                                                         { key: 'item_description', label: 'Item',      muted: true },
                                                         { key: 'hs_code',          label: 'HS Code',   nowrap: true,
                                                             render: v => v ? <code>{v}</code> : '—' },

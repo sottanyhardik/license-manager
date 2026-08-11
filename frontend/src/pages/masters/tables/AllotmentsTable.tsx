@@ -1,22 +1,10 @@
-import { toast } from "sonner";
-import { ClipboardCopy, Inbox } from "lucide-react";
+import { Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 import EntityCard from "../../../components/primitives/EntityCard";
 import DetailTable from "../../../components/primitives/DetailTable";
-import api from "../../../api/axios";
 import { saveFilterState } from "../../../utils/filterPersistence";
-import { openPdfPreview } from "../../../utils/pdfPreview";
+import { openLicenseCopyPdf } from "../../../utils/licenseCopyPdf";
 import { formatTruthyIndianNumber, formatTruthyInr } from "../masterDisplayFormatters";
-
-// Copy license number to clipboard
-async function copyToClipboard(text: string) {
-    try {
-        await navigator.clipboard.writeText(text);
-        toast.success("Copied");
-    } catch {
-        toast.error("Failed to copy");
-    }
-}
 
 interface AllotmentsTableProps {
     loading: boolean;
@@ -122,18 +110,18 @@ export default function AllotmentsTable({
                                                 <DetailTable
                                                     columns={[
                                                         { key: 'license_number',     label: 'License',     bold: true, nowrap: true,
-                                                            render: (v, row) => v ? (
+                                                            render: (v, row) => v && row.license_id ? (
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => copyToClipboard(v)}
+                                                                    onClick={() => openLicenseCopyPdf(row.license_id, v)}
                                                                     className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer')}
-                                                                    title="Copy license number"
-                                                                    aria-label={`Copy ${v}`}
+                                                                    title="Open License Copy PDF"
+                                                                    aria-label={`Open License Copy PDF for ${v}`}
                                                                 >
                                                                     {v}
                                                                 </button>
                                                             ) : (
-                                                                <span className="text-primary">—</span>
+                                                                <span className="text-primary">{v || '—'}</span>
                                                             ) },
                                                         { key: 'serial_number',      label: 'Sl#',         align: 'right', nowrap: true },
                                                         { key: 'product_description', label: 'Item',       muted: true },
@@ -171,18 +159,22 @@ export default function AllotmentsTable({
                                                                     });
                                                                     return (
                                                                         <div className="flex flex-wrap items-center gap-2">
-                                                                            {licenseNumbers.map((licNum) => (
-                                                                                <button
-                                                                                    key={licNum}
-                                                                                    type="button"
-                                                                                    onClick={() => copyToClipboard(licNum)}
-                                                                                    className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer')}
-                                                                                    title="Copy license number"
-                                                                                    aria-label={`Copy ${licNum}`}
-                                                                                >
-                                                                                    {licNum}
-                                                                                </button>
-                                                                            ))}
+                                                                            {licenseNumbers.map((licNum) => {
+                                                                                const licenseId = licenseMap.get(licNum);
+                                                                                return (
+                                                                                    <button
+                                                                                        key={licNum}
+                                                                                        type="button"
+                                                                                        onClick={() => licenseId && openLicenseCopyPdf(licenseId, licNum)}
+                                                                                        disabled={!licenseId}
+                                                                                        className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer', !licenseId && 'opacity-50 cursor-not-allowed')}
+                                                                                        title="Open License Copy PDF"
+                                                                                        aria-label={`Open License Copy PDF for ${licNum}`}
+                                                                                    >
+                                                                                        {licNum}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
                                                                         </div>
                                                                     );
                                                                 })()}

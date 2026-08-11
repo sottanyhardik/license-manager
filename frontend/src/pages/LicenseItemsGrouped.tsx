@@ -243,54 +243,54 @@ export default function LicenseItemsGrouped({
                       </div>
                     </div>
 
-                    {/* Allocation Controls */}
-                    {effectiveMaxQty > 0 && (
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div>
-                          <label className="font-semibold text-muted-foreground">QTY (Max: {formatTruthyIndianNumber(effectiveMaxQty.toString(), { maximumFractionDigits: 0 })})</label>
-                          <input
-                            type="number"
-                            value={currentQty}
-                            onChange={(e) =>
-                              onAllocationChange(item.id, {
-                                ...currentAllocation,
-                                qty: e.target.value,
-                                plan_line_id: selectedPlanningId || undefined,
-                              })
-                            }
-                            placeholder="Qty"
-                            className="w-full px-2 py-1 border rounded text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="font-semibold text-muted-foreground">VALUE (Max: {formatTruthyInr(effectiveMaxValue.toString())})</label>
-                          <input
-                            type="number"
-                            value={currentValue}
-                            onChange={(e) =>
-                              onAllocationChange(item.id, {
-                                ...currentAllocation,
-                                cif_fc: e.target.value,
-                                plan_line_id: selectedPlanningId || undefined,
-                              })
-                            }
-                            placeholder="CIF FC"
-                            className="w-full px-2 py-1 border rounded text-xs"
-                          />
-                        </div>
-                        <div className="flex flex-col justify-end">
-                          <button
-                            onClick={() => onAllocate(item)}
-                            disabled={!isValid}
-                            className="w-full px-2 py-1 bg-primary text-primary-foreground rounded text-xs font-semibold disabled:opacity-50"
-                          >
-                            Allocate
-                          </button>
-                        </div>
+                    {/* Allocation Controls - Always Show (disabled if planning required but not selected) */}
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <label className="font-semibold text-muted-foreground">QTY (Max: {formatTruthyIndianNumber(Math.max(0, effectiveMaxQty).toString(), { maximumFractionDigits: 0 })})</label>
+                        <input
+                          type="number"
+                          value={currentQty}
+                          onChange={(e) =>
+                            onAllocationChange(item.id, {
+                              ...currentAllocation,
+                              qty: e.target.value,
+                              plan_line_id: selectedPlanningId || undefined,
+                            })
+                          }
+                          disabled={!itemHasPlanning ? false : !selectedPlanningId}
+                          placeholder="Qty"
+                          className="w-full px-2 py-1 border rounded text-xs disabled:opacity-50 disabled:bg-muted"
+                        />
                       </div>
-                    )}
+                      <div>
+                        <label className="font-semibold text-muted-foreground">VALUE (Max: {formatTruthyInr(Math.max(0, effectiveMaxValue).toString())})</label>
+                        <input
+                          type="number"
+                          value={currentValue}
+                          onChange={(e) =>
+                            onAllocationChange(item.id, {
+                              ...currentAllocation,
+                              cif_fc: e.target.value,
+                              plan_line_id: selectedPlanningId || undefined,
+                            })
+                          }
+                          disabled={!itemHasPlanning ? false : !selectedPlanningId}
+                          placeholder="CIF FC"
+                          className="w-full px-2 py-1 border rounded text-xs disabled:opacity-50 disabled:bg-muted"
+                        />
+                      </div>
+                      <div className="flex flex-col justify-end">
+                        <button
+                          onClick={() => onAllocate(item)}
+                          disabled={!isValid || (itemHasPlanning && !selectedPlanningId)}
+                          className="w-full px-2 py-1 bg-primary text-primary-foreground rounded text-xs font-semibold disabled:opacity-50"
+                        >
+                          Allocate
+                        </button>
+                      </div>
+                    </div>
 
-                    {!effectiveMaxQty && itemHasPlanning && !selectedPlanningId && (
+                    {itemHasPlanning && !selectedPlanningId && (
                       <div className="text-xs text-red-500 font-semibold">Select planning to allocate</div>
                     )}
                   </div>

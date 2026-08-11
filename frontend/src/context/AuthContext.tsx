@@ -1,4 +1,3 @@
-import axios from "axios";
 import React, {createContext, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import api from "../api/axios";
 import type { AuthContextValue, AuthUser, LoginResponse } from "../types";
@@ -83,7 +82,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     // Proactively refresh the access token before it expires so the user
-    // never sees a 401 mid-request while actively working.
+    // never sees a 401 mid-request while actively working. Uses the configured
+    // api client (not raw axios) to ensure consistency with API_BASE and other interceptors.
     const scheduleProactiveRefresh = useCallback(() => {
         if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
 
@@ -99,7 +99,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const refresh = localStorage.getItem("refresh");
             if (!refresh) return;
             try {
-                const {data} = await axios.post("/api/auth/refresh/", {refresh});
+                const {data} = await api.post("auth/refresh/", {refresh});
                 localStorage.setItem("access", data.access);
                 if (data.refresh) localStorage.setItem("refresh", data.refresh);
                 scheduleProactiveRefresh(); // schedule next refresh for the new token

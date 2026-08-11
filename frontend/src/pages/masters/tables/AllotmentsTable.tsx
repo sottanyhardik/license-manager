@@ -1,5 +1,7 @@
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import { Inbox } from "lucide-react";
+import { cn } from "@/lib/utils";
 import EntityCard from "../../../components/primitives/EntityCard";
 import DetailTable from "../../../components/primitives/DetailTable";
 import api from "../../../api/axios";
@@ -65,6 +67,8 @@ export default function AllotmentsTable({
                                                 { label: 'Req Qty',      value: fmtQty(item.required_quantity) },
                                                 { label: 'Req Value',    value: fmtInr(item.required_value) },
                                                 { label: 'Balanced Qty', value: fmtQty(item.balanced_quantity), tone: (item.balanced_quantity > 0 ? 'success' : undefined) },
+                                                { label: 'Allotted Items', value: item.allotted_items_count ?? 0 },
+                                                { label: 'Available Items', value: item.available_items_count ?? 0 },
                                             ]}
                                             actions={[
                                                 canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
@@ -109,7 +113,17 @@ export default function AllotmentsTable({
                                                 <DetailTable
                                                     columns={[
                                                         { key: 'license_number',     label: 'License',     bold: true, nowrap: true,
-                                                            render: v => v ? <span className="text-primary">{v}</span> : '—' },
+                                                            render: (v, row) => v && row.license_id
+                                                                ? <Link
+                                                                    to={`/licenses/${row.license_id}/edit`}
+                                                                    onClick={(e) => {
+                                                                        saveFilterState('licenses', { filters: {}, pagination: { currentPage: 1, pageSize }, search: '' });
+                                                                    }}
+                                                                    className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring')}
+                                                                  >
+                                                                    {v}
+                                                                  </Link>
+                                                                : <span className="text-primary">{v || '—'}</span> },
                                                         { key: 'serial_number',      label: 'Sl#',         align: 'right', nowrap: true },
                                                         { key: 'product_description', label: 'Item',       muted: true },
                                                         { key: 'qty',                 label: 'Qty',        align: 'right', nowrap: true,

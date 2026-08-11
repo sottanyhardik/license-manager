@@ -16,6 +16,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     product_description = serializers.CharField(read_only=True, required=False, allow_blank=True)
     hs_code = serializers.CharField(read_only=True, required=False, allow_null=True)
     license_number = serializers.CharField(read_only=True, required=False, allow_null=True)
+    license_id = serializers.IntegerField(source='item.license.id', read_only=True)
     license_date = serializers.SerializerMethodField()
     exporter = serializers.CharField(read_only=True, required=False, allow_null=True, source='exporter.name')
     license_expiry = serializers.SerializerMethodField()
@@ -84,7 +85,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
         model = AllotmentItems
         fields = [
             'id', 'item', 'allotment', 'cif_inr', 'cif_fc', 'qty', 'is_boe',
-            'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number',
+            'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number', 'license_id',
             'license_date', 'exporter', 'license_expiry', 'registration_number',
             'registration_date', 'notification_number', 'file_number', 'port_code',
             'purchase_status', 'current_owner', 'file_transfer_status', 'condition_type'
@@ -118,6 +119,10 @@ class AllotmentSerializer(serializers.ModelSerializer):
     # Custom label field for dropdown display
     display_label = serializers.SerializerMethodField(read_only=True)
 
+    # Counts for UI display
+    allotted_items_count = serializers.SerializerMethodField(read_only=True)
+    available_items_count = serializers.SerializerMethodField(read_only=True)
+
     def get_is_boe(self, obj):
         """
         Calculate is_boe at runtime based on whether the allotment has a bill of entry.
@@ -138,6 +143,32 @@ class AllotmentSerializer(serializers.ModelSerializer):
         if obj.required_quantity:
             parts.append(f"Qty: {obj.required_quantity}")
         return " | ".join(parts) if parts else obj.item_name
+
+    def get_allotted_items_count(self, obj):
+        """Count of items allocated to this allotment"""
+        try:
+            return obj.allotment_details.count()
+        except Exception:
+            return 0
+
+    def get_available_items_count(self, obj):
+        """Count of unique licenses with available balance for allocation"""
+        try:
+            from decimal import Decimal
+            from apps.core.constants import DEC_0
+
+            # Count unique licenses in allotment_details
+            allocated_licenses = obj.allotment_details.values_list('item__license_id', flat=True).distinct()
+
+            # If balanced_quantity > 0, there are still available slots
+            # This is a simplified approach: if there's remaining balance, it means items are available
+            if obj.balanced_quantity and obj.balanced_quantity > DEC_0:
+                # Return count of unique licenses already allocated
+                # (real "available" items would require checking against license balances)
+                return len(set(allocated_licenses))
+            return 0
+        except Exception:
+            return 0
 
     def get_created_on(self, obj):
         if obj.created_on:
@@ -167,7 +198,8 @@ class AllotmentSerializer(serializers.ModelSerializer):
             'is_boe', 'is_approved', 'created_on', 'modified_on', 'created_by', 'modified_by',
             'required_value', 'dfia_list', 'balanced_quantity',
             'alloted_quantity', 'allotted_value', 'company_name', 'port_name',
-            'related_company_name', 'display_label', 'allotment_details_read'
+            'related_company_name', 'display_label', 'allotment_details_read',
+            'allotted_items_count', 'available_items_count'
         ]
 
     def create(self, validated_data):

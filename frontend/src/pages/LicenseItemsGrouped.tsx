@@ -49,7 +49,7 @@ export default function LicenseItemsGrouped({
   maxValueFromAllotment,
   pageSize,
 }: LicenseItemsGroupedProps) {
-  const [selectedPlanning, setSelectedPlanning] = useState<Record<number, number>>({});
+  const [selectedPlanningId, setSelectedPlanningId] = useState<number | null>(null);
 
   // Group items by license_id
   const groupedByLicense: Record<string, AvailableItem[]> = {};
@@ -63,10 +63,45 @@ export default function LicenseItemsGrouped({
 
   const licenses = Object.entries(groupedByLicense);
 
+  // Consolidate planning options from all items in a license group
+  const getPlanningOptionsForGroup = (items: AvailableItem[]) => {
+    const optionMap = new Map<number, { id: number; item_name: string | null; remaining_quantity: string; remaining_cif_fc: string }>();
+    items.forEach((item) => {
+      if (item.planning_options) {
+        item.planning_options.forEach((plan) => {
+          if (!optionMap.has(plan.id)) {
+            optionMap.set(plan.id, plan);
+          }
+        });
+      }
+    });
+    return Array.from(optionMap.values());
+  };
+
+  // Calculate total allocation across all items for a group
+  const getTotalAllocationForGroup = (items: AvailableItem[]) => {
+    return items.reduce(
+      (acc, item) => {
+        const allocation = allocationData[item.id] || {};
+        return {
+          qty: acc.qty + parseFloat(allocation.qty || "0"),
+          cif_fc: acc.cif_fc + parseFloat(allocation.cif_fc || "0"),
+        };
+      },
+      { qty: 0, cif_fc: 0 }
+    );
+  };
+
   return (
     <div className="space-y-6">
       {licenses.map(([licenseId, licenseItems]) => {
         const firstItem = licenseItems[0];
+        const groupPlanningOptions = getPlanningOptionsForGroup(licenseItems);
+        const selectedPlan = selectedPlanningId
+          ? groupPlanningOptions.find((p) => p.id === selectedPlanningId)
+          : null;
+        const groupHasAnyPlanning = licenseItems.some((item) => item.planning_options && item.planning_options.length > 0);
+        const totalAllocation = getTotalAllocationForGroup(licenseItems);
 
         return (
           <div key={licenseId} className="border rounded-lg overflow-hidden">
@@ -117,27 +152,76 @@ export default function LicenseItemsGrouped({
               </div>
             </div>
 
-            {/* Items in this license group */}
+            {/* ROW 2: Item Details (from first item) */}
+            <div className="bg-background border-b px-4 py-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-sm">{firstItem.description || firstItem.product_description}</span>
+                {firstItem.hs_code_label && (
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                    HS: {firstItem.hs_code_label}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* ROW 3: Common Planning Selection (OUTSIDE item loop) */}
+            {groupHasAnyPlanning && (
+              <div className="border-b px-4 py-3 bg-muted/10">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold block">Planning Selection</label>
+                  <select
+                    value={selectedPlanningId || ""}
+                    onChange={(e) => {
+                      const newId = e.target.value ? parseInt(e.target.value) : null;
+                      setSelectedPlanningId(newId);
+                      licenseItems.forEach((item) => {
+                        onAllocationChange(item.id, {
+                          ...allocationData[item.id],
+                          plan_line_id: newId || undefined,
+                        });
+                      });
+                    }}
+                    className="w-full px-2 py-1.5 border rounded text-xs"
+                  >
+                    <option value="">-- Select Planning --</option>
+                    {groupPlanningOptions.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.item_name || "Unplanned"} — {formatTruthyIndianNumber(plan.remaining_quantity, { maximumFractionDigits: 3 })} available
+                      </option>
+                    ))}
+                  </select>
+                  {selectedPlan && (
+                    <div className="text-xs text-muted-foreground mt-2 p-2 bg-background rounded space-y-1">
+                      <div>MAX QTY: {formatTruthyIndianNumber(selectedPlan.remaining_quantity, { maximumFractionDigits: 3 })}</div>
+                      <div>MAX VALUE: {formatTruthyInr(selectedPlan.remaining_cif_fc)}</div>
+                      <div className="pt-1 border-t">
+                        Total in Group: QTY {formatTruthyIndianNumber(totalAllocation.qty.toString(), { maximumFractionDigits: 3 })} / VALUE {formatTruthyInr(totalAllocation.cif_fc.toString())}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Allotment Lines (items in this license group) */}
             <div className="divide-y">
               {licenseItems.map((item) => {
                 const currentAllocation = allocationData[item.id] || {};
                 const currentQty = parseFloat(currentAllocation.qty || "0");
                 const currentValue = parseFloat(currentAllocation.cif_fc || "0");
-                const selectedPlanId = selectedPlanning[item.id];
-                const selectedPlan = selectedPlanId && item.planning_options
-                  ? item.planning_options.find((p) => p.id === selectedPlanId)
-                  : null;
+                const itemHasPlanning = item.planning_options && item.planning_options.length > 0;
 
                 // Calculate max based on planning or item availability
                 let maxQty = parseFloat(item.available_quantity || "0");
                 let maxValue = parseFloat(item.balance_cif_fc || "0");
 
-                if (item.planning_options && item.planning_options.length > 0) {
-                  if (selectedPlanId && selectedPlan) {
-                    maxQty = Math.min(maxQty, parseFloat(selectedPlan.remaining_quantity || "0"));
-                    maxValue = Math.min(maxValue, parseFloat(selectedPlan.remaining_cif_fc || "0"));
+                if (itemHasPlanning) {
+                  if (selectedPlanningId && selectedPlan) {
+                    // Item has planning AND user selected a planning
+                    maxQty = parseFloat(selectedPlan.remaining_quantity || "0");
+                    maxValue = parseFloat(selectedPlan.remaining_cif_fc || "0");
                   } else {
-                    // Planning exists but none selected
+                    // Item has planning but none selected yet - block allocation
                     maxQty = 0;
                     maxValue = 0;
                   }
@@ -149,62 +233,21 @@ export default function LicenseItemsGrouped({
 
                 return (
                   <div key={item.id} className="p-4 space-y-3">
-                    {/* ROW 2: Item/Product Info */}
+                    {/* Item/Product Info */}
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-sm">{item.description || item.product_description}</span>
-                        {item.hs_code_label && (
-                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
-                            HS: {item.hs_code_label}
-                          </span>
-                        )}
+                      <div className="text-xs font-semibold">
+                        SR #{item.serial_number}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        SR #{item.serial_number} • Available: {formatTruthyIndianNumber(item.available_quantity, { maximumFractionDigits: 3 })} • CIF FC: {formatTruthyInr(item.balance_cif_fc)} • Avg: {unitPrice > 0 ? (parseFloat(item.balance_cif_fc || "0") / parseFloat(item.available_quantity || "1")).toFixed(2) : "—"}
+                        Available: {formatTruthyIndianNumber(item.available_quantity, { maximumFractionDigits: 3 })} • CIF FC: {formatTruthyInr(item.balance_cif_fc)} • Avg: {unitPrice > 0 ? (parseFloat(item.balance_cif_fc || "0") / parseFloat(item.available_quantity || "1")).toFixed(2) : "—"}
                       </div>
                     </div>
-
-                    {/* ROW 3: Planning Selection */}
-                    {item.planning_options && item.planning_options.length > 0 ? (
-                      <div className="border rounded p-3 space-y-2 bg-muted/20">
-                        <label className="text-xs font-semibold block">Planning Selection</label>
-                        <select
-                          value={selectedPlanId || ""}
-                          onChange={(e) => {
-                            const newId = e.target.value ? parseInt(e.target.value) : null;
-                            setSelectedPlanning((prev) => ({
-                              ...prev,
-                              [item.id]: newId || undefined,
-                            }));
-                            onAllocationChange(item.id, {
-                              ...currentAllocation,
-                              plan_line_id: newId || undefined,
-                            });
-                          }}
-                          className="w-full px-2 py-1.5 border rounded text-xs"
-                        >
-                          <option value="">-- Select Planning --</option>
-                          {item.planning_options.map((plan) => (
-                            <option key={plan.id} value={plan.id}>
-                              {plan.item_name || "Unplanned"} — {formatTruthyIndianNumber(plan.remaining_quantity, { maximumFractionDigits: 3 })} available
-                            </option>
-                          ))}
-                        </select>
-                        {selectedPlan && (
-                          <div className="text-xs text-muted-foreground mt-2 p-2 bg-background rounded">
-                            MAX QTY: {Math.floor(parseFloat(selectedPlan.remaining_quantity || "0"))} | MAX VALUE: {formatTruthyInr(selectedPlan.remaining_cif_fc)}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground italic">No planning for this item</div>
-                    )}
 
                     {/* Allocation Controls */}
                     {effectiveMaxQty > 0 && (
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div>
-                          <label className="font-semibold text-muted-foreground">QTY (Max: {Math.floor(effectiveMaxQty)})</label>
+                          <label className="font-semibold text-muted-foreground">QTY (Max: {formatTruthyIndianNumber(effectiveMaxQty.toString(), { maximumFractionDigits: 0 })})</label>
                           <input
                             type="number"
                             value={currentQty}
@@ -212,6 +255,7 @@ export default function LicenseItemsGrouped({
                               onAllocationChange(item.id, {
                                 ...currentAllocation,
                                 qty: e.target.value,
+                                plan_line_id: selectedPlanningId || undefined,
                               })
                             }
                             placeholder="Qty"
@@ -219,7 +263,7 @@ export default function LicenseItemsGrouped({
                           />
                         </div>
                         <div>
-                          <label className="font-semibold text-muted-foreground">VALUE (Max: {formatTruthyInr(effectiveMaxValue)})</label>
+                          <label className="font-semibold text-muted-foreground">VALUE (Max: {formatTruthyInr(effectiveMaxValue.toString())})</label>
                           <input
                             type="number"
                             value={currentValue}
@@ -227,6 +271,7 @@ export default function LicenseItemsGrouped({
                               onAllocationChange(item.id, {
                                 ...currentAllocation,
                                 cif_fc: e.target.value,
+                                plan_line_id: selectedPlanningId || undefined,
                               })
                             }
                             placeholder="CIF FC"
@@ -245,7 +290,7 @@ export default function LicenseItemsGrouped({
                       </div>
                     )}
 
-                    {!effectiveMaxQty && item.planning_options && item.planning_options.length > 0 && !selectedPlanId && (
+                    {!effectiveMaxQty && itemHasPlanning && !selectedPlanningId && (
                       <div className="text-xs text-red-500 font-semibold">Select planning to allocate</div>
                     )}
                   </div>

@@ -16,6 +16,14 @@ import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 
+interface PlanningOption {
+    plan_line_id: number;
+    item_name: string;
+    remaining_quantity?: string;
+    remaining_cif_fc?: string;
+    [key: string]: any;
+}
+
 interface AvailableItem {
     id: number;
     license_id?: number;
@@ -54,6 +62,9 @@ interface AvailableItem {
     // needed for submission + the new "Planned Item Name" column.
     import_item_id?: number;
     planned_item_name?: string;
+    // Item-specific planning splits (DWP, SWP, PKO, etc.)
+    // Only present when the item has planning relationships
+    planning_options?: PlanningOption[];
 }
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
@@ -66,6 +77,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const id = propId || paramId;
 
     const [allocationData, setAllocationData] = useState({});
+    // Track selected planning per item (key: item.id, value: selected plan_line_id or null)
+    const [selectedPlanningByItem, setSelectedPlanningByItem] = useState<Record<number, number | null>>({});
     // When an allot is rejected for exceeding the utilization plan, we stash the
     // item here so the planning panel can open and retry the allot after editing.
     const [planModal, setPlanModal] = useState(null);
@@ -1035,36 +1048,26 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             </div>
                                         </div>
 
-                                        {/* ── ITEM HEADER (compact inline) ── */}
-                                        <div className="px-3 py-1 border-b border-border/60 bg-card text-[12px]">
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                <span className="font-bold text-foreground">
-                                                    {firstItem.description}
-                                                </span>
-                                                {firstItem.hs_code_label && (
-                                                    <>
-                                                        <span className="text-muted-foreground">·</span>
-                                                        <span className="text-muted-foreground">HS: {firstItem.hs_code_label}</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
+                                        {/* ── GROUPED ITEMS WITH ITEM-SPECIFIC PLANNING ── */}
 
-                                        {/* ── PLANNING SECTION (compact inline) ── */}
-                                        {groupHasPlanning && !isPlanMode && (
-                                            <div className="px-3 py-1.5 bg-primary/5 border-b border-primary/10 text-[11px]">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="font-semibold text-primary">Planning:</span>
-                                                    <span className="text-foreground">MAX QTY {groupItems.filter(i => i.has_plan).reduce((sum, i) => sum + parseFloat(i.remaining_planned_quantity ?? 0), 0).toFixed(3)}</span>
-                                                    <span className="text-foreground">MAX VALUE ₹{groupItems.filter(i => i.has_plan).reduce((sum, i) => sum + parseFloat(i.remaining_planned_cif_fc ?? 0), 0).toFixed(2)}</span>
-                                                    <span className="text-muted-foreground ml-1">Total: QTY {totalGroupQtyAllocated.toFixed(3)} / VALUE ₹{totalGroupValueAllocated.toFixed(2)}</span>
-                                                </div>
-                                            </div>
-                                        )}
+                                        {/* ── ITEMS WITH ITEM-SPECIFIC PLANNING ── */}
+                                        <div className="p-2 space-y-3">
+                                            {groupItems.map((item, itemIdx) => {
+                                                const planningOptions = item.planning_options || [];
+                                                const selectedPlanId = selectedPlanningByItem[item.id] || null;
+                                                const selectedPlan = selectedPlanId ? planningOptions.find(p => p.plan_line_id === selectedPlanId) : null;
 
-                                        {/* ── ALLOTMENT LINES (compact) ── */}
-                                        <div className="p-2 space-y-2">
-                                            {groupItems.map((item) => {
+                                                // Determine effective max allocation based on selected planning or item availability
+                                                let effectiveMaxQty = parseFloat(item.available_quantity || "0");
+                                                let effectiveMaxValue = parseFloat(item.balance_cif_fc || "0");
+
+                                                if (selectedPlan) {
+                                                    const planRemainQty = parseFloat(selectedPlan.remaining_quantity || "0");
+                                                    const planRemainValue = parseFloat(selectedPlan.remaining_cif_fc || "0");
+                                                    effectiveMaxQty = Math.min(effectiveMaxQty, planRemainQty);
+                                                    effectiveMaxValue = Math.min(effectiveMaxValue, planRemainValue);
+                                                }
+
                                                 const maxAllocation = calculateMaxAllocation(item);
                                                 const currentAllocation = allocationData[item.id];
                                                 const qty = parseFloat(item.available_quantity || "0");
@@ -1074,6 +1077,53 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                                                 return (
                                                     <div key={item.id} className="border border-border/60 rounded p-2 bg-muted/20">
+                                                        {/* Item header with item-specific info */}
+                                                        {itemIdx === 0 && (
+                                                            <div className="px-1 py-1 mb-1.5 text-[12px] border-b border-border/60">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <span className="font-bold text-foreground">{item.description}</span>
+                                                                    {item.hs_code_label && (
+                                                                        <>
+                                                                            <span className="text-muted-foreground">·</span>
+                                                                            <span className="text-muted-foreground">HS: {item.hs_code_label}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Item-specific planning selector */}
+                                                        {planningOptions.length > 0 && !isPlanMode && (
+                                                            <div className="px-1 py-1.5 mb-1.5 bg-primary/5 rounded text-[10px] border border-primary/20">
+                                                                <div className="font-semibold text-primary mb-0.5">Planning for SR #{item.serial_number}:</div>
+                                                                <div className="space-y-1">
+                                                                    {planningOptions.map(plan => (
+                                                                        <label key={plan.plan_line_id} className="flex items-center gap-1.5 cursor-pointer hover:bg-primary/10 p-0.5 rounded">
+                                                                            <input
+                                                                                type="radio"
+                                                                                name={`planning-${item.id}`}
+                                                                                value={plan.plan_line_id}
+                                                                                checked={selectedPlanId === plan.plan_line_id}
+                                                                                onChange={() => setSelectedPlanningByItem(prev => ({
+                                                                                    ...prev,
+                                                                                    [item.id]: plan.plan_line_id
+                                                                                }))}
+                                                                                className="cursor-pointer"
+                                                                            />
+                                                                            <span className="text-foreground font-semibold">{plan.item_name}</span>
+                                                                            <span className="text-muted-foreground">
+                                                                                Qty: {parseFloat(plan.remaining_quantity || "0").toFixed(3)} | Value: ₹{parseFloat(plan.remaining_cif_fc || "0").toFixed(2)}
+                                                                            </span>
+                                                                        </label>
+                                                                    ))}
+                                                                </div>
+                                                                {selectedPlan && (
+                                                                    <div className="mt-1 pt-1 border-t border-primary/20 text-[10px] font-semibold text-primary">
+                                                                        Selected: {selectedPlan.item_name} | MAX QTY: {parseFloat(selectedPlan.remaining_quantity || "0").toFixed(3)} | MAX VALUE: ₹{parseFloat(selectedPlan.remaining_cif_fc || "0").toFixed(2)}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                         {/* Item identifier + availability info (compact inline) */}
                                                         <div className="flex items-center justify-between gap-2 mb-1.5 text-[11px] flex-wrap">
                                                             <div className="flex items-center gap-1.5">

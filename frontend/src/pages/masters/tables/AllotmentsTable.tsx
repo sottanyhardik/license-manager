@@ -68,7 +68,7 @@ export default function AllotmentsTable({
                                                 { label: 'Req Value',    value: fmtInr(item.required_value) },
                                                 { label: 'Balanced Qty', value: fmtQty(item.balanced_quantity), tone: (item.balanced_quantity > 0 ? 'success' : undefined) },
                                                 { label: 'Allotted Items', value: item.allotted_items_count ?? 0 },
-                                                { label: 'Available Items', value: item.available_items_count ?? 0 },
+                                                { label: 'Allocated Licenses', value: item.allocated_licenses_count ?? 0 },
                                             ]}
                                             actions={[
                                                 canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',

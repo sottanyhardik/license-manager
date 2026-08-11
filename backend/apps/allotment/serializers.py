@@ -121,7 +121,7 @@ class AllotmentSerializer(serializers.ModelSerializer):
 
     # Counts for UI display
     allotted_items_count = serializers.SerializerMethodField(read_only=True)
-    available_items_count = serializers.SerializerMethodField(read_only=True)
+    allocated_licenses_count = serializers.SerializerMethodField(read_only=True)
 
     def get_is_boe(self, obj):
         """
@@ -151,20 +151,15 @@ class AllotmentSerializer(serializers.ModelSerializer):
         except Exception:
             return 0
 
-    def get_available_items_count(self, obj):
-        """Count of unique licenses with available balance for allocation"""
+    def get_allocated_licenses_count(self, obj):
+        """Count of unique licenses that have items allocated to this allotment"""
         try:
-            from decimal import Decimal
             from apps.core.constants import DEC_0
 
             # Count unique licenses in allotment_details
-            allocated_licenses = obj.allotment_details.values_list('item__license_id', flat=True).distinct()
-
-            # If balanced_quantity > 0, there are still available slots
-            # This is a simplified approach: if there's remaining balance, it means items are available
+            # Only count if there's still balanced quantity (otherwise fully allocated)
             if obj.balanced_quantity and obj.balanced_quantity > DEC_0:
-                # Return count of unique licenses already allocated
-                # (real "available" items would require checking against license balances)
+                allocated_licenses = obj.allotment_details.values_list('item__license_id', flat=True).distinct()
                 return len(set(allocated_licenses))
             return 0
         except Exception:
@@ -199,7 +194,7 @@ class AllotmentSerializer(serializers.ModelSerializer):
             'required_value', 'dfia_list', 'balanced_quantity',
             'alloted_quantity', 'allotted_value', 'company_name', 'port_name',
             'related_company_name', 'display_label', 'allotment_details_read',
-            'allotted_items_count', 'available_items_count'
+            'allotted_items_count', 'allocated_licenses_count'
         ]
 
     def create(self, validated_data):

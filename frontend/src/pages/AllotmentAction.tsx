@@ -11,20 +11,10 @@ import {useBackButton} from "../hooks/useBackButton";
 import {usePurchaseStatusOptions} from "../hooks/useMasterOptions";
 import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
-import LicenseItemsGrouped from "./LicenseItemsGrouped";
 import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
-
-interface PlanningOption {
-    id: number;
-    item_name: string | null;
-    planned_quantity: string;
-    remaining_quantity: string;
-    planned_cif_fc: string;
-    remaining_cif_fc: string;
-}
 
 interface AvailableItem {
     id: number;
@@ -36,8 +26,6 @@ interface AvailableItem {
     hs_code_label?: string;
     notification_number?: string;
     license_expiry_date?: string;
-    license_date?: string;
-    product_description?: string;
     description: string;
     exporter_name?: string;
     items_detail?: Array<{ name: string }>;
@@ -56,8 +44,6 @@ interface AvailableItem {
     original_planned_cif_fc?: string;
     used_planned_cif_fc?: string;
     remaining_planned_cif_fc?: string;
-    // Planning options for this item — list of LicenseItemPlan lines user can allocate from
-    planning_options?: PlanningOption[];
     // Plan mode (Debit Based On = Plan) only — one row per LicenseItemPlan
     // line. `id` is the plan line's own id (unique per split row); the real
     // underlying import item is `import_item_id` — the Confirm-allot payload
@@ -254,7 +240,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     const allocateMutation = useMutation({
-        mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string; plan_line_id?: number } }) =>
+        mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) =>
             api.post(`allotment-actions/${id}/allocate-items/`, {
                 allocations: [{
                     // Plan mode's row id is the LicenseItemPlan line's own id
@@ -268,9 +254,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     // backend can decrement THAT line's own remaining balance
                     // independently of its siblings (see allocate_items).
                     ...(payload.item.import_item_id ? { plan_line_id: payload.item.id } : {}),
-                    // Item Planning Selection: when user selects a planning line,
-                    // send its id so backend can decrement that line's remaining balance
-                    ...(payload.allocation.plan_line_id ? { plan_line_id: payload.allocation.plan_line_id } : {}),
                 }],
             }).then(r => r.data),
         onSuccess: (data, { item, allocation }) => {
@@ -347,6 +330,234 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     useEffect(() => {
         setCurrentPage(1);
     }, [filters]);
+
+    const calculateMaxAllocation = (item) => {
+        if (!allotment?.unit_value_per_unit) return { qty: 0, value: 0 };
+
+        const unitPrice = parseFloat(allotment.unit_value_per_unit);
+        // Use balanced_quantity directly from backend (already calculated: required - allotted)
+        const balancedQty = parseFloat(allotment.balanced_quantity || 0);
+        const requiredValue = parseFloat(allotment.required_value || 0);
+        const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
+        const allottedValue = parseFloat(allotment.allotted_value || 0);
+        const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
+        // Floor to integer — backend's calculate_available_quantity() rounds DOWN
+        // to whole units, so any fractional part of the stored available_quantity
+        // would be rejected on submit.
+        const availableQty = Math.floor(parseFloat(item.available_quantity || "0"));
+        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
+
+        // Max quantity is the minimum of balanced quantity and available quantity
+        let maxQty = Math.floor(Math.min(balancedQty, availableQty));
+
+        // Calculate value for this quantity
+        let maxValue = maxQty * unitPrice;
+
+        // Check if value exceeds available CIF FC (using balance_cif_fc)
+        if (maxValue > availableCifFc) {
+            // Adjust quantity based on available CIF FC
+            maxQty = Math.floor(availableCifFc / unitPrice);
+            maxValue = maxQty * unitPrice;
+        }
+
+        // Check if value exceeds balanced value (with $10 buffer already included)
+        if (maxValue > balancedValueWithBuffer) {
+            // Adjust quantity based on balanced value with buffer
+            maxQty = Math.floor(balancedValueWithBuffer / unitPrice);
+            maxValue = maxQty * unitPrice;
+        }
+
+        // Utilization-plan cap: the item can never be allotted past its
+        // Remaining Planned Qty/$ (Original plan minus what's already
+        // allotted to the group — see plan_status_for on the backend).
+        // Effective Max = min(Available, Remaining Planned). Absent when the
+        // item has no plan (has_plan false) — unconstrained, as before.
+        // Same recompute-both-together pattern as the clamps above, so
+        // maxQty and maxValue never end up inconsistent with each other.
+        let remainingPlanValue = Infinity;
+        if (item.has_plan) {
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_quantity ?? "0")));
+            remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif_fc ?? "0"));
+            if (maxQty > remainingPlanQty) {
+                maxQty = remainingPlanQty;
+                maxValue = maxQty * unitPrice;
+            }
+            if (maxValue > remainingPlanValue) {
+                maxQty = Math.floor(remainingPlanValue / unitPrice);
+                maxValue = maxQty * unitPrice;
+            }
+        }
+
+        // Belt-and-suspenders: clamp maxValue to all caps (restricted CIF +
+        // balanced value + remaining plan) and truncate to 2 decimal places.
+        // Math.floor(X/Y)*Y can drift past X by a float-epsilon, and
+        // .toFixed(2) can round half-cents UP — this line ensures the
+        // requested cif_fc never crosses the backend's check.
+        maxValue = Math.min(maxValue, availableCifFc, balancedValueWithBuffer, remainingPlanValue);
+        maxValue = Math.floor(maxValue * 100) / 100;
+
+        return {
+            qty: maxQty,
+            value: maxValue
+        };
+    };
+
+    const handleQuantityChange = (itemId, qty) => {
+        const item = availableItems.find(i => i.id === itemId);
+        if (!item) return;
+
+        const unitPrice = parseFloat(allotment.unit_value_per_unit);
+        let inputQty = parseInt(qty) || 0;
+
+        // Get balance quantities and values with buffer
+        // Use balanced_quantity from backend (already calculated: required - allotted)
+        const balancedQty = parseFloat(allotment.balanced_quantity || 0);
+        const requiredValue = parseFloat(allotment.required_value || 0);
+        const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
+        const allottedValue = parseFloat(allotment.allotted_value || 0);
+        const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
+        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
+        // Floor: backend rounds available_quantity DOWN to whole units, so we must too.
+        const availableQty = Math.floor(parseFloat(item.available_quantity || "0"));
+
+        // Show warning if user tries to exceed limits
+        if (inputQty > balancedQty) {
+            toast.warning(`Quantity adjusted to balanced quantity: ${balancedQty}`);
+            inputQty = balancedQty;
+        }
+        if (inputQty > availableQty) {
+            toast.warning(`Quantity adjusted to available quantity: ${availableQty}`);
+            inputQty = availableQty;
+        }
+
+        // Calculate value from quantity
+        let allocateCifFc = inputQty * unitPrice;
+
+        // If calculated value exceeds balanced value with buffer, adjust quantity down
+        if (allocateCifFc > balancedValueWithBuffer) {
+            inputQty = Math.floor(balancedValueWithBuffer / unitPrice);
+            allocateCifFc = inputQty * unitPrice;
+            toast.warning(`Quantity adjusted to match value limit: ${inputQty}`);
+        }
+
+        // If calculated value exceeds available CIF FC, adjust quantity down
+        if (allocateCifFc > availableCifFc) {
+            inputQty = Math.floor(availableCifFc / unitPrice);
+            allocateCifFc = inputQty * unitPrice;
+            toast.warning(`Quantity adjusted to available CIF: ${inputQty}`);
+        }
+
+        // Utilization-plan cap: never allow more than what's left of the
+        // item's plan (Original planned qty/$ minus what's already
+        // allotted to its group). Clamp both qty and value together so the
+        // field always ends in a valid, submittable state.
+        if (item.has_plan) {
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_quantity ?? "0")));
+            const remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif_fc ?? "0"));
+            if (inputQty > remainingPlanQty) {
+                toast.error("Cannot allot quantity greater than remaining planned quantity.");
+                inputQty = remainingPlanQty;
+                allocateCifFc = inputQty * unitPrice;
+            }
+            if (allocateCifFc > remainingPlanValue) {
+                toast.error("Cannot allot CIF value greater than remaining planned value.");
+                inputQty = Math.floor(remainingPlanValue / unitPrice);
+                allocateCifFc = inputQty * unitPrice;
+            }
+        }
+
+        setAllocationData({
+            ...allocationData,
+            [itemId]: {
+                qty: inputQty.toString(),
+                cif_fc: allocateCifFc.toFixed(2)
+            }
+        });
+    };
+
+    const handleValueChange = (itemId, value) => {
+        const item = availableItems.find(i => i.id === itemId);
+        if (!item) return;
+
+        const unitPrice = parseFloat(allotment.unit_value_per_unit);
+        let inputValue = parseFloat(value) || 0;
+
+        // Get balance values with buffer
+        const balancedQty = parseInt(allotment.balanced_quantity || 0);
+        const requiredValue = parseFloat(allotment.required_value || 0);
+        const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
+        const allottedValue = parseFloat(allotment.allotted_value || 0);
+        const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
+        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
+
+        // Constrain to balanced value with buffer
+        if (inputValue > balancedValueWithBuffer) {
+            inputValue = balancedValueWithBuffer;
+        }
+
+        // Constrain to available CIF FC
+        if (inputValue > availableCifFc) {
+            inputValue = availableCifFc;
+        }
+
+        // Calculate quantity from value (round down to integer)
+        let allocateQty = Math.floor(inputValue / unitPrice);
+
+        // Constrain to balanced quantity
+        if (allocateQty > balancedQty) {
+            allocateQty = balancedQty;
+        }
+
+        // Utilization-plan cap: never allow more than what's left of the
+        // item's plan. Same rule as handleQuantityChange, entered from the
+        // Value field instead of the Qty field.
+        if (item.has_plan) {
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_quantity ?? "0")));
+            const remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif_fc ?? "0"));
+            if (inputValue > remainingPlanValue) {
+                toast.error("Cannot allot CIF value greater than remaining planned value.");
+                inputValue = remainingPlanValue;
+                allocateQty = Math.floor(inputValue / unitPrice);
+            }
+            if (allocateQty > remainingPlanQty) {
+                toast.error("Cannot allot quantity greater than remaining planned quantity.");
+                allocateQty = remainingPlanQty;
+            }
+        }
+
+        // Recalculate value based on adjusted quantity
+        const adjustedValue = (allocateQty * unitPrice).toFixed(2);
+
+        setAllocationData({
+            ...allocationData,
+            [itemId]: {
+                qty: allocateQty.toString(),
+                cif_fc: adjustedValue
+            }
+        });
+    };
+
+    const handleMaxQuantity = (item) => {
+        const maxAllocation = calculateMaxAllocation(item);
+        setAllocationData({
+            ...allocationData,
+            [item.id]: {
+                qty: maxAllocation.qty.toString(),
+                cif_fc: maxAllocation.value.toFixed(2)
+            }
+        });
+    };
+
+    const handleMaxValue = (item) => {
+        const maxAllocation = calculateMaxAllocation(item);
+        setAllocationData({
+            ...allocationData,
+            [item.id]: {
+                qty: maxAllocation.qty.toString(),
+                cif_fc: maxAllocation.value.toFixed(2)
+            }
+        });
+    };
 
     const handleConfirmAllot = (item) => {
         const allocation = allocationData[item.id];
@@ -768,23 +979,202 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     />
 
                     <div className="max-h-[650px] overflow-y-auto pr-px">
-                        {!tableLoading && availableItems.length > 0 && (
-                            <LicenseItemsGrouped
-                                availableItems={availableItems}
-                                allocationData={allocationData}
-                                onAllocationChange={(itemId, allocation) =>
-                                    setAllocationData(prev => ({ ...prev, [itemId]: allocation }))
-                                }
-                                onAllocate={(item) => {
-                                    const allocation = allocationData[item.id];
-                                    allocateMutation.mutate({ item, allocation });
-                                }}
-                                unitPrice={parseFloat(allotment?.unit_value_per_unit || 0)}
-                                maxQtyFromAllotment={Math.max(0, parseFloat(allotment?.balanced_quantity || 0))}
-                                maxValueFromAllotment={Math.max(0, parseFloat(allotment?.required_value_with_buffer || 0) - parseFloat(allotment?.allotted_value || 0))}
-                                pageSize={pageSize}
-                            />
-                        )}
+                        {availableItems.map((item) => {
+                            const maxAllocation = calculateMaxAllocation(item);
+                            const currentAllocation = allocationData[item.id];
+                            const qty = parseFloat(item.available_quantity || "0");
+                            const cifFc = parseFloat(item.balance_cif_fc || "0");
+                            const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
+                            const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
+
+                            return (
+                                <div key={item.id} className={cn(
+                                    "mb-2.5 overflow-hidden rounded-xl bg-card",
+                                    isReady
+                                        ? "border border-primary border-l-[4px] shadow-[0_2px_12px_rgba(79,70,229,0.12)]"
+                                        : "border border-border/60 border-l-[4px] border-l-border shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+                                )}>
+                                    {/* ── Row 1: Identity bar ── */}
+                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-1.5 bg-muted/40 border-b border-border">
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const licenseId = item.license_id || item.license;
+                                                    const response = await api.get(`licenses/${licenseId}/merged-documents/`, { responseType: 'blob' });
+                                                    openPdfPreview(response.data, `${item.license_number || licenseId}-copy.pdf`);
+                                                } catch {
+                                                    toast.error('Failed to load license document');
+                                                }
+                                            }}
+                                            title="View license document"
+                                            className="mr-1 inline-flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer font-bold text-[14px] text-primary underline decoration-dotted underline-offset-[3px]"
+                                        >
+                                            <FileText className="size-4" aria-hidden="true" />
+                                            {item.license_number}
+                                        </button>
+                                        <span className="rounded-md bg-border px-[7px] py-px text-[12px] font-semibold text-muted-foreground">#{item.serial_number}</span>
+                                        <ConditionBadge type={item.condition_type} size="xs" />
+
+                                        {item.hs_code_label && (
+                                            <span className="rounded-md border border-primary/20 bg-primary/5 px-[7px] py-px text-[12px] text-primary">HS: {item.hs_code_label}</span>
+                                        )}
+                                        {item.notification_number && (
+                                            <span className="text-[12px] text-muted-foreground">
+                                                Notif: {item.notification_number}
+                                            </span>
+                                        )}
+                                        <span className="ml-auto flex items-center gap-1 text-[12px] text-muted-foreground">
+                                            <Calendar className="size-4" aria-hidden="true" />
+                                            Exp: {item.license_expiry_date || '—'}
+                                        </span>
+                                        {/* Restriction is read-only — driven by the licence's
+                                            condition_type. Use the shared badge. */}
+                                        {item.condition_type
+                                            ? <ConditionBadge type={item.condition_type} size="xs" />
+                                            : (
+                                                <span className="inline-flex items-center gap-1 rounded border border-success/30 bg-success/10 px-[7px] py-px text-[11px] text-success">
+                                                    <Unlock className="size-3" aria-hidden="true" />Open
+                                                </span>
+                                            )}
+                                    </div>
+
+                                    {/* ── Row 2: Compact description + exporter + chips ── */}
+                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-[5px] bg-card border-b border-border/60">
+                                        <span className="font-bold text-[13px] text-foreground">
+                                            {item.description}
+                                        </span>
+                                        <span className="inline-block w-px h-3 bg-border shrink-0" />
+                                        <span className="inline-flex items-center gap-[3px] text-[11.5px] text-muted-foreground">
+                                            <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
+                                        </span>
+                                        {item.items_detail && item.items_detail.length > 0 && item.items_detail.map((i, idx) => (
+                                            <span key={idx} className="rounded border border-primary/20 bg-primary/10 px-1.5 text-[0.7rem] font-semibold leading-[1.6] text-primary">{i.name}</span>
+                                        ))}
+                                        {item.planned_item_name && (
+                                            <span className="rounded border border-success/30 bg-success/10 px-1.5 text-[0.7rem] font-semibold leading-[1.6] text-success">
+                                                Planned: {item.planned_item_name}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* ── Row 2.5: Utilization-plan status (Original/Used/Remaining) —
+                                        only rendered for items that actually carry a plan. This is the
+                                        SAME Original/Used/Remaining the Max button below is capped to,
+                                        and what the server re-checks on Confirm — shown here so the
+                                        operator sees the cap before typing, not after a rejection.
+                                        Never shown in Plan mode: each row there IS already one plan
+                                        line, so the aggregate Original/Used/Remaining concept doesn't
+                                        map onto a single split row. ── */}
+                                    {!isPlanMode && item.has_plan && (() => {
+                                        const origQty = Number(item.original_planned_quantity ?? 0);
+                                        const usedQty = Number(item.used_planned_quantity ?? 0);
+                                        const remQty  = Number(item.remaining_planned_quantity ?? 0);
+                                        const origVal = Number(item.original_planned_cif_fc ?? 0);
+                                        const usedVal = Number(item.used_planned_cif_fc ?? 0);
+                                        const remVal  = Number(item.remaining_planned_cif_fc ?? 0);
+                                        return (
+                                            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 bg-primary/5 border-b border-primary/10 px-3 py-[5px] text-[11.5px]">
+                                                <span className="inline-flex items-center gap-1 font-semibold text-primary">
+                                                    <ListChecks className="size-3" aria-hidden="true" />Plan
+                                                </span>
+                                                <span className="text-muted-foreground">
+                                                    Qty — Original <b className="text-foreground font-semibold">{origQty.toFixed(3)}</b>
+                                                    {' · '}Used <b className="text-foreground font-semibold">{usedQty.toFixed(3)}</b>
+                                                    {' · '}Remaining <b className={cn("font-semibold", remQty <= 0 ? "text-destructive" : "text-foreground")}>{remQty.toFixed(3)}</b>
+                                                </span>
+                                                <span className="text-muted-foreground">
+                                                    Value — Original <b className="text-foreground font-semibold">${origVal.toFixed(2)}</b>
+                                                    {' · '}Used <b className="text-foreground font-semibold">${usedVal.toFixed(2)}</b>
+                                                    {' · '}Remaining <b className={cn("font-semibold", remVal <= 0 ? "text-destructive" : "text-foreground")}>${remVal.toFixed(2)}</b>
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* ── Row 3: Stats + Inputs + Action (compact bottom bar) ── */}
+                                    <div className="flex items-center flex-wrap bg-muted/40">
+
+                                        {/* Availability stats */}
+                                        <div className="flex gap-3 px-3 py-[7px] shrink-0">
+                                            {[
+                                                {label: isPlanMode ? 'Plan Qty' : 'Avail Qty', value: qty.toFixed(3)},
+                                                {label: 'CIF FC', value: cifFc.toFixed(2)},
+                                                {label: 'Avg', value: average},
+                                            ].map(({label, value}) => (
+                                                <div key={label}>
+                                                    <div className="text-[0.62rem] text-muted-foreground uppercase tracking-[0.4px]">{label}</div>
+                                                    <div className="font-bold text-[13px] text-foreground leading-[1.2]">{value}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="w-px h-9 bg-border/60 shrink-0" />
+
+                                        {/* Allocation inputs */}
+                                        <div className="flex gap-2 px-3 py-[7px] flex-wrap flex-1 min-w-[260px]">
+                                            <div className="flex-1 min-w-[130px]">
+                                                <label className="block mb-[3px] text-[0.62rem] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
+                                                    Qty <span className="font-normal normal-case">/ max {maxAllocation.qty}</span>
+                                                </label>
+                                                <div className="relative flex">
+                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
+                                                        value={currentAllocation?.qty || ""}
+                                                        onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                                                        placeholder="Qty"
+                                                        step="1" min="0" max={maxAllocation.qty}
+                                                    />
+                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-[12px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted" type="button"
+                                                        onClick={() => handleMaxQuantity(item)}>Max</button>
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 min-w-[130px]">
+                                                <label className="block mb-[3px] text-[0.62rem] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
+                                                    Value <span className="font-normal normal-case">/ max {maxAllocation.value.toFixed(2)}</span>
+                                                </label>
+                                                <div className="relative flex">
+                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
+                                                        value={currentAllocation?.cif_fc || ""}
+                                                        onChange={(e) => handleValueChange(item.id, e.target.value)}
+                                                        placeholder="Value"
+                                                        step="0.01" min="0"
+                                                    />
+                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-[12px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted" type="button"
+                                                        onClick={() => handleMaxValue(item)}>Max</button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="w-px h-9 bg-border/60 shrink-0" />
+
+                                        {/* Confirm action */}
+                                        <div className="shrink-0 px-3 py-[7px] flex items-center justify-center">
+                                            <button
+                                                className={cn(
+                                                    "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[0.82rem] font-semibold whitespace-nowrap transition-all duration-200",
+                                                    isReady
+                                                        ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground cursor-pointer hover:opacity-90"
+                                                        : "bg-muted text-muted-foreground cursor-not-allowed"
+                                                )}
+                                                onClick={() => handleConfirmAllot(item)}
+                                                disabled={!isReady || (allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id)}
+                                            >
+                                                {allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id ? (
+                                                    <>
+                                                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-1" aria-hidden="true" />
+                                                        Saving…
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <CheckCircle2 className="size-4" aria-hidden="true" />
+                                                        Confirm
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     {tableLoading && (

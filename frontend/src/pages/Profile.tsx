@@ -6,6 +6,7 @@ import api from "../api/axios";
 import type { AuthUser } from "../types";
 import { ROLE_LABELS } from "../utils/roleConstants";
 import PageHeader from "@/components/PageHeader";
+import ChangePasswordForm from "@/components/ChangePasswordForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -298,6 +299,8 @@ export default function Profile() {
                             </CardContent>
                         </Card>
                     )}
+
+                    <ChangePasswordForm />
                 </div>
             </div>
         </>

@@ -70,6 +70,27 @@ class SafeDateTimeField(serializers.DateTimeField):
         return super().to_representation(value)
 
 
+class PlanningOptionSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for planning options returned in import item details.
+    Used by LicenseImportItemSerializer.planning_options to display all plan lines
+    for a given import item without fetching the full LicenseItemPlanSerializer.
+    """
+    plan_line_id = serializers.IntegerField(source='id', read_only=True)
+    item_name = serializers.CharField(source='item_name.name', read_only=True, allow_null=True)
+    planned_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
+    remaining_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
+    planned_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    remaining_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = LicenseItemPlan
+        fields = [
+            'plan_line_id', 'item_name', 'planned_quantity', 'remaining_quantity',
+            'planned_cif_fc', 'remaining_cif_fc'
+        ]
+
+
 class LicenseExportItemSerializer(serializers.ModelSerializer):
     norm_class_detail = SionNormClassNestedSerializer(source='norm_class', read_only=True)
     norm_class_label = serializers.SerializerMethodField()
@@ -169,6 +190,10 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     # corresponding BOE, making the double-count visible in the UI.
     billed_no_boe = serializers.SerializerMethodField(read_only=True)
 
+    # Planning options for this import item — all LicenseItemPlan rows split across
+    # this item, each with its own remaining availability after allocations.
+    planning_options = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = LicenseImportItemsModel
         fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'items_detail', 'description', 'quantity',
@@ -176,7 +201,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                   'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value', 'planned_quantity',
                   'license_number', 'license_date', 'license_expiry_date',
                   'notification_number', 'exporter_name', 'notes', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
-                  'is_restricted', 'condition_type', 'billed_no_boe']
+                  'is_restricted', 'condition_type', 'billed_no_boe', 'planning_options']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly
         extra_kwargs = {
@@ -336,6 +361,21 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
             value = value_map.get(obj.id)
             return float(value) if value is not None else 0.0
         return float(obj.available_value_calculated or 0)
+
+    def get_planning_options(self, obj):
+        """
+        Return all LicenseItemPlan rows for this import item, formatted with the
+        essential planning fields needed by the frontend to display planning options
+        and enforce per-plan-line allocation caps.
+
+        The related LicenseItemPlan objects are loaded via prefetch_related in the view
+        (same pattern as `items`, `items_detail`, etc.), so this is O(1) per item.
+        Falls back to a fresh query if no prefetch is present (e.g., standalone usage).
+        """
+        # utilization_plans is the related_name on LicenseItemPlan.import_item
+        plans = obj.utilization_plans.all()
+        serializer = PlanningOptionSerializer(plans, many=True)
+        return serializer.data
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

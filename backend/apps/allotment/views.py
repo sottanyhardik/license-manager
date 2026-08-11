@@ -177,6 +177,8 @@ def custom_get_queryset_with_defaults(self):
         'allotment_details__item__license',
         'allotment_details__item__license__purchase_status',
         'allotment_details__item__license__ownership__current_owner',
+        'allotment_details__item__utilization_plans',
+        'allotment_details__item__utilization_plans__item_name',
     )
 
     params = self.request.query_params

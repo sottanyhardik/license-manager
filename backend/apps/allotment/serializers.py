@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from apps.allotment.models import AllotmentModel, AllotmentItems
 from apps.core.serializers.fields import IndianDateField
+from apps.license.serializers.license import PlanningOptionSerializer
 
 
 class AllotmentItemSerializer(serializers.ModelSerializer):
@@ -29,6 +30,11 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     current_owner = serializers.SerializerMethodField()
     file_transfer_status = serializers.SerializerMethodField()
     condition_type = serializers.SerializerMethodField()
+
+    # Planning options from the related import item — all LicenseItemPlan rows split
+    # across this item, each with its own remaining availability after allocations.
+    # Loaded via prefetch_related to avoid N+1 queries.
+    planning_options = serializers.SerializerMethodField(read_only=True)
 
     def get_ledger(self, obj):
         ledger = obj.ledger
@@ -81,6 +87,22 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     def get_condition_type(self, obj):
         return getattr(obj.item, 'condition_type', '') or ''
 
+    def get_planning_options(self, obj):
+        """
+        Return all LicenseItemPlan rows for the related import item.
+        Allows the frontend to display planning options and enforce per-plan-line caps.
+
+        The related LicenseItemPlan objects are loaded via prefetch_related in the view
+        (same pattern as the import_item's utilization_plans), so this is O(1) per item.
+        Falls back to a fresh query if no prefetch is present (e.g., standalone usage).
+        """
+        if obj.item is None:
+            return []
+        # utilization_plans is the related_name on LicenseItemPlan.import_item
+        plans = obj.item.utilization_plans.all()
+        serializer = PlanningOptionSerializer(plans, many=True)
+        return serializer.data
+
     class Meta:
         model = AllotmentItems
         fields = [
@@ -88,7 +110,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
             'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number', 'license_id',
             'license_date', 'exporter', 'license_expiry', 'registration_number',
             'registration_date', 'notification_number', 'file_number', 'port_code',
-            'purchase_status', 'current_owner', 'file_transfer_status', 'condition_type'
+            'purchase_status', 'current_owner', 'file_transfer_status', 'condition_type', 'planning_options'
         ]
 
 

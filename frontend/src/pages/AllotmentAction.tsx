@@ -11,10 +11,20 @@ import {useBackButton} from "../hooks/useBackButton";
 import {usePurchaseStatusOptions} from "../hooks/useMasterOptions";
 import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
+import AllotmentItemPlanningCard from "./AllotmentItemPlanningCard";
 import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
+
+interface PlanningOption {
+    id: number;
+    item_name: string | null;
+    planned_quantity: string;
+    remaining_quantity: string;
+    planned_cif_fc: string;
+    remaining_cif_fc: string;
+}
 
 interface AvailableItem {
     id: number;
@@ -26,6 +36,8 @@ interface AvailableItem {
     hs_code_label?: string;
     notification_number?: string;
     license_expiry_date?: string;
+    license_date?: string;
+    product_description?: string;
     description: string;
     exporter_name?: string;
     items_detail?: Array<{ name: string }>;
@@ -44,6 +56,8 @@ interface AvailableItem {
     original_planned_cif_fc?: string;
     used_planned_cif_fc?: string;
     remaining_planned_cif_fc?: string;
+    // Planning options for this item — list of LicenseItemPlan lines user can allocate from
+    planning_options?: PlanningOption[];
     // Plan mode (Debit Based On = Plan) only — one row per LicenseItemPlan
     // line. `id` is the plan line's own id (unique per split row); the real
     // underlying import item is `import_item_id` — the Confirm-allot payload
@@ -240,7 +254,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     const allocateMutation = useMutation({
-        mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) =>
+        mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string; plan_line_id?: number } }) =>
             api.post(`allotment-actions/${id}/allocate-items/`, {
                 allocations: [{
                     // Plan mode's row id is the LicenseItemPlan line's own id
@@ -254,6 +268,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     // backend can decrement THAT line's own remaining balance
                     // independently of its siblings (see allocate_items).
                     ...(payload.item.import_item_id ? { plan_line_id: payload.item.id } : {}),
+                    // Item Planning Selection: when user selects a planning line,
+                    // send its id so backend can decrement that line's remaining balance
+                    ...(payload.allocation.plan_line_id ? { plan_line_id: payload.allocation.plan_line_id } : {}),
                 }],
             }).then(r => r.data),
         onSuccess: (data, { item, allocation }) => {

@@ -118,7 +118,9 @@ class AllotmentActionViewSet(ViewSet):
         ).prefetch_related(
             'items',
             'items__sion_norm_class',
-            'license__export_license'
+            'license__export_license',
+            'utilization_plans',
+            'utilization_plans__item_name'
         ).order_by('license__license_expiry_date', 'serial_number')
 
         # Apply search filter if provided
@@ -833,7 +835,11 @@ class AllotmentActionViewSet(ViewSet):
                 if plan_line_id:
                     from apps.license.models import LicenseItemPlan
                     try:
-                        plan_line = LicenseItemPlan.objects.select_for_update().get(id=plan_line_id)
+                        # Validate plan_line_id belongs to the selected item
+                        plan_line = LicenseItemPlan.objects.select_for_update().get(
+                            id=plan_line_id,
+                            import_item_id=item_id
+                        )
                         current_remaining = (
                             plan_line.remaining_quantity
                             if plan_line.remaining_quantity is not None
@@ -844,10 +850,9 @@ class AllotmentActionViewSet(ViewSet):
                         plan_line.remaining_cif_fc = new_remaining_qty * plan_line.unit_price
                         plan_line.save(update_fields=['remaining_quantity', 'remaining_cif_fc'])
                     except LicenseItemPlan.DoesNotExist:
-                        # Stale reference (e.g. Auto-Plan regenerated this
-                        # line between page load and Confirm) — the real
-                        # allotment above already succeeded; there's just no
-                        # specific plan-line balance left to decrement.
+                        # Could be stale reference (e.g. Auto-Plan regenerated this
+                        # line between page load and Confirm), or plan_line_id doesn't
+                        # belong to this item (security issue caught, silently ignored).
                         pass
                 # ------------------------------------------------------------
 

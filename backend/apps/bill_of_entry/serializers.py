@@ -1,13 +1,36 @@
 # bill_of_entry/serializers.py
+from decimal import Decimal, ROUND_HALF_UP
 from rest_framework import serializers
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 
 
 class RowDetailsSerializer(serializers.ModelSerializer):
-    """Serializer for BOE row details (nested items)"""
+    """Serializer for BOE row details (nested items) with decimal precision enforcement."""
     # Make id writable so it can be passed during updates
     id = serializers.IntegerField(required=False)
+
+    # Enforce CIF INR to 2 decimal places
+    cif_inr = serializers.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        coerce_to_string=False,
+    )
+
+    # Enforce CIF FC to 2 decimal places
+    cif_fc = serializers.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        coerce_to_string=False,
+    )
+
+    # Enforce Quantity to 3 decimal places
+    qty = serializers.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        coerce_to_string=False,
+    )
+
     license_number = serializers.CharField(source='sr_number.license.license_number', read_only=True)
     item_description = serializers.CharField(source='sr_number.description', read_only=True)
     hs_code = serializers.CharField(source='sr_number.hs_code.hs_code', read_only=True)
@@ -20,6 +43,24 @@ class RowDetailsSerializer(serializers.ModelSerializer):
         if obj.sr_number and obj.sr_number.license and obj.sr_number.license.purchase_status:
             return obj.sr_number.license.purchase_status.code
         return None
+
+    def validate_cif_inr(self, value):
+        """Ensure CIF INR is rounded to 2 decimal places using ROUND_HALF_UP."""
+        if value is not None:
+            return value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return value
+
+    def validate_cif_fc(self, value):
+        """Ensure CIF FC is rounded to 2 decimal places using ROUND_HALF_UP."""
+        if value is not None:
+            return value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return value
+
+    def validate_qty(self, value):
+        """Ensure Quantity is rounded to 3 decimal places using ROUND_HALF_UP."""
+        if value is not None:
+            return value.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+        return value
 
     class Meta:
         model = RowDetails
@@ -68,7 +109,7 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
     unit_price = serializers.DecimalField(
         source='get_unit_price',
         max_digits=15,
-        decimal_places=3,
+        decimal_places=2,
         read_only=True
     )
 

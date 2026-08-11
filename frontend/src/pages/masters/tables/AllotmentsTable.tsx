@@ -139,7 +139,7 @@ export default function AllotmentsTable({
                                             )}
                                         >
                                             {(item.item_name || item.dfia_list) && (
-                                                <div className="flex flex-wrap items-start gap-6">
+                                                <div className="flex flex-wrap items-start gap-4">
                                                     <div className="min-w-[200px] flex-1">
                                                         <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">Item</div>
                                                         <div className="text-[14.5px] font-medium text-foreground">

@@ -919,7 +919,7 @@ main > .container-fluid {
 }
 .entity-card:hover { box-shadow: var(--tb-shadow-2) !important; }
 .entity-card + .entity-card,
-article.entity-card + article.entity-card { margin-top: 8px; }
+article.entity-card + article.entity-card { margin-top: 4px; }
 .entity-card.tone-primary { border-left: 3px solid var(--tb-brand) !important; }
 .entity-card.tone-success { border-left: 3px solid var(--tb-success) !important; }
 .entity-card.tone-warning { border-left: 3px solid var(--tb-warning) !important; }
@@ -939,7 +939,7 @@ article.entity-card + article.entity-card { margin-top: 8px; }
     gap: 8px;
     background: var(--tb-sunken) !important;
     border-bottom: 1px solid var(--tb-border-soft) !important;
-    padding: 8px 14px !important;
+    padding: 5px 12px !important;
 }
 .entity-card-title {
     font-size: var(--tb-fs-base) !important;
@@ -955,30 +955,30 @@ article.entity-card + article.entity-card { margin-top: 8px; }
     border-color: var(--tb-border-soft) !important;
 }
 .entity-card-body {
-    padding: 10px 14px !important;
+    padding: 6px 12px !important;
     border-bottom: 1px solid var(--tb-border-soft) !important;
 }
 .entity-card-body-row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     flex-wrap: wrap;
 }
 .entity-card-summary {
     display: flex;
     flex-wrap: wrap;
-    gap: 18px;
+    gap: 12px;
     flex: 1;
     min-width: 0;
 }
 .entity-card-actions {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex-wrap: wrap;
 }
 .entity-card-detail {
-    padding: 12px 14px;
+    padding: 8px 12px;
     background: var(--tb-sunken);
     border-top: 1px solid var(--tb-border-soft);
 }
@@ -988,7 +988,7 @@ article.entity-card + article.entity-card { margin-top: 8px; }
     letter-spacing: 0.06em;
     font-weight: var(--tb-fw-semibold);
     text-transform: uppercase;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
 }
 .entity-card-stat-value {
     font-size: var(--tb-fs-base) !important;
@@ -1025,12 +1025,12 @@ article.entity-card + article.entity-card { margin-top: 8px; }
     letter-spacing: 0.05em;
     font-weight: var(--tb-fw-semibold);
     font-size: 10.5px;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-bottom: 1px solid var(--tb-border);
     white-space: nowrap;
 }
 .detail-table-scroller > table tbody td {
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-bottom: 1px solid var(--tb-border-soft);
     vertical-align: middle;
 }

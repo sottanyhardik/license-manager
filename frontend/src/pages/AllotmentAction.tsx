@@ -979,202 +979,234 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     />
 
                     <div className="max-h-[650px] overflow-y-auto pr-px">
-                        {availableItems.map((item) => {
-                            const maxAllocation = calculateMaxAllocation(item);
-                            const currentAllocation = allocationData[item.id];
-                            const qty = parseFloat(item.available_quantity || "0");
-                            const cifFc = parseFloat(item.balance_cif_fc || "0");
-                            const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
-                            const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
+                        {(() => {
+                            // Group items by license
+                            const groupedByLicense: Record<string, AvailableItem[]> = {};
+                            availableItems.forEach(item => {
+                                const key = item.license_number || item.license || 'unknown';
+                                if (!groupedByLicense[key]) {
+                                    groupedByLicense[key] = [];
+                                }
+                                groupedByLicense[key].push(item);
+                            });
 
-                            return (
-                                <div key={item.id} className={cn(
-                                    "mb-2.5 overflow-hidden rounded-xl bg-card",
-                                    isReady
-                                        ? "border border-primary border-l-[4px] shadow-[0_2px_12px_rgba(79,70,229,0.12)]"
-                                        : "border border-border/60 border-l-[4px] border-l-border shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
-                                )}>
-                                    {/* ── Row 1: Identity bar ── */}
-                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-1.5 bg-muted/40 border-b border-border">
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    const licenseId = item.license_id || item.license;
-                                                    const response = await api.get(`licenses/${licenseId}/merged-documents/`, { responseType: 'blob' });
-                                                    openPdfPreview(response.data, `${item.license_number || licenseId}-copy.pdf`);
-                                                } catch {
-                                                    toast.error('Failed to load license document');
-                                                }
-                                            }}
-                                            title="View license document"
-                                            className="mr-1 inline-flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer font-bold text-[14px] text-primary underline decoration-dotted underline-offset-[3px]"
-                                        >
-                                            <FileText className="size-4" aria-hidden="true" />
-                                            {item.license_number}
-                                        </button>
-                                        <span className="rounded-md bg-border px-[7px] py-px text-[12px] font-semibold text-muted-foreground">#{item.serial_number}</span>
-                                        <ConditionBadge type={item.condition_type} size="xs" />
+                            return Object.entries(groupedByLicense).map(([licenseKey, groupItems]) => {
+                                const firstItem = groupItems[0];
+                                const licenseId = firstItem.license_id || firstItem.license;
+                                const groupHasPlanning = groupItems.some(item => item.has_plan);
+                                const totalGroupQtyAllocated = groupItems.reduce((sum, item) => {
+                                    const alloc = allocationData[item.id];
+                                    return sum + (alloc ? parseFloat(alloc.qty || 0) : 0);
+                                }, 0);
+                                const totalGroupValueAllocated = groupItems.reduce((sum, item) => {
+                                    const alloc = allocationData[item.id];
+                                    return sum + (alloc ? parseFloat(alloc.cif_fc || 0) : 0);
+                                }, 0);
 
-                                        {item.hs_code_label && (
-                                            <span className="rounded-md border border-primary/20 bg-primary/5 px-[7px] py-px text-[12px] text-primary">HS: {item.hs_code_label}</span>
-                                        )}
-                                        {item.notification_number && (
-                                            <span className="text-[12px] text-muted-foreground">
-                                                Notif: {item.notification_number}
-                                            </span>
-                                        )}
-                                        <span className="ml-auto flex items-center gap-1 text-[12px] text-muted-foreground">
-                                            <Calendar className="size-4" aria-hidden="true" />
-                                            Exp: {item.license_expiry_date || '—'}
-                                        </span>
-                                        {/* Restriction is read-only — driven by the licence's
-                                            condition_type. Use the shared badge. */}
-                                        {item.condition_type
-                                            ? <ConditionBadge type={item.condition_type} size="xs" />
-                                            : (
-                                                <span className="inline-flex items-center gap-1 rounded border border-success/30 bg-success/10 px-[7px] py-px text-[11px] text-success">
-                                                    <Unlock className="size-3" aria-hidden="true" />Open
+                                return (
+                                    <div key={licenseKey} className="mb-4 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                                        {/* ── LICENSE HEADER ── */}
+                                        <div className="px-4 py-3.5 bg-muted/50 border-b border-border/60">
+                                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const response = await api.get(`licenses/${licenseId}/merged-documents/`, { responseType: 'blob' });
+                                                            openPdfPreview(response.data, `${licenseKey}-copy.pdf`);
+                                                        } catch {
+                                                            toast.error('Failed to load license document');
+                                                        }
+                                                    }}
+                                                    title="View license document"
+                                                    className="inline-flex items-center gap-1.5 bg-transparent border-none p-0 cursor-pointer font-bold text-[15px] text-primary underline decoration-dotted underline-offset-[3px] hover:opacity-80"
+                                                >
+                                                    <FileText className="size-4" aria-hidden="true" />
+                                                    {licenseKey}
+                                                </button>
+                                                <div className="flex items-center gap-3 text-[12px] text-muted-foreground ml-auto">
+                                                    <span>{firstItem.license_expiry_date ? new Date(firstItem.license_expiry_date).toLocaleDateString('en-IN', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</span>
+                                                    <span className="text-foreground font-semibold">{firstItem.exporter_name || '—'}</span>
+                                                    {firstItem.license_expiry_date && (
+                                                        <span>Exp: {new Date(firstItem.license_expiry_date).toLocaleDateString('en-IN', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
+                                                    )}
+                                                    {firstItem.notification_number && (
+                                                        <span>Notif: {firstItem.notification_number}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* ── ITEM HEADER ── */}
+                                        <div className="px-4 py-2.5 border-b border-border/60 bg-card">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-bold text-[14px] text-foreground">
+                                                    {firstItem.description}
                                                 </span>
+                                                {firstItem.hs_code_label && (
+                                                    <span className="text-[12px] text-muted-foreground">({firstItem.hs_code_label})</span>
+                                                )}
+                                            </div>
+                                            {firstItem.hs_code_label && (
+                                                <div className="text-[11px] text-muted-foreground mt-1">
+                                                    HS: {firstItem.hs_code_label}
+                                                </div>
                                             )}
-                                    </div>
+                                        </div>
 
-                                    {/* ── Row 2: Compact description + exporter + chips ── */}
-                                    <div className="flex items-center flex-wrap gap-1.5 px-3 py-[5px] bg-card border-b border-border/60">
-                                        <span className="font-bold text-[13px] text-foreground">
-                                            {item.description}
-                                        </span>
-                                        <span className="inline-block w-px h-3 bg-border shrink-0" />
-                                        <span className="inline-flex items-center gap-[3px] text-[11.5px] text-muted-foreground">
-                                            <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
-                                        </span>
-                                        {item.items_detail && item.items_detail.length > 0 && item.items_detail.map((i, idx) => (
-                                            <span key={idx} className="rounded border border-primary/20 bg-primary/10 px-1.5 text-[0.7rem] font-semibold leading-[1.6] text-primary">{i.name}</span>
-                                        ))}
-                                        {item.planned_item_name && (
-                                            <span className="rounded border border-success/30 bg-success/10 px-1.5 text-[0.7rem] font-semibold leading-[1.6] text-success">
-                                                Planned: {item.planned_item_name}
-                                            </span>
+                                        {/* ── PLANNING SECTION ── */}
+                                        {groupHasPlanning && !isPlanMode && (
+                                            <div className="px-4 py-3 bg-primary/5 border-b border-primary/10">
+                                                <div className="text-[12px] font-semibold text-primary mb-2">Planning Selection</div>
+                                                <div className="flex items-center gap-2 text-[13px] text-foreground">
+                                                    <span className="font-semibold">MAX QTY:</span>
+                                                    <span>{groupItems.filter(i => i.has_plan).reduce((sum, i) => sum + parseFloat(i.remaining_planned_quantity ?? 0), 0).toFixed(3)}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-[13px] text-foreground mt-1">
+                                                    <span className="font-semibold">MAX VALUE:</span>
+                                                    <span>₹{groupItems.filter(i => i.has_plan).reduce((sum, i) => sum + parseFloat(i.remaining_planned_cif_fc ?? 0), 0).toFixed(2)}</span>
+                                                </div>
+                                                <div className="pt-2 mt-2 border-t border-primary/10">
+                                                    <div className="text-[11px] text-muted-foreground">
+                                                        Total in Group: QTY {totalGroupQtyAllocated.toFixed(3)} / VALUE ₹{totalGroupValueAllocated.toFixed(2)}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         )}
+
+                                        {/* ── ALLOTMENT LINES ── */}
+                                        <div className="p-4 space-y-4">
+                                            {groupItems.map((item) => {
+                                                const maxAllocation = calculateMaxAllocation(item);
+                                                const currentAllocation = allocationData[item.id];
+                                                const qty = parseFloat(item.available_quantity || "0");
+                                                const cifFc = parseFloat(item.balance_cif_fc || "0");
+                                                const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
+                                                const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
+
+                                                return (
+                                                    <div key={item.id} className="border border-border/60 rounded-lg p-3 bg-muted/30">
+                                                        {/* Item identifier */}
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <span className="font-semibold text-[13px] text-foreground">SR #{item.serial_number}</span>
+                                                            <ConditionBadge type={item.condition_type} size="xs" />
+                                                            {item.condition_type
+                                                                ? null
+                                                                : (
+                                                                    <span className="inline-flex items-center gap-1 rounded border border-success/30 bg-success/10 px-[5px] py-px text-[10px] text-success">
+                                                                        <Unlock className="size-3" aria-hidden="true" />Open
+                                                                    </span>
+                                                                )}
+                                                        </div>
+
+                                                        {/* Availability info */}
+                                                        <div className="grid grid-cols-3 gap-3 mb-3 text-[12px]">
+                                                            <div>
+                                                                <div className="text-muted-foreground">Available</div>
+                                                                <div className="font-semibold text-foreground">{qty.toFixed(3)}</div>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-muted-foreground">CIF FC</div>
+                                                                <div className="font-semibold text-foreground">₹{cifFc.toFixed(2)}</div>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-muted-foreground">Avg</div>
+                                                                <div className="font-semibold text-foreground">{average}</div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Planning status if exists */}
+                                                        {!isPlanMode && item.has_plan && (() => {
+                                                            const remQty = Number(item.remaining_planned_quantity ?? 0);
+                                                            const remVal = Number(item.remaining_planned_cif_fc ?? 0);
+                                                            return (
+                                                                <div className="mb-3 pb-3 border-b border-border/60 text-[11px]">
+                                                                    <div className="text-muted-foreground">
+                                                                        Plan: <span className="font-semibold text-foreground">Qty {remQty.toFixed(3)} / Value ₹{remVal.toFixed(2)}</span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
+
+                                                        {/* Allocation controls */}
+                                                        <div className="space-y-2">
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div>
+                                                                    <label className="block mb-1 text-[11px] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
+                                                                        Qty <span className="font-normal normal-case">/ max {maxAllocation.qty}</span>
+                                                                    </label>
+                                                                    <div className="flex gap-1.5">
+                                                                        <input
+                                                                            type="number"
+                                                                            className="flex h-8 flex-1 rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
+                                                                            value={currentAllocation?.qty || ""}
+                                                                            onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                                                                            placeholder="Qty"
+                                                                            step="1"
+                                                                            min="0"
+                                                                            max={maxAllocation.qty}
+                                                                        />
+                                                                        <button
+                                                                            className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-[11px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted"
+                                                                            type="button"
+                                                                            onClick={() => handleMaxQuantity(item)}>Max
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block mb-1 text-[11px] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
+                                                                        Value <span className="font-normal normal-case">/ max {maxAllocation.value.toFixed(2)}</span>
+                                                                    </label>
+                                                                    <div className="flex gap-1.5">
+                                                                        <input
+                                                                            type="number"
+                                                                            className="flex h-8 flex-1 rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
+                                                                            value={currentAllocation?.cif_fc || ""}
+                                                                            onChange={(e) => handleValueChange(item.id, e.target.value)}
+                                                                            placeholder="Value"
+                                                                            step="0.01"
+                                                                            min="0"
+                                                                        />
+                                                                        <button
+                                                                            className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-[11px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted"
+                                                                            type="button"
+                                                                            onClick={() => handleMaxValue(item)}>Max
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Confirm button */}
+                                                            <button
+                                                                className={cn(
+                                                                    "w-full flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[0.82rem] font-semibold transition-all duration-200",
+                                                                    isReady
+                                                                        ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground cursor-pointer hover:opacity-90"
+                                                                        : "bg-muted text-muted-foreground cursor-not-allowed"
+                                                                )}
+                                                                onClick={() => handleConfirmAllot(item)}
+                                                                disabled={!isReady || (allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id)}
+                                                            >
+                                                                {allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id ? (
+                                                                    <>
+                                                                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+                                                                        Saving…
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <CheckCircle2 className="size-4" aria-hidden="true" />
+                                                                        Confirm
+                                                                    </>
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-
-                                    {/* ── Row 2.5: Utilization-plan status (Original/Used/Remaining) —
-                                        only rendered for items that actually carry a plan. This is the
-                                        SAME Original/Used/Remaining the Max button below is capped to,
-                                        and what the server re-checks on Confirm — shown here so the
-                                        operator sees the cap before typing, not after a rejection.
-                                        Never shown in Plan mode: each row there IS already one plan
-                                        line, so the aggregate Original/Used/Remaining concept doesn't
-                                        map onto a single split row. ── */}
-                                    {!isPlanMode && item.has_plan && (() => {
-                                        const origQty = Number(item.original_planned_quantity ?? 0);
-                                        const usedQty = Number(item.used_planned_quantity ?? 0);
-                                        const remQty  = Number(item.remaining_planned_quantity ?? 0);
-                                        const origVal = Number(item.original_planned_cif_fc ?? 0);
-                                        const usedVal = Number(item.used_planned_cif_fc ?? 0);
-                                        const remVal  = Number(item.remaining_planned_cif_fc ?? 0);
-                                        return (
-                                            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 bg-primary/5 border-b border-primary/10 px-3 py-[5px] text-[11.5px]">
-                                                <span className="inline-flex items-center gap-1 font-semibold text-primary">
-                                                    <ListChecks className="size-3" aria-hidden="true" />Plan
-                                                </span>
-                                                <span className="text-muted-foreground">
-                                                    Qty — Original <b className="text-foreground font-semibold">{origQty.toFixed(3)}</b>
-                                                    {' · '}Used <b className="text-foreground font-semibold">{usedQty.toFixed(3)}</b>
-                                                    {' · '}Remaining <b className={cn("font-semibold", remQty <= 0 ? "text-destructive" : "text-foreground")}>{remQty.toFixed(3)}</b>
-                                                </span>
-                                                <span className="text-muted-foreground">
-                                                    Value — Original <b className="text-foreground font-semibold">${origVal.toFixed(2)}</b>
-                                                    {' · '}Used <b className="text-foreground font-semibold">${usedVal.toFixed(2)}</b>
-                                                    {' · '}Remaining <b className={cn("font-semibold", remVal <= 0 ? "text-destructive" : "text-foreground")}>${remVal.toFixed(2)}</b>
-                                                </span>
-                                            </div>
-                                        );
-                                    })()}
-
-                                    {/* ── Row 3: Stats + Inputs + Action (compact bottom bar) ── */}
-                                    <div className="flex items-center flex-wrap bg-muted/40">
-
-                                        {/* Availability stats */}
-                                        <div className="flex gap-3 px-3 py-[7px] shrink-0">
-                                            {[
-                                                {label: isPlanMode ? 'Plan Qty' : 'Avail Qty', value: qty.toFixed(3)},
-                                                {label: 'CIF FC', value: cifFc.toFixed(2)},
-                                                {label: 'Avg', value: average},
-                                            ].map(({label, value}) => (
-                                                <div key={label}>
-                                                    <div className="text-[0.62rem] text-muted-foreground uppercase tracking-[0.4px]">{label}</div>
-                                                    <div className="font-bold text-[13px] text-foreground leading-[1.2]">{value}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        <div className="w-px h-9 bg-border/60 shrink-0" />
-
-                                        {/* Allocation inputs */}
-                                        <div className="flex gap-2 px-3 py-[7px] flex-wrap flex-1 min-w-[260px]">
-                                            <div className="flex-1 min-w-[130px]">
-                                                <label className="block mb-[3px] text-[0.62rem] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
-                                                    Qty <span className="font-normal normal-case">/ max {maxAllocation.qty}</span>
-                                                </label>
-                                                <div className="relative flex">
-                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
-                                                        value={currentAllocation?.qty || ""}
-                                                        onChange={(e) => handleQuantityChange(item.id, e.target.value)}
-                                                        placeholder="Qty"
-                                                        step="1" min="0" max={maxAllocation.qty}
-                                                    />
-                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-[12px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted" type="button"
-                                                        onClick={() => handleMaxQuantity(item)}>Max</button>
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 min-w-[130px]">
-                                                <label className="block mb-[3px] text-[0.62rem] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
-                                                    Value <span className="font-normal normal-case">/ max {maxAllocation.value.toFixed(2)}</span>
-                                                </label>
-                                                <div className="relative flex">
-                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
-                                                        value={currentAllocation?.cif_fc || ""}
-                                                        onChange={(e) => handleValueChange(item.id, e.target.value)}
-                                                        placeholder="Value"
-                                                        step="0.01" min="0"
-                                                    />
-                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-[12px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted" type="button"
-                                                        onClick={() => handleMaxValue(item)}>Max</button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="w-px h-9 bg-border/60 shrink-0" />
-
-                                        {/* Confirm action */}
-                                        <div className="shrink-0 px-3 py-[7px] flex items-center justify-center">
-                                            <button
-                                                className={cn(
-                                                    "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[0.82rem] font-semibold whitespace-nowrap transition-all duration-200",
-                                                    isReady
-                                                        ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground cursor-pointer hover:opacity-90"
-                                                        : "bg-muted text-muted-foreground cursor-not-allowed"
-                                                )}
-                                                onClick={() => handleConfirmAllot(item)}
-                                                disabled={!isReady || (allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id)}
-                                            >
-                                                {allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id ? (
-                                                    <>
-                                                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-1" aria-hidden="true" />
-                                                        Saving…
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <CheckCircle2 className="size-4" aria-hidden="true" />
-                                                        Confirm
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            });
+                        })()}
                     </div>
 
                     {tableLoading && (

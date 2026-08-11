@@ -24,7 +24,7 @@ interface AvailableItem {
   available_quantity: string;
   balance_cif_fc: string;
   condition_type?: string;
-  planning_options?: Array<{ id: number; item_name: string | null; remaining_quantity: string; remaining_cif_fc: string }>;
+  planning_options?: Array<{ plan_line_id: number; item_name: string | null; remaining_quantity: string; remaining_cif_fc: string }>;
   [key: string]: any;
 }
 
@@ -65,12 +65,12 @@ export default function LicenseItemsGrouped({
 
   // Consolidate planning options from all items in a license group
   const getPlanningOptionsForGroup = (items: AvailableItem[]) => {
-    const optionMap = new Map<number, { id: number; item_name: string | null; remaining_quantity: string; remaining_cif_fc: string }>();
+    const optionMap = new Map<number, { plan_line_id: number; item_name: string | null; remaining_quantity: string; remaining_cif_fc: string }>();
     items.forEach((item) => {
       if (item.planning_options) {
         item.planning_options.forEach((plan) => {
-          if (!optionMap.has(plan.id)) {
-            optionMap.set(plan.id, plan);
+          if (!optionMap.has(plan.plan_line_id)) {
+            optionMap.set(plan.plan_line_id, plan);
           }
         });
       }
@@ -98,7 +98,7 @@ export default function LicenseItemsGrouped({
         const firstItem = licenseItems[0];
         const groupPlanningOptions = getPlanningOptionsForGroup(licenseItems);
         const selectedPlan = selectedPlanningId
-          ? groupPlanningOptions.find((p) => p.id === selectedPlanningId)
+          ? groupPlanningOptions.find((p) => p.plan_line_id === selectedPlanningId)
           : null;
         const groupHasAnyPlanning = licenseItems.some((item) => item.planning_options && item.planning_options.length > 0);
         const totalAllocation = getTotalAllocationForGroup(licenseItems);
@@ -185,7 +185,7 @@ export default function LicenseItemsGrouped({
                   >
                     <option value="">-- Select Planning --</option>
                     {groupPlanningOptions.map((plan) => (
-                      <option key={plan.id} value={String(plan.id)}>
+                      <option key={plan.plan_line_id} value={String(plan.plan_line_id)}>
                         {plan.item_name || "Unplanned"} — {formatTruthyIndianNumber(plan.remaining_quantity, { maximumFractionDigits: 3 })} available
                       </option>
                     ))}

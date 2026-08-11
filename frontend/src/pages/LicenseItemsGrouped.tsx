@@ -170,9 +170,9 @@ export default function LicenseItemsGrouped({
                 <div className="space-y-2">
                   <label className="text-xs font-semibold block">Planning Selection</label>
                   <select
-                    value={selectedPlanningId || ""}
+                    value={selectedPlanningId ? String(selectedPlanningId) : ""}
                     onChange={(e) => {
-                      const newId = e.target.value ? parseInt(e.target.value) : null;
+                      const newId = e.target.value ? parseInt(e.target.value, 10) : null;
                       setSelectedPlanningId(newId);
                       licenseItems.forEach((item) => {
                         onAllocationChange(item.id, {
@@ -185,7 +185,7 @@ export default function LicenseItemsGrouped({
                   >
                     <option value="">-- Select Planning --</option>
                     {groupPlanningOptions.map((plan) => (
-                      <option key={plan.id} value={plan.id}>
+                      <option key={plan.id} value={String(plan.id)}>
                         {plan.item_name || "Unplanned"} — {formatTruthyIndianNumber(plan.remaining_quantity, { maximumFractionDigits: 3 })} available
                       </option>
                     ))}

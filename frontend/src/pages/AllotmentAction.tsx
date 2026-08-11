@@ -1004,10 +1004,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 }, 0);
 
                                 return (
-                                    <div key={licenseKey} className="mb-4 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-                                        {/* ── LICENSE HEADER ── */}
-                                        <div className="px-4 py-3.5 bg-muted/50 border-b border-border/60">
-                                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    <div key={licenseKey} className="mb-2 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                                        {/* ── LICENSE HEADER (compact) ── */}
+                                        <div className="px-3 py-1.5 bg-muted/50 border-b border-border/60 text-[12px]">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <button
                                                     onClick={async () => {
                                                         try {
@@ -1018,63 +1018,52 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                         }
                                                     }}
                                                     title="View license document"
-                                                    className="inline-flex items-center gap-1.5 bg-transparent border-none p-0 cursor-pointer font-bold text-[15px] text-primary underline decoration-dotted underline-offset-[3px] hover:opacity-80"
+                                                    className="inline-flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer font-bold text-[13px] text-primary underline decoration-dotted underline-offset-[2px] hover:opacity-80"
                                                 >
-                                                    <FileText className="size-4" aria-hidden="true" />
+                                                    <FileText className="size-3.5" aria-hidden="true" />
                                                     {licenseKey}
                                                 </button>
-                                                <div className="flex items-center gap-3 text-[12px] text-muted-foreground ml-auto">
-                                                    <span>{firstItem.license_expiry_date ? new Date(firstItem.license_expiry_date).toLocaleDateString('en-IN', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</span>
-                                                    <span className="text-foreground font-semibold">{firstItem.exporter_name || '—'}</span>
-                                                    {firstItem.license_expiry_date && (
-                                                        <span>Exp: {new Date(firstItem.license_expiry_date).toLocaleDateString('en-IN', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
-                                                    )}
-                                                    {firstItem.notification_number && (
-                                                        <span>Notif: {firstItem.notification_number}</span>
-                                                    )}
-                                                </div>
+                                                <span className="text-muted-foreground">|</span>
+                                                <span className="text-muted-foreground">{firstItem.license_expiry_date ? new Date(firstItem.license_expiry_date).toLocaleDateString('en-IN', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</span>
+                                                <span className="text-foreground font-semibold">{firstItem.exporter_name || '—'}</span>
+                                                {firstItem.license_expiry_date && (
+                                                    <span className="text-muted-foreground">Exp: {new Date(firstItem.license_expiry_date).toLocaleDateString('en-IN', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
+                                                )}
+                                                {firstItem.notification_number && (
+                                                    <span className="text-muted-foreground">Notif: {firstItem.notification_number}</span>
+                                                )}
                                             </div>
                                         </div>
 
-                                        {/* ── ITEM HEADER ── */}
-                                        <div className="px-4 py-2.5 border-b border-border/60 bg-card">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="font-bold text-[14px] text-foreground">
+                                        {/* ── ITEM HEADER (compact inline) ── */}
+                                        <div className="px-3 py-1 border-b border-border/60 bg-card text-[12px]">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="font-bold text-foreground">
                                                     {firstItem.description}
                                                 </span>
                                                 {firstItem.hs_code_label && (
-                                                    <span className="text-[12px] text-muted-foreground">({firstItem.hs_code_label})</span>
+                                                    <>
+                                                        <span className="text-muted-foreground">·</span>
+                                                        <span className="text-muted-foreground">HS: {firstItem.hs_code_label}</span>
+                                                    </>
                                                 )}
                                             </div>
-                                            {firstItem.hs_code_label && (
-                                                <div className="text-[11px] text-muted-foreground mt-1">
-                                                    HS: {firstItem.hs_code_label}
-                                                </div>
-                                            )}
                                         </div>
 
-                                        {/* ── PLANNING SECTION ── */}
+                                        {/* ── PLANNING SECTION (compact inline) ── */}
                                         {groupHasPlanning && !isPlanMode && (
-                                            <div className="px-4 py-3 bg-primary/5 border-b border-primary/10">
-                                                <div className="text-[12px] font-semibold text-primary mb-2">Planning Selection</div>
-                                                <div className="flex items-center gap-2 text-[13px] text-foreground">
-                                                    <span className="font-semibold">MAX QTY:</span>
-                                                    <span>{groupItems.filter(i => i.has_plan).reduce((sum, i) => sum + parseFloat(i.remaining_planned_quantity ?? 0), 0).toFixed(3)}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-[13px] text-foreground mt-1">
-                                                    <span className="font-semibold">MAX VALUE:</span>
-                                                    <span>₹{groupItems.filter(i => i.has_plan).reduce((sum, i) => sum + parseFloat(i.remaining_planned_cif_fc ?? 0), 0).toFixed(2)}</span>
-                                                </div>
-                                                <div className="pt-2 mt-2 border-t border-primary/10">
-                                                    <div className="text-[11px] text-muted-foreground">
-                                                        Total in Group: QTY {totalGroupQtyAllocated.toFixed(3)} / VALUE ₹{totalGroupValueAllocated.toFixed(2)}
-                                                    </div>
+                                            <div className="px-3 py-1.5 bg-primary/5 border-b border-primary/10 text-[11px]">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="font-semibold text-primary">Planning:</span>
+                                                    <span className="text-foreground">MAX QTY {groupItems.filter(i => i.has_plan).reduce((sum, i) => sum + parseFloat(i.remaining_planned_quantity ?? 0), 0).toFixed(3)}</span>
+                                                    <span className="text-foreground">MAX VALUE ₹{groupItems.filter(i => i.has_plan).reduce((sum, i) => sum + parseFloat(i.remaining_planned_cif_fc ?? 0), 0).toFixed(2)}</span>
+                                                    <span className="text-muted-foreground ml-1">Total: QTY {totalGroupQtyAllocated.toFixed(3)} / VALUE ₹{totalGroupValueAllocated.toFixed(2)}</span>
                                                 </div>
                                             </div>
                                         )}
 
-                                        {/* ── ALLOTMENT LINES ── */}
-                                        <div className="p-4 space-y-4">
+                                        {/* ── ALLOTMENT LINES (compact) ── */}
+                                        <div className="p-2 space-y-2">
                                             {groupItems.map((item) => {
                                                 const maxAllocation = calculateMaxAllocation(item);
                                                 const currentAllocation = allocationData[item.id];
@@ -1084,118 +1073,92 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
 
                                                 return (
-                                                    <div key={item.id} className="border border-border/60 rounded-lg p-3 bg-muted/30">
-                                                        {/* Item identifier */}
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <span className="font-semibold text-[13px] text-foreground">SR #{item.serial_number}</span>
-                                                            <ConditionBadge type={item.condition_type} size="xs" />
-                                                            {item.condition_type
-                                                                ? null
-                                                                : (
-                                                                    <span className="inline-flex items-center gap-1 rounded border border-success/30 bg-success/10 px-[5px] py-px text-[10px] text-success">
-                                                                        <Unlock className="size-3" aria-hidden="true" />Open
-                                                                    </span>
-                                                                )}
-                                                        </div>
-
-                                                        {/* Availability info */}
-                                                        <div className="grid grid-cols-3 gap-3 mb-3 text-[12px]">
-                                                            <div>
-                                                                <div className="text-muted-foreground">Available</div>
-                                                                <div className="font-semibold text-foreground">{qty.toFixed(3)}</div>
+                                                    <div key={item.id} className="border border-border/60 rounded p-2 bg-muted/20">
+                                                        {/* Item identifier + availability info (compact inline) */}
+                                                        <div className="flex items-center justify-between gap-2 mb-1.5 text-[11px] flex-wrap">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-semibold text-foreground">SR #{item.serial_number}</span>
+                                                                {item.condition_type
+                                                                    ? <ConditionBadge type={item.condition_type} size="xs" />
+                                                                    : (
+                                                                        <span className="inline-flex items-center gap-0.5 rounded border border-success/30 bg-success/10 px-1 py-px text-[9px] text-success">
+                                                                            <Unlock className="size-2.5" aria-hidden="true" />Open
+                                                                        </span>
+                                                                    )}
                                                             </div>
-                                                            <div>
-                                                                <div className="text-muted-foreground">CIF FC</div>
-                                                                <div className="font-semibold text-foreground">₹{cifFc.toFixed(2)}</div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-muted-foreground">Avg</div>
-                                                                <div className="font-semibold text-foreground">{average}</div>
+                                                            <div className="flex items-center gap-1.5 text-muted-foreground ml-auto">
+                                                                <span>Available: <span className="font-semibold text-foreground">{qty.toFixed(3)}</span></span>
+                                                                <span>CIF: <span className="font-semibold text-foreground">₹{cifFc.toFixed(2)}</span></span>
+                                                                <span>Avg: <span className="font-semibold text-foreground">{average}</span></span>
+                                                                {!isPlanMode && item.has_plan && (() => {
+                                                                    const remQty = Number(item.remaining_planned_quantity ?? 0);
+                                                                    const remVal = Number(item.remaining_planned_cif_fc ?? 0);
+                                                                    return (
+                                                                        <span>Plan: <span className="font-semibold text-foreground">{remQty.toFixed(3)} / ₹{remVal.toFixed(2)}</span></span>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                         </div>
 
-                                                        {/* Planning status if exists */}
-                                                        {!isPlanMode && item.has_plan && (() => {
-                                                            const remQty = Number(item.remaining_planned_quantity ?? 0);
-                                                            const remVal = Number(item.remaining_planned_cif_fc ?? 0);
-                                                            return (
-                                                                <div className="mb-3 pb-3 border-b border-border/60 text-[11px]">
-                                                                    <div className="text-muted-foreground">
-                                                                        Plan: <span className="font-semibold text-foreground">Qty {remQty.toFixed(3)} / Value ₹{remVal.toFixed(2)}</span>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })()}
+                                                        {/* Allocation controls (compact inline) */}
+                                                        <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                                                            <div className="flex items-center gap-1 flex-1 min-w-[200px]">
+                                                                <label className="text-muted-foreground font-semibold whitespace-nowrap">Qty:</label>
+                                                                <input
+                                                                    type="number"
+                                                                    className="flex h-7 flex-1 rounded border border-input bg-card px-1.5 py-0.5 text-[0.78rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
+                                                                    value={currentAllocation?.qty || ""}
+                                                                    onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                                                                    placeholder="Qty"
+                                                                    step="1"
+                                                                    min="0"
+                                                                    max={maxAllocation.qty}
+                                                                    title={`Max: ${maxAllocation.qty}`}
+                                                                />
+                                                                <button
+                                                                    className="rounded border border-border bg-card px-1.5 py-0.5 font-semibold text-muted-foreground cursor-pointer hover:bg-muted whitespace-nowrap"
+                                                                    type="button"
+                                                                    onClick={() => handleMaxQuantity(item)}
+                                                                    title={`Set to max: ${maxAllocation.qty}`}
+                                                                >Max</button>
+                                                            </div>
 
-                                                        {/* Allocation controls */}
-                                                        <div className="space-y-2">
-                                                            <div className="grid grid-cols-2 gap-2">
-                                                                <div>
-                                                                    <label className="block mb-1 text-[11px] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
-                                                                        Qty <span className="font-normal normal-case">/ max {maxAllocation.qty}</span>
-                                                                    </label>
-                                                                    <div className="flex gap-1.5">
-                                                                        <input
-                                                                            type="number"
-                                                                            className="flex h-8 flex-1 rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
-                                                                            value={currentAllocation?.qty || ""}
-                                                                            onChange={(e) => handleQuantityChange(item.id, e.target.value)}
-                                                                            placeholder="Qty"
-                                                                            step="1"
-                                                                            min="0"
-                                                                            max={maxAllocation.qty}
-                                                                        />
-                                                                        <button
-                                                                            className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-[11px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted"
-                                                                            type="button"
-                                                                            onClick={() => handleMaxQuantity(item)}>Max
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block mb-1 text-[11px] text-muted-foreground font-semibold uppercase tracking-[0.3px]">
-                                                                        Value <span className="font-normal normal-case">/ max {maxAllocation.value.toFixed(2)}</span>
-                                                                    </label>
-                                                                    <div className="flex gap-1.5">
-                                                                        <input
-                                                                            type="number"
-                                                                            className="flex h-8 flex-1 rounded-md border border-input bg-card px-2 py-1 text-[0.82rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
-                                                                            value={currentAllocation?.cif_fc || ""}
-                                                                            onChange={(e) => handleValueChange(item.id, e.target.value)}
-                                                                            placeholder="Value"
-                                                                            step="0.01"
-                                                                            min="0"
-                                                                        />
-                                                                        <button
-                                                                            className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-[11px] font-semibold text-muted-foreground cursor-pointer hover:bg-muted"
-                                                                            type="button"
-                                                                            onClick={() => handleMaxValue(item)}>Max
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
+                                                            <div className="flex items-center gap-1 flex-1 min-w-[200px]">
+                                                                <label className="text-muted-foreground font-semibold whitespace-nowrap">Value:</label>
+                                                                <input
+                                                                    type="number"
+                                                                    className="flex h-7 flex-1 rounded border border-input bg-card px-1.5 py-0.5 text-[0.78rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
+                                                                    value={currentAllocation?.cif_fc || ""}
+                                                                    onChange={(e) => handleValueChange(item.id, e.target.value)}
+                                                                    placeholder="Value"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    title={`Max: ${maxAllocation.value.toFixed(2)}`}
+                                                                />
+                                                                <button
+                                                                    className="rounded border border-border bg-card px-1.5 py-0.5 font-semibold text-muted-foreground cursor-pointer hover:bg-muted whitespace-nowrap"
+                                                                    type="button"
+                                                                    onClick={() => handleMaxValue(item)}
+                                                                    title={`Set to max: ${maxAllocation.value.toFixed(2)}`}
+                                                                >Max</button>
                                                             </div>
 
                                                             {/* Confirm button */}
                                                             <button
                                                                 className={cn(
-                                                                    "w-full flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[0.82rem] font-semibold transition-all duration-200",
+                                                                    "rounded px-2.5 py-1 font-semibold whitespace-nowrap transition-all duration-200",
                                                                     isReady
                                                                         ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground cursor-pointer hover:opacity-90"
                                                                         : "bg-muted text-muted-foreground cursor-not-allowed"
                                                                 )}
                                                                 onClick={() => handleConfirmAllot(item)}
                                                                 disabled={!isReady || (allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id)}
+                                                                title="Allocate this item"
                                                             >
                                                                 {allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id ? (
-                                                                    <>
-                                                                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                                                        Saving…
-                                                                    </>
+                                                                    <span className="inline-block size-2.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                                                 ) : (
-                                                                    <>
-                                                                        <CheckCircle2 className="size-4" aria-hidden="true" />
-                                                                        Confirm
-                                                                    </>
+                                                                    'Confirm'
                                                                 )}
                                                             </button>
                                                         </div>

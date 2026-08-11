@@ -1,5 +1,4 @@
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
 import { ClipboardCopy, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 import EntityCard from "../../../components/primitives/EntityCard";
@@ -123,32 +122,18 @@ export default function AllotmentsTable({
                                                 <DetailTable
                                                     columns={[
                                                         { key: 'license_number',     label: 'License',     bold: true, nowrap: true,
-                                                            render: (v, row) => (
-                                                                <div className="group inline-flex items-center gap-1">
-                                                                    {v && row.license_id
-                                                                        ? <Link
-                                                                            to={`/licenses/${row.license_id}/edit`}
-                                                                            onClick={(e) => {
-                                                                                saveFilterState('licenses', { filters: {}, pagination: { currentPage: 1, pageSize }, search: '' });
-                                                                            }}
-                                                                            className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring')}
-                                                                          >
-                                                                            {v}
-                                                                          </Link>
-                                                                        : <span className="text-primary">{v || '—'}</span>
-                                                                    }
-                                                                    {v && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => copyToClipboard(v)}
-                                                                            className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer opacity-0 transition-opacity group-hover:opacity-100"
-                                                                            title="Copy license number"
-                                                                            aria-label={`Copy ${v}`}
-                                                                        >
-                                                                            <ClipboardCopy className="size-3" aria-hidden="true" />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
+                                                            render: (v, row) => v ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => copyToClipboard(v)}
+                                                                    className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer')}
+                                                                    title="Copy license number"
+                                                                    aria-label={`Copy ${v}`}
+                                                                >
+                                                                    {v}
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-primary">—</span>
                                                             ) },
                                                         { key: 'serial_number',      label: 'Sl#',         align: 'right', nowrap: true },
                                                         { key: 'product_description', label: 'Item',       muted: true },
@@ -186,35 +171,18 @@ export default function AllotmentsTable({
                                                                     });
                                                                     return (
                                                                         <div className="flex flex-wrap items-center gap-2">
-                                                                            {licenseNumbers.map((licNum, idx) => {
-                                                                                const licenseId = licenseMap.get(licNum);
-                                                                                return (
-                                                                                    <div key={licNum} className="group inline-flex items-center gap-1">
-                                                                                        {licenseId ? (
-                                                                                            <Link
-                                                                                                to={`/licenses/${licenseId}/edit`}
-                                                                                                onClick={(e) => {
-                                                                                                    saveFilterState('licenses', { filters: {}, pagination: { currentPage: 1, pageSize }, search: '' });
-                                                                                                }}
-                                                                                                className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring')}
-                                                                                            >
-                                                                                                {licNum}
-                                                                                            </Link>
-                                                                                        ) : (
-                                                                                            <span className="text-primary">{licNum}</span>
-                                                                                        )}
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => copyToClipboard(licNum)}
-                                                                                            className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer opacity-0 transition-opacity group-hover:opacity-100"
-                                                                                            title="Copy license number"
-                                                                                            aria-label={`Copy ${licNum}`}
-                                                                                        >
-                                                                                            <ClipboardCopy className="size-3" aria-hidden="true" />
-                                                                                        </button>
-                                                                                    </div>
-                                                                                );
-                                                                            })}
+                                                                            {licenseNumbers.map((licNum) => (
+                                                                                <button
+                                                                                    key={licNum}
+                                                                                    type="button"
+                                                                                    onClick={() => copyToClipboard(licNum)}
+                                                                                    className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer')}
+                                                                                    title="Copy license number"
+                                                                                    aria-label={`Copy ${licNum}`}
+                                                                                >
+                                                                                    {licNum}
+                                                                                </button>
+                                                                            ))}
                                                                         </div>
                                                                     );
                                                                 })()}

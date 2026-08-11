@@ -149,7 +149,38 @@ export default function AllotmentsTable({
                                                     {item.dfia_list && (
                                                         <div className="min-w-[140px] flex-1">
                                                             <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">Licenses</div>
-                                                            <div className="text-[13.5px] font-medium text-primary">{item.dfia_list}</div>
+                                                            <div className="text-[13.5px] font-medium text-primary">
+                                                                {(() => {
+                                                                    const licenseNumbers = item.dfia_list.split(', ').filter(Boolean);
+                                                                    const licenseMap = new Map();
+                                                                    (item.allotment_details || []).forEach(detail => {
+                                                                        if (detail.license_number) {
+                                                                            licenseMap.set(detail.license_number, detail.license_id);
+                                                                        }
+                                                                    });
+                                                                    return (
+                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                            {licenseNumbers.map((licNum, idx) => {
+                                                                                const licenseId = licenseMap.get(licNum);
+                                                                                return licenseId ? (
+                                                                                    <Link
+                                                                                        key={licNum}
+                                                                                        to={`/licenses/${licenseId}/edit`}
+                                                                                        onClick={(e) => {
+                                                                                            saveFilterState('licenses', { filters: {}, pagination: { currentPage: 1, pageSize }, search: '' });
+                                                                                        }}
+                                                                                        className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring')}
+                                                                                    >
+                                                                                        {licNum}
+                                                                                    </Link>
+                                                                                ) : (
+                                                                                    <span key={licNum} className="text-primary">{licNum}</span>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>

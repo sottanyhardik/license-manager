@@ -35,7 +35,7 @@
       <excludeFolder url="file://$MODULE_DIR$/backend/media" />
       <excludeFolder url="file://$MODULE_DIR$/backend/DFIA_COPY" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.14 (license-manager)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="~/Developer/projects/license-manager/.venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">

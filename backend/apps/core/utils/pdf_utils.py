@@ -395,27 +395,6 @@ class BusinessPDFExporter:
         except (ValueError, TypeError):
             return str(value)
 
-    @staticmethod
-    def format_date(date_value, format_string='%d-%m-%Y'):
-        """
-        Format date for display in PDF.
-
-        Args:
-            date_value: Date object or string
-            format_string: Desired format string
-
-        Returns:
-            Formatted date string
-        """
-        if not date_value:
-            return '--'
-
-        try:
-            if isinstance(date_value, str):
-                return date_value
-            return date_value.strftime(format_string)
-        except (AttributeError, ValueError):
-            return str(date_value)
 
 
 def create_pdf_exporter(title, filename_prefix, orientation='landscape'):

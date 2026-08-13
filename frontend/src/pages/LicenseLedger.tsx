@@ -54,6 +54,8 @@ type LedgerFilters = {
     /** `core.PurchaseStatus.code` — also DFIA-only, drops every Incentive
      * license once set (see `ledger_service.py`'s `_get_purchase_status_param`). */
     purchase_status: PurchaseStatusFilter;
+    /** Filter by purchase bill status: 'ALL' (default), 'WITH_PURCHASE_BILL', 'NO_PURCHASE_BILL' */
+    purchase_bill: string;
 };
 
 type LedgerTransaction = {
@@ -78,6 +80,7 @@ type LicenseWiseEntry = {
     license_date: string;
     license_type: string;
     companies: LedgerCompany[];
+    has_purchase_bill?: boolean;
 };
 
 type LicenseWiseData = {
@@ -88,6 +91,7 @@ type LicenseWiseData = {
 
 const VALID_LICENSE_TYPES = new Set(['ALL', 'DFIA', 'INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']);
 const VALID_ORDERING = new Set(['-license_date', 'license_date', '-balance_value', 'balance_value']);
+const VALID_PURCHASE_BILL_MODES = new Set(['ALL', 'WITH_PURCHASE_BILL', 'NO_PURCHASE_BILL']);
 
 const LICENSE_TYPE_OPTIONS = [
     { value: 'ALL',       label: 'All Licenses',  Icon: Globe },
@@ -96,6 +100,12 @@ const LICENSE_TYPE_OPTIONS = [
     { value: 'RODTEP',    label: 'RODTEP',         Icon: Trophy },
     { value: 'ROSTL',     label: 'ROSTL',          Icon: Trophy },
     { value: 'MEIS',      label: 'MEIS',           Icon: Trophy },
+];
+
+const PURCHASE_BILL_OPTIONS = [
+    { value: 'ALL',                label: 'All',                  Icon: Globe },
+    { value: 'WITH_PURCHASE_BILL', label: 'With Purchase Bill',   Icon: BadgeCheck },
+    { value: 'NO_PURCHASE_BILL',   label: 'No Purchase Bill',     Icon: XCircle },
 ];
 
 // ─── Pure utilities ────────────────────────────────────────────────────────────
@@ -155,6 +165,7 @@ export function buildLedgerFilterParams(filters: LedgerFilters, additionalFilter
     const norm = getNormFilterValue(currentFilters.norm);
     const purchaseStatus = getPurchaseStatusFilterValue(currentFilters.purchase_status);
     const ordering = VALID_ORDERING.has(currentFilters.ordering) ? currentFilters.ordering : '-license_date';
+    const purchaseBill = normalizeText(currentFilters.purchase_bill || 'ALL').toUpperCase();
 
     params.append('license_type', licenseType);
     if (minBalance) params.append('min_balance', minBalance);
@@ -166,6 +177,7 @@ export function buildLedgerFilterParams(filters: LedgerFilters, additionalFilter
     if (currentFilters.purchase_date_from) params.append('purchase_date_from', currentFilters.purchase_date_from);
     if (currentFilters.purchase_date_to) params.append('purchase_date_to', currentFilters.purchase_date_to);
     params.append('active_only', String(Boolean(currentFilters.active_only)));
+    if (purchaseBill && purchaseBill !== 'ALL') params.append('purchase_bill', purchaseBill);
     if (currentFilters.no_purchases) params.append('no_purchases', 'true');
     return params;
 }
@@ -377,7 +389,7 @@ export default function LicenseLedger() {
 
     const [filters, setFilters] = useState<LedgerFilters>({
         license_type: 'ALL', min_balance: '', search: '', company: null, norm: null, purchase_status: null,
-        active_only: true, ordering: '-license_date',
+        active_only: true, ordering: '-license_date', purchase_bill: 'ALL',
         purchase_date_from: currentFYStart, purchase_date_to: currentFYEnd,
     });
 
@@ -400,6 +412,7 @@ export default function LicenseLedger() {
         filters.company,
         filters.norm,
         filters.purchase_status,
+        filters.purchase_bill,
         filters.active_only,
         filters.ordering,
         filters.purchase_date_from,
@@ -769,6 +782,36 @@ export default function LicenseLedger() {
                                 loadOnMount={false} aria-labelledby="purchase-status-filter-label"
                             />
                             <p className="mt-0.5 text-[11px] text-muted-foreground">DFIA only — hides Incentive licenses</p>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="lg:col-span-2">
+                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Purchase Bill Status</label>
+                            <div className="flex flex-wrap gap-1">
+                                {PURCHASE_BILL_OPTIONS.map(opt => {
+                                    const active = filters.purchase_bill === opt.value;
+                                    const Icon = opt.Icon;
+                                    return (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            aria-pressed={active}
+                                            onClick={() => handleFilterChange('purchase_bill', opt.value)}
+                                            className={cn(
+                                                "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors flex items-center gap-1.5",
+                                                active
+                                                    ? "border-primary bg-primary text-primary-foreground"
+                                                    : "border-border bg-card text-muted-foreground hover:bg-muted",
+                                            )}
+                                        >
+                                            <Icon className="size-3.5" aria-hidden="true" />
+                                            {opt.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">Filter by purchase bill presence</p>
                         </div>
                     </div>
 

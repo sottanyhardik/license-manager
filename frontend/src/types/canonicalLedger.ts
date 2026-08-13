@@ -124,13 +124,10 @@ export type ProfitState = 'PROFIT' | 'LOSS' | 'BREAK_EVEN' | 'UNAVAILABLE';
  * The on-screen summary block — every summary figure the ledger page displays,
  * computed once by `CanonicalLedgerService._build_summary`.
  *
- * DEBIT / CREDIT — ONE MEANING
- *   `total_credit` = Σ of the table's **Credit** column = PURCHASE rows
+ * DEBIT / CREDIT COLUMNS (visual table columns)
+ *   `total_debit`  = Σ of the table's **Debit** column = PURCHASE rows
  *                    (+ the OPENING row when it is shown)
- *   `total_debit`  = Σ of the table's **Debit** column  = SALE rows
- * The ledger is the licence's own account: acquiring licence value credits it,
- * consuming licence value debits it. This agrees with each type's
- * `balance_direction`, so the two names cannot drift apart.
+ *   `total_credit` = Σ of the table's **Credit** column = SALE rows
  *
  * ⚠ TWO CURRENCIES, NEVER MIXED ⚠
  *   `total_debit` / `total_credit` / `opening_balance` / `current_balance` /
@@ -139,7 +136,10 @@ export type ProfitState = 'PROFIT' | 'LOSS' | 'BREAK_EVEN' | 'UNAVAILABLE';
  * Never add or compare figures across these two groups.
  *
  * THE IDENTITY the backend guarantees — unconditional, no correction term:
- *     total_credit − total_debit === current_balance === total_profit_loss
+ * When opening_in_debit is true:
+ *     total_debit − total_credit === current_balance === total_profit_loss
+ * When opening_in_debit is false:
+ *     opening_balance + total_debit − total_credit === current_balance === total_profit_loss
  *
  * `opening_balance` is licence metadata and is deliberately NOT part of it:
  * when a PURCHASE exists, the opening and that purchase are the same
@@ -147,9 +147,9 @@ export type ProfitState = 'PROFIT' | 'LOSS' | 'BREAK_EVEN' | 'UNAVAILABLE';
  * it never performs the subtraction.
  */
 export interface LedgerSummary {
-  /** Σ of the displayed Debit column = sales. */
+  /** Σ of the displayed Debit column = purchases (+ opening iff `opening_in_debit`). */
   total_debit: string;
-  /** Σ of the displayed Credit column = purchases (+ opening iff `opening_in_credit`). */
+  /** Σ of the displayed Credit column = sales. */
   total_credit: string;
   /** Σ of the displayed Debit Bill column, in `bill_currency`. */
   total_debit_bill: string;
@@ -161,10 +161,10 @@ export interface LedgerSummary {
   opening_balance: string;
   /**
    * True when the OPENING row is on screen (no PURCHASE exists) and is therefore
-   * ALREADY counted inside `total_credit`. Published so no client re-derives the
+   * ALREADY counted inside `total_debit`. Published so no client re-derives the
    * display rule.
    */
-  opening_in_credit: boolean;
+  opening_in_debit: boolean;
   /**
    * THE canonical balance: `total_credit − total_debit`. Display as given.
    * Never recompute it, and never substitute `license_running_balance` — that

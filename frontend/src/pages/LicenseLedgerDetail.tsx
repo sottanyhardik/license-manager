@@ -154,7 +154,7 @@ function LedgerSummaryCards({ summary }: { summary: LedgerSummary | undefined })
         // crashing the financial screen.
         ?? PROFIT_STATE_PRESENTATION.UNAVAILABLE;
 
-    const profitValue = !summary.total_profit_loss && summary.total_profit_loss !== 0
+    const profitValue = !summary.total_profit_loss && summary.total_profit_loss !== '0'
         ? 'N/A'
         : formatMoney(
             profit.magnitude

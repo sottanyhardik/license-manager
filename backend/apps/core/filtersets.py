@@ -32,6 +32,21 @@ def _filter_recent_days(queryset, field_name, value):
     return queryset
 
 
+def _filter_company_ids(queryset, field_name, value):
+    """
+    Filter queryset by comma-separated company IDs.
+
+    Args:
+        queryset: Django queryset to filter
+        field_name: Field name to filter on (e.g., 'company_id' or 'license__company_id')
+        value: Comma-separated company IDs as string
+
+    Returns:
+        Filtered queryset
+    """
+    return _filter_csv_ids(queryset, field_name, value)
+
+
 # ============================================================================
 # Base FilterSets
 # ============================================================================
@@ -238,7 +253,7 @@ class BOEFilterSet(BaseFilterSet):
 
     def filter_company_ids(self, queryset, name, value):
         """Filter by comma-separated company IDs."""
-        return _filter_csv_ids(queryset, 'company_id', value)
+        return _filter_company_ids(queryset, 'company_id', value)
 
     def filter_recent_days(self, queryset, name, value):
         """Filter BOEs from last N days."""
@@ -277,7 +292,7 @@ class AllotmentFilterSet(BaseFilterSet):
 
     def filter_company_ids(self, queryset, name, value):
         """Filter by comma-separated company IDs."""
-        return _filter_csv_ids(queryset, 'company_id', value)
+        return _filter_company_ids(queryset, 'company_id', value)
 
     def filter_license_number(self, queryset, name, value):
         """Filter allotments by license number (searches in nested allotment_details)."""
@@ -366,7 +381,7 @@ class ItemReportFilterSet(filters.FilterSet):
 
     def filter_company_ids(self, queryset, name, value):
         """Include only these companies."""
-        return _filter_csv_ids(queryset, 'license__company_id', value)
+        return _filter_company_ids(queryset, 'license__company_id', value)
 
     def filter_exclude_company_ids(self, queryset, name, value):
         """Exclude these companies."""

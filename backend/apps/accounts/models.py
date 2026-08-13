@@ -90,6 +90,16 @@ class User(AbstractBaseUser, PermissionsMixin):
         validators=[FileExtensionValidator(allowed_extensions=['png', 'jpg', 'jpeg'])],
     )
 
+    # Company association for company-scoped license/ledger access
+    company = models.ForeignKey(
+        'core.CompanyModel',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='users',
+        help_text='The company this user belongs to. Required for ledger/license access.',
+    )
+
     objects = UserManager()
 
     USERNAME_FIELD = "username"

@@ -82,23 +82,21 @@ class LedgerSummarySerializer(serializers.Serializer):
     Representation only — every value is produced by
     `CanonicalLedgerService._build_summary`; nothing is computed here.
 
-    DEBIT / CREDIT — ONE MEANING, AGREEING WITH `balance_direction`
+    DEBIT / CREDIT COLUMNS (visual table columns)
+      * `total_debit` = Σ the table's **Debit** column
+                      = PURCHASE rows + OPENING row (when shown)
       * `total_credit` = Σ the table's **Credit** column
-                       = PURCHASE rows (+ the OPENING row when it is shown)
-                       — whose `balance_direction` is "CREDIT". ✓
-      * `total_debit`  = Σ the table's **Debit** column
-                       = SALE rows — whose `balance_direction` is "DEBIT". ✓
-    The ledger is the LICENCE's own account: acquiring licence value credits it,
-    consuming licence value debits it. The column is derived from
-    `balance_direction` in `transaction_semantics.ledger_column_for`, so these
-    two names cannot drift apart.
+                       = SALE rows
 
-    The identity, unconditional (no correction term, no second form):
-        total_credit − total_debit == current_balance == total_profit_loss
+    The identity, unconditional:
+        total_debit − total_credit == current_balance == total_profit_loss
+
+    When OPENING is displayed: opening is already in total_debit.
+    When OPENING is NOT displayed: opening_balance must be added separately.
 
     `current_balance` and `total_profit_loss` are the SAME single number, not two
-    calculations. `opening_balance` is licence metadata and is NOT added: when a
-    PURCHASE exists the opening would double-count the acquisition, which is
+    calculations. `opening_balance` is licence metadata and is NOT double-counted:
+    when a PURCHASE exists the opening would double-count the acquisition, which is
     exactly the defect this block fixes. See `_build_summary` for the full
     derivation and for the accounting note on the PROFIT / LOSS label.
 
@@ -120,19 +118,19 @@ class LedgerSummarySerializer(serializers.Serializer):
     #: identity above (adding it would double-count a purchased licence).
     opening_balance = serializers.DecimalField(max_digits=19, decimal_places=2)
     #: True when the OPENING row is displayed (and therefore already counted in
-    #: `total_credit`) — i.e. when the licence has no PURCHASE. Published so the
+    #: `total_debit`) — i.e. when the licence has no PURCHASE. Published so the
     #: client never re-derives the display rule.
-    opening_in_credit = serializers.BooleanField()
+    opening_in_debit = serializers.BooleanField()
     current_balance = serializers.DecimalField(max_digits=19, decimal_places=2)
     balance_currency = serializers.CharField()
 
     #: The SAME number as `current_balance`, in `profit_currency`
     #: (== `balance_currency`). Signed: a negative position serialises negative.
     #: Always present — the position is computable for every licence type.
-    total_profit_loss = serializers.DecimalField(max_digits=19, decimal_places=2)
+    total_profit_loss = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True)
     profit_currency = serializers.CharField()
-    #: PROFIT | LOSS | NONE — decided in the backend so no client branches on
-    #: the sign of a number. 'NONE' is exact zero ("no profit / no loss").
+    #: PROFIT | LOSS | BREAK_EVEN | UNAVAILABLE — decided in the backend so no
+    #: client branches on the sign of a number.
     profit_state = serializers.CharField()
 
 
@@ -170,6 +168,14 @@ class CanonicalLedgerSerializer(serializers.Serializer):
     #: definition does not reach). This is the field the ledger list's Purchase
     #: Date Range filters on, so a client can always see WHY a licence matched.
     first_purchase_date = serializers.DateField(allow_null=True, required=False)
+
+    #: Purchase bill detection — TRUE if license has ≥1 qualifying PURCHASE with
+    #: non-zero bill amount; FALSE if no such purchase exists. NOT inferred from
+    #: balance state, but computed from actual trade bills.
+    has_purchase_bill = serializers.BooleanField()
+    #: Enumerated status: "WITH_PURCHASE_BILL" | "NO_PURCHASE_BILL"
+    #: Derived from has_purchase_bill for easier client-side filtering.
+    purchase_bill_status = serializers.CharField()
 
     opening_balance = serializers.DecimalField(max_digits=19, decimal_places=2)
     license_running_balance = serializers.DecimalField(max_digits=19, decimal_places=2)

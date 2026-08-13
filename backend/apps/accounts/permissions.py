@@ -130,7 +130,14 @@ class LedgerUploadPermission(permissions.BasePermission):
 
 
 class LicenseLedgerViewPermission(permissions.BasePermission):
-    """View license ledger — trade/license roles or LEDGER_MANAGER."""
+    """
+    View license ledger — trade/license roles or LEDGER_MANAGER.
+
+    ENFORCES COMPANY ISOLATION:
+    - Role-based access (has_permission) checks if user has required role
+    - Company-scoped access (get_queryset override in viewset) enforces user.company
+    - Object-level access (check_object_permissions) validates cross-company requests
+    """
 
     def has_permission(self, request, view):
         if request.user and request.user.is_superuser:
@@ -141,6 +148,45 @@ class LicenseLedgerViewPermission(permissions.BasePermission):
             'TRADE_VIEWER', 'TRADE_MANAGER',
             'LICENSE_MANAGER', 'LEDGER_MANAGER',
         ])
+
+    def has_object_permission(self, request, view, obj):
+        """
+        Validate that user's company matches the requested company_id.
+
+        Called by viewset.check_object_permissions() for retrieve, ledger_detail,
+        company_ledger, and any action that needs per-company validation.
+
+        Args:
+            obj: A dict-like object with 'company_id' key, or a license object
+                with exporter company info.
+
+        Returns:
+            True if user can access this company's data, False otherwise.
+        """
+        if request.user.is_superuser:
+            return True
+
+        # Get the company_id from the request (query_params)
+        request_company_id = request.query_params.get('company')
+        if request_company_id:
+            try:
+                request_company_id = int(request_company_id)
+            except (ValueError, TypeError):
+                return False
+
+        # User must have a company assigned to access company-scoped data
+        if not hasattr(request.user, 'company') or not request.user.company:
+            return False
+
+        user_company_id = request.user.company.id
+
+        # If a specific company_id is requested, it must match user's company
+        if request_company_id:
+            return request_company_id == user_company_id
+
+        # For single license retrieval (no company param), allow access
+        # (the get_queryset() filter will scope to user's company trades)
+        return True
 
 
 class AccountAccessPermission(permissions.BasePermission):

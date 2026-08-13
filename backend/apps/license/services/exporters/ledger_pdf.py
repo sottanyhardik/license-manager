@@ -81,11 +81,18 @@ def get_license_transactions(lic_data, company_id=None):
         )
 
         # Build map of canonical balances by transaction ID
+        # Also extract SION norms and has_purchase_bill status for each transaction
         canonical_balances = {}
+        canonical_sion_norms = {}
+        has_purchase_bill = canonical_data.get('has_purchase_bill', False)
+
         for txn in canonical_data.get('transactions', []):
             txn_id = txn.get('id')
             if txn_id:
                 canonical_balances[txn_id] = float(txn.get('license_running_balance', 0) or 0)
+                # Extract SION norms from canonical transaction
+                sion_norm_str = txn.get('sion_norms', '')
+                canonical_sion_norms[txn_id] = sion_norm_str
 
         # Direction-aware company filter:
         # - PURCHASE: company is the BUYER (to_company)
@@ -119,6 +126,7 @@ def get_license_transactions(lic_data, company_id=None):
         transactions = []
         total_purchase_cif = 0
         total_purchase_amount = 0
+        total_sale_amount = 0  # Track cumulative sale amount for profit/loss calculation
 
         # Sort: deterministic order by date then trade ID (matches CanonicalLedgerService)
         # This ensures same transaction order for parity with API
@@ -162,13 +170,18 @@ def get_license_transactions(lic_data, company_id=None):
                     'debit_amount': 0,
                     'credit_amount': 0,
                     'balance': round(opening_balance_canonical, 2),
-                    'profit_loss': 0,
+                    'total_profit_loss': 0,
+                    'item_names': '-',
+                    'has_purchase_bill': has_purchase_bill,
+                    'sion_norm': '',  # No SION norms on opening
+                    'is_sion_norm_empty': True,  # Opening always has no SION
                 })
 
         # Process each transaction
         for idx, (trans_type, trans_date, trans_obj) in enumerate(all_trans):
             total_cif_usd = 0
             total_amount = 0
+            item_names = []  # Collect item descriptions for this transaction
 
             # Get lines for this license only
             if license_type == 'DFIA':
@@ -189,6 +202,9 @@ def get_license_transactions(lic_data, company_id=None):
 
                     total_cif_usd += cif_usd
                     total_amount += float(line.amount_inr or 0)
+                    # Collect item names/descriptions
+                    if line.sr_number and line.sr_number.description:
+                        item_names.append(line.sr_number.description)
             else:
                 # For Incentive licenses, use incentive_lines
                 incentive_line = trans_obj.incentive_lines.filter(incentive_license_id=lic_id).first()
@@ -216,21 +232,14 @@ def get_license_transactions(lic_data, company_id=None):
             credit_amount = 0
 
             if trans_type in ['PURCHASE', 'COMMISSION_PURCHASE']:
-                debit_cif = total_cif_usd
-                debit_amount = total_amount
+                credit_cif = total_cif_usd
+                credit_amount = total_amount
                 total_purchase_cif += total_cif_usd
                 total_purchase_amount += total_amount
             elif trans_type in ['SALE', 'COMMISSION_SALE']:
-                credit_cif = total_cif_usd
-                credit_amount = total_amount
-
-            # Calculate profit/loss for sales
-            profit_loss = 0
-            if trans_type in ['SALE', 'COMMISSION_SALE'] and total_purchase_cif > 0:
-                avg_purchase_rate = total_purchase_amount / total_purchase_cif
-                purchase_amount_for_this_sale = total_cif_usd * avg_purchase_rate
-                sale_amount_inr = total_amount
-                profit_loss = sale_amount_inr - purchase_amount_for_this_sale
+                debit_cif = total_cif_usd
+                debit_amount = total_amount
+                total_sale_amount += total_amount
 
             # Get company names
             from_company = trans_obj.from_company.name if trans_obj.from_company else 'Unknown'
@@ -243,6 +252,13 @@ def get_license_transactions(lic_data, company_id=None):
 
             # Get canonical balance (authoritative source of truth)
             canonical_balance = canonical_balances.get(trans_obj.id, 0)
+
+            # Get canonical SION norms for this transaction
+            sion_norm_str = canonical_sion_norms.get(trans_obj.id, '')
+            is_sion_norm_empty = not sion_norm_str or sion_norm_str.strip() == ''
+
+            # Calculate cumulative profit/loss (Sale Amount - Purchase Amount)
+            cumulative_profit_loss = total_sale_amount - total_purchase_amount
 
             transactions.append({
                 'date': trans_date,
@@ -257,7 +273,11 @@ def get_license_transactions(lic_data, company_id=None):
                 'debit_amount': debit_amount,
                 'credit_amount': credit_amount,
                 'balance': round(canonical_balance, 2),
-                'profit_loss': round(profit_loss, 2),
+                'total_profit_loss': round(cumulative_profit_loss, 2),
+                'item_names': ', '.join(item_names) if item_names else '-',
+                'has_purchase_bill': has_purchase_bill,
+                'sion_norm': sion_norm_str,
+                'is_sion_norm_empty': is_sion_norm_empty,
             })
 
         return transactions
@@ -315,14 +335,16 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
             balance_val = lic_data.get('balance_value', 0)
             currency = lic_data.get('currency', 'USD')
 
+            # Always use canonical profit/loss (TOTAL CREDIT BILL - TOTAL DEBIT BILL in INR)
+            # Never recalculate independently
+            profit_loss = lic_data.get('total_profit_loss', 0)
+
             if company_id and transactions:
-                purchase_amt = sum(t.get('debit_amount', 0) for t in transactions)
-                sale_amt = sum(t.get('credit_amount', 0) for t in transactions)
-                profit_loss = sale_amt - purchase_amt
+                purchase_amt = sum(t.get('credit_amount', 0) for t in transactions)
+                sale_amt = sum(t.get('debit_amount', 0) for t in transactions)
             else:
                 purchase_amt = lic_data.get('purchase_amount', 0)
                 sale_amt = lic_data.get('sale_amount', 0)
-                profit_loss = lic_data.get('profit_loss', 0)
 
             info_data = [
                 ['License Date:', lic_date_str, 'Expiry Date:', exp_date_str],
@@ -347,7 +369,8 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
             elements.append(info_table)
             elements.append(Spacer(1, 0.15 * inch))
 
-            # Profit/Loss Summary
+            # Profit/Loss Summary (from canonical source)
+            profit_loss = float(lic_data.get('total_profit_loss') or 0)
             pl_color = colors.green if profit_loss >= 0 else colors.red
             pl_text = f"Profit: ₹{format_indian_number(profit_loss, 2)}" if profit_loss >= 0 else f"Loss: ₹{format_indian_number(abs(profit_loss), 2)}"
 
@@ -378,8 +401,12 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
                 txn_data = [[
                     'Date', 'Type', 'Particulars', 'Invoice No.',
                     'Debit CIF', 'Credit CIF', 'Balance',
-                    'Debit Amt', 'Credit Amt', 'P/L'
+                    'Debit Amt', 'Credit Amt', 'SION Norm', 'Status', 'P/L'
                 ]]
+
+                # Track rows with no purchase bill for styling
+                no_purchase_bill_rows = []
+                row_idx = 1  # Skip header row
 
                 for txn in transactions:
                     # Format values
@@ -393,7 +420,28 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
                     balance = txn.get('balance', 0)
                     debit_amt = txn.get('debit_amount', 0)
                     credit_amt = txn.get('credit_amount', 0)
-                    pl = txn.get('profit_loss', 0)
+                    pl = txn.get('total_profit_loss', 0)
+
+                    # SION norm: show "N/A" if is_sion_norm_empty=TRUE, else show sion_norm value
+                    is_sion_norm_empty = txn.get('is_sion_norm_empty', True)
+                    sion_norm = txn.get('sion_norm', '')
+                    sion_display = 'N/A' if is_sion_norm_empty else (sion_norm or 'N/A')
+
+                    # Purchase bill status: mark if has_purchase_bill = FALSE
+                    has_purchase_bill = txn.get('has_purchase_bill', False)
+                    status_text = 'No Purchase Bill' if not has_purchase_bill else '-'
+                    status_color = colors.HexColor('#d32f2f') if not has_purchase_bill else None
+
+                    # Track rows with no purchase bill for row-level styling
+                    if not has_purchase_bill:
+                        no_purchase_bill_rows.append(row_idx)
+
+                    # Create status paragraph with color if needed
+                    if status_color:
+                        status_style = ParagraphStyle('_StatusWarning', parent=wrap_style, textColor=status_color, fontName='Helvetica-Bold')
+                        status_para = Paragraph(status_text, status_style)
+                    else:
+                        status_para = Paragraph(status_text, wrap_style)
 
                     # Color code profit/loss
                     if pl != 0:
@@ -412,24 +460,30 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
                         Paragraph(format_indian_number(balance, 2), wrap_style),
                         Paragraph(format_indian_number(debit_amt, 2) if debit_amt > 0 else '-', wrap_style),
                         Paragraph(format_indian_number(credit_amt, 2) if credit_amt > 0 else '-', wrap_style),
+                        Paragraph(sion_display, wrap_style),
+                        status_para,
                         pl_para
                     ])
+                    row_idx += 1
 
                 # Create table with expanded widths (landscape A4: ~10.5 inches available)
                 txn_table = Table(txn_data, colWidths=[
                     0.7*inch,   # Date
                     0.8*inch,   # Type
-                    2.2*inch,   # Particulars (expanded)
-                    0.9*inch,   # Invoice No.
-                    0.85*inch,  # Debit CIF
-                    0.85*inch,  # Credit CIF
-                    0.85*inch,  # Balance
-                    0.95*inch,  # Debit Amt
-                    0.95*inch,  # Credit Amt
-                    0.85*inch   # P/L
+                    2.0*inch,   # Particulars (slightly reduced)
+                    0.85*inch,  # Invoice No.
+                    0.8*inch,   # Debit CIF
+                    0.8*inch,   # Credit CIF
+                    0.75*inch,  # Balance
+                    0.85*inch,  # Debit Amt
+                    0.85*inch,  # Credit Amt
+                    0.75*inch,  # SION Norm
+                    0.85*inch,  # Status (No Purchase Bill)
+                    0.75*inch   # P/L
                 ], repeatRows=1)
 
-                txn_table.setStyle(TableStyle(
+                # Build table style including highlighting for no_purchase_bill rows
+                table_styles = (
                     make_header_table_style_commands(header_bg='#34495e', header_fontsize=7)
                     + make_data_grid_commands()
                     + [
@@ -438,7 +492,13 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
                         ('VALIGN', (0, 1), (-1, -1), 'TOP'),
                         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
                     ]
-                ))
+                )
+
+                # Add red background highlighting for rows with no purchase bill
+                for row_num in no_purchase_bill_rows:
+                    table_styles.append(('BACKGROUND', (0, row_num), (-1, row_num), colors.HexColor('#ffebee')))
+
+                txn_table.setStyle(TableStyle(table_styles))
 
                 elements.append(txn_table)
             else:
@@ -476,13 +536,13 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
         for lic_data in licenses_data:
             txns = get_license_transactions(lic_data, company_id=company_id_summary)
             if company_id_summary and txns:
-                pur = sum(t.get('debit_amount', 0) for t in txns)
-                sal = sum(t.get('credit_amount', 0) for t in txns)
+                pur = sum(t.get('credit_amount', 0) for t in txns)
+                sal = sum(t.get('debit_amount', 0) for t in txns)
                 pl  = sal - pur
             else:
                 pur = lic_data.get('purchase_amount', 0)
                 sal = lic_data.get('sale_amount', 0)
-                pl  = lic_data.get('profit_loss', 0)
+                pl  = lic_data.get('total_profit_loss', 0)
 
             cif_purchase = lic_data.get('total_value', 0) or 0
             cif_sold = lic_data.get('sold_value', 0) or 0
@@ -609,6 +669,41 @@ def generate_all_licenses_pdf(licenses_data, query_params):
         elements.append(Paragraph(filter_info, make_subtitle_style(styles)))
         elements.append(Spacer(1, 0.2 * inch))
 
+        # ── No Purchase Bill Warning ──────────────────────────────────────
+        # Highlight licenses with no purchases (empty purchase column)
+        no_purchase_licenses = [
+            lic for lic in licenses_data
+            if not lic.get('purchase_amount') or lic.get('purchase_amount') == 0
+        ]
+        if no_purchase_licenses:
+            warning_style = ParagraphStyle(
+                '_NoPurchaseWarning',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#7D6608'),
+                fontName='Helvetica-Bold',
+                alignment=TA_LEFT,
+            )
+            warning_para = Paragraph(
+                f"⚠ WARNING: {len(no_purchase_licenses)} license(s) with no purchase transactions. "
+                f"These licenses may require special handling.",
+                warning_style
+            )
+            warning_bg = Table(
+                [[warning_para]],
+                colWidths=[10 * inch]
+            )
+            warning_bg.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#FEF9E7')),
+                ('TOPPADDING', (0, 0), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ('LEFTPADDING', (0, 0), (-1, -1), 12),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+                ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#D4AF37')),
+            ]))
+            elements.append(warning_bg)
+            elements.append(Spacer(1, 0.15 * inch))
+
         if not licenses_data:
             no_data = Paragraph("<i>No licenses found matching the criteria</i>", styles['Normal'])
             elements.append(no_data)
@@ -618,8 +713,8 @@ def generate_all_licenses_pdf(licenses_data, query_params):
             loss_style = ParagraphStyle('_LossStyle', parent=wrap_style, textColor=colors.red)
 
             # Separate licenses into profit and loss groups
-            profit_licenses = [lic for lic in licenses_data if lic.get('profit_loss', 0) >= 0]
-            loss_licenses = [lic for lic in licenses_data if lic.get('profit_loss', 0) < 0]
+            profit_licenses = [lic for lic in licenses_data if lic.get('total_profit_loss', 0) >= 0]
+            loss_licenses = [lic for lic in licenses_data if lic.get('total_profit_loss', 0) < 0]
 
             # Helper function to process table for a set of licenses
             def create_license_table(licenses_list, table_title):
@@ -659,7 +754,7 @@ def generate_all_licenses_pdf(licenses_data, query_params):
                     sold_val = license.get('sold_value', 0)
                     purchase_amt = license.get('purchase_amount', 0)
                     sale_amt = license.get('sale_amount', 0)
-                    profit_loss = license.get('profit_loss', 0)
+                    profit_loss = license.get('total_profit_loss', 0)
                     currency = license.get('currency', 'USD')
                     status = 'Active' if license.get('is_active', False) else 'Expired'
 
@@ -726,7 +821,7 @@ def generate_all_licenses_pdf(licenses_data, query_params):
 
                 total_purchase_amt = sum(lic.get('purchase_amount', 0) for lic in licenses_list)
                 total_sale_amt = sum(lic.get('sale_amount', 0) for lic in licenses_list)
-                total_pl = sum(lic.get('profit_loss', 0) for lic in licenses_list)
+                total_pl = sum(lic.get('total_profit_loss', 0) for lic in licenses_list)
 
                 # Create bold style for total row
                 total_style = ParagraphStyle(
@@ -869,7 +964,7 @@ def generate_all_licenses_pdf(licenses_data, query_params):
                         if not license.get('is_active', False) and i not in no_purchase_rows:
                             table_style.append(('TEXTCOLOR', (0, i), (-1, i), colors.HexColor('#999999')))
 
-                        profit_loss = license.get('profit_loss', 0)
+                        profit_loss = license.get('total_profit_loss', 0)
                         if profit_loss > 0:
                             table_style.append(('TEXTCOLOR', (10, i), (10, i), colors.HexColor('#2e7d32')))
                         elif profit_loss < 0:
@@ -897,7 +992,7 @@ def generate_all_licenses_pdf(licenses_data, query_params):
             total_balance_inr = sum(lic.get('balance_value', 0) for lic in licenses_data if lic.get('currency') == 'INR')
             total_purchase = sum(lic.get('purchase_amount', 0) for lic in licenses_data)
             total_sale = sum(lic.get('sale_amount', 0) for lic in licenses_data)
-            total_profit_loss = sum(lic.get('profit_loss', 0) for lic in licenses_data)
+            total_profit_loss = sum(lic.get('total_profit_loss', 0) for lic in licenses_data)
 
             # Summary title
             elements.append(Paragraph(
@@ -992,7 +1087,7 @@ def generate_company_ledger_pdf(licenses_data, company_name, query_params):
         elements.append(Paragraph(filter_info, make_subtitle_style(styles)))
         elements.append(Spacer(1, 0.3 * inch))
 
-        # Table data
+        # Table data with Profit/Loss column
         table_data = [[
             'License No.',
             'Type',
@@ -1000,11 +1095,30 @@ def generate_company_ledger_pdf(licenses_data, company_name, query_params):
             'Date',
             'Expiry',
             'Total Value',
-            'Balance'
+            'Balance',
+            'P/L (INR)'
         ]]
 
         for lic in licenses_data:
             currency = 'USD' if lic.get('license_type') == 'DFIA' else 'INR'
+            profit_loss = lic.get('total_profit_loss', 0)
+
+            # Color code P/L
+            pl_color = colors.green if profit_loss >= 0 else colors.red
+            pl_style = ParagraphStyle(
+                '_CompanyPLStyle',
+                parent=styles['Normal'],
+                fontSize=8,
+                textColor=pl_color,
+                fontName='Helvetica-Bold',
+                alignment=TA_RIGHT,
+            )
+            pl_text = f"{format_indian_number(profit_loss, 2)}"
+            if profit_loss >= 0:
+                pl_para = Paragraph(f"<font color='green'>+{pl_text}</font>", pl_style)
+            else:
+                pl_para = Paragraph(f"<font color='red'>{pl_text}</font>", pl_style)
+
             table_data.append([
                 lic.get('license_number', '-'),
                 lic.get('license_type', '-'),
@@ -1012,11 +1126,12 @@ def generate_company_ledger_pdf(licenses_data, company_name, query_params):
                 lic.get('license_date', '-') if lic.get('license_date') else '-',
                 lic.get('expiry_date', '-') if lic.get('expiry_date') else '-',
                 f"{currency} {format_indian_number(lic.get('total_value', 0))}",
-                f"{currency} {format_indian_number(lic.get('available_balance', 0))}"
+                f"{currency} {format_indian_number(lic.get('available_balance', 0))}",
+                pl_para
             ])
 
-        # Create table
-        table = Table(table_data, colWidths=[90, 50, 150, 70, 70, 100, 100])
+        # Create table with updated widths for new P/L column
+        table = Table(table_data, colWidths=[90, 50, 150, 70, 70, 100, 100, 90])
         table.setStyle(TableStyle(
             make_header_table_style_commands(header_bg='#4a5568', header_fontsize=10)
             + make_data_grid_commands(font_size=8)

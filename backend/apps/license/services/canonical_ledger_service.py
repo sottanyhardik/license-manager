@@ -103,6 +103,10 @@ class CanonicalLedgerService:
                 'port_name': str,                 # '' when unknown
                 'first_purchase_date': date or None,  # canonical acquisition date
 
+                # --- purchase bill detection ---
+                'has_purchase_bill': bool,        # TRUE if license has ≥1 qualifying PURCHASE with non-zero bill
+                'purchase_bill_status': str,      # "WITH_PURCHASE_BILL" | "NO_PURCHASE_BILL"
+
                 # --- balances ---
                 'opening_balance': Decimal,
                 'license_running_balance': Decimal,  # Final balance
@@ -171,12 +175,12 @@ class CanonicalLedgerService:
                     'total_credit_bill': Decimal, # Σ same rows' bill_amount (INR)
                     'bill_currency': 'INR',
                     'opening_balance': Decimal,   # licence metadata; NOT in the identity
-                    'opening_in_credit': bool,    # is opening already inside total_credit?
+                    'opening_in_debit': bool,     # is opening already inside total_credit?
                     'current_balance': Decimal,   # total_credit − total_debit
                     'balance_currency': str,      # 'USD' (DFIA) | 'INR'
                     'total_profit_loss': Decimal, # SAME number as current_balance
                     'profit_currency': str,       # == balance_currency
-                    'profit_state': str,          # PROFIT|LOSS|NONE
+                    'profit_state': str,          # PROFIT|LOSS|BREAK_EVEN|UNAVAILABLE
                 },
             }
 
@@ -208,6 +212,8 @@ class CanonicalLedgerService:
             'opening_balance': Decimal('0.00'),
             'license_running_balance': Decimal('0.00'),
             'closing_balance': Decimal('0.00'),
+            'has_purchase_bill': False,  # Will be set after transactions are loaded
+            'purchase_bill_status': 'NO_PURCHASE_BILL',  # Will be set after transactions are loaded
             'transactions': [],
             'company_utilizations': {},
             'totals': {
@@ -219,6 +225,11 @@ class CanonicalLedgerService:
 
         # Fetch and normalize transactions
         raw_transactions = _fetch_transactions(license_obj, license_type)
+
+        # Compute purchase bill presence (check for any PURCHASE with non-zero bill)
+        has_purchase_bill = _has_purchase_bill(raw_transactions)
+        dataset['has_purchase_bill'] = has_purchase_bill
+        dataset['purchase_bill_status'] = 'WITH_PURCHASE_BILL' if has_purchase_bill else 'NO_PURCHASE_BILL'
 
         # Calculate opening balance (if any)
         opening_balance = quantize_2dp(
@@ -363,6 +374,9 @@ class CanonicalLedgerService:
         # ── Screen reconciliation summary (additive; recomputes nothing) ────
         dataset['summary'] = _build_summary(dataset)
 
+        # ── Add purchase-not-present detection flag ────
+        dataset['has_purchase_bill'] = _has_purchase_bill(dataset['transactions'])
+
         return dataset
 
 
@@ -382,6 +396,28 @@ _USD_BALANCE_LICENSE_TYPES = frozenset({'DFIA'})
 #: `balance_direction` (see `ledger_column_for`). So `total_credit` cannot
 #: disagree with a `balance_direction` of CREDIT — a contradiction the previous
 #: inverted presentation actively maintained.
+
+
+def _has_purchase_bill(transactions: List[Dict[str, Any]]) -> bool:
+    """
+    Check if this license has at least one qualifying Purchase Bill/transaction.
+
+    A "qualifying purchase" is a PURCHASE transaction with a non-zero bill amount.
+    This detection is based on actual trade bills, not inferred from balance state.
+
+    Args:
+        transactions: List of transaction dicts from _fetch_transactions
+
+    Returns:
+        True if at least one qualifying PURCHASE with non-zero bill exists; False otherwise
+    """
+    for txn in transactions:
+        if txn.get('type') == 'PURCHASE':
+            bill_amount = txn.get('bill_amount')
+            # Check for non-zero bill amount (even small amounts count)
+            if bill_amount and bill_amount > DEC_0:
+                return True
+    return False
 
 
 def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
@@ -475,12 +511,16 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     for row in display_rows:
         column = ledger_column_for(row.get('type'))
         row_bill = row.get('bill_amount') or DEC_0
+        # LEDGER COLUMN MAPPING: balance_direction CREDIT (PURCHASE, OPENING)
+        # goes to the visual Debit column; balance_direction DEBIT (SALE) goes to
+        # the visual Credit column. This inverts the semantic direction so that the
+        # table column names align with visual presentation.
         if column == LEDGER_COLUMN_CREDIT:
-            total_credit += row['amount']
-            total_credit_bill += row_bill
-        elif column == LEDGER_COLUMN_DEBIT:
-            total_debit += row['amount']
+            total_credit += row['amount']  # PURCHASE/OPENING (balance_direction CREDIT)
             total_debit_bill += row_bill
+        elif column == LEDGER_COLUMN_DEBIT:
+            total_debit += row['amount']  # SALE (balance_direction DEBIT)
+            total_credit_bill += row_bill
 
     total_credit = quantize_2dp(total_credit)
     total_debit = quantize_2dp(total_debit)
@@ -488,31 +528,38 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     # THE canonical financial result. Computed once; published twice.
     # Signed — a negative position is reported as a negative number and as
     # `profit_state='LOSS'`; it is never absolute-valued or hidden here.
+    # Formula: current_balance = total_credit - total_debit
+    # (where total_credit includes purchases/opening, total_debit includes sales)
     net_position = quantize_2dp(total_credit - total_debit)
 
     license_type = dataset.get('license_type')
     balance_currency = 'USD' if license_type in _USD_BALANCE_LICENSE_TYPES else 'INR'
 
+    # PROFIT/LOSS CALCULATION (FINAL ACCOUNTING TRUTH)
+    # MUST be: TOTAL CREDIT BILL (₹) - TOTAL DEBIT BILL (₹)
+    # Always in INR, always from bill amounts, never from license values
+    total_debit_bill = quantize_2dp(total_debit_bill)
+    total_credit_bill = quantize_2dp(total_credit_bill)
+    profit_loss_inr = quantize_2dp(total_credit_bill - total_debit_bill)
+
     return {
         'total_debit': total_debit,
         'total_credit': total_credit,
-        # Σ of the two BILL columns, in `bill_currency` (INR) — NOT in
-        # `balance_currency`, and NOT an input to `net_position`.
-        'total_debit_bill': quantize_2dp(total_debit_bill),
-        'total_credit_bill': quantize_2dp(total_credit_bill),
+        # Σ of the two BILL columns, in `bill_currency` (INR)
+        'total_debit_bill': total_debit_bill,
+        'total_credit_bill': total_credit_bill,
         'bill_currency': 'INR',
-        # Licence metadata, unchanged. NOT part of the identity above — see
-        # "WHY THE OPENING BALANCE IS NOT ADDED".
+        # Licence metadata, unchanged.
         'opening_balance': dataset['opening_balance'],
         # True when the OPENING row is on screen (and so is already inside
         # `total_credit`). Published so no consumer re-derives the display rule.
-        'opening_in_credit': opening_row is not None,
+        'opening_in_debit': opening_row is not None,
         'current_balance': net_position,
         'balance_currency': balance_currency,
-        # Same object as `current_balance` — one calculation, two labels.
-        'total_profit_loss': net_position,
-        'profit_currency': balance_currency,
-        'profit_state': _profit_state(net_position),
+        # PROFIT/LOSS is ALWAYS: credit_bill_inr - debit_bill_inr (in INR)
+        'total_profit_loss': profit_loss_inr,
+        'profit_currency': 'INR',
+        'profit_state': _profit_state(profit_loss_inr),
     }
 
 
@@ -546,21 +593,22 @@ def _first_purchase_date_for(license_id, license_type: Optional[str]) -> Optiona
 
 def _profit_state(net_position: Optional[Decimal]) -> str:
     """
-    Decide PROFIT / LOSS / NONE in the BACKEND so no client ever branches on the
-    sign of a number (and so Web, and later PDF/Excel, all agree).
+    Decide PROFIT / LOSS / BREAK_EVEN / UNAVAILABLE in the BACKEND so no client
+    ever branches on the sign of a number (and so Web, and later PDF/Excel, all agree).
 
-    'NONE' is the exact-zero case — presented as "NO PROFIT / NO LOSS", which is
-    a real financial statement. It is NOT the same as "unknown": the position is
-    always computable (it is just Credit − Debit over rows already on screen),
-    for every licence type, so there is no unavailable case to represent.
+    BREAK_EVEN is the exact-zero case — presented as "NO PROFIT / NO LOSS", which is
+    a real financial statement.
+
+    UNAVAILABLE is returned when the position is not computable (None), which happens
+    for incentive licences whose profit definition does not apply.
     """
-    if net_position is None:  # pragma: no cover — defensive
-        return 'NONE'
+    if net_position is None:
+        return 'UNAVAILABLE'
     if net_position > DEC_0:
         return 'PROFIT'
     if net_position < DEC_0:
         return 'LOSS'
-    return 'NONE'
+    return 'BREAK_EVEN'
 
 
 def _get_license_object(license_id: int, license_type: str):

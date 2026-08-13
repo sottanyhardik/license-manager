@@ -36,6 +36,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
     Unified ledger view for both DFIA and Incentive licenses.
     Shows available balance for selling licenses.
 
+    SECURITY: ALL endpoints are company-scoped:
+    - User must have user.company set
+    - List/summary/aggregation endpoints return only user's company data
+    - Single-license retrieval validates user can access that license
+    - Company-specific endpoints validate user.company == requested company
+
     Returns:
     - DFIA licenses: balance_cif (available CIF $ balance)
     - Incentive licenses: balance_value (available INR balance)
@@ -47,9 +53,66 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-license_date']
 
     def get_queryset(self):
-        """Return unified filtered list of DFIA + Incentive license dicts."""
+        """
+        Return unified filtered list of DFIA + Incentive license dicts,
+        SCOPED TO USER'S COMPANY.
+
+        SECURITY FIX: Inject user's company_id into query_params before
+        delegating to ledger_service, ensuring the user only sees their
+        company's data regardless of query parameters.
+        """
         from apps.license.services.ledger_service import build_license_queryset
+        from copy import copy
+
+        # CRITICAL: Scope all queries to user's company
+        if not self.request.user.is_superuser:
+            if not hasattr(self.request.user, 'company') or not self.request.user.company:
+                # User has no company assignment — return empty queryset
+                return []
+
+            # Create a mutable copy of query_params and inject company_id
+            scoped_params = copy(self.request.query_params)
+            # Force company_id to user's assigned company, overriding any query param
+            scoped_params = {**dict(scoped_params), 'company': str(self.request.user.company.id)}
+            return build_license_queryset(scoped_params)
+
+        # Superusers can filter by any company or see all
         return build_license_queryset(self.request.query_params)
+
+    def check_object_permissions(self, request, obj):
+        """
+        Validate object-level access for retrieve and ledger_detail endpoints.
+
+        For single-license views, verify that:
+        1. User's company traded this license (from get_queryset scoping)
+        2. OR validate explicit company_id param matches user's company
+        """
+        super().check_object_permissions(request, obj)
+
+        # Superusers bypass object-level checks
+        if request.user.is_superuser:
+            return
+
+        # Validate company-specific query parameter if provided
+        requested_company_id = request.query_params.get('company')
+        if requested_company_id:
+            try:
+                requested_company_id = int(requested_company_id)
+                if not hasattr(request.user, 'company') or not request.user.company:
+                    from rest_framework.exceptions import PermissionDenied
+                    raise PermissionDenied(
+                        detail='User has no company assignment for ledger access.'
+                    )
+                if requested_company_id != request.user.company.id:
+                    from rest_framework.exceptions import PermissionDenied
+                    raise PermissionDenied(
+                        detail='You can only access ledger data for your assigned company.'
+                    )
+            except (ValueError, TypeError):
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError(
+                    detail='Invalid company parameter.'
+                )
 
     def _prepare_dfia_data(self, queryset):
         from apps.license.services.ledger_service import prepare_dfia_data
@@ -176,7 +239,13 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         Retrieve a single license by ID or license_number.
         Supports both DFIA and Incentive licenses.
         Auto-searches both tables if not found in the specified type.
+
+        SECURITY: Validates user's company can access this license via
+        explicit LicenseTrade check (P0 IDOR fix).
         """
+        from apps.trade.models import LicenseTrade
+        from rest_framework.exceptions import PermissionDenied
+
         license_type = request.query_params.get('license_type', 'AUTO')
 
         # Determine search strategy based on license_type parameter
@@ -193,6 +262,26 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'error': f'License not found: {pk}',
                 'searched_in': 'DFIA only' if license_type == 'DFIA' else 'Incentive only' if license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'] else 'both DFIA and Incentive'
             }, status=404)
+
+        # SECURITY (P0 IDOR FIX): Validate that user's company traded this license
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                raise PermissionDenied(
+                    detail='User has no company assignment for ledger access.'
+                )
+
+            # Verify LicenseTrade exists for this license and user's company
+            from django.db.models import Q
+            trade_exists = LicenseTrade.objects.filter(
+                Q(from_company_id=request.user.company.id) | Q(to_company_id=request.user.company.id),
+                license_type=found_type,
+                **({'lines__sr_number__license_id': license.id} if found_type == 'DFIA' else {'incentive_lines__incentive_license_id': license.id})
+            ).exists()
+
+            if not trade_exists:
+                raise PermissionDenied(
+                    detail='You do not have access to this license. Your company has not traded it.'
+                )
 
         # Prepare and return data based on found type
         if found_type == 'DFIA':
@@ -211,9 +300,25 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Get summary statistics for license balances.
         Filters by company, license_type, date range, and other parameters.
+
+        SECURITY (P0 DATA LEAKAGE FIX): Forces company_id to user's assigned company
+        before calling service, preventing access to other companies' data.
+        Only returns data for licenses the user's company traded.
         """
         from apps.license.services.ledger_service import get_ledger_summary
-        return Response(get_ledger_summary(request.query_params))
+        from copy import copy
+
+        # CRITICAL (P0 FIX): Force company_id to user's company before calling service
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                return Response({'detail': 'User has no company assignment for ledger access.'}, status=403)
+
+            scoped_params = copy(dict(request.query_params))
+            scoped_params['company'] = str(request.user.company.id)
+        else:
+            scoped_params = dict(request.query_params)
+
+        return Response(get_ledger_summary(scoped_params))
 
     @action(detail=True, methods=['get'])
     def ledger_detail(self, request, pk=None):
@@ -224,6 +329,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         Auto-searches both tables if license_type not specified.
 
         Optional company parameter: If provided, only shows transactions involving that company.
+        SECURITY: If company parameter is provided, it must match user's assigned company.
+        User's company must have traded this license (P0 IDOR fix).
 
         **Phase 4C:** API consumes CanonicalLedgerService as the single source of truth.
         All financial calculations are performed by CanonicalLedgerService; the API layer
@@ -231,9 +338,29 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         """
         from apps.license.services.canonical_ledger_service import CanonicalLedgerService
         from apps.license.serializers import CanonicalLedgerSerializer
+        from rest_framework.exceptions import PermissionDenied
+        from apps.trade.models import LicenseTrade
+        from django.db.models import Q
 
         license_type = request.query_params.get('license_type', 'AUTO')
         company_id = request.query_params.get('company')  # Optional company filter
+
+        # SECURITY: Validate company parameter if provided
+        if company_id:
+            try:
+                company_id_int = int(company_id)
+                if not request.user.is_superuser:
+                    if not hasattr(request.user, 'company') or not request.user.company:
+                        raise PermissionDenied(
+                            detail='User has no company assignment for ledger access.'
+                        )
+                    if company_id_int != request.user.company.id:
+                        raise PermissionDenied(
+                            detail='You can only access ledger data for your assigned company.'
+                        )
+            except (ValueError, TypeError):
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError(detail='Invalid company parameter.')
 
         # Determine search strategy
         if license_type == 'DFIA':
@@ -249,6 +376,25 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'error': f'License not found: {pk}',
                 'searched_in': 'DFIA only' if license_type == 'DFIA' else 'Incentive only' if license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'] else 'both DFIA and Incentive'
             }, status=404)
+
+        # SECURITY (P0 IDOR FIX): Validate that user's company traded this license
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                raise PermissionDenied(
+                    detail='User has no company assignment for ledger access.'
+                )
+
+            # Verify LicenseTrade exists for this license and user's company
+            trade_exists = LicenseTrade.objects.filter(
+                Q(from_company_id=request.user.company.id) | Q(to_company_id=request.user.company.id),
+                license_type=found_type,
+                **({'lines__sr_number__license_id': license.id} if found_type == 'DFIA' else {'incentive_lines__incentive_license_id': license.id})
+            ).exists()
+
+            if not trade_exists:
+                raise PermissionDenied(
+                    detail='You do not have access to this license. Your company has not traded it.'
+                )
 
         # Delegate all calculation to CanonicalLedgerService (single source of truth).
         # The API is a transparent serialization layer with NO business logic.
@@ -266,26 +412,67 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Get licenses with available balance for sale.
         Filters out expired and fully sold licenses.
+
+        SECURITY (P0 DATA LEAKAGE FIX): Scopes results to licenses user's company traded.
+        Uses get_queryset() logic which applies company filtering via LicenseTrade check.
+        Only returns licenses the user's company owns or traded.
         """
+        from apps.license.services.ledger_service import _dfia_ids_with_min_live_balance
+        from apps.trade.models import LicenseTrade
+        from django.db.models import Q
+
         min_balance = Decimal(request.query_params.get('min_balance', '100'))
+
+        # CRITICAL (P0 FIX): Get list of license IDs user's company traded
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                return Response({'detail': 'User has no company assignment for ledger access.'}, status=403)
+
+            # Find DFIA licenses traded by user's company
+            dfia_traded_ids = set(
+                LicenseTrade.objects.filter(
+                    Q(from_company_id=request.user.company.id) | Q(to_company_id=request.user.company.id),
+                    license_type='DFIA'
+                ).values_list('lines__sr_number__license_id', flat=True).distinct()
+            )
+
+            # Find Incentive licenses traded by user's company
+            incentive_traded_ids = set(
+                LicenseTrade.objects.filter(
+                    Q(from_company_id=request.user.company.id) | Q(to_company_id=request.user.company.id),
+                    license_type='INCENTIVE'
+                ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
+            )
+        else:
+            # Superusers can see all licenses
+            dfia_traded_ids = None
+            incentive_traded_ids = None
 
         # DFIA with balance. BL-LEDGER-02: the cached `balance__balance_cif`
         # column can be stale, so resolve `min_balance` against the LIVE,
         # batched-computed balance instead of filtering the DB column.
-        from apps.license.services.ledger_service import _dfia_ids_with_min_live_balance
         active_dfia_qs = LicenseDetailsModel.objects.filter(flags__is_expired=False).select_related('exporter', 'port')
+
+        # Apply company scoping for non-superusers
+        if dfia_traded_ids is not None:
+            active_dfia_qs = active_dfia_qs.filter(id__in=dfia_traded_ids)
+
         dfia_data = self._prepare_dfia_data(
             active_dfia_qs.filter(id__in=_dfia_ids_with_min_live_balance(active_dfia_qs, min_balance))
         )
 
         # Incentive with balance
-        incentive_data = self._prepare_incentive_data(
-            IncentiveLicense.objects.filter(
-                is_active=True,
-                license_expiry_date__gte=timezone.now().date(),
-                balance_value__gte=min_balance
-            ).select_related('exporter', 'port_code')
-        )
+        incentive_qs = IncentiveLicense.objects.filter(
+            is_active=True,
+            license_expiry_date__gte=timezone.now().date(),
+            balance_value__gte=min_balance
+        ).select_related('exporter', 'port_code')
+
+        # Apply company scoping for non-superusers
+        if incentive_traded_ids is not None:
+            incentive_qs = incentive_qs.filter(id__in=incentive_traded_ids)
+
+        incentive_data = self._prepare_incentive_data(incentive_qs)
 
         combined = list(dfia_data) + list(incentive_data)
         combined.sort(key=lambda x: x.get('balance_value', 0), reverse=True)
@@ -301,9 +488,25 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Search DFIA + Incentive licenses by license number or exporter name.
         Requires query param ``q``.
+
+        SECURITY (P0 DATA LEAKAGE FIX): Forces company_id to user's assigned company
+        before calling service, preventing access to other companies' data.
+        Only returns licenses the user's company traded.
         """
         from apps.license.services.ledger_service import search_licenses
-        result = search_licenses(request.query_params)
+        from copy import copy
+
+        # CRITICAL (P0 FIX): Force company_id to user's company before calling service
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                return Response({'detail': 'User has no company assignment for ledger access.'}, status=403)
+
+            scoped_params = copy(dict(request.query_params))
+            scoped_params['company'] = str(request.user.company.id)
+        else:
+            scoped_params = dict(request.query_params)
+
+        result = search_licenses(scoped_params)
         if result is None:
             return Response({'error': 'Search query parameter "q" is required'}, status=400)
         return Response(result)
@@ -319,6 +522,9 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         - min_balance: Minimum balance filter
         - exporter: Filter by exporter ID
         - search: Search by license number or exporter name
+
+        SECURITY: Automatically scoped to user's assigned company via get_queryset().
+        Only exports licenses the user's company traded.
         """
         # Get filtered data using same logic as list()
         data = self.get_queryset()
@@ -379,6 +585,114 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
     def _generate_all_licenses_pdf(self, licenses_data, query_params):
         from apps.license.services.exporters.ledger_pdf import generate_all_licenses_pdf
         return generate_all_licenses_pdf(licenses_data, query_params)
+
+    @action(detail=False, methods=['get'], url_path='export/excel')
+    def export_excel(self, request):
+        """
+        Export all licenses (or filtered licenses) to Excel.
+        Parallel to PDF export with same filter parameters.
+
+        Query params:
+        - license_type: Filter by type (DFIA, INCENTIVE, etc.) - default: ALL
+        - active_only: Filter only active licenses (default: true)
+        - detailed: If 'true', generates detailed Excel with transactions - default: false
+        """
+        from apps.license.services.exporters.ledger_excel import (
+            generate_ledger_summary_excel,
+            generate_ledger_detailed_excel
+        )
+
+        # Get filtered data using same logic as list()
+        data = self.get_queryset()
+
+        # Apply search filter manually for combined data
+        search = request.query_params.get('search')
+        if search and isinstance(data, list):
+            terms = [t.strip().lower() for t in search.split(',') if t.strip()]
+            if len(terms) > 1:
+                data = [
+                    item for item in data
+                    if (item.get('license_number') or '').lower() in terms
+                ]
+            else:
+                search_lower = terms[0] if terms else ''
+                data = [
+                    item for item in data
+                    if search_lower in (item.get('license_number') or '').lower()
+                       or search_lower in (item.get('exporter_name') or '').lower()
+                ]
+
+        # Apply ordering
+        ordering = request.query_params.get('ordering', '-license_date')
+        if isinstance(data, list):
+            reverse = ordering.startswith('-')
+            order_field = ordering.lstrip('-')
+            if order_field in ['license_date', 'balance_value', 'license_expiry_date']:
+                from datetime import date
+                if order_field in ['license_date', 'license_expiry_date']:
+                    data.sort(key=lambda x: x.get(order_field) or date.min, reverse=reverse)
+                else:
+                    data.sort(key=lambda x: x.get(order_field) or 0, reverse=reverse)
+
+        # Check if detailed view is requested
+        detailed = request.query_params.get('detailed', 'false').lower() == 'true'
+
+        # Generate Excel (detailed or summary)
+        if detailed:
+            excel_content, filename = generate_ledger_detailed_excel(data, request.query_params)
+        else:
+            excel_content, filename = generate_ledger_summary_excel(data, request.query_params)
+
+        # Create response
+        response = HttpResponse(
+            excel_content,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        return response
+
+    @action(detail=False, methods=['get'], url_path='company-ledger/export/excel')
+    def company_ledger_export_excel(self, request):
+        """
+        Export company-specific ledger to Excel.
+        Parallel to PDF export with same filter parameters.
+
+        Query params:
+        - company: Company ID (required)
+        - license_type: Filter by type (default: ALL)
+        - active_only: Filter only active licenses (default: true)
+        """
+        from apps.license.services.exporters.ledger_excel import generate_ledger_company_excel
+        from apps.core.models import CompanyModel
+
+        company_id = request.query_params.get('company')
+
+        if not company_id:
+            return Response({'error': 'company parameter is required'}, status=400)
+
+        # Get company name
+        try:
+            company = CompanyModel.objects.get(pk=int(company_id))
+            company_name = company.name
+        except (CompanyModel.DoesNotExist, ValueError):
+            return Response({'error': 'Company not found'}, status=404)
+
+        # Get filtered data
+        data = self.get_queryset()
+
+        # Generate Excel
+        excel_content, filename = generate_ledger_company_excel(data, company_name, request.query_params)
+
+        # Create response
+        response = HttpResponse(
+            excel_content,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        return response
+
     @action(detail=False, methods=['get'], url_path='company-ledger')
     def company_ledger(self, request):
         """
@@ -386,25 +700,43 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         where the company appears in trades (either as buyer or seller).
 
         Query params:
-        - company: Company ID (required)
+        - company: Company ID (required, must match user's assigned company)
         - license_type: Filter by type (DFIA, INCENTIVE, etc.) - default: ALL
         - active_only: Filter only active licenses (default: true)
+
+        SECURITY: Validates that the requested company matches user's assigned company.
         """
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+        from apps.trade.models import LicenseTrade
+        from django.db.models import Q, Count
+
         company_id = request.query_params.get('company')
 
         if not company_id:
             return Response({'error': 'company parameter is required'}, status=400)
 
+        # SECURITY: Validate company parameter
+        try:
+            company_id_int = int(company_id)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid company ID'}, status=400)
+
+        # SECURITY: Non-superusers can only access their assigned company
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                raise PermissionDenied(
+                    detail='User has no company assignment for ledger access.'
+                )
+            if company_id_int != request.user.company.id:
+                raise PermissionDenied(
+                    detail='You can only access ledger data for your assigned company.'
+                )
+
         # Use existing get_queryset logic which already filters by company
         data = self.get_queryset()
 
         # Add company transaction count for each license
-        from apps.trade.models import LicenseTrade
-        from django.db.models import Q, Count
-
         try:
-            company_id_int = int(company_id)
-
             for item in data if isinstance(data, list) else []:
                 license_id = item.get('license_id')
                 license_type = item.get('license_type')
@@ -426,9 +758,9 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
                 item['company_transaction_count'] = trade_count
 
-        except (ValueError, TypeError) as e:
-            logger.error(f"Invalid company_id: {company_id} - {e}")
-            return Response({'error': 'Invalid company ID'}, status=400)
+        except Exception as e:
+            logger.error(f"Error processing company ledger: {company_id} - {e}")
+            return Response({'error': 'Error processing company ledger'}, status=500)
 
         return Response({'results': data})
 
@@ -438,19 +770,40 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         Export company-specific ledger to PDF.
 
         Query params:
-        - company: Company ID (required)
+        - company: Company ID (required, must match user's assigned company)
         - license_type: Filter by type (default: ALL)
         - active_only: Filter only active licenses (default: true)
+
+        SECURITY: Validates that the requested company matches user's assigned company.
         """
+        from rest_framework.exceptions import PermissionDenied
+        from apps.core.models import CompanyModel
+
         company_id = request.query_params.get('company')
 
         if not company_id:
             return Response({'error': 'company parameter is required'}, status=400)
 
-        # Get company name
-        from apps.core.models import CompanyModel
+        # Parse and validate company_id
         try:
-            company = CompanyModel.objects.get(pk=int(company_id))
+            company_id_int = int(company_id)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid company ID'}, status=400)
+
+        # SECURITY: Non-superusers can only export their assigned company
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                raise PermissionDenied(
+                    detail='User has no company assignment for ledger access.'
+                )
+            if company_id_int != request.user.company.id:
+                raise PermissionDenied(
+                    detail='You can only export ledger data for your assigned company.'
+                )
+
+        # Get company name
+        try:
+            company = CompanyModel.objects.get(pk=company_id_int)
             company_name = company.name
         except (CompanyModel.DoesNotExist, ValueError):
             return Response({'error': 'Company not found'}, status=404)
@@ -476,15 +829,47 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
     def company_wise(self, request):
         """
         Returns all trades grouped by company with purchases, sales, and a grand summary.
+
+        SECURITY (P1 AGGREGATION DATA LEAKAGE FIX): Forces company_id to user's assigned company
+        before calling service, preventing access to other companies' aggregation data.
+        Only returns aggregation for licenses the user's company traded.
         """
         from apps.license.services.ledger_service import get_company_wise_trades
-        return Response(get_company_wise_trades(request.query_params))
+        from copy import copy
+
+        # CRITICAL (P1 FIX): Force company_id to user's company before calling service
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                return Response({'detail': 'User has no company assignment for ledger access.'}, status=403)
+
+            scoped_params = copy(dict(request.query_params))
+            scoped_params['company'] = str(request.user.company.id)
+        else:
+            scoped_params = dict(request.query_params)
+
+        return Response(get_company_wise_trades(scoped_params))
 
     @action(detail=False, methods=['get'], url_path='license-wise')
     def license_wise(self, request):
         """
         Returns trades grouped by license, then by company within each license.
         Structure: license → [company → purchases/sales/totals]
+
+        SECURITY (P1 AGGREGATION DATA LEAKAGE FIX): Forces company_id to user's assigned company
+        before calling service, preventing access to other companies' aggregation data.
+        Only returns aggregation for licenses the user's company traded.
         """
         from apps.license.services.ledger_service import get_license_wise_trades
-        return Response(get_license_wise_trades(request.query_params))
+        from copy import copy
+
+        # CRITICAL (P1 FIX): Force company_id to user's company before calling service
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                return Response({'detail': 'User has no company assignment for ledger access.'}, status=403)
+
+            scoped_params = copy(dict(request.query_params))
+            scoped_params['company'] = str(request.user.company.id)
+        else:
+            scoped_params = dict(request.query_params)
+
+        return Response(get_license_wise_trades(scoped_params))

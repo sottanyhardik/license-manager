@@ -87,6 +87,19 @@ class CanonicalLedgerSerializer(serializers.Serializer):
     closing_balance = serializers.DecimalField(max_digits=19, decimal_places=2)
 
     transactions = TransactionSerializer(many=True)
+
+    # ── Presentation only — carries NO financial meaning ──────────────────
+    # `transactions` above remains the complete financial record. These two
+    # fields are the ledger transaction display rule, applied ONCE in
+    # `transaction_semantics.select_display_rows` and consumed verbatim by
+    # every client. Clients must render these and must NOT re-derive the rule.
+    #   * display_transactions — PURCHASE + SALE only, chronological order
+    #     preserved, never contains OPENING.
+    #   * opening_display — the OPENING starting-state row, present only when
+    #     no PURCHASE exists; null otherwise.
+    display_transactions = TransactionSerializer(many=True, read_only=True)
+    opening_display = TransactionSerializer(read_only=True, allow_null=True)
+
     company_utilizations = serializers.DictField(child=CompanyUtilizationSerializer())
     totals = TotalsSerializer()
 

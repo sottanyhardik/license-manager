@@ -258,6 +258,92 @@ class TransactionSemantics:
         ]
 
 
+# ---------------------------------------------------------------------------
+# LEDGER TRANSACTION DISPLAY RULE — presentation only
+#
+# This section decides WHICH ROWS are presented in the License Ledger
+# transaction table. It has NO effect on any financial figure: opening balance,
+# purchase/sale totals, debit, credit, running balance, closing balance,
+# utilisation and CIF are all computed upstream and are untouched by this code.
+#
+# The rule:
+#   * Only PURCHASE and SALE are shown as ordinary transaction rows.
+#   * OPENING is shown ONLY when no PURCHASE exists, and then only as the
+#     starting-state row — never as an ordinary transaction.
+#
+#   | PURCHASE | SALE | OPENING | displayed                |
+#   |----------|------|---------|--------------------------|
+#   | yes      | yes  | yes     | PURCHASE + SALE          |
+#   | yes      | no   | yes     | PURCHASE                 |
+#   | no       | yes  | yes     | OPENING (state) + SALE   |
+#   | no       | no   | yes     | OPENING (state)          |
+#   | no       | no   | no      | nothing (empty state)    |
+#
+# Implemented ONCE here and reused by every consumer (API, screens, PDF,
+# Excel). Do not re-express `if type == 'PURCHASE'` in a view or component.
+# ---------------------------------------------------------------------------
+
+#: Types rendered as ordinary rows in the transaction table.
+DISPLAY_ROW_TYPES: tuple[str, ...] = ("PURCHASE", "SALE")
+
+#: The starting-state row. Never an ordinary transaction row.
+OPENING_ROW_TYPE: str = "OPENING"
+
+#: Types whose presence suppresses the OPENING row.
+#
+#  Strictly "PURCHASE". COMMISSION_PURCHASE is deliberately NOT included: it is
+#  non-balance-affecting by approved semantics (see DEFINITIONS above), so it
+#  cannot stand in for the licence's opening position. Change this tuple if that
+#  business decision changes — it is the single place that decides.
+PURCHASE_PRESENCE_TYPES: tuple[str, ...] = ("PURCHASE",)
+
+
+def select_display_rows(transactions) -> Dict[str, Any]:
+    """Apply the ledger transaction display rule.
+
+    Args:
+        transactions: the canonical transaction collection, in the order the
+            canonical ledger service produced it (date, then id). Each item is
+            a mapping with at least a ``type`` key.
+
+    Returns:
+        ``{"display_transactions": [...], "opening_row": dict | None}``
+
+        ``display_transactions`` contains only PURCHASE and SALE rows, in the
+        input order (so chronological ordering is preserved, never re-sorted).
+        It NEVER contains the OPENING row.
+
+        ``opening_row`` is the OPENING row when — and only when — no PURCHASE
+        exists. It is returned separately, outside the transaction collection,
+        so consumers can render it as the starting state rather than as a
+        transaction. It is ``None`` whenever a PURCHASE exists, and also when
+        there is no opening balance at all (the canonical service only emits an
+        OPENING row for a non-zero opening balance).
+
+    This function only selects and never mutates, copies amounts, or computes.
+    """
+    rows = list(transactions or [])
+
+    display_transactions = [
+        txn for txn in rows if txn.get("type") in DISPLAY_ROW_TYPES
+    ]
+
+    has_purchase = any(
+        txn.get("type") in PURCHASE_PRESENCE_TYPES for txn in rows
+    )
+
+    opening_row = None
+    if not has_purchase:
+        opening_row = next(
+            (txn for txn in rows if txn.get("type") == OPENING_ROW_TYPE), None
+        )
+
+    return {
+        "display_transactions": display_transactions,
+        "opening_row": opening_row,
+    }
+
+
 # Convenience constants for common operations
 
 # Transaction types that should be counted in balance calculation

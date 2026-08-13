@@ -3,6 +3,19 @@ import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import { formatIndianNumber } from './numberFormatter';
 import { formatDate } from './dateFormatter';
+import { createDisplayRowFilter } from './ledgerDisplayRows';
+
+// ─── Rows vs. totals ────────────────────────────────────────────────────────
+//
+// `license.transactions` is the COMPLETE financial record and is the only thing
+// any total, running balance, debit/credit or P/L in this file ever reads.
+//
+// `createDisplayRowFilter(license.transactions)` decides WHICH OF THOSE ROWS
+// GET PRINTED (the ledger display rule — PURCHASE + SALE, plus the OPENING row
+// only when there is no purchase). It is applied strictly at the point a row is
+// pushed into the PDF body / written to the worksheet. No aggregate is ever
+// computed from a filtered collection.
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -248,14 +261,17 @@ function buildPdfBody(license, companiesGrouped) {
         fontStyle: 'bold', fontSize: 8.5, halign: 'right',
     };
 
-    companiesGrouped.forEach(company => {
-        body.push([{ content: company.company_name, colSpan: colCount, styles: chStyle }]);
+    // PRESENTATION ONLY — gates which rows are printed. Every figure below is
+    // still derived from the full `company.transactions`.
+    const isPrintableRow = createDisplayRowFilter(license.transactions);
 
+    companiesGrouped.forEach(company => {
         const sortedTxns = sortTxns(company.transactions);
 
         // Check if we have canonical balances (license_running_balance field)
         const hasCanonicalBalances = sortedTxns.length > 0 && sortedTxns[0].license_running_balance !== undefined;
 
+        const printedRows = [];
         let lastBalance = 0;
         sortedTxns.forEach(txn => {
             // Use canonical balance if available, otherwise calculate inline
@@ -297,9 +313,19 @@ function buildPdfBody(license, companiesGrouped) {
                 fmtNum(displayBalance),   // ← Balance from API or calculated
                 rowPL,
             );
-            body.push(row);
+            // Display rule decides visibility only — `lastBalance` below still
+            // walks EVERY transaction, so the company total is unchanged.
+            if (isPrintableRow(txn)) printedRows.push(row);
             lastBalance = displayBalance;
         });
+
+        // Nothing to show for this group (e.g. the synthetic opening row's
+        // company-less group once a real purchase exists) — emit no section
+        // rather than a header and total with no rows beneath them.
+        if (!printedRows.length) return;
+
+        body.push([{ content: company.company_name, colSpan: colCount, styles: chStyle }]);
+        printedRows.forEach(printedRow => body.push(printedRow));
 
         const txns = company.transactions;
         const totalDebit  = txns.reduce((s, t) => s + toFiniteNumber(t.debit_amount || 0), 0);
@@ -383,6 +409,12 @@ function writeLicenseHeaderToPdf(doc, license, pageWidth, startY = 12) {
     return startY + 40; // return tableStartY
 }
 
+// TOTALS-ONLY SURFACE — deliberately NOT filtered by the ledger display rule.
+// This page renders one row per (company, licence) built purely from
+// aggregates (`totalPurchase`, `totalSale`, `pl`) over the full transaction
+// collection; there are no per-transaction rows to select here, and the
+// company grouping is what those aggregates are keyed by. Filtering it would
+// change exported totals.
 function writeSummaryPageToPdf(doc, licensesData) {
     const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -572,6 +604,8 @@ export function generatePDF(licensesData, filename) {
 
 // ─── Excel summary sheet ─────────────────────────────────────────────────────
 
+// TOTALS-ONLY SURFACE — see the note on `writeSummaryPageToPdf`. Deliberately
+// NOT filtered by the ledger display rule.
 function buildSummarySheet(wb, licensesData) {
     const ws = wb.addWorksheet('Summary');
     const COLS = 9;
@@ -786,9 +820,17 @@ export async function generateExcel(licensesData, filename) {
 
         // ── Data rows grouped by company
         const companiesGrouped = groupByCompany(license.transactions);
+        // PRESENTATION ONLY — gates which rows are written. Every figure below
+        // is still derived from the full `company.transactions`.
+        const isPrintableRow = createDisplayRowFilter(license.transactions);
 
         for (const company of companiesGrouped) {
             const txns = sortTxns(company.transactions);
+
+            // Nothing to show for this group (e.g. the synthetic opening row's
+            // company-less group once a real purchase exists) — emit no section
+            // rather than a header and total with no rows beneath them.
+            if (!txns.some(isPrintableRow)) continue;
 
             // Company header (merged)
             let rowNum = ws.rowCount + 1;
@@ -808,7 +850,6 @@ export async function generateExcel(licensesData, filename) {
             const hasCanonicalBalances = txns.length > 0 && txns[0].license_running_balance !== undefined;
 
             for (const txn of txns) {
-                rowNum = ws.rowCount + 1;
                 const isPurchase = txn.type === 'PURCHASE' || txn.type === 'OPENING';
                 const isSale = txn.type === 'SALE';
 
@@ -827,31 +868,37 @@ export async function generateExcel(licensesData, filename) {
                     displayBalance = lastBalance;
                 }
 
-                const row = [
-                    fmtDate(txn.date),
-                    txn.particular + (txn.invoice_number ? ` (${txn.invoice_number})` : ''),
-                ];
-                if (isDFIA) row.push(txn.items || '', fmtNum(txn.debit_cif), fmtNum(txn.credit_cif));
-                else row.push(fmtNum(txn.debit_license_value), fmtNum(txn.credit_license_value));
-                row.push(
-                    fmtNum(txn.rate),
-                    txn.debit_amount ? fmtNum(txn.debit_amount) : '-',
-                    txn.credit_amount ? fmtNum(txn.credit_amount) : '-',
-                    fmtNum(displayBalance),  // ← Balance from API or calculated
-                    isSale && txn.profit_loss != null ? fmtNum(Math.abs(txn.profit_loss)) : '-',
-                );
+                // Display rule decides visibility only — `lastBalance` below
+                // still walks EVERY transaction, so the company total row and
+                // its closing balance are unchanged.
+                if (isPrintableRow(txn)) {
+                    rowNum = ws.rowCount + 1;
+                    const row = [
+                        fmtDate(txn.date),
+                        txn.particular + (txn.invoice_number ? ` (${txn.invoice_number})` : ''),
+                    ];
+                    if (isDFIA) row.push(txn.items || '', fmtNum(txn.debit_cif), fmtNum(txn.credit_cif));
+                    else row.push(fmtNum(txn.debit_license_value), fmtNum(txn.credit_license_value));
+                    row.push(
+                        fmtNum(txn.rate),
+                        txn.debit_amount ? fmtNum(txn.debit_amount) : '-',
+                        txn.credit_amount ? fmtNum(txn.credit_amount) : '-',
+                        fmtNum(displayBalance),  // ← Balance from API or calculated
+                        isSale && txn.profit_loss != null ? fmtNum(Math.abs(txn.profit_loss)) : '-',
+                    );
 
-                ws.addRow(row);
-                const bgArgb = isPurchase ? 'FFF0FDF4' : (isSale ? 'FFFFF4F4' : 'FFFFFFFF');
-                for (let col = 1; col <= numCols; col++) {
-                    const cell = ws.getCell(rowNum, col);
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
-                    cell.border = allThin('FFDDDDDD');
-                    const isRight = col > 2 && !(col === 3 && isDFIA);
-                    cell.alignment = { horizontal: isRight ? 'right' : 'left', vertical: 'middle', wrapText: col === 2 };
+                    ws.addRow(row);
+                    const bgArgb = isPurchase ? 'FFF0FDF4' : (isSale ? 'FFFFF4F4' : 'FFFFFFFF');
+                    for (let col = 1; col <= numCols; col++) {
+                        const cell = ws.getCell(rowNum, col);
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+                        cell.border = allThin('FFDDDDDD');
+                        const isRight = col > 2 && !(col === 3 && isDFIA);
+                        cell.alignment = { horizontal: isRight ? 'right' : 'left', vertical: 'middle', wrapText: col === 2 };
+                    }
+                    if (isPurchase) ws.getCell(rowNum, numCols - 2).font = { color: { argb: 'FF065F46' } };
+                    if (isSale) ws.getCell(rowNum, numCols - 1).font = { color: { argb: 'FF991B1B' } };
                 }
-                if (isPurchase) ws.getCell(rowNum, numCols - 2).font = { color: { argb: 'FF065F46' } };
-                if (isSale) ws.getCell(rowNum, numCols - 1).font = { color: { argb: 'FF991B1B' } };
                 lastBalance = displayBalance;
             }
 

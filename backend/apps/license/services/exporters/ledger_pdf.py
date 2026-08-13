@@ -19,6 +19,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 
+from apps.license.domain.transaction_semantics import PURCHASE_PRESENCE_TYPES
 from apps.license.models import LicenseDetailsModel, IncentiveLicense
 
 # Shared PDF infrastructure — no apps.* imports inside shared/
@@ -127,11 +128,25 @@ def get_license_transactions(lic_data, company_id=None):
 
         all_trans.sort(key=lambda x: (x[1], x[2].id))  # (invoice_date, trade_id)
 
-        # Add opening balance if exists
-        if len(all_trans) == 0 and license_type == 'DFIA':
+        # Add opening balance if exists.
+        #
+        # DISPLAY RULE (shared with the API and the screens — see
+        # transaction_semantics.select_display_rows): OPENING is shown only when
+        # no PURCHASE exists. This previously required `len(all_trans) == 0`,
+        # i.e. no trades AT ALL, so a licence with sales but no purchase wrongly
+        # lost its opening row. Uses the shared constant so the three surfaces
+        # cannot drift apart.
+        has_purchase = any(
+            direction in PURCHASE_PRESENCE_TYPES for direction, _, _ in all_trans
+        )
+        if not has_purchase and license_type == 'DFIA':
             opening_bal = float(license_obj.opening_balance or 0)
             if opening_bal > 0:
-                total_purchase_cif = opening_bal
+                # FINANCIAL: seeded from opening only when there are no trades at
+                # all, exactly as before. Widening the display condition above must
+                # not change any export total.
+                if len(all_trans) == 0:
+                    total_purchase_cif = opening_bal
                 # Opening balance from canonical
                 opening_balance_canonical = canonical_balances.get(0, opening_bal)
                 transactions.append({

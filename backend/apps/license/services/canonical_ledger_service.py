@@ -42,7 +42,10 @@ from datetime import date as date_type
 from django.db.models import Q, Sum, Value, DecimalField, Prefetch
 from django.db.models.functions import Coalesce
 
-from apps.license.domain.transaction_semantics import TransactionSemantics
+from apps.license.domain.transaction_semantics import (
+    TransactionSemantics,
+    select_display_rows,
+)
 from apps.license.models import LicenseDetailsModel, IncentiveLicense
 from apps.trade.models import LicenseTrade
 from apps.core.utils.decimal_utils import to_decimal
@@ -122,6 +125,20 @@ class CanonicalLedgerService:
                     },
                     ...
                 ],
+
+                # --- presentation only; NO financial meaning ---
+                # `transactions` above is the complete financial record and is
+                # what every balance/total is derived from. These two fields are
+                # the display rule applied on top of it (see
+                # transaction_semantics.select_display_rows):
+                'display_transactions': [...],   # PURCHASE + SALE only, input
+                                # order preserved. NEVER contains OPENING.
+                'opening_display': dict or None, # the OPENING row, returned
+                                # OUTSIDE the transaction collection so it can be
+                                # rendered as the starting state. Non-None only
+                                # when NO PURCHASE exists (and an opening
+                                # balance exists at all).
+
                 # Keyed by company_id (NOT a list).
                 'company_utilizations': {
                     company_id: {
@@ -265,6 +282,18 @@ class CanonicalLedgerService:
         # Set final balances
         dataset['license_running_balance'] = running_balance
         dataset['closing_balance'] = running_balance
+
+        # ── Display selection (presentation only) ──────────────────────────
+        # `transactions` above stays the complete financial record — it still
+        # carries the OPENING row, because the running balances, the totals and
+        # the balance-by-transaction-id maps used by the PDF/Excel exporters are
+        # all derived from it. The display rule is applied on top, once, here:
+        # consumers render `display_transactions` (PURCHASE + SALE only) plus
+        # `opening_display` (the starting state, present only when there is no
+        # PURCHASE). No amount is recomputed, rounded or re-ordered.
+        display = select_display_rows(dataset['transactions'])
+        dataset['display_transactions'] = display['display_transactions']
+        dataset['opening_display'] = display['opening_row']
 
         # Build company utilizations dict.
         # Company names are resolved in ONE bulk query (previously one query

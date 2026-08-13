@@ -45,6 +45,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { openPdfPreview } from "../../../utils/pdfPreview";
 import { openDocument, openAuthedFile } from "../../../utils/documentDownload";
 import { saveFilterState } from "../../../utils/filterPersistence";
+import { selectLedgerDisplayRows } from "@/utils/ledgerDisplayRows";
 import LedgerTab from "./LedgerTab";
 import PlanTab from "./PlanTab";
 
@@ -147,7 +148,12 @@ interface LedgerData {
     // Deprecated fields (backward compat only)
     available_balance?: number;
     db_balance?: number;
+    /** COMPLETE financial record — every total/balance derives from this. */
     transactions: LedgerTransaction[];
+    /** PRESENTATION ONLY — see `@/utils/ledgerDisplayRows`. */
+    display_transactions?: LedgerTransaction[];
+    /** PRESENTATION ONLY — see `@/utils/ledgerDisplayRows`. */
+    opening_display?: LedgerTransaction | null;
 }
 
 interface Transfer {
@@ -530,9 +536,12 @@ function TransactionsTab({
     if (loading) return <TabSkeleton />;
     if (!ledger) return <TabSkeleton />;
 
-    const txns = ledger.transactions ?? [];
+    // THE DISPLAY RULE lives in `selectLedgerDisplayRows` — never re-expressed
+    // here. `txns` is PURCHASE + SALE only; `openingRow` is the starting state,
+    // present only when this licence has no purchase.
+    const { rows: txns, openingRow } = selectLedgerDisplayRows<LedgerTransaction>(ledger);
 
-    if (txns.length === 0) {
+    if (txns.length === 0 && !openingRow) {
         return (
             <EmptyTabState
                 icon={ScrollText}
@@ -541,6 +550,13 @@ function TransactionsTab({
             />
         );
     }
+
+    // The opening row leads the table as the starting state, visually set apart
+    // from the ordinary transaction rows below it.
+    const displayRows: { txn: LedgerTransaction; isOpening: boolean }[] = [
+        ...(openingRow ? [{ txn: openingRow, isOpening: true }] : []),
+        ...txns.map((txn) => ({ txn, isOpening: false })),
+    ];
 
     function typeBadge(type: string) {
         const t = (type || "").toUpperCase();
@@ -569,7 +585,7 @@ function TransactionsTab({
                 </div>
                 <div>
                     <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Transactions</span>
-                    <div className="font-semibold tabular-nums">{txns.length}</div>
+                    <div className="font-semibold tabular-nums">{displayRows.length}</div>
                 </div>
             </div>
 
@@ -589,11 +605,17 @@ function TransactionsTab({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
-                        {txns.map((txn, idx) => {
+                        {displayRows.map(({ txn, isOpening }, idx) => {
                             const isDebit = txn.debit_cif > 0;
                             const isCredit = txn.credit_cif > 0;
                             return (
-                                <tr key={`${txn.trade_id ?? idx}`} className="transition-colors hover:bg-muted/20">
+                                <tr
+                                    key={`${txn.trade_id ?? idx}`}
+                                    className={cn(
+                                        "transition-colors hover:bg-muted/20",
+                                        isOpening && "bg-muted/40 font-medium",
+                                    )}
+                                >
                                     <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
                                         {txn.date ? String(txn.date) : "—"}
                                     </td>

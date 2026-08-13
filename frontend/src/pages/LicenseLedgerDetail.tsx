@@ -8,8 +8,9 @@ import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-    ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, TriangleAlert,
+    ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, ScrollText, TriangleAlert, Wallet,
 } from "lucide-react";
+import { isSaleRow, selectLedgerDisplayRows } from '@/utils/ledgerDisplayRows';
 import type { CanonicalLedgerResponse, CanonicalTransaction, CompanyUtilization } from '../types/canonicalLedger';
 
 // ─── Pure utilities ─────────────────────────────────────────────────────────────
@@ -94,6 +95,31 @@ function groupTransactionsByCompany(transactions: CanonicalTransaction[]) {
     return Object.values(companiesMap);
 }
 
+// ─── Shared ledger table chrome ─────────────────────────────────────────────────
+
+/**
+ * The one column set for the ledger table — reused by the opening starting-state
+ * block and by every company group so the two always line up.
+ */
+function LedgerColumnHeader({ isDFIA }: { isDFIA: boolean }) {
+    return (
+        <thead>
+            <tr className="border-b-2 border-primary/20 bg-primary/8">
+                <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Date</th>
+                <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Particulars</th>
+                <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Type</th>
+                {isDFIA && <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Items</th>}
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-success">Debit (₹)</th>
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-destructive">Credit (₹)</th>
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">
+                    License Balance {isDFIA ? '($)' : '(₹)'}
+                </th>
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">Status</th>
+            </tr>
+        </thead>
+    );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────────
 
 export default function LicenseLedgerDetail() {
@@ -168,6 +194,10 @@ export default function LicenseLedgerDetail() {
     if (!ledger) return null;
 
     const isDFIA = ledger.license_type === 'DFIA';
+    // NOTE: not a display decision — this drives the "Action Required" banner and
+    // deliberately reads the COMPLETE financial collection (`transactions`),
+    // opening row included. Which rows get rendered is decided further down by
+    // `selectLedgerDisplayRows`.
     const hasPurchases = (ledger.transactions || []).some(
         t => t.type === 'PURCHASE' || t.type === 'OPENING',
     );
@@ -312,14 +342,86 @@ export default function LicenseLedgerDetail() {
                 </div>
             </div>
 
-            {/* ── Company-grouped ledger tables ─────────────────── */}
+            {/* ── Ledger tables ─────────────────────────────────── */}
             {(() => {
-                // Group transactions by company (structure only)
-                const companiesGrouped = groupTransactionsByCompany(ledger.transactions);
+                // THE DISPLAY RULE lives in `selectLedgerDisplayRows` — never
+                // re-expressed here. `rows` is PURCHASE + SALE only (so the
+                // synthetic OPENING row can no longer form a bogus "N/A"
+                // company group); `openingRow` is the starting state, present
+                // only when this licence has no purchase.
+                const { rows, openingRow } = selectLedgerDisplayRows<CanonicalTransaction>(ledger);
+
+                if (!rows.length && !openingRow) {
+                    return (
+                        <div className="mx-5 my-5 flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-card px-5 py-12 text-center">
+                            <ScrollText className="size-8 text-muted-foreground" aria-hidden="true" />
+                            <p className="text-sm font-semibold text-foreground">No transactions</p>
+                            <p className="text-[13px] text-muted-foreground">
+                                No ledger entries found for this license.
+                            </p>
+                        </div>
+                    );
+                }
+
+                // Group ONLY the display rows by company (structure only)
+                const companiesGrouped = groupTransactionsByCompany(rows);
                 // Get company utilizations from canonical API (not recalculated)
                 const companyUtilizations: Record<string, CompanyUtilization> = ledger.company_utilizations || {};
 
-                return companiesGrouped.map((company, ci) => {
+                const openingBlock = openingRow ? (
+                    <div
+                        data-testid="ledger-opening-state"
+                        className={cn(
+                            "mx-5 mt-5 overflow-hidden rounded-md border border-border shadow-md",
+                            companiesGrouped.length ? "mb-0" : "mb-5",
+                        )}
+                    >
+                        {/* Starting state — deliberately NOT a company group header */}
+                        <div className="flex items-center justify-between border-b border-border bg-muted px-5 py-2.5">
+                            <div className="flex items-center gap-2">
+                                <Wallet className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                <span className="text-[15px] font-bold text-foreground">Opening Balance</span>
+                            </div>
+                            <span className="text-[13px] text-muted-foreground">
+                                Starting state — carried forward, not a transaction
+                            </span>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse bg-card text-[0.82rem]">
+                                <LedgerColumnHeader isDFIA={isDFIA} />
+                                <tbody>
+                                    <tr className="border-b border-border bg-muted/50">
+                                        <td className="whitespace-nowrap px-2.5 py-[5px] text-muted-foreground">
+                                            {formatDate(openingRow.date)}
+                                        </td>
+                                        <td className="px-2.5 py-[5px] font-medium text-foreground">Opening Balance</td>
+                                        <td className="px-2.5 py-[5px] text-foreground">
+                                            <Badge variant="secondary" className="text-[11px]">{openingRow.type}</Badge>
+                                        </td>
+                                        {isDFIA && <td className="px-2.5 py-[5px] text-muted-foreground">-</td>}
+                                        <td className="px-2.5 py-[5px] text-right font-semibold text-success">
+                                            {formatCurrency(toFiniteNumber(openingRow.amount), isDFIA ? 'USD' : 'INR')}
+                                        </td>
+                                        <td className="px-2.5 py-[5px] text-right font-semibold text-destructive">-</td>
+                                        <td className={cn(
+                                            "px-2.5 py-[5px] text-right tabular-nums font-medium",
+                                            toFiniteNumber(openingRow.license_running_balance) >= 0 ? "text-success" : "text-destructive",
+                                        )}>
+                                            {formatIndianNumber(toFiniteNumber(openingRow.license_running_balance), 2)}
+                                        </td>
+                                        <td className="px-2.5 py-[5px] text-right">
+                                            <span className="text-[11px] text-muted-foreground">
+                                                {normalizeText(openingRow.display_status, 'Opening Balance')}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : null;
+
+                const companyBlocks = companiesGrouped.map((company, ci) => {
                     const txns = company.transactions as CanonicalTransaction[];
                     // Get company balance from canonical API data
                     const companyUtilization = Object.values(companyUtilizations).find(
@@ -327,12 +429,13 @@ export default function LicenseLedgerDetail() {
                     );
                     const companyBalance = companyUtilization ? toFiniteNumber(companyUtilization.utilization_balance) : 0;
 
-                    const marginTop = ci === 0 ? "mt-5" : "mt-3";
+                    const marginTop = ci === 0 && !openingBlock ? "mt-5" : "mt-3";
                     const marginBottom = ci === companiesGrouped.length - 1 ? "mb-5" : "mb-0";
 
                     return (
                         <div
                             key={company.company_id ?? ci}
+                            data-testid="ledger-company-block"
                             className={cn(
                                 "mx-5 overflow-hidden rounded-md border border-border shadow-md",
                                 marginTop, marginBottom,
@@ -342,7 +445,9 @@ export default function LicenseLedgerDetail() {
                             <div className="flex items-center justify-between bg-primary px-5 py-2.5 text-primary-foreground">
                                 <div className="flex items-center gap-2">
                                     <Building2 className="size-4 shrink-0" aria-hidden="true" />
-                                    <span className="text-[15px] font-bold">{company.company_name}</span>
+                                    <span data-testid="ledger-company-group" className="text-[15px] font-bold">
+                                        {company.company_name}
+                                    </span>
                                 </div>
                                 <div className="text-[13px] text-primary-foreground/80">
                                     Company Balance: <span className="font-semibold">{formatCurrency(companyBalance, isDFIA ? 'USD' : 'INR')}</span>
@@ -352,24 +457,14 @@ export default function LicenseLedgerDetail() {
                             {/* Company ledger table */}
                             <div className="overflow-x-auto">
                                 <table className="w-full border-collapse bg-card text-[0.82rem]">
-                                    <thead>
-                                        <tr className="border-b-2 border-primary/20 bg-primary/8">
-                                            <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Date</th>
-                                            <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Particulars</th>
-                                            <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Type</th>
-                                            {isDFIA && <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Items</th>}
-                                            <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-success">Debit (₹)</th>
-                                            <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-destructive">Credit (₹)</th>
-                                            <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">
-                                                License Balance {isDFIA ? '($)' : '(₹)'}
-                                            </th>
-                                            <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">Status</th>
-                                        </tr>
-                                    </thead>
+                                    <LedgerColumnHeader isDFIA={isDFIA} />
                                     <tbody>
                                         {txns.map((txn, ti) => {
-                                            const isPurchase = txn.type === 'PURCHASE' || txn.type === 'OPENING';
-                                            const isSale = txn.type === 'SALE';
+                                            // `txns` is PURCHASE + SALE only (display rule), so the
+                                            // amount lands in the credit column for sales and the
+                                            // debit column for everything else.
+                                            const isSale = isSaleRow(txn);
+                                            const isPurchase = !isSale;
                                             const isCommission = txn.is_commission;
                                             // Use canonical license_running_balance from API
                                             const licenseBalance = toFiniteNumber(txn.license_running_balance);
@@ -430,6 +525,13 @@ export default function LicenseLedgerDetail() {
                         </div>
                     );
                 });
+
+                return (
+                    <>
+                        {openingBlock}
+                        {companyBlocks}
+                    </>
+                );
             })()}
         </div>
     );

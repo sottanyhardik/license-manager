@@ -84,7 +84,31 @@ export interface CanonicalLedgerResponse {
   license_running_balance: string;
   closing_balance: string;
 
+  /**
+   * The COMPLETE financial record. Every running balance, total and
+   * balance-by-id map is derived from this — never filter it for arithmetic.
+   */
   transactions: CanonicalTransaction[];
+
+  /**
+   * PRESENTATION ONLY — the rows the ledger table should render.
+   *
+   * PURCHASE and SALE only, chronological order preserved, NEVER contains
+   * OPENING. Produced server-side by `select_display_rows()`; consume it via
+   * `selectLedgerDisplayRows()` in `@/utils/ledgerDisplayRows`, not directly.
+   *
+   * Optional because older/cached responses predate the field.
+   */
+  display_transactions?: CanonicalTransaction[];
+
+  /**
+   * PRESENTATION ONLY — the OPENING row, to be rendered as the starting state
+   * rather than as an ordinary transaction.
+   *
+   * Non-null only when no PURCHASE exists (and an opening balance exists).
+   */
+  opening_display?: CanonicalTransaction | null;
+
   company_utilizations: Record<string, CompanyUtilization>;
   totals: LedgerTotals;
 

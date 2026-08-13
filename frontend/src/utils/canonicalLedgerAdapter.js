@@ -79,6 +79,12 @@ function adaptTransactionForExport(txn, isDFIA) {
  * Transforms canonical API response into format for PDF/Excel generation.
  * Preserves canonical balances (no recalculation).
  *
+ * IMPORTANT — this returns the COMPLETE financial collection on purpose, not
+ * the display rows. `ledgerExport.js` is the module that separates the two: it
+ * derives every total from this full collection and applies the ledger display
+ * rule (`createDisplayRowFilter` from `./ledgerDisplayRows`) only at the point
+ * a row is printed. Filtering here would silently corrupt export totals.
+ *
  * @param {Object} canonicalData - Response from CanonicalLedgerService API
  * @param {boolean} isDFIA - Whether this is a DFIA license
  * @returns {Array} Transactions adapted for PDF/Excel

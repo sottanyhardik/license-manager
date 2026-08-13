@@ -17,6 +17,7 @@ from apps.core.models import CompanyModel, HSCodeModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.license.services.e1_auto_plan import compute_e1_auto_plan
 from apps.license.services.e1_plan import E1Item, classify_e1_item, plan_e1_items
+from apps.license.services.milk_planner import MILK_CONFIG
 from apps.license.services.plan_grouping import validate_group_plan_lines
 
 
@@ -186,9 +187,11 @@ class TestComputeE1AutoPlanParity:
 
     def test_milk_step_only_invokes_shared_milk_splitter_for_milk_products(self):
         # Egg Albumin (a plain generic step) must NOT be priced via the milk
-        # splitter's DWP/SWP ceilings (4.40/1.50) — only Milk Products (step 3)
-        # delegates to split_milk_0404. Egg Albumin's own $25 ceiling comes
-        # from the generic routine (Step 4).
+        # splitter's DWP/SWP rates (6.50 ceiling / 4.40 floor / 1.50 SWP) —
+        # only Milk Products (step 3) delegates to split_milk_0404. Egg
+        # Albumin's own $25 ceiling comes from the generic routine (Step 4).
+        # The milk item here has avg = 100000/100 = 1000 >= 6.50, so its line
+        # lands exactly on the ceiling.
         balance = Decimal('100000')
         license_obj, patcher = _make_license("LIC-E1-AUTOPLAN-MILKSCOPE", balance)
         try:
@@ -206,7 +209,16 @@ class TestComputeE1AutoPlanParity:
             egg_lines = [l for l in lines if 'Step 4' in l['note']]
             milk_lines = [l for l in lines if 'DWP' in l['note'] or 'SWP' in l['note']]
             assert egg_lines and egg_lines[0]['unit_price'] == 25.0
-            assert milk_lines and all(l['unit_price'] in (5.0, 1.5, 4.4) for l in milk_lines)
+            # Auto-Plan lines carry floats; compare in Decimal against the
+            # shared milk config so the rate set (6.50 / 1.50 / 4.40) can never
+            # go stale here again.
+            milk_rates = (MILK_CONFIG.dwp_price, MILK_CONFIG.swp_price, MILK_CONFIG.dwp_min_price)
+            assert milk_lines and all(
+                Decimal(str(l['unit_price'])) in milk_rates for l in milk_lines
+            )
+            # This licence's milk item sits above the ceiling, so pin the exact
+            # rate too — not just membership in the allowed set.
+            assert all(Decimal(str(l['unit_price'])) == MILK_CONFIG.dwp_price for l in milk_lines)
         finally:
             patcher.stop()
 

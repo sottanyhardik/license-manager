@@ -81,8 +81,18 @@ class WriteRecorder:
 
 @pytest.fixture
 def enable_mds(settings):
-    """Turn the cutover on for this test, wiring the 17-master map."""
-    from mds_client.model_map import DEFAULT_MDS_MODELS
+    """Turn the cutover on for this test, wiring the 17-master map.
+
+    ``mds_client`` is an optional, out-of-tree package that is not installed in
+    this environment (Master Sync superseded MDS in Module 04, and settings
+    self-disable when the import fails). Skip rather than error so the suite
+    reports honestly: these MDS-ON paths are genuinely unverified here.
+    """
+    model_map = pytest.importorskip(
+        "mds_client.model_map",
+        reason="mds_client is not installed; MDS cutover is inactive (MDS_ENABLED=False)",
+    )
+    DEFAULT_MDS_MODELS = model_map.DEFAULT_MDS_MODELS
 
     settings.MDS_ENABLED = True
     settings.MDS_MODELS = DEFAULT_MDS_MODELS

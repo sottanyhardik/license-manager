@@ -1510,7 +1510,9 @@ class LicenseBalanceCalculator:
         return credit
 
     @classmethod
-    def calculate_opening_balance_for_licenses(cls, license_ids) -> dict:
+    def calculate_opening_balance_for_licenses(
+        cls, license_ids, purchase_credit_map=None
+    ) -> dict:
         """
         Batched sibling of `calculate_opening_balance` — same 3-way gate,
         for MANY licenses in a fixed, small number of queries, composed
@@ -1518,6 +1520,11 @@ class LicenseBalanceCalculator:
         total_for_licenses`, `has_purchase_for_licenses`, `calculate_
         purchase_credit_for_licenses`. See `calculate_credit_for_licenses`
         for the return-shape/zero-default contract.
+
+        `purchase_credit_map` lets a caller that has ALREADY computed
+        `calculate_purchase_credit_for_licenses(ids)` hand it in, so the
+        same aggregate is not issued twice for one request. Callers that
+        omit it get the previous behaviour unchanged.
         """
         ids = list(license_ids)
         if not ids:
@@ -1525,7 +1532,8 @@ class LicenseBalanceCalculator:
         credit_map = cls.calculate_credit_for_licenses(ids)
         hidden_map = cls.calculate_hidden_boe_debit_total_for_licenses(ids)
         has_purchase_map = cls.has_purchase_for_licenses(ids)
-        purchase_credit_map = cls.calculate_purchase_credit_for_licenses(ids)
+        if purchase_credit_map is None:
+            purchase_credit_map = cls.calculate_purchase_credit_for_licenses(ids)
 
         result = {}
         for lid in ids:
@@ -1636,8 +1644,13 @@ class LicenseBalanceCalculator:
         if not ids:
             return {}
 
-        opening_map = cls.calculate_opening_balance_for_licenses(ids)
+        # Compute purchase credit ONCE and share it with the opening-balance
+        # gate, which needs the same map — it used to issue the identical
+        # aggregate a second time.
         purchase_credit_map = cls.calculate_purchase_credit_for_licenses(ids)
+        opening_map = cls.calculate_opening_balance_for_licenses(
+            ids, purchase_credit_map=purchase_credit_map
+        )
         sale_debit_map = cls.calculate_trade_for_licenses(ids)
         boe_debit_map = cls.calculate_debit_for_licenses(ids)
         allotment_map = cls.calculate_allotment_for_licenses(ids)

@@ -177,10 +177,15 @@ def download_media_from_peer(peer: SyncPeer, media_path: str) -> bytes | None:
     Uses the peer's base_url and auth_token to fetch the file.
     Returns the file content as bytes, or None on failure.
     """
-    import urllib.request
     import urllib.error
+    import urllib.parse
+    import urllib.request
 
-    url = f"{peer.base_url.rstrip('/')}/api/sync/media/download/?path={media_path}"
+    # The path must be percent-encoded: uploaded filenames legitimately contain
+    # spaces, "&" and "+", all of which would otherwise truncate or corrupt the
+    # query parameter and make the peer serve the wrong file (or 404).
+    query = urllib.parse.urlencode({"path": media_path})
+    url = f"{peer.base_url.rstrip('/')}/api/sync/media/download/?{query}"
     req = urllib.request.Request(url)
     if peer.auth_token:
         req.add_header("Authorization", f"Bearer {peer.auth_token}")
@@ -190,6 +195,12 @@ def download_media_from_peer(peer: SyncPeer, media_path: str) -> bytes | None:
             return resp.read()
     except (urllib.error.URLError, urllib.error.HTTPError) as exc:
         logger.error("Failed to download media from %s: %s", peer.server_id, exc)
+        return None
+    except Exception:
+        # A socket read timeout raises TimeoutError, not URLError.  Anything
+        # unexpected here must degrade to a retry, never abort the worker loop
+        # and leave the remaining tasks unprocessed.
+        logger.exception("Unexpected error downloading media from %s", peer.server_id)
         return None
 
 

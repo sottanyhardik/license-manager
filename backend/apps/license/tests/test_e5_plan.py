@@ -3,6 +3,7 @@ from decimal import Decimal
 from unittest import TestCase
 
 from apps.license.services.e5_plan import (
+    DWP_PRICE,
     E5_UNIT_PRICES,
     E5Item,
     E5PlanLine,
@@ -11,6 +12,15 @@ from apps.license.services.e5_plan import (
     is_wheat_flour,
     plan_e5_items,
 )
+
+# DWP rate ceiling of the shared milk splitter (``MILK_CONFIG.dwp_price``, which
+# E5 aliases as ``DWP_PRICE``), numerically pinned in ``test_milk_planner.py``
+# and tied back to the engine by
+# ``TestUnitPricesTable.test_milk_dwp_ceiling_matches_shared_milk_config``.
+# Milk expectations below are arithmetic against this one constant.
+DWP_CEILING = Decimal('6.5')
+# 50 kg planned at that ceiling — the recurring figure (50 * 6.50 = 325).
+CEILING_CIF_50KG = Decimal('50') * DWP_CEILING
 
 
 def _lines_by_step(result, step) -> list[E5PlanLine]:
@@ -133,6 +143,12 @@ class TestFixedRateSteps(TestCase):
         assert E5_UNIT_PRICES['RBD PALMOLEIN'] == Decimal('1.20')
         assert E5_UNIT_PRICES['REMAINING OILS'] == Decimal('5.00')
 
+    def test_milk_dwp_ceiling_matches_shared_milk_config(self):
+        # Guard for this module's shared DWP_CEILING constant — if the shared
+        # milk config's ceiling moves, this fails instead of silently
+        # invalidating the derived milk expectations below.
+        assert DWP_CEILING == DWP_PRICE
+
 
 class TestSpecialValidation(TestCase):
     """Milk-priority gate executed immediately after Dietary Fibre."""
@@ -161,8 +177,10 @@ class TestSpecialValidation(TestCase):
         ]
         result = plan_e5_items(items, Decimal('5000'))
         assert result.special_validation_triggered is False
-        assert _cif(result, 'PALM KERNEL OIL') == Decimal('180.0000')
-        assert _cif(result, 'DWP') == Decimal('250.0000')
+        assert _cif(result, 'PALM KERNEL OIL') == Decimal('180.0000')   # 100 * 1.80
+        # Oils run first: 5000 - 180 = 4820 left, avg = 4820/50 = 96.40 >= 6.50
+        # -> the whole 50 kg goes to DWP at the ceiling (50 * 6.50 = 325).
+        assert _cif(result, 'DWP') == CEILING_CIF_50KG
 
     def test_not_triggered_when_no_milk_present(self):
         items = [E5Item(key='oil', category='PALM KERNEL OIL', qty=Decimal('100'))]
@@ -213,13 +231,14 @@ class TestMilkPerItemNoAveraging(TestCase):
         assert result.remaining_cif == Decimal('0')
 
     def test_0404_avg_above_ceiling_all_dwp_no_swp(self):
-        # avg = 5000/50 = 100 >= 5 -> DWP takes the full quantity; nothing is
-        # left of the item's qty for SWP to read.
+        # avg = 5000/50 = 100 >= 6.50 -> DWP takes the full quantity at the
+        # ceiling; nothing is left of the item's qty for SWP to read.
         items = [E5Item(key='m', category='MILK PRODUCTS', qty=Decimal('50'))]
         result = plan_e5_items(items, Decimal('5000'))
         dwp = _lines_by_step(result, 'DWP')[0]
         assert dwp.planned_qty == Decimal('50')
-        assert dwp.planned_cif == Decimal('250.0000')   # 50*5
+        assert dwp.unit_price == DWP_CEILING
+        assert dwp.planned_cif == CEILING_CIF_50KG      # 50 * 6.50 = 325
         assert _lines_by_step(result, 'SWP') == []
 
     def test_3502_only_full_qty_to_wpc_capped_at_25(self):
@@ -242,16 +261,19 @@ class TestMilkPerItemNoAveraging(TestCase):
             E5Item(key='m', category='MILK PRODUCTS', qty=Decimal('50')),
             E5Item(key='e', category='EGG ALBUMIN / WPC', qty=Decimal('50')),
         ]
-        result = plan_e5_items(items, Decimal('300'))
+        result = plan_e5_items(items, Decimal('375'))
         dwp = _lines_by_step(result, 'DWP')
         swp = _lines_by_step(result, 'SWP')
         wpc = _lines_by_step(result, 'WPC')
-        # The 0404 item is processed first against the full $300: avg = 6 >=
-        # 5, so DWP takes the full 50 kg (250) and SWP gets nothing (the
-        # item's qty is already exhausted). The 3502 item then sees the
-        # leftover balance (50), capped below its $25 rate — entirely
-        # independent of the 0404 item. No averaged rate.
-        assert dwp and dwp[0].key == 'm' and dwp[0].planned_cif == Decimal('250.0000')
+        # Balance raised 300 -> 375 so the 0404 leg still clears the (now 6.50)
+        # DWP ceiling and still leaves something behind for the 3502 item.
+        # The 0404 item is processed first against the full $375: avg = 7.50 >=
+        # 6.50, so DWP takes the full 50 kg (50 * 6.50 = 325) and SWP gets
+        # nothing (the item's qty is already exhausted). The 3502 item then sees
+        # the leftover balance (375 - 325 = 50): 50 kg * $25 = 1250 > 50, so its
+        # rate drops to 50/50 = $1.00 — entirely independent of the 0404 item.
+        # No averaged rate.
+        assert dwp and dwp[0].key == 'm' and dwp[0].planned_cif == CEILING_CIF_50KG
         assert swp == []
         assert wpc and wpc[0].key == 'e' and wpc[0].planned_cif == Decimal('50.0000')
         assert wpc[0].unit_price == Decimal('1.0000')
@@ -263,27 +285,33 @@ class TestMilkPerItemNoAveraging(TestCase):
             E5Item(key='m', category='MILK PRODUCTS', qty=Decimal('10')),
         ]
         result = plan_e5_items(items, Decimal('1000'))
-        # avg for milk = 1000/10 = 100 >= 5 -> full DWP, no SWP (qty already
-        # exhausted); the leftover balance flows to the 3502 item afterwards.
+        # avg for milk = 1000/10 = 100 >= 6.50 -> full DWP at the ceiling, no
+        # SWP (qty already exhausted); the leftover balance flows to the 3502
+        # item afterwards.
         milk_steps = [ln.step for ln in result.lines if ln.category in ('MILK PRODUCTS', 'EGG ALBUMIN / WPC')]
         assert milk_steps == ['DWP', 'WPC']
-        assert result.remaining_cif == Decimal('700')   # 1000 - 50 (DWP) - 250 (WPC)
+        # 1000 - 10*6.50 (DWP = 65) - 10*25 (WPC = 250) = 685
+        assert result.remaining_cif == Decimal('1000') - Decimal('10') * DWP_CEILING - Decimal('250')
 
     def test_multiple_0404_items_planned_independently_in_input_order(self):
         items = [
             E5Item(key='m1', category='MILK PRODUCTS', qty=Decimal('50')),
             E5Item(key='m2', category='MILK PRODUCTS', qty=Decimal('50')),
         ]
-        result = plan_e5_items(items, Decimal('300'))
+        result = plan_e5_items(items, Decimal('375'))
         m1_steps = {ln.step for ln in result.lines if ln.key == 'm1'}
         m2_lines = [ln for ln in result.lines if ln.key == 'm2']
-        # m1: avg = 300/50 = 6 >= 5 -> full DWP (250), no SWP — unlike the
-        # old engine, DWP no longer also re-reads m1's qty for a second SWP
-        # pass, so m1 leaves 50 behind for m2 instead of exhausting the
-        # balance by itself.
+        # Balance raised 300 -> 375 so m1 still clears the (now 6.50) ceiling
+        # and still leaves a balance for m2: avg = 375/50 = 7.50 >= 6.50 ->
+        # full DWP (50 * 6.50 = 325), no SWP — unlike the old engine, DWP no
+        # longer also re-reads m1's qty for a second SWP pass, so m1 leaves
+        # 375 - 325 = 50 behind for m2 instead of exhausting the balance by
+        # itself.
         assert m1_steps == {'DWP'}
-        assert _cif(result, 'DWP') == Decimal('250.0000')
-        assert {ln.step for ln in m2_lines} == {'SWP'}   # avg = 50/50 = 1.0 < 1.5
+        assert _cif(result, 'DWP') == CEILING_CIF_50KG
+        # m2 against the leftover 50: avg = 50/50 = 1.0 < 1.5 -> SWP only,
+        # 50/1.5 = 33.3333... kg at 1.50 = the whole 50.
+        assert {ln.step for ln in m2_lines} == {'SWP'}
         assert m2_lines[0].planned_cif == Decimal('50.0000')
         assert result.remaining_cif == Decimal('0')
 

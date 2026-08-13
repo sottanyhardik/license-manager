@@ -165,7 +165,10 @@ class TestLedgerAPICanonicalMigration:
         assert response.status_code == status.HTTP_200_OK
         data = response.data
 
-        if data['opening_balance'] > 0:
+        # `opening_balance` is serialized as a 2dp STRING (asserted by
+        # test_api_decimal_fields_as_strings), so compare it as a Decimal —
+        # same pattern as test_api_running_balance_is_consistent below.
+        if Decimal(data['opening_balance']) > 0:
             # First transaction should be OPENING
             assert data['transactions'][0]['type'] == 'OPENING'
             assert data['transactions'][0]['id'] == 0

@@ -17,14 +17,23 @@ import logging
 
 from django.db import connection
 
+from apps.core.constants import CREDIT, DEBIT
+
 logger = logging.getLogger(__name__)
+
+# ``RowDetails.transaction_type`` is a max_length=2 column holding the canonical
+# single-character codes from apps.core.constants ("C"/"D") — never the words
+# "CREDIT"/"DEBIT". The SQL below interpolates the constants rather than
+# hardcoding literals so the views can never silently drift out of sync with the
+# model again: a mismatch here matches zero rows, which makes utilisation read as
+# 0 and inflates every balance the views expose.
 
 
 # ============================================================================
 # Materialized View Definitions
 # ============================================================================
 
-LICENSE_BALANCE_VIEW = """
+LICENSE_BALANCE_VIEW = f"""
 CREATE MATERIALIZED VIEW IF NOT EXISTS license_balance_mv AS
 SELECT
     ld.id as license_id,
@@ -42,7 +51,7 @@ SELECT
 
     -- Calculate utilized CIF from BOE (debits)
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.cif_inr
         ELSE 0
     END), 0) as utilized_cif,
 
@@ -59,7 +68,7 @@ SELECT
         WHERE lei.license_id = ld.id
     ), 0) -
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.cif_inr
         ELSE 0
     END), 0) -
     COALESCE(SUM(CASE
@@ -80,7 +89,7 @@ LEFT JOIN license_licenseimportitemsmodel lii
 
 LEFT JOIN bill_of_entry_rowdetails rd
     ON rd.sr_number_id = lii.id
-    AND rd.transaction_type IN ('DEBIT', 'CREDIT')
+    AND rd.transaction_type IN ('{DEBIT}', '{CREDIT}')
 
 LEFT JOIN allotment_allotmentitems ai
     ON ai.item_id = lii.id
@@ -102,7 +111,7 @@ CREATE INDEX IF NOT EXISTS license_balance_mv_is_active_idx
 """
 
 
-ITEM_BALANCE_VIEW = """
+ITEM_BALANCE_VIEW = f"""
 CREATE MATERIALIZED VIEW IF NOT EXISTS item_balance_mv AS
 SELECT
     lii.id as item_id,
@@ -115,12 +124,12 @@ SELECT
 
     -- Utilized via BOE
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.qty
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.qty
         ELSE 0
     END), 0) as utilized_quantity,
 
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.cif_inr
         ELSE 0
     END), 0) as utilized_cif,
 
@@ -131,14 +140,14 @@ SELECT
     -- Balance (available)
     lii.quantity -
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.qty
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.qty
         ELSE 0
     END), 0) -
     COALESCE(SUM(ai.qty), 0) as available_quantity,
 
     lii.cif_fc -
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.cif_inr
         ELSE 0
     END), 0) -
     COALESCE(SUM(ai.cif_fc), 0) as available_cif,
@@ -156,7 +165,7 @@ INNER JOIN license_licensedetailsmodel ld
 
 LEFT JOIN bill_of_entry_rowdetails rd
     ON rd.sr_number_id = lii.id
-    AND rd.transaction_type IN ('DEBIT', 'CREDIT')
+    AND rd.transaction_type IN ('{DEBIT}', '{CREDIT}')
 
 LEFT JOIN allotment_allotmentitems ai
     ON ai.item_id = lii.id

@@ -22,8 +22,11 @@ describe("ItemReport helpers", () => {
             expiryDateTo: "2026-12-31",
         });
 
+        // Excel uses `_format` (not `format`) so DRF content negotiation does not
+        // intercept the request — see reportQueryString.ts. The backend reads
+        // `_format` first and falls back to `format` (item_report.py:133-135).
         expect(url).toBe(
-            "reports/item-report/?format=excel&item_names=12%2C34&company_ids=56&exclude_company_ids=78&min_balance=500&min_avail_qty=1000&license_status=expiring_soon&is_restricted=true&purchase_status=GE%2CMI&product_description=foil+%26+cap&hsn_code=7607+20&norms=E1%2CE132&notification_numbers=025%2F2023&expiry_date_from=2026-01-01&expiry_date_to=2026-12-31",
+            "reports/item-report/?_format=excel&item_names=12%2C34&company_ids=56&exclude_company_ids=78&min_balance=500&min_avail_qty=1000&license_status=expiring_soon&is_restricted=true&purchase_status=GE%2CMI&product_description=foil+%26+cap&hsn_code=7607+20&norms=E1%2CE132&notification_numbers=025%2F2023&expiry_date_from=2026-01-01&expiry_date_to=2026-12-31",
         );
     });
 

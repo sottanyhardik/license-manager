@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from rest_framework import serializers
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.core.constants import DEBIT
 
 
 class RowDetailsSerializer(serializers.ModelSerializer):
@@ -301,7 +302,7 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                     continue
 
                 # Get transaction_type (default to 'D' for DFIA)
-                transaction_type = item_data.get('transaction_type', 'D')
+                transaction_type = item_data.get('transaction_type', DEBIT)
 
                 # Check if item has an id - if yes, update it; if no, use update_or_create
                 item_id = item_data.get('id')

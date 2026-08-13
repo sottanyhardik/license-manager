@@ -6,6 +6,7 @@ from django.db.models import Q
 logger = logging.getLogger(__name__)
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.core.constants import DEBIT
 from apps.core.models import CompanyModel, PortModel
 from apps.core.scripts.calculate_balance import update_balance_values
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
@@ -302,7 +303,7 @@ def bulk_get_or_create_boe(boe_row):
         existing_rows = RowDetails.objects.filter(
             Q(bill_of_entry__in=[row.bill_of_entry for row in row_details_list]),
             Q(sr_number__in=[row.sr_number for row in row_details_list]),
-            Q(transaction_type='D'),
+            Q(transaction_type=DEBIT),
         )
         rows_dict = {(row.bill_of_entry, row.sr_number, row.transaction_type): row for
                      row in existing_rows}

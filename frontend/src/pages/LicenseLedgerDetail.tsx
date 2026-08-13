@@ -49,8 +49,10 @@ export function normalizeLedgerDetail(value: unknown): CanonicalLedgerResponse |
     // Validate required fields are present
     if (!value.license_number || !value.license_type) return null;
 
-    // Canonical ledger response should provide all required fields
-    return value as CanonicalLedgerResponse;
+    // Canonical ledger response should provide all required fields. The double
+    // assertion is required because `Record<string, unknown>` and the canonical
+    // shape do not structurally overlap; the guard above is the runtime check.
+    return value as unknown as CanonicalLedgerResponse;
 }
 
 export function sanitizeLedgerFilenamePart(value: unknown): string {
@@ -254,7 +256,7 @@ export default function LicenseLedgerDetail() {
                         <div className="grid grid-cols-1 gap-3 text-[15px] sm:grid-cols-2">
                             <div>
                                 <span className="mr-2.5 text-muted-foreground">Exporter:</span>
-                                <strong>{normalizeText(ledger.exporter, 'N/A')}</strong>
+                                <strong>{normalizeText(ledger.exporter_name, 'N/A')}</strong>
                             </div>
                             <div>
                                 <span className="mr-2.5 text-muted-foreground">License Date:</span>
@@ -266,7 +268,7 @@ export default function LicenseLedgerDetail() {
                                     <strong className="text-info">
                                         {(() => {
                                             const allNorms = [...new Set(
-                                                (ledger.transactions as LedgerTransaction[])
+                                                ledger.transactions
                                                     .filter(t => t.sion_norms)
                                                     .flatMap(t => String(t.sion_norms).split(', '))
                                             )];
@@ -282,7 +284,12 @@ export default function LicenseLedgerDetail() {
                             <div>
                                 <span className="mr-2.5 text-muted-foreground">Total Value:</span>
                                 <strong className="text-primary">
-                                    {formatCurrency(ledger.total_value, isDFIA ? 'USD' : 'INR')}
+                                    {/* The canonical contract has no `total_value`; reading it
+                                        made this always render as 0. The legacy endpoint defined
+                                        the field as total purchase CIF, which the canonical
+                                        service already publishes as `totals.total_purchases`
+                                        (Decimal, USD for DFIA / INR for incentive). */}
+                                    {formatCurrency(ledger.totals?.total_purchases, isDFIA ? 'USD' : 'INR')}
                                 </strong>
                             </div>
                         </div>

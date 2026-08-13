@@ -31,6 +31,15 @@ export interface CanonicalTransaction {
   license_running_balance: string;
   company_utilization_after: string | null;
   display_status: string;
+  /**
+   * Comma-space joined SION norm classes for the licence items billed on this
+   * trade, e.g. "E1, E5". DFIA-only — always `''` for incentive licences, for
+   * DFIA trades whose items carry no norm, and for the synthetic OPENING row.
+   *
+   * NOTE: this is a presentation-layer derivation, not a ledger fact. There is
+   * no per-transaction norm in the data model; the norm hangs off the item name.
+   */
+  sion_norms?: string | null;
 }
 
 /**

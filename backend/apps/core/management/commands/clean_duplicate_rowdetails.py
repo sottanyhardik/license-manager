@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Count
 
 from apps.bill_of_entry.models import RowDetails
+from apps.core.constants import DEBIT
 
 
 class Command(BaseCommand):
@@ -21,7 +22,7 @@ class Command(BaseCommand):
         total_deleted = 0
 
         # 1. Delete rows where bill_of_entry is NULL and transaction_type is 'D'
-        null_be_qs = RowDetails.objects.filter(bill_of_entry__isnull=True, transaction_type='D')
+        null_be_qs = RowDetails.objects.filter(bill_of_entry__isnull=True, transaction_type=DEBIT)
         null_be_count = null_be_qs.count()
         if null_be_count > 0:
             if dry_run:

@@ -51,7 +51,10 @@ class LicenseOverviewSummaryViewTests(LicenseBalanceLedgerFixtureMixin, TestCase
         # after the Financial Balance Engine + BOE-level invoice-status
         # resolver additions (each adds a handful more fixed, non-per-row
         # aggregate queries to the same snapshot composition).
-        with self.assertNumQueries(48):
+        # Lowered 48 -> 47: `calculate_purchase_credit_for_licenses` was being
+        # issued twice per snapshot (once directly, once inside the opening-
+        # balance gate). It is now computed once and passed down.
+        with self.assertNumQueries(47):
             resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-summary/")
 
         self.assertEqual(resp.status_code, 200, resp.data)

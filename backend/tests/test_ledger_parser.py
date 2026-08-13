@@ -9,6 +9,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.license.views.ledger_upload import LedgerUploadView
 
+# Committed ICEGATE-format sample exports. These live in the repo (rather than a
+# developer-local ``ledgers/`` directory) so the suite is hermetic and runs on a
+# clean checkout. They deliberately reproduce the real-world quirks the parser
+# has to survive: UTF-8 BOM, non-breaking spaces, multi-page continuation
+# headers, and 9-digit licence/IEC numbers that need zero-padding.
+LEDGER_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "ledgers"
+
 
 @pytest.mark.parametrize(
     ("filename", "expected_license_numbers"),
@@ -19,7 +26,7 @@ from apps.license.views.ledger_upload import LedgerUploadView
     ],
 )
 def test_ledger_upload_parser_accepts_icegate_csv_exports(filename, expected_license_numbers):
-    path = Path(__file__).resolve().parents[2] / "ledgers" / filename
+    path = LEDGER_FIXTURE_DIR / filename
     uploaded_file = SimpleUploadedFile(filename, path.read_bytes(), content_type="text/csv")
 
     parsed = LedgerUploadView()._parse_file(uploaded_file)
@@ -30,7 +37,7 @@ def test_ledger_upload_parser_accepts_icegate_csv_exports(filename, expected_lic
 
 @pytest.mark.django_db
 def test_ledger_upload_endpoint_accepts_sample_icegate_csv_exports(authenticated_client):
-    ledger_dir = Path(__file__).resolve().parents[2] / "ledgers"
+    ledger_dir = LEDGER_FIXTURE_DIR
     expected_license_numbers = [
         "0311051667",
         "5211018767",

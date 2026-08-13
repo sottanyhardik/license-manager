@@ -163,9 +163,13 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
     # py` (never a per-license loop); see this function's docstring for the
     # full field-by-field writeup.
     hidden_map = LicenseBalanceCalculator.calculate_hidden_boe_debit_total_for_licenses(ids)
-    opening_map = LicenseBalanceCalculator.calculate_opening_balance_for_licenses(ids)
-    financial_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(ids)
+    # Purchase credit is needed here AND by the opening-balance gate; compute it
+    # once and pass it down so the same aggregate is not issued twice per request.
     purchase_credit_map = LicenseBalanceCalculator.calculate_purchase_credit_for_licenses(ids)
+    opening_map = LicenseBalanceCalculator.calculate_opening_balance_for_licenses(
+        ids, purchase_credit_map=purchase_credit_map
+    )
+    financial_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(ids)
     sale_debit_map = LicenseBalanceCalculator.calculate_trade_for_licenses(ids)
     # The literal, hidden-inclusive Customs figure — the ONE that always
     # matches `build_customs_ledger`'s own running total exactly (see

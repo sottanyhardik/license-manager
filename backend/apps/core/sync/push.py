@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -85,10 +86,11 @@ def check_delete_on_peers(model_label: str, natural_key: dict) -> list[dict]:
     Returns a list of conflict responses from peers that have references.
     """
     conflicts = []
+    # default=str: natural keys may hold dates/Decimals (e.g. ExchangeRateModel).
     payload = json.dumps({
         "model_label": model_label,
         "natural_key": natural_key,
-    }).encode("utf-8")
+    }, default=str).encode("utf-8")
 
     for peer in SyncPeer.objects.filter(is_active=True):
         url = f"{peer.base_url.rstrip('/')}/api/sync/delete-check/"
@@ -144,7 +146,10 @@ def sync_from_peer(peer: SyncPeer) -> int:
 
     url = f"{peer.base_url.rstrip('/')}/api/sync/pull/"
     if since:
-        url += f"?since={since}"
+        # Must be percent-encoded: an ISO timestamp ends in "+00:00" and a raw
+        # "+" is decoded as a space by the peer, so the cursor would be silently
+        # dropped and every pull would return the peer's entire change feed.
+        url += "?" + urllib.parse.urlencode({"since": since})
 
     req = urllib.request.Request(
         url,

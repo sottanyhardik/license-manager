@@ -14,12 +14,25 @@ Tests all 14 golden scenarios from LEDGER_GOLDEN_DATASET.md to verify:
 
 from decimal import Decimal
 from datetime import date, timedelta
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
+from apps.license.models import (
+    LicenseDetailsModel,
+    LicenseImportItemsModel,
+    LicenseExportItemModel,
+    IncentiveLicense,
+)
 from apps.license.services.canonical_ledger_service import CanonicalLedgerService
-from apps.trade.models import LicenseTrade
-from apps.core.models import CompanyModel
+from apps.trade.models import LicenseTrade, IncentiveTradeLine
+from apps.core.models import (
+    CompanyModel,
+    PortModel,
+    ItemNameModel,
+    SionNormClassModel,
+    HeadSIONNormsModel,
+)
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 
 
@@ -731,4 +744,150 @@ class Scenario14ComprehensiveRealWorld(CanonicalLedgerServiceTestBase):
         self.assertEqual(
             result['company_utilizations'][self.company_a.id]['utilization_balance'],
             result2['company_utilizations'][self.company_a.id]['utilization_balance']
+        )
+
+
+# ========== SION NORMS (presentation metadata, not a ledger fact) ==========
+
+class CanonicalLedgerSionNormsTests(CanonicalLedgerServiceTestBase):
+    """
+    `transactions[].sion_norms` — the SION norms of the LICENCE ITEMS billed on
+    a trade, resolved via line.sr_number -> .items -> .sion_norm_class.
+
+    DFIA-only by construction: incentive trade lines reference an
+    IncentiveLicense directly and carry no licence items, so there are no norms
+    to resolve and the field must be empty rather than raising.
+    """
+
+    def _make_norm(self, code):
+        head = HeadSIONNormsModel.objects.create(name=f'{code} Head')
+        return SionNormClassModel.objects.create(head_norm=head, norm_class=code)
+
+    def _make_item(self, name, norm=None, display_order=1):
+        return ItemNameModel.objects.create(
+            name=name, sion_norm_class=norm, display_order=display_order
+        )
+
+    def _billed_sr_number(self, trade):
+        """The licence item (sr_number) billed by this trade's single line."""
+        return trade.lines.first().sr_number
+
+    def test_sion_norms_populated_for_dfia_license_with_norm_bearing_items(self):
+        trade = self._create_purchase_trade(self.license, self.company_a, Decimal('1000.00'))
+        sr_number = self._billed_sr_number(trade)
+        e1 = self._make_norm('E1')
+        e5 = self._make_norm('E5')
+        sr_number.items.add(
+            self._make_item('Item E1', e1, display_order=1),
+            self._make_item('Item E5', e5, display_order=2),
+            # Same norm again on a different item -> must be de-duplicated.
+            self._make_item('Item E1 Duplicate', e1, display_order=3),
+        )
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+        txn = result['transactions'][0]
+
+        # Exact legacy shape: comma-space joined, first-seen order, de-duplicated.
+        self.assertEqual(txn['sion_norms'], 'E1, E5')
+        # And it survives the frontend's split(', ') contract.
+        self.assertEqual(str(txn['sion_norms']).split(', '), ['E1', 'E5'])
+
+    def test_sion_norms_serializes_through_canonical_serializer(self):
+        from apps.license.serializers import CanonicalLedgerSerializer
+
+        trade = self._create_purchase_trade(self.license, self.company_a, Decimal('500.00'))
+        norm = self._make_norm('E132')
+        self._billed_sr_number(trade).items.add(self._make_item('Nuts', norm))
+
+        dataset = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+        data = CanonicalLedgerSerializer(dataset).data
+
+        self.assertEqual(data['transactions'][0]['sion_norms'], 'E132')
+
+    def test_sion_norms_empty_when_billed_items_have_no_norm(self):
+        trade = self._create_purchase_trade(self.license, self.company_a, Decimal('750.00'))
+        # Item with NO sion_norm_class at all.
+        self._billed_sr_number(trade).items.add(self._make_item('Unclassified Item'))
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+
+        self.assertEqual(result['transactions'][0]['sion_norms'], '')
+
+    def test_sion_norms_empty_when_no_items_are_linked(self):
+        self._create_purchase_trade(self.license, self.company_a, Decimal('300.00'))
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+
+        self.assertEqual(result['transactions'][0]['sion_norms'], '')
+
+    def test_sion_norms_empty_on_synthetic_opening_row(self):
+        self._set_opening_balance(Decimal('2000.00'))
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+        opening = result['transactions'][0]
+
+        self.assertEqual(opening['type'], 'OPENING')
+        self.assertEqual(opening['sion_norms'], '')
+
+    def test_sion_norms_empty_for_incentive_license_without_error(self):
+        exporter = CompanyModel.objects.create(name='Incentive Exporter', iec='0000000099')
+        port = PortModel.objects.create(code='INCP1', name='Incentive Port')
+        incentive = IncentiveLicense.objects.create(
+            license_type='RODTEP',
+            license_number='RODTEP-SION-001',
+            license_date=date(2026, 1, 1),
+            license_expiry_date=date(2027, 12, 31),
+            exporter=exporter,
+            port_code=port,
+            license_value=Decimal('5000.00'),
+        )
+        trade = LicenseTrade.objects.create(
+            from_company=exporter,
+            to_company=self.company_a,
+            direction='PURCHASE',
+            invoice_number='INV-INC-SION-1',
+            invoice_date=date(2026, 1, 15),
+            license_type='INCENTIVE',
+        )
+        IncentiveTradeLine.objects.create(
+            trade=trade,
+            incentive_license=incentive,
+            license_value=Decimal('5000.00'),
+            rate_pct=Decimal('50.000'),
+            amount_inr=Decimal('2500.00'),
+        )
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(
+            incentive.id, license_type='RODTEP'
+        )
+
+        self.assertEqual(len(result['transactions']), 1)
+        self.assertEqual(result['transactions'][0]['sion_norms'], '')
+        # Metadata still resolves off the differently-named port FK.
+        self.assertEqual(result['license_number'], 'RODTEP-SION-001')
+        self.assertEqual(result['port_name'], 'Incentive Port')
+        self.assertEqual(result['exporter_name'], 'Incentive Exporter')
+
+    def test_sion_norms_resolution_is_not_n_plus_one(self):
+        """Query count must not grow with the number of norm-bearing trades."""
+        def build_with_trades(n):
+            for _ in range(n):
+                # Unique per call: HeadSIONNormsModel derives a natural-key uid
+                # from `name`, so norm codes must not repeat across batches.
+                tag = self._get_next_sr_number()
+                trade = self._create_purchase_trade(
+                    self.license, self.company_a, Decimal('100.00'), date(2026, 1, 10)
+                )
+                norm = self._make_norm(f'N{tag}')
+                self._billed_sr_number(trade).items.add(self._make_item(f'Item {tag}', norm))
+            with CaptureQueriesContext(connection) as ctx:
+                CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+            return len(ctx.captured_queries)
+
+        queries_2 = build_with_trades(2)
+        queries_6 = build_with_trades(4)  # 6 trades total
+
+        self.assertEqual(
+            queries_2, queries_6,
+            f'sion_norms resolution scales with trade count: {queries_2} -> {queries_6} queries'
         )

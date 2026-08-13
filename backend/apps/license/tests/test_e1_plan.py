@@ -11,6 +11,15 @@ from apps.license.services.e1_plan import (
     classify_e1_item,
     plan_e1_items,
 )
+from apps.license.services.milk_planner import MILK_CONFIG
+
+# DWP rate ceiling of the shared milk splitter (``MILK_CONFIG.dwp_price``),
+# numerically pinned in ``test_milk_planner.py`` and tied back to the engine by
+# ``TestUnitPricesTable.test_milk_dwp_ceiling_matches_shared_milk_config``.
+# Milk expectations below are arithmetic against this one constant.
+DWP_CEILING = Decimal('6.5')
+# 50 kg planned at that ceiling — the recurring figure (50 * 6.50 = 325).
+CEILING_CIF_50KG = Decimal('50') * DWP_CEILING
 
 
 def _lines_by_step(result, step) -> list[E1PlanLine]:
@@ -176,6 +185,12 @@ class TestUnitPricesTable(TestCase):
     def test_egg_albumin_reuses_shared_milk_config_wpc_price(self):
         assert EGG_ALBUMIN_PRICE == Decimal('25')
 
+    def test_milk_dwp_ceiling_matches_shared_milk_config(self):
+        # Guard for this module's shared DWP_CEILING constant — if the shared
+        # milk config's ceiling moves, this fails instead of silently
+        # invalidating the derived milk expectations below.
+        assert DWP_CEILING == MILK_CONFIG.dwp_price
+
 
 class TestGenericStages(TestCase):
     """Steps 1, 2, 4-8 — full balance (max rate) vs partial balance
@@ -280,36 +295,47 @@ class TestMilkStageDelegatesToSharedSplitter(TestCase):
         assert result.remaining_cif == Decimal('0')
 
     def test_milk_avg_above_ceiling_all_dwp_no_swp(self):
+        # avg = 5000/50 = 100 >= 6.50 -> DWP takes the full qty at the ceiling.
         items = [E1Item(key='m', category='MILK PRODUCTS', qty=Decimal('50'))]
         result = plan_e1_items(items, Decimal('5000'))
         dwp = _lines_by_step(result, 'DWP')[0]
         assert dwp.planned_qty == Decimal('50')
-        assert dwp.planned_cif == Decimal('250.0000')
+        assert dwp.planned_cif == CEILING_CIF_50KG      # 50 * 6.50 = 325
         assert _lines_by_step(result, 'SWP') == []
 
     def test_multiple_milk_items_planned_independently_in_order(self):
+        # Balance raised 300 -> 375 to keep m1 ABOVE the DWP ceiling now that
+        # the ceiling is 6.50: 375/50 = 7.50 (at 300 the avg of 6.00 would fall
+        # into the in-band branch, m1 would swallow the whole balance and m2
+        # would get no line at all — the hand-off this test exists to prove).
         items = [
             E1Item(key='m1', category='MILK PRODUCTS', qty=Decimal('50')),
             E1Item(key='m2', category='MILK PRODUCTS', qty=Decimal('50')),
         ]
-        result = plan_e1_items(items, Decimal('300'))
+        result = plan_e1_items(items, Decimal('375'))
         m1_steps = {ln.step for ln in result.lines if ln.key == 'm1'}
         m2_lines = [ln for ln in result.lines if ln.key == 'm2']
-        # m1: avg = 300/50 = 6 >= 5 -> full DWP (250), qty exhausted, no SWP.
+        # m1: avg = 375/50 = 7.50 >= 6.50 -> full DWP (50 * 6.50 = 325), qty
+        # exhausted, no SWP; 375 - 325 = 50 is handed to m2.
         assert m1_steps == {'DWP'}
-        assert {ln.step for ln in m2_lines} == {'SWP'}   # avg = 50/50 = 1.0 < 1.5
+        assert _cif(result, 'DWP') == CEILING_CIF_50KG
+        # m2 sees only the 50 m1 left behind: avg = 50/50 = 1.0 < 1.5 -> no DWP
+        # at all, SWP takes 50/1.5 = 33.3333... kg for the whole 50.
+        assert {ln.step for ln in m2_lines} == {'SWP'}
+        assert m2_lines[0].planned_cif == Decimal('50.0000')
         assert result.remaining_cif == Decimal('0')
 
     def test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate(self):
-        # avg = 5000/50 = 100, way above the 5.00 DWP ceiling. A (wrongly)
+        # avg = 5000/50 = 100, way above the 6.50 DWP ceiling. A (wrongly)
         # generically-routed stage would set rate = min(max_rate, remaining/qty)
         # for some max_rate; split_milk_0404 instead caps DWP at exactly its
-        # own 5.00 ceiling regardless of how large the implied avg is.
+        # own 6.50 ceiling regardless of how large the implied avg is.
         items = [E1Item(key='m', category='MILK PRODUCTS', qty=Decimal('50'))]
         result = plan_e1_items(items, Decimal('5000'))
         dwp = _lines_by_step(result, 'DWP')[0]
-        assert dwp.unit_price == Decimal('5.0000')
-        assert result.remaining_cif == Decimal('4750')  # 5000 - 50*5
+        assert dwp.unit_price == DWP_CEILING
+        # 5000 - 50*6.50 = 5000 - 325 = 4675
+        assert result.remaining_cif == Decimal('5000') - CEILING_CIF_50KG
 
 
 class TestPriorityAndSequence(TestCase):

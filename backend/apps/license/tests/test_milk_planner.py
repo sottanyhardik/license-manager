@@ -8,14 +8,28 @@ from unittest import TestCase
 
 from apps.license.services.milk_planner import MILK_CONFIG, MilkConfig, plan_milk
 
+# The DWP rate ceiling (``MILK_CONFIG.dwp_price``), pinned numerically by
+# ``TestMilkConfigConstants.test_e1_config_prices`` below. Every ceiling-priced
+# expectation in this module is arithmetic against this single constant, so a
+# future price change lands in exactly one place plus that one pinning test.
+DWP_CEILING = Decimal('6.5')
+# 50 kg planned at that ceiling — the recurring worked figure below
+# (50 * 6.50 = 325).
+CEILING_CIF_50KG = Decimal('50') * DWP_CEILING
+
 
 class TestMilkConfigConstants(TestCase):
 
     def test_e1_config_prices(self):
-        assert MILK_CONFIG.dwp_price == Decimal('5')
+        assert MILK_CONFIG.dwp_price == Decimal('6.5')
         assert MILK_CONFIG.dwp_min_price == Decimal('4.40')
         assert MILK_CONFIG.swp_price == Decimal('1.5')
         assert MILK_CONFIG.wpc_price == Decimal('25')
+
+    def test_shared_ceiling_constant_tracks_the_engine(self):
+        # Guard: if MILK_CONFIG.dwp_price moves again, this fails alongside the
+        # test above instead of silently invalidating every derived expectation.
+        assert DWP_CEILING == MILK_CONFIG.dwp_price
 
 
 class TestPlanMilk0404Only(TestCase):
@@ -25,17 +39,20 @@ class TestPlanMilk0404Only(TestCase):
     """
 
     def test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over(self):
-        # avg = 300/50 = 6 >= 5 -> DWP takes everything at the 5.00 ceiling;
-        # qty is exhausted so the surplus balance can't be spent.
-        planned, rate, remaining = plan_milk(Decimal('50'), Decimal('0'), Decimal('300'), MILK_CONFIG)
-        assert planned['DWP'] == Decimal('250')      # 50 * 5.00
-        assert rate['DWP'] == Decimal('5')
+        # avg = 350/50 = 7.00 >= 6.50 -> DWP takes everything at the 6.50
+        # ceiling; qty is exhausted so the surplus balance can't be spent.
+        # (Balance raised 300 -> 350 so the case still sits ABOVE the ceiling:
+        # at the old 5.00 ceiling 300/50 = 6 cleared it, at 6.50 it would fall
+        # into the in-band branch tested immediately below.)
+        planned, rate, remaining = plan_milk(Decimal('50'), Decimal('0'), Decimal('350'), MILK_CONFIG)
+        assert planned['DWP'] == CEILING_CIF_50KG    # 50 * 6.50 = 325
+        assert rate['DWP'] == DWP_CEILING
         assert planned['SWP'] == Decimal('0')
         assert planned['WPC'] == Decimal('0')
-        assert remaining == Decimal('50')            # 300 - 250, unavoidable
+        assert remaining == Decimal('25')            # 350 - 325, unavoidable
 
     def test_avg_in_band_all_dwp_at_blended_rate_zero_remaining(self):
-        # avg = 240/50 = 4.80, within [4.40, 5.00] -> full qty to DWP at the
+        # avg = 240/50 = 4.80, within [4.40, 6.50] -> full qty to DWP at the
         # blended rate; no room left for SWP and none needed.
         planned, rate, remaining = plan_milk(Decimal('50'), Decimal('0'), Decimal('240'), MILK_CONFIG)
         assert planned['DWP'] == Decimal('240')      # 50 * 4.80
@@ -96,12 +113,13 @@ class TestPlanMilkMixedRunsSequentially(TestCase):
     3502, back to back, against the same shrinking balance."""
 
     def test_runs_0404_then_3502_sequentially(self):
-        # avg for the 0404 leg = 5000/50 = 100 >= 5 -> full qty to DWP, no SWP.
+        # avg for the 0404 leg = 5000/50 = 100 >= 6.50 -> full qty to DWP at the
+        # ceiling, no SWP.
         planned, rate, remaining = plan_milk(Decimal('50'), Decimal('10'), Decimal('5000'), MILK_CONFIG)
-        assert planned['DWP'] == Decimal('250')    # 50 * 5
+        assert planned['DWP'] == CEILING_CIF_50KG   # 50 * 6.50 = 325
         assert planned['SWP'] == Decimal('0')
         assert planned['WPC'] == Decimal('250')    # 10 * 25, after DWP drew down balance
-        assert remaining == Decimal('5000') - 250 - 250
+        assert remaining == Decimal('5000') - CEILING_CIF_50KG - Decimal('250')   # 4425
 
 
 class TestPlanMilkEdgeCases(TestCase):
@@ -117,7 +135,7 @@ class TestPlanMilkEdgeCases(TestCase):
 
     def test_tolerant_type_coercion(self):
         planned, rate, remaining = plan_milk('50', None, '5000', MILK_CONFIG)
-        assert planned['DWP'] == Decimal('250')
+        assert planned['DWP'] == CEILING_CIF_50KG   # 50 * 6.50 = 325
 
     def test_milk_config_is_frozen(self):
         with self.assertRaises(Exception):

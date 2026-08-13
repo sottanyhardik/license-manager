@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+from pathlib import Path
 
 from django.conf import settings
 from django.http import FileResponse, Http404
@@ -44,6 +45,9 @@ from .serializers import (
 )
 
 logger = logging.getLogger("sync.views")
+
+#: Upper bound for GET /api/sync/conflicts/?limit=
+MAX_CONFLICT_PAGE = 1000
 
 
 class SyncPushView(APIView):
@@ -165,11 +169,31 @@ class DeleteCheckView(APIView):
             )
 
         Model = _get_model(model_label)
-        nk_filter = _natural_key_filter(entry, nk_data)
         nk_str = _nk_string(entry, nk_data)
+        try:
+            nk_filter = _natural_key_filter(entry, nk_data)
+        except ValueError as exc:
+            # Incomplete / unusable natural key is a client error, not a 500.
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             instance = Model.objects.get(**nk_filter)
+        except Model.MultipleObjectsReturned:
+            # Ambiguous natural key: refuse the delete rather than guess.
+            return Response(
+                DeleteCheckResultSerializer({
+                    "model_label": model_label,
+                    "natural_key": nk_str,
+                    "safe": False,
+                    "references": [
+                        f"Ambiguous natural key: multiple {model_label} rows match"
+                    ],
+                }).data,
+                status=status.HTTP_409_CONFLICT,
+            )
         except Model.DoesNotExist:
             return Response(
                 DeleteCheckResultSerializer({
@@ -251,8 +275,10 @@ class MediaDownloadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        full_path = settings.MEDIA_ROOT / media_path
-        if not full_path.exists():
+        full_path = Path(settings.MEDIA_ROOT) / media_path
+        # is_file() (not exists()): a directory would otherwise reach open()
+        # and raise IsADirectoryError → 500.
+        if not full_path.is_file():
             raise Http404("Media file not found")
 
         content_type, _ = mimetypes.guess_type(str(full_path))
@@ -271,7 +297,15 @@ class SyncConflictLogView(APIView):
 
     def get(self, request):
         since = request.query_params.get("since")
-        limit = int(request.query_params.get("limit", "100"))
+        try:
+            limit = int(request.query_params.get("limit", "100"))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "'limit' must be an integer"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Guard the slice: a negative bound raises, an unbounded one is a DoS.
+        limit = max(1, min(limit, MAX_CONFLICT_PAGE))
 
         qs = SyncConflictLog.objects.all()
         if since:

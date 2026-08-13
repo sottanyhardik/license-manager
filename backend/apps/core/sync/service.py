@@ -69,15 +69,93 @@ def _get_model(model_label: str) -> type[models.Model]:
 
 
 def _natural_key_filter(entry: MasterSyncEntry, data: dict) -> dict:
-    """Build a queryset filter dict from the natural key fields in data."""
+    """Build a queryset filter dict from the natural key fields in data.
+
+    If a natural-key field is a FK (e.g. ``ProductDescriptionModel.hs_code``),
+    the payload carries the *related* natural key — never the local surrogate
+    id, which is meaningless on another server — so the filter is expressed as
+    a related lookup (``hs_code__hs_code="98765432"``).
+    """
+    Model = _get_model(entry.model_label)
     filt = {}
     for k in entry.natural_key:
         val = data.get(k)
         if val is None:
             raise ValueError(f"Missing natural key field '{k}' in sync payload")
+
         # If the NK field is a FK, look up by the related natural key
-        filt[k] = val
+        nk_field = Model._meta.get_field(k)
+        if isinstance(nk_field, models.ForeignKey) and not isinstance(val, models.Model):
+            related_entry = get_entry(nk_field.related_model._meta.label)
+            if related_entry is None:
+                raise ValueError(
+                    f"Natural key field '{k}' of {entry.model_label} points at "
+                    f"unregistered model {nk_field.related_model._meta.label}"
+                )
+            for lookup, part in _related_nk_parts(related_entry, val).items():
+                filt[f"{k}__{lookup}"] = part
+        else:
+            filt[k] = val
     return filt
+
+
+def _related_nk_parts(related_entry: MasterSyncEntry, value) -> dict:
+    """Split a transported FK value into {related_nk_field: value}.
+
+    ``_serialize_instance`` joins multi-field related natural keys with "|".
+    """
+    parts = str(value).split("|")
+    if len(parts) != len(related_entry.natural_key):
+        raise ValueError(
+            f"FK natural key {value!r} does not match "
+            f"{related_entry.model_label} key {related_entry.natural_key}"
+        )
+    return dict(zip(related_entry.natural_key, parts))
+
+
+def _resolve_related(fk_field: models.ForeignKey, value):
+    """Resolve a transported FK natural-key value to a local instance."""
+    related_model = fk_field.related_model
+    related_entry = get_entry(related_model._meta.label)
+    if related_entry is None:
+        raise ValueError(
+            f"FK '{fk_field.name}' points at unregistered model "
+            f"{related_model._meta.label}; it cannot be synced by natural key"
+        )
+    filt = _related_nk_parts(related_entry, value)
+    instance = related_model.objects.filter(**filt).order_by().first()
+    if instance is None:
+        raise ValueError(
+            f"Unresolved FK '{fk_field.name}': no {related_model._meta.label} "
+            f"with natural key {value!r} on this server"
+        )
+    return instance
+
+
+def _resolve_fk_values(Model: type[models.Model], data: dict) -> dict:
+    """Return ``data`` with FK natural-key strings replaced by instances.
+
+    Sync payloads reference parents by natural key (see ``_serialize_instance``).
+    A FK whose related model is not in the registry cannot be transported at all
+    (a local surrogate id would point at an unrelated row on the peer, or break
+    a deferred FK constraint at commit), so such keys are dropped.
+    """
+    resolved = dict(data)
+    for fk_field in Model._meta.get_fields():
+        if not isinstance(fk_field, models.ForeignKey):
+            continue
+        if get_entry(fk_field.related_model._meta.label) is None:
+            # Unsyncable reference: drop both "created_by" and "created_by_id".
+            resolved.pop(fk_field.name, None)
+            resolved.pop(fk_field.attname, None)
+            continue
+        if fk_field.name not in resolved:
+            continue
+        value = resolved[fk_field.name]
+        if value is None or isinstance(value, models.Model):
+            continue
+        resolved[fk_field.name] = _resolve_related(fk_field, value)
+    return resolved
 
 
 def _nk_string(entry: MasterSyncEntry, data: dict) -> str:
@@ -122,12 +200,25 @@ def apply_create_or_update(
     (deterministic tie-break).
     """
     Model = _get_model(entry.model_label)
-    nk_filter = _natural_key_filter(entry, data)
     nk_str = _nk_string(entry, data)
 
     try:
+        # Payload-shape problems (missing natural key, unresolvable parent) are
+        # per-event errors, never an exception that aborts the whole batch.
+        nk_filter = _natural_key_filter(entry, data)
+        data = _resolve_fk_values(Model, data)
+
         with transaction.atomic():
-            existing = Model.objects.select_for_update().filter(**nk_filter).first()
+            # order_by() is required: a Meta.ordering that spans a nullable FK
+            # adds an outer join, and Postgres refuses SELECT ... FOR UPDATE on
+            # the nullable side of one.
+            existing = (
+                Model.objects
+                .filter(**nk_filter)
+                .order_by()
+                .select_for_update()
+                .first()
+            )
 
             if existing is not None:
                 # ── Duplicate reconciliation / UPDATE path ───────────
@@ -251,12 +342,20 @@ def apply_delete(
     Soft-delete: the record is tombstoned, not physically removed.
     """
     Model = _get_model(entry.model_label)
-    nk_filter = _natural_key_filter(entry, data)
     nk_str = _nk_string(entry, data)
 
     try:
+        nk_filter = _natural_key_filter(entry, data)
+
         with transaction.atomic():
-            existing = Model.objects.select_for_update().filter(**nk_filter).first()
+            # See apply_create_or_update: order_by() keeps FOR UPDATE legal.
+            existing = (
+                Model.objects
+                .filter(**nk_filter)
+                .order_by()
+                .select_for_update()
+                .first()
+            )
 
             if existing is None:
                 return SyncResult(
@@ -457,14 +556,26 @@ def get_changes_since(since: str | None = None) -> list[dict[str, Any]]:
 
             data = _serialize_instance(instance, entry)
             version = getattr(instance, "sync_version", 1)
-            events.append({
+            event = {
                 "model_label": change.model_label,
                 "op": change.op,
                 "data": data,
                 "source_server": SERVER_ID,
                 "source_version": version,
                 "at": change.at.isoformat(),
-            })
+            }
+
+            # Media metadata (path + SHA256) so the peer can queue the file
+            # transfer.  Without this the receiver's MediaSyncTask pipeline is
+            # never triggered and media never replicates.
+            if entry.media_fields:
+                from .media import get_media_info
+
+                media_info = get_media_info(instance, entry)
+                if any(v for v in media_info.values()):
+                    event["media"] = media_info
+
+            events.append(event)
 
     return events
 
@@ -482,19 +593,21 @@ def _serialize_instance(instance: models.Model, entry: MasterSyncEntry) -> dict:
             continue
         # For FK fields, store the natural key of the related object
         if isinstance(f, models.ForeignKey):
+            related_entry = get_entry(f.related_model._meta.label)
+            if related_entry is None:
+                # A local surrogate id (created_by_id, ...) means nothing on a
+                # peer: it would either point at an unrelated row or violate a
+                # deferred FK constraint at commit time.  Do not transport it.
+                continue
             related_obj = getattr(instance, name, None)
             if related_obj is not None:
-                # Try to get the natural key field value
-                related_entry = get_entry(f.related_model._meta.label)
-                if related_entry:
-                    nk_vals = []
-                    for nk_field in related_entry.natural_key:
-                        nk_vals.append(str(getattr(related_obj, nk_field, "")))
-                    data[name] = "|".join(nk_vals)
-                else:
-                    data[f.attname] = getattr(instance, f.attname)
+                nk_vals = [
+                    str(getattr(related_obj, nk_field, ""))
+                    for nk_field in related_entry.natural_key
+                ]
+                data[name] = "|".join(nk_vals)
             else:
-                data[f.attname] = None
+                data[name] = None
         elif isinstance(f, (models.ImageField, models.FileField)):
             field_file = getattr(instance, name)
             data[name] = field_file.name if field_file else None

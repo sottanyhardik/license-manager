@@ -61,7 +61,7 @@ class AllocationService:
         balanced_qty = to_decimal(allotment.balanced_quantity or 0, DEC_0)
         required_value = to_decimal(allotment.required_value or 0, DEC_0)
         required_value_with_buffer = to_decimal(
-            allotment.required_value_with_buffer or (required_value + Decimal('20')),
+            getattr(allotment, 'required_value_with_buffer', None) or (required_value + Decimal('20')),
             DEC_0
         )
         allotted_value = to_decimal(allotment.allotted_value or 0, DEC_0)

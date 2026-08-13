@@ -184,7 +184,9 @@ describe("LicenseLedger", () => {
                     },
                 });
             }
-            if (url === "license-ledger/1/ledger_detail/") {
+            // The exporter passes license_type so the backend targets the correct
+            // table (DFIA vs Incentive) instead of AUTO-searching both.
+            if (url === "license-ledger/1/ledger_detail/?license_type=DFIA") {
                 return Promise.resolve({ data: { license_id: 1, license_number: "LIC-1" } });
             }
             return Promise.reject(new Error(`Unexpected URL: ${url}`));
@@ -197,7 +199,7 @@ describe("LicenseLedger", () => {
         fireEvent.click(await screen.findByRole("button", { name: "Export license ledger as PDF" }));
 
         await waitFor(() => {
-            expect(mockedApiGet).toHaveBeenCalledWith("license-ledger/1/ledger_detail/");
+            expect(mockedApiGet).toHaveBeenCalledWith("license-ledger/1/ledger_detail/?license_type=DFIA");
         });
         expect(mockedGeneratePDF).toHaveBeenCalledWith(
             [{ license_id: 1, license_number: "LIC-1" }],

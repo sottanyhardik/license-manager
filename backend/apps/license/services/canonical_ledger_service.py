@@ -39,7 +39,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, Dict, List, Any
 from datetime import date as date_type
 
-from django.db.models import Q, Sum, Value, DecimalField
+from django.db.models import Q, Sum, Value, DecimalField, Prefetch
 from django.db.models.functions import Coalesce
 
 from apps.license.domain.transaction_semantics import TransactionSemantics
@@ -83,33 +83,54 @@ class CanonicalLedgerService:
         Returns:
             Dict with structure:
             {
+                # --- identity / metadata (see _extract_license_metadata) ---
                 'license_id': int,
                 'license_type': str,
+                'license_number': str,
+                'license_date': date or None,
+                'expiry_date': date or None,      # from <license>.license_expiry_date
+                'exporter_id': int or None,
+                'exporter_name': str,             # '' when unknown
+                'port_id': int or None,
+                'port_name': str,                 # '' when unknown
+
+                # --- balances ---
                 'opening_balance': Decimal,
                 'license_running_balance': Decimal,  # Final balance
                 'closing_balance': Decimal,  # Same as running_balance
+
                 'transactions': [
                     {
                         'date': date,
-                        'id': int (transaction ID),
-                        'type': str,  # OPENING, PURCHASE, SALE, COMMISSION
+                        'id': int (transaction ID; 0 for the synthetic OPENING row),
+                        'type': str,  # OPENING, PURCHASE, SALE,
+                                      # COMMISSION_PURCHASE, COMMISSION_SALE
                         'company_id': int or None,
                         'company_name': str or None,
                         'amount': Decimal,
                         'is_commission': bool,
+                        'affects_balance': bool,
+                        'sion_norms': str,  # PRESENTATION-LAYER DERIVATION, NOT a
+                                # ledger fact: the SION norms of the LICENCE ITEMS
+                                # billed on this trade (see _extract_sion_norms).
+                                # Comma-space joined, '' when none. DFIA only —
+                                # always '' for INCENTIVE/RODTEP/ROSTL/MEIS and on
+                                # the synthetic OPENING row.
                         'license_running_balance': Decimal,  # Running balance after this txn
-                        'company_utilization_after': Decimal,  # Company util after (if company-scoped)
+                        'company_utilization_after': Decimal or None,  # (if company-scoped;
+                                                # absent on the synthetic OPENING row)
                     },
                     ...
                 ],
-                'company_utilizations': [
-                    {
+                # Keyed by company_id (NOT a list).
+                'company_utilizations': {
+                    company_id: {
                         'company_id': int,
                         'company_name': str,
                         'utilization_balance': Decimal,
                     },
                     ...
-                ],
+                },
                 'totals': {
                     'total_purchases': Decimal,
                     'total_sales': Decimal,
@@ -125,10 +146,15 @@ class CanonicalLedgerService:
         if not license_obj:
             raise ValueError(f"License {license_id} (type {license_type}) not found")
 
+        # License metadata promised by the dataset contract (single shared
+        # extraction path for both LicenseDetailsModel and IncentiveLicense).
+        metadata = _extract_license_metadata(license_obj)
+
         # Build dataset
         dataset = {
             'license_id': license_id,
             'license_type': license_type,
+            **metadata,
             'opening_balance': Decimal('0.00'),
             'license_running_balance': Decimal('0.00'),
             'closing_balance': Decimal('0.00'),
@@ -158,7 +184,7 @@ class CanonicalLedgerService:
         # Add opening transaction first (if opening balance exists)
         if opening_balance > DEC_0:
             dataset['transactions'].append({
-                'date': license_obj.license_date if hasattr(license_obj, 'license_date') else None,
+                'date': metadata['license_date'],
                 'id': 0,  # Opening is transaction 0
                 'type': 'OPENING',
                 'company_id': None,
@@ -167,6 +193,7 @@ class CanonicalLedgerService:
                 'is_commission': False,
                 'license_running_balance': running_balance,
                 'affects_balance': True,
+                'sion_norms': '',  # Not trade-derived; no billed items exist.
             })
 
         # Process all other transactions
@@ -232,16 +259,19 @@ class CanonicalLedgerService:
                 'license_running_balance': running_balance,
                 'company_utilization_after': company_util_after,
                 'affects_balance': affects_balance,
+                'sion_norms': txn_data.get('sion_norms', ''),
             })
 
         # Set final balances
         dataset['license_running_balance'] = running_balance
         dataset['closing_balance'] = running_balance
 
-        # Build company utilizations dict
+        # Build company utilizations dict.
+        # Company names are resolved in ONE bulk query (previously one query
+        # per company inside this loop).
+        company_names = _get_company_names_for_ids(company_balances.keys())
         for company_id, balance in company_balances.items():
-            # Fetch company name
-            company_name = _get_company_name_for_id(company_id)
+            company_name = company_names.get(company_id, 'Unknown')
             dataset['company_utilizations'][company_id] = {
                 'company_id': company_id,
                 'company_name': company_name,
@@ -258,16 +288,81 @@ class CanonicalLedgerService:
 # ========== INTERNAL HELPERS ==========
 
 def _get_license_object(license_id: int, license_type: str):
-    """Fetch license object by ID and type."""
+    """
+    Fetch license object by ID and type.
+
+    The exporter/port relations are pulled in with select_related because
+    _extract_license_metadata() always reads them (avoids 2 extra queries).
+    Note the port FK is named differently on each model: LicenseDetailsModel.port
+    vs IncentiveLicense.port_code.
+    """
     try:
         if license_type == 'DFIA':
-            return LicenseDetailsModel.objects.get(id=license_id)
+            return (
+                LicenseDetailsModel.objects
+                .select_related('exporter', 'port')
+                .get(id=license_id)
+            )
         elif license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
-            return IncentiveLicense.objects.get(id=license_id)
+            return (
+                IncentiveLicense.objects
+                .select_related('exporter', 'port_code')
+                .get(id=license_id)
+            )
         else:
             return None
     except (LicenseDetailsModel.DoesNotExist, IncentiveLicense.DoesNotExist):
         return None
+
+
+# The two license models agree on `license_number`, `license_date`,
+# `license_expiry_date` and `exporter`, but disagree on the port FK name.
+_PORT_FK_ATTRS = ('port', 'port_code')
+
+
+def _extract_license_metadata(license_obj) -> Dict[str, Any]:
+    """
+    Extract the license metadata part of the canonical dataset contract.
+
+    ONE shared implementation for BOTH license models:
+
+    | canonical key   | LicenseDetailsModel (DFIA) | IncentiveLicense (INCENTIVE/…) |
+    |-----------------|----------------------------|--------------------------------|
+    | license_number  | license_number             | license_number                 |
+    | license_date    | license_date (nullable)    | license_date                   |
+    | expiry_date     | license_expiry_date        | license_expiry_date            |
+    | exporter_id     | exporter_id (nullable)     | exporter_id                    |
+    | exporter_name   | exporter.name              | exporter.name                  |
+    | port_id         | port_id (nullable)         | port_code_id                   |
+    | port_name       | port.name                  | port_code.name                 |
+
+    Missing relations degrade to None ids and '' names (never raises), so the
+    API contract holds even for partially-populated legacy rows. For DFIA, a
+    deleted exporter falls back to the `archived_exporter_name` snapshot.
+    """
+    exporter = getattr(license_obj, 'exporter', None)
+    exporter_name = exporter.name if exporter else ''
+    if not exporter_name:
+        # DFIA only: name snapshot kept when the company row was deleted.
+        exporter_name = getattr(license_obj, 'archived_exporter_name', '') or ''
+
+    port = None
+    port_id = None
+    for attr in _PORT_FK_ATTRS:
+        if hasattr(license_obj, attr):
+            port = getattr(license_obj, attr)
+            port_id = getattr(license_obj, f'{attr}_id', None)
+            break
+
+    return {
+        'license_number': getattr(license_obj, 'license_number', '') or '',
+        'license_date': getattr(license_obj, 'license_date', None),
+        'expiry_date': getattr(license_obj, 'license_expiry_date', None),
+        'exporter_id': getattr(license_obj, 'exporter_id', None),
+        'exporter_name': exporter_name,
+        'port_id': port_id,
+        'port_name': (port.name if port else '') or '',
+    }
 
 
 def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
@@ -281,22 +376,49 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
     - company_id: company ID (if company-scoped)
     - company_name: company name
     - amount: transaction amount
+    - sion_norms: comma-space joined SION norms of the billed licence items
+      (DFIA only; '' for incentive licenses) — presentation metadata, not a
+      ledger fact
 
     Transactions are sorted deterministically: date ASC, then id ASC
     """
+    from apps.trade.models import IncentiveTradeLine, LicenseTradeLine
+
     transactions = []
 
-    # Fetch all trades for this license
+    # Fetch all trades for this license.
+    #
+    # The per-license line filter is pushed into a Prefetch(to_attr=...) so the
+    # lines for ALL trades are fetched in ONE query. Previously the loop below
+    # ran `trade.lines.filter(...)` / `trade.incentive_lines.filter(...)`, i.e.
+    # one query per trade (N+1). The Prefetch queryset carries the SAME filter,
+    # and both line models declare `ordering = ["id"]`, so the rows and their
+    # order — and therefore the amounts computed from them — are unchanged.
+    #
+    # The `sr_number__items__sion_norm_class` chain rides along on that same
+    # Prefetch so `_extract_sion_norms` stays N+1-free (2 extra queries total,
+    # regardless of trade count).
     if license_type == 'DFIA':
+        license_lines_qs = (
+            LicenseTradeLine.objects
+            .filter(sr_number__license=license_obj)
+            .select_related('sr_number')
+            .prefetch_related('sr_number__items__sion_norm_class')
+        )
         trades = LicenseTrade.objects.filter(
             license_type='DFIA',
             lines__sr_number__license=license_obj
-        ).prefetch_related('lines__sr_number', 'from_company', 'to_company').distinct()
+        ).select_related('from_company', 'to_company').prefetch_related(
+            Prefetch('lines', queryset=license_lines_qs, to_attr='license_lines')
+        ).distinct()
     else:
+        incentive_lines_qs = IncentiveTradeLine.objects.filter(incentive_license=license_obj)
         trades = LicenseTrade.objects.filter(
             license_type='INCENTIVE',
             incentive_lines__incentive_license=license_obj
-        ).prefetch_related('incentive_lines', 'from_company', 'to_company').distinct()
+        ).select_related('from_company', 'to_company').prefetch_related(
+            Prefetch('incentive_lines', queryset=incentive_lines_qs, to_attr='license_incentive_lines')
+        ).distinct()
 
     # Process each trade
     for trade in trades:
@@ -327,15 +449,21 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
         # Calculate total CIF for this trade in this license
         total_cif = Decimal('0.00')
 
+        # SION norms are DFIA-only: incentive trade lines reference an
+        # IncentiveLicense directly and carry no licence items, hence no norms.
+        sion_norms = ''
+
         if license_type == 'DFIA':
-            lines = trade.lines.filter(sr_number__license=license_obj)
-            for line in lines:
+            # Prefetched above, already filtered to this license.
+            for line in trade.license_lines:
                 # Extract CIF value (with currency conversion if needed)
                 line_cif = _extract_line_cif(line)
                 total_cif += line_cif
+            sion_norms = _extract_sion_norms(trade.license_lines)
         else:
-            # Incentive license
-            incentive_line = trade.incentive_lines.filter(incentive_license=license_obj).first()
+            # Incentive license (prefetched, already filtered to this license)
+            lines = trade.license_incentive_lines
+            incentive_line = lines[0] if lines else None
             if incentive_line:
                 total_cif = to_decimal(incentive_line.license_value, DEC_0)
 
@@ -348,6 +476,7 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
             'company_id': company_id,
             'company_name': company_name,
             'amount': total_cif,
+            'sion_norms': sion_norms,
         })
 
     # Sort deterministically: date ASC, then trade ID ASC
@@ -375,11 +504,57 @@ def _extract_line_cif(line) -> Decimal:
         return DEC_0
 
 
-def _get_company_name_for_id(company_id: int) -> str:
-    """Fetch company name by ID."""
+def _extract_sion_norms(lines) -> str:
+    """
+    THE single SION-norm resolution for the ledger: the norms of the licence
+    items billed on one trade.
+
+    **This is a PRESENTATION-LAYER DERIVATION, not a ledger fact.** There is no
+    transaction→norm relationship in the data model: `LicenseImportItemsModel`
+    (what a trade line bills, via `sr_number`) has no norm field at all. The
+    norm lives two hops away on the item NAME:
+
+        line.sr_number (LicenseImportItemsModel)
+          -> .items (M2M ItemNameModel)
+            -> .sion_norm_class (SionNormClassModel).norm_class
+
+    Same traversal, dedup rule (first-seen order) and ', ' join as the legacy
+    `build_dfia_ledger_detail`/PDF ledger it replaces, so the string shape is
+    unchanged for existing consumers.
+
+    DFIA only — callers pass '' for incentive licenses. Returns '' when no
+    billed item carries a norm. Relies on the caller having prefetched
+    `sr_number__items__sion_norm_class` (see `_fetch_transactions`); without
+    that prefetch this is still correct, just query-heavy.
+    """
+    norms: List[str] = []
+    for line in lines:
+        sr_number = getattr(line, 'sr_number', None)
+        if not sr_number:
+            continue
+        for item in sr_number.items.all():
+            norm_class = getattr(item, 'sion_norm_class', None)
+            norm = getattr(norm_class, 'norm_class', None) if norm_class else None
+            if norm and norm not in norms:
+                norms.append(norm)
+    return ', '.join(norms)
+
+
+def _get_company_names_for_ids(company_ids) -> Dict[int, str]:
+    """
+    Resolve {company_id: company_name} for many companies in a SINGLE query.
+
+    Unknown/missing ids are simply absent from the returned map; callers
+    default to 'Unknown'.
+    """
+    ids = [cid for cid in company_ids if cid]
+    if not ids:
+        return {}
     try:
         from apps.core.models import CompanyModel
-        company = CompanyModel.objects.get(id=company_id)
-        return company.name
+        return {
+            row['id']: (row['name'] or 'Unknown')
+            for row in CompanyModel.objects.filter(id__in=ids).values('id', 'name')
+        }
     except Exception:
-        return 'Unknown'
+        return {}

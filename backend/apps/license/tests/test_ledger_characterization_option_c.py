@@ -45,7 +45,7 @@ from apps.core.constants import DEC_0
 from apps.core.models import CompanyModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
-from apps.trade.models import LicenseTrade, LicenseTradeLineItem
+from apps.trade.models import LicenseTrade, LicenseTradeLine
 
 User = get_user_model()
 

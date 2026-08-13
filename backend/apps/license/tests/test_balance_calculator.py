@@ -458,9 +458,19 @@ class TestItemBalanceCalculator(TestCase):
         # the shared Balance Engine helper (see
         # `get_outstanding_allotment_totals`'s docstring) rather than
         # querying AllotmentItems directly.
-        with patch.object(
-            LicenseBalanceCalculator, 'get_outstanding_allotment_totals',
-            return_value=(Decimal('200'), Decimal('0')),
+        # `calculate_direct_sale_quantity` issues a real ORM `.filter(sr_number=...)`.
+        # Under Django 6.0 `check_filterable()` calls `get_source_expressions()` on the
+        # Mock item and raises `TypeError: 'Mock' object is not iterable`. This test
+        # covers the arithmetic, not that ORM call, so stub it out.
+        with (
+            patch.object(
+                LicenseBalanceCalculator, 'get_outstanding_allotment_totals',
+                return_value=(Decimal('200'), Decimal('0')),
+            ),
+            patch.object(
+                ItemBalanceCalculator, 'calculate_direct_sale_quantity',
+                return_value=Decimal('0'),
+            ),
         ):
             # Execute
             result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
@@ -490,9 +500,15 @@ class TestItemBalanceCalculator(TestCase):
         mock_debit_qs.aggregate.return_value = {'qty__sum': Decimal('600')}
         mock_row_details.objects.filter.return_value = mock_debit_qs
 
-        with patch.object(
-            LicenseBalanceCalculator, 'get_outstanding_allotment_totals',
-            return_value=(Decimal('500'), Decimal('0')),
+        with (
+            patch.object(
+                LicenseBalanceCalculator, 'get_outstanding_allotment_totals',
+                return_value=(Decimal('500'), Decimal('0')),
+            ),
+            patch.object(
+                ItemBalanceCalculator, 'calculate_direct_sale_quantity',
+                return_value=Decimal('0'),
+            ),
         ):
             # Execute
             result = ItemBalanceCalculator.calculate_available_quantity(mock_item)

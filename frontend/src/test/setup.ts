@@ -34,3 +34,27 @@ if (!globalThis.sessionStorage) {
     configurable: true,
   })
 }
+
+// jsdom does not implement ResizeObserver. `cmdk` (the CommandPalette) observes
+// its list on mount, so without this any component rendering it throws
+// "ResizeObserver is not defined" before a single assertion runs. Stub it
+// globally rather than per-test so every consumer gets it.
+if (!globalThis.ResizeObserver) {
+  class ResizeObserverStub implements ResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    value: ResizeObserverStub,
+    configurable: true,
+    writable: true,
+  })
+}
+
+// jsdom also has no layout engine, so Element.scrollIntoView is missing. cmdk
+// calls it when it moves the selected item into view.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = function scrollIntoView(): void {}
+}

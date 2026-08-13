@@ -31,6 +31,10 @@ class TransactionSerializer(serializers.Serializer):
         max_digits=19, decimal_places=2, allow_null=True, required=False
     )
     display_status = serializers.CharField(required=False, allow_blank=True)
+    # Presentation metadata, NOT a ledger fact: SION norms of the licence items
+    # billed on this trade, comma-space joined ('' when none / non-DFIA).
+    # Optional + blank-able so older/partial datasets keep serializing.
+    sion_norms = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class CompanyUtilizationSerializer(serializers.Serializer):
@@ -86,14 +90,15 @@ class CanonicalLedgerSerializer(serializers.Serializer):
     company_utilizations = serializers.DictField(child=CompanyUtilizationSerializer())
     totals = TotalsSerializer()
 
-    # Backward compatibility: old field names (Phase 4C only; deprecated in Phase 4D+)
-    available_balance = serializers.SerializerMethodField()
-    db_balance = serializers.SerializerMethodField()
-
-    def get_available_balance(self, obj):
-        """Alias for license_running_balance (deprecated; for backward compat)."""
-        return obj.get("license_running_balance")
-
-    def get_db_balance(self, obj):
-        """Alias for license_running_balance (deprecated; for backward compat)."""
-        return obj.get("license_running_balance")
+    # Backward compatibility: old field names (Phase 4C only; deprecated in Phase 4D+).
+    # Declared as DecimalField (not SerializerMethodField) so the aliases are
+    # rendered IDENTICALLY to `license_running_balance` — i.e. as 2dp strings.
+    # A SerializerMethodField returned the raw Decimal, which the JSON renderer
+    # coerced to a float, so the same number was a string under one key and a
+    # float under its own alias.
+    available_balance = serializers.DecimalField(
+        max_digits=19, decimal_places=2, source="license_running_balance", read_only=True
+    )
+    db_balance = serializers.DecimalField(
+        max_digits=19, decimal_places=2, source="license_running_balance", read_only=True
+    )

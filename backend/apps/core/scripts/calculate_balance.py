@@ -1,5 +1,6 @@
 from django.db.models import Sum, Q
 
+from apps.core.constants import DEBIT
 from apps.core.utils.decimal_utils import round_decimal_down as round_down, to_float
 
 
@@ -34,12 +35,12 @@ def _get_aggregated_values(instance):
     # ------------------------------------------------------------------ #
     if 'item_details' in prefetch_cache:
         rows = prefetch_cache['item_details']
-        debited_qty = sum(float(r.qty or 0) for r in rows if r.transaction_type == 'D')
-        debited_value = sum(float(r.cif_fc or 0) for r in rows if r.transaction_type == 'D')
+        debited_qty = sum(float(r.qty or 0) for r in rows if r.transaction_type == DEBIT)
+        debited_value = sum(float(r.cif_fc or 0) for r in rows if r.transaction_type == DEBIT)
     else:
         item_agg = instance.item_details.aggregate(
-            debited_qty=Sum('qty', filter=Q(transaction_type='D')),
-            debited_value=Sum('cif_fc', filter=Q(transaction_type='D'))
+            debited_qty=Sum('qty', filter=Q(transaction_type=DEBIT)),
+            debited_value=Sum('cif_fc', filter=Q(transaction_type=DEBIT))
         )
         debited_qty = to_float(item_agg['debited_qty'])
         debited_value = to_float(item_agg['debited_value'])

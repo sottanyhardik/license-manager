@@ -165,14 +165,18 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
-from django.db.models import DecimalField, Sum, Value
-from django.db.models.functions import Coalesce
 
 from apps.core.constants import DEC_0
 from apps.core.models import ItemNameModel
 from apps.core.reports.envelope import validate_envelope
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
-from apps.trade.models import LicenseTrade, LicenseTradeLine
+from apps.license.services.license_profit import (
+    SALE_LINE_FILTERS,
+    first_purchase_by_license,
+    purchase_lines_ordered,
+    sale_totals_by_license,
+)
+from apps.trade.models import LicenseTradeLine
 
 # Mirrors the frontend's `NormCardGrid.tsx:22` convention — the four DFIA
 # conversion norms recognized by the `norm` FILTER parameter; anything else
@@ -351,29 +355,26 @@ def build_purchase_profit_report(
     # date-filtered — buying a license is a one-time event. Ordering by
     # `(license_id, invoice_date, trade_id)` means the first row seen per
     # license IS its earliest qualifying purchase — that same row's
-    # `from_company__name` is "Purchase From", with no second query. ------
-    purchase_lines = (
-        LicenseTradeLine.objects.filter(
-            sr_number__license_id__in=base_license_ids,
-            trade__direction=LicenseTrade.DIR_PURCHASE,
-            trade__linked_trade__isnull=True,
-        )
-        .order_by("sr_number__license_id", "trade__invoice_date", "trade_id")
-        .values(
-            "sr_number__license_id",
-            "trade_id",
-            "trade__invoice_date",
-            "trade__from_company__name",
-            "amount_inr",
-            "cif_fc",
-        )
-    )
+    # `from_company__name` is "Purchase From", with no second query.
+    #
+    # The FILTERS/ordering/columns now live in
+    # `apps.license.services.license_profit.purchase_lines_ordered` — the same
+    # module the License Ledger's summary block gets its Profit / Loss from —
+    # so "what counts as a qualifying external purchase line" is defined exactly
+    # once. Same SQL, same row order, same Python accumulation as before. ----
+    purchase_lines = purchase_lines_ordered(base_license_ids)
+
+    # `purchase_lines` is consumed ONCE: the money is accumulated here, and the
+    # "first qualifying purchase" fold (first purchase date + Purchase From) is
+    # delegated to `license_profit.first_purchase_by_license` — the same helper
+    # the License Ledger uses — so "earliest qualifying purchase" is defined in
+    # exactly one place. Materialised to a list first because a `.values()`
+    # queryset would otherwise re-run the SQL for the second pass.
+    purchase_rows = list(purchase_lines)
 
     purchase_amount_by_license: Dict[int, Decimal] = {}
     purchase_usd_by_license: Dict[int, Decimal] = {}
-    first_purchase_date_by_license: Dict[int, Any] = {}
-    purchase_from_by_license: Dict[int, str] = {}
-    for row in purchase_lines:
+    for row in purchase_rows:
         lid = row["sr_number__license_id"]
         purchase_amount_by_license[lid] = (
             purchase_amount_by_license.get(lid, DEC_0) + (row["amount_inr"] or DEC_0)
@@ -381,12 +382,17 @@ def build_purchase_profit_report(
         purchase_usd_by_license[lid] = (
             purchase_usd_by_license.get(lid, DEC_0) + (row["cif_fc"] or DEC_0)
         )
-        if lid not in first_purchase_date_by_license:
-            # First row seen for this license_id, given the ordering above,
-            # IS its earliest qualifying purchase trade.
-            first_purchase_date_by_license[lid] = row["trade__invoice_date"]
-            purchase_from_by_license[lid] = row["trade__from_company__name"] or ""
 
+    first_purchase = first_purchase_by_license(purchase_rows)
+    first_purchase_date_by_license: Dict[int, Any] = {
+        lid: entry["first_purchase_date"] for lid, entry in first_purchase.items()
+    }
+    purchase_from_by_license: Dict[int, str] = {
+        lid: entry["purchase_from"] for lid, entry in first_purchase.items()
+    }
+
+    # The report is scoped by FIRST purchase date — a licence belongs to the
+    # period it was acquired in, never to a later top-up purchase's period.
     qualifying_license_ids = [
         lid
         for lid, first_date in first_purchase_date_by_license.items()
@@ -404,21 +410,15 @@ def build_purchase_profit_report(
     # name)) — those dicts intentionally duplicate a multi-item-name Import
     # Item's full debit across every header it maps to, which would
     # double-count Sale Amount/Sale $ for any such license. See module
-    # docstring for the full rationale. --------------------------------
-    sale_agg = (
-        LicenseTradeLine.objects.filter(
-            sr_number__license_id__in=qualifying_license_ids,
-            trade__direction=LicenseTrade.DIR_SALE,
-            trade__linked_trade__isnull=True,
-        )
-        .values("sr_number__license_id")
-        .annotate(
-            sale_amount=Coalesce(Sum("amount_inr"), Value(DEC_0), output_field=DecimalField()),
-            sale_usd=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
-        )
-    )
-    sale_amount_by_license = {r["sr_number__license_id"]: r["sale_amount"] for r in sale_agg}
-    sale_usd_by_license = {r["sr_number__license_id"]: r["sale_usd"] for r in sale_agg}
+    # docstring for the full rationale.
+    #
+    # Delegated to `license_profit.sale_totals_by_license` — byte-for-byte the
+    # same single grouped aggregate this block used to run inline, now shared
+    # with the License Ledger summary block so Sale Amount / Sale $ /
+    # Profit / Loss cannot diverge between the two screens. ------------------
+    sale_totals = sale_totals_by_license(qualifying_license_ids)
+    sale_amount_by_license = {lid: t["sale_amount"] for lid, t in sale_totals.items()}
+    sale_usd_by_license = {lid: t["sale_usd"] for lid, t in sale_totals.items()}
 
     norms_by_license = _norms_by_license(qualifying_license_ids)
 
@@ -509,8 +509,10 @@ def build_purchase_profit_report(
     debit_lines = (
         LicenseTradeLine.objects.filter(
             sr_number__license_id__in=qualifying_license_ids,
-            trade__direction=LicenseTrade.DIR_SALE,
-            trade__linked_trade__isnull=True,
+            # Same canonical SALE-line definition as `sale_totals_by_license`
+            # above — one shared constant, so the pivot's cells and the
+            # Sale Amount column can never be filtered differently.
+            **SALE_LINE_FILTERS,
         )
         .order_by("sr_number__license_id", "trade__invoice_date", "trade_id")
         .values("sr_number_id", "sr_number__license_id", "qty_kg", "cif_fc", "amount_inr")

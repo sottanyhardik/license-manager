@@ -35,6 +35,7 @@ calculations. It is the ONLY authoritative source for ledger data. All consumers
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, Dict, List, Any
 from datetime import date as date_type
@@ -43,7 +44,10 @@ from django.db.models import Q, Sum, Value, DecimalField, Prefetch
 from django.db.models.functions import Coalesce
 
 from apps.license.domain.transaction_semantics import (
+    LEDGER_COLUMN_CREDIT,
+    LEDGER_COLUMN_DEBIT,
     TransactionSemantics,
+    ledger_column_for,
     select_display_rows,
 )
 from apps.license.models import LicenseDetailsModel, IncentiveLicense
@@ -51,6 +55,7 @@ from apps.trade.models import LicenseTrade
 from apps.core.utils.decimal_utils import to_decimal
 from apps.core.constants import DEC_0
 
+logger = logging.getLogger(__name__)
 
 DECIMAL_2DP = Decimal("0.01")
 
@@ -96,6 +101,7 @@ class CanonicalLedgerService:
                 'exporter_name': str,             # '' when unknown
                 'port_id': int or None,
                 'port_name': str,                 # '' when unknown
+                'first_purchase_date': date or None,  # canonical acquisition date
 
                 # --- balances ---
                 'opening_balance': Decimal,
@@ -152,7 +158,26 @@ class CanonicalLedgerService:
                     'total_purchases': Decimal,
                     'total_sales': Decimal,
                     'total_commission': Decimal,
-                }
+                },
+
+                # --- on-screen summary block (see _build_summary) ---
+                # Derived ENTIRELY from the display rows already selected above.
+                # Adds NO new financial concept and costs no query: its one
+                # arithmetic operation is `total_credit − total_debit`.
+                'summary': {
+                    'total_debit': Decimal,       # Σ displayed Debit column = SALE
+                    'total_credit': Decimal,      # Σ displayed Credit column = PURCHASE (+ shown OPENING)
+                    'total_debit_bill': Decimal,  # Σ same rows' bill_amount (INR)
+                    'total_credit_bill': Decimal, # Σ same rows' bill_amount (INR)
+                    'bill_currency': 'INR',
+                    'opening_balance': Decimal,   # licence metadata; NOT in the identity
+                    'opening_in_credit': bool,    # is opening already inside total_credit?
+                    'current_balance': Decimal,   # total_credit − total_debit
+                    'balance_currency': str,      # 'USD' (DFIA) | 'INR'
+                    'total_profit_loss': Decimal, # SAME number as current_balance
+                    'profit_currency': str,       # == balance_currency
+                    'profit_state': str,          # PROFIT|LOSS|NONE
+                },
             }
 
         Raises:
@@ -172,6 +197,14 @@ class CanonicalLedgerService:
             'license_id': license_id,
             'license_type': license_type,
             **metadata,
+            # The licence's canonical acquisition date, from the SAME definition
+            # the Purchase & Profit report and the ledger list's Purchase Date
+            # Range filter use. Deliberately NOT re-derived as MIN(date) over
+            # this dataset's own PURCHASE rows: the ledger includes the internal
+            # linked/mirror legs that the canonical definition excludes, so a
+            # locally-derived date could disagree with the filter that decides
+            # whether this licence appears in the list at all.
+            'first_purchase_date': _first_purchase_date_for(license_id, license_type),
             'opening_balance': Decimal('0.00'),
             'license_running_balance': Decimal('0.00'),
             'closing_balance': Decimal('0.00'),
@@ -206,7 +239,16 @@ class CanonicalLedgerService:
                 'type': 'OPENING',
                 'company_id': None,
                 'company_name': None,
+                # The opening balance is a carried-forward STATE, not a trade:
+                # there is no counterparty, no invoice and no billed item. All
+                # three stay empty rather than being back-filled from the
+                # licence — a fabricated party/bill on the opening row would be
+                # presented to a CA as a transaction that never happened.
+                'party_id': None,
+                'party_name': None,
                 'amount': opening_balance,
+                'bill_amount': None,
+                'item_names': [],
                 'is_commission': False,
                 'license_running_balance': running_balance,
                 'affects_balance': True,
@@ -271,7 +313,14 @@ class CanonicalLedgerService:
                 'type': txn_type,
                 'company_id': company_id,
                 'company_name': company_name,
+                'party_id': txn_data.get('party_id'),
+                'party_name': txn_data.get('party_name'),
                 'amount': amount,
+                # Carried through verbatim from `_fetch_transactions`: already
+                # 2dp, and deliberately NOT folded into any balance — the bill
+                # is INR while the balance is CIF USD for DFIA.
+                'bill_amount': txn_data.get('bill_amount'),
+                'item_names': txn_data.get('item_names') or [],
                 'is_commission': is_commission,
                 'license_running_balance': running_balance,
                 'company_utilization_after': company_util_after,
@@ -311,10 +360,208 @@ class CanonicalLedgerService:
         for key in dataset['totals']:
             dataset['totals'][key] = quantize_2dp(dataset['totals'][key])
 
+        # ── Screen reconciliation summary (additive; recomputes nothing) ────
+        dataset['summary'] = _build_summary(dataset)
+
         return dataset
 
 
 # ========== INTERNAL HELPERS ==========
+
+#: License types whose ledger balance is denominated in CIF USD. Everything
+#: else (Incentive-scheme licenses) carries an INR license value.
+_USD_BALANCE_LICENSE_TYPES = frozenset({'DFIA'})
+
+#: Which ledger column a row's amount belongs in — read from the SINGLE
+#: definition in `transaction_semantics.ledger_column_for`, never restated here.
+#:
+#: PURCHASE and OPENING → Credit (they add licence value);
+#: SALE → Debit (it consumes licence value).
+#:
+#: This agrees with `balance_direction`, because the column IS
+#: `balance_direction` (see `ledger_column_for`). So `total_credit` cannot
+#: disagree with a `balance_direction` of CREDIT — a contradiction the previous
+#: inverted presentation actively maintained.
+
+
+def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build the ledger `summary` block — the four figures above the transaction
+    table, and the SINGLE canonical financial result they all derive from.
+
+    ONE CALCULATION, TWO LABELS
+    ---------------------------
+    There is exactly one arithmetic operation in this function:
+
+        net_position = total_credit − total_debit
+
+    It is computed ONCE and published under BOTH `current_balance` and
+    `total_profit_loss`, because under the approved business rule they are the
+    same number. They are deliberately NOT two independent calculations that
+    happen to agree — there is nothing to drift.
+
+    ⚠ ACCOUNTING NOTE — RECORDED, NOT SILENTLY IMPLEMENTED ⚠
+    `total_profit_loss` here is the licence's UNUTILISED POSITION (licence value
+    acquired minus licence value consumed), not a realised trading margin. A
+    realised margin is `sale price − purchase cost` in INR, which is a different
+    quantity and still lives — defined exactly once — in
+    `apps.license.services.license_profit` for the Purchase & Profit report.
+    This block reports the position under the label PROFIT / LOSS because that
+    is the approved presentation for this screen. The two figures answer
+    different questions and are NOT expected to match.
+
+    WHY THE OPENING BALANCE IS NOT ADDED
+    ------------------------------------
+    `license_running_balance` is `opening + Σpurchases − Σsales`, and it
+    DOUBLE-COUNTS the licence's acquisition whenever a PURCHASE exists: the
+    `opening_balance` (Σ `export_license.cif_fc` — the licence's own face value)
+    and the PURCHASE trade that acquired that licence are the SAME economic
+    event recorded twice. Verified on real data: licence `0311055317` has
+    opening 95,464.44 and a single purchase of 95,464.44, giving a running
+    balance of 141,964.38 for a licence that only ever held 95,464.44.
+
+    Summing the DISPLAYED rows fixes this exactly, because the display rule
+    (`transaction_semantics.select_display_rows`) shows the acquisition ONCE:
+
+        PURCHASE exists  → purchase rows shown, OPENING row suppressed
+                           ⇒ acquisition counted via the purchase
+        no PURCHASE      → OPENING row shown as the starting state
+                           ⇒ acquisition counted via the opening
+
+    Either way the licence's acquisition lands in the Credit column exactly
+    once, so:
+
+        total_credit − total_debit == current_balance
+
+    holds unconditionally — no `opening_in_*` correction term, and no second
+    form of the identity. `opening_balance` is still published (unchanged) as
+    licence metadata, and `license_running_balance` is left exactly as it was
+    for the consumers that legitimately want the raw running figure.
+
+    NOTHING ELSE IS RECOMPUTED
+    --------------------------
+    The column totals are summed from the ALREADY-SELECTED display rows
+    (`display_transactions` / `opening_display`), and each row's column comes
+    from `transaction_semantics.ledger_column_for` — so the summary cannot
+    disagree with either the table it sits above or the balance semantics.
+
+    CURRENCIES
+    ----------
+    `total_debit` / `total_credit` / `opening_balance` / `current_balance` /
+    `total_profit_loss` are ALL in `balance_currency` (CIF **USD** for DFIA, INR
+    for incentive licences). `total_debit_bill` / `total_credit_bill` are in
+    `bill_currency` (**INR**) and are supplementary — never added to the
+    licence-value figures, and never used to derive profit.
+
+    Cost: ZERO queries. Every input is already in `dataset`.
+    """
+    display_rows = list(dataset.get('display_transactions') or [])
+    opening_row = dataset.get('opening_display')
+
+    # The displayed OPENING row is a Credit-column row like any other (it adds
+    # licence value); it is kept out of `display_transactions` only so the UI
+    # can render it as a starting state rather than as a transaction. For
+    # totalling purposes it is simply one more row.
+    if opening_row is not None:
+        display_rows.append(opening_row)
+
+    total_debit: Decimal = DEC_0
+    total_credit: Decimal = DEC_0
+    # Bill totals are accumulated in the SAME pass over the SAME rows, so a bill
+    # column footer can never disagree with the rows above it. Separate
+    # currency (INR); published only so the client never sums a money column.
+    total_debit_bill: Decimal = DEC_0
+    total_credit_bill: Decimal = DEC_0
+    for row in display_rows:
+        column = ledger_column_for(row.get('type'))
+        row_bill = row.get('bill_amount') or DEC_0
+        if column == LEDGER_COLUMN_CREDIT:
+            total_credit += row['amount']
+            total_credit_bill += row_bill
+        elif column == LEDGER_COLUMN_DEBIT:
+            total_debit += row['amount']
+            total_debit_bill += row_bill
+
+    total_credit = quantize_2dp(total_credit)
+    total_debit = quantize_2dp(total_debit)
+
+    # THE canonical financial result. Computed once; published twice.
+    # Signed — a negative position is reported as a negative number and as
+    # `profit_state='LOSS'`; it is never absolute-valued or hidden here.
+    net_position = quantize_2dp(total_credit - total_debit)
+
+    license_type = dataset.get('license_type')
+    balance_currency = 'USD' if license_type in _USD_BALANCE_LICENSE_TYPES else 'INR'
+
+    return {
+        'total_debit': total_debit,
+        'total_credit': total_credit,
+        # Σ of the two BILL columns, in `bill_currency` (INR) — NOT in
+        # `balance_currency`, and NOT an input to `net_position`.
+        'total_debit_bill': quantize_2dp(total_debit_bill),
+        'total_credit_bill': quantize_2dp(total_credit_bill),
+        'bill_currency': 'INR',
+        # Licence metadata, unchanged. NOT part of the identity above — see
+        # "WHY THE OPENING BALANCE IS NOT ADDED".
+        'opening_balance': dataset['opening_balance'],
+        # True when the OPENING row is on screen (and so is already inside
+        # `total_credit`). Published so no consumer re-derives the display rule.
+        'opening_in_credit': opening_row is not None,
+        'current_balance': net_position,
+        'balance_currency': balance_currency,
+        # Same object as `current_balance` — one calculation, two labels.
+        'total_profit_loss': net_position,
+        'profit_currency': balance_currency,
+        'profit_state': _profit_state(net_position),
+    }
+
+
+def _first_purchase_date_for(license_id, license_type: Optional[str]) -> Optional[date_type]:
+    """
+    The licence's canonical `first_purchase_date`, or None when it has none.
+
+    ONE query for DFIA, ZERO for incentive licences: the canonical definition is
+    expressed over `LicenseTradeLine.sr_number__license_id`, a
+    `LicenseDetailsModel` FK that does not reach `IncentiveLicense` at all (see
+    `license_profit`'s SCOPE section). Because the two models have independent id
+    sequences, asking for an incentive id would return an unrelated DFIA
+    licence's date — so incentive licences report None rather than a wrong date.
+
+    Never raises: a metadata lookup must not be able to break the ledger screen.
+    A failure degrades to None, and is logged rather than swallowed silently.
+    """
+    if license_type not in _USD_BALANCE_LICENSE_TYPES or not license_id:
+        return None
+    try:
+        from apps.license.services.license_profit import first_purchase_date_for_license
+        return first_purchase_date_for_license(license_id)
+    except Exception:  # pragma: no cover — defensive
+        logger.exception(
+            "first_purchase_date lookup failed for license_id=%s (%s); reporting None",
+            license_id,
+            license_type,
+        )
+        return None
+
+
+def _profit_state(net_position: Optional[Decimal]) -> str:
+    """
+    Decide PROFIT / LOSS / NONE in the BACKEND so no client ever branches on the
+    sign of a number (and so Web, and later PDF/Excel, all agree).
+
+    'NONE' is the exact-zero case — presented as "NO PROFIT / NO LOSS", which is
+    a real financial statement. It is NOT the same as "unknown": the position is
+    always computable (it is just Credit − Debit over rows already on screen),
+    for every licence type, so there is no unavailable case to represent.
+    """
+    if net_position is None:  # pragma: no cover — defensive
+        return 'NONE'
+    if net_position > DEC_0:
+        return 'PROFIT'
+    if net_position < DEC_0:
+        return 'LOSS'
+    return 'NONE'
+
 
 def _get_license_object(license_id: int, license_type: str):
     """
@@ -402,9 +649,16 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
     - date: date of transaction
     - id: transaction ID (for deterministic ordering)
     - type: transaction type (PURCHASE, SALE, COMMISSION, etc.)
-    - company_id: company ID (if company-scoped)
-    - company_name: company name
-    - amount: transaction amount
+    - company_id: company ID (if company-scoped) — OUR side of the trade
+    - company_name: company name — OUR side (this is what the table groups by)
+    - party_id / party_name: the COUNTERPARTY (see `_resolve_trade_sides`).
+      `None` when the relation is absent — never a fabricated stand-in.
+    - amount: transaction amount — the LICENSE value (CIF FC for DFIA)
+    - bill_amount: the actual INVOICE/BILL value in INR (Σ `amount_inr` of the
+      lines). A DIFFERENT figure from `amount`, in a DIFFERENT currency — see
+      `_extract_bill_amount`. Never assume the two are equal.
+    - item_names: list of billed licence item names, first-seen order, deduped
+      (DFIA only; [] for incentive licenses)
     - sion_norms: comma-space joined SION norms of the billed licence items
       (DFIA only; '' for incentive licenses) — presentation metadata, not a
       ledger fact
@@ -455,32 +709,28 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
         txn_date = trade.invoice_date or trade.created_at.date()
         trade_direction = trade.direction  # PURCHASE, SALE, COMMISSION_PURCHASE, COMMISSION_SALE
 
-        # Determine transaction type and company
-        if trade_direction == 'PURCHASE':
-            txn_type = 'PURCHASE'
-            company_id = trade.to_company.id if trade.to_company else None
-            company_name = trade.to_company.name if trade.to_company else 'Unknown'
-        elif trade_direction == 'SALE':
-            txn_type = 'SALE'
-            company_id = trade.from_company.id if trade.from_company else None
-            company_name = trade.from_company.name if trade.from_company else 'Unknown'
-        elif trade_direction == 'COMMISSION_PURCHASE':
-            txn_type = 'COMMISSION_PURCHASE'
-            company_id = trade.to_company.id if trade.to_company else None
-            company_name = trade.to_company.name if trade.to_company else 'Unknown'
-        elif trade_direction == 'COMMISSION_SALE':
-            txn_type = 'COMMISSION_SALE'
-            company_id = trade.from_company.id if trade.from_company else None
-            company_name = trade.from_company.name if trade.from_company else 'Unknown'
-        else:
+        # Determine transaction type, OUR company, and the COUNTERPARTY.
+        # Both sides come from `_resolve_trade_sides` so "which end of the trade
+        # is us" is decided exactly once for all four directions.
+        if trade_direction not in _TRADE_DIRECTION_SIDES:
             continue  # Unknown trade type
+        txn_type = trade_direction
+        own, party = _resolve_trade_sides(trade, trade_direction)
+        company_id = own.id if own else None
+        company_name = own.name if own else 'Unknown'
+        # Absent counterparty stays None — the UI renders 'N/A'. Do NOT fall
+        # back to the licence holder or to `company_name`: that would silently
+        # present our own company as the party we traded with.
+        party_id = party.id if party else None
+        party_name = (party.name if party else None) or None
 
         # Calculate total CIF for this trade in this license
         total_cif = Decimal('0.00')
 
-        # SION norms are DFIA-only: incentive trade lines reference an
-        # IncentiveLicense directly and carry no licence items, hence no norms.
+        # SION norms and item names are DFIA-only: incentive trade lines
+        # reference an IncentiveLicense directly and carry no licence items.
         sion_norms = ''
+        item_names: List[str] = []
 
         if license_type == 'DFIA':
             # Prefetched above, already filtered to this license.
@@ -489,12 +739,15 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
                 line_cif = _extract_line_cif(line)
                 total_cif += line_cif
             sion_norms = _extract_sion_norms(trade.license_lines)
+            item_names = _extract_item_names(trade.license_lines)
+            bill_amount = _extract_bill_amount(trade.license_lines)
         else:
             # Incentive license (prefetched, already filtered to this license)
             lines = trade.license_incentive_lines
             incentive_line = lines[0] if lines else None
             if incentive_line:
                 total_cif = to_decimal(incentive_line.license_value, DEC_0)
+            bill_amount = _extract_bill_amount(lines)
 
         # Include transaction even if zero-amount (per Scenario 7: zero txns visible but not counted)
         # Zero-amount transactions will not affect balance since amount=0
@@ -504,7 +757,11 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
             'type': txn_type,
             'company_id': company_id,
             'company_name': company_name,
+            'party_id': party_id,
+            'party_name': party_name,
             'amount': total_cif,
+            'bill_amount': bill_amount,
+            'item_names': item_names,
             'sion_norms': sion_norms,
         })
 
@@ -512,6 +769,97 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
     transactions.sort(key=lambda x: (x['date'], x['id']))
 
     return transactions
+
+
+#: Which end of a `LicenseTrade` is OUR company and which is the COUNTERPARTY,
+#: per trade direction: ``{direction: (own_attr, party_attr)}``.
+#
+#  A LicenseTrade always runs `from_company` → `to_company`. Which end is "us"
+#  depends on the direction:
+#
+#      direction             own (grouped by)  party (Particulars)
+#      --------------------  ----------------  -------------------
+#      PURCHASE              to_company        from_company   (we bought FROM)
+#      SALE                  from_company      to_company     (we sold TO)
+#      COMMISSION_PURCHASE   to_company        from_company
+#      COMMISSION_SALE       from_company      to_company
+#
+#  The ledger table GROUPS BY the `own` side, so repeating it in the row's
+#  Particulars cell would just echo the group header. Particulars shows the
+#  `party` — the company on the other side of the trade.
+_TRADE_DIRECTION_SIDES: Dict[str, tuple] = {
+    'PURCHASE': ('to_company', 'from_company'),
+    'SALE': ('from_company', 'to_company'),
+    'COMMISSION_PURCHASE': ('to_company', 'from_company'),
+    'COMMISSION_SALE': ('from_company', 'to_company'),
+}
+
+
+def _resolve_trade_sides(trade, direction: str) -> tuple:
+    """
+    ``(own_company, counterparty)`` for one trade — either may be None.
+
+    Both FKs are `select_related` by `_fetch_transactions`, so this touches no
+    database. Direction is validated by the caller against
+    `_TRADE_DIRECTION_SIDES`.
+    """
+    own_attr, party_attr = _TRADE_DIRECTION_SIDES[direction]
+    return getattr(trade, own_attr, None), getattr(trade, party_attr, None)
+
+
+def _extract_item_names(lines) -> List[str]:
+    """
+    The licence item names billed on one trade — deduped, first-seen order.
+
+    Same traversal as `_extract_sion_norms` (the norm hangs off the item), so it
+    rides the SAME `sr_number__items__sion_norm_class` prefetch and costs no
+    extra query:
+
+        line.sr_number (LicenseImportItemsModel) -> .items (M2M ItemNameModel).name
+
+    Returned as a LIST, not a joined string: a trade legitimately bills several
+    items, and the UI must be able to show "+2 more" / a tooltip without
+    re-splitting a string. Returning a list also keeps the caller from being
+    tempted to duplicate the transaction row per item — one trade is ONE ledger
+    row regardless of how many items it bills.
+
+    DFIA only (callers pass [] for incentive licenses). Empty when no billed
+    item resolves to a name.
+    """
+    names: List[str] = []
+    for line in lines:
+        sr_number = getattr(line, 'sr_number', None)
+        if not sr_number:
+            continue
+        for item in sr_number.items.all():
+            name = (getattr(item, 'name', '') or '').strip()
+            if name and name not in names:
+                names.append(name)
+    return names
+
+
+def _extract_bill_amount(lines) -> Decimal:
+    """
+    The actual INVOICE / BILL value of one trade, in **INR** — Σ `amount_inr`
+    over the trade's lines for this licence.
+
+    ⚠ NOT THE SAME NUMBER AS `amount` ⚠
+    `amount` is the LICENCE value consumed by the trade (CIF FC — USD — for
+    DFIA, `license_value` for incentive). `bill_amount` is what was actually
+    invoiced, in INR. They are different quantities in different currencies and
+    must never be substituted for one another, summed together, or assumed
+    equal — a licence can be sold at any margin over the CIF it releases.
+
+    `amount_inr` exists on BOTH `LicenseTradeLine` and `IncentiveTradeLine`
+    (same name, same meaning), so this one helper serves both branches.
+
+    Returns `DEC_0` for a trade with no lines — an unbilled trade, not a
+    missing-data error.
+    """
+    total = DEC_0
+    for line in lines or ():
+        total += to_decimal(getattr(line, 'amount_inr', None), DEC_0)
+    return quantize_2dp(total)
 
 
 def _extract_line_cif(line) -> Decimal:

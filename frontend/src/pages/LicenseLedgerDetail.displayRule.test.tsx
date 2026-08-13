@@ -111,9 +111,12 @@ beforeEach(() => {
 });
 
 // ─── Scoped queries ─────────────────────────────────────────────────────────
-// "N/A" also legitimately appears in the licence header (SION Norms), and
-// company names also appear in each row's Particulars cell — so every
-// grouping assertion is scoped to the company-group headings themselves.
+// "N/A" legitimately appears in the licence header (SION Norms) and in the
+// Particulars cell of any row whose counterparty is absent — these fixtures
+// carry no `party_name`, so every row here renders "N/A" there. Grouping
+// assertions are therefore scoped to the company-group headings themselves.
+// (Particulars shows the COUNTERPARTY, never the group's own company; the
+// party/items/bill columns are covered in LicenseLedgerDetail.summary.test.tsx.)
 
 const companyGroupNames = (): string[] =>
     screen.queryAllByTestId("ledger-company-group").map((el) => el.textContent?.trim() ?? "");

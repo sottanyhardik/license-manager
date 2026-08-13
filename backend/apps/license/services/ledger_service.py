@@ -14,16 +14,29 @@ from django.db.models.functions import Coalesce
 from django.utils.dateparse import parse_date
 
 from apps.license.models import LicenseDetailsModel, IncentiveLicense
+from apps.license.services.ledger_accounting import (
+    ALL_LICENSE_TYPES,
+    DFIA_LICENSE_TYPE,
+    INCENTIVE_LICENSE_TYPE,
+    INCENTIVE_LICENSE_TYPES,
+    INCENTIVE_SUBTYPES,
+    LedgerFilterSpec,
+    LicenseLedgerAccountingService,
+    ReportingPeriod,
+    license_index,
+    net_of,
+    parse_decimal,
+    parse_int,
+    text_param,
+)
 
 logger = logging.getLogger(__name__)
 
-DFIA_LICENSE_TYPE = "DFIA"
-INCENTIVE_LICENSE_TYPE = "INCENTIVE"
-INCENTIVE_SUBTYPES = ("RODTEP", "ROSTL", "MEIS")
-INCENTIVE_LICENSE_TYPES = frozenset({INCENTIVE_LICENSE_TYPE, *INCENTIVE_SUBTYPES})
-ALL_LICENSE_TYPES = frozenset({"ALL", DFIA_LICENSE_TYPE, *INCENTIVE_LICENSE_TYPES})
+# The licence-type vocabulary, the filter parsers and the reporting period are
+# all imported from `ledger_accounting` rather than restated here: this module
+# is a PRESENTATION layer over that service, and a second copy of any of them is
+# how the four ledger endpoints drifted apart in the first place.
 TRADE_DIRECTIONS = ("PURCHASE", "SALE")
-TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 DECIMAL_ZERO = Decimal("0")
 
 
@@ -47,79 +60,24 @@ def _dfia_ids_with_min_live_balance(dfia_qs, min_balance) -> list:
     return [lid for lid, bal in live_map.items() if bal >= min_balance]
 
 
-def _get_text_param(query_params, name: str, default: str = "") -> str:
-    value = query_params.get(name, default)
-    if value is None:
-        return default
-    return str(value).strip()
-
-
-def _get_license_type(query_params) -> str:
-    license_type = _get_text_param(query_params, "license_type", "ALL").upper()
-    return license_type if license_type in ALL_LICENSE_TYPES else "ALL"
-
-
-def _get_norm_param(query_params) -> str:
-    """
-    Raw SION norm class code (e.g. 'E1', 'E5', 'E132', 'PP', 'A3627' — see
-    `core.SionNormClassModel.norm_class`), same value the `/masters/sion-
-    classes/` picker and `item_pivot_report.py`'s `sion_norm` filter both
-    use (`export_license__norm_class__norm_class`) — no separate norm
-    vocabulary invented here. A norm is a DFIA (export-item) concept only:
-    Incentive licenses carry no norm class, so every caller below drops
-    Incentive results entirely once a norm filter is active, rather than
-    leaving them in unfiltered.
-    """
-    return _get_text_param(query_params, "norm")
-
-
-def _get_purchase_status_param(query_params) -> str:
-    """
-    Raw `core.PurchaseStatus.code` (e.g. 'GE', 'MI', 'OT', 'LM', 'LG' — see
-    that model), same vocabulary `item_report.py`/`planned_report.py`/
-    `item_pivot_report.py`/`allotment/views_actions.py` already filter by
-    (`purchase_status__code[__in]=...`). A DFIA-only concept — `Incentive
-    License` carries no `purchase_status` field — so every caller below
-    drops Incentive results entirely once this filter is active, exactly
-    like `_get_norm_param`.
-    """
-    return _get_text_param(query_params, "purchase_status")
-
-
-def _get_bool_param(query_params, name: str, *, default: bool = False) -> bool:
-    value = query_params.get(name)
-    if value is None:
-        return default
-    return str(value).strip().lower() in TRUE_VALUES
-
-
-def _parse_decimal(value) -> Decimal | None:
-    if value in (None, ""):
-        return None
-    try:
-        parsed = Decimal(str(value).strip())
-    except (InvalidOperation, TypeError, ValueError):
-        return None
-    return parsed if parsed.is_finite() else None
-
-
-def _parse_int(value) -> int | None:
-    if value in (None, ""):
-        return None
-    try:
-        return int(str(value).strip())
-    except (TypeError, ValueError):
-        return None
-
-
-def _parse_iso_date(value) -> date | None:
-    if value in (None, ""):
-        return None
-    try:
-        return parse_date(str(value).strip())
-    except ValueError:
-        return None
-
+# ---------------------------------------------------------------------------
+# THE ONE FILTER + ACCOUNTING PIPELINE
+#
+# Every ledger endpoint in this module — the list, `summary`, `license_wise` and
+# `company_wise` — is built from `_ledger_dataset()` below. They differ ONLY in
+# how they group and label its rows.
+#
+# This is the module's central invariant, and it is what the Module 05 audit
+# exists to protect. Before it, each endpoint re-read the query string and each
+# disagreed with the others about at least one filter: `company_wise` read
+# nothing but `search`, `license_wise` filtered the whole licence population by
+# TRANSACTION date (so a licence held but quiet in the window vanished), and the
+# list and summary applied the company filter with different role semantics.
+#
+# Nothing in this file parses a filter, compares a date to a licence or a trade,
+# or computes a money figure. `ledger_accounting` owns all of it — see that
+# module's docstring for the rules and the worked examples.
+# ---------------------------------------------------------------------------
 
 def _as_decimal(value) -> Decimal:
     return value if value is not None else DECIMAL_ZERO
@@ -147,13 +105,288 @@ def get_sold_status(total, balance) -> str:
 
 
 # ---------------------------------------------------------------------------
+# The shared pipeline: filters -> eligible licences -> canonical activity
+# ---------------------------------------------------------------------------
+
+def _base_license_querysets(spec: LedgerFilterSpec):
+    """
+    Both families narrowed by the CHEAP COLUMN filters — everything that can be
+    answered from the licence row itself, before any accounting runs.
+
+    Order matters only for cost: these run first so the eligibility and activity
+    queries downstream see the smallest possible id set.
+    """
+    dfia_qs = LicenseDetailsModel.objects.select_related('exporter', 'port').all()
+    incentive_qs = IncentiveLicense.objects.select_related('exporter', 'port_code').all()
+
+    if spec.active_only:
+        dfia_qs = dfia_qs.filter(flags__is_expired=False)
+        incentive_qs = incentive_qs.filter(
+            is_active=True, license_expiry_date__gte=timezone.now().date()
+        )
+
+    if spec.exporter_id:
+        dfia_qs = dfia_qs.filter(exporter_id=spec.exporter_id)
+        incentive_qs = incentive_qs.filter(exporter_id=spec.exporter_id)
+
+    if spec.min_balance is not None:
+        # BL-LEDGER-02: DFIA balance is resolved LIVE, never from the stale
+        # denormalized column.
+        dfia_qs = dfia_qs.filter(id__in=_dfia_ids_with_min_live_balance(dfia_qs, spec.min_balance))
+        incentive_qs = incentive_qs.filter(balance_value__gte=spec.min_balance)
+
+    # `norm` and `purchase_status` are DFIA-only columns, so the whole Incentive
+    # family is dropped rather than left silently unfiltered — see
+    # `LedgerFilterSpec.drops_incentive_licenses`.
+    if spec.norm:
+        dfia_qs = dfia_qs.filter(export_license__norm_class__norm_class=spec.norm).distinct()
+    if spec.purchase_status:
+        dfia_qs = dfia_qs.filter(purchase_status__code=spec.purchase_status)
+    if spec.drops_incentive_licenses:
+        incentive_qs = IncentiveLicense.objects.none()
+
+    if spec.search_terms:
+        dfia_qs, incentive_qs = _apply_search(spec, dfia_qs, incentive_qs)
+
+    return _narrow_to_license_type(spec, dfia_qs, incentive_qs)
+
+
+def _apply_search(spec: LedgerFilterSpec, dfia_qs, incentive_qs):
+    """
+    The ``search`` box, applied to the LICENCE — one substring term matches a
+    licence number or an exporter name; several comma-separated terms are exact
+    licence numbers (see `LedgerFilterSpec.search_terms`).
+
+    Matching licences rather than trades is deliberate: searching a licence
+    number must not also decide which of that licence's transactions are in the
+    period. Only the reporting period does that.
+    """
+    terms = spec.search_terms
+    if len(terms) == 1:
+        term = terms[0]
+        match = Q(license_number__icontains=term) | Q(exporter__name__icontains=term)
+    else:
+        match = Q(license_number__in=terms)
+    return dfia_qs.filter(match), incentive_qs.filter(match)
+
+
+def _narrow_to_license_type(spec: LedgerFilterSpec, dfia_qs, incentive_qs):
+    """Drop the family the ``license_type`` filter excludes, at queryset level."""
+    if spec.license_type == DFIA_LICENSE_TYPE:
+        return dfia_qs, IncentiveLicense.objects.none()
+    if spec.license_type in INCENTIVE_LICENSE_TYPES:
+        if spec.license_type != INCENTIVE_LICENSE_TYPE:
+            incentive_qs = incentive_qs.filter(license_type=spec.license_type)
+        return LicenseDetailsModel.objects.none(), incentive_qs
+    return dfia_qs, incentive_qs
+
+
+def _company_scoped_licenses(spec: LedgerFilterSpec, dfia_qs, incentive_qs):
+    """
+    Narrow to the licences this company actually traded, in the ROLE the grids
+    group by: buyer of a purchase, seller of a sale.
+
+    The same rule `_own_and_party` applies inside the accounting service, so the
+    licence set and the transactions listed under it agree. The previous
+    "either side of the trade" filter admitted licences where the selected
+    company was only the counterparty — the diagnosed NEELKANTH IMPEX /
+    LABDHI GLOBAL LLP defect — and it disagreed with the grids, which never
+    grouped those trades under the selected company anyway.
+    """
+    from apps.trade.models import LicenseTrade
+
+    if not spec.company_id:
+        return dfia_qs, incentive_qs
+
+    role = (
+        Q(direction=LicenseTrade.DIR_PURCHASE, to_company_id=spec.company_id)
+        | Q(direction=LicenseTrade.DIR_SALE, from_company_id=spec.company_id)
+    )
+    dfia_ids = (
+        LicenseTrade.objects.filter(role, license_type=DFIA_LICENSE_TYPE)
+        .values_list('lines__sr_number__license_id', flat=True).distinct()
+    )
+    inc_ids = (
+        LicenseTrade.objects.filter(role, license_type=INCENTIVE_LICENSE_TYPE)
+        .values_list('incentive_lines__incentive_license_id', flat=True).distinct()
+    )
+    return dfia_qs.filter(id__in=dfia_ids), incentive_qs.filter(id__in=inc_ids)
+
+
+def _ledger_dataset(query_params, *, with_index: bool = True) -> dict:
+    """
+    THE License Ledger dataset: one parse, one licence set, one activity map.
+
+    Returns::
+
+        {
+          'spec':         LedgerFilterSpec,   # the parsed filters
+          'period':       ReportingPeriod,
+          'dfia_qs' / 'incentive_qs',         # the eligible licences, per family
+          'activity':     {(family, id): entry},   # canonical accounting
+          'index':        {(family, id): labels},  # license_number / date / type
+          'totals':       grand totals over `activity`,
+        }
+
+    Order of operations is the one fixed in `ledger_accounting`'s section 4 and
+    is not negotiable per endpoint:
+
+        column filters -> ELIGIBILITY -> company scope -> PERIOD ACTIVITY
+
+    The company scope lands AFTER eligibility so it can never influence a
+    first-purchase decision, and the period lands last so it can never remove a
+    licence — only move its transactions between opening and activity.
+    """
+    spec = LedgerFilterSpec.from_query_params(query_params)
+    if spec.company_id is None and text_param(query_params, 'company'):
+        logger.warning("Invalid company_id: %s", query_params.get('company'))
+
+    dfia_qs, incentive_qs = _base_license_querysets(spec)
+    dfia_qs, incentive_qs = LicenseLedgerAccountingService.apply_license_eligibility(
+        dfia_qs, incentive_qs, spec
+    )
+    dfia_qs, incentive_qs = _company_scoped_licenses(spec, dfia_qs, incentive_qs)
+
+    dfia_ids = list(dfia_qs.values_list('id', flat=True))
+    incentive_ids = list(incentive_qs.values_list('id', flat=True))
+
+    activity = LicenseLedgerAccountingService.build_period_activity(
+        dfia_ids=dfia_ids,
+        incentive_ids=incentive_ids,
+        period=spec.period,
+        company_id=spec.company_id,
+    )
+
+    return {
+        'spec': spec,
+        'period': spec.period,
+        'dfia_qs': dfia_qs,
+        'incentive_qs': incentive_qs,
+        'dfia_ids': dfia_ids,
+        'incentive_ids': incentive_ids,
+        'activity': activity,
+        'index': license_index(dfia_ids, incentive_ids) if with_index else {},
+        'totals': _totals_from_activity(activity.values()),
+    }
+
+
+def _totals_from_activity(entries) -> dict:
+    """
+    Grand totals over canonical entries, summed as raw Decimals so rounding
+    happens once, at the edge.
+
+    ``profit_loss`` is `calculate_profit_loss` applied to the two published
+    sums — never a sum of per-licence profits, which would round twice and could
+    drift from ``credit_bill - debit_bill``.
+    """
+    credit_bill = DECIMAL_ZERO
+    debit_bill = DECIMAL_ZERO
+    opening_position = DECIMAL_ZERO
+    for entry in entries:
+        credit_bill += entry['credit_bill']
+        debit_bill += entry['debit_bill']
+        opening_position += entry['opening_position']
+    return {
+        'credit_bill': credit_bill,
+        'debit_bill': debit_bill,
+        'profit_loss': LicenseLedgerAccountingService.calculate_profit_loss(
+            credit_bill, debit_bill
+        ),
+        'opening_position': opening_position,
+        'closing_position': opening_position + net_of(credit_bill, debit_bill),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Canonical period money, projected onto a presentation row
+# ---------------------------------------------------------------------------
+
+def _activity_for(activity, *, dfia_ids=(), incentive_ids=()) -> dict:
+    """
+    Return the caller's canonical activity map, or build a LIFETIME one.
+
+    The fallback exists for the callers that legitimately have no reporting
+    period — `search_licenses`, the viewset's single-licence detail row, and any
+    exporter that prepares rows directly. It is the unbounded period, which by
+    construction gives zero opening and whole-history movement, so those callers
+    see exactly what they saw before periods existed. It is never a different
+    rule, only an open one.
+    """
+    if activity is not None:
+        return activity
+    return LicenseLedgerAccountingService.build_period_activity(
+        dfia_ids=dfia_ids,
+        incentive_ids=incentive_ids,
+        period=ReportingPeriod.unbounded(),
+    )
+
+
+def _period_money(entry) -> dict:
+    """
+    The canonical INR money for one licence, as list-row keys.
+
+    `purchase_amount` / `sale_amount` keep their long-standing names and meaning
+    — Σ purchase bills, Σ sale bills — but are now scoped to the reporting
+    period, and `opening_position` / `closing_position` disclose what the period
+    carried in and out. `profit_loss` is the canonical
+    ``credit_bill - debit_bill`` and is COPIED, never recomputed here. A row with
+    no entry (a licence with no qualifying trade) reports zeros rather than being
+    dropped.
+    """
+    if not entry:
+        return {
+            'purchase_amount': 0.0,
+            'sale_amount': 0.0,
+            'profit_loss': 0.0,
+            'profit_state': 'NONE',
+            'opening_position': 0.0,
+            'closing_position': 0.0,
+        }
+    return {
+        'purchase_amount': float(entry['credit_bill']),
+        'sale_amount': float(entry['debit_bill']),
+        'profit_loss': float(entry['profit_loss']),
+        'profit_state': entry['profit_state'],
+        'opening_position': float(entry['opening_position']),
+        'closing_position': float(entry['closing_position']),
+    }
+
+
+def _iso_or_dash(value) -> str:
+    """A transaction date as the grids have always printed it: ISO, or ``'-'``."""
+    return str(value) if value else '-'
+
+
+def _iso_or_none(value):
+    return str(value) if value else None
+
+
+def _trade_row_sort_key(row):
+    """Chronological, ties broken by trade id; undated rows last, not first."""
+    return (row['invoice_date'] == '-', row['invoice_date'], row['trade_id'])
+
+
+# ---------------------------------------------------------------------------
 # Data-preparation helpers (previously private viewset methods)
 # ---------------------------------------------------------------------------
 
-def prepare_dfia_data(queryset) -> list:
+def prepare_dfia_data(queryset, activity=None) -> list:
     """
     Annotate a DFIA queryset with trade aggregates and return a list of dicts.
     Uses 2 batched group-by queries instead of 4N individual queries.
+
+    Args:
+        queryset: DFIA licences (a QuerySet or a plain list of instances).
+        activity: the canonical `build_period_activity` map. When given, the
+            money columns are that PERIOD's figures and the row also carries the
+            opening/closing position. When ``None`` this falls back to the
+            unbounded period — i.e. lifetime — which is what the callers that
+            have no period concept (`search_licenses`) want.
+
+    The INR money is never re-derived here: `purchase_amount`, `sale_amount`,
+    `profit_loss`, `opening_position` and `closing_position` all come from the
+    canonical accounting service, so this list cannot disagree with the summary
+    that totals it or with the grids that group it.
     """
     from apps.license.services.balance_calculator import LicenseBalanceCalculator
     from apps.trade.models import LicenseTrade
@@ -164,18 +397,23 @@ def prepare_dfia_data(queryset) -> list:
         return []
 
     license_ids = [lic.id for lic in licenses]
+    activity = _activity_for(activity, dfia_ids=license_ids)
 
+    # USD (CIF) movement stays a local aggregate: the canonical accounting
+    # service is denominated in INR (see its CURRENCY section), while
+    # `total_value`/`sold_value` below are the licence's own USD figures. The
+    # two currencies are reported side by side and never added.
     purchase_totals = (
         LicenseTrade.objects
         .filter(license_type=DFIA_LICENSE_TYPE, direction='PURCHASE', lines__sr_number__license_id__in=license_ids)
         .values('lines__sr_number__license_id')
-        .annotate(total_inr=Sum('lines__amount_inr'), total_usd=Sum('lines__cif_fc'))
+        .annotate(total_usd=Sum('lines__cif_fc'))
     )
     sale_totals = (
         LicenseTrade.objects
         .filter(license_type=DFIA_LICENSE_TYPE, direction='SALE', lines__sr_number__license_id__in=license_ids)
         .values('lines__sr_number__license_id')
-        .annotate(total_inr=Sum('lines__amount_inr'), total_usd=Sum('lines__cif_fc'))
+        .annotate(total_usd=Sum('lines__cif_fc'))
     )
 
     purchase_map = {r['lines__sr_number__license_id']: r for r in purchase_totals}
@@ -192,13 +430,11 @@ def prepare_dfia_data(queryset) -> list:
         pur_row = purchase_map.get(license.id, {})
         sal_row = sale_map.get(license.id, {})
 
-        purchase_amount_inr = float(pur_row.get('total_inr') or 0)
         purchase_amount_usd = float(pur_row.get('total_usd') or 0)
-        sale_amount_inr = float(sal_row.get('total_inr') or 0)
         sale_amount_usd = float(sal_row.get('total_usd') or 0)
 
-        profit_loss = sale_amount_inr - purchase_amount_inr
         balance_usd = float(balance_map.get(license.id, DECIMAL_ZERO))
+        entry = activity.get((DFIA_LICENSE_TYPE, license.id))
 
         data.append({
             'id': license.id,
@@ -212,20 +448,21 @@ def prepare_dfia_data(queryset) -> list:
             'total_value': purchase_amount_usd,
             'balance_value': balance_usd,
             'sold_value': sale_amount_usd,
-            'purchase_amount': purchase_amount_inr,
-            'sale_amount': sale_amount_inr,
-            'profit_loss': profit_loss,
             'currency': 'USD',
             'is_expired': license.is_expired,
             'is_active': not license.is_expired,
             'sold_status': get_sold_status(purchase_amount_usd, balance_usd),
+            **_period_money(entry),
         })
     return data
 
 
-def prepare_incentive_data(queryset) -> list:
+def prepare_incentive_data(queryset, activity=None) -> list:
     """
     Annotate an Incentive queryset with trade aggregates and return a list of dicts.
+
+    ``activity`` has the same contract as in `prepare_dfia_data`: the canonical
+    period money, or ``None`` for the lifetime view.
     """
     from apps.trade.models import LicenseTrade
 
@@ -235,7 +472,10 @@ def prepare_incentive_data(queryset) -> list:
 
     license_ids = [lic.id for lic in licenses]
     today = timezone.now().date()
+    activity = _activity_for(activity, incentive_ids=license_ids)
 
+    # `license_value` movement — the licence's own value, reported alongside the
+    # canonical INR money below.
     purchase_totals = (
         LicenseTrade.objects
         .filter(
@@ -244,7 +484,7 @@ def prepare_incentive_data(queryset) -> list:
             incentive_lines__incentive_license_id__in=license_ids,
         )
         .values('incentive_lines__incentive_license_id')
-        .annotate(total_inr=Sum('incentive_lines__amount_inr'), total_value=Sum('incentive_lines__license_value'))
+        .annotate(total_value=Sum('incentive_lines__license_value'))
     )
     sale_totals = (
         LicenseTrade.objects
@@ -254,7 +494,7 @@ def prepare_incentive_data(queryset) -> list:
             incentive_lines__incentive_license_id__in=license_ids,
         )
         .values('incentive_lines__incentive_license_id')
-        .annotate(total_inr=Sum('incentive_lines__amount_inr'), total_value=Sum('incentive_lines__license_value'))
+        .annotate(total_value=Sum('incentive_lines__license_value'))
     )
 
     purchase_map = {r['incentive_lines__incentive_license_id']: r for r in purchase_totals}
@@ -265,12 +505,9 @@ def prepare_incentive_data(queryset) -> list:
         pur_row = purchase_map.get(license.id, {})
         sal_row = sale_map.get(license.id, {})
 
-        purchase_amount_inr = float(pur_row.get('total_inr') or 0)
         purchase_value_inr = float(pur_row.get('total_value') or 0)
-        sale_amount_inr = float(sal_row.get('total_inr') or 0)
         sale_value_inr = float(sal_row.get('total_value') or 0)
-
-        profit_loss = sale_amount_inr - purchase_amount_inr
+        entry = activity.get((INCENTIVE_LICENSE_TYPE, license.id))
         # `balance_value` is the authoritative, signal-maintained
         # `IncentiveLicense.balance_value` field (`license_value -
         # sold_value`, kept in sync by `recompute_totals` on every trade
@@ -290,13 +527,11 @@ def prepare_incentive_data(queryset) -> list:
             'total_value': purchase_value_inr,
             'balance_value': balance_inr,
             'sold_value': sale_value_inr,
-            'purchase_amount': purchase_amount_inr,
-            'sale_amount': sale_amount_inr,
-            'profit_loss': profit_loss,
             'currency': 'INR',
             'is_expired': license.license_expiry_date < today if license.license_expiry_date else False,
             'is_active': license.is_active,
             'sold_status': get_sold_status(purchase_value_inr, balance_inr),
+            **_period_money(entry),
         })
     return data
 
@@ -335,94 +570,20 @@ def build_license_queryset(query_params) -> list:
     ``LicenseLedgerViewSet.get_queryset()``.
 
     Accepts a dict-like ``query_params`` (e.g. ``request.query_params``).
+
+    A pure PRESENTATION pass over `_ledger_dataset`: the licence set and every
+    money column come from the canonical service, so the list, the summary that
+    totals it and the two grids that regroup it are all reading one result.
     """
-    from apps.trade.models import LicenseTrade
+    dataset = _ledger_dataset(query_params, with_index=False)
+    activity = dataset['activity']
 
-    license_type = _get_license_type(query_params)
-    min_balance = _parse_decimal(_get_text_param(query_params, 'min_balance'))
-    exporter_id = _parse_int(_get_text_param(query_params, 'exporter'))
-    company_id = _parse_int(_get_text_param(query_params, 'company'))
-    no_purchases = _get_bool_param(query_params, 'no_purchases')
-    is_active_only = _get_bool_param(query_params, 'active_only', default=True)
-    purchase_date_from = _parse_iso_date(_get_text_param(query_params, 'purchase_date_from'))
-    purchase_date_to = _parse_iso_date(_get_text_param(query_params, 'purchase_date_to'))
-    norm = _get_norm_param(query_params)
-    purchase_status = _get_purchase_status_param(query_params)
-
-    dfia_qs = LicenseDetailsModel.objects.select_related('exporter', 'port').all()
-    incentive_qs = IncentiveLicense.objects.select_related('exporter', 'port_code').all()
-
-    if is_active_only:
-        dfia_qs = dfia_qs.filter(flags__is_expired=False)
-        incentive_qs = incentive_qs.filter(
-            is_active=True, license_expiry_date__gte=timezone.now().date()
-        )
-
-    if exporter_id:
-        dfia_qs = dfia_qs.filter(exporter_id=exporter_id)
-        incentive_qs = incentive_qs.filter(exporter_id=exporter_id)
-
-    if min_balance is not None:
-        dfia_qs = dfia_qs.filter(id__in=_dfia_ids_with_min_live_balance(dfia_qs, min_balance))
-        incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
-
-    if norm:
-        dfia_qs = dfia_qs.filter(export_license__norm_class__norm_class=norm).distinct()
-        incentive_qs = incentive_qs.none()
-
-    if purchase_status:
-        dfia_qs = dfia_qs.filter(purchase_status__code=purchase_status)
-        incentive_qs = incentive_qs.none()
-
-    if purchase_date_from or purchase_date_to:
-        dfia_pf: dict = {}
-        inc_pf: dict = {}
-        for param, key in [(purchase_date_from, 'invoice_date__gte'), (purchase_date_to, 'invoice_date__lte')]:
-            if param:
-                dfia_pf[key] = param
-                inc_pf[key] = param
-        if dfia_pf:
-            ids = LicenseTrade.objects.filter(
-                license_type=DFIA_LICENSE_TYPE, direction='PURCHASE', **dfia_pf
-            ).values_list('lines__sr_number__license_id', flat=True).distinct()
-            dfia_qs = dfia_qs.filter(id__in=ids)
-        if inc_pf:
-            ids = LicenseTrade.objects.filter(
-                license_type=INCENTIVE_LICENSE_TYPE, direction='PURCHASE', **inc_pf
-            ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
-            incentive_qs = incentive_qs.filter(id__in=ids)
-
-    if company_id:
-        dfia_ids = LicenseTrade.objects.filter(
-            Q(from_company_id=company_id) | Q(to_company_id=company_id), license_type=DFIA_LICENSE_TYPE
-        ).values_list('lines__sr_number__license_id', flat=True).distinct()
-        inc_ids = LicenseTrade.objects.filter(
-            Q(from_company_id=company_id) | Q(to_company_id=company_id), license_type=INCENTIVE_LICENSE_TYPE
-        ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
-        dfia_qs = dfia_qs.filter(id__in=dfia_ids)
-        incentive_qs = incentive_qs.filter(id__in=inc_ids)
-    elif query_params.get('company'):
-        logger.warning("Invalid company_id: %s", query_params.get('company'))
-
-    if no_purchases:
-        dfia_with = LicenseTrade.objects.filter(
-            license_type=DFIA_LICENSE_TYPE, direction='PURCHASE'
-        ).values_list('lines__sr_number__license_id', flat=True).distinct()
-        inc_with = LicenseTrade.objects.filter(
-            license_type=INCENTIVE_LICENSE_TYPE, direction='PURCHASE'
-        ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
-        dfia_qs = dfia_qs.exclude(id__in=dfia_with)
-        incentive_qs = incentive_qs.exclude(id__in=inc_with)
-
-    if license_type == DFIA_LICENSE_TYPE:
-        return prepare_dfia_data(dfia_qs)
-    if license_type in INCENTIVE_LICENSE_TYPES:
-        if license_type != INCENTIVE_LICENSE_TYPE:
-            incentive_qs = incentive_qs.filter(license_type=license_type)
-        return prepare_incentive_data(incentive_qs)
-    combined = list(prepare_dfia_data(dfia_qs)) + list(prepare_incentive_data(incentive_qs))
-    combined.sort(key=lambda x: x.get('license_date') or date.min, reverse=True)
-    return combined
+    rows = (
+        list(prepare_dfia_data(dataset['dfia_qs'], activity=activity))
+        + list(prepare_incentive_data(dataset['incentive_qs'], activity=activity))
+    )
+    rows.sort(key=lambda x: x.get('license_date') or date.min, reverse=True)
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -435,82 +596,16 @@ def get_ledger_summary(query_params) -> dict:
 
     Accepts a dict-like object (e.g. ``request.query_params``).
     Returns a plain dict suitable for ``Response(…)``.
+
+    A TOTAL OF THE LIST, not a second opinion about it: the licence set and the
+    activity map are the identical `_ledger_dataset` result the list rows are
+    built from, so ``total_licenses`` counts exactly the rows the grid shows and
+    the money columns sum exactly their values.
     """
-    from apps.trade.models import LicenseTrade
-
-    company_id = _parse_int(_get_text_param(query_params, 'company'))
-    license_type = _get_license_type(query_params)
-    is_active_only = _get_bool_param(query_params, 'active_only', default=True)
-    min_balance = _parse_decimal(_get_text_param(query_params, 'min_balance'))
-    purchase_date_from = _parse_iso_date(_get_text_param(query_params, 'purchase_date_from'))
-    purchase_date_to = _parse_iso_date(_get_text_param(query_params, 'purchase_date_to'))
-    norm = _get_norm_param(query_params)
-    purchase_status = _get_purchase_status_param(query_params)
-
-    # Base querysets
-    if is_active_only:
-        dfia_qs = LicenseDetailsModel.objects.filter(flags__is_expired=False)
-        incentive_qs = IncentiveLicense.objects.filter(
-            is_active=True, license_expiry_date__gte=timezone.now().date()
-        )
-    else:
-        dfia_qs = LicenseDetailsModel.objects.all()
-        incentive_qs = IncentiveLicense.objects.all()
-
-    if min_balance is not None:
-        dfia_qs = dfia_qs.filter(id__in=_dfia_ids_with_min_live_balance(dfia_qs, min_balance))
-        incentive_qs = incentive_qs.filter(balance_value__gte=min_balance)
-
-    if norm:
-        dfia_qs = dfia_qs.filter(export_license__norm_class__norm_class=norm).distinct()
-        incentive_qs = IncentiveLicense.objects.none()
-
-    if purchase_status:
-        dfia_qs = dfia_qs.filter(purchase_status__code=purchase_status)
-        incentive_qs = IncentiveLicense.objects.none()
-
-    # Date-range filter on license IDs via trade dates
-    if purchase_date_from or purchase_date_to:
-        dfia_f: dict = {}
-        inc_f: dict = {}
-        if purchase_date_from:
-            dfia_f['invoice_date__gte'] = purchase_date_from
-            inc_f['invoice_date__gte'] = purchase_date_from
-        if purchase_date_to:
-            dfia_f['invoice_date__lte'] = purchase_date_to
-            inc_f['invoice_date__lte'] = purchase_date_to
-        if dfia_f:
-            ids = LicenseTrade.objects.filter(
-                license_type=DFIA_LICENSE_TYPE, direction='PURCHASE', **dfia_f
-            ).values_list('lines__sr_number__license_id', flat=True).distinct()
-            dfia_qs = dfia_qs.filter(id__in=ids)
-        if inc_f:
-            ids = LicenseTrade.objects.filter(
-                license_type=INCENTIVE_LICENSE_TYPE, direction='PURCHASE', **inc_f
-            ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
-            incentive_qs = incentive_qs.filter(id__in=ids)
-
-    # Company filter
-    if company_id:
-        dfia_ids = LicenseTrade.objects.filter(
-            Q(from_company_id=company_id) | Q(to_company_id=company_id), license_type=DFIA_LICENSE_TYPE
-        ).values_list('lines__sr_number__license_id', flat=True).distinct()
-        inc_ids = LicenseTrade.objects.filter(
-            Q(from_company_id=company_id) | Q(to_company_id=company_id), license_type=INCENTIVE_LICENSE_TYPE
-        ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
-        dfia_qs = dfia_qs.filter(id__in=dfia_ids)
-        incentive_qs = incentive_qs.filter(id__in=inc_ids)
-    elif query_params.get('company'):
-        logger.warning("Invalid company_id in summary: %s", query_params.get('company'))
-
-    # License-type filter
-    if license_type != 'ALL':
-        if license_type == DFIA_LICENSE_TYPE:
-            incentive_qs = IncentiveLicense.objects.none()
-        elif license_type in INCENTIVE_LICENSE_TYPES:
-            dfia_qs = LicenseDetailsModel.objects.none()
-            if license_type != INCENTIVE_LICENSE_TYPE:
-                incentive_qs = incentive_qs.filter(license_type=license_type)
+    dataset = _ledger_dataset(query_params, with_index=False)
+    dfia_qs = dataset['dfia_qs']
+    incentive_qs = dataset['incentive_qs']
+    activity = dataset['activity']
 
     # DFIA aggregates
     _opening_rows = dfia_qs.annotate(
@@ -528,38 +623,39 @@ def get_ledger_summary(query_params) -> dict:
     incentive_balance = float(inc_agg['balance'] or 0)
     incentive_sold = float(inc_agg['sold'] or 0)
 
-    # Trade-amount aggregates
-    dfia_tf: dict = {'license_type': DFIA_LICENSE_TYPE}
-    inc_tf: dict = {'license_type': INCENTIVE_LICENSE_TYPE}
-    for field, param in [('invoice_date__gte', purchase_date_from), ('invoice_date__lte', purchase_date_to)]:
-        if param:
-            dfia_tf[field] = param
-            inc_tf[field] = param
-
-    def _sum(qs_filter, direction):
-        return LicenseTrade.objects.filter(direction=direction, **qs_filter).aggregate(
-            total=Sum('total_amount')
-        )['total'] or 0
-
-    if company_id:
-        cq = Q(from_company_id=company_id) | Q(to_company_id=company_id)
-        dfia_purchases = LicenseTrade.objects.filter(
-            cq, direction='PURCHASE', **dfia_tf
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        dfia_sales = LicenseTrade.objects.filter(
-            cq, direction='SALE', **dfia_tf
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        inc_purchases = LicenseTrade.objects.filter(
-            cq, direction='PURCHASE', **inc_tf
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        inc_sales = LicenseTrade.objects.filter(
-            cq, direction='SALE', **inc_tf
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-    else:
-        dfia_purchases = _sum(dfia_tf, 'PURCHASE')
-        dfia_sales = _sum(dfia_tf, 'SALE')
-        inc_purchases = _sum(inc_tf, 'PURCHASE')
-        inc_sales = _sum(inc_tf, 'SALE')
+    # STEP 2 — trade money, from the canonical service, over EXACTLY the licence
+    # set counted above.
+    #
+    # This replaced a pair of global aggregates that ran
+    # ``Sum(LicenseTrade.total_amount)`` across every trade in the date range.
+    # Three things were wrong with that, all of them silent:
+    #
+    #   * it was not restricted to the licences the summary was reporting on, so
+    #     a licence filtered out by exporter/norm/balance still contributed its
+    #     money to the totals;
+    #   * `total_amount` is the WHOLE trade, so a trade covering three licences
+    #     was counted three times — once per licence family it touched — and the
+    #     "profit" moved when unrelated licences were filtered;
+    #   * it selected trades by `invoice_date` alone, which is period ACTIVITY,
+    #     while the licence count beside it used licence ELIGIBILITY. The two
+    #     halves of the same summary answered two different questions.
+    #
+    # Per-licence line amounts, summed from the same entries the list prints,
+    # make the summary a total OF the list rather than a second opinion about it.
+    dfia_totals = LicenseLedgerAccountingService.calculate_period_profit_loss(
+        dfia_ids=dfia_qs.values_list('id', flat=True),
+        period=period,
+        company_id=company_id,
+    )
+    inc_totals = LicenseLedgerAccountingService.calculate_period_profit_loss(
+        incentive_ids=incentive_qs.values_list('id', flat=True),
+        period=period,
+        company_id=company_id,
+    )
+    dfia_purchases = dfia_totals['purchase_total']
+    dfia_sales = dfia_totals['sale_total']
+    inc_purchases = inc_totals['purchase_total']
+    inc_sales = inc_totals['sale_total']
 
     return {
         'dfia': {
@@ -569,7 +665,11 @@ def get_ledger_summary(query_params) -> dict:
             'balance_value_usd': round(dfia_balance, 2),
             'purchase_amount_inr': round(float(dfia_purchases), 2),
             'sale_amount_inr': round(float(dfia_sales), 2),
-            'profit_loss_inr': round(float(dfia_sales) - float(dfia_purchases), 2),
+            'profit_loss_inr': round(float(dfia_totals['profit_loss']), 2),
+            # Disclosed so the period figures above are readable as a movement:
+            # opening + purchases − sales == closing.
+            'opening_position_inr': round(float(dfia_totals['opening_position']), 2),
+            'closing_position_inr': round(float(dfia_totals['closing_position']), 2),
         },
         'incentive': {
             'total_licenses': incentive_qs.count(),
@@ -578,7 +678,9 @@ def get_ledger_summary(query_params) -> dict:
             'balance_value_inr': round(incentive_balance, 2),
             'purchase_amount_inr': round(float(inc_purchases), 2),
             'sale_amount_inr': round(float(inc_sales), 2),
-            'profit_loss_inr': round(float(inc_sales) - float(inc_purchases), 2),
+            'profit_loss_inr': round(float(inc_totals['profit_loss']), 2),
+            'opening_position_inr': round(float(inc_totals['opening_position']), 2),
+            'closing_position_inr': round(float(inc_totals['closing_position']), 2),
             'breakdown': get_incentive_breakdown(incentive_qs),
         },
     }
@@ -635,101 +737,76 @@ def search_licenses(query_params) -> dict:
 
 def get_company_wise_trades(query_params) -> dict:
     """
-    Return all trades grouped by company with purchases, sales, and a grand summary.
-    Accepts a dict-like ``query_params``.
+    The period's trades grouped by COMPANY, with a grand summary.
+
+    Same licences, same transactions, same money as `get_license_wise_trades` —
+    the two differ ONLY in whether company or licence is the outer grouping key.
+    Both read the identical `build_ledger_dataset` result, so they cannot report
+    different totals for the same filters (asserted by the cross-endpoint
+    reconciliation test).
+
+    WHAT THIS REPLACED: an implementation that accepted nothing but ``search``.
+    It applied no period, no company, no licence-type, no active/balance/norm/
+    purchase-status filter, and summed ``LicenseTrade.total_amount`` — the WHOLE
+    trade — so a January request and a February request returned byte-identical
+    lifetime totals, and any trade spanning several licences was counted once
+    per licence family it touched.
     """
-    from apps.trade.models import LicenseTrade
-
-    search = _get_text_param(query_params, 'search')
-    terms = [t.strip() for t in search.split(',') if t.strip()] if search else []
-
-    qs = LicenseTrade.objects.select_related('from_company', 'to_company').prefetch_related(
-        'lines__sr_number__license',
-        'incentive_lines__incentive_license',
-    ).filter(direction__in=TRADE_DIRECTIONS)
-
-    if terms:
-        if len(terms) == 1:
-            t = terms[0]
-            qs = qs.filter(
-                Q(lines__sr_number__license__license_number__icontains=t)
-                | Q(incentive_lines__incentive_license__license_number__icontains=t)
-            ).distinct()
-        else:
-            qs = qs.filter(
-                Q(lines__sr_number__license__license_number__in=terms)
-                | Q(incentive_lines__incentive_license__license_number__in=terms)
-            ).distinct()
+    dataset = _ledger_dataset(query_params)
+    period_label = dataset['period']
 
     companies_dict: dict = {}
+    for (license_type, license_id), entry in dataset['activity'].items():
+        meta = dataset['index'].get((license_type, license_id), {})
+        for company in entry['companies'].values():
+            bucket = companies_dict.get(company['company_id'])
+            if bucket is None:
+                bucket = {
+                    'company_id': company['company_id'],
+                    'company_name': company['company_name'],
+                    'purchases': [],
+                    'sales': [],
+                    'purchase_total': DECIMAL_ZERO,
+                    'sale_total': DECIMAL_ZERO,
+                }
+                companies_dict[company['company_id']] = bucket
 
-    for trade in qs:
-        company = trade.to_company if trade.direction == 'PURCHASE' else trade.from_company
-        if not company:
-            continue
-
-        cid = company.id
-        if cid not in companies_dict:
-            companies_dict[cid] = {
-                'company_id': cid,
-                'company_name': company.name,
-                'purchases': [],
-                'sales': [],
-                'purchase_total': Decimal('0'),
-                'sale_total': Decimal('0'),
-            }
-
-        if trade.license_type == 'DFIA':
-            lic_pairs = list({
-                (line.sr_number.license.id, line.sr_number.license.license_number)
-                for line in trade.lines.all()
-                if line.sr_number and line.sr_number.license
-            })
-        else:
-            lic_pairs = list({
-                (tl.incentive_license.id, tl.incentive_license.license_number)
-                for tl in trade.incentive_lines.all()
-                if tl.incentive_license
-            })
-
-        row = {
-            'trade_id': trade.id,
-            'license_ids': [p[0] for p in lic_pairs],
-            'licenses': [p[1] for p in lic_pairs],
-            'license_type': trade.license_type,
-            'invoice_date': str(trade.invoice_date) if trade.invoice_date else '-',
-            'amount': float(trade.total_amount or 0),
-        }
-
-        amount = trade.total_amount or Decimal('0')
-        if trade.direction == 'PURCHASE':
-            companies_dict[cid]['purchases'].append(row)
-            companies_dict[cid]['purchase_total'] += amount
-        else:
-            companies_dict[cid]['sales'].append(row)
-            companies_dict[cid]['sale_total'] += amount
+            for key in ('purchases', 'sales'):
+                for row in company[key]:
+                    bucket[key].append({
+                        'trade_id': row['trade_id'],
+                        'license_ids': [license_id],
+                        'licenses': [meta.get('license_number', '')],
+                        'license_type': meta.get('license_type', license_type),
+                        'invoice_date': _iso_or_dash(row['date']),
+                        'amount': float(row['amount']),
+                    })
+            bucket['purchase_total'] += company['purchase_total']
+            bucket['sale_total'] += company['sale_total']
 
     companies = []
-    total_purchase = Decimal('0')
-    total_sale = Decimal('0')
-
-    for c in sorted(companies_dict.values(), key=lambda x: x['company_name']):
-        pt = c['purchase_total']
-        st = c['sale_total']
-        c['purchase_total'] = float(pt)
-        c['sale_total'] = float(st)
-        c['profit_loss'] = float(st - pt)
-        total_purchase += pt
-        total_sale += st
+    for c in sorted(companies_dict.values(), key=lambda x: x['company_name'] or ''):
+        c['purchases'].sort(key=_trade_row_sort_key)
+        c['sales'].sort(key=_trade_row_sort_key)
+        c['profit_loss'] = float(net_of(c['sale_total'], c['purchase_total']))
+        c['purchase_total'] = float(c['purchase_total'])
+        c['sale_total'] = float(c['sale_total'])
         companies.append(c)
 
+    totals = dataset['totals']
     return {
         'companies': companies,
         'summary': {
             'total_companies': len(companies),
-            'total_purchase': float(total_purchase),
-            'total_sale': float(total_sale),
-            'profit_loss': float(total_sale - total_purchase),
+            'total_purchase': float(totals['purchase_total']),
+            'total_sale': float(totals['sale_total']),
+            'profit_loss': float(totals['profit_loss']),
+            'opening_position': float(totals['opening_position']),
+            'closing_position': float(totals['closing_position']),
+        },
+        'period': {
+            'start_date': _iso_or_none(period_label.start),
+            'end_date': _iso_or_none(period_label.end),
         },
     }
 

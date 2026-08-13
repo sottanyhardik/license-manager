@@ -344,6 +344,67 @@ def select_display_rows(transactions) -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# LEDGER PRESENTATION COLUMNS — the ONE canonical Debit/Credit mapping
+#
+# Which money column of the on-screen ledger table a row's amount belongs in.
+#
+# THE COLUMN *IS* `balance_direction`. There is no second mapping table here,
+# deliberately: the ledger is presented as the LICENCE's own account, so
+#
+#     acquiring licence value  → CREDIT the licence account → Credit column
+#     consuming licence value  → DEBIT  the licence account → Debit  column
+#
+#   | type     | balance_direction | UI column | effect on licence balance |
+#   |----------|-------------------|-----------|---------------------------|
+#   | OPENING  | CREDIT            | Credit    | + (adds)                  |
+#   | PURCHASE | CREDIT            | Credit    | + (adds)                  |
+#   | SALE     | DEBIT             | Debit     | − (subtracts)             |
+#
+# This replaced an INVERTED presentation (PURCHASE shown in the Debit column
+# while its `balance_direction` was "CREDIT"). That inversion meant the words
+# "debit" and "credit" had two contradictory meanings in one system — the API
+# said one thing and the screen said the opposite — and every consumer had to
+# know which convention it was holding. Deriving the column FROM
+# `balance_direction` collapses the two into one, so a `total_credit` can no
+# longer disagree with a `balance_direction` of CREDIT.
+#
+# `balance_direction` itself was NOT changed. Nothing about how a transaction
+# moves the balance is different; only which column the presentation layer puts
+# it in.
+# ---------------------------------------------------------------------------
+
+#: The two money columns of the ledger table.
+LEDGER_COLUMN_CREDIT: str = "CREDIT"
+LEDGER_COLUMN_DEBIT: str = "DEBIT"
+
+
+def ledger_column_for(transaction_type: str) -> str | None:
+    """The ledger table money column for a transaction type.
+
+    Args:
+        transaction_type: e.g. ``'PURCHASE'``, ``'SALE'``, ``'OPENING'``.
+
+    Returns:
+        ``'CREDIT'``, ``'DEBIT'``, or ``None`` for a type that occupies neither
+        money column (the COMMISSION family, whose `balance_direction` is
+        "NONE" — they are non-balance-affecting by approved semantics and are
+        not display rows either, so they have no column to sit in).
+
+        ``None`` is also returned for an unknown type rather than raising: a
+        column lookup must not be able to break a financial screen, and a row
+        with no column simply contributes to no total.
+
+    This is the SINGLE definition of "which column". Do not re-express
+    ``if type == 'PURCHASE': debit`` in a service, serializer, view or
+    component — read it from here.
+    """
+    if not TransactionSemantics.validate_transaction_type(transaction_type):
+        return None
+    direction = TransactionSemantics.get_balance_direction(transaction_type)
+    return direction if direction in (LEDGER_COLUMN_CREDIT, LEDGER_COLUMN_DEBIT) else None
+
+
 # Convenience constants for common operations
 
 # Transaction types that should be counted in balance calculation

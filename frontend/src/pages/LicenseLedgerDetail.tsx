@@ -8,10 +8,14 @@ import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-    ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, ScrollText, TriangleAlert, Wallet,
+    ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, Minus, ScrollText,
+    TrendingDown, TrendingUp, TriangleAlert, Wallet,
 } from "lucide-react";
 import { isSaleRow, selectLedgerDisplayRows } from '@/utils/ledgerDisplayRows';
-import type { CanonicalLedgerResponse, CanonicalTransaction, CompanyUtilization } from '../types/canonicalLedger';
+import StatCard from '@/components/StatCard';
+import type {
+    CanonicalLedgerResponse, CanonicalTransaction, CompanyUtilization, LedgerSummary, ProfitState,
+} from '../types/canonicalLedger';
 
 // ─── Pure utilities ─────────────────────────────────────────────────────────────
 
@@ -83,6 +87,125 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
     return fallback;
 }
 
+/**
+ * THE one money formatter for this page — symbol + Indian digit grouping.
+ *
+ * PRESENTATION ONLY. `toFiniteNumber` exists to hand `formatIndianNumber` a
+ * number to group the digits of; it is NOT arithmetic on the value. Every
+ * figure arrives from the backend already correct and already quantized to 2dp,
+ * and it is rendered at that same 2dp — nothing is summed, netted, converted or
+ * re-rounded on the client.
+ *
+ * `currency` must be the currency the BACKEND declared for that specific figure
+ * (`balance_currency` / `bill_currency` / `profit_currency`) — never guessed
+ * from the licence type at the call site. The three are genuinely different for
+ * one DFIA licence: balance in USD, bill and profit in INR.
+ */
+function formatMoney(value: unknown, currency = 'INR'): string {
+    if (!value && value !== 0) return '-';
+    const symbol = currency === 'USD' ? '$' : '₹';
+    return `${symbol}${formatIndianNumber(toFiniteNumber(value), 2)}`;
+}
+
+/**
+ * Presentation of the four `profit_state` values from the backend.
+ *
+ * Driven ENTIRELY by the backend's `profit_state` — this page never inspects the
+ * sign of `total_profit_loss` to decide a colour or a label. Consequences the
+ * spec requires and this table encodes:
+ *   * PROFIT is green, LOSS is red, BREAK_EVEN and UNAVAILABLE are neutral.
+ *   * LOSS shows the MAGNITUDE under a "LOSS" label, so "-$5,000" can never
+ *     appear beneath the word "PROFIT". The direction is in the word, never in
+ *     colour alone.
+ *   * BREAK_EVEN reads "BREAK-EVEN" — exact zero is a real financial statement.
+ *   * UNAVAILABLE shows "PROFIT / LOSS" with "N/A" instead of a figure.
+ */
+const PROFIT_STATE_PRESENTATION: Record<ProfitState, {
+    label: string; tone: 'success' | 'danger' | 'neutral'; icon: typeof TrendingUp;
+    /** Strip the sign: the label already carries the direction. */
+    magnitude: boolean;
+}> = {
+    PROFIT: { label: 'PROFIT', tone: 'success', icon: TrendingUp, magnitude: false },
+    LOSS: { label: 'LOSS', tone: 'danger', icon: TrendingDown, magnitude: true },
+    BREAK_EVEN: { label: 'BREAK-EVEN', tone: 'neutral', icon: Minus, magnitude: false },
+    UNAVAILABLE: { label: 'PROFIT / LOSS', tone: 'neutral', icon: Wallet, magnitude: false },
+};
+
+/**
+ * The CA summary band: TOTAL CREDIT / TOTAL DEBIT / CURRENT BALANCE /
+ * PROFIT-LOSS.
+ *
+ * Every value is a string straight from `summary` — no `reduce`, no `+`, no
+ * `-`, no re-rounding, no classification. Renders nothing at all when `summary`
+ * is absent (an older cached payload): showing zeros there would be inventing
+ * figures.
+ *
+ * Credit is tinted as a gain and Debit as a reduction, matching the row tints in
+ * the table below: a purchase adds licence value, a sale consumes it.
+ *
+ * Reuses `@/components/StatCard` (the app's existing KPI card, in `compact`
+ * mode — built precisely for long currency strings). No new card component.
+ */
+function LedgerSummaryCards({ summary }: { summary: LedgerSummary | undefined }) {
+    if (!summary) return null;
+
+    const profit = PROFIT_STATE_PRESENTATION[summary.profit_state]
+        // Unknown/newer state from the server degrades to neutral rather than
+        // crashing the financial screen.
+        ?? PROFIT_STATE_PRESENTATION.UNAVAILABLE;
+
+    const profitValue = !summary.total_profit_loss && summary.total_profit_loss !== 0
+        ? 'N/A'
+        : formatMoney(
+            profit.magnitude
+                // Sign stripped for display only — the direction is in the label,
+                // so "-$46,499.94" can never sit under the word PROFIT.
+                ? String(summary.total_profit_loss).replace(/^-/, '')
+                : summary.total_profit_loss,
+            summary.profit_currency,
+        );
+
+    return (
+        <div
+            data-testid="ledger-summary-cards"
+            className="grid grid-cols-1 gap-3 px-5 pt-5 sm:grid-cols-2 xl:grid-cols-4"
+        >
+            <StatCard
+                compact
+                label="Total Credit"
+                value={formatMoney(summary.total_credit, summary.balance_currency)}
+                secondaryValue={`Bill ${formatMoney(summary.total_credit_bill, summary.bill_currency)}`}
+                icon={Wallet}
+                tone="success"
+            />
+            <StatCard
+                compact
+                label="Total Debit"
+                value={formatMoney(summary.total_debit, summary.balance_currency)}
+                secondaryValue={`Bill ${formatMoney(summary.total_debit_bill, summary.bill_currency)}`}
+                icon={Wallet}
+                tone="danger"
+            />
+            <StatCard
+                compact
+                label="Current Balance"
+                value={formatMoney(summary.current_balance, summary.balance_currency)}
+                secondaryValue="Total Credit − Total Debit"
+                icon={ScrollText}
+                tone="primary"
+            />
+            <StatCard
+                compact
+                label={profit.label}
+                value={profitValue}
+                icon={profit.icon}
+                tone={profit.tone}
+                secondaryValue="Total Credit − Total Debit"
+            />
+        </div>
+    );
+}
+
 function groupTransactionsByCompany(transactions: CanonicalTransaction[]) {
     const companiesMap: Record<string, { company_id: string | number | null; company_name: string; transactions: CanonicalTransaction[] }> = {};
     transactions.forEach((txn, index) => {
@@ -101,22 +224,83 @@ function groupTransactionsByCompany(transactions: CanonicalTransaction[]) {
  * The one column set for the ledger table — reused by the opening starting-state
  * block and by every company group so the two always line up.
  */
-function LedgerColumnHeader({ isDFIA }: { isDFIA: boolean }) {
+function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCurrency: string }) {
+    // Debit/Credit render the LICENCE value (CIF FC for DFIA, INR otherwise), so
+    // these headers must carry the same symbol their cells are formatted with.
+    // They previously hardcoded "(₹)" while the cells rendered "$…" for DFIA —
+    // the header contradicted the number beneath it.
+    const licenceSuffix = isDFIA ? '($)' : '(₹)';
+    // The BILL columns are a different quantity in a different currency (always
+    // INR), so they get their own symbol from the backend's `bill_currency` —
+    // never the licence suffix above.
+    const billSuffix = billCurrency === 'USD' ? '($)' : '(₹)';
     return (
         <thead>
             <tr className="border-b-2 border-primary/20 bg-primary/8">
                 <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Date</th>
                 <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Particulars</th>
                 <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Type</th>
+                {/* Items is DFIA-only: incentive licences have no item link in
+                    the data model, so the column would be permanently empty. */}
                 {isDFIA && <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Items</th>}
-                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-success">Debit (₹)</th>
-                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-destructive">Credit (₹)</th>
-                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">
-                    License Balance {isDFIA ? '($)' : '(₹)'}
+                {/* Debit = SALE (consumes licence value), Credit = PURCHASE
+                    (adds it) — see `transaction_semantics.ledger_column_for`,
+                    the single definition. Debit is listed first to match the
+                    conventional Dr/Cr reading order. */}
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-destructive">Debit {licenceSuffix}</th>
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-success">Credit {licenceSuffix}</th>
+                {/* Full-strength semantic colours (never a faded opacity) so the
+                    bill columns keep WCAG AA contrast; the lighter FONT WEIGHT,
+                    not a lower contrast, is what distinguishes them from the
+                    licence-value columns above. */}
+                <th scope="col" className="whitespace-nowrap px-2.5 py-[7px] text-right font-medium text-destructive">
+                    Debit Bill {billSuffix}
                 </th>
-                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-foreground">Status</th>
+                <th scope="col" className="whitespace-nowrap px-2.5 py-[7px] text-right font-medium text-success">
+                    Credit Bill {billSuffix}
+                </th>
+                {/* NO per-row "License Balance" and NO "Status" column: this is a
+                    transaction ledger, not a running-balance statement. A
+                    per-row running balance printed a figure that double-counts a
+                    purchased licence's acquisition, contradicting the Current
+                    Balance card above. The balance is stated ONCE, in the
+                    summary band. */}
             </tr>
         </thead>
+    );
+}
+
+/**
+ * The Items cell — real item names, never a bare "-" placeholder when names
+ * exist.
+ *
+ * One trade is ONE row however many items it bills, so several names are shown
+ * inline with the overflow collapsed into "+N" and the full list on hover
+ * (`title`) for accessibility. The row is NEVER duplicated per item.
+ */
+function LedgerItemsCell({ itemNames }: { itemNames: string[] | undefined }) {
+    const names = (itemNames ?? []).filter(Boolean);
+    if (!names.length) {
+        return <td className="px-2.5 py-[5px] text-muted-foreground">-</td>;
+    }
+    const [first, ...rest] = names;
+    const fullList = names.join(', ');
+    return (
+        <td
+            className="max-w-[220px] px-2.5 py-[5px] text-foreground"
+            // `title` serves sighted mouse users; `aria-label` gives screen
+            // readers the COMPLETE list rather than the truncated "Palm Oil +2",
+            // so the collapsed items are not information available only on hover.
+            title={fullList}
+            aria-label={fullList}
+        >
+            <span className="block truncate">
+                {first}
+                {rest.length > 0 && (
+                    <span className="ml-1 text-muted-foreground" aria-hidden="true">+{rest.length}</span>
+                )}
+            </span>
+        </td>
     );
 }
 
@@ -158,11 +342,8 @@ export default function LicenseLedgerDetail() {
         return formatDateUtil(String(dateStr)) || '-';
     };
 
-    const formatCurrency = (value: unknown, currency = 'INR'): string => {
-        if (!value && value !== 0) return '-';
-        const symbol = currency === 'USD' ? '$' : '₹';
-        return `${symbol}${formatIndianNumber(toFiniteNumber(value), 2)}`;
-    };
+    // Single implementation, shared with the summary cards (see `formatMoney`).
+    const formatCurrency = formatMoney;
 
     // ── Loading state ────────────────────────────────────────────────────────
     if (loading) {
@@ -201,8 +382,25 @@ export default function LicenseLedgerDetail() {
     const hasPurchases = (ledger.transactions || []).some(
         t => t.type === 'PURCHASE' || t.type === 'OPENING',
     );
-    // Use canonical license_running_balance from API (not deprecated available_balance)
-    const currentBalance = toFiniteNumber(ledger.license_running_balance);
+    // The canonical reconciliation block. Optional only for older cached
+    // payloads; when absent the summary band is hidden rather than zero-filled.
+    const summary = ledger.summary;
+    // Currency comes from the BACKEND per figure. The `isDFIA` fallbacks exist
+    // solely for pre-`summary` payloads and reproduce the old behaviour; they
+    // are not a second source of truth.
+    const balanceCurrency = summary?.balance_currency ?? (isDFIA ? 'USD' : 'INR');
+    const billCurrency = summary?.bill_currency ?? 'INR';
+    // ONE balance, ONE source: the header figure and the Current Balance card
+    // both read `summary.current_balance`, so they cannot disagree.
+    //
+    // The `license_running_balance` fallback is ONLY for pre-`summary` cached
+    // payloads. It is deliberately not the primary: it double-counts the
+    // acquisition of a purchased licence (opening + the purchase that created
+    // that opening), which is the very figure the summary replaces.
+    const currentBalanceValue = summary?.current_balance ?? ledger.license_running_balance;
+    // Numeric form used ONLY for the sign — which colour to paint, and whether
+    // to raise the deficit warning. Never used to derive a displayed figure.
+    const currentBalance = toFiniteNumber(currentBalanceValue);
     const isNegativeBalance = currentBalance < 0;
     const showPurchaseWarning = !hasPurchases || isNegativeBalance;
 
@@ -264,7 +462,7 @@ export default function LicenseLedgerDetail() {
                             {!hasPurchases && !isNegativeBalance &&
                                 'No purchase transactions found. Please add purchase entries for this license.'}
                             {hasPurchases && isNegativeBalance &&
-                                `Balance is negative (${formatCurrency(currentBalance, isDFIA ? 'USD' : 'INR')}). Please add purchase transactions to cover the deficit.`}
+                                `Balance is negative (${formatCurrency(currentBalanceValue, balanceCurrency)}). Please add purchase transactions to cover the deficit.`}
                         </span>
                     </div>
                 </div>
@@ -319,7 +517,7 @@ export default function LicenseLedgerDetail() {
                                         the field as total purchase CIF, which the canonical
                                         service already publishes as `totals.total_purchases`
                                         (Decimal, USD for DFIA / INR for incentive). */}
-                                    {formatCurrency(ledger.totals?.total_purchases, isDFIA ? 'USD' : 'INR')}
+                                    {formatCurrency(ledger.totals?.total_purchases, balanceCurrency)}
                                 </strong>
                             </div>
                         </div>
@@ -335,12 +533,15 @@ export default function LicenseLedgerDetail() {
                                 "text-[1.75rem] font-bold tabular-nums",
                                 currentBalance >= 0 ? "text-success" : "text-destructive",
                             )}>
-                                {formatCurrency(currentBalance, isDFIA ? 'USD' : 'INR')}
+                                {formatCurrency(currentBalanceValue, balanceCurrency)}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* ── CA summary band ──────────────────────────────── */}
+            <LedgerSummaryCards summary={summary} />
 
             {/* ── Ledger tables ─────────────────────────────────── */}
             {(() => {
@@ -388,32 +589,29 @@ export default function LicenseLedgerDetail() {
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full border-collapse bg-card text-[0.82rem]">
-                                <LedgerColumnHeader isDFIA={isDFIA} />
+                                <LedgerColumnHeader isDFIA={isDFIA} billCurrency={billCurrency} />
                                 <tbody>
                                     <tr className="border-b border-border bg-muted/50">
                                         <td className="whitespace-nowrap px-2.5 py-[5px] text-muted-foreground">
                                             {formatDate(openingRow.date)}
                                         </td>
+                                        {/* A carried-forward state, not a trade: no counterparty,
+                                            no invoice, no billed item. All three stay blank. */}
                                         <td className="px-2.5 py-[5px] font-medium text-foreground">Opening Balance</td>
                                         <td className="px-2.5 py-[5px] text-foreground">
                                             <Badge variant="secondary" className="text-[11px]">{openingRow.type}</Badge>
                                         </td>
                                         {isDFIA && <td className="px-2.5 py-[5px] text-muted-foreground">-</td>}
-                                        <td className="px-2.5 py-[5px] text-right font-semibold text-success">
-                                            {formatCurrency(toFiniteNumber(openingRow.amount), isDFIA ? 'USD' : 'INR')}
-                                        </td>
+                                        {/* An opening balance ADDS licence value, exactly
+                                            like a purchase, so it occupies the CREDIT
+                                            column — and is already counted in
+                                            `summary.total_credit`. */}
                                         <td className="px-2.5 py-[5px] text-right font-semibold text-destructive">-</td>
-                                        <td className={cn(
-                                            "px-2.5 py-[5px] text-right tabular-nums font-medium",
-                                            toFiniteNumber(openingRow.license_running_balance) >= 0 ? "text-success" : "text-destructive",
-                                        )}>
-                                            {formatIndianNumber(toFiniteNumber(openingRow.license_running_balance), 2)}
+                                        <td className="px-2.5 py-[5px] text-right font-semibold text-success">
+                                            {formatCurrency(openingRow.amount, balanceCurrency)}
                                         </td>
-                                        <td className="px-2.5 py-[5px] text-right">
-                                            <span className="text-[11px] text-muted-foreground">
-                                                {normalizeText(openingRow.display_status, 'Opening Balance')}
-                                            </span>
-                                        </td>
+                                        <td className="px-2.5 py-[5px] text-right text-muted-foreground">-</td>
+                                        <td className="px-2.5 py-[5px] text-right text-muted-foreground">-</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -450,14 +648,14 @@ export default function LicenseLedgerDetail() {
                                     </span>
                                 </div>
                                 <div className="text-[13px] text-primary-foreground/80">
-                                    Company Balance: <span className="font-semibold">{formatCurrency(companyBalance, isDFIA ? 'USD' : 'INR')}</span>
+                                    Company Balance: <span className="font-semibold">{formatCurrency(companyBalance, balanceCurrency)}</span>
                                 </div>
                             </div>
 
                             {/* Company ledger table */}
                             <div className="overflow-x-auto">
                                 <table className="w-full border-collapse bg-card text-[0.82rem]">
-                                    <LedgerColumnHeader isDFIA={isDFIA} />
+                                    <LedgerColumnHeader isDFIA={isDFIA} billCurrency={billCurrency} />
                                     <tbody>
                                         {txns.map((txn, ti) => {
                                             // `txns` is PURCHASE + SALE only (display rule), so the
@@ -466,9 +664,6 @@ export default function LicenseLedgerDetail() {
                                             const isSale = isSaleRow(txn);
                                             const isPurchase = !isSale;
                                             const isCommission = txn.is_commission;
-                                            // Use canonical license_running_balance from API
-                                            const licenseBalance = toFiniteNumber(txn.license_running_balance);
-                                            const transactionAmount = toFiniteNumber(txn.amount);
 
                                             return (
                                                 <tr
@@ -483,38 +678,43 @@ export default function LicenseLedgerDetail() {
                                                     <td className="whitespace-nowrap px-2.5 py-[5px] text-muted-foreground">
                                                         {formatDate(txn.date)}
                                                     </td>
+                                                    {/* Particulars = the COUNTERPARTY, not us. The
+                                                        group header above already names our company;
+                                                        `company_name` here would just echo it. 'N/A'
+                                                        when the party relation is genuinely absent —
+                                                        never substituted with our own company. */}
                                                     <td className="px-2.5 py-[5px] text-foreground">
-                                                        {String(txn.company_name || 'N/A')}
+                                                        {normalizeText(txn.party_name, 'N/A')}
                                                     </td>
                                                     <td className="px-2.5 py-[5px] text-foreground">
                                                         <Badge variant={isCommission ? "secondary" : "outline"} className="text-[11px]">
                                                             {txn.type}
                                                         </Badge>
                                                     </td>
-                                                    {isDFIA && (
-                                                        <td className="px-2.5 py-[5px] text-foreground text-muted-foreground">-</td>
-                                                    )}
-                                                    <td className="px-2.5 py-[5px] text-right font-semibold text-success">
-                                                        {isPurchase ? formatCurrency(transactionAmount, isDFIA ? 'USD' : 'INR') : '-'}
-                                                    </td>
+                                                    {isDFIA && <LedgerItemsCell itemNames={txn.item_names} />}
+                                                    {/* Licence value (USD for DFIA) — NOT the bill.
+                                                        SALE → Debit (consumes licence value),
+                                                        PURCHASE → Credit (adds it). Both render
+                                                        `amount` as-is: the canonical service emits it
+                                                        as a positive magnitude and encodes direction
+                                                        in `type`, so neither side needs a sign flip. */}
                                                     <td className="px-2.5 py-[5px] text-right font-semibold text-destructive">
-                                                        {isSale ? formatCurrency(Math.abs(transactionAmount), isDFIA ? 'USD' : 'INR') : '-'}
+                                                        {isSale ? formatCurrency(txn.amount, balanceCurrency) : '-'}
                                                     </td>
-                                                    <td className={cn(
-                                                        "px-2.5 py-[5px] text-right tabular-nums font-medium",
-                                                        licenseBalance >= 0 ? "text-success" : "text-destructive",
-                                                    )}>
-                                                        {formatIndianNumber(licenseBalance, 2)}
+                                                    <td className="px-2.5 py-[5px] text-right font-semibold text-success">
+                                                        {isPurchase ? formatCurrency(txn.amount, balanceCurrency) : '-'}
                                                     </td>
-                                                    <td className="px-2.5 py-[5px] text-right">
-                                                        {isCommission && !txn.affects_balance && (
-                                                            <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                                                                Excluded
-                                                            </Badge>
-                                                        )}
-                                                        {!isCommission && txn.display_status && (
-                                                            <span className="text-[11px] text-muted-foreground">{txn.display_status}</span>
-                                                        )}
+                                                    {/* Bill columns: the INVOICED amount, in INR — a
+                                                        different quantity and currency from the two
+                                                        columns above. Never assumed equal to them.
+                                                        Each bill sits under the SAME column as its own
+                                                        licence value, so a sale's bill is a Debit Bill
+                                                        and a purchase's bill is a Credit Bill. */}
+                                                    <td className="px-2.5 py-[5px] text-right tabular-nums text-destructive">
+                                                        {isSale ? formatCurrency(txn.bill_amount, billCurrency) : '-'}
+                                                    </td>
+                                                    <td className="px-2.5 py-[5px] text-right tabular-nums text-success">
+                                                        {isPurchase ? formatCurrency(txn.bill_amount, billCurrency) : '-'}
                                                     </td>
                                                 </tr>
                                             );

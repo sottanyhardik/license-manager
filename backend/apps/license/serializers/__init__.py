@@ -19,6 +19,7 @@ from .ledger import (
     TransactionSerializer,
     CompanyUtilizationSerializer,
     TotalsSerializer,
+    LedgerSummarySerializer,
 )
 
 __all__ = [
@@ -26,5 +27,5 @@ __all__ = [
     "LicenseDocumentSerializer", "LicenseTransferSerializer", "LicensePurchaseSerializer",
     "LicenseDetailsSerializer", "IncentiveLicenseSerializer", "LicenseItemPlanSerializer",
     "CanonicalLedgerSerializer", "TransactionSerializer", "CompanyUtilizationSerializer",
-    "TotalsSerializer",
+    "TotalsSerializer", "LedgerSummarySerializer",
 ]

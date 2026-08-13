@@ -608,9 +608,15 @@ class TestItemBalanceCalculator:
             # the shared Balance Engine helper (LicenseBalanceCalculator.
             # get_outstanding_allotment_totals) rather than querying
             # AllotmentItems directly — see that method's docstring.
-            with patch.object(
-                LicenseBalanceCalculator, "get_outstanding_allotment_totals",
-                return_value=(Decimal("200"), DEC_0),
+            with (
+                patch.object(
+                    LicenseBalanceCalculator, "get_outstanding_allotment_totals",
+                    return_value=(Decimal("200"), DEC_0),
+                ),
+                patch.object(
+                    ItemBalanceCalculator, "calculate_direct_sale_quantity",
+                    return_value=DEC_0,
+                ),
             ):
                 result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
         assert result == Decimal("500")
@@ -622,9 +628,15 @@ class TestItemBalanceCalculator:
             qs = _self_looping_queryset()
             qs.aggregate.return_value = {"qty__sum": Decimal("600")}
             mock_rd.objects.filter.return_value = qs
-            with patch.object(
-                LicenseBalanceCalculator, "get_outstanding_allotment_totals",
-                return_value=(Decimal("500"), DEC_0),
+            with (
+                patch.object(
+                    LicenseBalanceCalculator, "get_outstanding_allotment_totals",
+                    return_value=(Decimal("500"), DEC_0),
+                ),
+                patch.object(
+                    ItemBalanceCalculator, "calculate_direct_sale_quantity",
+                    return_value=DEC_0,
+                ),
             ):
                 result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
         assert result == DEC_0

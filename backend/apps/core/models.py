@@ -16,6 +16,7 @@ from django.utils import timezone
 from .constants import (
     DEC_0,
 )
+from .sync.mixins import MasterSyncMixin
 
 # Canonical deterministic-uid recipe shared with MDS export/load (ADR-001).
 # Imported lazily-tolerant: if the mds_client package is not installed in this
@@ -221,7 +222,7 @@ class MasterChange(models.Model):
         return f"{self.op} {self.model_label}[{self.natural_key}] @ {self.at:%Y-%m-%d %H:%M:%S}"
 
 
-class CompanyModel(AuditModel):
+class CompanyModel(MasterSyncMixin, AuditModel):
     iec = models.CharField(max_length=10, unique=True)
     pan = models.CharField(
         max_length=50,
@@ -280,11 +281,14 @@ class CompanyModel(AuditModel):
         parts = [self.address_line_1, self.address_line_2]
         return " ".join(p for p in parts if p).strip()
 
+    def get_natural_key_values(self):
+        return (self.iec,)
+
     class Meta:
         ordering = ['name']
 
 
-class PortModel(AuditModel):
+class PortModel(MasterSyncMixin, AuditModel):
     code = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=255, blank=True, default='')
 
@@ -292,11 +296,14 @@ class PortModel(AuditModel):
         ordering = ('code', 'name')
         unique_together = ('name', 'code')
 
+    def get_natural_key_values(self):
+        return (self.code,)
+
     def __str__(self):
         return f"{self.code}"
 
 
-class ItemHeadModel(AuditModel):
+class ItemHeadModel(MasterSyncMixin, AuditModel):
     """Deprecated: Use ItemGroupModel instead"""
     name = models.CharField(max_length=255, unique=True)
     unit_rate = models.DecimalField(
@@ -323,6 +330,9 @@ class ItemHeadModel(AuditModel):
     )
     dict_key = models.CharField(max_length=255, null=True, blank=True)
 
+    def get_natural_key_values(self):
+        return (self.name,)
+
     def __str__(self):
         return self.name
 
@@ -331,9 +341,12 @@ class ItemHeadModel(AuditModel):
         verbose_name_plural = "Item Heads (Deprecated)"
 
 
-class ItemGroupModel(AuditModel):
+class ItemGroupModel(MasterSyncMixin, AuditModel):
     """Group model for categorizing items"""
     name = models.CharField(max_length=255, unique=True)
+
+    def get_natural_key_values(self):
+        return (self.name,)
 
     def __str__(self):
         return self.name
@@ -342,7 +355,7 @@ class ItemGroupModel(AuditModel):
         ordering = ['name']
 
 
-class ItemNameModel(AuditModel):
+class ItemNameModel(MasterSyncMixin, AuditModel):
     group = models.ForeignKey('core.ItemGroupModel', on_delete=models.CASCADE, related_name='items', null=True,
                               blank=True)
     name = models.CharField(max_length=255, unique=True)
@@ -371,6 +384,9 @@ class ItemNameModel(AuditModel):
     class Meta:
         ordering = ['display_order', 'group__name', 'name']
 
+    def get_natural_key_values(self):
+        return (self.name,)
+
     def __str__(self):
         return self.name
 
@@ -378,7 +394,7 @@ class ItemNameModel(AuditModel):
         return reverse('masters:itemnamemodel-list')
 
 
-class HSCodeModel(AuditModel):
+class HSCodeModel(MasterSyncMixin, AuditModel):
     hs_code = models.CharField(max_length=8, unique=True)
     product_description = models.TextField(null=True, blank=True)
     unit_price = models.DecimalField(
@@ -393,6 +409,9 @@ class HSCodeModel(AuditModel):
     note = models.TextField(null=True, blank=True)
     search_fields = ('hs_code', 'product_description')
 
+    def get_natural_key_values(self):
+        return (self.hs_code,)
+
     def __str__(self):
         return f"{self.hs_code}"
 
@@ -400,21 +419,27 @@ class HSCodeModel(AuditModel):
         ordering = ('hs_code',)
 
 
-class HeadSIONNormsModel(SyntheticUidMixin, SyncTimestampModel):
+class HeadSIONNormsModel(MasterSyncMixin, SyntheticUidMixin, SyncTimestampModel):
     name = models.CharField(max_length=255)
 
     def compute_uid(self):
         return _mds_synthetic_uid("HeadSIONNorm", "", _sig_head_sion_norm(self.name))
 
+    def get_natural_key_values(self):
+        return (self.name,)
+
     def __str__(self):
         return self.name
 
 
-class SionNormClassModel(AuditModel):
+class SionNormClassModel(MasterSyncMixin, AuditModel):
     head_norm = models.ForeignKey('core.HeadSIONNormsModel', on_delete=models.CASCADE, related_name='sion_head')
     description = models.CharField(max_length=255, null=True, blank=True)
     norm_class = models.CharField(max_length=10, unique=True)
     is_active = models.BooleanField(default=False)
+
+    def get_natural_key_values(self):
+        return (self.norm_class,)
 
     def __str__(self):
         return f"{self.norm_class}"
@@ -423,7 +448,7 @@ class SionNormClassModel(AuditModel):
         return reverse('masters:sionnormclassmodel-detail', kwargs={'pk': self.pk})
 
 
-class SIONExportModel(SyntheticUidMixin, SyncTimestampModel):
+class SIONExportModel(MasterSyncMixin, SyntheticUidMixin, SyncTimestampModel):
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='export_norm')
     description = models.CharField(max_length=255, null=True, blank=True)
     quantity = models.DecimalField(
@@ -441,11 +466,14 @@ class SIONExportModel(SyntheticUidMixin, SyncTimestampModel):
             _sig_sion_export(self.description, self.quantity, self.unit),
         )
 
+    def get_natural_key_values(self):
+        return (str(self.norm_class), self.description or "")
+
     def __str__(self):
         return f"{self.norm_class} | {self.description}" if self.description else f"{self.norm_class}"
 
 
-class SIONImportModel(SyntheticUidMixin, SyncTimestampModel):
+class SIONImportModel(MasterSyncMixin, SyntheticUidMixin, SyncTimestampModel):
     serial_number = models.IntegerField(default=0)
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='import_norm')
     hsn_code = models.ForeignKey(HSCodeModel, on_delete=models.SET_NULL, related_name='sion_imports', null=True,
@@ -474,11 +502,14 @@ class SIONImportModel(SyntheticUidMixin, SyncTimestampModel):
             ),
         )
 
+    def get_natural_key_values(self):
+        return (str(self.norm_class), self.serial_number)
+
     def __str__(self):
         return f"{self.norm_class} | {self.description}" if self.description else f"{self.norm_class}"
 
 
-class SionNormNote(SyntheticUidMixin, AuditModel):
+class SionNormNote(MasterSyncMixin, SyntheticUidMixin, AuditModel):
     """Multiple notes per SION norm"""
     sion_norm = models.ForeignKey('SionNormClassModel', on_delete=models.CASCADE, related_name='notes')
     note_text = models.TextField()
@@ -496,11 +527,14 @@ class SionNormNote(SyntheticUidMixin, AuditModel):
             _sig_sion_norm_note(self.display_order, self.note_text),
         )
 
+    def get_natural_key_values(self):
+        return (str(self.sion_norm), self.display_order)
+
     def __str__(self):
         return f"{self.sion_norm.norm_class} - Note {self.display_order}"
 
 
-class SionNormCondition(SyntheticUidMixin, AuditModel):
+class SionNormCondition(MasterSyncMixin, SyntheticUidMixin, AuditModel):
     """Multiple conditions per SION norm"""
     sion_norm = models.ForeignKey('SionNormClassModel', on_delete=models.CASCADE, related_name='conditions')
     condition_text = models.TextField()
@@ -518,11 +552,14 @@ class SionNormCondition(SyntheticUidMixin, AuditModel):
             _sig_sion_norm_condition(self.display_order, self.condition_text),
         )
 
+    def get_natural_key_values(self):
+        return (str(self.sion_norm), self.display_order)
+
     def __str__(self):
         return f"{self.sion_norm.norm_class} - Condition {self.display_order}"
 
 
-class ProductDescriptionModel(SyntheticUidMixin, AuditModel):
+class ProductDescriptionModel(MasterSyncMixin, SyntheticUidMixin, AuditModel):
     hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.PROTECT, related_name='product_descriptions')
     product_description = models.TextField()
 
@@ -533,22 +570,28 @@ class ProductDescriptionModel(SyntheticUidMixin, AuditModel):
             _sig_product_description(self.product_description),
         )
 
+    def get_natural_key_values(self):
+        return (str(self.hs_code), self.product_description)
+
     def __str__(self):
         return self.product_description
 
 
-class TransferLetterModel(AuditModel):
+class TransferLetterModel(MasterSyncMixin, AuditModel):
     name = models.CharField(max_length=255)
     tl = models.FileField(upload_to='tl')
 
     class Meta:
         ordering = ['name', 'id']
 
+    def get_natural_key_values(self):
+        return (self.name,)
+
     def __str__(self):
         return self.name
 
 
-class UnitPriceModel(SyntheticUidMixin, AuditModel):
+class UnitPriceModel(MasterSyncMixin, SyntheticUidMixin, AuditModel):
     name = models.CharField(max_length=255)
     unit_price = models.DecimalField(
         max_digits=15,
@@ -564,6 +607,9 @@ class UnitPriceModel(SyntheticUidMixin, AuditModel):
             _sig_unit_price(self.name, self.unit_price, self.label),
         )
 
+    def get_natural_key_values(self):
+        return (self.name, self.label)
+
     def __str__(self):
         return self.name
 
@@ -574,7 +620,7 @@ ACCOUNT_TYPES = (
 )
 
 
-class InvoiceEntity(models.Model):
+class InvoiceEntity(MasterSyncMixin, models.Model):
     name = models.CharField(max_length=255)
     address_line_1 = models.TextField()
     address_line_2 = models.TextField(blank=True)
@@ -600,27 +646,36 @@ class InvoiceEntity(models.Model):
     signature = models.ImageField(upload_to='entity_signature/', null=True, blank=True)
     stamp = models.ImageField(upload_to='entity_stamp/', null=True, blank=True)
 
+    def get_natural_key_values(self):
+        return (self.pan_number,)
+
     def __str__(self):
         return self.name
 
 
-class SchemeCode(models.Model):
+class SchemeCode(MasterSyncMixin, models.Model):
     code = models.CharField(max_length=10, unique=True)
     label = models.CharField(max_length=100)
+
+    def get_natural_key_values(self):
+        return (self.code,)
 
     def __str__(self):
         return f"{self.code} - {self.label}"
 
 
-class NotificationNumber(models.Model):
+class NotificationNumber(MasterSyncMixin, models.Model):
     code = models.CharField(max_length=10, unique=True)
     label = models.CharField(max_length=100)
+
+    def get_natural_key_values(self):
+        return (self.code,)
 
     def __str__(self):
         return self.label
 
 
-class PurchaseStatus(models.Model):
+class PurchaseStatus(MasterSyncMixin, models.Model):
     code = models.CharField(max_length=2, unique=True)
     label = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True, help_text="Whether this purchase status is active and should be shown in UI")
@@ -631,11 +686,14 @@ class PurchaseStatus(models.Model):
         verbose_name = "Purchase Status"
         verbose_name_plural = "Purchase Statuses"
 
+    def get_natural_key_values(self):
+        return (self.code,)
+
     def __str__(self):
         return self.label
 
 
-class ExchangeRateModel(AuditModel):
+class ExchangeRateModel(MasterSyncMixin, AuditModel):
     """
     Exchange Rate model to store currency exchange rates.
     The active exchange rate is the latest one based on the date field.
@@ -673,6 +731,9 @@ class ExchangeRateModel(AuditModel):
         indexes = [
             models.Index(fields=['-date']),  # Index for getting latest rate
         ]
+
+    def get_natural_key_values(self):
+        return (str(self.date),)
 
     def __str__(self):
         return f"Exchange Rate - {self.date.strftime('%d-%m-%Y')}"

@@ -49,6 +49,7 @@ urlpatterns = [
     path("api/", include("apps.reconciliation.urls", namespace="reconciliation")),
     path("api/", include("apps.tasks.urls", namespace="tasks")),
     path("api/masters/", include("apps.core.urls", namespace="masters")),
+    path("api/sync/", include("apps.core.sync.urls", namespace="sync")),
 
     # JSON 404 for any unmatched /api/ path (must come after all real api/ patterns,
     # before the SPA catch-all)

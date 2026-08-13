@@ -403,6 +403,13 @@ RECONCILIATION_CIF_TOLERANCE = Decimal(os.getenv("RECONCILIATION_CIF_TOLERANCE",
 RECONCILIATION_QTY_TOLERANCE = Decimal(os.getenv("RECONCILIATION_QTY_TOLERANCE", "1.000"))
 
 # ---------------------------------------------------------------------
+# Master Sync (Module 04) — multi-server peer-to-peer synchronization
+# ---------------------------------------------------------------------
+SYNC_SERVER_ID = os.getenv("SYNC_SERVER_ID", "default")
+SYNC_ENABLED = os.getenv("SYNC_ENABLED", "False").lower() == "true"
+SYNC_PUSH_ON_SAVE = os.getenv("SYNC_PUSH_ON_SAVE", "False").lower() == "true"
+
+# ---------------------------------------------------------------------
 # Master-Data Service integration (ADR-001) — OFF by default
 # ---------------------------------------------------------------------
 # When MDS_ENABLED=true and the `mds_client` package is importable, register it

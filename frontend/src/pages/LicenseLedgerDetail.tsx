@@ -172,17 +172,17 @@ function LedgerSummaryCards({ summary }: { summary: LedgerSummary | undefined })
         >
             <StatCard
                 compact
-                label="Total Credit"
-                value={formatMoney(summary.total_credit, summary.balance_currency)}
-                secondaryValue={`Bill ${formatMoney(summary.total_credit_bill, summary.bill_currency)}`}
+                label="Total Purchase"
+                value={formatMoney(summary.total_purchase, summary.balance_currency)}
+                secondaryValue={`Bill ${formatMoney(summary.total_purchase_bill_inr, summary.bill_currency)}`}
                 icon={Wallet}
                 tone="success"
             />
             <StatCard
                 compact
-                label="Total Debit"
-                value={formatMoney(summary.total_debit, summary.balance_currency)}
-                secondaryValue={`Bill ${formatMoney(summary.total_debit_bill, summary.bill_currency)}`}
+                label="Total Sale"
+                value={formatMoney(summary.total_sale, summary.balance_currency)}
+                secondaryValue={`Bill ${formatMoney(summary.total_sale_bill_inr, summary.bill_currency)}`}
                 icon={Wallet}
                 tone="danger"
             />
@@ -190,7 +190,7 @@ function LedgerSummaryCards({ summary }: { summary: LedgerSummary | undefined })
                 compact
                 label="Current Balance"
                 value={formatMoney(summary.current_balance, summary.balance_currency)}
-                secondaryValue="Total Credit − Total Debit"
+                secondaryValue="Total Purchase − Total Sale"
                 icon={ScrollText}
                 tone="primary"
             />
@@ -200,7 +200,7 @@ function LedgerSummaryCards({ summary }: { summary: LedgerSummary | undefined })
                 value={profitValue}
                 icon={profit.icon}
                 tone={profit.tone}
-                secondaryValue="Total Credit − Total Debit"
+                secondaryValue="Total Purchase − Total Sale"
             />
         </div>
     );
@@ -225,7 +225,7 @@ function groupTransactionsByCompany(transactions: CanonicalTransaction[]) {
  * block and by every company group so the two always line up.
  */
 function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCurrency: string }) {
-    // Debit/Credit render the LICENCE value (CIF FC for DFIA, INR otherwise), so
+    // Sale/Purchase render the LICENCE value (CIF FC for DFIA, INR otherwise), so
     // these headers must carry the same symbol their cells are formatted with.
     // They previously hardcoded "(₹)" while the cells rendered "$…" for DFIA —
     // the header contradicted the number beneath it.
@@ -243,12 +243,12 @@ function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCur
                 {/* Items is DFIA-only: incentive licences have no item link in
                     the data model, so the column would be permanently empty. */}
                 {isDFIA && <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Items</th>}
-                {/* Debit = SALE (consumes licence value), Credit = PURCHASE
+                {/* Sale = SALE (consumes licence value), Purchase = PURCHASE
                     (adds it) — see `transaction_semantics.ledger_column_for`,
-                    the single definition. Debit is listed first to match the
-                    conventional Dr/Cr reading order. */}
-                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-destructive">Debit {licenceSuffix}</th>
-                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-success">Credit {licenceSuffix}</th>
+                    the single definition. Sale is listed first to match the
+                    conventional reading order. */}
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-destructive">Sale {licenceSuffix}</th>
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-success">Purchase {licenceSuffix}</th>
                 {/* Full-strength semantic colours (never a faded opacity) so the
                     bill columns keep WCAG AA contrast; the lighter FONT WEIGHT,
                     not a lower contrast, is what distinguishes them from the
@@ -603,9 +603,9 @@ export default function LicenseLedgerDetail() {
                                         </td>
                                         {isDFIA && <td className="px-2.5 py-[5px] text-muted-foreground">-</td>}
                                         {/* An opening balance ADDS licence value, exactly
-                                            like a purchase, so it occupies the CREDIT
+                                            like a purchase, so it occupies the Purchase
                                             column — and is already counted in
-                                            `summary.total_credit`. */}
+                                            `summary.total_purchase`. */}
                                         <td className="px-2.5 py-[5px] text-right font-semibold text-destructive">-</td>
                                         <td className="px-2.5 py-[5px] text-right font-semibold text-success">
                                             {formatCurrency(openingRow.amount, balanceCurrency)}

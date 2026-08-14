@@ -31,7 +31,7 @@ class TransactionSerializer(serializers.Serializer):
     party_name = serializers.CharField(allow_null=True, required=False)
     #: The LICENSE value released/consumed by this trade — CIF FC (USD) for
     #: DFIA. A positive magnitude; the direction lives in `type`. Rendered in
-    #: the Credit column for PURCHASE, the Debit column for SALE
+    #: the Purchase column for PURCHASE, the Sale column for SALE
     #: (see `transaction_semantics.ledger_column_for`).
     amount = serializers.DecimalField(max_digits=19, decimal_places=2)
     #: The actual INVOICE value in **INR** (Σ line `amount_inr`). A DIFFERENT
@@ -83,46 +83,46 @@ class LedgerSummarySerializer(serializers.Serializer):
     `CanonicalLedgerService._build_summary`; nothing is computed here.
 
     LEDGER COLUMNS (visual table columns)
-      * `total_debit` = Σ the table's **Debit** column = SALE rows
+      * `total_sale` = Σ the table's **Sale** column = SALE rows
                       (licence value consumed, reduces balance)
-      * `total_credit` = Σ the table's **Credit** column = PURCHASE rows
-                       + OPENING row (when shown)
-                       (licence value added, increases balance)
+      * `total_purchase` = Σ the table's **Purchase** column = PURCHASE rows
+                           + OPENING row (when shown)
+                           (licence value added, increases balance)
 
     THE IDENTITY, UNCONDITIONAL (no correction term):
-        current_balance = total_credit − total_debit
+        current_balance = total_purchase − total_sale
         total_profit_loss = current_balance (same number, two labels)
 
     WHY NO OPENING ADJUSTMENT:
     The display rule (`select_display_rows`) shows the acquisition exactly once:
       - PURCHASE exists  → OPENING suppressed, acquisition counted via purchase
       - no PURCHASE      → OPENING shown as starting state
-    In both cases, total_credit − total_debit gives the correct balance.
+    In both cases, total_purchase − total_sale gives the correct balance.
     `opening_balance` is licence metadata and is deliberately NOT added here,
     because when a PURCHASE exists, the opening and that purchase are the SAME
     economic event (licence acquisition), so adding would double-count.
 
-    Currencies: `total_debit`/`total_credit`/`opening_balance`/`current_balance`/
+    Currencies: `total_sale`/`total_purchase`/`opening_balance`/`current_balance`/
     `total_profit_loss` are ALL in `balance_currency` (USD for DFIA, INR
-    otherwise). `total_debit_bill`/`total_credit_bill` are in `bill_currency`
+    otherwise). `total_sale_bill_inr`/`total_purchase_bill_inr` are in `bill_currency`
     (INR) and are supplementary — never add across the two.
     """
 
-    total_debit = serializers.DecimalField(max_digits=19, decimal_places=2)
-    total_credit = serializers.DecimalField(max_digits=19, decimal_places=2)
+    total_sale = serializers.DecimalField(max_digits=19, decimal_places=2)
+    total_purchase = serializers.DecimalField(max_digits=19, decimal_places=2)
     #: Σ of the two BILL columns, in `bill_currency` (INR). Published so the
     #: client never sums a money column; NOT part of the identity above, NOT in
     #: `balance_currency`, and NEVER an input to Profit / Loss.
-    total_debit_bill = serializers.DecimalField(max_digits=19, decimal_places=2)
-    total_credit_bill = serializers.DecimalField(max_digits=19, decimal_places=2)
+    total_sale_bill_inr = serializers.DecimalField(max_digits=19, decimal_places=2)
+    total_purchase_bill_inr = serializers.DecimalField(max_digits=19, decimal_places=2)
     bill_currency = serializers.CharField()
     #: The licence's own face value. Metadata only — deliberately OUTSIDE the
     #: identity above (adding it would double-count a purchased licence).
     opening_balance = serializers.DecimalField(max_digits=19, decimal_places=2)
     #: True when the OPENING row is displayed (and therefore already counted in
-    #: `total_debit`) — i.e. when the licence has no PURCHASE. Published so the
+    #: `total_purchase`) — i.e. when the licence has no PURCHASE. Published so the
     #: client never re-derives the display rule.
-    opening_in_debit = serializers.BooleanField()
+    opening_in_purchase = serializers.BooleanField()
     current_balance = serializers.DecimalField(max_digits=19, decimal_places=2)
     balance_currency = serializers.CharField()
 

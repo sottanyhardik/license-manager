@@ -74,13 +74,13 @@ const SALE: CanonicalTransaction = {
 };
 
 const BASE_SUMMARY: LedgerSummary = {
-    total_debit: "65380.63",
-    total_credit: "20000.00",
-    total_debit_bill: "5400000.00",
-    total_credit_bill: "1850000.00",
+    total_sale: "65380.63",
+    total_purchase: "20000.00",
+    total_sale_bill_inr: "5400000.00",
+    total_purchase_bill_inr: "1850000.00",
     bill_currency: "INR",
     opening_balance: "0.00",
-    opening_in_debit: false,
+    opening_in_purchase: false,
     current_balance: "45380.63",
     balance_currency: "USD",
     total_profit_loss: "1234567.89",
@@ -166,7 +166,7 @@ describe("summary cards", () => {
     it("renders the four CA cards", async () => {
         await renderLedger();
         expect(summaryBand()).not.toBeNull();
-        for (const label of ["Total Debit", "Total Credit", "Current Balance", "PROFIT"]) {
+        for (const label of ["Total Sale", "Total Purchase", "Current Balance", "PROFIT"]) {
             expect(within(summaryBand() as HTMLElement).getByText(label)).toBeTruthy();
         }
     });
@@ -174,15 +174,15 @@ describe("summary cards", () => {
     it("shows the licence-value totals in the backend's balance_currency (USD → $)", async () => {
         await renderLedger();
         // Exactly the backend string, digit-grouped. Not summed on the client.
-        expect(within(card("Total Debit")).getByText("$65,380.63")).toBeTruthy();
-        expect(within(card("Total Credit")).getByText("$20,000.00")).toBeTruthy();
+        expect(within(card("Total Sale")).getByText("$65,380.63")).toBeTruthy();
+        expect(within(card("Total Purchase")).getByText("$20,000.00")).toBeTruthy();
     });
 
     it("shows the bill totals in bill_currency (INR → ₹) on the SAME cards", async () => {
         await renderLedger();
         // The two currencies coexist on one card and must not be conflated.
-        expect(within(card("Total Debit")).getByText("Bill ₹54,00,000.00")).toBeTruthy();
-        expect(within(card("Total Credit")).getByText("Bill ₹18,50,000.00")).toBeTruthy();
+        expect(within(card("Total Sale")).getByText("Bill ₹54,00,000.00")).toBeTruthy();
+        expect(within(card("Total Purchase")).getByText("Bill ₹18,50,000.00")).toBeTruthy();
     });
 
     it("shows Current Balance as the canonical balance in USD, not INR", async () => {
@@ -301,12 +301,15 @@ describe("row presentation columns", () => {
         expect(within(rowFor("PURCHASE")).queryByText("Acme Exports")).toBeNull();
     });
 
-    it("falls back to N/A — never our own company — when the party is absent", async () => {
+    it("falls back to - — never our own company — when the party is absent", async () => {
         await renderLedger(BASE_SUMMARY, [
             { ...PURCHASE, party_id: null, party_name: null },
         ]);
         const row = rowFor("PURCHASE");
-        expect(within(row).getByText("N/A")).toBeTruthy();
+        // Check that "-" exists somewhere in the row (particulars/party column)
+        const dashElements = within(row).queryAllByText("-");
+        expect(dashElements.length).toBeGreaterThan(0);
+        // Verify that the actual company name is not shown
         expect(within(row).queryByText("Acme Exports")).toBeNull();
     });
 
@@ -348,8 +351,8 @@ describe("row presentation columns", () => {
     it("labels the bill columns separately from the licence-value columns", async () => {
         await renderLedger();
         // Licence-value columns carry the balance currency...
-        expect(screen.getAllByText("Debit ($)").length).toBeGreaterThan(0);
-        expect(screen.getAllByText("Credit ($)").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Sale ($)").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Purchase ($)").length).toBeGreaterThan(0);
         // ...the bill columns carry INR, on the same table.
         expect(screen.getAllByText("Sale Bill (₹)").length).toBeGreaterThan(0);
         expect(screen.getAllByText("Purchase Bill (₹)").length).toBeGreaterThan(0);

@@ -46,7 +46,7 @@ export interface CanonicalTransaction {
   party_name?: string | null;
   /**
    * The LICENSE value this trade released/consumed — CIF FC (**USD**) for DFIA.
-   * Rendered in the Debit column for PURCHASE, the Credit column for SALE.
+   * Rendered in the Sale column for SALE, the Purchase column for PURCHASE.
    */
   amount: string;
   /**
@@ -125,20 +125,20 @@ export type ProfitState = 'PROFIT' | 'LOSS' | 'BREAK_EVEN' | 'UNAVAILABLE';
  * computed once by `CanonicalLedgerService._build_summary`.
  *
  * LEDGER COLUMNS (visual table columns)
- *   `total_debit`  = Σ of the table's **Debit** column = SALE rows
- *                    (licence value consumed, reduces balance)
- *   `total_credit` = Σ of the table's **Credit** column = PURCHASE rows
- *                    (+ the OPENING row when it is shown)
- *                    (licence value added, increases balance)
+ *   `total_sale`     = Σ of the table's **Sale** column = SALE rows
+ *                      (licence value consumed, reduces balance)
+ *   `total_purchase` = Σ of the table's **Purchase** column = PURCHASE rows
+ *                      (+ the OPENING row when it is shown)
+ *                      (licence value added, increases balance)
  *
  * ⚠ TWO CURRENCIES, NEVER MIXED ⚠
- *   `total_debit` / `total_credit` / `opening_balance` / `current_balance` /
+ *   `total_sale` / `total_purchase` / `opening_balance` / `current_balance` /
  *   `total_profit_loss`                     → `balance_currency` (USD for DFIA)
- *   `total_debit_bill` / `total_credit_bill` → `bill_currency` (always INR)
+ *   `total_sale_bill_inr` / `total_purchase_bill_inr` → `bill_currency` (always INR)
  * Never add or compare figures across these two groups.
  *
  * THE IDENTITY the backend guarantees — unconditional, NO correction term:
- *     current_balance = total_credit − total_debit
+ *     current_balance = total_purchase − total_sale
  *     total_profit_loss = current_balance (same number, two labels)
  *
  * `opening_balance` is licence metadata and is deliberately NOT added here:
@@ -148,26 +148,26 @@ export type ProfitState = 'PROFIT' | 'LOSS' | 'BREAK_EVEN' | 'UNAVAILABLE';
  * The client renders these values; it never performs the subtraction.
  */
 export interface LedgerSummary {
-  /** Σ of the displayed Debit column = sales (licence value consumed). */
-  total_debit: string;
-  /** Σ of the displayed Credit column = purchases (+ opening iff `opening_in_debit`). */
-  total_credit: string;
+  /** Σ of the displayed Sale column = sales (licence value consumed). */
+  total_sale: string;
+  /** Σ of the displayed Purchase column = purchases (+ opening iff `opening_in_purchase`). */
+  total_purchase: string;
   /** Σ of the displayed Sale Bill column, in `bill_currency`. */
-  total_debit_bill: string;
+  total_sale_bill_inr: string;
   /** Σ of the displayed Purchase Bill column, in `bill_currency`. */
-  total_credit_bill: string;
+  total_purchase_bill_inr: string;
   /** Always 'INR' — bills are invoiced in rupees regardless of licence type. */
   bill_currency: string;
   /** The licence's face value. Metadata — NOT part of the identity above. */
   opening_balance: string;
   /**
    * True when the OPENING row is on screen (no PURCHASE exists) and is therefore
-   * ALREADY counted inside `total_debit`. Published so no client re-derives the
+   * ALREADY counted inside `total_purchase`. Published so no client re-derives the
    * display rule.
    */
-  opening_in_debit: boolean;
+  opening_in_purchase: boolean;
   /**
-   * THE canonical balance: `total_credit − total_debit`. Display as given.
+   * THE canonical balance: `total_purchase − total_sale`. Display as given.
    * Never recompute it, and never substitute `license_running_balance` — that
    * field double-counts the acquisition of a purchased licence.
    */

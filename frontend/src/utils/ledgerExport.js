@@ -534,8 +534,8 @@ export function generatePDF(licensesData, filename) {
         const { body } = buildPdfBody(license, companiesGrouped);
 
         const headers = isDFIA
-            ? [['Date', 'Particulars', 'Items', 'CIF $ Dr', 'CIF $ Cr', 'Rate', 'Debit (Rs)', 'Credit (Rs)', 'Balance ($)', 'P/L (Rs)']]
-            : [['Date', 'Particulars', 'Value Dr ($)', 'Value Cr ($)', 'Rate', 'Debit (Rs)', 'Credit (Rs)', 'Balance ($)', 'P/L (Rs)']];
+            ? [['Date', 'Particulars', 'Items', 'CIF $ Sale', 'CIF $ Purchase', 'Rate', 'Sale (₹)', 'Purchase (₹)', 'Balance ($)', 'P/L (₹)']]
+            : [['Date', 'Particulars', 'Value Sale ($)', 'Value Purchase ($)', 'Rate', 'Sale (₹)', 'Purchase (₹)', 'Balance (₹)', 'P/L (₹)']];
 
         autoTable(doc, {
             head: headers,
@@ -761,9 +761,9 @@ export async function generateExcel(licensesData, filename) {
         const ws = wb.addWorksheet(sheetName);
 
         const headers = ['Date', 'Particulars'];
-        if (isDFIA) headers.push('Items', 'CIF $ Dr', 'CIF $ Cr');
-        else headers.push('Value Dr', 'Value Cr');
-        headers.push('Rate', 'Debit (₹)', 'Credit (₹)', isDFIA ? 'Balance ($)' : 'Balance (₹)', 'P/L (₹)');
+        if (isDFIA) headers.push('Items', 'CIF $ Sale', 'CIF $ Purchase');
+        else headers.push('Value Sale', 'Value Purchase');
+        headers.push('Rate', 'Sale (₹)', 'Purchase (₹)', isDFIA ? 'Balance ($)' : 'Balance (₹)', 'P/L (₹)');
         const numCols = headers.length;
 
         // ── Title block

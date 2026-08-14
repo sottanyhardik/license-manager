@@ -71,6 +71,7 @@ describe("LicenseLedger helpers", () => {
             purchase_date_from: "2026-04-01",
             purchase_date_to: "2027-03-31",
             no_purchases: true,
+            purchase_bill: "ALL",
         });
 
         expect(params.get("license_type")).toBe("ALL");
@@ -95,6 +96,7 @@ describe("LicenseLedger helpers", () => {
             ordering: "-license_date",
             purchase_date_from: "",
             purchase_date_to: "",
+            purchase_bill: "ALL",
         });
 
         expect(params.has("norm")).toBe(false);

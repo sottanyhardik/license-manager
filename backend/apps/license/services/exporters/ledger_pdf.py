@@ -400,8 +400,8 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
 
                 txn_data = [[
                     'Date', 'Type', 'Particulars', 'Invoice No.',
-                    'Debit CIF', 'Credit CIF', 'Balance',
-                    'Debit Amt', 'Credit Amt', 'SION Norm', 'Status', 'P/L'
+                    'Sale CIF', 'Purchase CIF', 'Balance',
+                    'Sale (₹)', 'Purchase (₹)', 'SION Norm', 'Status', 'P/L'
                 ]]
 
                 # Track rows with no purchase bill for styling
@@ -472,11 +472,11 @@ def generate_detailed_licenses_pdf(licenses_data, query_params):
                     0.8*inch,   # Type
                     2.0*inch,   # Particulars (slightly reduced)
                     0.85*inch,  # Invoice No.
-                    0.8*inch,   # Debit CIF
-                    0.8*inch,   # Credit CIF
+                    0.8*inch,   # Sale CIF
+                    0.8*inch,   # Purchase CIF
                     0.75*inch,  # Balance
-                    0.85*inch,  # Debit Amt
-                    0.85*inch,  # Credit Amt
+                    0.85*inch,  # Sale (₹)
+                    0.85*inch,  # Purchase (₹)
                     0.75*inch,  # SION Norm
                     0.85*inch,  # Status (No Purchase Bill)
                     0.75*inch   # P/L

@@ -462,6 +462,7 @@ export default function LicenseLedger() {
             ordering: '-license_date',
             purchase_date_from: fyStart,
             purchase_date_to: fyEnd,
+            purchase_bill: 'ALL',
         });
     };
 

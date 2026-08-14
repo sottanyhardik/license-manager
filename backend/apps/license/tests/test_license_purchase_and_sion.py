@@ -37,7 +37,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.core.models import CompanyModel, PortModel, SionNormClassModel
+from apps.core.models import CompanyModel, PortModel, SionNormClassModel, HeadSIONNormsModel, ItemNameModel
 from apps.license.models import (
     LicenseDetailsModel,
     LicenseImportItemsModel,
@@ -90,8 +90,15 @@ class PurchaseAndSionTestFixture:
             available_quantity=Decimal("1000.000"),
             cif_fc=cif_fc,
             cif_inr=cif_fc * Decimal("84.5"),
-            sion_norm_class=sion_norm_class,
         )
+        # If sion_norm_class is provided, create an ItemNameModel with it and add to the import item
+        if sion_norm_class:
+            item_name = ItemNameModel.objects.create(
+                name=f"Test Item {sion_norm_class.norm_class}",
+                is_active=True,
+                sion_norm_class=sion_norm_class,
+            )
+            item.items.add(item_name)
         return item
 
     def make_purchase_trade(
@@ -157,7 +164,9 @@ class PurchaseAndSionTestFixture:
 
     def make_sion_norm_class(self, norm_class="E1", description="Test SION"):
         """Create a SION normalization class."""
+        head_norm = HeadSIONNormsModel.objects.create(name=f"Head {norm_class}")
         return SionNormClassModel.objects.create(
+            head_norm=head_norm,
             norm_class=norm_class,
             description=description,
         )

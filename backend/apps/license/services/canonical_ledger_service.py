@@ -167,16 +167,16 @@ class CanonicalLedgerService:
                 # --- on-screen summary block (see _build_summary) ---
                 # Derived ENTIRELY from the display rows already selected above.
                 # Adds NO new financial concept and costs no query: its one
-                # arithmetic operation is `total_credit − total_debit`.
+                # arithmetic operation is `total_purchase_bill_inr − total_sale_bill_inr`.
                 'summary': {
-                    'total_debit': Decimal,       # Σ displayed Debit column = SALE
-                    'total_credit': Decimal,      # Σ displayed Credit column = PURCHASE (+ shown OPENING)
-                    'total_debit_bill': Decimal,  # Σ same rows' bill_amount (INR)
-                    'total_credit_bill': Decimal, # Σ same rows' bill_amount (INR)
+                    'total_purchase': Decimal,       # Σ displayed Purchase column = PURCHASE/OPENING
+                    'total_sale': Decimal,           # Σ displayed Sale column = SALE
+                    'total_purchase_bill_inr': Decimal,  # Σ same rows' bill_amount (INR)
+                    'total_sale_bill_inr': Decimal,      # Σ same rows' bill_amount (INR)
                     'bill_currency': 'INR',
                     'opening_balance': Decimal,   # licence metadata; NOT in the identity
-                    'opening_in_debit': bool,     # is opening already inside total_credit?
-                    'current_balance': Decimal,   # total_credit − total_debit
+                    'opening_in_purchase': bool,     # is opening already inside total_purchase?
+                    'current_balance': Decimal,   # total_purchase − total_sale
                     'balance_currency': str,      # 'USD' (DFIA) | 'INR'
                     'total_profit_loss': Decimal, # SAME number as current_balance
                     'profit_currency': str,       # == balance_currency
@@ -429,7 +429,7 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     ---------------------------
     There is exactly one arithmetic operation in this function:
 
-        net_position = total_credit − total_debit
+        net_position = total_purchase − total_sale
 
     It is computed ONCE and published under BOTH `current_balance` and
     `total_profit_loss`, because under the approved business rule they are the
@@ -464,10 +464,10 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
         no PURCHASE      → OPENING row shown as the starting state
                            ⇒ acquisition counted via the opening
 
-    Either way the licence's acquisition lands in the Credit column exactly
+    Either way the licence's acquisition lands in the Purchase column exactly
     once, so:
 
-        total_credit − total_debit == current_balance
+        total_purchase − total_sale == current_balance
 
     holds unconditionally — no `opening_in_*` correction term, and no second
     form of the identity. `opening_balance` is still published (unchanged) as
@@ -483,9 +483,9 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
 
     CURRENCIES
     ----------
-    `total_debit` / `total_credit` / `opening_balance` / `current_balance` /
+    `total_sale` / `total_purchase` / `opening_balance` / `current_balance` /
     `total_profit_loss` are ALL in `balance_currency` (CIF **USD** for DFIA, INR
-    for incentive licences). `total_debit_bill` / `total_credit_bill` are in
+    for incentive licences). `total_purchase_bill_inr` / `total_sale_bill_inr` are in
     `bill_currency` (**INR**) and are supplementary — never added to the
     licence-value figures, and never used to derive profit.
 
@@ -495,75 +495,74 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     opening_row = dataset.get('opening_display')
     opening_balance = dataset.get('opening_balance') or DEC_0
 
-    # The displayed OPENING row is a Credit-column row like any other (it adds
+    # The displayed OPENING row is a Purchase-column row like any other (it adds
     # licence value); it is kept out of `display_transactions` only so the UI
     # can render it as a starting state rather than as a transaction. For
     # totalling purposes it is simply one more row.
     if opening_row is not None:
         display_rows.append(opening_row)
 
-    total_debit: Decimal = DEC_0
-    total_credit: Decimal = DEC_0
+    total_sale: Decimal = DEC_0
+    total_purchase: Decimal = DEC_0
     # Bill totals are accumulated in the SAME pass over the SAME rows, so a bill
     # column footer can never disagree with the rows above it. Separate
     # currency (INR); published only so the client never sums a money column.
-    total_debit_bill: Decimal = DEC_0
-    total_credit_bill: Decimal = DEC_0
+    total_purchase_bill_inr: Decimal = DEC_0
+    total_sale_bill_inr: Decimal = DEC_0
     for row in display_rows:
         column = ledger_column_for(row.get('type'))
         row_bill = row.get('bill_amount') or DEC_0
         # LEDGER COLUMN MAPPING: balance_direction CREDIT (PURCHASE, OPENING)
-        # goes to the visual Debit column; balance_direction DEBIT (SALE) goes to
-        # the visual Credit column. This inverts the semantic direction so that the
-        # table column names align with visual presentation.
+        # goes to the Purchase column; balance_direction DEBIT (SALE) goes to
+        # the Sale column. Both map to business semantics of what the transaction does.
         if column == LEDGER_COLUMN_CREDIT:
-            total_credit += row['amount']  # PURCHASE/OPENING (balance_direction CREDIT)
-            total_debit_bill += row_bill
+            total_purchase += row['amount']  # PURCHASE/OPENING (balance_direction CREDIT)
+            total_purchase_bill_inr += row_bill
         elif column == LEDGER_COLUMN_DEBIT:
-            total_debit += row['amount']  # SALE (balance_direction DEBIT)
-            total_credit_bill += row_bill
+            total_sale += row['amount']  # SALE (balance_direction DEBIT)
+            total_sale_bill_inr += row_bill
 
-    total_credit = quantize_2dp(total_credit)
-    total_debit = quantize_2dp(total_debit)
+    total_purchase = quantize_2dp(total_purchase)
+    total_sale = quantize_2dp(total_sale)
 
     # THE canonical financial result. Computed once; published twice.
     # Signed — a negative position is reported as a negative number and as
     # `profit_state='LOSS'`; it is never absolute-valued or hidden here.
     #
-    # CRITICAL: current_balance = opening_balance + total_credit - total_debit
+    # CRITICAL: current_balance = opening_balance + total_purchase - total_sale
     #
-    # Current balance is ALWAYS: total_credit - total_debit (from displayed rows)
+    # Current balance is ALWAYS: total_purchase - total_sale (from displayed rows)
     # The display rule (`select_display_rows`) ensures the acquisition is shown once:
     # - PURCHASE exists  → OPENING suppressed, acquisition via purchase rows
     # - no PURCHASE      → OPENING shown as starting state
-    # Per user definition: "Current Balance = total_credit - total_debit in USD"
-    current_balance = quantize_2dp(total_credit - total_debit)
+    # Per user definition: "Current Balance = total_purchase - total_sale in USD"
+    current_balance = quantize_2dp(total_purchase - total_sale)
 
     license_type = dataset.get('license_type')
     balance_currency = 'USD' if license_type in _USD_BALANCE_LICENSE_TYPES else 'INR'
 
     # PROFIT/LOSS CALCULATION (FINAL ACCOUNTING TRUTH)
-    # MUST be: TOTAL CREDIT BILL (₹) - TOTAL DEBIT BILL (₹)
+    # MUST be: TOTAL PURCHASE BILL (₹) - TOTAL SALE BILL (₹)
     # Always in INR, always from bill amounts, never from license values
-    total_debit_bill = quantize_2dp(total_debit_bill)
-    total_credit_bill = quantize_2dp(total_credit_bill)
-    profit_loss_inr = quantize_2dp(total_credit_bill - total_debit_bill)
+    total_purchase_bill_inr = quantize_2dp(total_purchase_bill_inr)
+    total_sale_bill_inr = quantize_2dp(total_sale_bill_inr)
+    profit_loss_inr = quantize_2dp(total_purchase_bill_inr - total_sale_bill_inr)
 
     return {
-        'total_debit': total_debit,
-        'total_credit': total_credit,
+        'total_purchase': total_purchase,
+        'total_sale': total_sale,
         # Σ of the two BILL columns, in `bill_currency` (INR)
-        'total_debit_bill': total_debit_bill,
-        'total_credit_bill': total_credit_bill,
+        'total_purchase_bill_inr': total_purchase_bill_inr,
+        'total_sale_bill_inr': total_sale_bill_inr,
         'bill_currency': 'INR',
         # Licence metadata, unchanged.
         'opening_balance': opening_balance,
         # True when the OPENING row is on screen (and so is already inside
-        # `total_credit`). Published so no consumer re-derives the display rule.
-        'opening_in_debit': opening_row is not None,
+        # `total_purchase`). Published so no consumer re-derives the display rule.
+        'opening_in_purchase': opening_row is not None,
         'current_balance': current_balance,
         'balance_currency': balance_currency,
-        # PROFIT/LOSS is ALWAYS: credit_bill_inr - debit_bill_inr (in INR)
+        # PROFIT/LOSS is ALWAYS: purchase_bill_inr - sale_bill_inr (in INR)
         'total_profit_loss': profit_loss_inr,
         'profit_currency': 'INR',
         'profit_state': _profit_state(profit_loss_inr),

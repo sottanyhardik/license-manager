@@ -80,16 +80,20 @@ def get_license_transactions(lic_data, company_id=None):
             license_type=license_type
         )
 
-        # Build map of canonical balances by transaction ID
-        # Also extract SION norms and has_purchase_bill status for each transaction
+        # Build map of canonical data by transaction ID (single source of truth)
+        # Includes balances, bill amounts, and SION norms
         canonical_balances = {}
+        canonical_bill_amounts = {}
         canonical_sion_norms = {}
         has_purchase_bill = canonical_data.get('has_purchase_bill', False)
+        canonical_summary = canonical_data.get('summary', {})
 
         for txn in canonical_data.get('transactions', []):
             txn_id = txn.get('id')
             if txn_id:
                 canonical_balances[txn_id] = float(txn.get('license_running_balance', 0) or 0)
+                # Extract bill amount (actual invoice amount in INR) from canonical
+                canonical_bill_amounts[txn_id] = float(txn.get('bill_amount', 0) or 0)
                 # Extract SION norms from canonical transaction
                 sion_norm_str = txn.get('sion_norms', '')
                 canonical_sion_norms[txn_id] = sion_norm_str
@@ -183,7 +187,7 @@ def get_license_transactions(lic_data, company_id=None):
             total_amount = 0
             item_names = []  # Collect item descriptions for this transaction
 
-            # Get lines for this license only
+            # Get lines for this license only (for USD/CIF and item names only)
             if license_type == 'DFIA':
                 lines = trans_obj.lines.filter(sr_number__license_id=lic_id)
 
@@ -201,7 +205,6 @@ def get_license_transactions(lic_data, company_id=None):
                         cif_usd = 0
 
                     total_cif_usd += cif_usd
-                    total_amount += float(line.amount_inr or 0)
                     # Collect item names/descriptions
                     if line.sr_number and line.sr_number.description:
                         item_names.append(line.sr_number.description)
@@ -211,10 +214,12 @@ def get_license_transactions(lic_data, company_id=None):
 
                 if incentive_line:
                     total_cif_usd = float(incentive_line.license_value or 0)
-                    total_amount = float(incentive_line.amount_inr or 0)
                 else:
                     # No line for this license in this trade, skip
                     continue
+
+            # Get bill amount from CANONICAL dataset (single source of truth for INR amounts)
+            total_amount = canonical_bill_amounts.get(trans_obj.id, 0)
 
             # Skip if no value
             if total_cif_usd == 0 and total_amount == 0:
@@ -257,8 +262,8 @@ def get_license_transactions(lic_data, company_id=None):
             sion_norm_str = canonical_sion_norms.get(trans_obj.id, '')
             is_sion_norm_empty = not sion_norm_str or sion_norm_str.strip() == ''
 
-            # Calculate cumulative profit/loss (Sale Amount - Purchase Amount)
-            cumulative_profit_loss = total_sale_amount - total_purchase_amount
+            # Calculate running profit/loss from canonical bill amounts (Sale - Purchase)
+            running_profit_loss = total_sale_amount - total_purchase_amount
 
             transactions.append({
                 'date': trans_date,
@@ -273,7 +278,7 @@ def get_license_transactions(lic_data, company_id=None):
                 'debit_amount': debit_amount,
                 'credit_amount': credit_amount,
                 'balance': round(canonical_balance, 2),
-                'total_profit_loss': round(cumulative_profit_loss, 2),
+                'total_profit_loss': round(running_profit_loss, 2),
                 'item_names': ', '.join(item_names) if item_names else '-',
                 'has_purchase_bill': has_purchase_bill,
                 'sion_norm': sion_norm_str,

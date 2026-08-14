@@ -542,11 +542,11 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     balance_currency = 'USD' if license_type in _USD_BALANCE_LICENSE_TYPES else 'INR'
 
     # PROFIT/LOSS CALCULATION (FINAL ACCOUNTING TRUTH)
-    # MUST be: TOTAL PURCHASE BILL (₹) - TOTAL SALE BILL (₹)
+    # MUST be: TOTAL SALE BILL (₹) - TOTAL PURCHASE BILL (₹)
     # Always in INR, always from bill amounts, never from license values
     total_purchase_bill_inr = quantize_2dp(total_purchase_bill_inr)
     total_sale_bill_inr = quantize_2dp(total_sale_bill_inr)
-    profit_loss_inr = quantize_2dp(total_purchase_bill_inr - total_sale_bill_inr)
+    profit_loss_inr = quantize_2dp(total_sale_bill_inr - total_purchase_bill_inr)
 
     return {
         'total_purchase': total_purchase,
@@ -562,7 +562,7 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
         'opening_in_purchase': opening_row is not None,
         'current_balance': current_balance,
         'balance_currency': balance_currency,
-        # PROFIT/LOSS is ALWAYS: purchase_bill_inr - sale_bill_inr (in INR)
+        # PROFIT/LOSS is ALWAYS: sale_bill_inr - purchase_bill_inr (in INR)
         'total_profit_loss': profit_loss_inr,
         'profit_currency': 'INR',
         'profit_state': _profit_state(profit_loss_inr),

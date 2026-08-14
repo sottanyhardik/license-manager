@@ -3,10 +3,9 @@ License Ledger Views - Unified view for DFIA and Incentive license balances
 """
 import logging
 from decimal import Decimal
-from datetime import datetime
 
+from django.http import FileResponse
 from django.utils import timezone
-from django.http import HttpResponse
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -511,187 +510,6 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'error': 'Search query parameter "q" is required'}, status=400)
         return Response(result)
 
-    @action(detail=False, methods=['get'], url_path='export/all')
-    def export_all(self, request):
-        """
-        Export all licenses (or filtered licenses) to a single PDF file.
-
-        Query params (same as list):
-        - license_type: Filter by type (DFIA, INCENTIVE, RODTEP, ROSTL, MEIS, or ALL) - default: ALL
-        - active_only: Filter only active licenses (default: true)
-        - min_balance: Minimum balance filter
-        - exporter: Filter by exporter ID
-        - search: Search by license number or exporter name
-
-        SECURITY: Automatically scoped to user's assigned company via get_queryset().
-        Only exports licenses the user's company traded.
-        """
-        # Get filtered data using same logic as list()
-        data = self.get_queryset()
-
-        # Apply search filter manually for combined data
-        search = request.query_params.get('search')
-        if search and isinstance(data, list):
-            # Support comma-separated license numbers (e.g. "0311045100,0311045787")
-            terms = [t.strip().lower() for t in search.split(',') if t.strip()]
-            if len(terms) > 1:
-                data = [
-                    item for item in data
-                    if (item.get('license_number') or '').lower() in terms
-                ]
-            else:
-                search_lower = terms[0] if terms else ''
-                data = [
-                    item for item in data
-                    if search_lower in (item.get('license_number') or '').lower()
-                       or search_lower in (item.get('exporter_name') or '').lower()
-                ]
-
-        # Apply ordering
-        ordering = request.query_params.get('ordering', '-license_date')
-        if isinstance(data, list):
-            reverse = ordering.startswith('-')
-            order_field = ordering.lstrip('-')
-            if order_field in ['license_date', 'balance_value', 'license_expiry_date']:
-                from datetime import date
-                if order_field in ['license_date', 'license_expiry_date']:
-                    data.sort(key=lambda x: x.get(order_field) or date.min, reverse=reverse)
-                else:
-                    data.sort(key=lambda x: x.get(order_field) or 0, reverse=reverse)
-
-        # Check if detailed view is requested
-        detailed = request.query_params.get('detailed', 'false').lower() == 'true'
-
-        # Generate PDF (detailed or summary)
-        if detailed:
-            pdf_content = self._generate_detailed_licenses_pdf(data, request.query_params)
-            filename = f"license_ledger_detailed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        else:
-            pdf_content = self._generate_all_licenses_pdf(data, request.query_params)
-            filename = f"license_ledger_all_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-
-        # Create response
-        response = HttpResponse(pdf_content, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-        return response
-
-    def _get_license_transactions(self, lic_data, company_id=None):
-        from apps.license.services.exporters.ledger_pdf import get_license_transactions
-        return get_license_transactions(lic_data, company_id=company_id)
-    def _generate_detailed_licenses_pdf(self, licenses_data, query_params):
-        from apps.license.services.exporters.ledger_pdf import generate_detailed_licenses_pdf
-        return generate_detailed_licenses_pdf(licenses_data, query_params)
-    def _generate_all_licenses_pdf(self, licenses_data, query_params):
-        from apps.license.services.exporters.ledger_pdf import generate_all_licenses_pdf
-        return generate_all_licenses_pdf(licenses_data, query_params)
-
-    @action(detail=False, methods=['get'], url_path='export/excel')
-    def export_excel(self, request):
-        """
-        Export all licenses (or filtered licenses) to Excel.
-        Parallel to PDF export with same filter parameters.
-
-        Query params:
-        - license_type: Filter by type (DFIA, INCENTIVE, etc.) - default: ALL
-        - active_only: Filter only active licenses (default: true)
-        - detailed: If 'true', generates detailed Excel with transactions - default: false
-        """
-        from apps.license.services.exporters.ledger_excel import (
-            generate_ledger_summary_excel,
-            generate_ledger_detailed_excel
-        )
-
-        # Get filtered data using same logic as list()
-        data = self.get_queryset()
-
-        # Apply search filter manually for combined data
-        search = request.query_params.get('search')
-        if search and isinstance(data, list):
-            terms = [t.strip().lower() for t in search.split(',') if t.strip()]
-            if len(terms) > 1:
-                data = [
-                    item for item in data
-                    if (item.get('license_number') or '').lower() in terms
-                ]
-            else:
-                search_lower = terms[0] if terms else ''
-                data = [
-                    item for item in data
-                    if search_lower in (item.get('license_number') or '').lower()
-                       or search_lower in (item.get('exporter_name') or '').lower()
-                ]
-
-        # Apply ordering
-        ordering = request.query_params.get('ordering', '-license_date')
-        if isinstance(data, list):
-            reverse = ordering.startswith('-')
-            order_field = ordering.lstrip('-')
-            if order_field in ['license_date', 'balance_value', 'license_expiry_date']:
-                from datetime import date
-                if order_field in ['license_date', 'license_expiry_date']:
-                    data.sort(key=lambda x: x.get(order_field) or date.min, reverse=reverse)
-                else:
-                    data.sort(key=lambda x: x.get(order_field) or 0, reverse=reverse)
-
-        # Check if detailed view is requested
-        detailed = request.query_params.get('detailed', 'false').lower() == 'true'
-
-        # Generate Excel (detailed or summary)
-        if detailed:
-            excel_content, filename = generate_ledger_detailed_excel(data, request.query_params)
-        else:
-            excel_content, filename = generate_ledger_summary_excel(data, request.query_params)
-
-        # Create response
-        response = HttpResponse(
-            excel_content,
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-        return response
-
-    @action(detail=False, methods=['get'], url_path='company-ledger/export/excel')
-    def company_ledger_export_excel(self, request):
-        """
-        Export company-specific ledger to Excel.
-        Parallel to PDF export with same filter parameters.
-
-        Query params:
-        - company: Company ID (required)
-        - license_type: Filter by type (default: ALL)
-        - active_only: Filter only active licenses (default: true)
-        """
-        from apps.license.services.exporters.ledger_excel import generate_ledger_company_excel
-        from apps.core.models import CompanyModel
-
-        company_id = request.query_params.get('company')
-
-        if not company_id:
-            return Response({'error': 'company parameter is required'}, status=400)
-
-        # Get company name
-        try:
-            company = CompanyModel.objects.get(pk=int(company_id))
-            company_name = company.name
-        except (CompanyModel.DoesNotExist, ValueError):
-            return Response({'error': 'Company not found'}, status=404)
-
-        # Get filtered data
-        data = self.get_queryset()
-
-        # Generate Excel
-        excel_content, filename = generate_ledger_company_excel(data, company_name, request.query_params)
-
-        # Create response
-        response = HttpResponse(
-            excel_content,
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-        return response
 
     @action(detail=False, methods=['get'], url_path='company-ledger')
     def company_ledger(self, request):
@@ -764,67 +582,6 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response({'results': data})
 
-    @action(detail=False, methods=['get'], url_path='company-ledger/export')
-    def company_ledger_export(self, request):
-        """
-        Export company-specific ledger to PDF.
-
-        Query params:
-        - company: Company ID (required, must match user's assigned company)
-        - license_type: Filter by type (default: ALL)
-        - active_only: Filter only active licenses (default: true)
-
-        SECURITY: Validates that the requested company matches user's assigned company.
-        """
-        from rest_framework.exceptions import PermissionDenied
-        from apps.core.models import CompanyModel
-
-        company_id = request.query_params.get('company')
-
-        if not company_id:
-            return Response({'error': 'company parameter is required'}, status=400)
-
-        # Parse and validate company_id
-        try:
-            company_id_int = int(company_id)
-        except (ValueError, TypeError):
-            return Response({'error': 'Invalid company ID'}, status=400)
-
-        # SECURITY: Non-superusers can only export their assigned company
-        if not request.user.is_superuser:
-            if not hasattr(request.user, 'company') or not request.user.company:
-                raise PermissionDenied(
-                    detail='User has no company assignment for ledger access.'
-                )
-            if company_id_int != request.user.company.id:
-                raise PermissionDenied(
-                    detail='You can only export ledger data for your assigned company.'
-                )
-
-        # Get company name
-        try:
-            company = CompanyModel.objects.get(pk=company_id_int)
-            company_name = company.name
-        except (CompanyModel.DoesNotExist, ValueError):
-            return Response({'error': 'Company not found'}, status=404)
-
-        # Get filtered data
-        data = self.get_queryset()
-
-        # Generate PDF
-        pdf_content = self._generate_company_ledger_pdf(data, company_name, request.query_params)
-
-        # Create response
-        response = HttpResponse(pdf_content, content_type='application/pdf')
-        safe_company_name = "".join(c for c in company_name if c.isalnum() or c in (' ', '_')).strip()
-        filename = f"company_ledger_{safe_company_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-        return response
-
-    def _generate_company_ledger_pdf(self, licenses_data, company_name, query_params):
-        from apps.license.services.exporters.ledger_pdf import generate_company_ledger_pdf
-        return generate_company_ledger_pdf(licenses_data, company_name, query_params)
     @action(detail=False, methods=['get'], url_path='company-wise')
     def company_wise(self, request):
         """
@@ -873,3 +630,147 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             scoped_params = dict(request.query_params)
 
         return Response(get_license_wise_trades(scoped_params))
+
+    @action(detail=False, methods=['get'], url_path='export/all')
+    def export_pdf(self, request):
+        """
+        Export Financial Ledger as PDF.
+
+        Route: GET /api/license-ledger/export/all/
+
+        Data flow:
+        1. Get license by ID or number
+        2. Validate permissions (company isolation)
+        3. Build canonical dataset from CanonicalLedgerService
+        4. Render to PDF using pure renderer
+        5. Return PDF file
+
+        SECURITY: Validates user can access this license (same as ledger_detail)
+        """
+        from apps.license.services.canonical_ledger_service import CanonicalLedgerService
+        from apps.license.services.exporters.financial_ledger_pdf_renderer import render_financial_ledger_pdf
+        from rest_framework.exceptions import PermissionDenied
+        from apps.trade.models import LicenseTrade
+        from django.db.models import Q
+
+        license_id = request.query_params.get('license_id')
+        if not license_id:
+            return Response({'error': 'license_id parameter is required'}, status=400)
+
+        license_type = request.query_params.get('license_type', 'AUTO')
+
+        # Find the license
+        if license_type == 'DFIA':
+            found_type, license = self._find_license_by_id_or_number(license_id, search_dfia=True, search_incentive=False)
+        elif license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
+            found_type, license = self._find_license_by_id_or_number(license_id, search_dfia=False, search_incentive=True)
+        else:
+            found_type, license = self._find_license_by_id_or_number(license_id, search_dfia=True, search_incentive=True)
+
+        if not license:
+            return Response({'error': f'License not found: {license_id}'}, status=404)
+
+        # SECURITY: Validate permissions
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                raise PermissionDenied(detail='User has no company assignment for ledger access.')
+
+            trade_exists = LicenseTrade.objects.filter(
+                Q(from_company_id=request.user.company.id) | Q(to_company_id=request.user.company.id),
+                license_type=found_type,
+                **({'lines__sr_number__license_id': license.id} if found_type == 'DFIA' else {'incentive_lines__incentive_license_id': license.id})
+            ).exists()
+
+            if not trade_exists:
+                raise PermissionDenied(detail='You do not have access to this license.')
+
+        # Build canonical dataset (single source of truth)
+        dataset = CanonicalLedgerService.build_canonical_ledger_dataset(
+            license_id=license.id,
+            license_type=found_type
+        )
+
+        # Render to PDF using pure renderer
+        pdf_buffer = render_financial_ledger_pdf(dataset)
+        pdf_buffer.seek(0)
+
+        # Return PDF file
+        return FileResponse(
+            pdf_buffer,
+            as_attachment=True,
+            filename=f'financial-ledger-{license.license_number}.pdf',
+            content_type='application/pdf'
+        )
+
+    @action(detail=False, methods=['get'], url_path='export/excel')
+    def export_excel(self, request):
+        """
+        Export Financial Ledger as Excel.
+
+        Route: GET /api/license-ledger/export/excel/
+
+        Data flow:
+        1. Get license by ID or number
+        2. Validate permissions (company isolation)
+        3. Build canonical dataset from CanonicalLedgerService
+        4. Render to Excel using pure renderer
+        5. Return Excel file
+
+        SECURITY: Validates user can access this license (same as ledger_detail)
+        """
+        from apps.license.services.canonical_ledger_service import CanonicalLedgerService
+        from apps.license.services.exporters.financial_ledger_excel_renderer import render_single_license_excel
+        from apps.license.services.exporters.dto import FinancialLedgerExportDTO
+        from rest_framework.exceptions import PermissionDenied
+        from apps.trade.models import LicenseTrade
+        from django.db.models import Q
+
+        license_id = request.query_params.get('license_id')
+        if not license_id:
+            return Response({'error': 'license_id parameter is required'}, status=400)
+
+        license_type = request.query_params.get('license_type', 'AUTO')
+
+        # Find the license
+        if license_type == 'DFIA':
+            found_type, license = self._find_license_by_id_or_number(license_id, search_dfia=True, search_incentive=False)
+        elif license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
+            found_type, license = self._find_license_by_id_or_number(license_id, search_dfia=False, search_incentive=True)
+        else:
+            found_type, license = self._find_license_by_id_or_number(license_id, search_dfia=True, search_incentive=True)
+
+        if not license:
+            return Response({'error': f'License not found: {license_id}'}, status=404)
+
+        # SECURITY: Validate permissions
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'company') or not request.user.company:
+                raise PermissionDenied(detail='User has no company assignment for ledger access.')
+
+            trade_exists = LicenseTrade.objects.filter(
+                Q(from_company_id=request.user.company.id) | Q(to_company_id=request.user.company.id),
+                license_type=found_type,
+                **({'lines__sr_number__license_id': license.id} if found_type == 'DFIA' else {'incentive_lines__incentive_license_id': license.id})
+            ).exists()
+
+            if not trade_exists:
+                raise PermissionDenied(detail='You do not have access to this license.')
+
+        # Build canonical dataset (single source of truth)
+        dataset = CanonicalLedgerService.build_canonical_ledger_dataset(
+            license_id=license.id,
+            license_type=found_type
+        )
+
+        # Convert to DTO and render to Excel
+        dto = FinancialLedgerExportDTO.from_canonical(dataset)
+        excel_buffer = render_single_license_excel(dto)
+        excel_buffer.seek(0)
+
+        # Return Excel file
+        return FileResponse(
+            excel_buffer,
+            as_attachment=True,
+            filename=f'financial-ledger-{license.license_number}.xlsx',
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )

@@ -15,8 +15,8 @@ GOLDEN EXAMPLE DATA:
     Sale Bill: ₹15,19,243.00 (INR)
 
 EXPECTED RESULTS:
-  Purchase row: Debit($)=-, Credit($)=$7,99,999.96, Debit Bill=₹17,00,076, Credit Bill=-
-  Sale row: Debit($)=$6,50,000, Credit($)=-, Debit Bill=-, Credit Bill=₹15,19,243
+  Purchase row: Debit($)=-, Credit($)=$7,99,999.96, Sale Bill=₹17,00,076, Purchase Bill=-
+  Sale row: Debit($)=$6,50,000, Credit($)=-, Sale Bill=-, Purchase Bill=₹15,19,243
   Current Balance: $1,49,999.96
   Profit/Loss: -₹1,80,833.00 (LOSS)
 

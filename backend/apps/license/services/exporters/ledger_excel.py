@@ -308,10 +308,10 @@ def generate_ledger_detailed_excel(licenses_data, query_params):
             transactions = get_license_transactions(lic_data, company_id=company_id)
 
             if transactions:
-                # Headers (NEW ORDER: Date, Particulars, Type, Items, Debit($), Credit($), Debit Bill(₹), Credit Bill(₹), Balance($), P/L(₹), Purchase Bill, SION)
+                # Headers (NEW ORDER: Date, Particulars, Type, Items, Debit($), Credit($), Sale Bill(₹), Purchase Bill(₹), Balance($), P/L(₹), Purchase Bill, SION)
                 txn_headers = [
                     'Date', 'Particulars', 'Type', 'Items',
-                    'Debit ($)', 'Credit ($)', 'Debit Bill (₹)', 'Credit Bill (₹)',
+                    'Debit ($)', 'Credit ($)', 'Sale Bill (₹)', 'Purchase Bill (₹)',
                     'Balance ($)', 'P/L (₹)', 'Purchase Bill', 'SION'
                 ]
                 header_row = current_row
@@ -382,7 +382,7 @@ def generate_ledger_detailed_excel(licenses_data, query_params):
                         if value == '-':
                             cell.value = '-'
                             cell.alignment = Alignment(horizontal='center', vertical='center')
-                        # Format numeric columns (5-10 are numeric: Debit($), Credit($), Debit Bill, Credit Bill, Balance, P/L)
+                        # Format numeric columns (5-10 are numeric: Debit($), Credit($), Sale Bill, Purchase Bill, Balance, P/L)
                         elif col_num in [5, 6, 7, 8, 9, 10] and value != '-' and isinstance(value, (int, float)):
                             cell.number_format = '#,##0.00'
                             cell.alignment = Alignment(horizontal='right', vertical='center')
@@ -413,8 +413,8 @@ def generate_ledger_detailed_excel(licenses_data, query_params):
             ws.column_dimensions['D'].width = 30  # Items
             ws.column_dimensions['E'].width = 14  # Debit ($)
             ws.column_dimensions['F'].width = 14  # Credit ($)
-            ws.column_dimensions['G'].width = 14  # Debit Bill (₹)
-            ws.column_dimensions['H'].width = 14  # Credit Bill (₹)
+            ws.column_dimensions['G'].width = 14  # Sale Bill (₹)
+            ws.column_dimensions['H'].width = 14  # Purchase Bill (₹)
             ws.column_dimensions['I'].width = 14  # Balance ($)
             ws.column_dimensions['J'].width = 12  # P/L (₹)
             ws.column_dimensions['K'].width = 18  # Purchase Bill

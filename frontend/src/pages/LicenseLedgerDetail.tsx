@@ -254,10 +254,10 @@ function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCur
                     not a lower contrast, is what distinguishes them from the
                     licence-value columns above. */}
                 <th scope="col" className="whitespace-nowrap px-2.5 py-[7px] text-right font-medium text-destructive">
-                    Debit Bill {billSuffix}
+                    Sale Bill {billSuffix}
                 </th>
                 <th scope="col" className="whitespace-nowrap px-2.5 py-[7px] text-right font-medium text-success">
-                    Credit Bill {billSuffix}
+                    Purchase Bill {billSuffix}
                 </th>
                 {/* NO per-row "License Balance" and NO "Status" column: this is a
                     transaction ledger, not a running-balance statement. A
@@ -708,8 +708,8 @@ export default function LicenseLedgerDetail() {
                                                         different quantity and currency from the two
                                                         columns above. Never assumed equal to them.
                                                         Each bill sits under the SAME column as its own
-                                                        licence value, so a sale's bill is a Debit Bill
-                                                        and a purchase's bill is a Credit Bill. */}
+                                                        licence value, so a sale's bill is a Sale Bill
+                                                        and a purchase's bill is a Purchase Bill. */}
                                                     <td className="px-2.5 py-[5px] text-right tabular-nums text-destructive">
                                                         {isSale ? formatCurrency(txn.bill_amount, billCurrency) : '-'}
                                                     </td>

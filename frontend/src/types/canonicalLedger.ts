@@ -151,9 +151,9 @@ export interface LedgerSummary {
   total_debit: string;
   /** Σ of the displayed Credit column = sales. */
   total_credit: string;
-  /** Σ of the displayed Debit Bill column, in `bill_currency`. */
+  /** Σ of the displayed Sale Bill column, in `bill_currency`. */
   total_debit_bill: string;
-  /** Σ of the displayed Credit Bill column, in `bill_currency`. */
+  /** Σ of the displayed Purchase Bill column, in `bill_currency`. */
   total_credit_bill: string;
   /** Always 'INR' — bills are invoiced in rupees regardless of licence type. */
   bill_currency: string;

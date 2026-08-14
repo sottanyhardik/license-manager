@@ -351,8 +351,8 @@ describe("row presentation columns", () => {
         expect(screen.getAllByText("Debit ($)").length).toBeGreaterThan(0);
         expect(screen.getAllByText("Credit ($)").length).toBeGreaterThan(0);
         // ...the bill columns carry INR, on the same table.
-        expect(screen.getAllByText("Debit Bill (₹)").length).toBeGreaterThan(0);
-        expect(screen.getAllByText("Credit Bill (₹)").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Sale Bill (₹)").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Purchase Bill (₹)").length).toBeGreaterThan(0);
     });
 
     it("leaves the opposite column blank rather than repeating the amount", async () => {

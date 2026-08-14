@@ -563,8 +563,10 @@ class TestGoldenLedgerPDFValues(GoldenLedgerTestFixture, TestCase):
         # Verify summary for PDF headers
         summary = dataset['summary']
         self.assertEqual(summary['current_balance'], GOLDEN_TEST_PARAMS['expected_balance'])
-        self.assertEqual(summary['total_debit_bill'], GOLDEN_TEST_PARAMS['purchase_amount_inr'])
-        self.assertEqual(summary['total_credit_bill'], GOLDEN_TEST_PARAMS['sale_amount_inr'])
+        # Total sale bill (debit side in classic accounting) = sum of SALE invoice amounts
+        self.assertEqual(summary['total_sale_bill_inr'], GOLDEN_TEST_PARAMS['sale_amount_inr'])
+        # Total purchase bill (credit side in classic accounting) = sum of PURCHASE invoice amounts
+        self.assertEqual(summary['total_purchase_bill_inr'], GOLDEN_TEST_PARAMS['purchase_amount_inr'])
 
 
 class TestGoldenLedgerExcelValues(GoldenLedgerTestFixture, TestCase):

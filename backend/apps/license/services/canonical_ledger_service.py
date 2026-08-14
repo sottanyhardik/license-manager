@@ -528,9 +528,22 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     # THE canonical financial result. Computed once; published twice.
     # Signed — a negative position is reported as a negative number and as
     # `profit_state='LOSS'`; it is never absolute-valued or hidden here.
-    # Formula: current_balance = total_credit - total_debit
-    # (where total_credit includes purchases/opening, total_debit includes sales)
-    net_position = quantize_2dp(total_credit - total_debit)
+    #
+    # CRITICAL FIX: current_balance MUST include opening_balance
+    # - When OPENING is displayed: it's already in total_credit from line 519
+    # - When OPENING is NOT displayed (PURCHASE exists): must add it explicitly
+    #
+    # The opening_in_debit flag tells whether opening was displayed, so we know
+    # whether it's already included in total_credit or not.
+    net_position_from_displayed = quantize_2dp(total_credit - total_debit)
+    opening_balance = dataset.get('opening_balance') or DEC_0
+
+    # If opening was NOT displayed (opening_in_debit=False), add it to get absolute balance
+    if opening_row is None:
+        current_balance = quantize_2dp(opening_balance + net_position_from_displayed)
+    else:
+        # If opening WAS displayed, it's already in total_credit, so just use net_position
+        current_balance = net_position_from_displayed
 
     license_type = dataset.get('license_type')
     balance_currency = 'USD' if license_type in _USD_BALANCE_LICENSE_TYPES else 'INR'
@@ -550,11 +563,11 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
         'total_credit_bill': total_credit_bill,
         'bill_currency': 'INR',
         # Licence metadata, unchanged.
-        'opening_balance': dataset['opening_balance'],
+        'opening_balance': opening_balance,
         # True when the OPENING row is on screen (and so is already inside
         # `total_credit`). Published so no consumer re-derives the display rule.
         'opening_in_debit': opening_row is not None,
-        'current_balance': net_position,
+        'current_balance': current_balance,
         'balance_currency': balance_currency,
         # PROFIT/LOSS is ALWAYS: credit_bill_inr - debit_bill_inr (in INR)
         'total_profit_loss': profit_loss_inr,

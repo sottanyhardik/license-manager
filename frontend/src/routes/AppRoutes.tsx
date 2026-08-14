@@ -228,7 +228,7 @@ export default function AppRoutes() {
                         <AdminLayout><LicenseLedger /></AdminLayout>
                     </ProtectedRoute>
                 } />
-                <Route path="/license-ledger/:id/:companyId?" element={
+                <Route path="/license-ledger/:licenseId/:itemId" element={
                     <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
                         <AdminLayout><LicenseLedgerDetail /></AdminLayout>
                     </ProtectedRoute>

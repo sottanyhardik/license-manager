@@ -18,15 +18,10 @@ import LicenseLedgerDetail from "./LicenseLedgerDetail";
 vi.mock("react-router-dom", () => ({
     useLocation: () => ({ search: "", state: null }),
     useNavigate: () => vi.fn(),
-    useParams: () => ({ id: "LIC/1", companyId: undefined }),
+    useParams: () => ({ licenseId: "LIC/1", itemId: "7" }),
 }));
 
 vi.mock("../api/axios", () => ({ default: { get: vi.fn() } }));
-
-vi.mock("../utils/ledgerExport", () => ({
-    generatePDF: vi.fn(),
-    generateExcel: vi.fn(),
-}));
 
 const mockedApiGet = vi.mocked(api.get);
 
@@ -38,6 +33,8 @@ const OPENING: CanonicalTransaction = {
     amount: "65380.63", is_commission: false, affects_balance: true,
     license_running_balance: "65380.63", company_utilization_after: null,
     display_status: "Opening Balance",
+    ledger_column: "CREDIT", purchase_amount: "65380.63", sale_amount: null,
+    purchase_bill_amount: null, sale_bill_amount: null,
 };
 const PURCHASE: CanonicalTransaction = {
     date: "2026-02-01", id: 2, type: "PURCHASE",
@@ -45,6 +42,8 @@ const PURCHASE: CanonicalTransaction = {
     amount: "65380.63", is_commission: false, affects_balance: true,
     license_running_balance: "65380.63", company_utilization_after: "65380.63",
     display_status: "",
+    ledger_column: "CREDIT", purchase_amount: "65380.63", sale_amount: null,
+    purchase_bill_amount: null, sale_bill_amount: null,
 };
 const SALE: CanonicalTransaction = {
     date: "2026-03-01", id: 3, type: "SALE",
@@ -52,6 +51,8 @@ const SALE: CanonicalTransaction = {
     amount: "20000.00", is_commission: false, affects_balance: true,
     license_running_balance: "45380.63", company_utilization_after: "-20000.00",
     display_status: "",
+    ledger_column: "DEBIT", purchase_amount: null, sale_amount: "20000.00",
+    purchase_bill_amount: null, sale_bill_amount: null,
 };
 
 interface MatrixCase {

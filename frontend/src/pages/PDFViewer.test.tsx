@@ -37,11 +37,11 @@ function renderPdfViewer(path: string) {
 
 describe("PDFViewer", () => {
     it("normalizes only relative API paths", () => {
-        expect(normalizePdfApiPath(" license-ledger/export/all/ ")).toBe(
-            "license-ledger/export/all/",
+        expect(normalizePdfApiPath(" reports/example.pdf ")).toBe(
+            "reports/example.pdf",
         );
-        expect(normalizePdfApiPath("/license-ledger/export/all/")).toBe(
-            "/license-ledger/export/all/",
+        expect(normalizePdfApiPath("/reports/example.pdf")).toBe(
+            "/reports/example.pdf",
         );
         expect(normalizePdfApiPath("https://example.com/report.pdf")).toBeNull();
         expect(normalizePdfApiPath("//example.com/report.pdf")).toBeNull();
@@ -61,11 +61,11 @@ describe("PDFViewer", () => {
     it("fetches a safe relative PDF path and renders an iframe", async () => {
         mockedGet.mockResolvedValueOnce({ data: new Blob(["%PDF"], { type: "application/pdf" }) });
 
-        renderPdfViewer("/pdf-viewer?url=license-ledger%2Fexport%2Fall%2F");
+        renderPdfViewer("/pdf-viewer?url=reports%2Fexample.pdf");
 
         await waitFor(() => {
             expect(mockedGet).toHaveBeenCalledWith(
-                "license-ledger/export/all/",
+                "reports/example.pdf",
                 { responseType: "blob" },
             );
         });

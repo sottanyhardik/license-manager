@@ -64,7 +64,7 @@ def num_to_words_indian(amount):
         return str(int(amount))
 
 
-def generate_bill_of_supply_pdf(trade, include_signature=True):
+def generate_bill_of_supply_pdf(trade, include_signature=True, canonical_total_inr=None):
     """
     Generate Bill of Supply PDF for SALE transactions.
 
@@ -454,7 +454,11 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             items_data.append(row)
 
     # Calculate roundoff
-    rounded_total = round(subtotal)
+    # Invoice drill-down supplies the already-canonical ledger Sale bill.  The
+    # legacy download path omits it and retains its historical rounding rule.
+    # This parameter changes presentation only; it does not introduce a second
+    # accounting calculation in the invoice renderer.
+    rounded_total = canonical_total_inr if canonical_total_inr is not None else round(subtotal)
     roundoff = rounded_total - subtotal
 
     # Add rounding off row (dynamic based on column count)

@@ -1,62 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
-import { generatePDF, generateExcel } from '../utils/ledgerExport';
-import AsyncSelectField from '../components/AsyncSelectField';
+import {
+    downloadLicenseLedgerExcel, licenseLedgerExportError, previewLicenseLedgerPdf,
+} from '../services/licenseLedgerExport';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
+import AsyncSelectField from '../components/AsyncSelectField';
+import DebouncedSearchInput from '../components/DebouncedSearchInput';
 import DateRangeFilter from '@/components/DateRangeFilter';
+import { getCurrentFinancialYearRange, getPreviousFinancialYearRange } from '../utils/dateRangePresets';
+import { buildLicenseLedgerParams, defaultLicenseLedgerFilters, type LicenseLedgerFilters } from './licenseLedgerFilters';
 import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import DebouncedSearchInput from '../components/DebouncedSearchInput';
 import {
-    getFinancialYearRange, getCurrentFinancialYearRange, getPreviousFinancialYearRange,
-} from '../utils/dateRangePresets';
-import {
-    ArrowDownCircle, ArrowUpCircle, BadgeCheck, BookOpen, Building2, Calendar,
-    CalendarCheck, CalendarRange, FileSpreadsheet, FileText,
-    Filter, Globe, Inbox, Loader2, Trophy, XCircle,
+    ArrowDownCircle, ArrowUpCircle, BookOpen, Building2, Calendar,
+    BadgeCheck, CalendarCheck, CalendarRange, FileSpreadsheet, FileText, Filter,
+    Globe, Inbox, Loader2, Trophy, XCircle,
 } from "lucide-react";
-
-// Re-exported for backward compatibility — moved to `utils/dateRangePresets`
-// so `<DateRangeFilter>` and every other filter panel can share it too.
-export { getFinancialYearRange };
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type CompanyFilter = { value: string | number; label?: string } | string | null;
-
-type NormFilter = { value: string; label?: string } | string | null;
-/** Same shape as `NormFilter` — `core.PurchaseStatus.code` (GE/MI/OT/LM/LG,
- * etc.), a separate DFIA-only master list. */
-type PurchaseStatusFilter = NormFilter;
-
-type LedgerFilters = {
-    license_type: string;
-    min_balance: string;
-    search: string;
-    company: CompanyFilter;
-    active_only: boolean;
-    ordering: string;
-    purchase_date_from: string;
-    purchase_date_to: string;
-    no_purchases?: boolean;
-    /** SION norm class code (E1/E5/E132/PP/A3627, etc.) — a DFIA-only
-     * concept, so setting this drops every Incentive license from the
-     * results (see `ledger_service.py`'s `_get_norm_param`). */
-    norm: NormFilter;
-    /** `core.PurchaseStatus.code` — also DFIA-only, drops every Incentive
-     * license once set (see `ledger_service.py`'s `_get_purchase_status_param`). */
-    purchase_status: PurchaseStatusFilter;
-    /** Filter by purchase bill status: 'ALL' (default), 'WITH_PURCHASE_BILL', 'NO_PURCHASE_BILL' */
-    purchase_bill: string;
-};
 
 type LedgerTransaction = {
     trade_id: string | number;
@@ -80,33 +51,56 @@ type LicenseWiseEntry = {
     license_date: string;
     license_type: string;
     companies: LedgerCompany[];
-    has_purchase_bill?: boolean;
 };
 
 type LicenseWiseData = {
     licenses: LicenseWiseEntry[];
+    company_groups?: LedgerCompanyGroup[];
+    grand_total?: LedgerGroupTotals;
 };
 
-// ─── Constants ─────────────────────────────────────────────────────────────────
+type LedgerGroupTotals = {
+    license_count: number;
+    total_purchase_bill_inr: number;
+    total_sale_bill_inr: number;
+    total_balance: number;
+    total_profit_loss_inr: number;
+};
 
-const VALID_LICENSE_TYPES = new Set(['ALL', 'DFIA', 'INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']);
-const VALID_ORDERING = new Set(['-license_date', 'license_date', '-balance_value', 'balance_value']);
-const VALID_PURCHASE_BILL_MODES = new Set(['ALL', 'WITH_PURCHASE_BILL', 'NO_PURCHASE_BILL']);
+type LedgerGroupLicense = {
+    license_id: string | number;
+    license_number: string;
+    license_date: string;
+    license_type: string;
+    first_purchase_date: string;
+    sion_norms: string;
+    current_balance: number;
+    purchase_bill_inr: number;
+    sale_bill_inr: number;
+    profit_loss_inr: number;
+    has_purchase_bill: boolean;
+};
 
-const LICENSE_TYPE_OPTIONS = [
-    { value: 'ALL',       label: 'All Licenses',  Icon: Globe },
-    { value: 'DFIA',      label: 'DFIA Only',      Icon: Globe },
-    { value: 'INCENTIVE', label: 'All Incentive',  Icon: Trophy },
-    { value: 'RODTEP',    label: 'RODTEP',         Icon: Trophy },
-    { value: 'ROSTL',     label: 'ROSTL',          Icon: Trophy },
-    { value: 'MEIS',      label: 'MEIS',           Icon: Trophy },
-];
+type LedgerSionGroup = {
+    sion_norm: string;
+    label: string;
+    license_count: number;
+    licenses: LedgerGroupLicense[];
+    total_purchase_bill_inr: number;
+    total_sale_bill_inr: number;
+    total_balance: number;
+    total_profit_loss_inr: number;
+};
 
-const PURCHASE_BILL_OPTIONS = [
-    { value: 'ALL',                label: 'All',                  Icon: Globe },
-    { value: 'WITH_PURCHASE_BILL', label: 'With Purchase Bill',   Icon: BadgeCheck },
-    { value: 'NO_PURCHASE_BILL',   label: 'No Purchase Bill',     Icon: XCircle },
-];
+type LedgerCompanyGroup = {
+    company_id: string | number;
+    company_name: string;
+    sion_groups: LedgerSionGroup[];
+    total_purchase_bill_inr: number;
+    total_sale_bill_inr: number;
+    total_balance: number;
+    total_profit_loss_inr: number;
+};
 
 // ─── Pure utilities ────────────────────────────────────────────────────────────
 
@@ -130,58 +124,6 @@ function normalizeId(value: unknown, fallback: string | number): string | number
     return fallback;
 }
 
-export function normalizeMinBalance(value: unknown): string {
-    const rawValue = String(value ?? '').trim();
-    if (!rawValue) return '';
-    const parsed = Number(rawValue);
-    if (!Number.isFinite(parsed) || parsed < 0) return '';
-    return String(parsed);
-}
-
-export function getCompanyFilterValue(company: CompanyFilter): string {
-    if (!company) return '';
-    if (typeof company === 'object') return normalizeText(company.value);
-    return normalizeText(company);
-}
-
-export function getNormFilterValue(norm: NormFilter): string {
-    if (!norm) return '';
-    if (typeof norm === 'object') return normalizeText(norm.value);
-    return normalizeText(norm);
-}
-
-export function getPurchaseStatusFilterValue(purchaseStatus: PurchaseStatusFilter): string {
-    if (!purchaseStatus) return '';
-    if (typeof purchaseStatus === 'object') return normalizeText(purchaseStatus.value);
-    return normalizeText(purchaseStatus);
-}
-
-export function buildLedgerFilterParams(filters: LedgerFilters, additionalFilters: Partial<LedgerFilters> = {}) {
-    const currentFilters = { ...filters, ...additionalFilters };
-    const params = new URLSearchParams();
-    const licenseType = VALID_LICENSE_TYPES.has(currentFilters.license_type) ? currentFilters.license_type : 'ALL';
-    const minBalance = normalizeMinBalance(currentFilters.min_balance);
-    const company = getCompanyFilterValue(currentFilters.company);
-    const norm = getNormFilterValue(currentFilters.norm);
-    const purchaseStatus = getPurchaseStatusFilterValue(currentFilters.purchase_status);
-    const ordering = VALID_ORDERING.has(currentFilters.ordering) ? currentFilters.ordering : '-license_date';
-    const purchaseBill = normalizeText(currentFilters.purchase_bill || 'ALL').toUpperCase();
-
-    params.append('license_type', licenseType);
-    if (minBalance) params.append('min_balance', minBalance);
-    if (currentFilters.search.trim()) params.append('search', currentFilters.search.trim());
-    if (company) params.append('company', company);
-    if (norm) params.append('norm', norm);
-    if (purchaseStatus) params.append('purchase_status', purchaseStatus);
-    params.append('ordering', ordering);
-    if (currentFilters.purchase_date_from) params.append('purchase_date_from', currentFilters.purchase_date_from);
-    if (currentFilters.purchase_date_to) params.append('purchase_date_to', currentFilters.purchase_date_to);
-    params.append('active_only', String(Boolean(currentFilters.active_only)));
-    if (purchaseBill && purchaseBill !== 'ALL') params.append('purchase_bill', purchaseBill);
-    if (currentFilters.no_purchases) params.append('no_purchases', 'true');
-    return params;
-}
-
 function normalizeTransactions(value: unknown): LedgerTransaction[] {
     if (!Array.isArray(value)) return [];
     return value.flatMap((row, index) => {
@@ -192,6 +134,52 @@ function normalizeTransactions(value: unknown): LedgerTransaction[] {
 
 export function normalizeLicenseWiseData(value: unknown): LicenseWiseData {
     const rawLicenses = isRecord(value) && Array.isArray(value.licenses) ? value.licenses : [];
+    const rawCompanyGroups = isRecord(value) && Array.isArray(value.company_groups) ? value.company_groups : [];
+    const rawGrandTotal = isRecord(value) && isRecord(value.grand_total) ? value.grand_total : null;
+    const company_groups = rawCompanyGroups.flatMap((company, companyIndex) => {
+        if (!isRecord(company)) return [];
+        const rawSionGroups = Array.isArray(company.sion_groups) ? company.sion_groups : [];
+        const sion_groups = rawSionGroups.flatMap((sion) => {
+            if (!isRecord(sion)) return [];
+            const rawRows = Array.isArray(sion.licenses) ? sion.licenses : [];
+            const licenses = rawRows.flatMap((row) => {
+                if (!isRecord(row) || row.license_id == null) return [];
+                return [{
+                    license_id: normalizeId(row.license_id, 'unknown-license'),
+                    license_number: normalizeText(row.license_number, 'Unknown license'),
+                    license_date: normalizeText(row.license_date, '-'),
+                    license_type: normalizeText(row.license_type, 'UNKNOWN'),
+                    first_purchase_date: normalizeText(row.first_purchase_date, '-'),
+                    sion_norms: normalizeText(row.sion_norms),
+                    current_balance: toFiniteNumber(row.current_balance),
+                    purchase_bill_inr: toFiniteNumber(row.purchase_bill_inr),
+                    sale_bill_inr: toFiniteNumber(row.sale_bill_inr),
+                    profit_loss_inr: toFiniteNumber(row.profit_loss_inr),
+                    has_purchase_bill: row.has_purchase_bill !== false,
+                }];
+            });
+            const norm = normalizeText(sion.sion_norm ?? sion.sion_norms);
+            return [{
+                sion_norm: norm,
+                label: normalizeText(sion.sion_label ?? sion.label ?? sion.group_label, norm || 'N/A / EMPTY'),
+                license_count: toFiniteNumber(sion.license_count) || licenses.length,
+                licenses,
+                total_purchase_bill_inr: toFiniteNumber(sion.total_purchase_bill_inr),
+                total_sale_bill_inr: toFiniteNumber(sion.total_sale_bill_inr),
+                total_balance: toFiniteNumber(sion.total_balance),
+                total_profit_loss_inr: toFiniteNumber(sion.total_profit_loss_inr),
+            }];
+        });
+        return [{
+            company_id: normalizeId(company.company_id, companyIndex),
+            company_name: normalizeText(company.company_name, 'Unknown company'),
+            sion_groups,
+            total_purchase_bill_inr: toFiniteNumber(company.total_purchase_bill_inr),
+            total_sale_bill_inr: toFiniteNumber(company.total_sale_bill_inr),
+            total_balance: toFiniteNumber(company.total_balance),
+            total_profit_loss_inr: toFiniteNumber(company.total_profit_loss_inr),
+        }];
+    });
     return {
         licenses: rawLicenses.flatMap((license) => {
             if (!isRecord(license)) return [];
@@ -203,19 +191,15 @@ export function normalizeLicenseWiseData(value: unknown): LicenseWiseData {
                 return [{ company_id: normalizeId(company.company_id, index), company_name: normalizeText(company.company_name, 'Unknown company'), purchases: normalizeTransactions(company.purchases), sales: normalizeTransactions(company.sales), purchase_total: toFiniteNumber(company.purchase_total), sale_total: toFiniteNumber(company.sale_total), profit_loss: toFiniteNumber(company.profit_loss) }];
             });
             return [{ license_id: normalizeId(licenseId, 'unknown-license'), license_number: normalizeText(license.license_number, 'Unknown license'), license_date: normalizeText(license.license_date, '-'), license_type: normalizeText(license.license_type, 'UNKNOWN'), companies }];
-        }),
+        }), ...(rawCompanyGroups.length > 0 ? { company_groups } : {}),
+        ...(rawGrandTotal ? { grand_total: {
+            license_count: toFiniteNumber(rawGrandTotal.license_count),
+            total_purchase_bill_inr: toFiniteNumber(rawGrandTotal.total_purchase_bill_inr),
+            total_sale_bill_inr: toFiniteNumber(rawGrandTotal.total_sale_bill_inr),
+            total_balance: toFiniteNumber(rawGrandTotal.total_balance),
+            total_profit_loss_inr: toFiniteNumber(rawGrandTotal.total_profit_loss_inr),
+        } } : {}),
     };
-}
-
-export function normalizeLedgerExportDetails(value: unknown) {
-    if (!isRecord(value)) return null;
-    const licenseId = value.license_id ?? value.id;
-    if (licenseId === null || licenseId === undefined || String(licenseId).trim() === '') return null;
-    return value;
-}
-
-export function getTodayStamp(date = new Date()): string {
-    return date.toISOString().slice(0, 10);
 }
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
@@ -229,9 +213,69 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
 
 // ─── LicenseWiseLedger sub-component ─────────────────────────────────────────
 
-function LicenseWiseLedger({ data, navigate, companyId }: { data: LicenseWiseData; navigate: ReturnType<typeof useNavigate>; companyId?: string }) {
-    const { licenses } = normalizeLicenseWiseData(data);
+function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate: ReturnType<typeof useNavigate> }) {
+    const { licenses, company_groups = [], grand_total } = normalizeLicenseWiseData(data);
     const fmt = (v: number) => `₹${formatIndianNumber(v, 2)}`;
+
+    if (company_groups.length > 0) {
+        return (
+            <div className="space-y-5 p-3" data-testid="company-sion-ledger">
+                {company_groups.map((company) => (
+                    <section key={company.company_id} aria-label={`Company ${company.company_name}`} className="overflow-hidden rounded-md border border-border">
+                        <h2 className="flex items-center gap-2 bg-primary px-4 py-3 text-sm font-bold text-primary-foreground">
+                            <Building2 className="size-4" aria-hidden="true" />{company.company_name}
+                        </h2>
+                        <div className="space-y-4 p-3">
+                            {company.sion_groups.map((sion) => (
+                                <section key={sion.sion_norm || '__empty__'} aria-label={`SION ${sion.label}`} className="overflow-hidden rounded border border-border">
+                                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 bg-muted px-3 py-2">
+                                        <h3 className="text-sm font-bold text-foreground">SION: {sion.label}</h3>
+                                        <span className="text-xs text-muted-foreground">{sion.license_count} license{sion.license_count === 1 ? '' : 's'}</span>
+                                        <span className="ml-auto text-xs tabular-nums">Purchase {fmt(sion.total_purchase_bill_inr)}</span>
+                                        <span className="text-xs tabular-nums">Sale {fmt(sion.total_sale_bill_inr)}</span>
+                                        <span className={cn("text-xs font-semibold tabular-nums", sion.total_profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>P/L {fmt(sion.total_profit_loss_inr)}</span>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full min-w-[900px] border-collapse text-xs">
+                                            <thead><tr className="border-y bg-primary/5 text-left">
+                                                <th className="px-3 py-2">License Number</th><th className="px-3 py-2">Type</th>
+                                                <th className="px-3 py-2">Date</th><th className="px-3 py-2">1st Purchase Date</th>
+                                                <th className="px-3 py-2 text-right">Balance</th><th className="px-3 py-2 text-right">Purchase (₹)</th>
+                                                <th className="px-3 py-2 text-right">Sale (₹)</th><th className="px-3 py-2 text-right">P/L (₹)</th><th className="px-3 py-2" />
+                                            </tr></thead>
+                                            <tbody>{sion.licenses.map((license) => (
+                                                <tr key={license.license_id} className={cn("border-b last:border-b-0", !license.has_purchase_bill && "bg-destructive/10 text-destructive")}>
+                                                    <td className="px-3 py-2 font-semibold">{license.license_number}{!license.has_purchase_bill && <span className="ml-2 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">NO PURCHASE BILL</span>}</td><td className="px-3 py-2">{license.license_type}</td>
+                                                    <td className="px-3 py-2">{license.license_date}</td><td className="px-3 py-2">{license.first_purchase_date}</td>
+                                                    <td className="px-3 py-2 text-right tabular-nums">{formatIndianNumber(license.current_balance, 2)}</td>
+                                                    <td className="px-3 py-2 text-right tabular-nums">{fmt(license.purchase_bill_inr)}</td>
+                                                    <td className="px-3 py-2 text-right tabular-nums">{fmt(license.sale_bill_inr)}</td>
+                                                    <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", license.profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>{fmt(license.profit_loss_inr)}</td>
+                                                    <td className="px-3 py-2 text-right"><button type="button" className="font-semibold text-primary hover:underline" onClick={() => navigate(`/license-ledger/${license.license_id}/${company.company_id}`)}>View Ledger</button></td>
+                                                </tr>
+                                            ))}</tbody>
+                                        </table>
+                                    </div>
+                                </section>
+                            ))}
+                            <div className="flex flex-wrap justify-end gap-5 border-t-2 border-primary px-3 pt-2 text-xs font-bold">
+                                <span>Company Total — {company.company_name}</span><span>Purchase {fmt(company.total_purchase_bill_inr)}</span>
+                                <span>Sale {fmt(company.total_sale_bill_inr)}</span><span>P/L {fmt(company.total_profit_loss_inr)}</span>
+                            </div>
+                        </div>
+                    </section>
+                ))}
+                {grand_total && company_groups.length > 1 && (
+                    <div className="flex flex-wrap justify-end gap-5 rounded-md bg-primary px-4 py-3 text-xs font-bold text-primary-foreground">
+                        <span>Grand Total — {grand_total.license_count} licenses</span>
+                        <span>Purchase {fmt(grand_total.total_purchase_bill_inr)}</span>
+                        <span>Sale {fmt(grand_total.total_sale_bill_inr)}</span>
+                        <span>P/L {fmt(grand_total.total_profit_loss_inr)}</span>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     if (licenses.length === 0) {
         return (
@@ -263,14 +307,16 @@ function LicenseWiseLedger({ data, navigate, companyId }: { data: LicenseWiseDat
                         )}>
                             {lic.license_type}
                         </span>
-                        <button
-                            type="button"
-                            onClick={() => navigate(companyId ? `/license-ledger/${lic.license_id}/${companyId}` : `/license-ledger/${lic.license_id}`)}
-                            aria-label={`View ledger for ${lic.license_number}`}
-                            className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25"
-                        >
-                            <BookOpen className="size-4" aria-hidden="true" />View Ledger
-                        </button>
+                        {lic.companies[0]?.company_id != null && (
+                            <button
+                                type="button"
+                                onClick={() => navigate(`/license-ledger/${lic.license_id}/${lic.companies[0].company_id}`)}
+                                aria-label={`View ledger for ${lic.license_number}`}
+                                className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25"
+                            >
+                                <BookOpen className="size-4" aria-hidden="true" />View Ledger
+                            </button>
+                        )}
                     </div>
 
                     {/* ── Companies table ────────────────────────────── */}
@@ -382,175 +428,59 @@ export default function LicenseLedger() {
     const [summary, setSummary] = useState<Record<string, Record<string, number>> | null>(null);
     const [companyWiseData, setCompanyWiseData] = useState<LicenseWiseData | null>(null);
     const [companyWiseLoading, setCompanyWiseLoading] = useState(false);
-    const [pdfExporting, setPdfExporting] = useState(false);
-    const [excelExporting, setExcelExporting] = useState(false);
-
-    const { fyStart: currentFYStart, fyEnd: currentFYEnd } = getFinancialYearRange();
-
-    const [filters, setFilters] = useState<LedgerFilters>({
-        license_type: 'ALL', min_balance: '', search: '', company: null, norm: null, purchase_status: null,
-        active_only: true, ordering: '-license_date', purchase_bill: 'ALL',
-        purchase_date_from: currentFYStart, purchase_date_to: currentFYEnd,
-    });
-
-    const buildFilterParams = useCallback((additionalFilters: Partial<LedgerFilters> = {}) => {
-        return buildLedgerFilterParams(filters, additionalFilters);
-    }, [filters]);
+    const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null);
+    const [filters, setFilters] = useState<LicenseLedgerFilters>(() => defaultLicenseLedgerFilters());
+    const requestVersion = useRef(0);
+    const params = buildLicenseLedgerParams(filters);
+    const paramsKey = params.toString();
 
     useEffect(() => {
-        fetchCompanyWise();
-        if (filters.company) {
-            fetchSummary();
-        } else {
-            setSummary(null);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [
-        filters.license_type,
-        filters.min_balance,
-        filters.search,
-        filters.company,
-        filters.norm,
-        filters.purchase_status,
-        filters.purchase_bill,
-        filters.active_only,
-        filters.ordering,
-        filters.purchase_date_from,
-        filters.purchase_date_to,
-    ]);
-
-    const fetchSummary = async () => {
-        try {
-            const params = buildFilterParams();
-            const response = await api.get(`license-ledger/summary/?${params.toString()}`);
-            setSummary(response.data);
-        } catch (error) {
-            toast.error(getApiErrorMessage(error, 'Failed to load summary data.'));
-        }
-    };
-
-    const fetchCompanyWise = async () => {
+        const version = ++requestVersion.current;
         setCompanyWiseLoading(true);
-        try {
-            const params = buildFilterParams();
-            const response = await api.get(`license-ledger/license-wise/?${params.toString()}`);
-            setCompanyWiseData(normalizeLicenseWiseData(response.data));
-        } catch (error) {
-            toast.error(getApiErrorMessage(error, 'Failed to load company-wise ledger.'));
+        Promise.all([
+            api.get(`license-ledger/license-wise/?${paramsKey}`),
+            api.get(`license-ledger/summary/?${paramsKey}`),
+        ]).then(([ledgerResponse, summaryResponse]) => {
+            if (version !== requestVersion.current) return;
+            setCompanyWiseData(normalizeLicenseWiseData(ledgerResponse.data));
+            setSummary(summaryResponse.data);
+        }).catch(error => {
+            if (version !== requestVersion.current) return;
+            toast.error(getApiErrorMessage(error, 'Failed to load License Ledger.'));
             setCompanyWiseData(null);
-        } finally {
-            setCompanyWiseLoading(false);
-        }
-    };
-
-    const handleFilterChange = (field: keyof LedgerFilters, value: LedgerFilters[keyof LedgerFilters]) =>
-        setFilters(prev => ({ ...prev, [field]: value }));
-
-    const clearDateFilter = () =>
-        setFilters(prev => ({ ...prev, purchase_date_from: '', purchase_date_to: '' }));
-
-    const clearAllFilters = () => {
-        const { fyStart, fyEnd } = getFinancialYearRange();
-        setFilters({
-            license_type: 'ALL',
-            min_balance: '',
-            search: '',
-            company: null,
-            norm: null,
-            purchase_status: null,
-            active_only: true,
-            ordering: '-license_date',
-            purchase_date_from: fyStart,
-            purchase_date_to: fyEnd,
-            purchase_bill: 'ALL',
+        }).finally(() => {
+            if (version === requestVersion.current) setCompanyWiseLoading(false);
         });
-    };
+    }, [paramsKey]);
 
-    const fetchFullLedgerDetails = async () => {
-        const licenses = normalizeLicenseWiseData(companyWiseData).licenses;
-        if (!licenses.length) return { results: [], failures: 0 };
+    const updateFilter = <K extends keyof LicenseLedgerFilters>(key: K, value: LicenseLedgerFilters[K]) =>
+        setFilters(previous => ({ ...previous, [key]: value }));
 
-        // When a company filter is active, pass it so the backend returns only that
-        // company's transactions (build_dfia/incentive_ledger_detail already supports this).
-        const companyValue = getCompanyFilterValue(filters.company);
+    const clearCompany = () => updateFilter('company', null);
+    const clearPurchaseDates = () => setFilters(previous => ({
+        ...previous, purchaseDateFrom: '', purchaseDateTo: '',
+    }));
+    const clearAllFilters = () => setFilters(defaultLicenseLedgerFilters());
 
-        // Fetch all licenses in parallel — eliminates the N×latency serial bottleneck.
-        // Pass license_type so the backend searches the correct table (DFIA vs Incentive)
-        // and avoids false matches when both tables share the same integer PK.
-        const settled = await Promise.allSettled(
-            licenses.map(lic => {
-                const params = new URLSearchParams({ license_type: lic.license_type });
-                if (companyValue) params.set('company', companyValue);
-                return api.get(`license-ledger/${lic.license_id}/ledger_detail/?${params}`)
-                          .then(r => ({ data: r.data, license_id: lic.license_id }));
-            })
-        );
-
-        let failures = 0;
-        const results: unknown[] = [];
-        for (const r of settled) {
-            if (r.status === 'rejected') { failures++; continue; }
-            // Defensively merge license_id in case the backend omits it
-            const detail = normalizeLedgerExportDetails(
-                { ...r.value.data, license_id: r.value.data.license_id ?? r.value.license_id }
-            );
-            if (detail) results.push(detail);
-            else failures++;
-        }
-        return { results, failures };
-    };
-
-    const handleBulkExport = async (
-        format: "pdf" | "xlsx",
-        setExporting: (v: boolean) => void,
-    ) => {
-        if (!normalizeLicenseWiseData(companyWiseData).licenses.length) {
-            toast.error("No data to export"); return;
-        }
-        const toastId = `bulk-${format}`;
-        setExporting(true);
+    const runExport = async (format: 'pdf' | 'xlsx') => {
+        if (exporting) return;
+        setExporting(format);
         try {
-            toast.info("Fetching ledger details…", { duration: Infinity, id: toastId });
-            const { results: allLedgers, failures } = await fetchFullLedgerDetails();
-            toast.dismiss(toastId);
-            if (!allLedgers.length) { toast.error("No ledger data available"); return; }
-            const stamp = getTodayStamp();
-            // Include the active company name in the filename when the filter is set.
-            const companySegment = companyLabel
-                ? `_${companyLabel.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_').substring(0, 40)}`
-                : '';
-            const fileBase = `License_Ledger_Bulk${companySegment}_${stamp}`;
-            if (format === "pdf") generatePDF(allLedgers, `${fileBase}.pdf`);
-            else await generateExcel(allLedgers, `${fileBase}.xlsx`);
-            toast.success(`Exported ${allLedgers.length} license(s) to ${format.toUpperCase()}${failures ? `; ${failures} failed` : ""}`);
-        } catch {
-            toast.dismiss(toastId);
-            toast.error(`Failed to generate ${format.toUpperCase()}`);
+            const scope = { params: new URLSearchParams(paramsKey) };
+            if (format === 'pdf') await previewLicenseLedgerPdf(scope);
+            else await downloadLicenseLedgerExcel(scope);
+        } catch (error) {
+            toast.error(licenseLedgerExportError(error, `Failed to generate ${format === 'pdf' ? 'PDF' : 'Excel'}.`));
         } finally {
-            setExporting(false);
+            setExporting(null);
         }
     };
 
-    const anyExporting = pdfExporting || excelExporting;
-    const handleBulkExportPDF   = () => handleBulkExport("pdf",  setPdfExporting);
-    const handleBulkExportExcel = () => handleBulkExport("xlsx", setExcelExporting);
-
-    const exportableLicenses = normalizeLicenseWiseData(companyWiseData).licenses;
-    const companyLabel = normalizeText(
-        filters.company && typeof filters.company === 'object'
-            ? filters.company.label ?? filters.company.value
-            : filters.company,
-    );
-    const normLabel = normalizeText(
-        filters.norm && typeof filters.norm === 'object'
-            ? filters.norm.label ?? filters.norm.value
-            : filters.norm,
-    );
-    const purchaseStatusLabel = normalizeText(
-        filters.purchase_status && typeof filters.purchase_status === 'object'
-            ? filters.purchase_status.label ?? filters.purchase_status.value
-            : filters.purchase_status,
-    );
+    const normalizedLedger = normalizeLicenseWiseData(companyWiseData);
+    const visibleLicenses = normalizedLedger.licenses;
+    const visibleLicenseCount = normalizedLedger.company_groups?.reduce(
+        (count, company) => count + company.sion_groups.reduce((subtotal, group) => subtotal + group.licenses.length, 0), 0,
+    ) ?? visibleLicenses.length;
 
     return (
         <>
@@ -559,31 +489,125 @@ export default function LicenseLedger() {
                 pretitle="Ledger"
                 title="License Ledger"
                 description="Track available balance for DFIA and Incentive licenses"
-                actions={
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline" size="sm"
-                            onClick={handleBulkExportPDF}
-                            disabled={anyExporting || exportableLicenses.length === 0}
-                            aria-label="Export license ledger as PDF"
-                            title={exportableLicenses.length === 0 ? 'No data to export' : undefined}
-                        >
-                            {pdfExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
-                            Export PDF
-                        </Button>
-                        <Button
-                            variant="outline" size="sm"
-                            onClick={handleBulkExportExcel}
-                            disabled={anyExporting || exportableLicenses.length === 0}
-                            aria-label="Export license ledger as Excel"
-                            title={exportableLicenses.length === 0 ? 'No data to export' : undefined}
-                        >
-                            {excelExporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
-                            Export Excel
-                        </Button>
-                    </div>
-                }
+                actions={<div className="flex gap-2">
+                    <Button variant="outline" size="sm" disabled={exporting !== null || visibleLicenseCount === 0} onClick={() => runExport('pdf')}>
+                        {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}Preview PDF
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={exporting !== null || visibleLicenseCount === 0} onClick={() => runExport('xlsx')}>
+                        {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}Download Excel
+                    </Button>
+                </div>}
             />
+
+            <Card className="mb-4">
+                <CardHeader className="border-b px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="flex items-center gap-2 text-sm font-semibold">
+                            <Filter className="size-4" aria-hidden="true" /> Filters &amp; Search
+                        </span>
+                        <div className="flex gap-2">
+                            <Button type="button" size="sm" variant="outline" onClick={clearCompany} disabled={!filters.company}>
+                                <Building2 className="size-4" aria-hidden="true" />Clear Company
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={clearAllFilters}>
+                                <XCircle className="size-4" aria-hidden="true" />Clear All
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4 p-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                        <div className="lg:col-span-2">
+                            <label id="ledger-company-label" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Company Filter</label>
+                            <AsyncSelectField endpoint="masters/companies/" labelField="name" valueField="id"
+                                value={filters.company} onChange={(value: LicenseLedgerFilters['company']) => updateFilter('company', value)}
+                                placeholder="All companies..." loadOnMount ariaLabel="Company Filter" />
+                        </div>
+                        <div>
+                            <label htmlFor="ledger-min-balance" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Min Balance</label>
+                            <Input id="ledger-min-balance" type="number" min="0" step="0.01" value={filters.minBalance}
+                                onChange={(event) => updateFilter('minBalance', event.target.value)} placeholder="0.00" />
+                        </div>
+                        <div className="lg:col-span-2">
+                            <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">Search</label>
+                            <DebouncedSearchInput value={filters.search} onChange={(value: string) => updateFilter('search', value)}
+                                placeholder="License # or exporter..." />
+                        </div>
+                        <div>
+                            <label htmlFor="ledger-sort" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Sort By</label>
+                            <select id="ledger-sort" value={filters.ordering} onChange={(event) => updateFilter('ordering', event.target.value)}
+                                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm">
+                                <option value="-license_date">Latest First</option>
+                                <option value="license_date">Oldest First</option>
+                                <option value="-balance_value">Highest Balance</option>
+                                <option value="balance_value">Lowest Balance</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+                        <div>
+                            <label htmlFor="ledger-license-type" className="mb-1.5 block text-xs font-semibold text-muted-foreground">License Type</label>
+                            <Select value={filters.licenseType} onValueChange={(value) => updateFilter('licenseType', value)}>
+                                <SelectTrigger id="ledger-license-type" aria-label="License Type">
+                                    <SelectValue placeholder="All Licenses" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All Licenses</SelectItem>
+                                    <SelectItem value="DFIA">DFIA</SelectItem>
+                                    <SelectItem value="ALL_INCENTIVE">All Incentive</SelectItem>
+                                    <SelectItem value="RODTEP">RODTEP</SelectItem>
+                                    <SelectItem value="ROSTL">ROSTL</SelectItem>
+                                    <SelectItem value="MEIS">MEIS</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label id="ledger-norm-label" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Norm</label>
+                            <AsyncSelectField endpoint="masters/sion-classes/?is_active=true" labelField="norm_class" valueField="norm_class"
+                                value={filters.norm} onChange={(value: LicenseLedgerFilters['norm']) => updateFilter('norm', value)}
+                                placeholder="All norms..." ariaLabel="Norm" />
+                            <p className="mt-1 text-[11px] text-muted-foreground">DFIA only — hides Incentive licenses</p>
+                        </div>
+                        <div>
+                            <label id="ledger-purchase-status-label" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Purchase Status</label>
+                            <AsyncSelectField endpoint="masters/purchase-statuses/?is_active=true" labelField="label" valueField="code"
+                                value={filters.purchaseStatus} onChange={(value: LicenseLedgerFilters['purchaseStatus']) => updateFilter('purchaseStatus', value)}
+                                placeholder="All statuses..." ariaLabel="Purchase Status" />
+                            <p className="mt-1 text-[11px] text-muted-foreground">DFIA only — hides Incentive licenses</p>
+                        </div>
+                        <div className="flex items-center gap-2 pt-5">
+                            <Switch id="ledger-active-only" checked={filters.activeOnly} onCheckedChange={(value) => updateFilter('activeOnly', value)} />
+                            <label htmlFor="ledger-active-only" className="text-sm font-medium">Active Only</label>
+                        </div>
+                    </div>
+
+                    <fieldset>
+                        <legend className="mb-1.5 text-xs font-semibold text-muted-foreground">Purchase Bill Status</legend>
+                        <div className="flex flex-wrap gap-1">
+                            {[
+                                ['ALL', 'All'], ['WITH_PURCHASE_BILL', 'With Purchase Bill'], ['NO_PURCHASE_BILL', 'No Purchase Bill'],
+                            ].map(([value, label]) => (
+                                <Button key={value} type="button" size="sm" variant={filters.purchaseBill === value ? 'default' : 'outline'}
+                                    onClick={() => updateFilter('purchaseBill', value)}>{label}</Button>
+                            ))}
+                        </div>
+                    </fieldset>
+
+                    <div className="border-t border-border pt-3">
+                        <DateRangeFilter label="Purchase Date Range" icon={CalendarRange} hint="(Defaults to current FY: Apr–Mar)"
+                            fromId="ledger-purchase-from" toId="ledger-purchase-to"
+                            fromValue={filters.purchaseDateFrom} toValue={filters.purchaseDateTo}
+                            onFromChange={(value) => updateFilter('purchaseDateFrom', value)}
+                            onToChange={(value) => updateFilter('purchaseDateTo', value)}
+                            onClear={clearPurchaseDates}
+                            presets={[
+                                { label: 'Current FY', icon: CalendarCheck, range: getCurrentFinancialYearRange },
+                                { label: 'Previous FY', icon: Calendar, range: getPreviousFinancialYearRange },
+                            ]} />
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* ── Summary cards ──────────────────────────────────── */}
             {summary && (
@@ -640,210 +664,12 @@ export default function LicenseLedger() {
                 </div>
             )}
 
-            {/* ── Filters card ───────────────────────────────────── */}
-            <Card className="mb-3">
-                <CardHeader className="border-b py-2 px-3">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Filter className="size-4 text-muted-foreground" aria-hidden="true" />
-                            <span className="text-[13px] font-semibold">Filters & Search</span>
-                            {filters.company && (
-                                <Badge variant="info" className="ml-1 text-[11px]">
-                                    <Building2 className="size-3" aria-hidden="true" />
-                                    {companyLabel}
-                                </Badge>
-                            )}
-                            {filters.norm && (
-                                <Badge variant="info" className="ml-1 text-[11px]">
-                                    <BookOpen className="size-3" aria-hidden="true" />
-                                    {normLabel}
-                                </Badge>
-                            )}
-                            {filters.purchase_status && (
-                                <Badge variant="info" className="ml-1 text-[11px]">
-                                    <BadgeCheck className="size-3" aria-hidden="true" />
-                                    {purchaseStatusLabel}
-                                </Badge>
-                            )}
-                        </div>
-                        <div className="flex gap-2">
-                            {filters.company && (
-                                <Button size="sm" variant="outline" onClick={() => handleFilterChange('company', null)}>
-                                    <XCircle className="size-3.5" aria-hidden="true" />Clear Company
-                                </Button>
-                            )}
-                            {filters.norm && (
-                                <Button size="sm" variant="outline" onClick={() => handleFilterChange('norm', null)}>
-                                    <XCircle className="size-3.5" aria-hidden="true" />Clear Norm
-                                </Button>
-                            )}
-                            {filters.purchase_status && (
-                                <Button size="sm" variant="outline" onClick={() => handleFilterChange('purchase_status', null)}>
-                                    <XCircle className="size-3.5" aria-hidden="true" />Clear Purchase Status
-                                </Button>
-                            )}
-                            <Button size="sm" variant="outline" onClick={clearAllFilters}>
-                                <XCircle className="size-3.5" aria-hidden="true" />Clear All
-                            </Button>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-3">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                        <div className="lg:col-span-2">
-                            <label id="company-filter-label" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">
-                                <Building2 className="size-4" aria-hidden="true" /> Company Filter
-                            </label>
-                            <AsyncSelectField
-                                endpoint="masters/companies/" labelField="name" valueField="id"
-                                value={filters.company}
-                                onChange={(value) => handleFilterChange('company', value)}
-                                isMulti={false} placeholder="Select company to view their ledger..."
-                                loadOnMount={false} aria-labelledby="company-filter-label"
-                            />
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">Filter by trades with specific company</p>
-                        </div>
-                        <div className="lg:col-span-2">
-                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">License Type</label>
-                            <div className="flex flex-wrap gap-1">
-                                {LICENSE_TYPE_OPTIONS.map(opt => {
-                                    const active = filters.license_type === opt.value;
-                                    return (
-                                        <button
-                                            key={opt.value}
-                                            type="button"
-                                            aria-pressed={active}
-                                            onClick={() => handleFilterChange('license_type', opt.value)}
-                                            className={cn(
-                                                "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
-                                                active
-                                                    ? "border-primary bg-primary text-primary-foreground"
-                                                    : "border-border bg-card text-muted-foreground hover:bg-muted",
-                                            )}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <div>
-                            <label htmlFor="ledger-min-balance" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Min Balance</label>
-                            <Input id="ledger-min-balance" type="number" value={filters.min_balance} onChange={(e) => handleFilterChange('min_balance', e.target.value)} placeholder="0" step="100" min="0" />
-                        </div>
-                        <div>
-                            <label htmlFor="ledger-search" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Search</label>
-                            <DebouncedSearchInput value={filters.search} onChange={(v) => handleFilterChange('search', v)} placeholder="License # or exporter..." />
-                        </div>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <div>
-                            <label htmlFor="ledger-sort" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Sort By</label>
-                            <select
-                                id="ledger-sort"
-                                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                value={filters.ordering}
-                                onChange={(e) => handleFilterChange('ordering', e.target.value)}
-                            >
-                                <option value="-license_date">Latest First</option>
-                                <option value="license_date">Oldest First</option>
-                                <option value="-balance_value">Highest Balance</option>
-                                <option value="balance_value">Lowest Balance</option>
-                            </select>
-                        </div>
-                        <div className="flex items-end">
-                            <label className="flex cursor-pointer items-center gap-2.5 text-sm" htmlFor="activeOnly">
-                                <Switch id="activeOnly" checked={filters.active_only} onCheckedChange={(v) => handleFilterChange('active_only', v)} />
-                                <span className="text-xs font-semibold text-muted-foreground">Active Only</span>
-                            </label>
-                        </div>
-                        <div>
-                            <label id="norm-filter-label" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">
-                                <BookOpen className="size-4" aria-hidden="true" /> Norm
-                            </label>
-                            <AsyncSelectField
-                                endpoint="masters/sion-classes/?is_active=true" labelField="label" valueField="norm_class"
-                                value={filters.norm}
-                                onChange={(value) => handleFilterChange('norm', value)}
-                                isMulti={false} placeholder="All norms..."
-                                loadOnMount={false} aria-labelledby="norm-filter-label"
-                            />
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">DFIA only — hides Incentive licenses</p>
-                        </div>
-                        <div>
-                            <label id="purchase-status-filter-label" className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">
-                                <BadgeCheck className="size-4" aria-hidden="true" /> Purchase Status
-                            </label>
-                            <AsyncSelectField
-                                endpoint="masters/purchase-statuses/?is_active=true" labelField="label" valueField="code"
-                                value={filters.purchase_status}
-                                onChange={(value) => handleFilterChange('purchase_status', value)}
-                                isMulti={false} placeholder="All statuses..."
-                                loadOnMount={false} aria-labelledby="purchase-status-filter-label"
-                            />
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">DFIA only — hides Incentive licenses</p>
-                        </div>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="lg:col-span-2">
-                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Purchase Bill Status</label>
-                            <div className="flex flex-wrap gap-1">
-                                {PURCHASE_BILL_OPTIONS.map(opt => {
-                                    const active = filters.purchase_bill === opt.value;
-                                    const Icon = opt.Icon;
-                                    return (
-                                        <button
-                                            key={opt.value}
-                                            type="button"
-                                            aria-pressed={active}
-                                            onClick={() => handleFilterChange('purchase_bill', opt.value)}
-                                            className={cn(
-                                                "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors flex items-center gap-1.5",
-                                                active
-                                                    ? "border-primary bg-primary text-primary-foreground"
-                                                    : "border-border bg-card text-muted-foreground hover:bg-muted",
-                                            )}
-                                        >
-                                            <Icon className="size-3.5" aria-hidden="true" />
-                                            {opt.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">Filter by purchase bill presence</p>
-                        </div>
-                    </div>
-
-                    {/* Purchase date range */}
-                    <div className="mt-3 border-t border-border/60 pt-3">
-                        <DateRangeFilter
-                            label="Purchase Date Range"
-                            icon={CalendarRange}
-                            hint="(Defaults to current FY: Apr-Mar)"
-                            fromId="ledger-purchase-from"
-                            toId="ledger-purchase-to"
-                            fromValue={filters.purchase_date_from}
-                            toValue={filters.purchase_date_to}
-                            onFromChange={(v) => handleFilterChange('purchase_date_from', v)}
-                            onToChange={(v) => handleFilterChange('purchase_date_to', v)}
-                            onClear={clearDateFilter}
-                            presets={[
-                                { label: 'Current FY', icon: CalendarCheck, range: getCurrentFinancialYearRange },
-                                { label: 'Previous FY', icon: Calendar, range: getPreviousFinancialYearRange },
-                            ]}
-                        />
-                    </div>
-                </CardContent>
-            </Card>
-
             {/* ── Company-wise ledger card ────────────────────────── */}
             <Card>
                 <CardHeader className="border-b py-2 px-3">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-muted-foreground">
-                            {exportableLicenses.length} license{exportableLicenses.length !== 1 ? 's' : ''}
+                            {visibleLicenseCount} license{visibleLicenseCount !== 1 ? 's' : ''}
                         </span>
                         {companyWiseLoading && (
                             <span className="text-xs text-muted-foreground">Loading…</span>
@@ -857,11 +683,7 @@ export default function LicenseLedger() {
                             <p className="text-sm text-muted-foreground">Loading license-wise ledger…</p>
                         </div>
                     ) : companyWiseData ? (
-                        <LicenseWiseLedger
-                            data={companyWiseData}
-                            navigate={navigate}
-                            companyId={getCompanyFilterValue(filters.company) || undefined}
-                        />
+                        <LicenseWiseLedger data={companyWiseData} navigate={navigate} />
                     ) : (
                         <EmptyState
                             icon={Building2}

@@ -60,6 +60,12 @@ export interface CanonicalTransaction {
    * `null` on the OPENING row — a carried-forward state has no invoice.
    */
   bill_amount?: string | null;
+  /** Canonical column placement and values; never re-derived in a client. */
+  ledger_column?: 'CREDIT' | 'DEBIT' | null;
+  purchase_amount?: string | null;
+  sale_amount?: string | null;
+  purchase_bill_amount?: string | null;
+  sale_bill_amount?: string | null;
   /**
    * Billed licence item names — deduped, first-seen order. `[]` for incentive
    * licences (no item link exists in their data model) and for the OPENING row.
@@ -83,6 +89,20 @@ export interface CanonicalTransaction {
    * no per-transaction norm in the data model; the norm hangs off the item name.
    */
   sion_norms?: string | null;
+  /**
+   * Canonical invoice-document presentation metadata. Consumers must never
+   * resolve storage paths or generate invoices themselves: PURCHASE points to
+   * the preferred uploaded copy, while SALE points to the persisted generated
+   * invoice. `secure_url` is opaque, temporary, and may be absent when an
+   * optional purchase copy has not been uploaded.
+   */
+  invoice_document?: {
+    invoice_number: string | null;
+    document_exists: boolean;
+    signed: boolean;
+    status: 'SIGNED' | 'UNSIGNED' | 'COPY_UNAVAILABLE';
+    secure_url: string | null;
+  } | null;
 }
 
 /**
@@ -137,9 +157,9 @@ export type ProfitState = 'PROFIT' | 'LOSS' | 'BREAK_EVEN' | 'UNAVAILABLE';
  *   `total_sale_bill_inr` / `total_purchase_bill_inr` → `bill_currency` (always INR)
  * Never add or compare figures across these two groups.
  *
- * THE IDENTITY the backend guarantees — unconditional, NO correction term:
+ * Backend identities:
  *     current_balance = total_purchase − total_sale
- *     total_profit_loss = current_balance (same number, two labels)
+ *     total_profit_loss = total_sale_bill_inr − total_purchase_bill_inr
  *
  * `opening_balance` is licence metadata and is deliberately NOT added here:
  * when a PURCHASE exists, the opening and that purchase are the same
@@ -174,10 +194,8 @@ export interface LedgerSummary {
   current_balance: string;
   balance_currency: 'USD' | 'INR';
   /**
-   * The SAME number as `current_balance` — one backend calculation surfaced
-   * under two labels, not two figures that happen to agree. Signed: negative
-   * means a loss (the label carries the direction, so the card shows the
-   * magnitude). Always present.
+   * Canonical realised bill result in `profit_currency`, calculated by the
+   * backend as Sale Bill − Purchase Bill. Signed; always present.
    *
    * NOTE: this is the licence's unutilised position, NOT the realised INR
    * trading margin shown by the Purchase & Profit report. Different question,
@@ -212,12 +230,13 @@ export interface CanonicalLedgerResponse {
   port_name: string | null;
   /**
    * The licence's canonical acquisition date: MIN(qualifying purchase invoice
-   * date). This is the field the ledger list's Purchase Date Range filters on.
+   * date). This remains canonical acquisition metadata for detail and exports.
    *
    * `null` when the licence has no qualifying purchase, and for incentive
    * licences (the canonical definition does not reach them).
    */
   first_purchase_date?: string | null;
+  has_purchase_transaction?: boolean;
 
   opening_balance: string;
   /**

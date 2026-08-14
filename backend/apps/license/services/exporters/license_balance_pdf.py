@@ -9,75 +9,15 @@ CIF reconciliation) ahead of the original Export/Import/BOE/Allotment tables
 ("the Customs Ledger"), plus a Final Reconciliation Summary at the end. See
 `_build_financial_ledger_elements` / `_build_final_reconciliation_elements`.
 """
-import re
 from decimal import Decimal
-
-
-def _split_invoice_numbers(raw):
-    """Split a free-text invoice field into a clean, ordered, deduped list.
-
-    Only splits on comma/semicolon/newline — NOT '/', because this system's
-    own generated invoice numbers (`LicenseTrade.next_invoice_number`) are
-    themselves in `PREFIX/FY/NNNN` form (e.g. "LGL/2026-27/0016"); splitting
-    on '/' would shred a single invoice number into three fragments.
-    """
-    if not raw:
-        return []
-    seen = []
-    for part in re.split(r'[,\n;]+', str(raw)):
-        part = part.strip()
-        if part and part not in seen:
-            seen.append(part)
-    return seen
+from apps.license.services.license_balance_ledger_builder import (
+    boe_invoice_allocation_map,
+    boe_external_invoice_map,
+)
 
 
 def _format_invoice_list(invoice_numbers):
     return ', '.join(invoice_numbers) if invoice_numbers else '-'
-
-
-def _item_display_name(license_import_item, fallback=''):
-    """Same "join item names, else description" convention already used
-    elsewhere in this file (e.g. the existing BOE/Allotment summary tables)."""
-    if license_import_item is None:
-        return fallback or '-'
-    if license_import_item.items.exists():
-        return ', '.join(i.name for i in license_import_item.items.all())
-    return license_import_item.description or fallback or '-'
-
-
-def _boe_invoice_allocation_map(license_obj):
-    """
-    {row_details_id: [invoice_number, ...]} of invoice numbers reconciled to
-    each BOE debit row via active `InvoiceBOEAllocation` matches (the
-    reconciliation panel), so the Financial Ledger and the enriched Customs
-    Ledger both show invoices matched there too, not just the BOE's own
-    free-text `invoice_no` field. One query for the whole license (not
-    per-row), to stay cheap on licenses with hundreds of BOEs.
-    """
-    from apps.reconciliation.models import InvoiceBOEAllocation
-
-    alloc_map = {}
-    rows = InvoiceBOEAllocation.objects.filter(
-        row_details__sr_number__license=license_obj,
-        status=InvoiceBOEAllocation.STATUS_ACTIVE,
-        is_current=True,
-    ).values_list('row_details_id', 'trade_line__trade__invoice_number')
-    for row_details_id, invoice_number in rows:
-        if invoice_number:
-            alloc_map.setdefault(row_details_id, []).append(invoice_number)
-    return alloc_map
-
-
-def _boe_row_invoice_numbers(row_details, alloc_map):
-    """Union of the BOE's own free-text invoice(s) and any invoice numbers
-    matched to this exact row via the reconciliation panel."""
-    boe = row_details.bill_of_entry
-    numbers = _split_invoice_numbers(boe.invoice_no if boe else None)
-    for invoice_number in alloc_map.get(row_details.id, []):
-        for piece in _split_invoice_numbers(invoice_number):
-            if piece not in numbers:
-                numbers.append(piece)
-    return numbers
 
 
 def _build_financial_ledger_elements(license_obj, alloc_map):
@@ -104,6 +44,8 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
 
     from apps.license.services.license_balance_ledger_builder import (
         LicenseBalanceLedgerBuilder, boe_external_invoice_map,
+        split_invoice_numbers, item_display_name,
+        boe_invoice_allocation_map, boe_row_invoice_numbers,
     )
 
     styles = getSampleStyleSheet()
@@ -700,7 +642,8 @@ def build_balance_pdf_response(license_obj, request, show_hidden=False):
     # `engine_balance`; reusing it here instead of a second standalone call
     # keeps this to the one canonical `LicenseBalanceCalculator.
     # calculate_balance()` computation for the whole PDF.
-    alloc_map = _boe_invoice_allocation_map(license_obj)
+    alloc_map = boe_invoice_allocation_map(license_obj)
+    ext_map = boe_external_invoice_map(license_obj)
     ledger_elements, ledger_summary = _build_financial_ledger_elements(license_obj, alloc_map)
     live_balance_cif = ledger_summary['engine_balance']
 
@@ -915,7 +858,7 @@ def build_balance_pdf_response(license_obj, request, show_hidden=False):
                         f"{float(detail.qty):.2f}",
                         f"{float(detail.cif_fc):.2f}",
                         f"{float(detail.cif_inr):.2f}",
-                        Paragraph(_format_invoice_list(_boe_row_invoice_numbers(detail, alloc_map)), styles['Normal']),
+                        Paragraph(_format_invoice_list(boe_row_invoice_numbers(detail, alloc_map, ext_map)), styles['Normal']),
                     ])
 
                 # Add total footer row
@@ -986,7 +929,7 @@ def build_balance_pdf_response(license_obj, request, show_hidden=False):
                         f"{float(allot.qty):.2f}",
                         f"{float(allot.cif_fc):.2f}",
                         f"{float(allot.cif_inr):.2f}",
-                        Paragraph(_format_invoice_list(_split_invoice_numbers(allot.allotment.invoice)), styles['Normal']),
+                        Paragraph(_format_invoice_list(split_invoice_numbers(allot.allotment.invoice)), styles['Normal']),
                     ])
 
                 # Add total footer row

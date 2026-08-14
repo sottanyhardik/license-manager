@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
+import { toast } from 'sonner';
+import {
+    downloadLicenseLedgerExcel, licenseLedgerExportError, previewLicenseLedgerPdf,
+} from '../services/licenseLedgerExport';
 import { formatIndianNumber } from '../utils/numberFormatter';
 import { formatDate as formatDateUtil } from '../utils/dateFormatter';
-import { generatePDF, generateExcel } from '../utils/ledgerExport';
 import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +14,7 @@ import {
     ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, Minus, ScrollText,
     TrendingDown, TrendingUp, TriangleAlert, Wallet,
 } from "lucide-react";
-import { isSaleRow, selectLedgerDisplayRows } from '@/utils/ledgerDisplayRows';
+import { selectLedgerDisplayRows } from '@/utils/ledgerDisplayRows';
 import StatCard from '@/components/StatCard';
 import type {
     CanonicalLedgerResponse, CanonicalTransaction, CompanyUtilization, LedgerSummary, ProfitState,
@@ -58,22 +61,6 @@ export function normalizeLedgerDetail(value: unknown): CanonicalLedgerResponse |
     // assertion is required because `Record<string, unknown>` and the canonical
     // shape do not structurally overlap; the guard above is the runtime check.
     return value as unknown as CanonicalLedgerResponse;
-}
-
-export function sanitizeLedgerFilenamePart(value: unknown): string {
-    return normalizeText(value, 'license')
-        .split('')
-        .map((char) => {
-            const code = char.charCodeAt(0);
-            return code < 32 || code === 127 || '\\/:*?"<>|'.includes(char) ? '-' : char;
-        })
-        .join('')
-        .replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '')
-        .slice(0, 120) || 'license';
-}
-
-export function getTodayStamp(date = new Date()): string {
-    return date.toISOString().slice(0, 10);
 }
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
@@ -239,6 +226,7 @@ function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCur
             <tr className="border-b-2 border-primary/20 bg-primary/8">
                 <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Date</th>
                 <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Particulars</th>
+                <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Invoice Number</th>
                 <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Type</th>
                 {/* Items is DFIA-only: incentive licences have no item link in
                     the data model, so the column would be permanently empty. */}
@@ -267,6 +255,39 @@ function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCur
                     summary band. */}
             </tr>
         </thead>
+    );
+}
+
+function InvoiceDocumentCell({ transaction }: { transaction: CanonicalTransaction }) {
+    const document = transaction.invoice_document;
+    const invoiceNumber = normalizeText(document?.invoice_number, '-');
+
+    if (document?.document_exists && document.secure_url) {
+        return (
+            <td className="px-2.5 py-[5px] text-foreground">
+                <a
+                    href={document.secure_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
+                    aria-label={`Open invoice ${invoiceNumber} (${document.signed ? 'signed' : 'unsigned'})`}
+                >
+                    {invoiceNumber}
+                </a>
+                <span className="ml-1.5 whitespace-nowrap text-[10px] font-semibold text-muted-foreground">
+                    {document.signed ? 'SIGNED' : 'UNSIGNED'}
+                </span>
+            </td>
+        );
+    }
+
+    return (
+        <td className="px-2.5 py-[5px] text-foreground">
+            <span>{invoiceNumber}</span>
+            {document?.status === 'COPY_UNAVAILABLE' && (
+                <span className="ml-1.5 whitespace-nowrap text-[10px] text-muted-foreground">Copy unavailable</span>
+            )}
+        </td>
     );
 }
 
@@ -307,12 +328,13 @@ function LedgerItemsCell({ itemNames }: { itemNames: string[] | undefined }) {
 // ─── Main component ──────────────────────────────────────────────────────────────
 
 export default function LicenseLedgerDetail() {
-    const { id, companyId } = useParams();
+    const { licenseId, itemId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
     const [ledger, setLedger] = useState<CanonicalLedgerResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null);
 
     const queryParams = new URLSearchParams(location.search);
     const licenseType = queryParams.get('license_type') || (location.state as Record<string, unknown>)?.license_type || 'DFIA';
@@ -322,7 +344,7 @@ export default function LicenseLedgerDetail() {
             setLoading(true);
             setError(null);
             try {
-                const url = buildLedgerDetailPath(id, companyId);
+                const url = buildLedgerDetailPath(licenseId, itemId);
                 if (!url) { setLedger(null); setError('Missing license ledger identifier'); return; }
                 const response = await api.get(url);
                 const normalizedLedger = normalizeLedgerDetail(response.data);
@@ -335,7 +357,7 @@ export default function LicenseLedgerDetail() {
             }
         };
         fetchLedgerDetail();
-    }, [id, licenseType, companyId]);
+    }, [licenseId, licenseType, itemId]);
 
     const formatDate = (dateStr: unknown): string => {
         if (!dateStr) return '-';
@@ -374,14 +396,26 @@ export default function LicenseLedgerDetail() {
 
     if (!ledger) return null;
 
+    const exportScope = { licenseId: licenseId!, itemId: itemId!, licenseType: ledger.license_type };
+    const runExport = async (format: 'pdf' | 'xlsx') => {
+        if (exporting) return;
+        setExporting(format);
+        try {
+            if (format === 'pdf') await previewLicenseLedgerPdf(exportScope);
+            else await downloadLicenseLedgerExcel(exportScope);
+        } catch (exportError) {
+            toast.error(licenseLedgerExportError(exportError, `Failed to generate ${format === 'pdf' ? 'PDF' : 'Excel'}.`));
+        } finally {
+            setExporting(null);
+        }
+    };
+
     const isDFIA = ledger.license_type === 'DFIA';
     // NOTE: not a display decision — this drives the "Action Required" banner and
     // deliberately reads the COMPLETE financial collection (`transactions`),
     // opening row included. Which rows get rendered is decided further down by
     // `selectLedgerDisplayRows`.
-    const hasPurchases = (ledger.transactions || []).some(
-        t => t.type === 'PURCHASE' || t.type === 'OPENING',
-    );
+    const hasPurchases = ledger.has_purchase_transaction ?? false;
     // The canonical reconciliation block. Optional only for older cached
     // payloads; when absent the summary band is hidden rather than zero-filled.
     const summary = ledger.summary;
@@ -404,27 +438,6 @@ export default function LicenseLedgerDetail() {
     const isNegativeBalance = currentBalance < 0;
     const showPurchaseWarning = !hasPurchases || isNegativeBalance;
 
-    // When the ledger was opened with a company filter (companyId in the URL),
-    // include the company name in the filename so downloads are clearly scoped.
-    const exportCompanyPart = companyId
-        ? sanitizeLedgerFilenamePart((ledger.transactions[0] as CanonicalTransaction)?.company_name ?? String(companyId))
-        : null;
-
-    const buildExportFilename = (ext: 'pdf' | 'xlsx') =>
-        [
-            'License_Ledger',
-            sanitizeLedgerFilenamePart(ledger.license_number),
-            exportCompanyPart,
-            getTodayStamp(),
-        ].filter(Boolean).join('_') + `.${ext}`;
-
-    const handleDownloadPDF = () => {
-        generatePDF([ledger], buildExportFilename('pdf'));
-    };
-    const handleDownloadExcel = async () => {
-        await generateExcel([ledger], buildExportFilename('xlsx'));
-    };
-
     return (
         <div className="min-h-screen bg-muted/40">
             {/* ── Tally-style toolbar ───────────────────────────── */}
@@ -437,11 +450,11 @@ export default function LicenseLedgerDetail() {
                         <span className="text-[1.1rem] font-medium text-white">License Ledger</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="destructive" size="sm" onClick={handleDownloadPDF}>
-                            <FileText className="size-4" aria-hidden="true" />Download PDF
+                        <Button variant="secondary" size="sm" disabled={exporting !== null} onClick={() => runExport('pdf')}>
+                            {exporting === 'pdf' ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}Preview PDF
                         </Button>
-                        <Button size="sm" className="bg-success text-white hover:bg-success/90" onClick={handleDownloadExcel}>
-                            <FileSpreadsheet className="size-4" aria-hidden="true" />Download Excel
+                        <Button variant="secondary" size="sm" disabled={exporting !== null} onClick={() => runExport('xlsx')}>
+                            {exporting === 'xlsx' ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}Download Excel
                         </Button>
                         <span className="ml-1 text-[14.5px] text-white/70">
                             {formatDate(new Date().toISOString())}
@@ -598,6 +611,7 @@ export default function LicenseLedgerDetail() {
                                         {/* A carried-forward state, not a trade: no counterparty,
                                             no invoice, no billed item. All three stay blank. */}
                                         <td className="px-2.5 py-[5px] font-medium text-foreground">Opening Balance</td>
+                                        <td className="px-2.5 py-[5px] text-muted-foreground">-</td>
                                         <td className="px-2.5 py-[5px] text-foreground">
                                             <Badge variant="secondary" className="text-[11px]">{openingRow.type}</Badge>
                                         </td>
@@ -608,7 +622,7 @@ export default function LicenseLedgerDetail() {
                                             `summary.total_purchase`. */}
                                         <td className="px-2.5 py-[5px] text-right font-semibold text-destructive">-</td>
                                         <td className="px-2.5 py-[5px] text-right font-semibold text-success">
-                                            {formatCurrency(openingRow.amount, balanceCurrency)}
+                                            {formatCurrency(openingRow.purchase_amount, balanceCurrency)}
                                         </td>
                                         <td className="px-2.5 py-[5px] text-right text-muted-foreground">-</td>
                                         <td className="px-2.5 py-[5px] text-right text-muted-foreground">-</td>
@@ -661,8 +675,8 @@ export default function LicenseLedgerDetail() {
                                             // `txns` is PURCHASE + SALE only (display rule), so the
                                             // amount lands in the credit column for sales and the
                                             // debit column for everything else.
-                                            const isSale = isSaleRow(txn);
-                                            const isPurchase = !isSale;
+                                            const isSale = txn.sale_amount != null;
+                                            const isPurchase = txn.purchase_amount != null;
                                             const isCommission = txn.is_commission;
 
                                             return (
@@ -686,6 +700,7 @@ export default function LicenseLedgerDetail() {
                                                     <td className="px-2.5 py-[5px] text-foreground">
                                                         {normalizeText(txn.party_name, '-')}
                                                     </td>
+                                                    <InvoiceDocumentCell transaction={txn} />
                                                     <td className="px-2.5 py-[5px] text-foreground">
                                                         <Badge variant={isCommission ? "secondary" : "outline"} className="text-[11px]">
                                                             {txn.type}
@@ -699,10 +714,10 @@ export default function LicenseLedgerDetail() {
                                                         as a positive magnitude and encodes direction
                                                         in `type`, so neither side needs a sign flip. */}
                                                     <td className="px-2.5 py-[5px] text-right font-semibold text-destructive">
-                                                        {isSale ? formatCurrency(txn.amount, balanceCurrency) : '-'}
+                                                        {formatCurrency(txn.sale_amount, balanceCurrency)}
                                                     </td>
                                                     <td className="px-2.5 py-[5px] text-right font-semibold text-success">
-                                                        {isPurchase ? formatCurrency(txn.amount, balanceCurrency) : '-'}
+                                                        {formatCurrency(txn.purchase_amount, balanceCurrency)}
                                                     </td>
                                                     {/* Bill columns: the INVOICED amount, in INR — a
                                                         different quantity and currency from the two
@@ -711,10 +726,10 @@ export default function LicenseLedgerDetail() {
                                                         licence value, so a sale's bill is a Sale Bill
                                                         and a purchase's bill is a Purchase Bill. */}
                                                     <td className="px-2.5 py-[5px] text-right tabular-nums text-destructive">
-                                                        {isSale ? formatCurrency(txn.bill_amount, billCurrency) : '-'}
+                                                        {formatCurrency(txn.sale_bill_amount, billCurrency)}
                                                     </td>
                                                     <td className="px-2.5 py-[5px] text-right tabular-nums text-success">
-                                                        {isPurchase ? formatCurrency(txn.bill_amount, billCurrency) : '-'}
+                                                        {formatCurrency(txn.purchase_bill_amount, billCurrency)}
                                                     </td>
                                                 </tr>
                                             );

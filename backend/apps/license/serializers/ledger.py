@@ -15,11 +15,21 @@ from decimal import Decimal
 from rest_framework import serializers
 
 
+class InvoiceDocumentSerializer(serializers.Serializer):
+    invoice_number = serializers.CharField(allow_blank=True)
+    document_exists = serializers.BooleanField()
+    signed = serializers.BooleanField()
+    status = serializers.CharField()
+    secure_url = serializers.CharField(allow_null=True, required=False)
+
+
 class TransactionSerializer(serializers.Serializer):
     """Serialize a single transaction in the canonical ledger."""
 
     date = serializers.DateField()
     id = serializers.IntegerField()
+    invoice_number = serializers.CharField(required=False, allow_blank=True)
+    invoice_document = InvoiceDocumentSerializer(required=False, allow_null=True)
     type = serializers.CharField()
     #: OUR side of the trade — what the ledger table groups by.
     company_id = serializers.IntegerField(allow_null=True)
@@ -40,11 +50,19 @@ class TransactionSerializer(serializers.Serializer):
     bill_amount = serializers.DecimalField(
         max_digits=19, decimal_places=2, allow_null=True, required=False
     )
+    ledger_column = serializers.CharField(allow_null=True, required=False)
+    purchase_amount = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True, required=False)
+    sale_amount = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True, required=False)
+    purchase_bill_amount = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True, required=False)
+    sale_bill_amount = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True, required=False)
     #: Billed licence item names, deduped, first-seen order ([] for incentive
     #: licences and the OPENING row). A list, not a joined string: one trade is
     #: ONE ledger row no matter how many items it bills.
     item_names = serializers.ListField(
         child=serializers.CharField(), required=False
+    )
+    rate = serializers.DecimalField(
+        max_digits=19, decimal_places=4, allow_null=True, required=False
     )
     is_commission = serializers.BooleanField()
     affects_balance = serializers.BooleanField()
@@ -89,9 +107,9 @@ class LedgerSummarySerializer(serializers.Serializer):
                            + OPENING row (when shown)
                            (licence value added, increases balance)
 
-    THE IDENTITY, UNCONDITIONAL (no correction term):
+    Backend identities:
         current_balance = total_purchase − total_sale
-        total_profit_loss = current_balance (same number, two labels)
+        total_profit_loss = total_sale_bill_inr − total_purchase_bill_inr
 
     WHY NO OPENING ADJUSTMENT:
     The display rule (`select_display_rows`) shows the acquisition exactly once:
@@ -103,9 +121,8 @@ class LedgerSummarySerializer(serializers.Serializer):
     economic event (licence acquisition), so adding would double-count.
 
     Currencies: `total_sale`/`total_purchase`/`opening_balance`/`current_balance`/
-    `total_profit_loss` are ALL in `balance_currency` (USD for DFIA, INR
-    otherwise). `total_sale_bill_inr`/`total_purchase_bill_inr` are in `bill_currency`
-    (INR) and are supplementary — never add across the two.
+    `current_balance` are in `balance_currency` (USD for DFIA, INR otherwise).
+    Bill totals and `total_profit_loss` are in INR.
     """
 
     total_sale = serializers.DecimalField(max_digits=19, decimal_places=2)
@@ -126,9 +143,7 @@ class LedgerSummarySerializer(serializers.Serializer):
     current_balance = serializers.DecimalField(max_digits=19, decimal_places=2)
     balance_currency = serializers.CharField()
 
-    #: The SAME number as `current_balance`, in `profit_currency`
-    #: (== `balance_currency`). Signed: a negative position serialises negative.
-    #: Always present — the position is computable for every licence type.
+    #: Sale Bill − Purchase Bill, in `profit_currency` (INR). Signed.
     total_profit_loss = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True)
     profit_currency = serializers.CharField()
     #: PROFIT | LOSS | BREAK_EVEN | UNAVAILABLE — decided in the backend so no
@@ -170,6 +185,9 @@ class CanonicalLedgerSerializer(serializers.Serializer):
     #: definition does not reach). This is the field the ledger list's Purchase
     #: Date Range filters on, so a client can always see WHY a licence matched.
     first_purchase_date = serializers.DateField(allow_null=True, required=False)
+    # Licence-level metadata across every DFIA import item, not transaction
+    # rows. Empty for incentive licences or genuinely unclassified items.
+    sion_norms = serializers.CharField(required=False, allow_blank=True)
 
     #: Purchase bill detection — TRUE if license has ≥1 qualifying PURCHASE with
     #: non-zero bill amount; FALSE if no such purchase exists. NOT inferred from
@@ -178,6 +196,7 @@ class CanonicalLedgerSerializer(serializers.Serializer):
     #: Enumerated status: "WITH_PURCHASE_BILL" | "NO_PURCHASE_BILL"
     #: Derived from has_purchase_bill for easier client-side filtering.
     purchase_bill_status = serializers.CharField()
+    has_purchase_transaction = serializers.BooleanField()
 
     opening_balance = serializers.DecimalField(max_digits=19, decimal_places=2)
     license_running_balance = serializers.DecimalField(max_digits=19, decimal_places=2)

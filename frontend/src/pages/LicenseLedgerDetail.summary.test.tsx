@@ -32,15 +32,10 @@ import LicenseLedgerDetail from "./LicenseLedgerDetail";
 vi.mock("react-router-dom", () => ({
     useLocation: () => ({ search: "", state: null }),
     useNavigate: () => vi.fn(),
-    useParams: () => ({ id: "LIC/1", companyId: undefined }),
+    useParams: () => ({ licenseId: "LIC/1", itemId: "7" }),
 }));
 
 vi.mock("../api/axios", () => ({ default: { get: vi.fn() } }));
-
-vi.mock("../utils/ledgerExport", () => ({
-    generatePDF: vi.fn(),
-    generateExcel: vi.fn(),
-}));
 
 const mockedApiGet = vi.mocked(api.get);
 
@@ -60,6 +55,12 @@ const PURCHASE: CanonicalTransaction = {
     is_commission: false, affects_balance: true,
     license_running_balance: "65380.63", company_utilization_after: "65380.63",
     display_status: "",
+    ledger_column: "CREDIT", purchase_amount: "65380.63", sale_amount: null,
+    purchase_bill_amount: "5400000.00", sale_bill_amount: null,
+    invoice_document: {
+        invoice_number: "PUR-001", document_exists: false, signed: false,
+        status: "COPY_UNAVAILABLE", secure_url: null,
+    },
 };
 
 const SALE: CanonicalTransaction = {
@@ -71,6 +72,12 @@ const SALE: CanonicalTransaction = {
     is_commission: false, affects_balance: true,
     license_running_balance: "45380.63", company_utilization_after: "45380.63",
     display_status: "",
+    ledger_column: "DEBIT", purchase_amount: null, sale_amount: "20000.00",
+    purchase_bill_amount: null, sale_bill_amount: "1850000.00",
+    invoice_document: {
+        invoice_number: "SAL-001", document_exists: true, signed: false,
+        status: "UNSIGNED", secure_url: "/api/invoice-documents/view/opaque-token/",
+    },
 };
 
 const BASE_SUMMARY: LedgerSummary = {
@@ -292,6 +299,22 @@ function rowFor(type: string): HTMLElement {
 }
 
 describe("row presentation columns", () => {
+    it("uses canonical invoice metadata for links and handles a missing purchase copy", async () => {
+        await renderLedger();
+
+        const purchaseRow = rowFor("PURCHASE");
+        expect(within(purchaseRow).getByText("PUR-001")).toBeTruthy();
+        expect(within(purchaseRow).getByText("Copy unavailable")).toBeTruthy();
+        expect(within(purchaseRow).queryByRole("link", { name: /PUR-001/i })).toBeNull();
+
+        const saleLink = within(rowFor("SALE")).getByRole("link", {
+            name: "Open invoice SAL-001 (unsigned)",
+        });
+        expect(saleLink).toHaveAttribute("href", "/api/invoice-documents/view/opaque-token/");
+        expect(saleLink).toHaveAttribute("target", "_blank");
+        expect(within(rowFor("SALE")).getByText("UNSIGNED")).toBeTruthy();
+    });
+
     it("shows the COUNTERPARTY in Particulars, not our own company", async () => {
         await renderLedger();
 

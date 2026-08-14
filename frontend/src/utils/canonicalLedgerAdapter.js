@@ -80,7 +80,7 @@ function adaptTransactionForExport(txn, isDFIA) {
  * Preserves canonical balances (no recalculation).
  *
  * IMPORTANT — this returns the COMPLETE financial collection on purpose, not
- * the display rows. `ledgerExport.js` is the module that separates the two: it
+ * the display rows. Export renderers must likewise separate the two: they
  * derives every total from this full collection and applies the ledger display
  * rule (`createDisplayRowFilter` from `./ledgerDisplayRows`) only at the point
  * a row is printed. Filtering here would silently corrupt export totals.

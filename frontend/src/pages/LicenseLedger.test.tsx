@@ -2,252 +2,185 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "../api/axios";
-import { generateExcel, generatePDF } from "../utils/ledgerExport";
-import LicenseLedger, {
-    buildLedgerFilterParams,
-    getCompanyFilterValue,
-    getFinancialYearRange,
-    getNormFilterValue,
-    getPurchaseStatusFilterValue,
-    getTodayStamp,
-    normalizeLicenseWiseData,
-    normalizeMinBalance,
-} from "./LicenseLedger";
+import { downloadLicenseLedgerExcel, previewLicenseLedgerPdf } from "../services/licenseLedgerExport";
+import { getFinancialYearRange } from "../utils/dateRangePresets";
+import LicenseLedger, { normalizeLicenseWiseData } from "./LicenseLedger";
 
-vi.mock("react-router-dom", () => ({
-    useNavigate: () => vi.fn(),
+const navigate = vi.fn();
+vi.mock("react-router-dom", () => ({ useNavigate: () => navigate }));
+vi.mock("../api/axios", () => ({ default: { get: vi.fn() } }));
+vi.mock("../services/licenseLedgerExport", () => ({
+    previewLicenseLedgerPdf: vi.fn(), downloadLicenseLedgerExcel: vi.fn(),
+    licenseLedgerExportError: (_error: unknown, fallback: string) => fallback,
 }));
-
-vi.mock("../api/axios", () => ({
-    default: {
-        get: vi.fn(),
-    },
-}));
-
-vi.mock("../utils/ledgerExport", () => ({
-    generatePDF: vi.fn(),
-    generateExcel: vi.fn(),
-}));
-
-vi.mock("sonner", () => ({
-    toast: {
-        dismiss: vi.fn(),
-        error: vi.fn(),
-        info: vi.fn(),
-        success: vi.fn(),
-    },
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+vi.mock("../components/AsyncSelectField", () => ({
+    default: ({ ariaLabel, value, onChange }: { ariaLabel: string; value: string | number | null; onChange: (value: unknown) => void }) => (
+        <select aria-label={ariaLabel} value={value ?? ""} onChange={(event) => onChange(event.target.value || null)}>
+            <option value="">All</option><option value="7">Option 7</option><option value="E1">E1</option><option value="GE">GE</option>
+        </select>
+    ),
 }));
 
 const mockedApiGet = vi.mocked(api.get);
-const mockedGeneratePDF = vi.mocked(generatePDF);
-const mockedGenerateExcel = vi.mocked(generateExcel);
+const mockedPreviewPdf = vi.mocked(previewLicenseLedgerPdf);
+const mockedDownloadExcel = vi.mocked(downloadLicenseLedgerExcel);
 
-describe("LicenseLedger helpers", () => {
-    it("calculates current and previous financial-year ranges", () => {
-        expect(getFinancialYearRange(new Date("2026-07-16T00:00:00Z"))).toEqual({
-            fyStart: "2026-04-01",
-            fyEnd: "2027-03-31",
-        });
-        expect(getFinancialYearRange(new Date("2026-02-10T00:00:00Z"))).toEqual({
-            fyStart: "2025-04-01",
-            fyEnd: "2026-03-31",
-        });
-        expect(getFinancialYearRange(new Date("2026-07-16T00:00:00Z"), -1)).toEqual({
-            fyStart: "2025-04-01",
-            fyEnd: "2026-03-31",
-        });
-    });
+const ledgerData = { licenses: [{
+    license_id: 2436, license_number: "LIC-2436", license_date: "2026-04-01",
+    license_type: "DFIA", companies: [{ company_id: 766, company_name: "LABDHI",
+        purchases: [], sales: [], purchase_total: 0, sale_total: 0, profit_loss: 0 }],
+}] };
+const summaryData = {
+    dfia: { total_licenses: 1, total_value_usd: 0, balance_value_usd: 0, purchase_amount_inr: 0, profit_loss_inr: 0 },
+    incentive: { total_licenses: 0, total_value_inr: 0, balance_value_inr: 0, purchase_amount_inr: 0, profit_loss_inr: 0 },
+};
 
-    it("normalizes ledger filters before building query parameters", () => {
-        const params = buildLedgerFilterParams({
-            license_type: "BAD",
-            min_balance: "-5",
-            search: " LIC 1 ",
-            company: { value: " 42 ", label: "Acme" },
-            norm: { value: "E1", label: "E1 - Something" },
-            purchase_status: { value: "LM", label: "LM Purchase" },
-            active_only: true,
-            ordering: "bad",
-            purchase_date_from: "2026-04-01",
-            purchase_date_to: "2027-03-31",
-            no_purchases: true,
-            purchase_bill: "ALL",
-        });
+function queryFor(prefix: string): URLSearchParams {
+    const call = [...mockedApiGet.mock.calls].reverse().find(([url]) => String(url).startsWith(prefix));
+    if (!call) throw new Error(`No request for ${prefix}`);
+    return new URL(String(call[0]), "https://test.invalid/").searchParams;
+}
 
-        expect(params.get("license_type")).toBe("ALL");
-        expect(params.has("min_balance")).toBe(false);
-        expect(params.get("search")).toBe("LIC 1");
-        expect(params.get("company")).toBe("42");
-        expect(params.get("norm")).toBe("E1");
-        expect(params.get("purchase_status")).toBe("LM");
-        expect(params.get("ordering")).toBe("-license_date");
-        expect(params.get("no_purchases")).toBe("true");
-    });
-
-    it("omits norm and purchase_status from params when not set", () => {
-        const params = buildLedgerFilterParams({
-            license_type: "ALL",
-            min_balance: "",
-            search: "",
-            company: null,
-            norm: null,
-            purchase_status: null,
-            active_only: true,
-            ordering: "-license_date",
-            purchase_date_from: "",
-            purchase_date_to: "",
-            purchase_bill: "ALL",
-        });
-
-        expect(params.has("norm")).toBe(false);
-        expect(params.has("purchase_status")).toBe(false);
-    });
-
-    it("normalizes company/norm/purchase-status and numeric filter edge cases", () => {
-        expect(getCompanyFilterValue(null)).toBe("");
-        expect(getCompanyFilterValue({ value: " 7 " })).toBe("7");
-        expect(getNormFilterValue(null)).toBe("");
-        expect(getNormFilterValue({ value: " E1 " })).toBe("E1");
-        expect(getPurchaseStatusFilterValue(null)).toBe("");
-        expect(getPurchaseStatusFilterValue({ value: " LM " })).toBe("LM");
-        expect(normalizeMinBalance("100.50")).toBe("100.5");
-        expect(normalizeMinBalance("bad")).toBe("");
-    });
-
-    it("filters malformed license-wise API rows before rendering/export", () => {
-        expect(normalizeLicenseWiseData({
-            licenses: [
-                null,
-                { license_id: "", companies: [] },
-                {
-                    license_id: "1",
-                    license_number: " LIC-1 ",
-                    license_date: "",
-                    license_type: "DFIA",
-                    companies: [{
-                        company_id: null,
-                        company_name: "",
-                        purchases: [{ trade_id: "p1", invoice_date: "2026-04-01", amount: "12.4" }, "bad"],
-                        sales: [{ trade_id: "s1", invoice_date: null, amount: "bad" }],
-                        purchase_total: "12.4",
-                        sale_total: "bad",
-                        profit_loss: "-2",
-                    }],
-                },
-            ],
-        })).toEqual({
-            licenses: [{
-                license_id: "1",
-                license_number: "LIC-1",
-                license_date: "-",
-                license_type: "DFIA",
-                companies: [{
-                    company_id: 0,
-                    company_name: "Unknown company",
-                    purchases: [{ trade_id: "p1", invoice_date: "2026-04-01", amount: 12.4 }],
-                    sales: [{ trade_id: "s1", invoice_date: "-", amount: 0 }],
-                    purchase_total: 12.4,
-                    sale_total: 0,
-                    profit_loss: -2,
-                }],
-            }],
-        });
-    });
-
-    it("formats deterministic export date stamps", () => {
-        expect(getTodayStamp(new Date("2026-07-16T12:30:00Z"))).toBe("2026-07-16");
-    });
-});
-
-describe("LicenseLedger", () => {
+describe("LicenseLedger fresh filters", () => {
     beforeEach(() => {
-        vi.restoreAllMocks();
         vi.clearAllMocks();
-        mockedGenerateExcel.mockResolvedValue(undefined);
         mockedApiGet.mockImplementation((url: string) => {
-            if (url.startsWith("license-ledger/license-wise/")) {
-                return Promise.resolve({
-                    data: {
-                        licenses: [{
-                            license_id: 1,
-                            license_number: "LIC-1",
-                            license_date: "2026-04-01",
-                            license_type: "DFIA",
-                            companies: [],
-                        }],
-                    },
-                });
-            }
-            if (url.startsWith("license-ledger/summary/")) {
-                return Promise.resolve({
-                    data: {
-                        dfia: { total_licenses: 0, total_value_usd: 0, sold_value_usd: 0, balance_value_usd: 0, purchase_amount_inr: 0, sale_amount_inr: 0, profit_loss_inr: 0 },
-                        incentive: { total_licenses: 0, total_value_inr: 0, sold_value_inr: 0, balance_value_inr: 0, purchase_amount_inr: 0, sale_amount_inr: 0, profit_loss_inr: 0 },
-                    },
-                });
-            }
-            // The exporter passes license_type so the backend targets the correct
-            // table (DFIA vs Incentive) instead of AUTO-searching both.
-            if (url === "license-ledger/1/ledger_detail/?license_type=DFIA") {
-                return Promise.resolve({ data: { license_id: 1, license_number: "LIC-1" } });
-            }
+            if (url.startsWith("license-ledger/license-wise/?")) return Promise.resolve({ data: ledgerData });
+            if (url.startsWith("license-ledger/summary/?")) return Promise.resolve({ data: summaryData });
             return Promise.reject(new Error(`Unexpected URL: ${url}`));
         });
     });
 
-    it("exports normalized license-wise ledger details to PDF", async () => {
+    it("renders every fresh filter and sends canonical defaults to both endpoints", async () => {
         render(<LicenseLedger />);
+        expect(await screen.findByText("LIC-2436")).toBeInTheDocument();
+        for (const label of ["Filters & Search", "Company Filter", "Min Balance", "Sort By", "Active Only", "Norm", "Purchase Status", "Purchase Bill Status", "Purchase Date Range"]) {
+            expect(screen.getByText(label)).toBeInTheDocument();
+        }
+        expect(screen.getByPlaceholderText(/license # or exporter/i)).toBeInTheDocument();
+        const expectedFy = getFinancialYearRange();
+        for (const prefix of ["license-ledger/license-wise/", "license-ledger/summary/"]) {
+            const params = queryFor(prefix);
+            expect(params.get("license_type")).toBe("ALL");
+            expect(params.get("ordering")).toBe("-license_date");
+            expect(params.has("active_only")).toBe(false);
+            expect(params.get("purchase_date_from")).toBe(expectedFy.fyStart);
+            expect(params.get("purchase_date_to")).toBe(expectedFy.fyEnd);
+        }
+    });
 
-        fireEvent.click(await screen.findByRole("button", { name: "Export license ledger as PDF" }));
+    it("normalizes independent filters into the new API contract", async () => {
+        render(<LicenseLedger />);
+        await screen.findByText("LIC-2436");
+        fireEvent.change(screen.getByLabelText("Company Filter"), { target: { value: "7" } });
+        fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
+        fireEvent.click(screen.getByRole("option", { name: "DFIA" }));
+        fireEvent.change(screen.getByLabelText("Min Balance"), { target: { value: "1000" } });
+        fireEvent.click(screen.getByRole("switch", { name: "Active Only" }));
+        fireEvent.change(screen.getByLabelText("Norm"), { target: { value: "E1" } });
+        fireEvent.change(screen.getByLabelText("Purchase Status"), { target: { value: "GE" } });
+        fireEvent.click(screen.getByRole("button", { name: "With Purchase Bill" }));
+        await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("purchase_bill")).toBe("WITH_PURCHASE_BILL"));
+        const params = queryFor("license-ledger/license-wise/");
+        expect(Object.fromEntries(params)).toMatchObject({ buying_company_id: "7", license_type: "DFIA", min_balance: "1000", active_only: "true", norm: "E1", purchase_status: "GE" });
+    });
+
+    it("clears dates independently and Clear All restores current-FY defaults", async () => {
+        render(<LicenseLedger />);
+        await screen.findByText("LIC-2436");
+        fireEvent.click(screen.getByRole("button", { name: /^Clear$/ }));
+        await waitFor(() => expect(queryFor("license-ledger/license-wise/").has("purchase_date_from")).toBe(false));
+        fireEvent.click(screen.getByRole("button", { name: /clear all/i }));
+        const expectedFy = getFinancialYearRange();
+        await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("purchase_date_from")).toBe(expectedFy.fyStart));
+    });
+
+    it("passes the exact filtered query to both shared exporters", async () => {
+        render(<LicenseLedger />);
+        await screen.findByText("LIC-2436");
+        fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
+        fireEvent.click(screen.getByRole("option", { name: "RODTEP" }));
+        await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("RODTEP"));
+        fireEvent.click(screen.getByRole("button", { name: /preview pdf/i }));
+        await waitFor(() => expect(mockedPreviewPdf).toHaveBeenCalled());
+        fireEvent.click(screen.getByRole("button", { name: /download excel/i }));
+        await waitFor(() => expect(mockedDownloadExcel).toHaveBeenCalled());
+        const pdfParams = mockedPreviewPdf.mock.calls[0][0].params;
+        const excelParams = mockedDownloadExcel.mock.calls[0][0].params;
+        expect(pdfParams.toString()).toBe(excelParams.toString());
+        expect(pdfParams.get("license_type")).toBe("RODTEP");
+    });
+
+    it("uses one accessible License Type select and resets it to All Licenses", async () => {
+        render(<LicenseLedger />);
+        await screen.findByText("LIC-2436");
+
+        const select = screen.getByRole("combobox", { name: "License Type" });
+        expect(select).toHaveTextContent("All Licenses");
+        expect(screen.queryByRole("button", { name: "DFIA Only" })).not.toBeInTheDocument();
+
+        fireEvent.keyDown(select, { key: "ArrowDown" });
+        fireEvent.click(screen.getByRole("option", { name: "MEIS" }));
+        await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("MEIS"));
+
+        fireEvent.click(screen.getByRole("button", { name: /clear all/i }));
+        await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("ALL"));
+        expect(screen.getByRole("combobox", { name: "License Type" })).toHaveTextContent("All Licenses");
+    });
+
+    it("sends the canonical ALL_INCENTIVE value for All Incentive", async () => {
+        render(<LicenseLedger />);
+        await screen.findByText("LIC-2436");
+
+        fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
+        fireEvent.click(screen.getByRole("option", { name: "All Incentive" }));
 
         await waitFor(() => {
-            expect(mockedApiGet).toHaveBeenCalledWith("license-ledger/1/ledger_detail/?license_type=DFIA");
-        });
-        expect(mockedGeneratePDF).toHaveBeenCalledWith(
-            [{ license_id: 1, license_number: "LIC-1" }],
-            expect.stringMatching(/^License_Ledger_Bulk_\d{4}-\d{2}-\d{2}\.pdf$/),
-        );
-    });
-
-    it("passes company param to license-wise endpoint when company filter is set", async () => {
-        render(<LicenseLedger />);
-        // Wait for initial load — export button is always rendered
-        await screen.findByRole("button", { name: /export license ledger as pdf/i });
-        // The initial call must hit license-wise (company param not forced in; no deletion)
-        const calls = mockedApiGet.mock.calls.map(([url]) => url as string);
-        expect(calls.some(url => url.startsWith("license-ledger/license-wise/"))).toBe(true);
-    });
-
-    it("Clear All button resets filters and re-triggers fetch", async () => {
-        render(<LicenseLedger />);
-        await screen.findByRole("button", { name: /export license ledger as pdf/i });
-        // Dirty one filter so clearAllFilters causes a real state change
-        const minBalanceInput = screen.getByLabelText(/min balance/i);
-        fireEvent.change(minBalanceInput, { target: { value: "500" } });
-        // Wait for the filter-change fetch to settle
-        await waitFor(() => expect(mockedApiGet).toHaveBeenCalled());
-        const clearAllBtn = screen.getByRole("button", { name: /clear all/i });
-        expect(clearAllBtn).toBeInTheDocument();
-        mockedApiGet.mockClear();
-        fireEvent.click(clearAllBtn);
-        await waitFor(() => {
-            expect(mockedApiGet).toHaveBeenCalledWith(
-                expect.stringContaining("license-ledger/license-wise/"),
-            );
+            expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("ALL_INCENTIVE");
+            expect(queryFor("license-ledger/summary/").get("license_type")).toBe("ALL_INCENTIVE");
         });
     });
 
-    it("export buttons are always rendered, disabled when no license data", async () => {
+    it("opens the retained detail route and normalizes malformed rows", async () => {
+        render(<LicenseLedger />);
+        fireEvent.click(await screen.findByRole("button", { name: /view ledger for LIC-2436/i }));
+        expect(navigate).toHaveBeenCalledWith("/license-ledger/2436/766");
+        expect(normalizeLicenseWiseData({ licenses: [null, { license_id: "", companies: [] }] })).toEqual({ licenses: [] });
+    });
+
+    it("renders the canonical company → SION → license hierarchy without changing financial values", async () => {
         mockedApiGet.mockImplementation((url: string) => {
-            if (url.startsWith("license-ledger/license-wise/")) {
-                return Promise.resolve({ data: { licenses: [] } });
-            }
-            return Promise.reject(new Error(`Unexpected: ${url}`));
+            if (url.startsWith("license-ledger/license-wise/?")) return Promise.resolve({ data: {
+                licenses: [],
+                company_groups: [{
+                    company_id: 766, company_name: "LABDHI MERCANTILE LLP",
+                    total_purchase_bill_inr: "300", total_sale_bill_inr: "450", total_balance: "75", total_profit_loss_inr: "150",
+                    sion_groups: [
+                        { sion_norm: "E1", sion_label: "E1", license_count: 1, total_purchase_bill_inr: "100", total_sale_bill_inr: "175", total_balance: "25", total_profit_loss_inr: "75",
+                            licenses: [{ license_id: 1, license_number: "LIC-E1", license_type: "DFIA", license_date: "2026-01-01", first_purchase_date: "2025-12-01", sion_norms: "E1", current_balance: "25", purchase_bill_inr: "100", sale_bill_inr: "175", profit_loss_inr: "75", has_purchase_bill: false }] },
+                        { sion_norm: "E5, E132", sion_label: "E5, E132", license_count: 1, total_purchase_bill_inr: "200", total_sale_bill_inr: "275", total_balance: "50", total_profit_loss_inr: "75",
+                            licenses: [{ license_id: 2, license_number: "LIC-MULTI", license_type: "DFIA", license_date: "2026-01-02", first_purchase_date: "2025-12-02", sion_norms: "E5, E132", current_balance: "50", purchase_bill_inr: "200", sale_bill_inr: "275", profit_loss_inr: "75" }] },
+                        { sion_norm: "", sion_label: "N/A / EMPTY", license_count: 1, total_purchase_bill_inr: "0", total_sale_bill_inr: "0", total_balance: "0", total_profit_loss_inr: "0", licenses: [] },
+                    ],
+                }],
+            } });
+            if (url.startsWith("license-ledger/summary/?")) return Promise.resolve({ data: summaryData });
+            return Promise.reject(new Error(`Unexpected URL: ${url}`));
         });
+
         render(<LicenseLedger />);
-        const pdfBtn = await screen.findByRole("button", { name: /export license ledger as pdf/i });
-        const xlsBtn = screen.getByRole("button", { name: /export license ledger as excel/i });
-        expect(pdfBtn).toBeDisabled();
-        expect(xlsBtn).toBeDisabled();
+        expect(await screen.findByRole("heading", { name: "LABDHI MERCANTILE LLP" })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "SION: E1" })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "SION: E5, E132" })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "SION: N/A / EMPTY" })).toBeInTheDocument();
+        expect(screen.getAllByText("LIC-MULTI")).toHaveLength(1);
+        expect(screen.getByText("NO PURCHASE BILL")).toBeInTheDocument();
+        expect(screen.getAllByText("₹100.00").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("₹175.00").length).toBeGreaterThan(0);
+        expect(screen.getByText("Company Total — LABDHI MERCANTILE LLP")).toBeInTheDocument();
+
+        fireEvent.click(screen.getAllByRole("button", { name: "View Ledger" })[0]);
+        expect(navigate).toHaveBeenCalledWith("/license-ledger/1/766");
     });
 });

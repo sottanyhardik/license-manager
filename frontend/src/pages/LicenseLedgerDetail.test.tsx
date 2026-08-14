@@ -2,19 +2,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "../api/axios";
-import { generateExcel, generatePDF } from "../utils/ledgerExport";
+import { downloadLicenseLedgerExcel, previewLicenseLedgerPdf } from "../services/licenseLedgerExport";
 import type { CanonicalLedgerResponse } from "../types/canonicalLedger";
 import LicenseLedgerDetail, {
     buildLedgerDetailPath,
-    getTodayStamp,
     normalizeLedgerDetail,
-    sanitizeLedgerFilenamePart,
 } from "./LicenseLedgerDetail";
 
 vi.mock("react-router-dom", () => ({
     useLocation: () => ({ search: "", state: null }),
     useNavigate: () => vi.fn(),
-    useParams: () => ({ id: "LIC/1", companyId: " 42 " }),
+    useParams: () => ({ licenseId: "LIC/1", itemId: " 42 " }),
 }));
 
 vi.mock("../api/axios", () => ({
@@ -22,15 +20,15 @@ vi.mock("../api/axios", () => ({
         get: vi.fn(),
     },
 }));
-
-vi.mock("../utils/ledgerExport", () => ({
-    generatePDF: vi.fn(),
-    generateExcel: vi.fn(),
+vi.mock("../services/licenseLedgerExport", () => ({
+    previewLicenseLedgerPdf: vi.fn(),
+    downloadLicenseLedgerExcel: vi.fn(),
+    licenseLedgerExportError: (_error: unknown, fallback: string) => fallback,
 }));
 
 const mockedApiGet = vi.mocked(api.get);
-const mockedGeneratePDF = vi.mocked(generatePDF);
-const mockedGenerateExcel = vi.mocked(generateExcel);
+const mockedPreviewPdf = vi.mocked(previewLicenseLedgerPdf);
+const mockedDownloadExcel = vi.mocked(downloadLicenseLedgerExcel);
 
 describe("LicenseLedgerDetail helpers", () => {
     it("builds safe ledger-detail API paths from route params", () => {
@@ -69,18 +67,12 @@ describe("LicenseLedgerDetail helpers", () => {
         expect(normalizeLedgerDetail(canonical)).toEqual(canonical);
     });
 
-    it("sanitizes export filename segments and date stamps", () => {
-        expect(sanitizeLedgerFilenamePart(' LIC:/<1>" ')).toBe("LIC-1");
-        expect(sanitizeLedgerFilenamePart("")).toBe("license");
-        expect(getTodayStamp(new Date("2026-07-16T12:30:00Z"))).toBe("2026-07-16");
-    });
 });
 
 describe("LicenseLedgerDetail", () => {
     beforeEach(() => {
         vi.restoreAllMocks();
         vi.clearAllMocks();
-        mockedGenerateExcel.mockResolvedValue(undefined);
         // Canonical API response (Phase 4C)
         const canonicalResponse: CanonicalLedgerResponse = {
             license_id: 1,
@@ -124,19 +116,16 @@ describe("LicenseLedgerDetail", () => {
         mockedApiGet.mockResolvedValue({ data: canonicalResponse });
     });
 
-    it("fetches canonical ledger details and exports PDF with a safe filename", async () => {
+    it("fetches canonical details and uses the shared export service", async () => {
         render(<LicenseLedgerDetail />);
 
         await waitFor(() => {
             expect(mockedApiGet).toHaveBeenCalledWith("license-ledger/LIC%2F1/ledger_detail/?company=42");
         });
-        fireEvent.click(await screen.findByRole("button", { name: /download pdf/i }));
-
-        // Verify PDF export was called with canonical response and safe filename
-        expect(mockedGeneratePDF).toHaveBeenCalled();
-        const calls = mockedGeneratePDF.mock.calls[0];
-        expect(calls[0][0].license_number).toBe("LIC/1");
-        expect(calls[0][0].license_type).toBe("DFIA");
-        expect(calls[1]).toMatch(/^License_Ledger_LIC-1_.*\.pdf$/);
+        expect(await screen.findByText("License Ledger")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: /preview pdf/i }));
+        await waitFor(() => expect(mockedPreviewPdf).toHaveBeenCalledWith({ licenseId: "LIC/1", itemId: " 42 ", licenseType: "DFIA" }));
+        fireEvent.click(screen.getByRole("button", { name: /download excel/i }));
+        await waitFor(() => expect(mockedDownloadExcel).toHaveBeenCalledWith({ licenseId: "LIC/1", itemId: " 42 ", licenseType: "DFIA" }));
     });
 });

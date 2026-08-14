@@ -36,6 +36,7 @@ calculations. It is the ONLY authoritative source for ledger data. All consumers
 from __future__ import annotations
 
 import logging
+import re
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, Dict, List, Any
 from datetime import date as date_type
@@ -65,6 +66,9 @@ def quantize_2dp(value: Decimal) -> Decimal:
     return to_decimal(value, DEC_0).quantize(DECIMAL_2DP, rounding=ROUND_HALF_UP)
 
 
+_FIRST_PURCHASE_UNSET = object()
+
+
 class CanonicalLedgerService:
     """
     Single authoritative source for License Ledger calculations.
@@ -77,7 +81,9 @@ class CanonicalLedgerService:
     """
 
     @staticmethod
-    def build_canonical_ledger_dataset(license_id: int, license_type: str = "DFIA") -> Dict[str, Any]:
+    def build_canonical_ledger_dataset(
+        license_id: int, license_type: str = "DFIA", *, first_purchase_date=_FIRST_PURCHASE_UNSET,
+    ) -> Dict[str, Any]:
         """
         Build the authoritative ledger dataset for a license.
 
@@ -201,6 +207,11 @@ class CanonicalLedgerService:
             'license_id': license_id,
             'license_type': license_type,
             **metadata,
+            # License metadata, resolved from every import item on the licence
+            # (not merely the items that happen to occur on a trade).  Keeping
+            # this here prevents list/PDF/Excel renderers from querying or
+            # reverse-engineering SION independently.
+            'sion_norms': _extract_license_sion_norms(license_obj, license_type),
             # The licence's canonical acquisition date, from the SAME definition
             # the Purchase & Profit report and the ledger list's Purchase Date
             # Range filter use. Deliberately NOT re-derived as MIN(date) over
@@ -208,7 +219,10 @@ class CanonicalLedgerService:
             # linked/mirror legs that the canonical definition excludes, so a
             # locally-derived date could disagree with the filter that decides
             # whether this licence appears in the list at all.
-            'first_purchase_date': _first_purchase_date_for(license_id, license_type),
+            'first_purchase_date': (
+                _first_purchase_date_for(license_id, license_type)
+                if first_purchase_date is _FIRST_PURCHASE_UNSET else first_purchase_date
+            ),
             'opening_balance': Decimal('0.00'),
             'license_running_balance': Decimal('0.00'),
             'closing_balance': Decimal('0.00'),
@@ -332,6 +346,10 @@ class CanonicalLedgerService:
                 # is INR while the balance is CIF USD for DFIA.
                 'bill_amount': txn_data.get('bill_amount'),
                 'item_names': txn_data.get('item_names') or [],
+                # Optional exchange rate copied from the billed lines.  It is
+                # deliberately absent when a trade has no single unambiguous
+                # rate; bill values are never recalculated from it.
+                'rate': txn_data.get('rate'),
                 'is_commission': is_commission,
                 'license_running_balance': running_balance,
                 'company_utilization_after': company_util_after,
@@ -342,6 +360,19 @@ class CanonicalLedgerService:
         # Set final balances
         dataset['license_running_balance'] = running_balance
         dataset['closing_balance'] = running_balance
+
+        # Publish debit/credit presentation values ONCE. Every consumer reads
+        # these fields verbatim; UI/PDF/Excel must never infer a column from
+        # transaction type independently.
+        for row in dataset['transactions']:
+            column = ledger_column_for(row.get('type'))
+            is_purchase = column == LEDGER_COLUMN_CREDIT
+            is_sale = column == LEDGER_COLUMN_DEBIT
+            row['ledger_column'] = column
+            row['purchase_amount'] = row['amount'] if is_purchase else None
+            row['sale_amount'] = row['amount'] if is_sale else None
+            row['purchase_bill_amount'] = row.get('bill_amount') if is_purchase else None
+            row['sale_bill_amount'] = row.get('bill_amount') if is_sale else None
 
         # ── Display selection (presentation only) ──────────────────────────
         # `transactions` above stays the complete financial record — it still
@@ -354,6 +385,10 @@ class CanonicalLedgerService:
         display = select_display_rows(dataset['transactions'])
         dataset['display_transactions'] = display['display_transactions']
         dataset['opening_display'] = display['opening_row']
+        dataset['has_purchase_transaction'] = any(
+            row.get('purchase_amount') is not None and row.get('type') == 'PURCHASE'
+            for row in dataset['transactions']
+        )
 
         # Build company utilizations dict.
         # Company names are resolved in ONE bulk query (previously one query
@@ -373,11 +408,151 @@ class CanonicalLedgerService:
 
         # ── Screen reconciliation summary (additive; recomputes nothing) ────
         dataset['summary'] = _build_summary(dataset)
+        dataset['license_wise_companies'] = _build_license_wise_companies(dataset)
 
         # ── Add purchase-not-present detection flag ────
         dataset['has_purchase_bill'] = _has_purchase_bill(dataset['transactions'])
 
         return dataset
+
+    @staticmethod
+    def build_collection_summary(datasets: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Aggregate list-page cards strictly from canonical per-license summaries."""
+        result = {
+            'dfia': {'total_licenses': 0, 'total_value_usd': DEC_0, 'balance_value_usd': DEC_0,
+                     'purchase_amount_inr': DEC_0, 'sale_amount_inr': DEC_0, 'profit_loss_inr': DEC_0},
+            'incentive': {'total_licenses': 0, 'total_value_inr': DEC_0, 'balance_value_inr': DEC_0,
+                          'purchase_amount_inr': DEC_0, 'sale_amount_inr': DEC_0, 'profit_loss_inr': DEC_0},
+        }
+        for data in datasets:
+            summary = data['summary']
+            bucket = result['dfia'] if data['license_type'] == 'DFIA' else result['incentive']
+            bucket['total_licenses'] += 1
+            value_key = 'total_value_usd' if data['license_type'] == 'DFIA' else 'total_value_inr'
+            balance_key = 'balance_value_usd' if data['license_type'] == 'DFIA' else 'balance_value_inr'
+            bucket[value_key] += summary['total_purchase']
+            bucket[balance_key] += summary['current_balance']
+            bucket['purchase_amount_inr'] += summary['total_purchase_bill_inr']
+            bucket['sale_amount_inr'] += summary['total_sale_bill_inr']
+            bucket['profit_loss_inr'] += summary['total_profit_loss']
+        for bucket in result.values():
+            for key, value in bucket.items():
+                if key != 'total_licenses':
+                    bucket[key] = quantize_2dp(value)
+        return result
+
+    @staticmethod
+    def build_collection_company_groups(datasets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Build export/list company groups without presentation-layer sums.
+
+        A licence can contain trades for more than one owning company, so the
+        company relationship comes from the already-canonical per-company
+        ledger groups rather than exporter/license-holder metadata.
+        """
+        groups: Dict[int, Dict[str, Any]] = {}
+        for data in datasets:
+            for company in data.get('license_wise_companies') or []:
+                company_id = company['company_id']
+                group = groups.setdefault(company_id, {
+                    'company_id': company_id,
+                    'company_name': company['company_name'],
+                    'licenses': [],
+                    'total_purchase_bill_inr': DEC_0,
+                    'total_sale_bill_inr': DEC_0,
+                    'total_balance': DEC_0,
+                    'total_profit_loss_inr': DEC_0,
+                    'balance_currency': data['summary']['balance_currency'],
+                })
+                row = {
+                    'license_id': data['license_id'],
+                    'license_number': data['license_number'],
+                    'license_type': data['license_type'],
+                    'license_date': data['license_date'],
+                    'first_purchase_date': data['first_purchase_date'],
+                    'sion_norms': data.get('sion_norms') or '',
+                    # The report column is the current balance of the licence.
+                    'current_balance': data['summary']['current_balance'],
+                    # Kept separately for a company total when a licence has
+                    # activity under multiple owning companies.
+                    'company_balance': company['current_balance'],
+                    'balance_currency': data['summary']['balance_currency'],
+                    'purchase_bill_inr': company['purchase_total'],
+                    'sale_bill_inr': company['sale_total'],
+                    'profit_loss_inr': company['profit_loss'],
+                    'profit_state': company['profit_state'],
+                    'has_purchase_bill': data['has_purchase_bill'],
+                }
+                group['licenses'].append(row)
+                group['total_purchase_bill_inr'] += company['purchase_total']
+                group['total_sale_bill_inr'] += company['sale_total']
+                group['total_balance'] += company['current_balance']
+                group['total_profit_loss_inr'] += company['profit_loss']
+
+        result = []
+        for group in groups.values():
+            # Preserve the filtered collection's approved ordering (license
+            # date/balance). Insertion into company/SION buckets is stable.
+            for key in ('total_purchase_bill_inr', 'total_sale_bill_inr', 'total_balance',
+                        'total_profit_loss_inr'):
+                group[key] = quantize_2dp(group[key])
+            group['profit_state'] = _profit_state(group['total_profit_loss_inr'])
+            # Reporting hierarchy is canonical and shared by every consumer:
+            # Company -> SION -> Licence.  A multi-norm licence belongs to one
+            # deterministic composite group so its financial values can never
+            # be duplicated across norm sections.
+            sion_groups: Dict[str, Dict[str, Any]] = {}
+            for row in group['licenses']:
+                sion_norm = _canonical_sion_group(row.get('sion_norms'))
+                bucket = sion_groups.setdefault(sion_norm, {
+                    'sion_norm': sion_norm,
+                    'sion_label': sion_norm or 'N/A / EMPTY',
+                    'licenses': [],
+                    'license_count': 0,
+                    'total_purchase_bill_inr': DEC_0,
+                    'total_sale_bill_inr': DEC_0,
+                    'total_balance': DEC_0,
+                    'total_profit_loss_inr': DEC_0,
+                    'balance_currency': group['balance_currency'],
+                })
+                bucket['licenses'].append(row)
+                bucket['license_count'] += 1
+                bucket['total_purchase_bill_inr'] += row['purchase_bill_inr']
+                bucket['total_sale_bill_inr'] += row['sale_bill_inr']
+                bucket['total_balance'] += row['company_balance']
+                bucket['total_profit_loss_inr'] += row['profit_loss_inr']
+
+            for bucket in sion_groups.values():
+                for key in ('total_purchase_bill_inr', 'total_sale_bill_inr',
+                            'total_balance', 'total_profit_loss_inr'):
+                    bucket[key] = quantize_2dp(bucket[key])
+                bucket['profit_state'] = _profit_state(bucket['total_profit_loss_inr'])
+            group['sion_groups'] = sorted(
+                sion_groups.values(),
+                key=lambda bucket: _sion_sort_key(bucket['sion_norm']),
+            )
+            result.append(group)
+        return sorted(result, key=lambda group: (group['company_name'], group['company_id']))
+
+    @staticmethod
+    def build_collection_grand_total(company_groups: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Reconcile the report total from canonical company partitions."""
+        total = {
+            'license_count': 0,
+            'total_purchase_bill_inr': DEC_0,
+            'total_sale_bill_inr': DEC_0,
+            'total_balance': DEC_0,
+            'total_profit_loss_inr': DEC_0,
+        }
+        for group in company_groups:
+            total['license_count'] += len(group.get('licenses') or [])
+            for key in ('total_purchase_bill_inr', 'total_sale_bill_inr',
+                        'total_balance', 'total_profit_loss_inr'):
+                total[key] += group[key]
+        for key in ('total_purchase_bill_inr', 'total_sale_bill_inr',
+                    'total_balance', 'total_profit_loss_inr'):
+            total[key] = quantize_2dp(total[key])
+        total['profit_state'] = _profit_state(total['total_profit_loss_inr'])
+        return total
 
 
 # ========== INTERNAL HELPERS ==========
@@ -385,6 +560,30 @@ class CanonicalLedgerService:
 #: License types whose ledger balance is denominated in CIF USD. Everything
 #: else (Incentive-scheme licenses) carries an INR license value.
 _USD_BALANCE_LICENSE_TYPES = frozenset({'DFIA'})
+
+
+def _natural_key(value: str):
+    """Deterministic human ordering: E1, E5, E132, PP."""
+    return tuple(int(part) if part.isdigit() else part.casefold()
+                 for part in re.split(r'(\d+)', value))
+
+
+def _canonical_sion_group(value: Optional[str]) -> str:
+    """Return one non-duplicating group key from canonical SION metadata.
+
+    The canonical licence field is a comma-separated set when a licence has
+    several norms.  Such a licence is assigned to a single composite group;
+    it is never copied into each constituent group because that would duplicate
+    Purchase, Sale, Balance and P/L.
+    """
+    norms = {part.strip() for part in (value or '').split(',') if part.strip()}
+    return ', '.join(sorted(norms, key=_natural_key))
+
+
+def _sion_sort_key(value: str):
+    # Empty is always last; configured/master order is not currently exposed
+    # by the canonical dataset, so use stable natural ordering.
+    return (not bool(value), _natural_key(value) if value else ())
 
 #: Which ledger column a row's amount belongs in — read from the SINGLE
 #: definition in `transaction_semantics.ledger_column_for`, never restated here.
@@ -510,17 +709,14 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     total_purchase_bill_inr: Decimal = DEC_0
     total_sale_bill_inr: Decimal = DEC_0
     for row in display_rows:
-        column = ledger_column_for(row.get('type'))
-        row_bill = row.get('bill_amount') or DEC_0
-        # LEDGER COLUMN MAPPING: balance_direction CREDIT (PURCHASE, OPENING)
-        # goes to the Purchase column; balance_direction DEBIT (SALE) goes to
-        # the Sale column. Both map to business semantics of what the transaction does.
-        if column == LEDGER_COLUMN_CREDIT:
-            total_purchase += row['amount']  # PURCHASE/OPENING (balance_direction CREDIT)
-            total_purchase_bill_inr += row_bill
-        elif column == LEDGER_COLUMN_DEBIT:
-            total_sale += row['amount']  # SALE (balance_direction DEBIT)
-            total_sale_bill_inr += row_bill
+        purchase_amount = row.get('purchase_amount')
+        sale_amount = row.get('sale_amount')
+        if purchase_amount is not None:
+            total_purchase += purchase_amount
+            total_purchase_bill_inr += row.get('purchase_bill_amount') or DEC_0
+        if sale_amount is not None:
+            total_sale += sale_amount
+            total_sale_bill_inr += row.get('sale_bill_amount') or DEC_0
 
     total_purchase = quantize_2dp(total_purchase)
     total_sale = quantize_2dp(total_sale)
@@ -569,6 +765,45 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _build_license_wise_companies(dataset: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Build the list screen's company groups from canonical row values."""
+    groups: Dict[int, Dict[str, Any]] = {}
+    for row in dataset.get('display_transactions') or []:
+        company_id = row.get('company_id')
+        if company_id is None:
+            continue
+        group = groups.setdefault(company_id, {
+            'company_id': company_id,
+            'company_name': row.get('company_name') or 'Unknown company',
+            'purchases': [], 'sales': [],
+            'purchase_total': DEC_0, 'sale_total': DEC_0,
+            'purchase_value': DEC_0, 'sale_value': DEC_0,
+        })
+        if row.get('purchase_bill_amount') is not None:
+            amount = row.get('purchase_bill_amount') or DEC_0
+            group['purchases'].append({'trade_id': row.get('id'), 'invoice_date': row.get('date'), 'amount': amount})
+            group['purchase_total'] += amount
+            group['purchase_value'] += row.get('purchase_amount') or DEC_0
+        if row.get('sale_bill_amount') is not None:
+            amount = row.get('sale_bill_amount') or DEC_0
+            group['sales'].append({'trade_id': row.get('id'), 'invoice_date': row.get('date'), 'amount': amount})
+            group['sale_total'] += amount
+            group['sale_value'] += row.get('sale_amount') or DEC_0
+
+    result = []
+    for group in groups.values():
+        group['purchase_total'] = quantize_2dp(group['purchase_total'])
+        group['sale_total'] = quantize_2dp(group['sale_total'])
+        group['purchase_value'] = quantize_2dp(group['purchase_value'])
+        group['sale_value'] = quantize_2dp(group['sale_value'])
+        group['current_balance'] = quantize_2dp(group['purchase_value'] - group['sale_value'])
+        group['balance_currency'] = dataset['summary']['balance_currency']
+        group['profit_loss'] = quantize_2dp(group['sale_total'] - group['purchase_total'])
+        group['profit_state'] = _profit_state(group['profit_loss'])
+        result.append(group)
+    return sorted(result, key=lambda group: group['company_name'])
+
+
 def _first_purchase_date_for(license_id, license_type: Optional[str]) -> Optional[date_type]:
     """
     The licence's canonical `first_purchase_date`, or None when it has none.
@@ -583,11 +818,15 @@ def _first_purchase_date_for(license_id, license_type: Optional[str]) -> Optiona
     Never raises: a metadata lookup must not be able to break the ledger screen.
     A failure degrades to None, and is logged rather than swallowed silently.
     """
-    if license_type not in _USD_BALANCE_LICENSE_TYPES or not license_id:
+    if not license_id:
         return None
     try:
-        from apps.license.services.license_profit import first_purchase_date_for_license
-        return first_purchase_date_for_license(license_id)
+        from apps.license.services.license_profit import (
+            first_purchase_date_for_license, incentive_first_purchase_date_by_license,
+        )
+        if license_type in _USD_BALANCE_LICENSE_TYPES:
+            return first_purchase_date_for_license(license_id)
+        return incentive_first_purchase_date_by_license([license_id]).get(license_id)
     except Exception:  # pragma: no cover — defensive
         logger.exception(
             "first_purchase_date lookup failed for license_id=%s (%s); reporting None",
@@ -631,6 +870,7 @@ def _get_license_object(license_id: int, license_type: str):
             return (
                 LicenseDetailsModel.objects
                 .select_related('exporter', 'port')
+                .prefetch_related('import_license__items__sion_norm_class')
                 .get(id=license_id)
             )
         elif license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
@@ -693,6 +933,25 @@ def _extract_license_metadata(license_obj) -> Dict[str, Any]:
         'port_id': port_id,
         'port_name': (port.name if port else '') or '',
     }
+
+
+def _extract_license_sion_norms(license_obj, license_type: str) -> str:
+    """Return the licence-level SION metadata in deterministic order.
+
+    SION belongs to DFIA licence items, not financial transactions.  The
+    licence query prefetches this relationship, so this traversal performs no
+    query and does not depend on whether an item has already been traded.
+    """
+    if license_type != 'DFIA':
+        return ''
+    norms: List[str] = []
+    for import_item in license_obj.import_license.all():
+        for item in import_item.items.all():
+            norm_class = getattr(item, 'sion_norm_class', None)
+            norm = (getattr(norm_class, 'norm_class', '') or '').strip() if norm_class else ''
+            if norm and norm not in norms:
+                norms.append(norm)
+    return ', '.join(norms)
 
 
 def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
@@ -795,6 +1054,7 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
             sion_norms = _extract_sion_norms(trade.license_lines)
             item_names = _extract_item_names(trade.license_lines)
             bill_amount = _extract_bill_amount(trade.license_lines)
+            rate = _extract_exchange_rate(trade.license_lines)
         else:
             # Incentive license (prefetched, already filtered to this license)
             lines = trade.license_incentive_lines
@@ -802,12 +1062,14 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
             if incentive_line:
                 total_cif = to_decimal(incentive_line.license_value, DEC_0)
             bill_amount = _extract_bill_amount(lines)
+            rate = None
 
         # Include transaction even if zero-amount (per Scenario 7: zero txns visible but not counted)
         # Zero-amount transactions will not affect balance since amount=0
         transactions.append({
             'date': txn_date,
             'id': trade.id,
+            'invoice_number': trade.invoice_number or '',
             'type': txn_type,
             'company_id': company_id,
             'company_name': company_name,
@@ -815,6 +1077,7 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
             'party_name': party_name,
             'amount': total_cif,
             'bill_amount': bill_amount,
+            'rate': rate,
             'item_names': item_names,
             'sion_norms': sion_norms,
         })
@@ -914,6 +1177,20 @@ def _extract_bill_amount(lines) -> Decimal:
     for line in lines or ():
         total += to_decimal(getattr(line, 'amount_inr', None), DEC_0)
     return quantize_2dp(total)
+
+
+def _extract_exchange_rate(lines) -> Optional[Decimal]:
+    """Return one real line exchange rate, or ``None`` when unavailable/mixed.
+
+    This is presentation metadata only.  In particular, it is never used to
+    calculate the already-canonical INR bill amount.
+    """
+    rates = []
+    for line in lines or ():
+        value = to_decimal(getattr(line, 'exc_rate', None), DEC_0)
+        if value > DEC_0 and value not in rates:
+            rates.append(value)
+    return rates[0] if len(rates) == 1 else None
 
 
 def _extract_line_cif(line) -> Decimal:

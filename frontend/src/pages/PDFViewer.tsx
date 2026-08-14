@@ -19,7 +19,7 @@ export function normalizePdfApiPath(value: string | null): string | null {
 
 /**
  * PDF Viewer — opens PDFs in a dedicated route that regenerates on refresh.
- * URL format: /pdf-viewer?url=/license-ledger/export/all/?params...
+ * URL format: /pdf-viewer?url=/reports/example.pdf
  */
 export default function PDFViewer() {
     const [searchParams] = useSearchParams();

@@ -6,10 +6,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from apps.accounts.permissions import LicensePermission, LicenseLedgerViewPermission
+from apps.accounts.permissions import LicensePermission
 from apps.core.models import CompanyModel
 from apps.core.utils.exceptions import api_error
-from apps.license.ledger_pdf import generate_license_ledger_pdf
 from apps.license.models import LicenseDetailsModel, LicenseOwnership, LicenseTransferModel
 
 
@@ -20,50 +19,7 @@ class LicenseActionViewSet(ViewSet):
     permission_classes = [LicensePermission]
 
     def get_permissions(self):
-        # download-ledger is also accessible to LEDGER_MANAGER
-        if self.action == 'download_ledger':
-            return [LicenseLedgerViewPermission()]
         return super().get_permissions()
-
-    @action(detail=True, methods=['get'], url_path='download-ledger')
-    def download_ledger(self, request, pk=None):
-        """
-        Download detailed ledger PDF for a license.
-        Groups items by head and shows:
-        - Import items with quantities and CIF
-        - Allotments (pending BOE)
-        - Bill of Entry (debited)
-        - Available balance
-        """
-        license_obj = get_object_or_404(
-            LicenseDetailsModel.objects.prefetch_related(
-                'import_license__items__group',
-                'import_license__items__sion_norm_class',
-                'import_license__allotment_details__allotment__company',
-                'import_license__hs_code'
-            ).select_related(
-                'exporter',
-                'port'
-            ),
-            pk=pk
-        )
-
-        try:
-            # Generate PDF grouped by item
-            pdf_content = generate_license_ledger_pdf(license_obj)
-
-            # Create response
-            response = HttpResponse(pdf_content, content_type='application/pdf')
-            filename = f"License_Ledger_{license_obj.license_number}.pdf"
-            response['Content-Disposition'] = f'inline; filename="{filename}"'
-
-            return response
-
-        except Exception as e:
-            return Response(
-                api_error('Failed to generate PDF', e, __name__),
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
 
     @action(detail=True, methods=['post'], url_path='fetch-ledger')
     def fetch_ledger(self, request, pk=None):

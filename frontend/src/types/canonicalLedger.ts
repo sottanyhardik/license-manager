@@ -37,7 +37,7 @@ export interface CanonicalTransaction {
    *
    * `null` when the relation is absent (the trade's company FK is nullable and
    * `SET_NULL`, so a deleted company really does leave a NULL party on a
-   * historical trade). Render 'N/A' — never substitute `company_name` or the
+   * historical trade). Render '-' — never substitute `company_name` or the
    * licence holder, which would state that we traded with ourselves.
    *
    * Optional because older/cached responses predate the field.
@@ -124,10 +124,12 @@ export type ProfitState = 'PROFIT' | 'LOSS' | 'BREAK_EVEN' | 'UNAVAILABLE';
  * The on-screen summary block — every summary figure the ledger page displays,
  * computed once by `CanonicalLedgerService._build_summary`.
  *
- * DEBIT / CREDIT COLUMNS (visual table columns)
- *   `total_debit`  = Σ of the table's **Debit** column = PURCHASE rows
+ * LEDGER COLUMNS (visual table columns)
+ *   `total_debit`  = Σ of the table's **Debit** column = SALE rows
+ *                    (licence value consumed, reduces balance)
+ *   `total_credit` = Σ of the table's **Credit** column = PURCHASE rows
  *                    (+ the OPENING row when it is shown)
- *   `total_credit` = Σ of the table's **Credit** column = SALE rows
+ *                    (licence value added, increases balance)
  *
  * ⚠ TWO CURRENCIES, NEVER MIXED ⚠
  *   `total_debit` / `total_credit` / `opening_balance` / `current_balance` /
@@ -135,21 +137,20 @@ export type ProfitState = 'PROFIT' | 'LOSS' | 'BREAK_EVEN' | 'UNAVAILABLE';
  *   `total_debit_bill` / `total_credit_bill` → `bill_currency` (always INR)
  * Never add or compare figures across these two groups.
  *
- * THE IDENTITY the backend guarantees — unconditional, no correction term:
- * When opening_in_debit is true:
- *     total_debit − total_credit === current_balance === total_profit_loss
- * When opening_in_debit is false:
- *     opening_balance + total_debit − total_credit === current_balance === total_profit_loss
+ * THE IDENTITY the backend guarantees — unconditional, NO correction term:
+ *     current_balance = total_credit − total_debit
+ *     total_profit_loss = current_balance (same number, two labels)
  *
- * `opening_balance` is licence metadata and is deliberately NOT part of it:
+ * `opening_balance` is licence metadata and is deliberately NOT added here:
  * when a PURCHASE exists, the opening and that purchase are the same
- * acquisition, so adding it would double-count. The client renders these values;
- * it never performs the subtraction.
+ * acquisition, so adding would double-count. The display rule ensures the
+ * acquisition is shown exactly once (purchase rows shown, opening suppressed).
+ * The client renders these values; it never performs the subtraction.
  */
 export interface LedgerSummary {
-  /** Σ of the displayed Debit column = purchases (+ opening iff `opening_in_debit`). */
+  /** Σ of the displayed Debit column = sales (licence value consumed). */
   total_debit: string;
-  /** Σ of the displayed Credit column = sales. */
+  /** Σ of the displayed Credit column = purchases (+ opening iff `opening_in_debit`). */
   total_credit: string;
   /** Σ of the displayed Sale Bill column, in `bill_currency`. */
   total_debit_bill: string;
@@ -181,9 +182,13 @@ export interface LedgerSummary {
    * NOTE: this is the licence's unutilised position, NOT the realised INR
    * trading margin shown by the Purchase & Profit report. Different question,
    * different currency — do not expect the two screens to match.
+   *
+   * CURRENCY: For DFIA, `profit_currency` is 'INR' (from bill amounts), NOT
+   * `balance_currency` (which is 'USD' from CIF values). The balance and profit
+   * are two independent figures in different currencies.
    */
   total_profit_loss: string;
-  /** Equals `balance_currency`. Profit is in licence value, never in bill INR. */
+  /** Currency of total_profit_loss: 'INR' for DFIA (from bill amounts), never mixed with balance_currency. */
   profit_currency: string;
   profit_state: ProfitState;
 }

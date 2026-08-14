@@ -92,7 +92,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         self.client.force_authenticate(user=self.user_a)
 
         # GET /ledger/ should be scoped to user_a's company
-        response = self.client.get('/api/ledger/')
+        response = self.client.get('/api/license-ledger/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Should receive empty list (no licenses created yet) but not 403
@@ -108,7 +108,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.user_no_company)
 
-        response = self.client.get('/api/ledger/')
+        response = self.client.get('/api/license-ledger/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Should return empty results, not all data
@@ -126,7 +126,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         # User B tries to retrieve a license (even if it exists)
         # Without get_queryset() scoping, this would succeed
         # With the fix, it will be blocked
-        response = self.client.get('/api/ledger/999/retrieve/')
+        response = self.client.get('/api/license-ledger/999/retrieve/')
         # Either 404 (license not found) or 403 (permission denied)
         # Both are acceptable - the important thing is user_b can't access it
         self.assertIn(response.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN])
@@ -139,7 +139,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         self.client.force_authenticate(user=self.user_a)
 
         # User A tries to access company B's ledger detail with explicit company param
-        response = self.client.get('/api/ledger/999/ledger_detail/?company=999')
+        response = self.client.get('/api/license-ledger/999/ledger_detail/?company=999')
 
         # Should get 403 PermissionDenied, not access to company B's data
         self.assertIn(
@@ -156,7 +156,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
 
         # Explicit attempt to access another company's data
         response = self.client.get(
-            f'/api/ledger/999/ledger_detail/?company={self.company_b.id}'
+            f'/api/license-ledger/999/ledger_detail/?company={self.company_b.id}'
         )
 
         # Must return 403, not allow access
@@ -170,11 +170,11 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         self.client.force_authenticate(user=self.user_a)
 
         # Missing company parameter
-        response = self.client.get('/api/ledger/company-ledger/')
+        response = self.client.get('/api/license-ledger/company-ledger/')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
         # Invalid company parameter
-        response = self.client.get('/api/ledger/company-ledger/?company=invalid')
+        response = self.client.get('/api/license-ledger/company-ledger/?company=invalid')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_company_ledger_endpoint_blocks_other_company(self):
@@ -186,7 +186,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
 
         # Try to access company B's ledger
         response = self.client.get(
-            f'/api/ledger/company-ledger/?company={self.company_b.id}'
+            f'/api/license-ledger/company-ledger/?company={self.company_b.id}'
         )
 
         # Must be denied
@@ -199,7 +199,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         self.client.force_authenticate(user=self.user_a)
 
         response = self.client.get(
-            f'/api/ledger/company-ledger/?company={self.company_a.id}'
+            f'/api/license-ledger/company-ledger/?company={self.company_a.id}'
         )
 
         # Should succeed (even if no licenses, the endpoint should work)
@@ -215,7 +215,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         self.client.force_authenticate(user=self.user_a)
 
         response = self.client.get(
-            f'/api/ledger/company-ledger/export/?company={self.company_b.id}'
+            f'/api/license-ledger/company-ledger/export/?company={self.company_b.id}'
         )
 
         # Must be denied
@@ -228,7 +228,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.user_a)
 
-        response = self.client.get('/api/ledger/export/all/')
+        response = self.client.get('/api/license-ledger/export/all/')
 
         # Should succeed and be scoped to user_a's company
         # (empty dataset is fine, the important thing is no cross-company leak)
@@ -243,7 +243,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.user_a)
 
-        response = self.client.get('/api/ledger/available_for_sale/')
+        response = self.client.get('/api/license-ledger/available_for_sale/')
 
         # Should be scoped to user_a's company
         self.assertIn(
@@ -257,7 +257,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.user_a)
 
-        response = self.client.get('/api/ledger/search/?q=0311045100')
+        response = self.client.get('/api/license-ledger/search/?q=0311045100')
 
         # Should be scoped to user_a's company
         self.assertIn(
@@ -272,7 +272,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.user_a)
 
-        response = self.client.get('/api/ledger/summary/')
+        response = self.client.get('/api/license-ledger/summary/')
 
         # Should be scoped to user_a's company
         self.assertIn(
@@ -286,7 +286,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.user_a)
 
-        response = self.client.get('/api/ledger/company-wise/')
+        response = self.client.get('/api/license-ledger/company-wise/')
 
         # Should be scoped to user_a's company
         self.assertIn(
@@ -300,7 +300,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.user_a)
 
-        response = self.client.get('/api/ledger/license-wise/')
+        response = self.client.get('/api/license-ledger/license-wise/')
 
         # Should be scoped to user_a's company
         self.assertIn(
@@ -317,7 +317,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
 
         # Superuser can access company B's data
         response = self.client.get(
-            f'/api/ledger/company-ledger/?company={self.company_b.id}'
+            f'/api/license-ledger/company-ledger/?company={self.company_b.id}'
         )
 
         # Should succeed
@@ -330,10 +330,10 @@ class LicenseLedgerSecurityTestCase(APITestCase):
         """
         Unauthenticated users should not get access to any ledger data.
         """
-        response = self.client.get('/api/ledger/')
+        response = self.client.get('/api/license-ledger/')
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-        response = self.client.get('/api/ledger/company-ledger/?company=1')
+        response = self.client.get('/api/license-ledger/company-ledger/?company=1')
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_user_without_required_role_denied_access(self):
@@ -350,7 +350,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
 
         self.client.force_authenticate(user=user_no_role)
 
-        response = self.client.get('/api/ledger/')
+        response = self.client.get('/api/license-ledger/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_company_id_injection_override(self):
@@ -363,7 +363,7 @@ class LicenseLedgerSecurityTestCase(APITestCase):
 
         # Try to force company_b via query parameter
         response = self.client.get(
-            f'/api/ledger/?company={self.company_b.id}'
+            f'/api/license-ledger/?company={self.company_b.id}'
         )
 
         # Should succeed but return only user_a's company data (empty if none)
@@ -424,7 +424,7 @@ class LicenseLedgerExploitTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.exporter_user)
 
-        response = self.client.get('/api/ledger/')
+        response = self.client.get('/api/license-ledger/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         data = response.json()
@@ -449,7 +449,7 @@ class LicenseLedgerExploitTestCase(APITestCase):
 
         # Attacker tries to access rival company's ledger
         exploit_response = self.client.get(
-            f'/api/ledger/company-ledger/?company={self.rival_co.id}'
+            f'/api/license-ledger/company-ledger/?company={self.rival_co.id}'
         )
 
         # CRITICAL: Must be 403, not 200 with rival company data
@@ -466,7 +466,7 @@ class LicenseLedgerExploitTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.exporter_user)
 
-        response = self.client.get('/api/ledger/summary/')
+        response = self.client.get('/api/license-ledger/summary/')
 
         # Should return data or error, but NOT rival company's summary
         self.assertIn(
@@ -506,10 +506,10 @@ class LicenseLedgerEdgeCaseTests(APITestCase):
         """Invalid company IDs should be rejected gracefully"""
         self.client.force_authenticate(user=self.user)
 
-        response = self.client.get('/api/ledger/company-ledger/?company=invalid_id')
+        response = self.client.get('/api/license-ledger/company-ledger/?company=invalid_id')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-        response = self.client.get('/api/ledger/company-ledger/?company=99999')
+        response = self.client.get('/api/license-ledger/company-ledger/?company=99999')
         # Either 400 (invalid) or 404 (not found), both are safe
         self.assertIn(
             response.status_code,
@@ -520,15 +520,15 @@ class LicenseLedgerEdgeCaseTests(APITestCase):
         """Empty company parameter should be handled safely"""
         self.client.force_authenticate(user=self.user)
 
-        response = self.client.get('/api/ledger/company-ledger/?company=')
+        response = self.client.get('/api/license-ledger/company-ledger/?company=')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_missing_company_param_in_company_endpoint(self):
         """Company-specific endpoints require company parameter"""
         self.client.force_authenticate(user=self.user)
 
-        response = self.client.get('/api/ledger/company-ledger/')
+        response = self.client.get('/api/license-ledger/company-ledger/')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-        response = self.client.get('/api/ledger/company-ledger/export/')
+        response = self.client.get('/api/license-ledger/company-ledger/export/')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

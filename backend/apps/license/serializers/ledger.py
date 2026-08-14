@@ -82,23 +82,25 @@ class LedgerSummarySerializer(serializers.Serializer):
     Representation only — every value is produced by
     `CanonicalLedgerService._build_summary`; nothing is computed here.
 
-    DEBIT / CREDIT COLUMNS (visual table columns)
-      * `total_debit` = Σ the table's **Debit** column
-                      = PURCHASE rows + OPENING row (when shown)
-      * `total_credit` = Σ the table's **Credit** column
-                       = SALE rows
+    LEDGER COLUMNS (visual table columns)
+      * `total_debit` = Σ the table's **Debit** column = SALE rows
+                      (licence value consumed, reduces balance)
+      * `total_credit` = Σ the table's **Credit** column = PURCHASE rows
+                       + OPENING row (when shown)
+                       (licence value added, increases balance)
 
-    The identity, unconditional:
-        total_debit − total_credit == current_balance == total_profit_loss
+    THE IDENTITY, UNCONDITIONAL (no correction term):
+        current_balance = total_credit − total_debit
+        total_profit_loss = current_balance (same number, two labels)
 
-    When OPENING is displayed: opening is already in total_debit.
-    When OPENING is NOT displayed: opening_balance must be added separately.
-
-    `current_balance` and `total_profit_loss` are the SAME single number, not two
-    calculations. `opening_balance` is licence metadata and is NOT double-counted:
-    when a PURCHASE exists the opening would double-count the acquisition, which is
-    exactly the defect this block fixes. See `_build_summary` for the full
-    derivation and for the accounting note on the PROFIT / LOSS label.
+    WHY NO OPENING ADJUSTMENT:
+    The display rule (`select_display_rows`) shows the acquisition exactly once:
+      - PURCHASE exists  → OPENING suppressed, acquisition counted via purchase
+      - no PURCHASE      → OPENING shown as starting state
+    In both cases, total_credit − total_debit gives the correct balance.
+    `opening_balance` is licence metadata and is deliberately NOT added here,
+    because when a PURCHASE exists, the opening and that purchase are the SAME
+    economic event (licence acquisition), so adding would double-count.
 
     Currencies: `total_debit`/`total_credit`/`opening_balance`/`current_balance`/
     `total_profit_loss` are ALL in `balance_currency` (USD for DFIA, INR

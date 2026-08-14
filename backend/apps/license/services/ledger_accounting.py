@@ -1403,8 +1403,8 @@ def _finalise_activity_entry(entry: Dict[str, Any]) -> None:
     """
     calc = LicenseLedgerAccountingService.calculate_profit_loss
     for company in entry["companies"].values():
-        company["profit_loss"] = calc(company["purchase_total"], company["sale_total"])
-    entry["profit_loss"] = calc(entry["credit_bill"], entry["debit_bill"])
+        company["profit_loss"] = calc(company["sale_total"], company["purchase_total"])
+    entry["profit_loss"] = calc(entry["debit_bill"], entry["credit_bill"])
     entry["profit_state"] = profit_state_for(entry["profit_loss"])
     entry["closing_position"] = entry["opening_position"] + net_of(
         entry["credit_bill"], entry["debit_bill"]

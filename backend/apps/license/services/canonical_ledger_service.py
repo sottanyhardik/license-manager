@@ -493,6 +493,7 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     """
     display_rows = list(dataset.get('display_transactions') or [])
     opening_row = dataset.get('opening_display')
+    opening_balance = dataset.get('opening_balance') or DEC_0
 
     # The displayed OPENING row is a Credit-column row like any other (it adds
     # licence value); it is kept out of `display_transactions` only so the UI
@@ -529,21 +530,14 @@ def _build_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
     # Signed — a negative position is reported as a negative number and as
     # `profit_state='LOSS'`; it is never absolute-valued or hidden here.
     #
-    # CRITICAL FIX: current_balance MUST include opening_balance
-    # - When OPENING is displayed: it's already in total_credit from line 519
-    # - When OPENING is NOT displayed (PURCHASE exists): must add it explicitly
+    # CRITICAL: current_balance = opening_balance + total_credit - total_debit
     #
-    # The opening_in_debit flag tells whether opening was displayed, so we know
-    # whether it's already included in total_credit or not.
-    net_position_from_displayed = quantize_2dp(total_credit - total_debit)
-    opening_balance = dataset.get('opening_balance') or DEC_0
-
-    # If opening was NOT displayed (opening_in_debit=False), add it to get absolute balance
-    if opening_row is None:
-        current_balance = quantize_2dp(opening_balance + net_position_from_displayed)
-    else:
-        # If opening WAS displayed, it's already in total_credit, so just use net_position
-        current_balance = net_position_from_displayed
+    # Current balance is ALWAYS: total_credit - total_debit (from displayed rows)
+    # The display rule (`select_display_rows`) ensures the acquisition is shown once:
+    # - PURCHASE exists  → OPENING suppressed, acquisition via purchase rows
+    # - no PURCHASE      → OPENING shown as starting state
+    # Per user definition: "Current Balance = total_credit - total_debit in USD"
+    current_balance = quantize_2dp(total_credit - total_debit)
 
     license_type = dataset.get('license_type')
     balance_currency = 'USD' if license_type in _USD_BALANCE_LICENSE_TYPES else 'INR'

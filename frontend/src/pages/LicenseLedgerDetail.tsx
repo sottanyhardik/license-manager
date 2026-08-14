@@ -211,7 +211,7 @@ function groupTransactionsByCompany(transactions: CanonicalTransaction[]) {
     transactions.forEach((txn, index) => {
         const key = txn.company_id != null ? String(txn.company_id) : `unknown-${index}`;
         if (!companiesMap[key]) {
-            companiesMap[key] = { company_id: txn.company_id ?? key, company_name: normalizeText(txn.company_name, 'N/A'), transactions: [] };
+            companiesMap[key] = { company_id: txn.company_id ?? key, company_name: normalizeText(txn.company_name, '-'), transactions: [] };
         }
         companiesMap[key].transactions.push(txn);
     });
@@ -680,11 +680,11 @@ export default function LicenseLedgerDetail() {
                                                     </td>
                                                     {/* Particulars = the COUNTERPARTY, not us. The
                                                         group header above already names our company;
-                                                        `company_name` here would just echo it. 'N/A'
+                                                        `company_name` here would just echo it. '-'
                                                         when the party relation is genuinely absent —
                                                         never substituted with our own company. */}
                                                     <td className="px-2.5 py-[5px] text-foreground">
-                                                        {normalizeText(txn.party_name, 'N/A')}
+                                                        {normalizeText(txn.party_name, '-')}
                                                     </td>
                                                     <td className="px-2.5 py-[5px] text-foreground">
                                                         <Badge variant={isCommission ? "secondary" : "outline"} className="text-[11px]">

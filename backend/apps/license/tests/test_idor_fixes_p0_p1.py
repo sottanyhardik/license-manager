@@ -75,10 +75,6 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
             license_date='2025-01-01',
             exporter_id=self.company_a.id,
             port_id=1,
-            license_form='DFIA',
-            product_description='Test Product',
-            quantity=1000.00,
-            uqc_code='KGS',
         )
 
         # Create a license that ONLY company_a traded
@@ -87,10 +83,6 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
             license_date='2025-01-01',
             exporter_id=self.company_a.id,
             port_id=1,
-            license_form='DFIA',
-            product_description='Test Product A',
-            quantity=1000.00,
-            uqc_code='KGS',
         )
 
         # Create a bill of entry for company_a's license

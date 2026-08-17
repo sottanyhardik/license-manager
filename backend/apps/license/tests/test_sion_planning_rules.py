@@ -150,6 +150,122 @@ def test_allocation_strategy_api_creates_db_action_for_new_rule_and_reloads(rule
     assert reloaded.data["config"]["buckets"] == payload["config"]["buckets"]
 
 
+def test_split_by_percentage_accepts_editable_rows(rule_world):
+    company, sion, _license_obj, _item, rule = rule_world
+    from apps.core.models import ItemNameModel
+    output_item = ItemNameModel.objects.create(name="PKO")
+    rule.output_item = output_item
+    rule.save(update_fields=("output_item",))
+
+    client, _user = _client(company)
+    payload = {
+        "strategy": "SPLIT_BY_PERCENTAGE",
+        "config": {
+            "algorithm": "SPLIT_BY_PERCENTAGE",
+            "rows": [
+                {"id": "row-1", "output_code": "PKO", "percentage": "50.00"},
+                {"id": "row-2", "output_code": "OLIVE_OIL", "percentage": "50.00"},
+            ],
+        },
+    }
+    response = client.patch(
+        f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/", payload, format="json",
+    )
+    assert response.status_code == 200
+    action = SionPlanningAction.objects.get(pk=response.data["action_id"])
+    assert action.config["algorithm"] == "SPLIT_BY_PERCENTAGE"
+    assert action.config["rows"] == payload["config"]["rows"]
+    assert action.is_active is True
+
+
+def test_split_by_percentage_rejects_percentages_not_summing_to_100(rule_world):
+    company, sion, _license_obj, _item, rule = rule_world
+    from apps.core.models import ItemNameModel
+    output_item = ItemNameModel.objects.create(name="PKO")
+    rule.output_item = output_item
+    rule.save(update_fields=("output_item",))
+
+    client, _user = _client(company)
+    payload = {
+        "strategy": "SPLIT_BY_PERCENTAGE",
+        "config": {
+            "algorithm": "SPLIT_BY_PERCENTAGE",
+            "rows": [
+                {"id": "row-1", "output_code": "PKO", "percentage": "40.00"},
+                {"id": "row-2", "output_code": "OLIVE_OIL", "percentage": "40.00"},
+            ],
+        },
+    }
+    response = client.patch(
+        f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/", payload, format="json",
+    )
+    assert response.status_code == 400
+    assert "100" in str(response.data.get("config", ""))
+
+
+def test_split_by_percentage_rejects_duplicate_input_codes(rule_world):
+    company, sion, _license_obj, _item, rule = rule_world
+    from apps.core.models import ItemNameModel
+    output_item = ItemNameModel.objects.create(name="PKO")
+    rule.output_item = output_item
+    rule.save(update_fields=("output_item",))
+
+    client, _user = _client(company)
+    payload = {
+        "strategy": "SPLIT_BY_PERCENTAGE",
+        "config": {
+            "algorithm": "SPLIT_BY_PERCENTAGE",
+            "rows": [
+                {"id": "row-1", "output_code": "PKO", "percentage": "60.00"},
+                {"id": "row-2", "output_code": "PKO", "percentage": "40.00"},
+            ],
+        },
+    }
+    response = client.patch(
+        f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/", payload, format="json",
+    )
+    assert response.status_code == 400
+    assert "Duplicate" in response.data.get("config", "")
+
+
+def test_split_by_percentage_loads_from_master_rules_as_defaults(rule_world):
+    company, sion, _license_obj, _item, rule = rule_world
+    from apps.core.models import ItemNameModel
+
+    output_item_1 = ItemNameModel.objects.create(name="PKO")
+    output_item_2 = ItemNameModel.objects.create(name="OLIVE_OIL")
+    rule.output_item = output_item_1
+    rule.save(update_fields=("output_item",))
+
+    master_rule_1 = SionPlanningRule.objects.create(
+        sion=sion, name="PKO Cap", unit="kg", max_unit_price=Decimal("2.50"),
+        priority=2, output_item=output_item_1, percentage_constraint=Decimal("50.00"),
+        expression={},
+    )
+    master_rule_2 = SionPlanningRule.objects.create(
+        sion=sion, name="Olive Cap", unit="kg", max_unit_price=Decimal("2.50"),
+        priority=3, output_item=output_item_2, percentage_constraint=Decimal("50.00"),
+        expression={},
+    )
+
+    client, _user = _client(company)
+
+    payload = {
+        "strategy": "SPLIT_BY_PERCENTAGE",
+        "config": {"algorithm": "SPLIT_BY_PERCENTAGE", "rows": []},
+    }
+    response = client.patch(
+        f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/", payload, format="json",
+    )
+    assert response.status_code == 200
+    action = SionPlanningAction.objects.get(pk=response.data["action_id"])
+    assert action.config["algorithm"] == "SPLIT_BY_PERCENTAGE"
+    assert len(action.config.get("rows", [])) == 2
+    percentages = {row["output_code"]: row["percentage"] for row in action.config.get("rows", [])}
+    assert percentages.get("PKO") == "50.00"
+    assert percentages.get("OLIVE_OIL") == "50.00"
+
+
 def test_safe_nested_expression_normalizes_case_space_and_hsn_zeroes():
     expression = {"operator": "AND", "conditions": [
         {"field": "HSN", "comparator": "CONTAINS", "value": " 1701 "},

@@ -1,5 +1,6 @@
 # Generated migration for generic SION rule support
 
+from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
 
@@ -52,8 +53,8 @@ class Migration(migrations.Migration):
                 ('is_active', models.BooleanField(db_index=True, default=True)),
                 ('output_item', models.ForeignKey(blank=True, help_text='If set, this alias applies only to this output item within the SION', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='sion_input_aliases', to='core.itemnamemodel')),
                 ('sion', models.ForeignKey(blank=True, help_text='If set, this alias applies only to this SION norm', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='input_aliases', to='core.sionnormclassmodel')),
-                ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to='accounts.customuser')),
-                ('modified_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to='accounts.customuser')),
+                ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL)),
+                ('modified_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'ordering': ('canonical_input_code', 'alias_normalized'),

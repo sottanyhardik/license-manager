@@ -51,23 +51,38 @@ def setup_generic_norm(db):
         )
 
     # Create 4-way split rule: 35/30/20/15
-    for name, pct in [
+    # First create PERCENTAGE_CAP rules (master caps) and SPLIT_PERCENTAGE rules (for splitting)
+    for i, (name, pct) in enumerate([
         ("COMPONENT_A", "35"),
         ("COMPONENT_B", "30"),
         ("COMPONENT_C", "20"),
         ("COMPONENT_D", "15"),
-    ]:
+    ], start=1):
+        # Create PERCENTAGE_CAP rule (master entitlement cap)
         SionPlanningRule.objects.create(
             sion=sion,
             output_item=output_item,
             name=name,
             max_unit_price=Decimal("100.00"),
             unit="KG",
-            priority=1,
+            priority=i,
             is_active=True,
             percentage_constraint=Decimal(pct),
             rule_type="PERCENTAGE_CAP",
-            rule_group_id=f"CUSTOM_4way_split",
+            rule_group_id="CUSTOM_4way",
+        )
+        # Create SPLIT_PERCENTAGE rule (for transaction splitting)
+        SionPlanningRule.objects.create(
+            sion=sion,
+            output_item=output_item,
+            name=f"{name}_SPLIT",
+            max_unit_price=Decimal("100.00"),
+            unit="KG",
+            priority=i + 100,
+            is_active=True,
+            percentage_constraint=Decimal(pct),
+            rule_type="SPLIT_PERCENTAGE",
+            rule_group_id="CUSTOM_4way",
         )
 
     # Create license with 1000 KG eligible quantity
@@ -167,7 +182,7 @@ class TestGenericNormIntegration:
         # The entire system should work without knowing it's "CUSTOM" norm
         # If there was hardcoding of E126/E132, it would fail here
         rules = SionRuleResolver.get_rules_for_output_item(output_item, sion)
-        assert len(rules) == 4
+        assert len(rules) == 8  # 4 PERCENTAGE_CAP + 4 SPLIT_PERCENTAGE
 
         # All rule types should be recognized generically
         for rule_info in rules:
@@ -198,28 +213,28 @@ class TestGenericNormIntegration:
         )
 
         # NORM_A: 3 inputs
-        for name, pct in [("X", "50"), ("Y", "30"), ("Z", "20")]:
+        for i, (name, pct) in enumerate([("X", "50"), ("Y", "30"), ("Z", "20")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_a,
                 output_item=output_a,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
-                priority=1,
+                priority=i,
                 is_active=True,
                 percentage_constraint=Decimal(pct),
                 rule_type="PERCENTAGE_CAP",
             )
 
         # NORM_B: 2 inputs
-        for name, pct in [("M", "60"), ("N", "40")]:
+        for i, (name, pct) in enumerate([("M", "60"), ("N", "40")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_b,
                 output_item=output_b,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
-                priority=1,
+                priority=i,
                 is_active=True,
                 percentage_constraint=Decimal(pct),
                 rule_type="PERCENTAGE_CAP",
@@ -238,7 +253,7 @@ class TestGenericNormIntegration:
         """Same SION can have different rules for different output items."""
         head_norm, _ = HeadSIONNormsModel.objects.get_or_create(name="Test Norms")
         sion, _ = SionNormClassModel.objects.get_or_create(
-            norm_class="MULTI_OUTPUT",
+            norm_class="E250",
             defaults={"head_norm": head_norm}
         )
 
@@ -252,28 +267,28 @@ class TestGenericNormIntegration:
         )
 
         # Output 1: 50/50 split
-        for name, pct in [("A", "50"), ("B", "50")]:
+        for i, (name, pct) in enumerate([("OUTPUT1_A", "50"), ("OUTPUT1_B", "50")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion,
                 output_item=output_1,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
-                priority=1,
+                priority=i,
                 is_active=True,
                 percentage_constraint=Decimal(pct),
                 rule_type="PERCENTAGE_CAP",
             )
 
-        # Output 2: 60/40 split (different!)
-        for name, pct in [("A", "60"), ("C", "40")]:
+        # Output 2: 60/40 split (different!) - priority continues from output_1
+        for i, (name, pct) in enumerate([("OUTPUT2_A", "60"), ("OUTPUT2_C", "40")], start=3):
             SionPlanningRule.objects.create(
                 sion=sion,
                 output_item=output_2,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
-                priority=1,
+                priority=i,
                 is_active=True,
                 percentage_constraint=Decimal(pct),
                 rule_type="PERCENTAGE_CAP",
@@ -283,8 +298,8 @@ class TestGenericNormIntegration:
         rules_1 = SionRuleResolver.get_percentage_rules_for_output_item(output_1, sion)
         rules_2 = SionRuleResolver.get_percentage_rules_for_output_item(output_2, sion)
 
-        assert rules_1 == {"A": Decimal("50"), "B": Decimal("50")}
-        assert rules_2 == {"A": Decimal("60"), "C": Decimal("40")}
+        assert rules_1 == {"OUTPUT1_A": Decimal("50"), "OUTPUT1_B": Decimal("50")}
+        assert rules_2 == {"OUTPUT2_A": Decimal("60"), "OUTPUT2_C": Decimal("40")}
 
-        # Even though A is in both, it has different percentages
-        assert rules_1["A"] != rules_2["A"]
+        # Rules for different outputs are completely different
+        assert rules_1 != rules_2

@@ -216,50 +216,61 @@ class DatabaseDrivenSionPlanner:
     def _split_by_percentage(self, state: "_State", config: dict[str, Any]) -> None:
         """Split matched records across outputs based on percentage constraints.
 
-        Uses SION percentage rules to allocate quantity proportionally to each output.
-        The percentage_rules in config specify each output and its percentage.
-
+        Supports both legacy percentage_rules and new rows format.
         Formula: allocated_qty = total_qty × percentage / 100
         """
         category = config.get("category")
+
+        percentage_items = []
+        rows = config.get("rows", [])
         percentage_rules = config.get("percentage_rules", [])
 
-        if not category or not percentage_rules:
+        if rows:
+            percentage_items = [
+                {
+                    "output_code": row.get("output_code", "").upper(),
+                    "percentage": row.get("percentage", "0"),
+                }
+                for row in rows
+            ]
+        elif percentage_rules:
+            percentage_items = [
+                {
+                    "output_code": rule.get("output_code", "").upper(),
+                    "percentage": rule.get("percentage", "0"),
+                }
+                for rule in percentage_rules
+            ]
+
+        if not category or not percentage_items:
             return
 
-        # Verify percentages total to 100
         total_percentage = sum(
-            decimal(rule.get("percentage", "0")) for rule in percentage_rules
+            decimal(item.get("percentage", "0")) for item in percentage_items
         )
         if total_percentage != Decimal("100"):
-            # Configuration error - percentages don't sum to 100
-            # For now, pass through records unchanged (will be caught in validation)
             return
 
         expanded = []
         for record in state.records:
-            # Keep non-matching records unchanged
             if record.get("matched_output") != category:
                 expanded.append(record)
                 continue
 
-            # Split this record according to percentages
             total_qty = _quantity(record)
             source_output = category
 
-            for rule_config in percentage_rules:
-                output_code = rule_config.get("output_code")
-                percentage = decimal(rule_config.get("percentage", "0"))
+            for item_config in percentage_items:
+                output_code = item_config.get("output_code")
+                percentage = decimal(item_config.get("percentage", "0"))
 
                 if not output_code or percentage <= ZERO:
                     continue
 
-                # Calculate allocated quantity for this percentage
                 allocated_qty = (total_qty * percentage / Decimal("100")).quantize(
                     Decimal("0.001"), rounding="ROUND_HALF_UP"
                 )
 
-                # Create a child record for this percentage output
                 child = deepcopy(record)
                 child["matched_output"] = output_code
                 child["source_output"] = source_output

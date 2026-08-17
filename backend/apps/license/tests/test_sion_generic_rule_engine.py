@@ -92,6 +92,7 @@ class TestSionRuleResolverBasics:
         assert SionRuleResolver.normalize_product_name("PALM KERNEL OIL") == "PALM KERNEL OIL"
         assert SionRuleResolver.normalize_product_name("palm   kernel   oil") == "PALM KERNEL OIL"
 
+    @pytest.mark.django_db
     def test_resolve_canonical_input_with_legacy_fallback(self):
         """Fallback to legacy aliases when SionInputAliasConfig not present."""
         # Without explicit alias config, should use legacy hardcoded aliases
@@ -103,6 +104,7 @@ class TestSionRuleResolverBasics:
         assert mapping.canonical_code == "PKO"
         assert mapping.is_mapped is True
 
+    @pytest.mark.django_db
     def test_resolve_unknown_product(self):
         """Unknown products resolve to UNMAPPED."""
         mapping = SionRuleResolver.resolve_canonical_input("UNKNOWN PRODUCT")
@@ -117,8 +119,8 @@ class TestDataDrivenAliasResolution:
         """Aliases can be created and looked up."""
         alias = SionInputAliasConfig.objects.create(
             sion=sion_e126,
-            canonical_input_code="PKO",
-            alias_normalized="PKO",
+            canonical_input_code="PKO_TEST",
+            alias_normalized="PKO_TEST",
             source_description="E126 PKO",
             is_active=True,
         )
@@ -240,14 +242,14 @@ class TestGenericRuleResolution:
     def test_split_percentage_rules_valid(self, db, sion_custom_3way, output_item_custom):
         """Split rules are returned only if they sum to 100%."""
         # Create valid 40/35/25 split
-        for name, pct in [("INPUT_A", "40"), ("INPUT_B", "35"), ("INPUT_C", "25")]:
+        for i, (name, pct) in enumerate([("INPUT_A", "40"), ("INPUT_B", "35"), ("INPUT_C", "25")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_custom_3way,
                 output_item=output_item_custom,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
-                priority=1,
+                priority=i,
                 is_active=True,
                 percentage_constraint=Decimal(pct),
                 rule_type="SPLIT_PERCENTAGE",
@@ -265,14 +267,14 @@ class TestGenericRuleResolution:
     def test_split_percentage_rules_invalid_total(self, db, sion_custom_3way, output_item_custom):
         """Invalid split rules (not summing to 100%) are rejected."""
         # Create invalid 50/30/15 split (not 100%)
-        for name, pct in [("INPUT_A", "50"), ("INPUT_B", "30"), ("INPUT_C", "15")]:
+        for i, (name, pct) in enumerate([("INPUT_A", "50"), ("INPUT_B", "30"), ("INPUT_C", "15")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_custom_3way,
                 output_item=output_item_custom,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
-                priority=1,
+                priority=i,
                 is_active=True,
                 percentage_constraint=Decimal(pct),
                 rule_type="SPLIT_PERCENTAGE",
@@ -342,14 +344,14 @@ class TestGenericNormSupport:
     def test_custom_norm_rules(self, db, sion_custom_3way, output_item_custom):
         """Custom norms with custom input codes work generically."""
         # Create rules with custom input codes
-        for name, pct in [("CUSTOM_A", "40"), ("CUSTOM_B", "35"), ("CUSTOM_C", "25")]:
+        for i, (name, pct) in enumerate([("CUSTOM_A", "40"), ("CUSTOM_B", "35"), ("CUSTOM_C", "25")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_custom_3way,
                 output_item=output_item_custom,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
-                priority=1,
+                priority=i,
                 is_active=True,
                 percentage_constraint=Decimal(pct),
                 rule_type="PERCENTAGE_CAP",

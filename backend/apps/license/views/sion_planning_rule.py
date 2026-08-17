@@ -115,9 +115,35 @@ class RuleAllocationStrategySerializer(serializers.Serializer):
     def _validate_percentage_config(self, config):
         """Validate SPLIT_BY_PERCENTAGE configuration.
 
-        Percentage config is read-only; derived from the rule's percentage_constraint field.
+        Supports both master-rule-derived configs and user-edited percentage rows.
         """
-        return {"strategy": "SPLIT_BY_PERCENTAGE", "config": config or {}}
+        if not isinstance(config, dict):
+            raise serializers.ValidationError({"config": "Configuration must be an object."})
+
+        rows = config.get("rows", [])
+        if isinstance(rows, list):
+            codes = set()
+            total_pct = Decimal("0")
+            for index, row in enumerate(rows):
+                if not isinstance(row, dict):
+                    raise serializers.ValidationError({"config": f"Row {index + 1} must be an object."})
+                code = str(row.get("output_code", "")).strip().upper() if isinstance(row, dict) else ""
+                if not code:
+                    raise serializers.ValidationError({"config": f"Row {index + 1} requires an input code."})
+                if code in codes:
+                    raise serializers.ValidationError({"config": f"Duplicate input code: {code}"})
+                codes.add(code)
+                try:
+                    percentage = Decimal(str(row.get("percentage", "0")))
+                except (InvalidOperation, TypeError, ValueError):
+                    raise serializers.ValidationError({"config": f"Row {index + 1} percentage must be a decimal."})
+                if not percentage.is_finite() or percentage < 0 or percentage > 100:
+                    raise serializers.ValidationError({"config": f"Row {index + 1} percentage must be between 0 and 100."})
+                total_pct += percentage
+            if total_pct != Decimal("100"):
+                raise serializers.ValidationError({"config": f"Percentages must sum to 100%, got {total_pct}."})
+
+        return {"strategy": "SPLIT_BY_PERCENTAGE", "config": config}
 
 
 class SionPlanningRuleViewSet(viewsets.ModelViewSet):
@@ -246,6 +272,36 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 return Response({"strategy": "STANDARD", "action_id": getattr(split_action, "pk", None)})
             action_config = split_action.config or {}
             strategy = "SPLIT_BY_PERCENTAGE" if action_config.get("algorithm") == "SPLIT_BY_PERCENTAGE" else "SPLIT_BY_UNIT_VALUE"
+
+            if strategy == "SPLIT_BY_PERCENTAGE":
+                response_config = dict(action_config)
+                rows = action_config.get("rows", [])
+                if not rows:
+                    percentage_rules = SionPlanningRule.objects.filter(
+                        sion_id=rule.sion_id,
+                        output_item_id=rule.output_item_id,
+                        percentage_constraint__isnull=False,
+                    ).exclude(percentage_constraint=Decimal("0")).order_by("name") if rule.output_item_id else SionPlanningRule.objects.none()
+
+                    if percentage_rules.exists():
+                        total_pct = sum(Decimal(str(r.percentage_constraint)) for r in percentage_rules)
+                        if total_pct == Decimal("100"):
+                            response_config["rows"] = [
+                                {
+                                    "id": f"row-{r.pk}",
+                                    "output_code": (r.output_item.name if r.output_item else "").upper(),
+                                    "percentage": str(r.percentage_constraint),
+                                }
+                                for r in percentage_rules
+                            ]
+                    else:
+                        response_config["rows"] = rows
+
+                return Response({
+                    "strategy": strategy, "action_id": split_action.pk,
+                    "config": response_config,
+                })
+
             return Response({
                 "strategy": strategy, "action_id": split_action.pk,
                 "config": action_config,
@@ -292,47 +348,34 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 split_action.save(update_fields=("is_active", "modified_by", "modified_on"))
                 response = {"strategy": "STANDARD", "action_id": split_action.pk}
             elif values["strategy"] == "SPLIT_BY_PERCENTAGE":
-                # Load percentage-constrained rules for this rule's output item + SION
-                # Using the new generic resolver, rules are scoped to (output_item, sion)
-                if not rule.output_item_id:
-                    return Response({
-                        "error": "Split by percentage requires the rule to have an output item."
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
-                percentage_rules = SionPlanningRule.objects.filter(
-                    sion_id=rule.sion_id,
-                    output_item_id=rule.output_item_id,
-                    percentage_constraint__isnull=False,
-                ).exclude(percentage_constraint=Decimal("0")).order_by("name")
-
-                if not percentage_rules.exists():
-                    return Response({
-                        "error": f"No percentage rules configured for output item {rule.output_item}. "
-                                 f"Create rules with percentage constraints before enabling Split by %."
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
-                # Validate that percentages sum to 100%
-                total_pct = sum(Decimal(str(r.percentage_constraint)) for r in percentage_rules)
-                if total_pct != Decimal("100"):
-                    return Response({
-                        "error": f"Split rule percentages must sum to 100%, got {total_pct}. "
-                                 f"Adjust rules for {rule.output_item} to reach 100%."
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
+                requested = values["config"]
                 config = dict(split_action.config or {})
                 config["source_rule_id"] = rule.pk
                 config["category"] = (rule.execution_output or rule.name).strip()
                 config["algorithm"] = "SPLIT_BY_PERCENTAGE"
-                config["sion_id"] = rule.sion_id
-                config["output_item_id"] = rule.output_item_id
-                config["percentage_rules"] = [
-                    {
-                        "rule_id": r.pk,
-                        "output_code": (r.output_item.name if r.output_item else "").upper(),
-                        "percentage": str(r.percentage_constraint),
-                    }
-                    for r in percentage_rules
-                ]
+
+                rows = requested.get("rows", [])
+                if rows:
+                    config["rows"] = rows
+                elif not config.get("rows"):
+                    if rule.output_item_id:
+                        percentage_rules = SionPlanningRule.objects.filter(
+                            sion_id=rule.sion_id,
+                            output_item_id=rule.output_item_id,
+                            percentage_constraint__isnull=False,
+                        ).exclude(percentage_constraint=Decimal("0")).order_by("name")
+
+                        if percentage_rules.exists():
+                            total_pct = sum(Decimal(str(r.percentage_constraint)) for r in percentage_rules)
+                            if total_pct == Decimal("100"):
+                                config["rows"] = [
+                                    {
+                                        "id": f"row-{r.pk}",
+                                        "output_code": (r.output_item.name if r.output_item else "").upper(),
+                                        "percentage": str(r.percentage_constraint),
+                                    }
+                                    for r in percentage_rules
+                                ]
 
                 split_action.config = config
                 split_action.is_active = True

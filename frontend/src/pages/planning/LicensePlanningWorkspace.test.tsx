@@ -40,6 +40,15 @@ describe("SION-first planning workspace", () => {
         expect(await screen.findByLabelText("Allocation strategy")).toHaveValue("SPLIT_BY_UNIT_VALUE");
         expect(screen.getByLabelText("SWP max price")).toHaveValue("1.50");
     });
+    it("never submits a blank max price and seeds it from a new split configuration", async () => {
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: "Add Rule" }));
+        const save = screen.getByRole("button", { name: "Save" });
+        expect(screen.getByLabelText("Maximum unit price")).toHaveAttribute("aria-invalid", "true");
+        expect(save).toBeDisabled();
+        await userEvent.selectOptions(screen.getByLabelText("Allocation strategy"), "SPLIT_BY_UNIT_VALUE");
+        expect(screen.getByLabelText("Maximum unit price")).toHaveValue("6.50");
+    });
     it("renders a mixed ANY expression exactly as returned and keeps edit semantics identical", async () => {
         vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...existing, priority: 2, expression: { operator: "OR", conditions: [
             { field: "HSN", operator: "CONTAINS", value: "1803" },

@@ -125,13 +125,20 @@ def _milk_category(item_name_list: list[str], e5_cat: Optional[str]) -> str:
 
 # ─── Main entry point ──────────────────────────────────────────────────────
 
-def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
+def compute_e5_auto_plan(
+    license_obj, *, configuration=None, create_item_names=True,
+) -> tuple[list[dict], float]:
     """Run the full E5 Auto Plan waterfall via the shared engine.
 
     Returns (lines, remaining_cif).
     """
     # ── Get-or-create all planned item names (§2: never fail on missing) ────
-    name_ids = _ensure_names(list(_RULE_NAMES_E5))
+    if create_item_names:
+        name_ids = _ensure_names(list(_RULE_NAMES_E5))
+    else:
+        from apps.license.models import ItemNameModel
+        wanted = {name for name, _norm in _RULE_NAMES_E5}
+        name_ids = dict(ItemNameModel.objects.filter(name__in=wanted).values_list('name', 'pk'))
 
     # ── Load import items ────────────────────────────────────────────────
     import_items = (
@@ -160,12 +167,29 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
         desc = (ii.description or '')
         hs_l = hs.lower().replace(' ', '').replace('-', '')
         desc_l = desc.lower()
-        cat = classify_e5_item(key, hs, desc)
+        cat = (
+            configuration.classify({
+                'record_id': ii.pk,
+                'item_key': key,
+                'hs_code': hs,
+                'description': desc,
+                'available_quantity': ii.available_quantity,
+                'quantity': ii.quantity,
+                'unit': ii.unit,
+                'serial_number': ii.serial_number,
+            })
+            if configuration is not None
+            else classify_e5_item(key, hs, desc)
+        )
 
         if cat == 'DIETARY FIBRE':
             dietary_fibre.append(ii)
-        elif _is_milk_group(item_names, cat):
-            if _milk_category(item_names, cat) == 'EGG ALBUMIN / WPC':
+        elif cat in ('MILK PRODUCTS', 'EGG ALBUMIN / WPC') or (
+            configuration is None and _is_milk_group(item_names, cat)
+        ):
+            if cat == 'EGG ALBUMIN / WPC' or (
+                configuration is None and _milk_category(item_names, cat) == 'EGG ALBUMIN / WPC'
+            ):
                 milk_3502.append(ii)
             else:
                 milk_0404.append(ii)
@@ -222,7 +246,10 @@ def compute_e5_auto_plan(license_obj) -> tuple[list[dict], float]:
     _add_group(olive_oil, 'REMAINING OILS')
     _add_group(wheat_flour, 'WHEAT FLOUR')
 
-    result = plan_e5_items(items, balance_cif, min_plan_qty=MIN_PLAN_QTY, floor_qty=True)
+    result = plan_e5_items(
+        items, balance_cif, min_plan_qty=MIN_PLAN_QTY, floor_qty=True,
+        price_overrides=configuration.price_by_output if configuration is not None else None,
+    )
 
     lines_by_rep: dict[int, list[dict]] = {}
     for line in result.lines:

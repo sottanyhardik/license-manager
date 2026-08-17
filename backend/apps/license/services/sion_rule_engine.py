@@ -393,6 +393,11 @@ class SionRulePlanningService:
         """Reload and execute all persisted active rules in DB priority order."""
         with transaction.atomic():
             sion = SionRulePriorityService._lock_sion(sion_id)
+            from apps.license.services.sion_planning_execution import SionPlanningExecutionService
+            if SionPlanningExecutionService.supports(sion):
+                return SionPlanningExecutionService.plan_sion(
+                    sion, license_ids, company_id=company_id, persist=True,
+                )
             rules = list(SionPlanningRule.objects.select_for_update().filter(
                 sion=sion, is_active=True,
             ).order_by("priority", "pk"))
@@ -468,6 +473,11 @@ class SionRulePlanningService:
             sion = SionNormClassModel.objects.get(pk=sion_id)
         except (TypeError, ValueError, SionNormClassModel.DoesNotExist) as exc:
             raise SionPlanningError("A valid canonical sion_id is required.") from exc
+        from apps.license.services.sion_planning_execution import SionPlanningExecutionService
+        if SionPlanningExecutionService.supports(sion):
+            return SionPlanningExecutionService.plan_sion(
+                sion, license_ids, company_id=company_id, persist=False,
+            )
         rules = SionRulePlanningService._saved_rules(sion)
         if not rules:
             raise SionPlanningError("The selected SION has no active saved rules.")

@@ -236,6 +236,7 @@ def plan_e5_items(
     *,
     min_plan_qty: Decimal = Decimal('0'),
     floor_qty: bool = False,
+    price_overrides: dict[str, Decimal] | None = None,
 ) -> E5PlanResult:
     """Run the full E5 waterfall over a list of already-classified items.
 
@@ -262,6 +263,8 @@ def plan_e5_items(
         ``remaining_cif``, and whether Special Validation fired.
     """
     remaining = _d(balance_cif)
+    prices = {**E5_UNIT_PRICES, 'EGG ALBUMIN / WPC': WPC_PRICE}
+    prices.update({key: _d(value) for key, value in (price_overrides or {}).items() if key in prices})
     min_qty = _d(min_plan_qty)
 
     all_by_cat: dict[str, list[E5Item]] = {cat: [] for cat in E5_CATS}
@@ -291,7 +294,7 @@ def plan_e5_items(
 
     # Step 1 — Dietary Fibre.
     for item in by_cat['DIETARY FIBRE']:
-        pq, rate, cif = _fixed_rate_line(item.qty, E5_UNIT_PRICES['DIETARY FIBRE'], remaining, floor_qty)
+        pq, rate, cif = _fixed_rate_line(item.qty, prices['DIETARY FIBRE'], remaining, floor_qty)
         _emit(item, 'DIETARY FIBRE', pq, rate, cif)
         remaining -= cif
 
@@ -310,9 +313,9 @@ def plan_e5_items(
     def _run_oils() -> None:
         nonlocal remaining
         for cat, rate in (
-            ('PALM KERNEL OIL', E5_UNIT_PRICES['PALM KERNEL OIL']),
-            ('RBD PALMOLEIN', E5_UNIT_PRICES['RBD PALMOLEIN']),
-            ('REMAINING OILS', E5_UNIT_PRICES['REMAINING OILS']),
+            ('PALM KERNEL OIL', prices['PALM KERNEL OIL']),
+            ('RBD PALMOLEIN', prices['RBD PALMOLEIN']),
+            ('REMAINING OILS', prices['REMAINING OILS']),
         ):
             for item in by_cat[cat]:
                 pq, r, cif = _fixed_rate_line(item.qty, rate, remaining, floor_qty)
@@ -344,7 +347,7 @@ def plan_e5_items(
         # 3502 items — WPC, dynamic rate capped at $25, processed after
         # every 0404 item.
         for item in by_cat['EGG ALBUMIN / WPC']:
-            wpc_cif, wpc_rate = allocate_step(item.qty, WPC_PRICE, remaining)
+            wpc_cif, wpc_rate = allocate_step(item.qty, prices['EGG ALBUMIN / WPC'], remaining)
             if wpc_cif > 0:
                 _emit(item, 'WPC', item.qty, wpc_rate, wpc_cif)
                 remaining -= wpc_cif

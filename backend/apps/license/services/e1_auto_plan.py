@@ -93,12 +93,19 @@ _STEP_LABEL: dict[str, str] = {
 }
 
 
-def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
+def compute_e1_auto_plan(
+    license_obj, *, configuration=None, create_item_names=True,
+) -> tuple[list[dict], float]:
     """Run the full E1 Auto Plan waterfall via the shared engine.
 
     Returns (lines, remaining_cif).
     """
-    name_ids = _ensure_names(list(_RULE_NAMES_E1))
+    if create_item_names:
+        name_ids = _ensure_names(list(_RULE_NAMES_E1))
+    else:
+        from apps.license.models import ItemNameModel
+        wanted = {name for name, _norm in _RULE_NAMES_E1}
+        name_ids = dict(ItemNameModel.objects.filter(name__in=wanted).values_list('name', 'pk'))
 
     import_items = (
         license_obj.import_license.all()
@@ -128,7 +135,20 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
         key = ', '.join(sorted(item_names)) if item_names else (ii.description or '-')
         hs = (ii.hs_code.hs_code if ii.hs_code else '') or ''
         desc = ii.description or ''
-        cat = classify_e1_item(key, hs, desc)
+        cat = (
+            configuration.classify({
+                'record_id': ii.pk,
+                'item_key': key,
+                'hs_code': hs,
+                'description': desc,
+                'available_quantity': ii.available_quantity,
+                'quantity': ii.quantity,
+                'unit': ii.unit,
+                'serial_number': ii.serial_number,
+            })
+            if configuration is not None
+            else classify_e1_item(key, hs, desc)
+        )
         if not cat:
             continue
         buckets.setdefault(cat, []).append(ii)
@@ -144,7 +164,10 @@ def compute_e1_auto_plan(license_obj) -> tuple[list[dict], float]:
             avail_by_rep[rep_id] = group['available_quantity']
             items.append(E1Item(key=rep_id, category=cat, qty=group['available_quantity']))
 
-    result = plan_e1_items(items, balance_cif, min_plan_qty=MIN_PLAN_QTY)
+    result = plan_e1_items(
+        items, balance_cif, min_plan_qty=MIN_PLAN_QTY,
+        price_overrides=configuration.price_by_output if configuration is not None else None,
+    )
 
     lines_by_rep: dict[int, list[dict]] = {}
     for line in result.lines:

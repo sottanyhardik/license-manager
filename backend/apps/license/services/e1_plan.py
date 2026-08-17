@@ -227,6 +227,7 @@ def plan_e1_items(
     balance_cif,
     *,
     min_plan_qty: Decimal = Decimal('0'),
+    price_overrides: dict[str, Decimal] | None = None,
 ) -> E1PlanResult:
     """Run the full E1 waterfall over a list of already-classified items.
 
@@ -245,6 +246,8 @@ def plan_e1_items(
         ``remaining_cif``.
     """
     remaining = _d(balance_cif)
+    prices = {**E1_UNIT_PRICES, 'EGG ALBUMIN': EGG_ALBUMIN_PRICE}
+    prices.update({key: _d(value) for key, value in (price_overrides or {}).items() if key in prices})
     min_qty = _d(min_plan_qty)
 
     by_cat: dict[str, list[E1Item]] = {cat: [] for cat in E1_CATS}
@@ -267,10 +270,10 @@ def plan_e1_items(
         remaining -= used_cif
 
     # Step 1 — Other Confectionery Ingredients.
-    _run_generic('OTHER CONFECTIONERY INGREDIENTS', E1_UNIT_PRICES['OTHER CONFECTIONERY INGREDIENTS'])
+    _run_generic('OTHER CONFECTIONERY INGREDIENTS', prices['OTHER CONFECTIONERY INGREDIENTS'])
 
     # Step 2 — Cocoa Mass.
-    _run_generic('COCOA MASS', E1_UNIT_PRICES['COCOA MASS'])
+    _run_generic('COCOA MASS', prices['COCOA MASS'])
 
     # Step 3 — Milk Products. Delegates to the shared milk engine, called
     # once per item exactly as e5_plan.py's own milk step does — E1 and E5
@@ -301,18 +304,18 @@ def plan_e1_items(
                 remaining -= swp_cif
 
     # Step 4 — Egg Albumin.
-    _run_generic('EGG ALBUMIN', EGG_ALBUMIN_PRICE)
+    _run_generic('EGG ALBUMIN', prices['EGG ALBUMIN'])
 
     # Step 5 — Fruit Juice.
-    _run_generic('FRUIT JUICE', E1_UNIT_PRICES['FRUIT JUICE'])
+    _run_generic('FRUIT JUICE', prices['FRUIT JUICE'])
 
     # Step 6 — Tartaric Acid.
-    _run_generic('TARTARIC ACID', E1_UNIT_PRICES['TARTARIC ACID'])
+    _run_generic('TARTARIC ACID', prices['TARTARIC ACID'])
 
     # Step 7 — Aluminium Foil.
-    _run_generic('ALUMINIUM FOIL', E1_UNIT_PRICES['ALUMINIUM FOIL'])
+    _run_generic('ALUMINIUM FOIL', prices['ALUMINIUM FOIL'])
 
     # Step 8 — Polypropylene.
-    _run_generic('POLYPROPYLENE', E1_UNIT_PRICES['POLYPROPYLENE'])
+    _run_generic('POLYPROPYLENE', prices['POLYPROPYLENE'])
 
     return E1PlanResult(lines=lines, remaining_cif=remaining)

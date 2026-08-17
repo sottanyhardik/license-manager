@@ -73,6 +73,7 @@ def import_profile_document(document, *, activate=False):
                 "unit": KG,
                 "priority": index,
                 "is_active": False,
+                "execution_output": category,
             },
         )
         rule_outputs[rule.stable_key] = category

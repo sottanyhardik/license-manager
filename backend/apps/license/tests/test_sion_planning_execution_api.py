@@ -1,0 +1,78 @@
+from datetime import date, timedelta
+from decimal import Decimal
+
+import pytest
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from rest_framework.test import APIClient
+
+from apps.core.models import CompanyModel, HeadSIONNormsModel, HSCodeModel, SionNormClassModel
+from apps.license.models import (
+    LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
+    SionPlanningRule,
+)
+from apps.license.services.e1_auto_plan import compute_e1_auto_plan
+from apps.license.services.e5_auto_plan import compute_e5_auto_plan
+from apps.license.services.sion_planner_config.importer import import_e1_e5_profiles
+
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.mark.parametrize("code,hsn,description,legacy_compute", [
+    ("E1", "080211", "Almond", compute_e1_auto_plan),
+    ("E5", "210600", "Dietary fibre", compute_e5_auto_plan),
+])
+def test_plan_sion_api_uses_db_classifier_and_preserves_legacy_mechanics(
+    code, hsn, description, legacy_compute,
+):
+    head = HeadSIONNormsModel.objects.create(name="Execution bridge")
+    sions = {
+        norm: SionNormClassModel.objects.create(
+            head_norm=head, norm_class=norm, is_active=True,
+        )
+        for norm in ("E1", "E5")
+    }
+    import_e1_e5_profiles(activate=True)
+    SionPlanningRule.objects.filter(sion=sions[code]).update(is_active=True)
+    company = CompanyModel.objects.create(iec=f"BRIDGE-{code}", name=f"Bridge {code}")
+    license_obj = LicenseDetailsModel.objects.create(
+        exporter=company, license_number=f"BRIDGE-{code}-1",
+        license_date=date.today(), license_expiry_date=date.today() + timedelta(days=30),
+    )
+    LicenseExportItemModel.objects.create(
+        license=license_obj, norm_class=sions[code], cif_fc=Decimal("1000"),
+    )
+    hs = HSCodeModel.objects.create(hs_code=hsn, product_description=description, unit="kg")
+    LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs, description=description,
+        unit="kg", quantity=Decimal("100"), available_quantity=Decimal("100"),
+    )
+
+    legacy_lines, legacy_remaining = legacy_compute(license_obj)
+    user = get_user_model().objects.create_user(username=f"bridge-{code}", company=company)
+    role, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
+    user.groups.add(role)
+    client = APIClient()
+    client.force_authenticate(user)
+
+    preview = client.post(
+        "/api/sion-planning-rules/preview-sion/",
+        {"sion_id": sions[code].pk, "license_ids": []}, format="json",
+    )
+    assert preview.status_code == 200, preview.data
+    actual_lines = preview.data["licenses"][0]["lines"]
+    assert [(Decimal(str(row["requested_quantity"])), Decimal(str(row["unit_price"]))) for row in actual_lines] == [
+        (Decimal(str(row["planned_quantity"])), Decimal(str(row["unit_price"])))
+        for row in legacy_lines
+    ]
+    assert Decimal(str(preview.data["licenses"][0]["remaining_balance_cif"])) == Decimal(str(legacy_remaining))
+
+    planned = client.post(
+        "/api/sion-planning-rules/plan-sion/",
+        {"sion_id": sions[code].pk}, format="json",
+    )
+    assert planned.status_code == 200, planned.data
+    assert planned.data["sion"] == code
+    assert planned.data["licenses"][0]["license_id"] == license_obj.pk
+    assert planned.data["write_results"][0]["status"] == "PLANNED"

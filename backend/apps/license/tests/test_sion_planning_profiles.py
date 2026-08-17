@@ -65,6 +65,12 @@ def test_configuration_rejects_unsafe_formula_and_cross_sion_mapping(profile):
     with pytest.raises(ValidationError, match="Unsupported structured formula"):
         action.full_clean()
 
+    action.config = {"formula": {
+        "operation": "WEIGHTED_AVERAGE", "numerator": "cif_fc",
+        "denominator": "quantity",
+    }}
+    action.full_clean()
+
     other = SionNormClassModel.objects.create(
         head_norm=profile.sion.head_norm, norm_class="CFG2", is_active=True,
     )

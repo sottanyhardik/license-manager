@@ -1351,7 +1351,10 @@ def _validate_planning_json(value, label):
     if not isinstance(value, dict):
         raise ValidationError(f"{label} must be a JSON object.")
     forbidden = {"python", "javascript", "sql", "eval", "exec", "script"}
-    allowed_formula_ops = {"ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "MIN", "MAX"}
+    allowed_formula_ops = {
+        "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "MIN", "MAX",
+        "WEIGHTED_AVERAGE",
+    }
 
     def walk(node):
         if isinstance(node, dict):

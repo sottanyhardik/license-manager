@@ -2,6 +2,7 @@ import logging
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+from django.db.models import Max
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -58,9 +59,14 @@ class RuleAllocationStrategySerializer(serializers.Serializer):
         if not isinstance(buckets, list) or len(buckets) != 2:
             raise serializers.ValidationError({"config": "Exactly two allocation buckets are required."})
         parsed = []
+        codes = set()
         for index, bucket in enumerate(buckets):
-            if not isinstance(bucket, dict) or not str(bucket.get("code", "")).strip():
+            code = str(bucket.get("code", "")).strip().upper() if isinstance(bucket, dict) else ""
+            if not code:
                 raise serializers.ValidationError({"config": f"Bucket {index + 1} requires a code."})
+            if code in codes:
+                raise serializers.ValidationError({"config": "Output bucket codes must be unique."})
+            codes.add(code)
             try:
                 minimum = Decimal(str(bucket["min_price"]))
                 maximum = Decimal(str(bucket["max_price"]))
@@ -180,6 +186,9 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         actions = list(SionPlanningAction.objects.filter(
             profile=profile, action_type="SPLIT",
         ).order_by("priority", "pk"))
+        for candidate in actions:
+            if str((candidate.config or {}).get("source_rule_id", "")) == str(rule.pk):
+                return candidate
         output = (rule.execution_output or "").strip().casefold()
         if output:
             for candidate in actions:
@@ -208,12 +217,37 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         serializer = RuleAllocationStrategySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
-        if not split_action:
-            return Response(
-                {"detail": "No canonical SPLIT action is configured for this rule output."},
-                status=status.HTTP_409_CONFLICT,
-            )
         with transaction.atomic():
+            if not split_action and values["strategy"] == "SPLIT_BY_UNIT_VALUE":
+                profile = SionPlanningProfile.objects.filter(
+                    sion_id=rule.sion_id, is_active=True,
+                ).order_by("-version", "-pk").first()
+                if profile is None:
+                    profile = SionPlanningProfile.objects.create(
+                        sion_id=rule.sion_id,
+                        stable_key=f"{rule.sion.norm_class}:PROFILE:UI:{rule.pk}",
+                        strategy_type="ACTION_PIPELINE",
+                        config={},
+                        is_active=True,
+                        created_by=request.user,
+                        modified_by=request.user,
+                    )
+                next_priority = (profile.actions.aggregate(value=Max("priority"))["value"] or 0) + 1
+                split_action = SionPlanningAction.objects.create(
+                    profile=profile,
+                    stable_key=f"{rule.sion.norm_class}:RULE:{rule.pk}:SPLIT",
+                    action_type="SPLIT",
+                    priority=next_priority,
+                    config={
+                        "source_rule_id": rule.pk,
+                        "category": (rule.execution_output or rule.name).strip(),
+                    },
+                    is_active=False,
+                    created_by=request.user,
+                    modified_by=request.user,
+                )
+            if split_action is None:
+                return Response({"strategy": "STANDARD"})
             split_action = SionPlanningAction.objects.select_for_update().get(pk=split_action.pk)
             if values["strategy"] == "STANDARD":
                 split_action.is_active = False
@@ -226,6 +260,8 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 # fields are UI-owned.
                 requested = values["config"]
                 config = dict(split_action.config or {})
+                config["source_rule_id"] = rule.pk
+                config["category"] = (rule.execution_output or rule.name).strip()
                 for key in ("algorithm", "basis", "buckets"):
                     config[key] = requested[key]
                 split_action.config = config

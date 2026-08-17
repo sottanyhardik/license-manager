@@ -22,6 +22,24 @@ describe("SION-first planning workspace", () => {
         expect(screen.getByDisplayValue("2.70")).toBeInTheDocument();
         expect(screen.getByLabelText("Rule logic")).toHaveValue("AND");
     });
+    it("shows a DB-backed split badge, detail summary, and editable planning strategy", async () => {
+        vi.mocked(rulesApi.fetchRuleAllocationStrategy).mockResolvedValue({
+            strategy: "SPLIT_BY_UNIT_VALUE", config: {
+                algorithm: "SPLIT_BY_UNIT_VALUE", basis: "BALANCE_CIF_PER_QUANTITY",
+                buckets: [
+                    { code: "SWP", min_price: "0.00", max_price: "1.50", reference_price: "1.50" },
+                    { code: "DWP", min_price: "1.50", max_price: "6.50", reference_price: "6.50" },
+                ],
+            },
+        });
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        expect(await screen.findByText("Split")).toBeInTheDocument();
+        expect(screen.getByText("Split by Unit Value")).toBeInTheDocument();
+        expect(screen.getByText("0.00 – 1.50 · Reference 1.50")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+        expect(await screen.findByLabelText("Allocation strategy")).toHaveValue("SPLIT_BY_UNIT_VALUE");
+        expect(screen.getByLabelText("SWP max price")).toHaveValue("1.50");
+    });
     it("renders a mixed ANY expression exactly as returned and keeps edit semantics identical", async () => {
         vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...existing, priority: 2, expression: { operator: "OR", conditions: [
             { field: "HSN", operator: "CONTAINS", value: "1803" },

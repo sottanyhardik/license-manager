@@ -31,7 +31,7 @@ export function AllocationStrategyEditor({ value, onChange, disabled = false }: 
 
     return <section aria-labelledby="allocation-strategy-heading" className="space-y-3 border-t pt-4">
         <div>
-            <h3 id="allocation-strategy-heading" className="text-sm font-semibold">Allocation Strategy</h3>
+            <h3 id="allocation-strategy-heading" className="text-sm font-semibold">Planning Strategy</h3>
             <p className="text-xs text-muted-foreground">Matching selects candidates; this strategy allocates their current remaining quantity and CIF.</p>
         </div>
         <label className="block max-w-xs text-xs">Strategy
@@ -41,7 +41,7 @@ export function AllocationStrategyEditor({ value, onChange, disabled = false }: 
             </select>
         </label>
         {splitConfig && <div className="rounded-md border bg-muted/20 p-3">
-            <p className="mb-2 text-xs text-muted-foreground">Price boundaries are saved in the planning action configuration. Calculations use current backend balance values.</p>
+            <p className="mb-2 text-xs text-muted-foreground"><strong>Split Allocation</strong> · Basis: Balance CIF / Available Quantity. Price boundaries are saved in the planning action configuration.</p>
             <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-xs">
                 <thead><tr className="border-b text-left text-muted-foreground"><th className="pb-2">Bucket</th><th className="pb-2">Minimum</th><th className="pb-2">Maximum</th><th className="pb-2">Reference Price</th></tr></thead>
                 <tbody>{splitConfig.buckets.map((bucket, index) => <tr key={`${bucket.code}-${index}`} className="border-b last:border-0">

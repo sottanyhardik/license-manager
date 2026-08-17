@@ -124,6 +124,32 @@ def test_allocation_strategy_api_rejects_invalid_band(rule_world):
     assert response.status_code == 400
 
 
+def test_allocation_strategy_api_creates_db_action_for_new_rule_and_reloads(rule_world):
+    company, _sion, _license_obj, _item, rule = rule_world
+    client, _user = _client(company)
+    payload = {
+        "strategy": "SPLIT_BY_UNIT_VALUE",
+        "config": {
+            "algorithm": "SPLIT_BY_UNIT_VALUE", "basis": "BALANCE_CIF_PER_QUANTITY",
+            "buckets": [
+                {"code": "LOW", "min_price": "0.00", "max_price": "1.50", "reference_price": "1.50"},
+                {"code": "HIGH", "min_price": "1.50", "max_price": "6.50", "reference_price": "6.50"},
+            ],
+        },
+    }
+    response = client.patch(
+        f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/", payload, format="json",
+    )
+    assert response.status_code == 200
+    action = SionPlanningAction.objects.get(pk=response.data["action_id"])
+    assert action.config["source_rule_id"] == rule.pk
+    assert action.config["category"] == rule.name
+
+    reloaded = client.get(f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/")
+    assert reloaded.status_code == 200
+    assert reloaded.data["config"]["buckets"] == payload["config"]["buckets"]
+
+
 def test_safe_nested_expression_normalizes_case_space_and_hsn_zeroes():
     expression = {"operator": "AND", "conditions": [
         {"field": "HSN", "comparator": "CONTAINS", "value": " 1701 "},

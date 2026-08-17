@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { createSionPlanningRule, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, reorderSionPlanningRules, testSionPlanningRule, updateSionPlanningRule, type SionPlanningMode, type SionPlanningPreview, type SionPlanningPreviewLicense, type SionPlanningRule } from "@/services/api/planningRuleApi";
 import { ExpressionTreeEditor, emptyRuleCondition } from "./ExpressionTreeEditor";
+import { getConditionDisplay } from "./ruleConditionDisplay";
 
 // This workspace contains actions, never form submissions. Keeping the native
 // type explicit prevents a future surrounding form from turning any editor
@@ -54,7 +55,7 @@ function ExpressionSummary({ group, depth = 0 }: { group: SionPlanningRule["expr
         <p className="py-1 text-xs font-semibold">{group.operator === "AND" ? "ALL" : "ANY"} <span className="font-normal text-muted-foreground">· {group.conditions.length} items</span></p>
         <div className="space-y-1">{group.conditions.map((node, index) => "conditions" in node
             ? <ExpressionSummary key={index} group={node} depth={depth + 1} />
-            : <p key={index} className="ml-3 border-l border-border py-1 pl-3 text-xs"><span className="font-medium">{node.field === "HSN" ? "HSN" : "Product"}</span> <span className="text-muted-foreground">{node.comparator === "CONTAINS" ? "contains" : "does not contain"}</span> {node.value || "—"}</p>)}</div>
+            : (() => { const display = getConditionDisplay(node); return <p key={index} className="ml-3 border-l border-border py-1 pl-3 text-xs"><span className="font-medium">{display.fieldLabel}</span> <span className="text-muted-foreground">{display.operatorLabel}</span> {display.value || "—"}</p>; })())}</div>
     </div>;
 }
 

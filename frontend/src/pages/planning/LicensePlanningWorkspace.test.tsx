@@ -22,6 +22,23 @@ describe("SION-first planning workspace", () => {
         expect(screen.getByDisplayValue("2.70")).toBeInTheDocument();
         expect(screen.getByLabelText("Rule logic")).toHaveValue("AND");
     });
+    it("renders a mixed ANY expression exactly as returned and keeps edit semantics identical", async () => {
+        vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...existing, priority: 2, expression: { operator: "OR", conditions: [
+            { field: "HSN", operator: "CONTAINS", value: "1803" },
+            { field: "PRODUCT_DESCRIPTION", operator: "CONTAINS", value: "1803" },
+        ] } }]);
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+
+        expect(await screen.findByText("ANY", { exact: false })).toHaveTextContent("ANY · 2 items");
+        expect(screen.getByText((_, element) => element?.tagName === "P" && element.textContent === "HSN contains 1803")).toBeInTheDocument();
+        expect(screen.getByText((_, element) => element?.tagName === "P" && element.textContent === "Product Description contains 1803")).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("button", { name: /Edit/ }));
+        expect(screen.getByLabelText("Condition 1 field")).toHaveValue("HSN");
+        expect(screen.getByLabelText("Condition 1 comparator")).toHaveValue("CONTAINS");
+        expect(screen.getByLabelText("Condition 2 field")).toHaveValue("PRODUCT_DESCRIPTION");
+        expect(screen.getByLabelText("Condition 2 comparator")).toHaveValue("CONTAINS");
+    });
     it("tests through the backend and renders its authoritative preview", async () => {
         render(<MemoryRouter initialEntries={["/planning?license_id=42"]}><LicensePlanningWorkspace /></MemoryRouter>);
         fireEvent.keyDown(screen.getByLabelText("SION Norm"), { key: "ArrowDown" }); fireEvent.click(await screen.findByText("E5"));

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Trash2, X } from "luci
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import type { RuleCondition, RuleGroup } from "@/services/api/planningRuleApi";
+import { conditionOperator, MATCH_FIELDS, MATCH_OPERATORS, withConditionOperator } from "./ruleConditionDisplay";
 
 export const emptyRuleCondition = (): RuleCondition => ({
     field: "HSN",
@@ -99,13 +100,11 @@ function GroupNode({ group, onChange, ruleName, depth, onRemove }: GroupNodeProp
                     onRemove={() => removeAt(index)}
                 />
                 : <div key={index} className="grid min-h-10 items-center gap-2 border-l border-border pl-3 sm:grid-cols-[minmax(130px,0.8fr)_minmax(150px,0.9fr)_minmax(180px,1.5fr)_32px]">
-                    <select aria-label={`Condition ${index + 1} field`} value={node.field} onChange={(event) => replace(index, { ...node, field: event.target.value as RuleCondition["field"] })} className="h-9 rounded-md border bg-background px-2 text-sm">
-                        <option value="HSN">HSN</option>
-                        <option value="PRODUCT_DESCRIPTION">Product Description</option>
+                    <select aria-label={`Condition ${index + 1} field`} value={node.field} onChange={(event) => replace(index, { ...node, field: event.target.value })} className="h-9 rounded-md border bg-background px-2 text-sm">
+                        {MATCH_FIELDS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
-                    <select aria-label={`Condition ${index + 1} comparator`} value={node.comparator} onChange={(event) => replace(index, { ...node, comparator: event.target.value as RuleCondition["comparator"] })} className="h-9 rounded-md border bg-background px-2 text-sm">
-                        <option value="CONTAINS">Contains</option>
-                        <option value="NOT_CONTAINS">Does not contain</option>
+                    <select aria-label={`Condition ${index + 1} comparator`} value={conditionOperator(node)} onChange={(event) => replace(index, withConditionOperator(node, event.target.value))} className="h-9 rounded-md border bg-background px-2 text-sm">
+                        {MATCH_OPERATORS.map(([value, label]) => <option key={value} value={value}>{label.charAt(0).toUpperCase() + label.slice(1)}</option>)}
                     </select>
                     <input aria-label={`Condition ${index + 1} value`} value={node.value} onChange={(event) => replace(index, { ...node, value: event.target.value })} className="h-9 min-w-0 rounded-md border bg-background px-2 text-sm" />
                     <Button type="button" size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-destructive" aria-label={`Remove condition ${index + 1}`} onClick={() => removeAt(index)}>

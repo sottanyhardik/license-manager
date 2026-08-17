@@ -1,6 +1,11 @@
 import api from "@/api/axios";
 
-export type RuleCondition = { field: "HSN" | "PRODUCT_DESCRIPTION"; comparator: "CONTAINS" | "NOT_CONTAINS"; value: string };
+export type RuleCondition = {
+    field: "HSN" | "HSN_DIGITS" | "PRODUCT_DESCRIPTION" | "ITEM_KEY" | string;
+    comparator?: string;
+    operator?: string;
+    value: string;
+};
 export type RuleGroup = { operator: "AND" | "OR"; conditions: Array<RuleCondition | RuleGroup> };
 export type SionPlanningRule = { id?: number; sion: number; name: string; expression: RuleGroup; max_unit_price: string; unit: string; priority: number; is_active: boolean; version?: number; modified_on?: string; modified_by_username?: string };
 

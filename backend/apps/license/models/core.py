@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, Optional
 
 from django.conf import settings
 from django.core.validators import RegexValidator, MinValueValidator
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import Count, Sum, DecimalField, Value
 from django.db.models.functions import Coalesce
@@ -1334,6 +1336,232 @@ class SionPlanningRule(AuditModel):
 
     def __str__(self):
         return f"{self.sion.norm_class}: {self.name} v{self.version}"
+
+
+PLANNING_ACTION_TYPES = (
+    ("MATCH", "Match"), ("PRICE", "Price"), ("GROUP", "Group"),
+    ("ALLOCATE", "Allocate"), ("SPLIT", "Split"),
+    ("REBALANCE", "Rebalance"), ("ROUND", "Round"),
+    ("MAP_OUTPUT", "Map output"),
+)
+
+
+def _validate_planning_json(value, label):
+    """Reject executable/ambiguous configuration at the model boundary."""
+    if not isinstance(value, dict):
+        raise ValidationError(f"{label} must be a JSON object.")
+    forbidden = {"python", "javascript", "sql", "eval", "exec", "script"}
+    allowed_formula_ops = {"ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "MIN", "MAX"}
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, child in node.items():
+                if str(key).lower() in forbidden:
+                    raise ValidationError(f"Unsafe configuration key: {key}.")
+                walk(child)
+            if "operation" in node and str(node["operation"]).upper() not in allowed_formula_ops:
+                raise ValidationError("Unsupported structured formula operation.")
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(value)
+
+
+class SionPlanningProfile(AuditModel):
+    """Versioned, SION-neutral description of how planning is executed."""
+    uid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    sion = models.ForeignKey(
+        "core.SionNormClassModel", on_delete=models.PROTECT,
+        related_name="planning_profiles",
+    )
+    stable_key = models.CharField(max_length=100, unique=True)
+    strategy_type = models.CharField(max_length=50, default="ACTION_PIPELINE")
+    config = models.JSONField(default=dict, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        ordering = ("sion_id", "-is_active", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("sion",), condition=models.Q(is_active=True),
+                name="uniq_active_sion_planning_profile",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(version__gte=1), name="sion_profile_version_gte_1",
+            ),
+        ]
+
+    admin_list_display = ("stable_key", "sion", "strategy_type", "version", "is_active", "modified_on")
+    admin_search_fields = ("stable_key", "sion__norm_class")
+    list_filter = ("strategy_type", "is_active")
+
+    def clean(self):
+        super().clean()
+        _validate_planning_json(self.config, "Profile config")
+        has_active_actions = self.pk and self.actions.filter(is_active=True).exists()
+        if self.is_active and not has_active_actions:
+            raise ValidationError({"is_active": "An active profile requires an active action."})
+
+    def __str__(self):
+        return f"{self.sion.norm_class}: {self.stable_key} v{self.version}"
+
+
+class SionPlanningAction(AuditModel):
+    """One generic, ordered stage in a planning profile pipeline."""
+    uid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    profile = models.ForeignKey(
+        SionPlanningProfile, on_delete=models.PROTECT, related_name="actions",
+    )
+    stable_key = models.CharField(max_length=100)
+    action_type = models.CharField(max_length=20, choices=PLANNING_ACTION_TYPES)
+    priority = models.PositiveIntegerField(default=1)
+    config = models.JSONField(default=dict)
+    version = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ("profile_id", "priority", "pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("profile", "stable_key"), name="uniq_profile_action_key",
+            ),
+            models.UniqueConstraint(
+                fields=("profile", "priority"), condition=models.Q(is_active=True),
+                name="uniq_active_profile_action_priority",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(priority__gte=1), name="sion_action_priority_gte_1",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(version__gte=1), name="sion_action_version_gte_1",
+            ),
+        ]
+
+    admin_list_display = ("stable_key", "profile", "action_type", "priority", "version", "is_active")
+    admin_search_fields = ("stable_key", "profile__stable_key")
+    list_filter = ("action_type", "is_active")
+
+    def clean(self):
+        super().clean()
+        _validate_planning_json(self.config, "Action config")
+
+    def __str__(self):
+        return f"{self.profile.stable_key}: {self.priority} {self.action_type}"
+
+
+class SionPlanningOutputMapping(AuditModel):
+    """Data-owned mapping from a match/rule to a canonical output item."""
+    uid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    profile = models.ForeignKey(
+        SionPlanningProfile, on_delete=models.PROTECT, related_name="output_mappings",
+    )
+    stable_key = models.CharField(max_length=100)
+    source_rule = models.ForeignKey(
+        SionPlanningRule, on_delete=models.PROTECT, related_name="output_mappings",
+        null=True, blank=True,
+    )
+    output_item = models.ForeignKey(
+        "core.ItemNameModel", on_delete=models.PROTECT,
+        related_name="sion_planning_output_mappings", null=True, blank=True,
+    )
+    conversion_factor = models.DecimalField(
+        max_digits=20, decimal_places=8, default=Decimal("1"),
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    rate = models.DecimalField(
+        max_digits=20, decimal_places=8, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    unit = models.CharField(max_length=10, choices=UNIT_CHOICES)
+    priority = models.PositiveIntegerField(default=1)
+    config = models.JSONField(default=dict, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ("profile_id", "priority", "pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("profile", "stable_key"), name="uniq_profile_output_mapping_key",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(conversion_factor__gte=0), name="sion_mapping_factor_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(rate__isnull=True) | models.Q(rate__gte=0),
+                name="sion_mapping_rate_nonnegative",
+            ),
+            models.UniqueConstraint(
+                fields=("profile", "priority"), condition=models.Q(is_active=True),
+                name="uniq_active_profile_mapping_priority",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(priority__gte=1), name="sion_mapping_priority_gte_1",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(version__gte=1), name="sion_mapping_version_gte_1",
+            ),
+        ]
+
+    admin_list_display = (
+        "stable_key", "profile", "output_item", "conversion_factor", "rate",
+        "unit", "priority", "version", "is_active",
+    )
+    admin_search_fields = ("stable_key", "profile__stable_key", "output_item__name")
+    list_filter = ("unit", "is_active")
+
+    def clean(self):
+        super().clean()
+        _validate_planning_json(self.config, "Output mapping config")
+        if self.source_rule_id and self.profile_id and self.source_rule.sion_id != self.profile.sion_id:
+            raise ValidationError({"source_rule": "Rule and profile must belong to the same SION."})
+
+
+class SionPlanningRun(AuditModel):
+    """Immutable configuration/result audit envelope for one planner execution."""
+    STATUS_CHOICES = (
+        ("PENDING", "Pending"), ("RUNNING", "Running"),
+        ("COMPLETED", "Completed"), ("FAILED", "Failed"),
+        ("SHADOW", "Shadow"),
+    )
+    run_uid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    profile = models.ForeignKey(
+        SionPlanningProfile, on_delete=models.PROTECT, related_name="runs",
+    )
+    sion = models.ForeignKey(
+        "core.SionNormClassModel", on_delete=models.PROTECT,
+        related_name="planning_runs",
+    )
+    profile_version = models.PositiveIntegerField()
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="PENDING", db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    config_snapshot = models.JSONField(default=dict)
+    result_summary = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ("-created_on",)
+        indexes = [models.Index(fields=("sion", "status", "created_on"))]
+
+    admin_list_display = (
+        "run_uid", "sion", "profile", "profile_version", "status",
+        "started_at", "completed_at",
+    )
+    admin_search_fields = ("run_uid", "profile__stable_key", "sion__norm_class")
+    list_filter = ("status",)
+
+    def clean(self):
+        super().clean()
+        _validate_planning_json(self.config_snapshot, "Config snapshot")
+        _validate_planning_json(self.result_summary, "Result summary")
+        if self.profile_id and self.sion_id and self.profile.sion_id != self.sion_id:
+            raise ValidationError({"sion": "Run SION must match its profile SION."})
+        if self.profile_id and self.profile_version != self.profile.version:
+            raise ValidationError({"profile_version": "Profile version must match at run creation."})
+        if self.completed_at and not self.started_at:
+            raise ValidationError({"completed_at": "A completed run requires started_at."})
 
 
 # -----------------------------

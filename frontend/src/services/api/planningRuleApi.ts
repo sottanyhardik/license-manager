@@ -123,3 +123,6 @@ export async function previewSavedSionRules(sionId: number, mode: SionPlanningMo
 export async function reorderSionPlanningRules(sionId: number, ruleOrder: number[]): Promise<SionPlanningRule[]> {
     return (await api.post("sion-planning-rules/reorder/", { sion_id: sionId, rule_order: ruleOrder })).data;
 }
+export async function planLicense(licenseId: number, mode: SionPlanningMode = "NEW"): Promise<SionPlanningPreview> {
+    return (await api.post("sion-planning-rules/plan-license/", { license_id: licenseId, mode })).data;
+}

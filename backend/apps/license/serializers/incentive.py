@@ -154,3 +154,29 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
         if normalized not in {code for code, _label in UNIT_CHOICES}:
             raise serializers.ValidationError("Unsupported planning unit.")
         return normalized
+
+
+class LicenseIdOnlySerializer(serializers.Serializer):
+    """Single-license planning request."""
+
+    license_id = serializers.IntegerField(required=True, min_value=1)
+    mode = serializers.ChoiceField(
+        choices=("NEW", "ALL"),
+        required=False,
+        default="NEW",
+    )
+
+
+class BulkLicensePlanningSerializer(serializers.Serializer):
+    """Bulk-license planning request."""
+
+    license_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=True,
+        allow_empty=False,
+    )
+    mode = serializers.ChoiceField(
+        choices=("NEW", "ALL"),
+        required=False,
+        default="NEW",
+    )

@@ -1,8 +1,12 @@
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Loader2, Target } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLicenseOverviewPlanning } from "./useLicenseOverviewPlanning";
 import { extractApiError, fmtNum } from "./licenseOverviewHelpers";
+import { planLicense } from "@/services/api/planningRuleApi";
 
 interface PlanningTabProps {
     licenseId: string | number | undefined;
@@ -21,7 +25,28 @@ interface PlanningTabProps {
  * planning service. This component deliberately performs no planning maths.
  */
 export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
-    const { data, isLoading, isError, error } = useLicenseOverviewPlanning(licenseId, isActive);
+    const { data, isLoading, isError, error, refetch } = useLicenseOverviewPlanning(licenseId, isActive);
+    const [isPlanning, setIsPlanning] = useState(false);
+
+    const handleAutoPlan = async () => {
+        if (!licenseId || isPlanning) return;
+        setIsPlanning(true);
+        try {
+            const result = await planLicense(Number(licenseId), "NEW");
+            const siansExecuted = result?.total_results?.sions_executed || 0;
+            const linesWritten = result?.total_results?.total_lines_written || 0;
+            toast.success(`Planning completed: ${siansExecuted} SION${siansExecuted !== 1 ? 's' : ''}, ${linesWritten} line${linesWritten !== 1 ? 's' : ''}`);
+            // Refetch the planning data to show updated plan info
+            refetch?.();
+        } catch (error) {
+            const message = error && typeof error === 'object' && 'response' in error
+                ? (error as any).response?.data?.error || (error as any).response?.data?.detail || 'Failed to plan license'
+                : 'Failed to plan license';
+            toast.error(message);
+        } finally {
+            setIsPlanning(false);
+        }
+    };
 
     if (!isActive) return null;
 
@@ -47,9 +72,25 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
 
     return (
         <div>
-            <div className="mb-3 flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">SION Norm</span>
-                <Badge variant={norm ? "info" : "secondary"}>{norm || "—"}</Badge>
+            <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">SION Norm</span>
+                    <Badge variant={norm ? "info" : "secondary"}>{norm || "—"}</Badge>
+                </div>
+                <Button
+                    onClick={handleAutoPlan}
+                    disabled={isPlanning || !norm}
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                >
+                    {isPlanning ? (
+                        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                        <Target className="size-3.5" aria-hidden="true" />
+                    )}
+                    {isPlanning ? "Planning..." : "Auto Plan"}
+                </Button>
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-border">

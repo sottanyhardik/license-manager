@@ -1,6 +1,9 @@
 # license/views/license.py
+import logging
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
 
 from apps.accounts.permissions import LicenseBalanceLedgerPermission, LicensePermission, LicenseReadOnlyPermission
 from apps.core.constants import SCHEME_CODE_CHOICES, \
@@ -324,6 +327,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     row['remaining_planned_cif_fc'] = str(plan_status['remaining_cif_fc'])
 
         from apps.license.services.plan_utilization import plan_utilization_rows
+        from apps.license.services.license_plan_presentation import LicensePlanPresentationService
+        from apps.license.serializers.license import LicensePlanPresentationSerializer
 
         _decimal_fields = (
             'available_quantity', 'total_quantity', 'balance_cif_fc',
@@ -337,6 +342,19 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             {**row, **{f: str(row[f]) for f in _decimal_fields if f in row}}
             for row in plan_utilization_rows(instance)
         ]
+
+        # Attach canonical license plan presentation (single source of truth)
+        try:
+            presentation = LicensePlanPresentationService.get_license_plan(instance.id)
+            serializer = LicensePlanPresentationSerializer(presentation)
+            data['license_plan_presentation'] = serializer.data
+        except Exception as e:
+            logger.warning(
+                f"Failed to load license plan presentation for license {instance.id}: {e}",
+                exc_info=True
+            )
+            # Gracefully degrade: omit the field if service fails
+            data['license_plan_presentation'] = None
 
         return Response(data)
 

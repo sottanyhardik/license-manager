@@ -6,6 +6,7 @@ import { formatIndianNumber } from '../utils/numberFormatter';
 import {
     downloadLicenseLedgerExcel, licenseLedgerExportError, previewLicenseLedgerPdf,
 } from '../services/licenseLedgerExport';
+import { planLicense } from '../services/api/planningRuleApi';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import AsyncSelectField from '../components/AsyncSelectField';
@@ -23,7 +24,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
     ArrowDownCircle, ArrowUpCircle, BookOpen, Building2, Calendar,
     BadgeCheck, CalendarCheck, CalendarRange, FileSpreadsheet, FileText, Filter,
-    Globe, Inbox, Loader2, Trophy, XCircle,
+    Globe, Inbox, Loader2, Target, Trophy, XCircle,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -213,7 +214,17 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
 
 // ─── LicenseWiseLedger sub-component ─────────────────────────────────────────
 
-function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate: ReturnType<typeof useNavigate> }) {
+function LicenseWiseLedger({
+    data,
+    navigate,
+    onAutoPlan,
+    planningLicenseId,
+}: {
+    data: LicenseWiseData;
+    navigate: ReturnType<typeof useNavigate>;
+    onAutoPlan?: (licenseId: number) => void;
+    planningLicenseId?: number | null;
+}) {
     const { licenses, company_groups = [], grand_total } = normalizeLicenseWiseData(data);
     const fmt = (v: number) => `₹${formatIndianNumber(v, 2)}`;
 
@@ -251,7 +262,29 @@ function LicenseWiseLedger({ data, navigate }: { data: LicenseWiseData; navigate
                                                     <td className="px-3 py-2 text-right tabular-nums">{fmt(license.purchase_bill_inr)}</td>
                                                     <td className="px-3 py-2 text-right tabular-nums">{fmt(license.sale_bill_inr)}</td>
                                                     <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", license.profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>{fmt(license.profit_loss_inr)}</td>
-                                                    <td className="px-3 py-2 text-right"><button type="button" className="font-semibold text-primary hover:underline" onClick={() => navigate(`/license-ledger/${license.license_id}/${company.company_id}`)}>View Ledger</button></td>
+                                                    <td className="px-3 py-2 space-x-1 text-right">
+                                                        <button
+                                                            type="button"
+                                                            disabled={planningLicenseId === license.license_id}
+                                                            onClick={() => onAutoPlan?.(Number(license.license_id))}
+                                                            aria-label={`Auto plan ${license.license_number}`}
+                                                            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        >
+                                                            {planningLicenseId === license.license_id ? (
+                                                                <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                                                            ) : (
+                                                                <Target className="size-3" aria-hidden="true" />
+                                                            )}
+                                                            Plan
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="font-semibold text-primary hover:underline"
+                                                            onClick={() => navigate(`/license-ledger/${license.license_id}/${company.company_id}`)}
+                                                        >
+                                                            View Ledger
+                                                        </button>
+                                                    </td>
                                                 </tr>
                                             ))}</tbody>
                                         </table>
@@ -429,6 +462,7 @@ export default function LicenseLedger() {
     const [companyWiseData, setCompanyWiseData] = useState<LicenseWiseData | null>(null);
     const [companyWiseLoading, setCompanyWiseLoading] = useState(false);
     const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null);
+    const [planningLicenseId, setPlanningLicenseId] = useState<number | null>(null);
     const [filters, setFilters] = useState<LicenseLedgerFilters>(() => defaultLicenseLedgerFilters());
     const requestVersion = useRef(0);
     const params = buildLicenseLedgerParams(filters);
@@ -461,6 +495,37 @@ export default function LicenseLedger() {
         ...previous, purchaseDateFrom: '', purchaseDateTo: '',
     }));
     const clearAllFilters = () => setFilters(defaultLicenseLedgerFilters());
+
+    const handleAutoPlan = async (licenseId: number) => {
+        if (planningLicenseId) return;
+        setPlanningLicenseId(licenseId);
+        try {
+            const result = await planLicense(licenseId, "NEW");
+            const licenseNumber = result?.license_number || `license ${licenseId}`;
+            const siansExecuted = result?.total_results?.sions_executed || 0;
+            const linesWritten = result?.total_results?.total_lines_written || 0;
+            toast.success(`Planning completed: ${licenseNumber} (${siansExecuted} SION${siansExecuted !== 1 ? 's' : ''}, ${linesWritten} line${linesWritten !== 1 ? 's' : ''})`);
+            // Refresh the ledger data to show updated plan info
+            const version = ++requestVersion.current;
+            Promise.all([
+                api.get(`license-ledger/license-wise/?${paramsKey}`),
+                api.get(`license-ledger/summary/?${paramsKey}`),
+            ]).then(([ledgerResponse, summaryResponse]) => {
+                if (version !== requestVersion.current) return;
+                setCompanyWiseData(normalizeLicenseWiseData(ledgerResponse.data));
+                setSummary(summaryResponse.data);
+            }).catch(() => {
+                // Silently fail on refresh
+            });
+        } catch (error) {
+            const message = error && typeof error === 'object' && 'response' in error
+                ? (error as any).response?.data?.error || (error as any).response?.data?.detail || 'Failed to plan license'
+                : 'Failed to plan license';
+            toast.error(message);
+        } finally {
+            setPlanningLicenseId(null);
+        }
+    };
 
     const runExport = async (format: 'pdf' | 'xlsx') => {
         if (exporting) return;
@@ -683,7 +748,12 @@ export default function LicenseLedger() {
                             <p className="text-sm text-muted-foreground">Loading license-wise ledger…</p>
                         </div>
                     ) : companyWiseData ? (
-                        <LicenseWiseLedger data={companyWiseData} navigate={navigate} />
+                        <LicenseWiseLedger
+                            data={companyWiseData}
+                            navigate={navigate}
+                            onAutoPlan={handleAutoPlan}
+                            planningLicenseId={planningLicenseId}
+                        />
                     ) : (
                         <EmptyState
                             icon={Building2}

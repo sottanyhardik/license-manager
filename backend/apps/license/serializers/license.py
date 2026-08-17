@@ -933,3 +933,96 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         return obj.purchase_status.label if obj.purchase_status else None
 
     # helper for M2M items in import rows
+
+
+# ============================================================================
+# License Plan Presentation Serializers (read-only)
+# ============================================================================
+
+class PlanLinePresentationSerializer(serializers.Serializer):
+    """
+    Serializer for a single split plan line within a PlanRow.
+    Represents one LicenseItemPlan instance in the split breakdown.
+    """
+    plan_line_id = serializers.IntegerField()
+    item_name = serializers.CharField(allow_null=True)
+    planned_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    remaining_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    planned_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    remaining_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+
+class PlanRowSerializer(serializers.Serializer):
+    """
+    Serializer for one grouped plan row.
+    Represents a set of import items with the same HSN + description + unit,
+    presented as a single row with aggregated quantities and optional split breakdown.
+    """
+    group_id = serializers.IntegerField()
+    import_item_ids = serializers.ListField(child=serializers.IntegerField())
+    serials = serializers.ListField(child=serializers.IntegerField())
+    description = serializers.CharField()
+    hs_code = serializers.CharField(allow_null=True)
+
+    # Aggregated quantities
+    total_available_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_available_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+    # Plan aggregates
+    has_plan = serializers.BooleanField()
+    planned_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    planned_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+    # Usage aggregates
+    used_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    used_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+    # Derived
+    remaining_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    remaining_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    uncommitted_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+
+    # Split breakdown
+    split_lines = PlanLinePresentationSerializer(many=True, read_only=True)
+
+    # Status flags
+    is_feasible = serializers.BooleanField()
+    is_short = serializers.BooleanField()
+
+
+class LicensePlanPresentationSerializer(serializers.Serializer):
+    """
+    Complete plan presentation for one license.
+    Single source of truth for aggregated license plan data.
+
+    Semantics:
+    - total_available_quantity: sum of import item quantities (from import)
+    - total_planned_quantity: sum of plan line quantities (user-authored plans)
+    - total_used_quantity: sum of allotment quantities (live consumption)
+    - total_remaining_quantity: planned - used (planning headroom)
+    - total_uncommitted_quantity: available - planned (unplanned headroom)
+    """
+    license_id = serializers.IntegerField()
+    license_number = serializers.CharField()
+    exporter_id = serializers.IntegerField(allow_null=True)
+    exporter_name = serializers.CharField()
+
+    # Rollup aggregates
+    total_available_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_available_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_planned_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_planned_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_used_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_used_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_remaining_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_remaining_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_uncommitted_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+
+    # License-level semantics
+    num_groups = serializers.IntegerField()
+    num_items = serializers.IntegerField()
+    has_any_plan = serializers.BooleanField()
+    is_over_planned = serializers.BooleanField()
+
+    # All rows (grouped, in serial order)
+    rows = PlanRowSerializer(many=True, read_only=True)

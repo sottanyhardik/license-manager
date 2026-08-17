@@ -1,22 +1,19 @@
 """Classify BOE and Allotment records by SION canonical input.
 
 Integrates SionInputClassifier with RowDetails (BOE debits) and AllotmentItems
-to provide canonical input classification at the transaction level.
+to provide canonical input classification and QUANTITY aggregation.
 """
 from decimal import Decimal
-from typing import Optional, Dict, Tuple
-from django.db.models import Sum, Q, F, DecimalField
-from django.db.models.functions import Coalesce
-
+from typing import Optional, Dict
 from apps.core.constants import DEC_0
 from apps.license.models import LicenseDetailsModel
 from apps.bill_of_entry.models import RowDetails
-from apps.allotment.models import AllotmentItems, AllotmentModel
+from apps.allotment.models import AllotmentItems
 from apps.license.services.sion_input_classifier import SionInputClassifier
 
 
 class SionBoeAllotmentClassifier:
-    """Classify BOE debit and Allotment records by canonical input."""
+    """Classify BOE debit and Allotment records by canonical input using QUANTITY."""
 
     @staticmethod
     def get_boe_canonical_input(boe) -> Optional[str]:
@@ -62,9 +59,9 @@ class SionBoeAllotmentClassifier:
         Returns:
             Canonical input code or None if unmapped
         """
-        # Check the related license item's name first
-        if allotment_item.item:
-            item_name = allotment_item.item.name or ''
+        # Check the related license item's ItemNameModel first
+        if allotment_item.item and allotment_item.item.items.exists():
+            item_name = allotment_item.item.items.first().name
             if item_name:
                 canonical = SionInputClassifier.resolve_canonical_input(item_name)
                 if canonical:
@@ -147,7 +144,10 @@ class SionBoeAllotmentClassifier:
     def get_usage_summary_by_input(
         license_obj: LicenseDetailsModel
     ) -> Dict[str, Dict[str, Decimal]]:
-        """Get CIF usage by canonical input across BOE and Allotment.
+        """Get QUANTITY usage by canonical input across BOE and Allotment.
+
+        Aggregates RowDetails.qty (BOE debits) and AllotmentItems.qty (allotments)
+        separately, providing a clear picture of allocation vs. debit.
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -155,40 +155,40 @@ class SionBoeAllotmentClassifier:
         Returns:
             Dict mapping canonical input code to:
                 {
-                    'allotted_cif': Decimal,
-                    'debited_cif': Decimal,
-                    'total_cif': Decimal,
+                    'allotted_quantity': Decimal (native units),
+                    'debited_quantity': Decimal (native units),
+                    'total_quantity': Decimal (native units),
                 }
         """
         result = {}
 
-        # Classify BOE rows
+        # Classify BOE rows and aggregate QUANTITY
         boe_classified = SionBoeAllotmentClassifier.classify_boe_rows_by_input(license_obj)
         for code, rows in boe_classified.items():
-            total_cif = sum(
-                (Decimal(str(row.cif_inr or DEC_0)) for row in rows),
+            total_qty = sum(
+                (Decimal(str(row.qty or DEC_0)) for row in rows),
                 DEC_0
             )
             if code not in result:
-                result[code] = {'allotted_cif': DEC_0, 'debited_cif': DEC_0}
-            result[code]['debited_cif'] = total_cif
+                result[code] = {'allotted_quantity': DEC_0, 'debited_quantity': DEC_0}
+            result[code]['debited_quantity'] = total_qty
 
-        # Classify allotment items
+        # Classify allotment items and aggregate QUANTITY
         allot_classified = SionBoeAllotmentClassifier.classify_allotment_items_by_input(license_obj)
         for code, items in allot_classified.items():
-            total_cif = sum(
-                (Decimal(str(item.cif_inr or DEC_0)) for item in items),
+            total_qty = sum(
+                (Decimal(str(item.qty or DEC_0)) for item in items),
                 DEC_0
             )
             if code not in result:
-                result[code] = {'allotted_cif': DEC_0, 'debited_cif': DEC_0}
-            result[code]['allotted_cif'] = total_cif
+                result[code] = {'allotted_quantity': DEC_0, 'debited_quantity': DEC_0}
+            result[code]['allotted_quantity'] = total_qty
 
         # Calculate total for each input
         for code in result:
-            result[code]['total_cif'] = (
-                result[code]['allotted_cif'] + result[code]['debited_cif']
-            ).quantize(Decimal('0.01'))
+            result[code]['total_quantity'] = (
+                result[code]['allotted_quantity'] + result[code]['debited_quantity']
+            ).quantize(Decimal('0.001'))
 
         return result
 

@@ -1,10 +1,16 @@
 """SION percentage rule capacity calculation and enforcement.
 
 Calculates and tracks usage of percentage-constrained output items
-during planning and allotment.
+during planning and allotment using QUANTITY (not CIF/value).
+
+Formula: input_quantity_cap = total_eligible_quantity × percentage / 100
+
+Example (E126 with 1000 KG total):
+  PKO cap = 1000 KG × 50 / 100 = 500 KG
+  OLIVE_OIL cap = 1000 KG × 50 / 100 = 500 KG
 """
 from decimal import Decimal
-from django.db.models import Sum, Q
+from django.db.models import Sum
 from apps.core.constants import DEC_0
 from apps.license.models import LicenseDetailsModel, AllotmentItems
 from apps.bill_of_entry.models import RowDetails
@@ -12,182 +18,223 @@ from apps.license.services.sion_input_classifier import SionInputClassifier
 
 
 class SionPercentageRule:
-    """Calculate percentage rule capacity for planning."""
+    """Calculate percentage rule capacity using QUANTITY (KG, MT, etc.)."""
 
     @staticmethod
-    def calculate_total_eligible_cif(license_obj: LicenseDetailsModel) -> Decimal:
-        """Calculate TOTAL SION eligible quantity in CIF (financial value).
+    def calculate_total_eligible_quantity(license_obj: LicenseDetailsModel, sion_id: int) -> Decimal:
+        """Calculate TOTAL SION eligible QUANTITY in native units (KG, MT, etc.).
 
-        This is the authoritative base for percentage calculations.
-        Not the current balance, but the original total credit.
+        Sums net_quantity from LicenseExportItemModel for the given SION norm.
+        This is the authoritative base for percentage cap calculations.
 
-        For export/import licenses, this is the SUM of export CIF.
+        Example:
+          LicenseExportItemModel records for SION E126:
+            PKO: 400 KG
+            OLIVE_OIL: 300 KG
+            RBD: 300 KG
+          Total Eligible Quantity = 1000 KG
 
         Args:
             license_obj: LicenseDetailsModel instance
+            sion_id: SionNormClassModel.id for the rule's norm
 
         Returns:
-            Decimal CIF value (or 0 if no exports)
+            Decimal quantity in native units (KG, MT) or 0 if no exports
         """
-        if not license_obj:
+        if not license_obj or not sion_id:
             return DEC_0
 
-        # For export licenses, sum all export CIF values
-        export_items = license_obj.export_items.all()
+        # Sum export quantities for this SION norm
+        export_items = license_obj.export_license.filter(norm_class_id=sion_id)
         if not export_items.exists():
             return DEC_0
 
         total = export_items.aggregate(
-            total_cif=Sum('cif')
-        )['total_cif'] or DEC_0
+            total_qty=Sum('net_quantity')
+        )['total_qty'] or DEC_0
 
         return Decimal(str(total))
 
     @staticmethod
-    def get_percentage_cap_for_input(license_obj: LicenseDetailsModel, canonical_input_code: str, percentage: Decimal) -> Decimal:
-        """Calculate absolute CIF cap for a canonical input.
+    def get_percentage_cap_for_input(
+        license_obj: LicenseDetailsModel,
+        sion_id: int,
+        percentage: Decimal
+    ) -> Decimal:
+        """Calculate absolute QUANTITY cap for a canonical input.
 
-        Cap = total_eligible_cif × (percentage / 100)
+        Formula: cap = total_eligible_quantity × (percentage / 100)
+
+        Example (E126, 50% constraint):
+          Total Eligible: 1000 KG
+          PKO cap = 1000 × 50 / 100 = 500 KG
 
         Args:
             license_obj: LicenseDetailsModel
-            canonical_input_code: Code like "PKO", "OLIVE_OIL", "CHEESE"
+            sion_id: SionNormClassModel.id for the rule's norm
             percentage: Decimal percentage (e.g., Decimal("50.00") for 50%)
 
         Returns:
-            Decimal CIF cap for the input
+            Decimal quantity cap in native units
         """
         if not percentage or percentage < DEC_0:
             return DEC_0
 
-        total_cif = SionPercentageRule.calculate_total_eligible_cif(license_obj)
-        if total_cif <= DEC_0:
+        total_qty = SionPercentageRule.calculate_total_eligible_quantity(license_obj, sion_id)
+        if total_qty <= DEC_0:
             return DEC_0
 
-        cap = (total_cif * percentage) / Decimal("100")
-        return cap.quantize(Decimal("0.01"))
+        cap = (total_qty * percentage) / Decimal("100")
+        return cap.quantize(Decimal("0.001"))
 
     @staticmethod
     def get_allotted_for_input(license_obj: LicenseDetailsModel, canonical_input_code: str) -> Decimal:
-        """Get total allotted quantity (CIF) for a canonical input.
+        """Get total allotted QUANTITY for a canonical input.
 
-        Aggregates AllotmentItems where the source item maps to canonical_input_code.
+        Aggregates AllotmentItems.qty where the source item maps to canonical_input_code.
 
         Args:
             license_obj: LicenseDetailsModel
             canonical_input_code: Code like "PKO", "OLIVE_OIL"
 
         Returns:
-            Decimal total allotted CIF
+            Decimal total allotted quantity in native units
         """
-        # Get all allotment items for this license (not yet BOE-d)
-        allotment_items = AllotmentItems.objects.filter(
-            allotment__license=license_obj,
-            allotment__bill_of_entry__isnull=True,  # Not yet debited via BOE
-        ).select_related('item')
+        if not license_obj:
+            return DEC_0
 
-        total_cif = DEC_0
+        # Get all allotment items for this license
+        allotment_items = AllotmentItems.objects.filter(
+            item__license=license_obj,
+        ).select_related('item', 'allotment')
+
+        total_qty = DEC_0
         for item in allotment_items:
-            # Classify the item's source by product name
-            item_name = item.item.name if item.item else item.allotment.item_name or ""
+            # Classify the allotment item's source by product name
+            item_name = ""
+
+            # Try to get name from linked license item's ItemNameModel
+            if item.item and item.item.items.exists():
+                item_name = item.item.items.first().name
+
+            # Fall back to allotment's item_name
+            if not item_name and item.allotment:
+                item_name = item.allotment.item_name or ""
+
             classified = SionInputClassifier.resolve_canonical_input(item_name)
             if classified and classified.code == canonical_input_code:
-                # Convert quantity to CIF using unit price
-                unit_price = Decimal(str(item.item.unit_price or DEC_0)) if item.item else DEC_0
-                item_cif = Decimal(str(item.qty or DEC_0)) * unit_price
-                total_cif += item_cif
+                # Accumulate native quantity
+                total_qty += Decimal(str(item.qty or DEC_0))
 
-        return total_cif.quantize(Decimal("0.01"))
+        return total_qty.quantize(Decimal("0.001"))
 
     @staticmethod
     def get_debited_for_input(license_obj: LicenseDetailsModel, canonical_input_code: str) -> Decimal:
-        """Get total debited quantity (CIF) for a canonical input.
+        """Get total debited QUANTITY for a canonical input.
 
-        Aggregates BOE RowDetails where the source item maps to canonical_input_code.
+        Aggregates RowDetails.qty where the BOE item maps to canonical_input_code.
 
         Args:
             license_obj: LicenseDetailsModel
             canonical_input_code: Code like "PKO", "OLIVE_OIL"
 
         Returns:
-            Decimal total debited CIF
+            Decimal total debited quantity in native units
         """
-        # Get BOE rows for items in this license
-        from apps.bill_of_entry.models import RowDetails
+        if not license_obj:
+            return DEC_0
 
+        # Get BOE debit rows for items in this license
         debit_rows = RowDetails.objects.filter(
-            bill_of_entry__rowdetails__sr_number__license=license_obj,
+            sr_number__license=license_obj,
             transaction_type='D',
         ).select_related('bill_of_entry', 'sr_number')
 
-        total_cif = DEC_0
+        total_qty = DEC_0
         for row in debit_rows:
             # Classify by BOE product_name
             boe_product_name = row.bill_of_entry.product_name or ""
             classified = SionInputClassifier.resolve_canonical_input(boe_product_name)
             if classified and classified.code == canonical_input_code:
-                # CIF already stored in RowDetails
-                item_cif = Decimal(str(row.cif_inr or DEC_0))
-                total_cif += item_cif
+                # Accumulate native quantity
+                total_qty += Decimal(str(row.qty or DEC_0))
 
-        return total_cif.quantize(Decimal("0.01"))
+        return total_qty.quantize(Decimal("0.001"))
 
     @staticmethod
-    def get_remaining_capacity_for_input(license_obj: LicenseDetailsModel, canonical_input_code: str, percentage: Decimal) -> Decimal:
-        """Calculate remaining CIF capacity for a canonical input under percentage constraint.
+    def get_remaining_capacity_for_input(
+        license_obj: LicenseDetailsModel,
+        sion_id: int,
+        canonical_input_code: str,
+        percentage: Decimal
+    ) -> Decimal:
+        """Calculate remaining QUANTITY capacity for a canonical input.
 
-        Remaining = cap - (allotted + debited)
+        Formula: remaining = cap - (allotted + debited)
+
+        Example (E126 PKO 50%):
+          Cap: 500 KG
+          Allotted: 300 KG
+          Debited: 150 KG
+          Remaining: 50 KG
 
         Args:
             license_obj: LicenseDetailsModel
+            sion_id: SionNormClassModel.id for the rule's norm
             canonical_input_code: Code like "PKO", "OLIVE_OIL"
             percentage: Decimal percentage (e.g., 50.00)
 
         Returns:
-            Decimal remaining capacity (non-negative)
+            Decimal remaining capacity in native units (non-negative)
         """
-        cap = SionPercentageRule.get_percentage_cap_for_input(license_obj, canonical_input_code, percentage)
+        if not license_obj or not sion_id:
+            return DEC_0
+
+        cap = SionPercentageRule.get_percentage_cap_for_input(license_obj, sion_id, percentage)
         allotted = SionPercentageRule.get_allotted_for_input(license_obj, canonical_input_code)
         debited = SionPercentageRule.get_debited_for_input(license_obj, canonical_input_code)
 
         used = allotted + debited
         remaining = max(DEC_0, cap - used)
 
-        return remaining.quantize(Decimal("0.01"))
+        return remaining.quantize(Decimal("0.001"))
 
     @staticmethod
     def check_percentage_capacity(
         license_obj: LicenseDetailsModel,
+        sion_id: int,
         canonical_input_code: str,
         percentage: Decimal,
-        requested_qty: Decimal,
-        requested_unit_price: Decimal
+        requested_qty: Decimal
     ) -> tuple[bool, str]:
-        """Check if a new allocation would violate percentage constraint.
+        """Check if a QUANTITY allocation would violate percentage constraint.
 
         Args:
             license_obj: LicenseDetailsModel
+            sion_id: SionNormClassModel.id for the rule's norm
             canonical_input_code: Code like "PKO"
             percentage: Constraint percentage (e.g., 50.00)
-            requested_qty: Quantity trying to allocate
-            requested_unit_price: Unit price for the quantity
+            requested_qty: Quantity trying to allocate (in native units)
 
         Returns:
             (allowed: bool, message: str) where message is empty if allowed
         """
-        if not percentage or percentage < DEC_0:
+        if not license_obj or not sion_id or not percentage or percentage < DEC_0:
             return True, ""  # No constraint
 
         remaining = SionPercentageRule.get_remaining_capacity_for_input(
-            license_obj, canonical_input_code, percentage
+            license_obj, sion_id, canonical_input_code, percentage
         )
-        requested_cif = (Decimal(str(requested_qty)) * Decimal(str(requested_unit_price))).quantize(Decimal("0.01"))
+        requested_qty_dec = Decimal(str(requested_qty))
 
-        if requested_cif > remaining:
-            cap = SionPercentageRule.get_percentage_cap_for_input(license_obj, canonical_input_code, percentage)
+        if requested_qty_dec > remaining:
+            cap = SionPercentageRule.get_percentage_cap_for_input(license_obj, sion_id, percentage)
+            allotted = SionPercentageRule.get_allotted_for_input(license_obj, canonical_input_code)
+            debited = SionPercentageRule.get_debited_for_input(license_obj, canonical_input_code)
             return False, (
-                f"{canonical_input_code} percentage cap exceeded. "
-                f"Cap: {cap} CIF, Remaining: {remaining} CIF, Requested: {requested_cif} CIF"
+                f"{canonical_input_code} percentage cap exceeded under {percentage}% constraint. "
+                f"Cap: {cap}, Allotted: {allotted}, Debited: {debited}, "
+                f"Remaining: {remaining}, Requested: {requested_qty_dec}"
             )
 
         return True, ""

@@ -38,6 +38,16 @@ describe("SION-first planning workspace", () => {
         await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7));
         expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7);
     });
+    it("does not enable preview or PLAN when only inactive rules are returned", async () => {
+        vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...existing, is_active: false }]);
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        const planButton = await screen.findByRole("button", { name: /PLAN E5/ });
+        expect(planButton).toBeDisabled();
+        expect(screen.getByRole("button", { name: /Preview E5 Plan/ })).toBeDisabled();
+        expect(screen.getByText(/Activate and save at least one rule/)).toBeInTheDocument();
+        fireEvent.click(planButton);
+        expect(rulesApi.planSavedSionRules).not.toHaveBeenCalled();
+    });
     it("supports nested ALL/ANY groups and accessible condition fields", async () => {
         render(<MemoryRouter initialEntries={["/planning"]}><LicensePlanningWorkspace /></MemoryRouter>);
         fireEvent.keyDown(screen.getByLabelText("SION Norm"), { key: "ArrowDown" }); fireEvent.click(await screen.findByText("E5"));

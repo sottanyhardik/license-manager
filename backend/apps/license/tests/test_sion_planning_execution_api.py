@@ -14,6 +14,7 @@ from apps.license.models import (
 from apps.license.services.e1_auto_plan import compute_e1_auto_plan
 from apps.license.services.e5_auto_plan import compute_e5_auto_plan
 from apps.license.services.sion_planner_config.importer import import_e1_e5_profiles
+from apps.license.services.sion_planning_execution import SionPlanningExecutionService
 from apps.license.views.sion_planning_rule import SionPlanRequestSerializer
 
 
@@ -25,7 +26,7 @@ pytestmark = pytest.mark.django_db
     ("E5", "210600", "Dietary fibre", compute_e5_auto_plan),
 ])
 def test_plan_sion_api_uses_db_classifier_and_preserves_legacy_mechanics(
-    code, hsn, description, legacy_compute,
+    code, hsn, description, legacy_compute, django_assert_num_queries,
 ):
     head = HeadSIONNormsModel.objects.create(name="Execution bridge")
     sions = {
@@ -80,6 +81,30 @@ def test_plan_sion_api_uses_db_classifier_and_preserves_legacy_mechanics(
     assert preview_license["items"][0]["rule_priority"] >= 1
     assert preview.data["summary"]["licenses_new"] == 1
     assert len({row["license_id"] for row in preview.data["licenses"]}) == len(preview.data["licenses"])
+
+    # The license-level DTO comparison must stay bulk: one import-item query,
+    # one item-name prefetch and one current-plan query.  In particular this
+    # guards against calling the canonical current-plan lookup once per
+    # license while adding existing-vs-proposed change detection.
+    configuration = SionPlanningExecutionService.resolve_configuration(sions[code])
+    raw_preview = [{
+        "license_id": license_obj.pk,
+        "license_number": license_obj.license_number,
+        "lines": preview_license["lines"],
+        "status": "PREVIEWED",
+    }]
+    with django_assert_num_queries(3):
+        regrouped = SionPlanningExecutionService._group_preview(
+            raw_preview, [license_obj], configuration, sions[code],
+        )
+    assert regrouped[0]["license_id"] == license_obj.pk
+
+    shortage_preview = [{**raw_preview[0], "status": "SHORTAGE"}]
+    shortage_grouped = SionPlanningExecutionService._group_preview(
+        shortage_preview, [license_obj], configuration, sions[code],
+    )
+    assert shortage_grouped[0]["change_status"] == "SHORTAGE"
+    assert shortage_grouped[0]["has_shortage"] is True
 
     planned = client.post(
         "/api/sion-planning-rules/plan-sion/",

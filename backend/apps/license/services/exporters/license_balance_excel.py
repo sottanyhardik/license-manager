@@ -1398,12 +1398,39 @@ def build_bulk_balance_excel(request):
         })
         # Pre-computed once for every exported license by the caller (see
         # `_balance_by_license` in `build_bulk_balance_excel`) — reused here
-        # AND passed into `effective_plan_for_license` below so norm-classified
-        # licenses don't re-trigger `get_balance_cif` a second time.
+        # to avoid re-triggering `get_balance_cif` for every license.
         _license_balance = float(_balance_by_license.get(license_obj.id, 0) or 0)
-        # Effective plan per license: manual if manually planned, else norm.
-        from apps.license.services.norm_plan import effective_plan_for_license
-        _plan_source, _plan_map = effective_plan_for_license(license_obj, balance_cif=_license_balance)
+        # Read persisted plan from LicenseItemPlan only (NO planner calls in read path).
+        from apps.license.models import LicenseItemPlan
+        from decimal import Decimal
+
+        # Fetch persisted plans for this license
+        persisted_plans = (
+            LicenseItemPlan.objects
+            .filter(license=license_obj)
+            .select_related('import_item')
+            .values('import_item_id', 'planned_quantity', 'planned_cif_fc')
+        )
+
+        # Build plan map: import_item_id -> {planned_quantity, planned_cif}
+        _plan_map = {}
+        _plan_source = ''
+        for plan in persisted_plans:
+            iid = plan['import_item_id']
+            if iid not in _plan_map:
+                _plan_map[iid] = {
+                    'planned_quantity': Decimal('0'),
+                    'planned_cif': Decimal('0'),
+                }
+            _plan_map[iid]['planned_quantity'] += Decimal(str(plan['planned_quantity'] or 0))
+            _plan_map[iid]['planned_cif'] += Decimal(str(plan['planned_cif_fc'] or 0))
+
+        # Set source if any plans exist
+        if _plan_map:
+            _plan_source = 'manual'
+        else:
+            _plan_map = {}
+            _plan_source = ''
         for _item in license_obj.import_license.all():
             _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
             _avail = float(_item.available_quantity or 0)
@@ -1564,12 +1591,10 @@ def build_bulk_balance_excel(request):
     # `license_obj.get_balance_cif` / `LicenseBalanceCalculator.calculate_balance`
     # would return) ONCE here, in 4 queries total, instead of `_write_license_sheet`
     # triggering `get_balance_cif` per license (4 queries: credit+debit+
-    # allotment+trade) — and, for norm-classified (E1/E5/E132) licenses,
-    # `effective_plan_for_license` → `norm_plan_for_license` triggering it a
-    # SECOND time per license. `_write_license_sheet` reads this dict via
-    # closure instead of the model property; nothing outside this one bulk
-    # export (Allocate screen, license detail API, single-license
-    # `balance_excel`) is touched — `get_balance_cif` itself is unchanged.
+    # allotment+trade). `_write_license_sheet` reads this dict via closure
+    # instead of the model property. Plans are read directly from persisted
+    # LicenseItemPlan (no planner calls in read path). Nothing outside this
+    # bulk export is touched — `get_balance_cif` itself is unchanged.
     from apps.license.services.balance_calculator import LicenseBalanceCalculator as _LBC_bulk
     _bulk_lic_ids = [lic.id for lic in sorted_licenses]
     _balance_by_license = _LBC_bulk.calculate_balance_for_licenses(_bulk_lic_ids)

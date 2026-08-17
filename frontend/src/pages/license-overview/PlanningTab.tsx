@@ -105,18 +105,20 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
 
     return (
         <div>
-            <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">SION Norm</span>
-                    <Badge variant={norm ? "info" : "secondary"}>{norm || "—"}</Badge>
-                </div>
+            <div className="mb-6 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-lg font-semibold">
+                    <div className="size-5 rounded-full bg-blue-100 flex items-center justify-center">
+                        <div className="size-2 rounded-full bg-blue-600" />
+                    </div>
+                    Plan utilization
+                </h3>
                 <div className="flex items-center gap-2">
                     <Button
                         onClick={handleAutoPlan}
                         disabled={isPlanning || !norm}
                         size="sm"
                         variant="outline"
-                        className="gap-2"
+                        className="gap-2 text-amber-600 border-amber-200 hover:bg-amber-50"
                     >
                         {isPlanning ? (
                             <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
@@ -146,6 +148,13 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                </div>
+            </div>
+
+            <div className="mb-4 flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">SION Norm</span>
+                    <Badge variant={norm ? "info" : "secondary"}>{norm || "—"}</Badge>
                 </div>
             </div>
 

@@ -300,23 +300,56 @@ class ItemReportView(APIView):
         # without issuing a second DB round-trip.
         item_list = list(items)
 
-        # Utilization plan per item. Per LICENSE we use the manual plan if one
-        # exists, otherwise the norm (E1/E5/E132) plan — never both.
-        # Pre-compute for ALL unique licenses in one pass rather than calling
-        # effective_plan_for_license() inside the loop (was O(N) DB round-trips).
+        # Utilization plan per item: read ONLY from persisted LicenseItemPlan.
+        # No fallback to norm planning in read paths.
+        # Pre-compute for ALL unique licenses in one pass.
         from apps.license.services.plan_reporting import plan_map_for_import_items
-        from apps.license.services.norm_plan import effective_plan_for_license
+        from apps.license.models import LicenseItemPlan
+
         manual_splits = plan_map_for_import_items([it.id for it in item_list])
 
-        # Build per-license effective-plan cache from the already-loaded licenses
-        # (select_related already pulled them; no extra queries needed here).
+        # Build per-license plan cache from persisted LicenseItemPlan
+        # (no planner calls, read-only from database).
         _eff_cache: dict = {}
-        seen_license_ids: set = set()
-        for it in item_list:
-            lid = it.license_id
-            if lid not in seen_license_ids:
-                seen_license_ids.add(lid)
-                _eff_cache[lid] = effective_plan_for_license(it.license)
+        _license_ids = {it.license_id for it in item_list}
+
+        # Fetch all LicenseItemPlan records for these licenses
+        plans = (
+            LicenseItemPlan.objects
+            .filter(license_id__in=_license_ids)
+            .select_related('import_item', 'item_name')
+        )
+
+        # Build per-license plan cache
+        plan_cache_by_license: dict = {}
+        for plan in plans:
+            lid = plan.license_id
+            if lid not in plan_cache_by_license:
+                plan_cache_by_license[lid] = {}
+
+            # Map import_item_id to aggregated plan data
+            iid = plan.import_item_id
+            if iid not in plan_cache_by_license[lid]:
+                plan_cache_by_license[lid][iid] = {
+                    'planned_quantity': Decimal('0'),
+                    'planned_cif': Decimal('0'),
+                }
+
+            plan_cache_by_license[lid][iid]['planned_quantity'] += plan.planned_quantity or Decimal('0')
+            plan_cache_by_license[lid][iid]['planned_cif'] += plan.planned_cif_fc or Decimal('0')
+
+        # Build final cache in the expected format: {license_id: (source, {import_item_id: {plan_data}})}
+        for lid in _license_ids:
+            has_plan = lid in plan_cache_by_license and plan_cache_by_license[lid]
+            # Convert Decimal to float for consistency
+            plan_dict = {
+                iid: {
+                    'planned_quantity': float(data['planned_quantity']),
+                    'planned_cif': float(data['planned_cif']),
+                }
+                for iid, data in (plan_cache_by_license.get(lid) or {}).items()
+            }
+            _eff_cache[lid] = ('manual' if has_plan else '', plan_dict)
 
         # Balance CIF must be identical everywhere in the app — read LIVE via
         # the shared `LicenseBalanceCalculator` (same batched method the

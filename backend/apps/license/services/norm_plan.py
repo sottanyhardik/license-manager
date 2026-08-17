@@ -44,55 +44,37 @@ def detect_norm(license_obj) -> str:
 
 def effective_plan_for_license(license_obj, *, balance_cif=None):
     """
-    Per-import-item effective plan, net of allotments.
+    DEPRECATED: Read-only paths must use LicenseItemPlan directly.
 
-    Composition (per item, not per license):
-      * MANUAL FIRST — if an import item has a manual plan line, that line is used
-        and is FIXED: the automated norm logic never overrides it.
-      * NORM FILLS THE REST — items without a manual line use the norm (E1/E5/E132)
-        plan.
-      * REMAINING = plan − allotted — the planned quantity and CIF are then reduced
-        by what has already been ALLOTTED for that item (floored at 0). Because the
-        item's allotted_quantity / allotted_value are maintained by the allotment
-        signals, this figure shrinks when an allotment is made and grows back when
-        one is removed, with no stored-plan mutation.
+    Legacy function that merged manual and norm-derived plans. This is now
+    DEPRECATED for read paths — reports, exports, and other GET endpoints must
+    read ONLY from persisted LicenseItemPlan, never from on-the-fly planning.
 
-    Args:
-      balance_cif: optional pre-computed `license_obj.get_balance_cif` value
-        (int/float/Decimal), for bulk callers that already batched every
-        license's balance and want to avoid `norm_plan_for_license`
-        re-triggering the model property's own DB round-trips. Defaults to
-        `None`, in which case `norm_plan_for_license` computes it itself
-        exactly as before — existing callers are unaffected.
+    This function is kept for backward compatibility with legacy code, but
+    SHOULD NOT be called from new read paths. Use plan_map_for_license() to
+    read manual plans from LicenseItemPlan instead.
+
+    WRITE paths (planning operations) should use the canonical planning engine
+    directly, not this function.
 
     Returns (source, {import_item_id: {planned_quantity, unit_price, planned_cif}})
-    where source is 'manual' (any manual line present), 'norm', or '' (neither).
+    where source is 'manual' (manual plan present), or '' (no plan).
     """
     from apps.license.services.plan_reporting import plan_map_for_license
     from apps.license.models import LicenseImportItemsModel
 
     manual = plan_map_for_license(license_obj.id)
-    norm = norm_plan_for_license(license_obj, balance_cif=balance_cif)
 
-    # Per-item merge: manual line wins for its item; norm fills every other item.
+    # Per-item mapping: ONLY manual plans, no norm fallback
     out = {}
-    for iid in set(norm) | set(manual):
-        if iid in manual:
-            d = manual[iid]
-            q = float(d["total_planned_quantity"] or 0)
-            c = float(d["total_planned_cif"] or 0)
-            out[iid] = {
-                "planned_quantity": q,
-                "unit_price": round(c / q, 2) if q else 0.0,
-                "planned_cif": c,
-            }
-        else:
-            n = norm[iid]
-            out[iid] = {
-                "planned_quantity": float(n["planned_quantity"]),
-                "unit_price": float(n["unit_price"]),
-                "planned_cif": float(n["planned_cif"]),
-            }
+    for iid, d in manual.items():
+        q = float(d["total_planned_quantity"] or 0)
+        c = float(d["total_planned_cif"] or 0)
+        out[iid] = {
+            "planned_quantity": q,
+            "unit_price": round(c / q, 2) if q else 0.0,
+            "planned_cif": c,
+        }
 
     # Remaining = plan − allotted (per item), floored at 0.
     if out:
@@ -110,17 +92,26 @@ def effective_plan_for_license(license_obj, *, balance_cif=None):
             p["planned_cif"] = rc
             p["unit_price"] = round(rc / rq, 2) if rq else 0.0
 
-    source = "manual" if manual else ("norm" if norm else "")
+    source = "manual" if manual else ""
     return source, out
 
 
 def norm_plan_for_license(license_obj, *, balance_cif=None) -> dict:
-    """Per-import-item norm plan: {item_id: {planned_quantity, unit_price, planned_cif}}.
+    """
+    INTERNAL / WRITE-ONLY: Legacy norm-based planning logic.
+
+    This function computes planned quantities using legacy norm-specific
+    planning engines (E1/E5/E126/E132 waterfalls). It is kept for backward
+    compatibility with write paths that may still need it.
+
+    MUST NOT be called from read paths (reports, exports, GET endpoints).
+    Read paths must use LicenseItemPlan directly.
+
+    Returns: {item_id: {planned_quantity, unit_price, planned_cif}}
 
     Args:
       balance_cif: optional pre-computed `license_obj.get_balance_cif` value.
-        When omitted (the default, used by every caller except the bulk
-        exporter), computed here exactly as before via the model property.
+        When omitted (the default), computed here via the model property.
     """
     from apps.license.models import LicenseImportItemsModel
 

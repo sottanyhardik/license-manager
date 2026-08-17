@@ -1260,291 +1260,132 @@ class ItemPivotReportView(APIView):
         elif rutile_total_balance_qty > 0:
             rutile_unit_price = 0.0
 
-        # ── Per-item Unit Price + Planned CIF (E1 / E5 only) ───────────────
-        # Run the same waterfall the bulk Balance Excel runs so the per-item
-        # rows in the pivot match the per-category planner exactly. For each
-        # item we classify it into a category, compute the category's
-        # effective rate (planned_cif / util_qty), then allocate this item's
-        # share of the category's planned CIF proportionally to its util qty.
-        # Fix #4: use prefetch cache for export_license — .exists()/.first() bypass it
-        primary_norm = ''
-        _exp_list = list(license_obj.export_license.all())
-        if _exp_list and _exp_list[0].norm_class:
-            primary_norm = _exp_list[0].norm_class.norm_class or ''
+        # ── Per-item Unit Price + Planned CIF (from persisted LicenseItemPlan) ──
+        # Read ONLY from saved canonical LicenseItemPlan. No planner calls.
+        # If a license has no persisted plan: show 0 / not planned.
+        # This separates read paths (reports) from write paths (planning).
+        from apps.license.models import LicenseItemPlan
+        from decimal import Decimal as _Decimal
 
-        # `item_plan_data[item_name]` → {'planned_cif': float, 'unit_price': float}
+        # `item_plan_data[item_name]` → {'planned_cif': float, 'unit_price': float, 'planned_import_items': [...]}
         item_plan_data: Dict[str, Dict[str, float]] = {}
-        if primary_norm == 'E1':
-            from decimal import Decimal as _Decimal
 
-            from apps.license.services.e1_auto_plan import STEP_ITEM_NAME as _E1_STEP_ITEM_NAME
-            from apps.license.services.e1_plan import (
-                E1Item as _E1Item, classify_e1_item as _classify, plan_e1_items as _plan_e1_items,
-            )
+        # Read persisted plans for this license grouped by item name
+        plans = (
+            LicenseItemPlan.objects
+            .filter(license=license_obj)
+            .select_related('import_item', 'item_name')
+            .values('import_item_id', 'item_name__name', 'planned_quantity', 'planned_cif_fc', 'unit_price')
+        )
 
-            # Fix #3: reuse the already-prefetched import items instead of issuing
-            # a second SELECT per E1 licence. Inactive items are included because
-            # the prefetch query (import_items_qs) has no is_active filter.
-            # Note: use ii.items.all() not .values_list() — .values_list() bypasses
-            # the prefetch cache and would re-query; .all() reads from it for free.
-            import_items = license_obj.import_license.all()
-            item_ledger_by_id: Dict[int, dict] = {}
-            for ii in import_items:
-                item_ledger_by_id[ii.id] = {
+        if plans.exists():
+            # Aggregate persisted plans by item name
+            plan_by_item_name: Dict[str, dict] = {}
+            import_item_data: Dict[int, dict] = {}
+
+            # Build ledger for import items
+            for ii in license_obj.import_license.all():
+                import_item_data[ii.id] = {
                     'hs_code': ii.hs_code.hs_code if ii.hs_code else '',
                     'description': ii.description or '',
                     'quantity': float(ii.quantity or 0),
                     'allotted_quantity': float(ii.allotted_quantity or 0),
                     'debited_quantity': float(ii.debited_quantity or 0),
-                    'available_quantity': float(_Decimal(str(ii.available_quantity or 0))),
+                    'available_quantity': float(ii.available_quantity or 0),
                 }
 
-            # Classify and plan ONE merged group per physical product (same
-            # HSN + normalized description) instead of once per raw import
-            # item — see `merge_items_for_classification`'s docstring: a
-            # per-serial classify can split one physical product into two
-            # different categories/columns if its serials carry inconsistent
-            # master-data tags, which no amount of post-hoc output merging
-            # can undo (it only ever sees one category's bucket at a time).
-            groups = _merge_items_for_classification(import_items)
-            group_by_rep: Dict[int, dict] = {}
-            e1_items: list = []
-            for g in groups:
-                names_text = ', '.join(g['item_names']) if g['item_names'] else (g['description'] or '-')
-                cat = _classify(names_text, g['hs_code'], g['description'])
-                if not cat:
-                    continue
-                group_by_rep[g['representative_id']] = g
-                e1_items.append(_E1Item(key=g['representative_id'], category=cat, qty=g['available_quantity']))
+            # Aggregate plans by item name
+            for plan in plans:
+                item_name = plan['item_name__name'] or "Unspecified"
+                if item_name not in plan_by_item_name:
+                    plan_by_item_name[item_name] = {
+                        'total_qty': Decimal('0'),
+                        'total_cif': Decimal('0'),
+                        'items_by_import_id': {},
+                        'count': 0,
+                    }
 
-            # Run the shared per-item engine — the same rules Auto-Plan and
-            # norm_plan.py use, so this table (and its Excel export) never
-            # drifts from what Auto-Plan would actually commit.
-            plan_result = _plan_e1_items(e1_items, _Decimal(str(balance_cif)))
+                iid = plan['import_item_id']
+                qty = Decimal(str(plan['planned_quantity'] or 0))
+                cif = Decimal(str(plan['planned_cif_fc'] or 0))
 
-            # Attribute each planned line to the SAME item-name column
-            # Auto-Plan would persist it under (STEP_ITEM_NAME) — NOT the
-            # import item's own master-data tags (`ii.items.all()`). Several
-            # E1 categories (e.g. "FRUIT/COCOA - E1", "EGG ALBUMIN"/"WPC - E1",
-            # "PP - E1") are pure planner-output labels that a real import
-            # item is rarely pre-tagged with in master data even when it WAS
-            # the item the engine selected — attributing by the import item's
-            # own tags left those columns' HSN/Description blank despite a
-            # real planned CIF. This covers every category the engine can
-            # produce (STEP_ITEM_NAME is keyed by all of them), not a
-            # per-category patch.
-            per_item_util: Dict[str, float] = {}
-            per_item_cif: Dict[str, float] = {}
-            per_item_planned_items: Dict[str, Dict[int, dict]] = {}
-            for line in plan_result.lines:
-                nm = _E1_STEP_ITEM_NAME.get(line.step)
-                if not nm:
-                    continue
-                per_item_util[nm] = per_item_util.get(nm, 0.0) + float(line.planned_qty)
-                per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(line.planned_cif)
-                _bucket = per_item_planned_items.setdefault(nm, {})
-                # `line.key` is the merged group's representative id — fan the
-                # group's single planned qty/CIF back across every raw member,
-                # proportional to each member's own available_quantity share
-                # (the category rate is uniform across the group, so the
-                # ratio cancels it out and every member ends up at the same
-                # unit rate). This keeps `_merge_planned_import_items` below
-                # working unchanged: every member of a physical-product group
-                # is now guaranteed to land in this SAME `nm` bucket, so it
-                # reliably collapses them into one display row with correct
-                # per-member ledger fields.
-                group = group_by_rep[line.key]
-                members = group['member_ids']
-                total_avail = float(group['available_quantity'])
-                for _iid in members:
-                    _ledger = item_ledger_by_id.get(_iid) or {}
-                    share = (
-                        _ledger.get('available_quantity', 0.0) / total_avail
-                        if total_avail else 1.0 / len(members)
-                    )
-                    if _iid not in _bucket:
-                        _bucket[_iid] = {
-                            'import_item_id': _iid,
-                            'hs_code': _ledger.get('hs_code', ''),
-                            'description': _ledger.get('description', ''),
-                            'quantity': _ledger.get('quantity', 0.0),
-                            'allotted_quantity': _ledger.get('allotted_quantity', 0.0),
-                            'debited_quantity': _ledger.get('debited_quantity', 0.0),
-                            'available_quantity': _ledger.get('available_quantity', 0.0),
-                            'planned_quantity': 0.0,
-                            'planned_cif_fc': 0.0,
-                        }
-                    _bucket[_iid]['planned_quantity'] += float(line.planned_qty) * share
-                    _bucket[_iid]['planned_cif_fc'] += float(line.planned_cif) * share
+                plan_by_item_name[item_name]['total_qty'] += qty
+                plan_by_item_name[item_name]['total_cif'] += cif
+                plan_by_item_name[item_name]['count'] += 1
 
-            for nm, uq in per_item_util.items():
-                item_plan = per_item_cif.get(nm, 0.0)
-                item_plan_data[nm] = {
-                    'unit_price': round(item_plan / uq, 2) if uq else 0.0,
-                    'planned_cif': round(item_plan, 2),
+                # Track per-import-item plan
+                if iid not in plan_by_item_name[item_name]['items_by_import_id']:
+                    ledger = import_item_data.get(iid, {})
+                    plan_by_item_name[item_name]['items_by_import_id'][iid] = {
+                        'import_item_id': iid,
+                        'hs_code': ledger.get('hs_code', ''),
+                        'description': ledger.get('description', ''),
+                        'quantity': ledger.get('quantity', 0.0),
+                        'allotted_quantity': ledger.get('allotted_quantity', 0.0),
+                        'debited_quantity': ledger.get('debited_quantity', 0.0),
+                        'available_quantity': ledger.get('available_quantity', 0.0),
+                        'planned_quantity': 0.0,
+                        'planned_cif_fc': 0.0,
+                    }
+
+                plan_by_item_name[item_name]['items_by_import_id'][iid]['planned_quantity'] += float(qty)
+                plan_by_item_name[item_name]['items_by_import_id'][iid]['planned_cif_fc'] += float(cif)
+
+            # Build item_plan_data from aggregated persisted plans
+            for item_name, data in plan_by_item_name.items():
+                total_qty = float(data['total_qty'])
+                total_cif = float(data['total_cif'])
+                unit_price = round(total_cif / total_qty, 2) if total_qty else 0.0
+
+                item_plan_data[item_name] = {
+                    'unit_price': unit_price,
+                    'planned_cif': round(total_cif, 2),
                     'planned_import_items': _merge_planned_import_items(
-                        per_item_planned_items.get(nm, {}).values(),
-                    ),
-                }
-        elif primary_norm == 'E5':
-            from decimal import Decimal as _Decimal
-
-            from apps.license.services.e5_auto_plan import STEP_ITEM_NAME as _E5_STEP_ITEM_NAME
-            from apps.license.services.e5_plan import (
-                E5Item as _E5Item, classify_e5_item as _classify, plan_e5_items as _plan_e5_items,
-            )
-
-            # Fix #3: reuse the already-prefetched import items (see E1 note above).
-            import_items = license_obj.import_license.all()
-            item_ledger_by_id: Dict[int, dict] = {}
-            for ii in import_items:
-                item_ledger_by_id[ii.id] = {
-                    'hs_code': ii.hs_code.hs_code if ii.hs_code else '',
-                    'description': ii.description or '',
-                    'quantity': float(ii.quantity or 0),
-                    'allotted_quantity': float(ii.allotted_quantity or 0),
-                    'debited_quantity': float(ii.debited_quantity or 0),
-                    'available_quantity': float(_Decimal(str(ii.available_quantity or 0))),
-                }
-
-            # Classify and plan ONE merged group per physical product — see
-            # the matching E1 note above for why a per-serial classify can
-            # split one product into two categories/columns.
-            groups = _merge_items_for_classification(import_items)
-            group_by_rep: Dict[int, dict] = {}
-            e5_items: list = []
-            for g in groups:
-                names_text = ', '.join(g['item_names']) if g['item_names'] else (g['description'] or '-')
-                cat = _classify(names_text, g['hs_code'], g['description'])
-                if not cat:
-                    continue
-                group_by_rep[g['representative_id']] = g
-                e5_items.append(_E5Item(key=g['representative_id'], category=cat, qty=g['available_quantity']))
-
-            # Run the shared per-item engine — the same rules Auto-Plan and
-            # norm_plan.py use, so this table (and its Excel export) never
-            # drifts from what Auto-Plan would actually commit.
-            plan_result = _plan_e5_items(e5_items, _Decimal(str(balance_cif)))
-
-            # Attribute each planned line to the SAME item-name column
-            # Auto-Plan would persist it under (STEP_ITEM_NAME) — NOT the
-            # import item's own master-data tags. See the matching E1 note
-            # above for why this matters for every category, not just the
-            # ones already coincidentally pre-tagged in master data.
-            per_item_util: Dict[str, float] = {}
-            per_item_cif: Dict[str, float] = {}
-            per_item_planned_items: Dict[str, Dict[int, dict]] = {}
-            for line in plan_result.lines:
-                nm = _E5_STEP_ITEM_NAME.get(line.step)
-                if not nm:
-                    continue
-                per_item_util[nm] = per_item_util.get(nm, 0.0) + float(line.planned_qty)
-                per_item_cif[nm] = per_item_cif.get(nm, 0.0) + float(line.planned_cif)
-                _bucket = per_item_planned_items.setdefault(nm, {})
-                # See the matching E1 note above: fan the merged group's one
-                # planned line back across every raw member, proportional to
-                # each member's available_quantity share.
-                group = group_by_rep[line.key]
-                members = group['member_ids']
-                total_avail = float(group['available_quantity'])
-                for _iid in members:
-                    _ledger = item_ledger_by_id.get(_iid) or {}
-                    share = (
-                        _ledger.get('available_quantity', 0.0) / total_avail
-                        if total_avail else 1.0 / len(members)
-                    )
-                    if _iid not in _bucket:
-                        _bucket[_iid] = {
-                            'import_item_id': _iid,
-                            'hs_code': _ledger.get('hs_code', ''),
-                            'description': _ledger.get('description', ''),
-                            'quantity': _ledger.get('quantity', 0.0),
-                            'allotted_quantity': _ledger.get('allotted_quantity', 0.0),
-                            'debited_quantity': _ledger.get('debited_quantity', 0.0),
-                            'available_quantity': _ledger.get('available_quantity', 0.0),
-                            'planned_quantity': 0.0,
-                            'planned_cif_fc': 0.0,
-                        }
-                    _bucket[_iid]['planned_quantity'] += float(line.planned_qty) * share
-                    _bucket[_iid]['planned_cif_fc'] += float(line.planned_cif) * share
-
-            for nm, uq in per_item_util.items():
-                item_plan = per_item_cif.get(nm, 0.0)
-                item_plan_data[nm] = {
-                    'unit_price': round(item_plan / uq, 2) if uq else 0.0,
-                    'planned_cif': round(item_plan, 2),
-                    'planned_import_items': _merge_planned_import_items(
-                        per_item_planned_items.get(nm, {}).values(),
+                        data['items_by_import_id'].values(),
                     ),
                 }
 
-        # ── Per-item classification plan (E132) ────────────────────────────
-        # E132 planning is a deterministic classification (services/e132_plan.py):
-        # each item is classified into one planning item and priced at that item's
-        # fixed unit price. Unit Price / Planned CIF reuse the E1/E5 columns.
-        # Keyed by item name (matching the downstream lookup).
+        # If no plans exist for this license: item_plan_data stays empty
+        # This causes all planned_quantity/planned_cif values to be 0 in the output
+
+        # If no plans exist for this license: item_plan_data stays empty,
+        # resulting in all planned_quantity/planned_cif values being 0 in the report.
+        # This is correct behavior — no explicit plan means NOT_PLANNED.
+
+        # E132/E126 have been migrated to read-only from LicenseItemPlan as well.
+        # Legacy planner logic removed. All norms now read from persisted plans only.
         item_e132_data: Dict[str, Dict[str, Any]] = {}
-        if primary_norm == 'E132':
-            from apps.license.services.e132_plan import plan_e132_per_item
-            _e132_input = []
-            for _iid, _inm in all_items:
-                if _iid in item_quantities:
-                    _d132 = item_quantities[_iid]
-                    _e132_input.append({
-                        'record_id': _inm,
-                        'quantity': float(_d132['available_quantity'] or 0),
-                        'hs_code': _d132['hs_code'] or '',
-                        'description': _d132['description'] or '',
-                    })
-            item_e132_data = plan_e132_per_item(_e132_input, float(balance_cif))
 
-        # "As per planning" (AUTOMATED): for E132 the classification IS the plan —
-        # only items that classified into a planning item are shown; unclassified
-        # items are hidden. A manual plan, when present, takes precedence.
+        # Visibility logic: which items to show in the pivot grid.
+        # All planning is now read-only from persisted LicenseItemPlan.
+        # No on-the-fly planning or E132 auto-classification in read paths.
         e132_planned_names = None
-        if primary_norm == 'E132' and item_plan_totals is None:
-            e132_planned_names = set(item_e132_data.keys())
 
         # Add item columns
         planned_item_ids = set(item_plan_totals) if item_plan_totals is not None else None
         for item_id, item_name in all_items:
-            # Per-product visibility — three-way priority:
+            # Per-product visibility — two priorities:
             #
-            # 1. Manual utilization plan (LicenseItemPlan rows) → show ONLY the
-            #    explicitly planned items.  Norm-derived plan (E1/E5 category
-            #    waterfall) must NOT cause un-planned import items (e.g. "Milk
-            #    Powder") to bleed into a manually-planned license's row — that
-            #    is the mixing bug this block fixes.
-            #    Also: planned items may be ItemNameModel entries not linked to
-            #    the import via M2M (e.g. "SWP - E1" planned from a "Milk Powder"
-            #    import item) so the `item_id in item_quantities` guard is
-            #    intentionally dropped; the cell falls back to zero import
-            #    quantities for such items, which is correct.
+            # 1. Explicit persisted plan (LicenseItemPlan rows) → show ONLY the
+            #    explicitly planned items. Planned items may be ItemNameModel
+            #    entries not linked to the import via M2M (e.g. "SWP - E1"
+            #    planned from a "Milk Powder" import item) so the `item_id in
+            #    item_quantities` guard is intentionally dropped; the cell falls
+            #    back to zero import quantities for such items, which is correct.
             #
-            # 2. E132 auto-classification (no manual plan) → show items that the
-            #    classifier placed into a planning item; require item_quantities
-            #    presence because the classifier works off import data.
-            #
-            # 3. No planning context → show all items that have import data,
-            #    OR that the LIVE norm waterfall (item_plan_data, E1/E5) just
-            #    planned a real CIF for — a purely planner-output item-name
-            #    (e.g. "FRUIT/COCOA - E1") has no M2M-linked import item on
-            #    this licence by construction, so `item_id in item_quantities`
-            #    alone would hide a genuinely-planned cell entirely.
+            # 2. No persisted plan → show all items that have import data
+            #    OR persisted plan data (now reading from LicenseItemPlan only,
+            #    never from on-the-fly planning).
             _has_manual = planned_item_ids is not None and item_id in planned_item_ids
-            _has_e132   = bool(item_e132_data.get(item_name))
-            _has_live_plan = bool(item_plan_data.get(item_name))
+            _has_persisted_plan = bool(item_plan_data.get(item_name))
 
             if item_plan_totals is not None:
-                # Priority 1 — manual plan: show only planned items, no quantity guard.
+                # Priority 1 — explicit persisted plan: show only planned items
                 show_item = _has_manual
-            elif e132_planned_names is not None:
-                # Priority 2 — E132 auto-classification: show classified items only.
-                show_item = _has_e132 and item_id in item_quantities
             else:
-                # Priority 3 — no planning context: show items with import data
-                # or a real live-computed plan.
-                show_item = item_id in item_quantities or _has_live_plan
+                # Priority 2 — no persisted plan: show items with import data
+                # or persisted plan data
+                show_item = item_id in item_quantities or _has_persisted_plan
 
             if show_item:
                 item_data = item_quantities[item_id]

@@ -21,12 +21,14 @@ import pytest
 from django.test import TestCase
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
+from datetime import datetime
+from decimal import Decimal
 
 from apps.accounts.models import User
-from apps.core.models import CompanyModel
-from apps.license.models import LicenseDetailsModel, IncentiveLicense
+from apps.core.models import CompanyModel, PortModel
+from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, IncentiveLicense
 from apps.trade.models import LicenseTrade, LicenseTradeLine, IncentiveTradeLine
-from apps.bill_of_entry.models import BillOfEntryModel
+from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 
 
 class P0_IDORRetrieveEndpointTest(APITestCase):
@@ -42,6 +44,9 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
 
     def setUp(self):
         self.client = APIClient()
+
+        # Create port
+        self.port = PortModel.objects.create(code='INMUN1', name='Mumbai Port')
 
         # Create two companies
         self.company_a = CompanyModel.objects.create(
@@ -72,56 +77,74 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
         # Create a DFIA license (owned by neither - orphan license)
         self.orphan_license = LicenseDetailsModel.objects.create(
             license_number='0311111111',
-            license_date='2025-01-01',
-            exporter_id=self.company_a.id,
-            port_id=1,
+            license_date=datetime.now().date(),
+            exporter=self.company_a,
+            port=self.port,
         )
 
         # Create a license that ONLY company_a traded
         self.company_a_only_license = LicenseDetailsModel.objects.create(
             license_number='0312222222',
-            license_date='2025-01-01',
-            exporter_id=self.company_a.id,
-            port_id=1,
+            license_date=datetime.now().date(),
+            exporter=self.company_a,
+            port=self.port,
+        )
+
+        # Create import item for company_a_only_license
+        import_item_a = LicenseImportItemsModel.objects.create(
+            license=self.company_a_only_license,
+            serial_number=1,
+            description='Test Import Item',
+            quantity=Decimal('100.000'),
+            available_quantity=Decimal('100.000'),
+            cif_fc=Decimal('1000.00'),
+            cif_inr=Decimal('84500.00'),
         )
 
         # Create a bill of entry for company_a's license
         boe_a = BillOfEntryModel.objects.create(
-            boe_number='BOE001',
-            boe_date='2025-01-01',
-            exporter_id=self.company_a.id,
+            bill_of_entry_number='BOE001',
+            bill_of_entry_date=datetime.now().date(),
+            company=self.company_a,
+            port=self.port,
+            exchange_rate=Decimal('84.50'),
         )
 
-        # Create sr_number linking company_a_only_license to boe_a
-        sr_a = boe_a.srnumber_set.create(
-            license_id=self.company_a_only_license.id,
-            boe_quantity=100.00,
+        # Link BOE to the license via RowDetails
+        RowDetails.objects.create(
+            bill_of_entry=boe_a,
+            sr_number=import_item_a,
+            cif_inr=Decimal('84500.00'),
+            cif_fc=Decimal('1000.00'),
+            qty=Decimal('100.000'),
         )
 
         # Create a trade for company_a_only_license (company_a sells to company_b)
         trade_a = LicenseTrade.objects.create(
-            trade_date='2025-02-01',
             from_company=self.company_a,
             to_company=self.company_b,
-            license_type='DFIA',
-            quantity=100.00,
-            amount_inr=10000.00,
             direction='SALE',
+            license_type='DFIA',
+            invoice_number='INV001',
+            invoice_date=datetime.now().date(),
         )
+        trade_a.boes.set([boe_a])
 
         # Link the trade to the license via line detail
         LicenseTradeLine.objects.create(
             trade=trade_a,
-            sr_number=sr_a,
-            quantity=100.00,
-            amount_inr=10000.00,
+            sr_number=import_item_a,
+            description='Test Item',
+            hsn_code='49070000',
+            qty_kg=Decimal('100.000'),
+            cif_inr=Decimal('84500.00'),
         )
 
     def test_user_a_can_retrieve_own_traded_license(self):
         """Company A user can retrieve a license their company traded"""
         self.client.force_authenticate(user=self.user_a)
 
-        response = self.client.get(f'/api/license-ledger/{self.company_a_only_license.id}/retrieve/')
+        response = self.client.get(f'/api/license-ledger/{self.company_a_only_license.id}/')
 
         # Should succeed - company_a traded this license
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -133,7 +156,7 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
         # User B tries to retrieve company_a_only_license
         # VULNERABILITY: Without fix, this would succeed (no company check)
         # FIX: Now validates LicenseTrade exists for user_b.company
-        response = self.client.get(f'/api/license-ledger/{self.company_a_only_license.id}/retrieve/')
+        response = self.client.get(f'/api/license-ledger/{self.company_a_only_license.id}/')
 
         # Must be blocked - company_b did not trade this license
         # (Even though company_b received it, the license exists in trades,
@@ -144,7 +167,7 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
         """User cannot access a license no company traded"""
         self.client.force_authenticate(user=self.user_a)
 
-        response = self.client.get(f'/api/license-ledger/{self.orphan_license.id}/retrieve/')
+        response = self.client.get(f'/api/license-ledger/{self.orphan_license.id}/')
 
         # Should be blocked - no LicenseTrade exists
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -159,12 +182,12 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
         self.client.force_authenticate(user=superuser)
 
         # Superuser can retrieve any license
-        response = self.client.get(f'/api/license-ledger/{self.orphan_license.id}/retrieve/')
+        response = self.client.get(f'/api/license-ledger/{self.orphan_license.id}/')
 
         # Should not be blocked (superuser exemption)
         self.assertIn(
             response.status_code,
-            [status.HTTP_200_OK, status.HTTP_500_OK]  # 500 is okay if data prep fails
+            [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR]  # 500 is okay if data prep fails
         )
 
 
@@ -180,6 +203,9 @@ class P0_IDORLedgerDetailEndpointTest(APITestCase):
     def setUp(self):
         self.client = APIClient()
 
+        # Create port
+        self.port = PortModel.objects.create(code='INMUN1', name='Mumbai Port')
+
         self.company_a = CompanyModel.objects.create(
             name='Company A', iec='CA', pan='12CA0001F2Z5', gst_number='27CA0001C1Z0'
         )
@@ -193,20 +219,17 @@ class P0_IDORLedgerDetailEndpointTest(APITestCase):
         # Create a license
         self.license = LicenseDetailsModel.objects.create(
             license_number='0313333333',
-            license_date='2025-01-01',
-            exporter_id=self.company_a.id,
-            port_id=1,
+            license_date=datetime.now().date(),
+            exporter=self.company_a,
+            port=self.port,
             license_form='DFIA',
-            product_description='Test',
-            quantity=1000.00,
-            uqc_code='KGS',
         )
 
     def test_user_b_cannot_get_ledger_detail_for_company_a_license(self):
-        """P0 IDOR FIX: ledger_detail blocks access to untrad licenses"""
+        """P0 IDOR FIX: ledger_detail blocks access to untraded licenses"""
         self.client.force_authenticate(user=self.user_b)
 
-        response = self.client.get(f'/api/license-ledger/{self.license.id}/ledger_detail/')
+        response = self.client.get(f'/api/license-ledger/{self.license.id}/ledger-detail/')
 
         # Must be blocked
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -217,7 +240,7 @@ class P0_IDORLedgerDetailEndpointTest(APITestCase):
 
         # Try to explicitly request company_b's data
         response = self.client.get(
-            f'/api/license-ledger/{self.license.id}/ledger_detail/?company={self.company_b.id}'
+            f'/api/license-ledger/{self.license.id}/ledger-detail/?company={self.company_b.id}'
         )
 
         # Must be blocked - user_a cannot access company_b's data
@@ -314,6 +337,9 @@ class P0_DataLeakageAvailableForSaleEndpointTest(APITestCase):
     def setUp(self):
         self.client = APIClient()
 
+        # Create port
+        self.port = PortModel.objects.create(code='INMUN1', name='Mumbai Port')
+
         self.company_a = CompanyModel.objects.create(
             name='Company A', iec='CA', pan='12CA0001F2Z5', gst_number='27CA0001C1Z0'
         )
@@ -327,13 +353,10 @@ class P0_DataLeakageAvailableForSaleEndpointTest(APITestCase):
         # Create licenses owned by company_b
         self.lic_b = LicenseDetailsModel.objects.create(
             license_number='0314444444',
-            license_date='2025-01-01',
-            exporter_id=self.company_b.id,
-            port_id=1,
+            license_date=datetime.now().date(),
+            exporter=self.company_b,
+            port=self.port,
             license_form='DFIA',
-            product_description='Company B License',
-            quantity=5000.00,
-            uqc_code='KGS',
         )
 
     def test_user_a_cannot_see_company_b_available_licenses(self):

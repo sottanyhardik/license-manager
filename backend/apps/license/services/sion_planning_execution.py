@@ -372,9 +372,11 @@ class SionPlanningExecutionService:
             proposed = list(raw.get("lines", ()))
             existing = existing_by_license.get(license_id, [])
             matched = matched_by_license.get(license_id, [])
-            if not matched:
+            if configuration.rules and not matched:
                 # Preview is a rule-match view, not the raw eligible-universe
-                # list.  This also gives the UI an unambiguous empty state.
+                # list. This also gives the UI an unambiguous empty state.
+                # Transitional planners without DB classifiers must retain
+                # their legacy dry-run universe until their rules are cut over.
                 continue
             proposed_by_item = {}
             for line in proposed:
@@ -533,6 +535,7 @@ class SionPlanningExecutionService:
             "matched_items": sum(len(row.get("lines", ())) for row in results),
             "summary": {
                 "rules": len(rules),
+                "rules_processed": len(rules),
                 "active_rules": len(rules),
                 "eligible_licenses": len(results),
                 "matched_items": sum(len(row.get("lines", ())) for row in results),

@@ -73,6 +73,28 @@ Supported forms include `plan_norms E1`, `plan_norms --sion E1 --new`, and
 mechanics. E126/E132/A3627 remain centralized transitional factory adapters
 and are not claimed as DB-classifier cutovers.
 
+### License-centric preview (2026-08-17)
+
+The canonical dry-run response is grouped by `license_id`; duplicate top-level
+licenses are rejected defensively. Each license contains ordered matched-item
+children, matched rule counts/priorities, bulk-loaded existing and proposed
+plan snapshots, and a backend-computed `NEW`, `CHANGE`, `NO_CHANGE`, `SHORTAGE`,
+or `SKIPPED` status. Exact comparison uses canonical identifiers and Decimal
+quantities/prices rather than rendered strings. Summary counts use the same
+license objects.
+
+The UI renders one compact license row, backend status badges, and item
+expansion keyed by license id. **View Plan** reuses the established
+`/licenses/:id/overview?tab=planning` route and its canonical plan-utilization
+API instead of introducing another detail implementation. NEW and ALL preview
+modes now flow through the API to the same execution service.
+
+The grouping/current-plan comparison adds a fixed three-query bulk load,
+covered by regression test. The preserved E1/E5 legacy compute adapter still
+has its pre-existing per-license query behavior; changing that adapter is
+deferred because this UX correction intentionally does not alter proven
+planner mechanics.
+
 ### plan-sion 400 resolution
 
 The exact local failure was reproduced: omitted and empty `license_ids` both

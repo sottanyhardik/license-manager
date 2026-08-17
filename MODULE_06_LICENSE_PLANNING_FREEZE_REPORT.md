@@ -155,6 +155,16 @@ as the API. A SION row lock prevents concurrent UI and CLI runs for the same
 norm. E126/E132/A3627 remain centralized compatibility adapters, so their
 DB-classifier cutover is not claimed complete.
 
+Preview presentation is license-centric. The backend returns one unique object
+per matched license with child items in rule-priority/stable-item order,
+existing/proposed plan snapshots, matched counts, and canonical change status.
+React performs no planning comparison or arithmetic. It renders license-level
+summary counts and badges, expands items by stable license id, and sends View
+Plan to the existing License Overview Planning tab. Mode is honored for both
+NEW and FORCE ALL previews. The new grouping/diff layer bulk-loads imports,
+item tags, and current plans in three fixed queries; preserved legacy adapter
+queries remain a documented migration constraint.
+
 Priority is read-only in the normal serializer. `SionRulePriorityService`
 assigns new rules at the next per-SION position under a SION row lock,
 normalizes active positions after retirement, and owns the atomic `reorder`
@@ -243,6 +253,8 @@ prices, and batch-loads financial balances for the applicable license set.
 - Dual-mode UI/API/CLI focused backend suite: 36 passed.
 - Fresh focused frontend dual-mode suite: 12 passed; typecheck passed.
 - Django system check and migration drift check: passed.
+- License-grouped preview backend integration: 46 passed.
+- License-grouped preview frontend/API suite: 14 passed; typecheck passed.
 - Local migration 0019: applied and runtime columns verified.
 - E1/E5 cross-SION preview and reorder isolation: passed.
 - Focused Module 05 regression suite: 25 passed.

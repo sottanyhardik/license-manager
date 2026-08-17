@@ -557,31 +557,11 @@ class ItemPivotReportView(APIView):
         all_items = {}  # Changed to dict to store item object for sorting
         valid_licenses = list(licenses)  # Licenses already filtered by LIVE balance above
 
-        # Norm-specific plannable-item allow-sets: only item names the auto-planner
-        # can generate are shown as columns.  Items outside the set (e.g.
-        # ESSENTIAL OIL - E1, SUGAR - E1) are silently excluded from the column
-        # build here.  The _missing_planned block further below re-admits any item
-        # that a user actually planned even if it is outside the allow-set, so
-        # intentional manual plans are always surfaced.
-        from apps.license.services.e1_plan import E1_PLANNABLE_NAMES as _E1_PLANNABLE
-        _NORM_ALLOW: dict[str, frozenset[str]] = {
-            'E1': _E1_PLANNABLE,
-        }
-
         for license_obj in valid_licenses:
             for import_item in license_obj.import_license.all():
                 for item in import_item.items.all():
                     # Only add items with valid names and that are active (is_active=False hides from pivot)
                     if item and item.name and item.is_active:
-                        # Per-norm plannable filter: skip items whose names the
-                        # auto-planner for their norm never generates.  This is
-                        # keyed off the item's own norm code so it works correctly
-                        # regardless of the ?sion_norm request parameter.
-                        _item_norm = (item.sion_norm_class.norm_class
-                                      if item.sion_norm_class else None)
-                        _allow = _NORM_ALLOW.get(_item_norm)
-                        if _allow is not None and item.name not in _allow:
-                            continue
                         # If filtering by norm, only include items matching that norm
                         if sion_norm:
                             if item.sion_norm_class and item.sion_norm_class.norm_class == sion_norm:

@@ -256,7 +256,7 @@ def test_planning_replan_idempotent(e1_sion, test_rule_without_item):
     license_obj.export_license.create(norm_class=e1_sion)
 
     hs_code = HSCodeModel.objects.create(hs_code="15150000")
-    LicenseImportItemsModel.objects.create(
+    import_item = LicenseImportItemsModel.objects.create(
         license=license_obj,
         serial_number=1,
         hs_code=hs_code,
@@ -269,7 +269,7 @@ def test_planning_replan_idempotent(e1_sion, test_rule_without_item):
     import_item.save()
 
     # First plan
-    result1 = SionRulePriorityService.plan_sion(
+    result1 = SionRulePlanningService.plan_sion(
         e1_sion.pk,
         license_ids=[license_obj.pk],
         mode="NEW",
@@ -286,7 +286,7 @@ def test_planning_replan_idempotent(e1_sion, test_rule_without_item):
 
     # Force re-plan
     LicenseItemPlan.objects.filter(license=license_obj).delete()
-    result2 = SionRulePriorityService.plan_sion(
+    result2 = SionRulePlanningService.plan_sion(
         e1_sion.pk,
         license_ids=[license_obj.pk],
         mode="ALL",

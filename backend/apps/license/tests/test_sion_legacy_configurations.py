@@ -3,12 +3,15 @@ from decimal import Decimal
 
 import pytest
 
+from apps.core.models import HeadSIONNormsModel, SionNormClassModel
+from apps.license.models import SionPlanningProfile, SionPlanningRule
 from apps.license.services.e126_plan import plan_e126
 from apps.license.services.e132_plan import plan_e132
 from apps.license.services.sion_legacy_configurations import (
     GOLDEN_CASES,
     LEGACY_PLANNER_CONFIGURATIONS,
 )
+from apps.license.services.sion_legacy_importer import import_planner_definition
 
 
 @pytest.mark.parametrize("norm", ["E126", "E132", "A3627"])
@@ -77,3 +80,22 @@ def test_no_float_in_persistable_configuration():
 
     walk(LEGACY_PLANNER_CONFIGURATIONS)
     walk(GOLDEN_CASES)
+
+
+@pytest.mark.django_db
+def test_importer_is_idempotent_and_never_activates_shadow_profile():
+    head = HeadSIONNormsModel.objects.create(name="E126 migration head")
+    SionNormClassModel.objects.create(head_norm=head, norm_class="E126")
+    definition = LEGACY_PLANNER_CONFIGURATIONS["E126"]
+
+    first = import_planner_definition("E126", definition)
+    second = import_planner_definition("E126", definition)
+
+    assert first["profile_created"] is True
+    assert second["profile_created"] is False
+    assert second["rules_created"] == second["actions_created"] == second["mappings_created"] == 0
+    profile = SionPlanningProfile.objects.get(stable_key="E126:PROFILE")
+    assert profile.is_active is False
+    assert profile.actions.count() == len(definition["actions"])
+    assert profile.output_mappings.count() == len(definition["mappings"])
+    assert SionPlanningRule.objects.filter(sion=profile.sion, is_active=True).count() == 0

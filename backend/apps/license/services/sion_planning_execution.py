@@ -372,6 +372,10 @@ class SionPlanningExecutionService:
             proposed = list(raw.get("lines", ()))
             existing = existing_by_license.get(license_id, [])
             matched = matched_by_license.get(license_id, [])
+            if not matched:
+                # Preview is a rule-match view, not the raw eligible-universe
+                # list.  This also gives the UI an unambiguous empty state.
+                continue
             proposed_by_item = {}
             for line in proposed:
                 proposed_by_item.setdefault(line["import_item_id"], []).append(line)

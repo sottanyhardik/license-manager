@@ -688,6 +688,25 @@ class ItemPivotReportView(APIView):
             # come straight from that ONE import item (import_item_ledger_by_id
             # above) — never summed or "first wins" across import items.
             _iid = _pl['import_item_id']
+
+            # FIX: If import_item_id is NULL (legacy plans or split items),
+            # infer it from the item_name tag. Find the first import item
+            # tagged with this item_name — that's the source being planned.
+            if _iid is None:
+                _inferred_iid = None
+                for _ii in _lo.import_license.all():
+                    for _it in _ii.items.all():
+                        if _it.id == _iname:
+                            _inferred_iid = _ii.id
+                            break
+                    if _inferred_iid is not None:
+                        break
+                # If we found a source import item for this item_name, use it.
+                # Otherwise keep _iid as None (which will result in available_qty=0,
+                # correct for synthetic items with no source import).
+                if _inferred_iid is not None:
+                    _iid = _inferred_iid
+
             _planned_items = _cell.setdefault('planned_import_items', {})
             if _iid not in _planned_items:
                 _ledger = import_item_ledger_by_id.get(_iid, {})

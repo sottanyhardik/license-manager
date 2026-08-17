@@ -1,6 +1,6 @@
+import logging
+
 from django.db import transaction
-from django.db.models import Max
-from apps.core.models import SionNormClassModel
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -11,7 +11,11 @@ from apps.license.serializers import SionPlanningRuleSerializer
 from apps.license.services.canonical_planning_service import (
     CompanyIsolationError, PlanningError,
 )
-from apps.license.services.sion_rule_engine import SionRulePlanningService
+from apps.license.services.sion_rule_engine import (
+    SionRulePlanningService, SionRulePriorityService,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class SionPlanningRuleViewSet(viewsets.ModelViewSet):
@@ -25,47 +29,77 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             "sion", "created_by", "modified_by",
         ).all()
 
+    def _audit(self, event, *, rule=None, sion_id=None, extra=None):
+        from apps.core.models import ActivityLog
+        try:
+            ActivityLog.objects.create(
+                user=self.request.user, username=self.request.user.username or "",
+                action=(
+                    ActivityLog.ACTION_CREATE if event == "RULE_CREATED"
+                    else ActivityLog.ACTION_DELETE if event == "RULE_DEACTIVATED"
+                    else ActivityLog.ACTION_UPDATE
+                ),
+                module="SION_PLANNING", resource_id=str(getattr(rule, "pk", sion_id) or ""),
+                description=event, endpoint=self.request.path, method=self.request.method,
+                status_code=200, extra={
+                    "event": event, "sion_id": getattr(rule, "sion_id", sion_id),
+                    "rule_id": getattr(rule, "pk", None),
+                    "rule_version": getattr(rule, "version", None), **(extra or {}),
+                },
+            )
+        except Exception:
+            logger.exception("Unable to persist SION planning audit event %s", event)
+
     def perform_create(self, serializer):
         values = serializer.validated_data
         with transaction.atomic():
-            SionNormClassModel.objects.select_for_update().get(pk=values["sion"].pk)
-            latest = SionPlanningRule.objects.filter(
-                sion=values["sion"], name=values["name"],
-            ).aggregate(value=Max("version"))["value"] or 0
-            serializer.save(
-                version=latest + 1, created_by=self.request.user,
+            priority = SionRulePriorityService.next_priority(values["sion"].pk)
+            rule = serializer.save(
+                version=1, priority=priority, created_by=self.request.user,
                 modified_by=self.request.user,
             )
+        self._audit("RULE_CREATED", rule=rule)
 
     def update(self, request, *args, **kwargs):
         """Edits append a version; the prior audit row is never overwritten."""
         current = self.get_object()
+        was_active = current.is_active
         serializer = self.get_serializer(current, data=request.data, partial=kwargs.pop("partial", False))
         serializer.is_valid(raise_exception=True)
         values = {
             field: serializer.validated_data.get(field, getattr(current, field))
-            for field in ("sion", "name", "expression", "max_unit_price", "unit", "priority", "is_active")
+            for field in ("name", "expression", "max_unit_price", "unit", "is_active")
         }
         with transaction.atomic():
-            SionNormClassModel.objects.select_for_update().get(pk=values["sion"].pk)
+            SionRulePriorityService._lock_sion(current.sion_id)
             current.is_active = False
             current.modified_by = request.user
             current.save(update_fields=("is_active", "modified_on", "modified_by"))
-            latest = SionPlanningRule.objects.filter(
-                sion=values["sion"], name=values["name"],
-            ).aggregate(value=Max("version"))["value"] or 0
             created = SionPlanningRule.objects.create(
-                **values, version=latest + 1,
+                **values, sion=current.sion, priority=current.priority,
+                version=current.version + 1,
                 created_by=request.user, modified_by=request.user,
             )
+            if not created.is_active:
+                SionRulePriorityService.normalize(current.sion_id)
+        event = (
+            "RULE_DEACTIVATED" if not created.is_active
+            else "RULE_ACTIVATED" if not was_active
+            else "RULE_UPDATED"
+        )
+        self._audit(event, rule=created)
         return Response(self.get_serializer(created).data)
 
     def destroy(self, request, *args, **kwargs):
         """Retire a rule; audit versions are intentionally never deleted."""
-        rule = self.get_object()
-        rule.is_active = False
-        rule.modified_by = request.user
-        rule.save(update_fields=("is_active", "modified_on", "modified_by"))
+        with transaction.atomic():
+            rule = self.get_object()
+            SionRulePriorityService._lock_sion(rule.sion_id)
+            rule.is_active = False
+            rule.modified_by = request.user
+            rule.save(update_fields=("is_active", "modified_on", "modified_by"))
+            SionRulePriorityService.normalize(rule.sion_id)
+        self._audit("RULE_DEACTIVATED", rule=rule)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _company_id(self):
@@ -84,8 +118,45 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=("post",), url_path="test")
     def test_rule(self, request, pk=None):
-        return self._execute(request, persist=False)
+        response = self._execute(request, persist=False)
+        if response.status_code < 400:
+            self._audit("RULE_TESTED", rule=self.get_object())
+        return response
 
-    @action(detail=True, methods=("post",), url_path="plan")
-    def plan_rule(self, request, pk=None):
-        return self._execute(request, persist=True)
+    @action(detail=False, methods=("post",), url_path="reorder")
+    def reorder(self, request):
+        try:
+            with transaction.atomic():
+                rules = SionRulePriorityService.reorder(
+                    request.data.get("sion_id"), request.data.get("rule_order"),
+                )
+        except PlanningError as exc:
+            return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
+        self._audit(
+            "RULE_REORDERED", sion_id=request.data.get("sion_id"),
+            extra={"rule_order": request.data.get("rule_order")},
+        )
+        return Response(self.get_serializer(rules, many=True).data)
+
+    @action(detail=False, methods=("post",), url_path="plan-sion")
+    def plan_sion(self, request):
+        if "rules" in request.data or "expression" in request.data:
+            return Response(
+                {"error": "Planning accepts only saved database rules."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = SionRulePlanningService.plan_sion(
+                request.data.get("sion_id"), request.data.get("license_ids"),
+                company_id=self._company_id(),
+            )
+        except CompanyIsolationError as exc:
+            return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
+        except (PlanningError, ValueError, TypeError) as exc:
+            payload = exc.as_dict() if isinstance(exc, PlanningError) else {"error": str(exc)}
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+        self._audit(
+            "SION_PLAN_EXECUTED", sion_id=result["sion_id"],
+            extra={"rules_executed": result["rules_executed"]},
+        )
+        return Response(result)

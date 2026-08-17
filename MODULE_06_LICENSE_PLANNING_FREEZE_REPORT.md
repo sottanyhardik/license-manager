@@ -130,6 +130,31 @@ primary planning control.
   available/planned/shortage status and applicable license. It does not evaluate
   rules, prices, quantities, or feasibility.
 
+## Database rule authority
+
+Planning execution no longer accepts a browser rule definition or a rule-row
+PLAN request. The UI must save edits first and then sends only `sion_id` plus
+optional downstream license ids to
+`POST /api/sion-planning-rules/plan-sion/`. The backend locks the canonical
+SION, reloads all active `SionPlanningRule` rows, orders them by persisted
+priority, evaluates them, aggregates their non-overlapping item lines and makes
+one canonical write per license. Requests containing `rules` or `expression`
+are rejected.
+
+Priority is read-only in the normal serializer. `SionRulePriorityService`
+assigns new rules at the next per-SION position under a SION row lock,
+normalizes active positions after retirement, and owns the atomic `reorder`
+operation. A conditional database constraint prevents duplicate active
+`(sion, priority)` pairs. Migration `0019` normalizes existing active priorities
+and adds immutable rule id/version/priority provenance to generated
+`LicenseItemPlan` rows. Named create/update/activate/deactivate/test/reorder/plan
+events are written to the existing activity log.
+
+The workspace labels database-saved versus unsaved state explicitly. Test and
+Plan are disabled while the selected editor differs from the last backend
+response; switching SION discards the prior draft and reloads that SION's active
+rules from the API in database order.
+
 ## Security
 
 `LicenseItemPlanViewSet` is tenant scoped for list, retrieve, create, update, and delete. `LicenseDetailsViewSet` now applies the same company scope centrally, closing the URL-selected `plan-utilization` IDOR and protecting detail/overview actions used during planning preselection. Single-SION planning validates the complete requested license set before computation and locks license rows in deterministic order. A missing, inapplicable, inactive, unsupported, or cross-company selection rolls back the entire request. Cross-company identifiers do not expose or mutate planning data; superuser behavior remains explicit.
@@ -143,17 +168,18 @@ prices, and batch-loads financial balances for the applicable license set.
 
 ## Verification
 
-- SION rule engine/API/security/idempotency suite: 21 passed.
-- Broader canonical planning, single-SION, security, grouping, utilization and
-  plan CRUD regression: 120 passed.
-- SION-first workspace focused tests: 4 passed.
+- Database authority, priority, reorder, request-tampering and provenance
+  coverage is included in the 24-test SION rule suite.
+- Combined SION rules plus broader canonical planning, single-SION, security,
+  grouping, utilization and plan CRUD regression: 144 passed.
+- SION-first workspace focused tests: 5 passed.
 - Integrated focused backend planning/security suite: 49 passed.
 - Explicit single-SION contract/workspace envelope: 13 passed.
 - Combined single-SION, planning-security and detail target: 17 passed.
 - Tenant/detail authorization audit: 19 passed.
 - Planning workspace/UI acceptance: 16 passed.
 - Focused Module 05 regression suite: 25 passed.
-- Frontend full regression: 398 passed across 54 files.
+- Frontend full regression: 399 passed across 54 files.
 - Frontend typecheck: passed.
 - Frontend production build: passed.
 - Migration drift check: no changes detected.

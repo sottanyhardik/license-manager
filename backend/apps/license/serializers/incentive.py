@@ -135,7 +135,7 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
             "modified_by_username",
         )
         read_only_fields = (
-            "version", "created_on", "created_by_username", "modified_on",
+            "version", "priority", "created_on", "created_by_username", "modified_on",
             "modified_by_username",
         )
 

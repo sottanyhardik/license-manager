@@ -185,6 +185,9 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
             remaining_quantity=remaining_quantity,
             remaining_cif_fc=remaining_cif_fc,
             note=ln.get("note", ""),
+            planning_rule_id=ln.get("planning_rule_id"),
+            planning_rule_version=ln.get("planning_rule_version"),
+            planning_rule_priority=ln.get("planning_rule_priority"),
             baseline_used_quantity=baseline_qty,
             baseline_used_cif_fc=baseline_val,
         ))

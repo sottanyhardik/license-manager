@@ -12,6 +12,7 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from apps.core.models import SionNormClassModel
 
 from apps.license.models import LicenseDetailsModel, SionPlanningRule
 from apps.license.services.canonical_planning_service import (
@@ -147,6 +148,63 @@ def _item_context(item, license_balance):
         "unit": item.unit,
         "serial_number": item.serial_number,
     }
+
+
+class SionRulePriorityService:
+    """The single transactional authority for active rule ordering."""
+
+    @staticmethod
+    def _lock_sion(sion_id):
+        try:
+            sion_id = int(sion_id)
+            return SionNormClassModel.objects.select_for_update().get(pk=sion_id)
+        except (TypeError, ValueError, SionNormClassModel.DoesNotExist) as exc:
+            raise SionPlanningError("A valid canonical sion_id is required.") from exc
+
+    @classmethod
+    def next_priority(cls, sion_id):
+        active = cls.normalize(sion_id)
+        return len(active) + 1
+
+    @classmethod
+    def normalize(cls, sion_id):
+        cls._lock_sion(sion_id)
+        active = list(SionPlanningRule.objects.filter(
+            sion_id=sion_id, is_active=True,
+        ).order_by("priority", "pk"))
+        # Move through collision-free temporary values because the database
+        # enforces one active priority per SION.
+        for offset, rule in enumerate(active, start=1):
+            rule.priority = 1_000_000 + offset
+        SionPlanningRule.objects.bulk_update(active, ("priority",))
+        for priority, rule in enumerate(active, start=1):
+            rule.priority = priority
+        SionPlanningRule.objects.bulk_update(active, ("priority",))
+        return active
+
+    @classmethod
+    def reorder(cls, sion_id, rule_ids):
+        cls._lock_sion(sion_id)
+        active = list(SionPlanningRule.objects.filter(
+            sion_id=sion_id, is_active=True,
+        ))
+        by_id = {rule.pk: rule for rule in active}
+        try:
+            ordered_ids = [int(value) for value in rule_ids]
+        except (TypeError, ValueError):
+            raise SionPlanningError("rule_order must contain rule ids.")
+        if len(ordered_ids) != len(set(ordered_ids)) or set(ordered_ids) != set(by_id):
+            raise SionPlanningError(
+                "rule_order must contain every active rule for the selected SION exactly once.",
+            )
+        ordered = [by_id[pk] for pk in ordered_ids]
+        for offset, rule in enumerate(ordered, start=1):
+            rule.priority = 1_000_000 + offset
+        SionPlanningRule.objects.bulk_update(ordered, ("priority",))
+        for priority, rule in enumerate(ordered, start=1):
+            rule.priority = priority
+        SionPlanningRule.objects.bulk_update(ordered, ("priority",))
+        return ordered
 
 
 class SionRulePlanningService:
@@ -299,3 +357,69 @@ class SionRulePlanningService:
             preview["write_results"] = write_results
             preview["planned_licenses"] = len(write_results)
             return preview
+
+    @staticmethod
+    def plan_sion(sion_id, license_ids=None, *, company_id=None):
+        """Reload and execute all persisted active rules in DB priority order."""
+        with transaction.atomic():
+            sion = SionRulePriorityService._lock_sion(sion_id)
+            rules = list(SionPlanningRule.objects.select_for_update().filter(
+                sion=sion, is_active=True,
+            ).order_by("priority", "pk"))
+            if not rules:
+                raise SionPlanningError("The selected SION has no active saved rules.")
+
+            previews = [
+                SionRulePlanningService.preview(rule, license_ids, company_id=company_id)
+                for rule in rules
+            ]
+            conflicts = [conflict for preview in previews for conflict in preview["conflicts"]]
+            if conflicts:
+                raise SionPlanningError(
+                    "Saved rule conflicts must be resolved before planning.", conflicts=conflicts,
+                )
+
+            by_license = {}
+            license_numbers = {}
+            for rule, preview in zip(rules, previews):
+                for result in preview["results"]:
+                    license_id = result["license_id"]
+                    license_numbers[license_id] = result["license_number"]
+                    target = by_license.setdefault(license_id, [])
+                    target.extend({
+                        "import_item_id": line["import_item_id"],
+                        "requested_quantity": line["planned_quantity"],
+                        "unit_price": line["current_unit_price"],
+                        "priority": rule.priority,
+                        "note": f"SION rule {rule.pk} v{rule.version}",
+                        "planning_rule_id": rule.pk,
+                        "planning_rule_version": rule.version,
+                        "planning_rule_priority": rule.priority,
+                    } for line in result["matched_lines"])
+
+            locked_ids = sorted(by_license)
+            list(LicenseDetailsModel.objects.select_for_update().filter(
+                pk__in=locked_ids,
+            ).order_by("pk").values_list("pk", flat=True))
+            writes = []
+            for license_id in locked_ids:
+                lines = by_license[license_id]
+                if CanonicalPlanningService._generated_plan_matches_current(license_id, lines):
+                    writes.append({"license_id": license_id, "mutation_status": "UNCHANGED"})
+                else:
+                    writes.append(CanonicalPlanningService.build_canonical_plan(
+                        license_id=license_id, norm_class=sion.norm_class,
+                        items=lines, force_replan=True, company_id=company_id,
+                    ))
+            return {
+                "sion_id": sion.pk,
+                "sion": sion.norm_class,
+                "rules_executed": [{
+                    "id": rule.pk, "version": rule.version, "priority": rule.priority,
+                } for rule in rules],
+                "licenses": [{
+                    "license_id": license_id,
+                    "license_number": license_numbers.get(license_id),
+                } for license_id in locked_ids],
+                "write_results": writes,
+            }

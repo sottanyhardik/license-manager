@@ -1272,6 +1272,12 @@ class LicenseItemPlan(AuditModel):
     baseline_used_cif_fc = models.DecimalField(
         max_digits=15, decimal_places=2, default=DEC_0,
     )
+    planning_rule = models.ForeignKey(
+        "license.SionPlanningRule", on_delete=models.PROTECT,
+        related_name="generated_plan_lines", null=True, blank=True,
+    )
+    planning_rule_version = models.PositiveIntegerField(null=True, blank=True)
+    planning_rule_priority = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         indexes = [models.Index(fields=["license"]), models.Index(fields=["import_item"])]
@@ -1318,6 +1324,10 @@ class SionPlanningRule(AuditModel):
             models.CheckConstraint(
                 condition=models.Q(max_unit_price__gte=DEC_0),
                 name="sion_rule_nonnegative_max_price",
+            ),
+            models.UniqueConstraint(
+                fields=("sion", "priority"), condition=models.Q(is_active=True),
+                name="uniq_active_sion_rule_priority",
             ),
         ]
         indexes = [models.Index(fields=("sion", "is_active", "priority"))]

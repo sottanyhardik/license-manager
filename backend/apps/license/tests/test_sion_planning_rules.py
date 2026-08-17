@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from django.db import IntegrityError
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
@@ -42,6 +43,7 @@ def rule_world():
     )
     rule = SionPlanningRule.objects.create(
         sion=sion, name="Sugar", unit="kg", max_unit_price=Decimal("2.50"),
+        priority=1,
         expression={"operator": "AND", "conditions": [
             {"field": "HSN", "comparator": "CONTAINS", "value": "1701"},
             {"operator": "NOT", "conditions": [{
@@ -119,23 +121,14 @@ def test_preview_never_writes_and_duplicate_ids_are_rejected(rule_world):
         )
 
 
-def test_equal_priority_conflict_blocks_without_writes(rule_world):
-    company, sion, license_obj, _item, rule = rule_world
-    competitor = SionPlanningRule.objects.create(
-        sion=sion, name="Sugar duplicate", unit="kg",
-        max_unit_price=Decimal("2.50"), priority=rule.priority,
-        expression=rule.expression,
-    )
-    preview = SionRulePlanningService.preview(
-        competitor, [license_obj.pk], company_id=company.pk,
-    )
-    assert preview["can_plan"] is False
-    assert preview["conflicts"][0]["rule_ids"] == sorted([rule.pk, competitor.pk])
-    with pytest.raises(Exception, match="conflicts"):
-        SionRulePlanningService.plan(
-            competitor, [license_obj.pk], company_id=company.pk,
+def test_database_rejects_duplicate_active_priority(rule_world):
+    _company, sion, _license_obj, _item, rule = rule_world
+    with pytest.raises(IntegrityError):
+        SionPlanningRule.objects.create(
+            sion=sion, name="Sugar duplicate", unit="kg",
+            max_unit_price=Decimal("2.50"), priority=rule.priority,
+            expression=rule.expression,
         )
-    assert not LicenseItemPlan.objects.exists()
 
 
 def test_inactive_rule_cannot_plan(rule_world):
@@ -204,7 +197,7 @@ def test_rule_api_permissions_and_company_isolation(rule_world):
         f"/api/sion-planning-rules/{rule.pk}/test/", {}, format="json",
     ).status_code == 403
     assert viewer_client.post(
-        f"/api/sion-planning-rules/{rule.pk}/plan/", {}, format="json",
+        "/api/sion-planning-rules/plan-sion/", {"sion_id": sion.pk}, format="json",
     ).status_code == 403
 
     foreign_company = CompanyModel.objects.create(iec="9200000002", name="Foreign Rule")
@@ -236,7 +229,7 @@ def test_crud_versions_and_delete_retires_history(rule_world):
     first_id = created.data["id"]
     assert created.data["version"] == 1
     assert SionPlanningRule.objects.get(pk=first_id).created_by == user
-    updated = client.patch(f"/api/sion-planning-rules/{first_id}/", {"priority": 4}, format="json")
+    updated = client.patch(f"/api/sion-planning-rules/{first_id}/", {"max_unit_price": "3.10"}, format="json")
     assert updated.status_code == 200, updated.data
     assert updated.data["id"] != first_id and updated.data["version"] == 2
     assert SionPlanningRule.objects.get(pk=first_id).is_active is False
@@ -244,3 +237,62 @@ def test_crud_versions_and_delete_retires_history(rule_world):
     assert retired.status_code == 204
     assert SionPlanningRule.objects.filter(pk=updated.data["id"], is_active=False).exists()
     assert SionPlanningRule.objects.filter(name="API Rule").count() == 2
+
+
+def test_database_priority_assignment_is_sion_scoped_and_reorder_persists(rule_world):
+    company, sion, _license_obj, _item, existing = rule_world
+    client, _user = _client(company)
+    head = sion.head_norm
+    other_sion = SionNormClassModel.objects.create(
+        head_norm=head, norm_class="R78", is_active=True,
+    )
+    payload = {
+        "name": "Second", "unit": "kg", "max_unit_price": "4.20",
+        "expression": {"field": "HSN", "comparator": "CONTAINS", "value": "99"},
+    }
+    second = client.post(
+        "/api/sion-planning-rules/", {**payload, "sion": sion.pk, "priority": 88}, format="json",
+    )
+    first_other = client.post(
+        "/api/sion-planning-rules/", {**payload, "sion": other_sion.pk}, format="json",
+    )
+    assert second.status_code == first_other.status_code == 201
+    assert second.data["priority"] == 2
+    assert first_other.data["priority"] == 1
+    reordered = client.post("/api/sion-planning-rules/reorder/", {
+        "sion_id": sion.pk, "rule_order": [second.data["id"], existing.pk],
+    }, format="json")
+    assert reordered.status_code == 200, reordered.data
+    assert list(SionPlanningRule.objects.filter(
+        sion=sion, is_active=True,
+    ).order_by("priority").values_list("pk", "priority")) == [
+        (second.data["id"], 1), (existing.pk, 2),
+    ]
+    retired = client.delete(f"/api/sion-planning-rules/{second.data['id']}/")
+    assert retired.status_code == 204
+    existing.refresh_from_db()
+    assert existing.priority == 1
+
+
+def test_plan_sion_uses_only_saved_active_rules_and_records_provenance(rule_world):
+    company, sion, license_obj, _item, rule = rule_world
+    client, _user = _client(company)
+    response = client.post("/api/sion-planning-rules/plan-sion/", {
+        "sion_id": sion.pk,
+        "license_ids": [license_obj.pk],
+        "rules": [{"expression": {"field": "HSN", "operator": "CONTAINS", "value": "fake"}}],
+    }, format="json")
+    assert response.status_code == 400
+    assert not LicenseItemPlan.objects.exists()
+
+    response = client.post("/api/sion-planning-rules/plan-sion/", {
+        "sion_id": sion.pk, "license_ids": [license_obj.pk],
+    }, format="json")
+    assert response.status_code == 200, response.data
+    assert response.data["rules_executed"] == [{
+        "id": rule.pk, "version": 1, "priority": 1,
+    }]
+    plan = LicenseItemPlan.objects.get()
+    assert plan.planning_rule_id == rule.pk
+    assert plan.planning_rule_version == 1
+    assert plan.planning_rule_priority == 1

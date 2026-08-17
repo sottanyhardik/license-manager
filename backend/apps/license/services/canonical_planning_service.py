@@ -310,6 +310,9 @@ class CanonicalPlanningService:
                     "unit_price": row["unit_price"],
                     "planned_cif_fc": row["planned_cif_fc"],
                     "note": row["note"],
+                    "planning_rule_id": row["planning_rule_id"],
+                    "planning_rule_version": row["planning_rule_version"],
+                    "planning_rule_priority": row["planning_rule_priority"],
                 }
                 for row in allocated_items
                 # A zero-quantity line is never persisted: LicenseItemPlan rows act
@@ -716,7 +719,8 @@ class CanonicalPlanningService:
         current = list(
             LicenseItemPlan.objects.filter(license_id=license_id).values(
                 "import_item_id", "item_name_id", "planned_quantity",
-                "unit_price", "planned_cif_fc", "note",
+                "unit_price", "planned_cif_fc", "note", "planning_rule_id",
+                "planning_rule_version", "planning_rule_priority",
             )
         )
 
@@ -729,6 +733,8 @@ class CanonicalPlanningService:
             return (
                 int(row.get("import_item_id") or 0),
                 row.get("item_name_id"), qty, price, cif, row.get("note") or "",
+                row.get("planning_rule_id"), row.get("planning_rule_version"),
+                row.get("planning_rule_priority"),
             )
 
         return sorted(repr(signature(row)) for row in current) == sorted(
@@ -834,6 +840,9 @@ class CanonicalPlanningService:
                 "requested_quantity": requested_quantity,
                 "requested_unit_price": unit_price,
                 "note": raw.get("note", "") or "",
+                "planning_rule_id": raw.get("planning_rule_id"),
+                "planning_rule_version": raw.get("planning_rule_version"),
+                "planning_rule_priority": raw.get("planning_rule_priority"),
             })
 
         normalized.sort(key=lambda row: (row["priority"], row["import_item_id"]))
@@ -1062,6 +1071,9 @@ class CanonicalPlanningService:
                 "available_capacity": capacity,
                 "status": line_status,
                 "note": row["note"],
+                "planning_rule_id": row["planning_rule_id"],
+                "planning_rule_version": row["planning_rule_version"],
+                "planning_rule_priority": row["planning_rule_priority"],
             })
 
         return allocated_items, remaining_balance
@@ -1207,7 +1219,10 @@ class CanonicalPlanningService:
                 "planned_cif_fc": DEC_0,
                 "available_capacity": DEC_000,
                 "status": STATUS_SKIPPED_ALREADY_PLANNED,
-                "note": row["note"],
+                    "note": row["note"],
+                    "planning_rule_id": row["planning_rule_id"],
+                    "planning_rule_version": row["planning_rule_version"],
+                    "planning_rule_priority": row["planning_rule_priority"],
             }
             for row in normalized
         ]

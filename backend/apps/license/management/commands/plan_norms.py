@@ -1,278 +1,149 @@
-"""
-Management command — run Auto Plan for all licenses of a given Norms Class.
+"""Plan a SION through the same DB-driven orchestration used by the API.
 
-Usage
------
-    python manage.py plan_norms E1
-    python manage.py plan_norms E5 --pending-only
-    python manage.py plan_norms E1 --license 3411007711
-    python manage.py plan_norms E1 --force
-    python manage.py plan_norms E5 --dry-run
-    python manage.py plan_norms E1 --force --dry-run
-
-Arguments
----------
-    norms_class     Required. E1, E5, E132, or any registered norm.
-
-Optional flags
---------------
-    --license       Process only the specified license number.
-    --pending-only  Skip licenses already ≥ 99 % planned.
-                    (default: skip already-planned unless --force is set)
-    --force         Re-plan even fully-planned licenses (overrides --pending-only).
-    --dry-run       Compute and display what would be saved without committing.
+The positional norm argument is retained for backwards compatibility.  New
+automation may use ``--sion``.  The safe/default mode is NEW; ``--all`` keeps
+its historical meaning of reprocessing the full eligible universe for the
+selected norm (it never means "all SIONs").
 """
 
-import time
 from datetime import timedelta
+from time import monotonic
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
 
-from apps.license.models import LicenseDetailsModel, LicenseItemPlan
-from apps.license.services.planner_factory import PlannerFactory
+from apps.core.models import SionNormClassModel
+from apps.license.models import LicenseDetailsModel
+from apps.license.services.sion_planning_execution import (
+    PlannerConfigurationError,
+    SionPlanningExecutionService,
+)
 
-
-# ── helpers ──────────────────────────────────────────────────────────────────
 
 def _fmt_duration(seconds: float) -> str:
-    """Format elapsed seconds as HH:MM:SS."""
     return str(timedelta(seconds=int(seconds)))
 
 
-def _is_fully_planned(license_obj, threshold: float = 0.99, *, live_balance=None) -> bool:
-    """Return True when the existing plan covers ≥ *threshold* of the LIVE
-    balance CIF. BL-LEDGER-02: `license_obj.balance_cif` (the denormalized
-    `LicenseBalance` cache) has no signal on reconciliation-allocation
-    changes and can go stale; `live_balance` is pre-batched by the caller
-    when available (a fixed number of queries for the whole run, not one
-    per license), falling back to a single live call only if not supplied."""
-    if live_balance is None:
-        from apps.license.services.balance_calculator import LicenseBalanceCalculator
-        live_balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
-    bal = float(live_balance or 0)
-    if bal <= 0:
-        return False
-    from django.db.models import Sum
-    total = float(
-        LicenseItemPlan.objects
-        .filter(license=license_obj)
-        .aggregate(t=Sum("planned_cif_fc"))["t"] or 0
-    )
-    return total >= bal * threshold
-
-
-def _save_lines(license_obj, lines: list[dict]) -> None:
-    """Full-replace: delete existing plan, insert new lines atomically."""
-    from apps.license.services.plan_enforcement import save_plan_lines_for_license
-    save_plan_lines_for_license(license_obj, lines)
-
-
-# ── command ───────────────────────────────────────────────────────────────────
-
 class Command(BaseCommand):
-    help = "Run Auto Plan for all licenses belonging to a specific Norms Class."
+    help = "Plan one SION using its saved active database rules."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "norms_class",
+            nargs="?",
             type=str.upper,
-            help=(
-                "Norm identifier to process (E1, E5, E132, …). "
-                f"Supported: {', '.join(PlannerFactory.supported_norms())}."
-            ),
+            help="Backward-compatible selected SION (for example E1).",
+        )
+        parser.add_argument(
+            "--sion",
+            dest="sion_code",
+            type=str.upper,
+            metavar="SION",
+            help="Selected SION (for example E1).",
         )
         parser.add_argument(
             "--license",
             dest="license_number",
             metavar="LICENSE_NUMBER",
-            default=None,
-            help="Process only the specified license number.",
+            help="Optionally restrict planning to one license number.",
         )
-        parser.add_argument(
+        modes = parser.add_mutually_exclusive_group()
+        modes.add_argument(
+            "--new",
+            dest="mode",
+            action="store_const",
+            const="NEW",
+            help="Plan only canonical identities that are not already planned (default).",
+        )
+        modes.add_argument(
             "--all",
-            dest="replan_all",
-            action="store_true",
-            default=False,
-            help="Re-plan ALL licenses, including those already ≥ 99 %% planned.",
+            dest="mode",
+            action="store_const",
+            const="ALL",
+            help="Force reprocess the full eligible universe for this SION.",
         )
+        parser.set_defaults(mode="NEW")
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            default=False,
-            help="Compute plans and print them without saving any changes.",
+            help="Preview through the canonical service without writing plans.",
         )
-
-    # ── main ─────────────────────────────────────────────────────────────────
 
     def handle(self, *args, **options):
-        norms_class: str = options["norms_class"]
-        license_number   = options["license_number"]
-        replan_all: bool = options["replan_all"]
-        dry_run: bool    = options["dry_run"]
-
-        # Validate norm.
-        if not PlannerFactory.is_supported(norms_class):
+        positional = options.get("norms_class")
+        selected = options.get("sion_code")
+        if positional and selected and positional != selected:
             raise CommandError(
-                f"Norm '{norms_class}' is not supported. "
-                f"Supported: {', '.join(PlannerFactory.supported_norms())}."
+                f"Conflicting SION values: positional {positional!r} and --sion {selected!r}."
             )
+        code = selected or positional
+        if not code:
+            raise CommandError("Select exactly one SION using --sion E1 or the positional E1 argument.")
 
-        self.stdout.write("")
-        self.stdout.write(self.style.MIGRATE_HEADING("Starting Auto Plan…"))
-        self.stdout.write("")
-        self.stdout.write(f"  Norms Class : {norms_class}")
+        try:
+            sion = SionNormClassModel.objects.get(norm_class__iexact=code)
+        except SionNormClassModel.DoesNotExist as exc:
+            raise CommandError(f"Unknown SION {code!r}.") from exc
+        except SionNormClassModel.MultipleObjectsReturned as exc:
+            raise CommandError(f"SION {code!r} is not unique in the canonical master.") from exc
+
+        license_ids = None
+        license_number = options.get("license_number")
+        if license_number:
+            ids = list(
+                LicenseDetailsModel.objects.filter(license_number=license_number)
+                .order_by("pk").values_list("pk", flat=True)
+            )
+            if not ids:
+                raise CommandError(f"License {license_number!r} not found.")
+            if len(ids) != 1:
+                raise CommandError(
+                    f"License number {license_number!r} is ambiguous; use the API's ID restriction."
+                )
+            license_ids = ids
+
+        mode = options["mode"]
+        dry_run = options["dry_run"]
+        self.stdout.write(self.style.MIGRATE_HEADING("Starting SION planning…"))
+        self.stdout.write(f"  SION        : {sion.norm_class}")
+        self.stdout.write(f"  Mode        : {'FORCE ALL' if mode == 'ALL' else 'NEW'}")
         if license_number:
             self.stdout.write(f"  License     : {license_number}")
-        mode = "ALL licenses (--all)" if replan_all else "Not-yet-planned only"
-        self.stdout.write(f"  Mode        : {mode}")
         if dry_run:
-            self.stdout.write(
-                "  " + self.style.WARNING("Dry Run     : nothing will be saved")
+            self.stdout.write("  " + self.style.WARNING("Dry Run     : nothing will be saved"))
+
+        started = monotonic()
+        try:
+            result = SionPlanningExecutionService.plan_sion(
+                sion,
+                license_ids=license_ids,
+                persist=not dry_run,
+                mode=mode,
             )
+        except (PlannerConfigurationError, ValueError) as exc:
+            raise CommandError(str(exc)) from exc
+
+        summary = result.get("summary", {})
+        rules = summary.get("rules", len(result.get("rules_executed", result.get("rules_processed", ()))))
+        eligible = summary.get("eligible_licenses", result.get("eligible_licenses", 0))
+        matched = summary.get("matched_items", result.get("matched_items", 0))
+        planned = result.get("planned_licenses", summary.get("planned_licenses", 0))
+        already = result.get("already_planned", summary.get("already_planned", 0))
+        shortages = result.get("shortages", summary.get("shortages", 0))
+
         self.stdout.write("")
-
-        # Build queryset. BL-LEDGER-02: eligibility used to be filtered at
-        # the DB level against the cached `balance__balance_cif` column
-        # (`balance__balance_cif__gt=0`), which can be stale. Fetch every
-        # active license instead and resolve eligibility against the LIVE,
-        # batched-computed balance below (a fixed number of queries for the
-        # whole run, not one live call per license).
-        qs = (
-            LicenseDetailsModel.objects
-            .filter(flags__is_active=True)
-            .prefetch_related(
-                "export_license__norm_class",
-                "import_license__items",
-                "import_license__hs_code",
-            )
-            .select_related("balance")
-            .order_by("license_date", "license_number")
-        )
-        if license_number:
-            qs = qs.filter(license_number=license_number)
-            if not qs.exists():
-                raise CommandError(f"License '{license_number}' not found.")
-
-        qs = list(qs)  # prefetch_related is incompatible with iterator(); materialize once
-        from apps.license.services.balance_calculator import LicenseBalanceCalculator
-        live_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
-            [lic.id for lic in qs]
-        )
-
-        # Counters.
-        total = skipped_norm = already_planned = succeeded = failed = 0
-        failures: list[tuple[str, str]] = []
-
-        start = time.monotonic()
-
-        for lic in qs:
-            live_balance = live_balance_by_license.get(lic.id, 0)
-            if live_balance <= 0:
-                # Same effect as the old `balance__balance_cif__gt=0` DB
-                # filter: not eligible at all, not counted anywhere below.
-                continue
-
-            # Exact selected-SION applicability. Never choose the first export
-            # row: a licence may legitimately carry several SION metadata rows.
-            applicable_norms = {
-                (row.norm_class.norm_class or "").strip().upper()
-                for row in lic.export_license.all()
-                if row.norm_class_id
-            }
-            if norms_class not in applicable_norms:
-                skipped_norm += 1
-                continue
-
-            total += 1
-            num = lic.license_number
-
-            # Default: skip already-planned licenses.
-            # --all: re-plan everything regardless of current plan status.
-            if not replan_all and _is_fully_planned(lic, live_balance=live_balance):
-                already_planned += 1
-                self.stdout.write(
-                    f"  Processing License : {num} … "
-                    + self.style.WARNING("SKIPPED (Already Planned)")
-                )
-                continue
-
-            # Run planner.
-            try:
-                result = PlannerFactory.run(lic, norms_class)
-
-                if not result.lines:
-                    already_planned += 1
-                    self.stdout.write(
-                        f"  Processing License : {num} … "
-                        + self.style.WARNING("SKIPPED (No plannable items)")
-                    )
-                    continue
-
-                if dry_run:
-                    total_cif = sum(ln["planned_cif_fc"] for ln in result.lines)
-                    succeeded += 1
-                    self.stdout.write(
-                        f"  Processing License : {num} … "
-                        + self.style.SUCCESS(
-                            f"DRY-RUN OK  ({len(result.lines)} lines, "
-                            f"${total_cif:,.2f} planned, "
-                            f"${result.remaining_cif:,.2f} remaining)"
-                        )
-                    )
-                else:
-                    with transaction.atomic():
-                        _save_lines(lic, result.lines)
-                    succeeded += 1
-                    self.stdout.write(
-                        f"  Processing License : {num} … "
-                        + self.style.SUCCESS("SUCCESS")
-                    )
-
-            except Exception as exc:  # noqa: BLE001
-                failed += 1
-                reason = str(exc)
-                failures.append((num, reason))
-                self.stdout.write(
-                    f"  Processing License : {num} … "
-                    + self.style.ERROR("FAILED")
-                )
-                self.stdout.write(
-                    f"  {'':>29}Reason: {reason}"
-                )
-
-        elapsed = time.monotonic() - start
-
-        # Summary.
-        self.stdout.write("")
-        self.stdout.write("-" * 50)
-        self.stdout.write("")
-        self.stdout.write(self.style.MIGRATE_HEADING("Auto Plan Completed"))
-        self.stdout.write("")
-        self.stdout.write(f"  Norms Class          : {norms_class}")
-        self.stdout.write(f"  Total Licenses       : {total}")
-        self.stdout.write(
-            f"  Successfully Planned : "
-            + (self.style.SUCCESS(str(succeeded)) if succeeded else "0")
-        )
-        self.stdout.write(
-            f"  Already Planned      : "
-            + (self.style.WARNING(str(already_planned)) if already_planned else "0")
-        )
-        self.stdout.write(
-            f"  Failed               : "
-            + (self.style.ERROR(str(failed)) if failed else "0")
-        )
-        self.stdout.write(f"  Execution Time       : {_fmt_duration(elapsed)}")
+        self.stdout.write(self.style.MIGRATE_HEADING("SION planning completed"))
+        self.stdout.write(f"  SION                : {sion.norm_class}")
+        self.stdout.write(f"  Mode                : {'FORCE ALL' if mode == 'ALL' else 'NEW'}")
+        self.stdout.write(f"  Rules processed     : {rules}")
+        self.stdout.write(f"  Eligible licenses   : {eligible}")
+        self.stdout.write(f"  Matched items       : {matched}")
+        self.stdout.write(f"  Planned licenses    : {planned}")
+        self.stdout.write(f"  Already planned     : {already}")
+        self.stdout.write(f"  Shortages           : {shortages}")
+        self.stdout.write(f"  Execution time      : {_fmt_duration(monotonic() - started)}")
+        # Stable labels retained for scripts which parsed the legacy summary.
+        self.stdout.write(f"  Total Licenses       : {eligible}")
+        self.stdout.write(f"  Successfully Planned : {planned}")
+        self.stdout.write(f"  Already Planned      : {already}")
         if dry_run:
-            self.stdout.write("")
-            self.stdout.write(
-                "  " + self.style.WARNING("DRY RUN — no data was modified.")
-            )
-        self.stdout.write("")
-
-        if failures:
-            self.stdout.write(self.style.ERROR("Failed licenses:"))
-            for num, reason in failures:
-                self.stdout.write(f"  {num}: {reason}")
-            self.stdout.write("")
+            self.stdout.write("  " + self.style.WARNING("DRY RUN — no data was modified."))

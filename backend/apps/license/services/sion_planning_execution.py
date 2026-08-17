@@ -49,6 +49,26 @@ class ResolvedPlannerConfiguration:
     sion_code: str
     rules: tuple[Any, ...]
     output_by_rule_key: dict[str, str]
+    actions: tuple[Any, ...] = ()
+
+    def split_action_for_category(self, category: str) -> dict[str, Any] | None:
+        """Return the persisted split action for a matched output category."""
+        for action in self.actions:
+            config = action.config if hasattr(action, "config") else action.get("config", {})
+            action_type = action.action_type if hasattr(action, "action_type") else action.get("action_type")
+            if (
+                action_type == "SPLIT"
+                and config.get("algorithm") == "SPLIT_BY_UNIT_VALUE"
+                and config.get("category") == category
+            ):
+                return config
+        return None
+
+    def rule_for_output(self, output: str):
+        for rule in self.rules:
+            if getattr(rule, "execution_output", "") == output:
+                return rule
+        return None
 
     @property
     def price_by_output(self) -> dict[str, Decimal]:
@@ -137,6 +157,7 @@ class _E5Adapter:
             items, balance_cif,
             min_plan_qty=Decimal(str(options.get("min_plan_qty", 0))),
             floor_qty=bool(options.get("floor_qty", False)),
+            split_allocation_config=configuration.split_action_for_category("MILK PRODUCTS"),
         )
 
     def compute_license(self, license_obj, configuration, *, preview):
@@ -207,8 +228,9 @@ class SionPlanningExecutionService:
             "-is_active", "-version", "-pk",
         ).prefetch_related("actions").first()
         output_by_rule_key: dict[str, str] = {}
+        actions = tuple(profile.actions.filter(is_active=True).order_by("priority", "pk")) if profile is not None else ()
         if profile is not None:
-            for action in profile.actions.filter(is_active=True).order_by("priority", "pk"):
+            for action in actions:
                 output_by_rule_key.update(action.config.get("rule_outputs", {}))
         # UI-created rules already carry their execution bucket.  Use it
         # directly so DB rules remain executable even when an older database
@@ -236,7 +258,7 @@ class SionPlanningExecutionService:
                 f"Saved rule {rule.pk} has no execution output. Save an execution bucket before planning."
             )
         return ResolvedPlannerConfiguration(
-            sion.norm_class.strip().upper(), rules, output_by_rule_key,
+            sion.norm_class.strip().upper(), rules, output_by_rule_key, actions,
         )
 
     @classmethod
@@ -407,14 +429,43 @@ class SionPlanningExecutionService:
                 existing_lines = existing_by_item.get(detail["import_item_id"], [])
                 proposed_qty = sum((cls._decimal(row["requested_quantity"]) for row in proposed_lines), Decimal("0"))
                 current_qty = sum((cls._decimal(row["planned_quantity"]) for row in existing_lines), Decimal("0"))
-                children.append({
+                child = {
                     **detail,
                     "current_planned_quantity": current_qty,
                     "proposed_planned_quantity": proposed_qty,
                     "quantity_change": proposed_qty - current_qty,
                     "current_unit_price": existing_lines[0]["unit_price"] if existing_lines else None,
                     "proposed_unit_price": proposed_lines[0]["unit_price"] if proposed_lines else None,
-                })
+                }
+                split_lines = [
+                    row for row in proposed_lines
+                    if row.get("allocation_provenance", {}).get("allocation_strategy") == "SPLIT_BY_UNIT_VALUE"
+                ]
+                if split_lines:
+                    provenance = split_lines[0]["allocation_provenance"]
+                    allocated_qty = sum((cls._decimal(row["requested_quantity"]) for row in split_lines), Decimal("0"))
+                    allocated_cif = sum((
+                        cls._decimal(row["requested_quantity"]) * cls._decimal(row["unit_price"])
+                        for row in split_lines
+                    ), Decimal("0"))
+                    total_qty = cls._decimal(provenance["original_quantity"])
+                    balance = cls._decimal(provenance["original_balance_cif"])
+                    child["allocation"] = {
+                        "strategy": "SPLIT_BY_UNIT_VALUE",
+                        "status": "ALLOCATED",
+                        "total_quantity": total_qty,
+                        "balance_cif": balance,
+                        "effective_unit_price": balance / total_qty if total_qty else None,
+                        "quantity_remaining": total_qty - allocated_qty,
+                        "cif_remaining": balance - allocated_cif,
+                        "lines": [{
+                            "bucket": row["allocation_provenance"]["bucket"],
+                            "quantity": row["requested_quantity"],
+                            "unit_price": row["unit_price"],
+                            "cif": cls._decimal(row["requested_quantity"]) * cls._decimal(row["unit_price"]),
+                        } for row in split_lines],
+                    }
+                children.append(child)
             has_shortage = (
                 bool(matched) and not proposed and raw.get("status") != "SKIPPED_ALREADY_PLANNED"
             ) or bool(raw.get("has_shortage")) or raw.get("status") == "SHORTAGE" or any(
@@ -513,6 +564,10 @@ class SionPlanningExecutionService:
                     "unit_price": row["unit_price"],
                     "priority": index,
                     "note": row.get("note", ""),
+                    "planning_rule_id": row.get("planning_rule_id"),
+                    "planning_rule_version": row.get("planning_rule_version"),
+                    "planning_rule_priority": row.get("planning_rule_priority"),
+                    "allocation_provenance": row.get("allocation_provenance", {}),
                 } for index, row in enumerate(lines)]
                 result = {
                     "license_id": license_obj.pk,

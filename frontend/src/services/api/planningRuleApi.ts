@@ -7,7 +7,27 @@ export type RuleCondition = {
     value: string;
 };
 export type RuleGroup = { operator: "AND" | "OR"; conditions: Array<RuleCondition | RuleGroup> };
-export type SionPlanningRule = { id?: number; sion: number; name: string; expression: RuleGroup; max_unit_price: string; unit: string; priority: number; is_active: boolean; version?: number; modified_on?: string; modified_by_username?: string };
+
+/**
+ * UI representation of the canonical SionPlanningAction.config for a SPLIT
+ * action. Prices remain strings so the browser never converts planning
+ * decimals to IEEE-754 numbers.
+ */
+export type SplitAllocationBucket = {
+    code: string;
+    min_price: string;
+    max_price: string;
+    reference_price: string;
+};
+export type SplitAllocationConfig = {
+    algorithm: "SPLIT_BY_UNIT_VALUE";
+    basis: "BALANCE_CIF_PER_QUANTITY";
+    buckets: SplitAllocationBucket[];
+};
+export type RuleAllocationStrategy =
+    | { strategy: "STANDARD"; action_id?: number }
+    | { strategy: "SPLIT_BY_UNIT_VALUE"; action_id?: number; config: SplitAllocationConfig };
+export type SionPlanningRule = { id?: number; sion: number; name: string; expression: RuleGroup; max_unit_price: string; unit: string; priority: number; is_active: boolean; execution_output?: string; version?: number; modified_on?: string; modified_by_username?: string };
 
 function safeRuleExpression(value: unknown): RuleGroup {
     if (!value || typeof value !== "object") return { operator: "AND", conditions: [] };
@@ -39,6 +59,12 @@ export async function createSionPlanningRule(payload: SionPlanningRule): Promise
 export async function updateSionPlanningRule(id: number, payload: Partial<SionPlanningRule>): Promise<SionPlanningRule> {
     return (await api.patch(`sion-planning-rules/${id}/`, payload)).data;
 }
+export async function fetchRuleAllocationStrategy(id: number): Promise<RuleAllocationStrategy> {
+    return (await api.get(`sion-planning-rules/${id}/allocation-strategy/`)).data;
+}
+export async function updateRuleAllocationStrategy(id: number, payload: RuleAllocationStrategy): Promise<RuleAllocationStrategy> {
+    return (await api.patch(`sion-planning-rules/${id}/allocation-strategy/`, payload)).data;
+}
 export type SionPlanningMode = "NEW" | "ALL";
 export type SionPlanningChangeStatus = "NEW" | "CHANGE" | "NO_CHANGE" | "SHORTAGE" | "SKIPPED";
 export type SionPlanningPreviewItem = {
@@ -47,6 +73,24 @@ export type SionPlanningPreviewItem = {
     current_unit_price?: string; unit_price?: string; max_unit_price?: string; price_status?: string;
     available_qty?: string; available_quantity?: string; existing_planned_qty?: string; current_planned_quantity?: string;
     proposed_planned_qty?: string; proposed_planned_quantity?: string; quantity_change?: string; shortage_qty?: string; status?: string;
+    allocation?: SplitAllocationPreview;
+};
+export type SplitAllocationPreviewLine = {
+    bucket: string;
+    quantity: string;
+    unit_price: string;
+    cif: string;
+};
+export type SplitAllocationPreview = {
+    strategy: "SPLIT_BY_UNIT_VALUE";
+    status: "ALLOCATED" | "BLOCKED" | "PRECISION_CONFLICT" | "ZERO_AVAILABLE_QUANTITY" | string;
+    total_quantity: string;
+    balance_cif: string;
+    effective_unit_price?: string;
+    quantity_remaining: string;
+    cif_remaining: string;
+    reason?: string;
+    lines: SplitAllocationPreviewLine[];
 };
 export type SionPlanningPreviewLicense = {
     license_id: number; license_number: string; license_type?: string; sion?: string;

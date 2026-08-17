@@ -212,8 +212,10 @@ E5_PROFILE: dict[str, Any] = {
             "action_type": "SPLIT",
             "priority": 6,
             "config": {
-                "algorithm": "ORDERED_MILK_0404_THEN_WPC_3502",
+                "algorithm": "SPLIT_BY_UNIT_VALUE",
+                "basis": "BALANCE_CIF_PER_QUANTITY",
                 "pipeline_membership": ["OILS_THEN_NORMAL_MILK"],
+                "category": "MILK PRODUCTS",
                 "milk_category": "MILK PRODUCTS",
                 "wpc_category": "EGG ALBUMIN / WPC",
                 "granularity": "ITEM_SEQUENTIAL",
@@ -222,6 +224,10 @@ E5_PROFILE: dict[str, Any] = {
                 "swp_rate": "1.5",
                 "wpc_max_rate": "25",
                 "wpc_insufficient_balance": "REDUCE_RATE_KEEP_FULL_QUANTITY",
+                "buckets": [
+                    {"code": "SWP", "min_price": "0.00", "max_price": "1.50", "reference_price": "1.50"},
+                    {"code": "DWP", "min_price": "1.50", "max_price": "6.50", "reference_price": "6.50"},
+                ],
             },
         },
         {

@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 from apps.core.models import CompanyModel, HeadSIONNormsModel, HSCodeModel, SionNormClassModel
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
-    LicenseItemPlan, SionPlanningRule,
+    LicenseItemPlan, SionPlanningAction, SionPlanningProfile, SionPlanningRule,
 )
 from apps.license.services.canonical_planning_service import CanonicalPlanningService
 from apps.license.services.sion_rule_engine import (
@@ -61,6 +61,67 @@ def _client(company):
     client = APIClient()
     client.force_authenticate(user)
     return client, user
+
+
+def _split_action(sion, rule):
+    rule.execution_output = "MILK PRODUCTS"
+    rule.save(update_fields=("execution_output",))
+    profile = SionPlanningProfile.objects.create(
+        sion=sion, stable_key=f"{sion.norm_class}:PROFILE", is_active=True,
+    )
+    return SionPlanningAction.objects.create(
+        profile=profile, stable_key=f"{sion.norm_class}:SPLIT", action_type="SPLIT",
+        priority=1, config={
+            "algorithm": "SPLIT_BY_UNIT_VALUE",
+            "basis": "BALANCE_CIF_PER_QUANTITY",
+            "category": "MILK PRODUCTS",
+            "granularity": "ITEM_SEQUENTIAL",
+            "buckets": [
+                {"code": "SWP", "min_price": "0.00", "max_price": "1.50", "reference_price": "1.50"},
+                {"code": "DWP", "min_price": "1.50", "max_price": "6.50", "reference_price": "6.50"},
+            ],
+        },
+    )
+
+
+def test_allocation_strategy_api_reads_and_updates_canonical_action(rule_world):
+    company, sion, _license_obj, _item, rule = rule_world
+    action = _split_action(sion, rule)
+    client, _user = _client(company)
+
+    response = client.get(f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/")
+    assert response.status_code == 200
+    assert response.data["strategy"] == "SPLIT_BY_UNIT_VALUE"
+    assert response.data["config"]["buckets"][1]["max_price"] == "6.50"
+
+    changed = response.data["config"]
+    changed["buckets"][1]["max_price"] = "6.75"
+    response = client.patch(f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/", {
+        "strategy": "SPLIT_BY_UNIT_VALUE", "config": changed,
+    }, format="json")
+    assert response.status_code == 200
+    action.refresh_from_db()
+    assert action.config["buckets"][1]["max_price"] == "6.75"
+    assert action.config["category"] == "MILK PRODUCTS"
+    assert action.config["granularity"] == "ITEM_SEQUENTIAL"
+    assert action.version == 2
+
+
+def test_allocation_strategy_api_rejects_invalid_band(rule_world):
+    company, sion, _license_obj, _item, rule = rule_world
+    _split_action(sion, rule)
+    client, _user = _client(company)
+    response = client.patch(f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/", {
+        "strategy": "SPLIT_BY_UNIT_VALUE",
+        "config": {
+            "algorithm": "SPLIT_BY_UNIT_VALUE", "basis": "BALANCE_CIF_PER_QUANTITY",
+            "buckets": [
+                {"code": "SWP", "min_price": "1.50", "max_price": "1.50", "reference_price": "1.50"},
+                {"code": "DWP", "min_price": "1.50", "max_price": "6.50", "reference_price": "6.50"},
+            ],
+        },
+    }, format="json")
+    assert response.status_code == 400
 
 
 def test_safe_nested_expression_normalizes_case_space_and_hsn_zeroes():

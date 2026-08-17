@@ -1280,6 +1280,7 @@ class LicenseItemPlan(AuditModel):
     )
     planning_rule_version = models.PositiveIntegerField(null=True, blank=True)
     planning_rule_priority = models.PositiveIntegerField(null=True, blank=True)
+    allocation_provenance = models.JSONField(default=dict, blank=True)
 
     class Meta:
         indexes = [models.Index(fields=["license"]), models.Index(fields=["import_item"])]

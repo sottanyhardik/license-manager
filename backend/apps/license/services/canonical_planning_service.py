@@ -843,6 +843,7 @@ class CanonicalPlanningService:
                 "planning_rule_id": raw.get("planning_rule_id"),
                 "planning_rule_version": raw.get("planning_rule_version"),
                 "planning_rule_priority": raw.get("planning_rule_priority"),
+                "allocation_provenance": raw.get("allocation_provenance", {}),
             })
 
         normalized.sort(key=lambda row: (row["priority"], row["import_item_id"]))
@@ -1074,6 +1075,7 @@ class CanonicalPlanningService:
                 "planning_rule_id": row["planning_rule_id"],
                 "planning_rule_version": row["planning_rule_version"],
                 "planning_rule_priority": row["planning_rule_priority"],
+                "allocation_provenance": row["allocation_provenance"],
             })
 
         return allocated_items, remaining_balance
@@ -1223,6 +1225,7 @@ class CanonicalPlanningService:
                     "planning_rule_id": row["planning_rule_id"],
                     "planning_rule_version": row["planning_rule_version"],
                     "planning_rule_priority": row["planning_rule_priority"],
+                    "allocation_provenance": row["allocation_provenance"],
             }
             for row in normalized
         ]

@@ -249,6 +249,10 @@ def compute_e5_auto_plan(
     result = plan_e5_items(
         items, balance_cif, min_plan_qty=MIN_PLAN_QTY, floor_qty=True,
         price_overrides=configuration.price_by_output if configuration is not None else None,
+        split_allocation_config=(
+            configuration.split_action_for_category('MILK PRODUCTS')
+            if configuration is not None else None
+        ),
     )
 
     lines_by_rep: dict[int, list[dict]] = {}
@@ -258,13 +262,27 @@ def compute_e5_auto_plan(
             label = 'Rule Special — SWP - E5'
         else:
             label = _STEP_LABEL[line.step]
+        source_rule = configuration.rule_for_output(line.category) if configuration is not None else None
+        provenance = {}
+        if line.allocation_strategy == 'SPLIT_BY_UNIT_VALUE':
+            provenance = {
+                'allocation_strategy': line.allocation_strategy,
+                'original_quantity': str(line.source_quantity),
+                'original_balance_cif': str(line.source_balance_cif),
+                'bucket': line.step,
+                'calculated_unit_price': str(line.unit_price),
+            }
         lines_by_rep.setdefault(rep.id, []).append({
             'import_item':      rep.id,
             'item_name':        name_ids.get(STEP_ITEM_NAME[line.step]),
-            'planned_quantity': float(line.planned_qty),
-            'unit_price':       float(line.unit_price),
-            'planned_cif_fc':   float(line.planned_cif),
+            'planned_quantity': line.planned_qty,
+            'unit_price':       line.unit_price,
+            'planned_cif_fc':   line.planned_cif,
             'note':             f'Auto-planned (E5 {label})',
+            'planning_rule_id': source_rule.pk if source_rule else None,
+            'planning_rule_version': source_rule.version if source_rule else None,
+            'planning_rule_priority': source_rule.priority if source_rule else None,
+            'allocation_provenance': provenance,
         })
 
     # ── Mandatory generic validation (never skip this) ────────────────────

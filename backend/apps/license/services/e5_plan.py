@@ -44,6 +44,9 @@ from decimal import Decimal, ROUND_FLOOR
 
 from apps.license.services.milk_planner import MILK_CONFIG, split_milk_0404
 from apps.license.services.planning_allocation import allocate_step, d as _d
+from apps.license.services.split_allocation import (
+    SplitAllocationService, SplitAllocationStatus, SplitBucket,
+)
 
 _MONEY_4DP = Decimal('0.0001')
 
@@ -184,6 +187,9 @@ class E5PlanLine:
     planned_qty: Decimal
     unit_price: Decimal
     planned_cif: Decimal
+    allocation_strategy: str | None = None
+    source_quantity: Decimal | None = None
+    source_balance_cif: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -191,6 +197,7 @@ class E5PlanResult:
     lines: list[E5PlanLine]
     remaining_cif: Decimal
     special_validation_triggered: bool
+    blocked_allocations: tuple[dict, ...] = ()
 
 
 def _fixed_rate_line(
@@ -237,6 +244,7 @@ def plan_e5_items(
     min_plan_qty: Decimal = Decimal('0'),
     floor_qty: bool = False,
     price_overrides: dict[str, Decimal] | None = None,
+    split_allocation_config: dict | None = None,
 ) -> E5PlanResult:
     """Run the full E5 waterfall over a list of already-classified items.
 
@@ -279,8 +287,14 @@ def plan_e5_items(
             by_cat[it.category].append(item)
 
     lines: list[E5PlanLine] = []
+    blocked_allocations: list[dict] = []
 
-    def _emit(item: E5Item, step: str, planned_qty: Decimal, rate: Decimal, cif: Decimal) -> None:
+    def _emit(
+        item: E5Item, step: str, planned_qty: Decimal, rate: Decimal, cif: Decimal,
+        *, allocation_strategy: str | None = None,
+        source_quantity: Decimal | None = None,
+        source_balance_cif: Decimal | None = None,
+    ) -> None:
         if cif <= 0:
             return
         lines.append(E5PlanLine(
@@ -290,6 +304,9 @@ def plan_e5_items(
             planned_qty=planned_qty,
             unit_price=_quantize(rate),
             planned_cif=_quantize(cif),
+            allocation_strategy=allocation_strategy,
+            source_quantity=source_quantity,
+            source_balance_cif=source_balance_cif,
         ))
 
     # Step 1 — Dietary Fibre.
@@ -335,6 +352,41 @@ def plan_e5_items(
         # and SWP by the shared HSN 0404 algorithm (never averaged with any
         # 3502 item on the same licence).
         for item in by_cat['MILK PRODUCTS']:
+            if split_allocation_config:
+                allocation_opening_balance = remaining
+                buckets = tuple(SplitBucket(
+                    code=str(bucket['code']),
+                    min_unit_price=Decimal(str(bucket['min_price'])),
+                    max_unit_price=Decimal(str(bucket['max_price'])),
+                    reference_price=Decimal(str(bucket['reference_price'])),
+                ) for bucket in split_allocation_config.get('buckets', ()))
+                allocation = SplitAllocationService.allocate(
+                    quantity=item.qty,
+                    balance_value=remaining,
+                    buckets=buckets,
+                    quantity_quantum=Decimal('0.001'),
+                )
+                if allocation.status is not SplitAllocationStatus.SUCCESS:
+                    blocked_allocations.append({
+                        'key': item.key,
+                        'category': item.category,
+                        'status': allocation.status.value,
+                        'reason': allocation.reason,
+                        'quantity': allocation.quantity,
+                        'balance_cif': allocation.balance_value,
+                        'effective_unit_price': allocation.effective_unit_price,
+                    })
+                    continue
+                for allocation_line in allocation.allocations:
+                    _emit(
+                        item, allocation_line.bucket_code, allocation_line.quantity,
+                        allocation_line.unit_price, allocation_line.value,
+                        allocation_strategy='SPLIT_BY_UNIT_VALUE',
+                        source_quantity=item.qty,
+                        source_balance_cif=allocation_opening_balance,
+                    )
+                    remaining -= allocation_line.value
+                continue
             dwp_qty, dwp_rate, swp_qty = split_milk_0404(item.qty, remaining, MILK_CONFIG)
             if dwp_qty > 0:
                 dwp_cif = dwp_qty * dwp_rate
@@ -367,4 +419,5 @@ def plan_e5_items(
         lines=lines,
         remaining_cif=remaining,
         special_validation_triggered=special_triggered,
+        blocked_allocations=tuple(blocked_allocations),
     )

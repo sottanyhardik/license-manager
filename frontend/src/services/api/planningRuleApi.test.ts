@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import api from "@/api/axios";
-import { fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules } from "./planningRuleApi";
+import { fetchRuleAllocationStrategy, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, updateRuleAllocationStrategy } from "./planningRuleApi";
 
-vi.mock("@/api/axios", () => ({ default: { get: vi.fn(), post: vi.fn() } }));
+vi.mock("@/api/axios", () => ({ default: { get: vi.fn(), patch: vi.fn(), post: vi.fn() } }));
 
 describe("SION planning request payloads", () => {
     beforeEach(() => {
@@ -38,5 +38,23 @@ describe("SION planning request payloads", () => {
 
         expect(rules[0].expression).toEqual({ operator: "AND", conditions: [] });
         expect(rules[1].expression).toEqual({ operator: "AND", conditions: [{ field: "HSN", comparator: "CONTAINS", value: "1701" }] });
+    });
+
+    it("reads and writes allocation strategy through the canonical action endpoint", async () => {
+        const strategy = { strategy: "SPLIT_BY_UNIT_VALUE" as const, config: {
+            algorithm: "SPLIT_BY_UNIT_VALUE" as const, basis: "BALANCE_CIF_PER_QUANTITY" as const,
+            buckets: [
+                { code: "SWP", min_price: "0.00", max_price: "1.50", reference_price: "1.50" },
+                { code: "DWP", min_price: "1.50", max_price: "6.50", reference_price: "6.50" },
+            ],
+        } };
+        vi.mocked(api.get).mockResolvedValue({ data: strategy });
+        vi.mocked(api.patch).mockResolvedValue({ data: strategy });
+
+        expect(await fetchRuleAllocationStrategy(9)).toEqual(strategy);
+        await updateRuleAllocationStrategy(9, strategy);
+
+        expect(api.get).toHaveBeenCalledWith("sion-planning-rules/9/allocation-strategy/");
+        expect(api.patch).toHaveBeenCalledWith("sion-planning-rules/9/allocation-strategy/", strategy);
     });
 });

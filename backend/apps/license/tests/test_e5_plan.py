@@ -13,6 +13,16 @@ from apps.license.services.e5_plan import (
     plan_e5_items,
 )
 
+SPLIT_BY_UNIT_VALUE = {
+    'algorithm': 'SPLIT_BY_UNIT_VALUE',
+    'basis': 'BALANCE_CIF_PER_QUANTITY',
+    'category': 'MILK PRODUCTS',
+    'buckets': [
+        {'code': 'SWP', 'min_price': '0.00', 'max_price': '1.50', 'reference_price': '1.50'},
+        {'code': 'DWP', 'min_price': '1.50', 'max_price': '6.50', 'reference_price': '6.50'},
+    ],
+}
+
 # DWP rate ceiling of the shared milk splitter (``MILK_CONFIG.dwp_price``, which
 # E5 aliases as ``DWP_PRICE``), numerically pinned in ``test_milk_planner.py``
 # and tied back to the engine by
@@ -424,3 +434,28 @@ class TestAutoPlanFloorAndThreshold(TestCase):
         assert len(wf_lines) == 1
         assert wf_lines[0].key == 'big'
         assert wf_lines[0].unit_price == Decimal('10.0000')  # 1000 / 100, not / 110
+
+
+class TestConfiguredSplitAllocation(TestCase):
+    def test_configured_action_exhausts_quantity_and_cif_exactly(self):
+        result = plan_e5_items(
+            [E5Item(key='milk', category='MILK PRODUCTS', qty=Decimal('1000'))],
+            Decimal('3500'),
+            split_allocation_config=SPLIT_BY_UNIT_VALUE,
+        )
+        swp, dwp = result.lines
+        assert (swp.step, swp.planned_qty, swp.planned_cif) == ('SWP', Decimal('600.000'), Decimal('900.0000'))
+        assert (dwp.step, dwp.planned_qty, dwp.planned_cif) == ('DWP', Decimal('400.000'), Decimal('2600.0000'))
+        assert sum((line.planned_qty for line in result.lines), Decimal('0')) == Decimal('1000')
+        assert sum((line.planned_cif for line in result.lines), Decimal('0')) == Decimal('3500')
+        assert result.remaining_cif == 0
+
+    def test_configured_action_blocks_above_max_without_fabricating_price(self):
+        result = plan_e5_items(
+            [E5Item(key='milk', category='MILK PRODUCTS', qty=Decimal('1000'))],
+            Decimal('7000'),
+            split_allocation_config=SPLIT_BY_UNIT_VALUE,
+        )
+        assert result.lines == []
+        assert result.remaining_cif == Decimal('7000')
+        assert result.blocked_allocations[0]['status'] == 'ABOVE_MAX_SUPPORTED_UNIT_PRICE'

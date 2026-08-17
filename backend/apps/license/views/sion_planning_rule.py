@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from rest_framework import serializers, status, viewsets
@@ -6,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.permissions import LicensePermission
-from apps.license.models import SionPlanningRule
+from apps.license.models import SionPlanningAction, SionPlanningProfile, SionPlanningRule
 from apps.license.serializers import SionPlanningRuleSerializer
 from apps.license.services.canonical_planning_service import (
     CompanyIsolationError, PlanningError,
@@ -35,6 +36,47 @@ class SionPlanRequestSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(
         choices=("NEW", "ALL"), required=False, default="NEW",
     )
+
+
+class RuleAllocationStrategySerializer(serializers.Serializer):
+    """Bounded UI contract backed by the canonical SPLIT action config."""
+
+    strategy = serializers.ChoiceField(choices=("STANDARD", "SPLIT_BY_UNIT_VALUE"))
+    config = serializers.JSONField(required=False)
+
+    def validate(self, values):
+        if values["strategy"] == "STANDARD":
+            return values
+        config = values.get("config")
+        if not isinstance(config, dict):
+            raise serializers.ValidationError({"config": "Split configuration is required."})
+        if config.get("algorithm") != "SPLIT_BY_UNIT_VALUE":
+            raise serializers.ValidationError({"config": "Unsupported split algorithm."})
+        if config.get("basis") != "BALANCE_CIF_PER_QUANTITY":
+            raise serializers.ValidationError({"config": "Unsupported allocation basis."})
+        buckets = config.get("buckets")
+        if not isinstance(buckets, list) or len(buckets) != 2:
+            raise serializers.ValidationError({"config": "Exactly two allocation buckets are required."})
+        parsed = []
+        for index, bucket in enumerate(buckets):
+            if not isinstance(bucket, dict) or not str(bucket.get("code", "")).strip():
+                raise serializers.ValidationError({"config": f"Bucket {index + 1} requires a code."})
+            try:
+                minimum = Decimal(str(bucket["min_price"]))
+                maximum = Decimal(str(bucket["max_price"]))
+                reference = Decimal(str(bucket["reference_price"]))
+            except (KeyError, InvalidOperation, TypeError, ValueError):
+                raise serializers.ValidationError({"config": f"Bucket {index + 1} prices must be decimals."})
+            if (
+                not minimum.is_finite() or not maximum.is_finite() or not reference.is_finite()
+                or minimum < 0 or maximum <= minimum or not minimum <= reference <= maximum
+            ):
+                raise serializers.ValidationError({"config": f"Bucket {index + 1} has an invalid price band."})
+            parsed.append((minimum, maximum, reference))
+        lower, upper = parsed
+        if upper[0] != lower[1] or upper[1] <= lower[1] or upper[2] <= lower[2]:
+            raise serializers.ValidationError({"config": "Bucket bands must be adjacent and ordered."})
+        return values
 
 
 class SionPlanningRuleViewSet(viewsets.ModelViewSet):
@@ -127,6 +169,79 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
 
     def _company_id(self):
         return None if self.request.user.is_superuser else self.request.user.company_id
+
+    @staticmethod
+    def _allocation_action_for(rule):
+        profile = SionPlanningProfile.objects.filter(
+            sion_id=rule.sion_id, is_active=True,
+        ).order_by("-version", "-pk").first()
+        if not profile:
+            return None
+        actions = list(SionPlanningAction.objects.filter(
+            profile=profile, action_type="SPLIT",
+        ).order_by("priority", "pk"))
+        output = (rule.execution_output or "").strip().casefold()
+        if output:
+            for candidate in actions:
+                config = candidate.config or {}
+                categories = {
+                    str(config.get(key, "")).strip().casefold()
+                    for key in ("category", "milk_category", "source_category")
+                }
+                if output in categories:
+                    return candidate
+        return actions[0] if len(actions) == 1 else None
+
+    @action(detail=True, methods=("get", "patch"), url_path="allocation-strategy")
+    def allocation_strategy(self, request, pk=None):
+        """Read/update the rule's canonical profile SPLIT action; never copy it onto the rule."""
+        rule = self.get_object()
+        split_action = self._allocation_action_for(rule)
+        if request.method == "GET":
+            if not split_action or not split_action.is_active:
+                return Response({"strategy": "STANDARD", "action_id": getattr(split_action, "pk", None)})
+            return Response({
+                "strategy": "SPLIT_BY_UNIT_VALUE", "action_id": split_action.pk,
+                "config": split_action.config,
+            })
+
+        serializer = RuleAllocationStrategySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        if not split_action:
+            return Response(
+                {"detail": "No canonical SPLIT action is configured for this rule output."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        with transaction.atomic():
+            split_action = SionPlanningAction.objects.select_for_update().get(pk=split_action.pk)
+            if values["strategy"] == "STANDARD":
+                split_action.is_active = False
+                split_action.modified_by = request.user
+                split_action.save(update_fields=("is_active", "modified_by", "modified_on"))
+                response = {"strategy": "STANDARD", "action_id": split_action.pk}
+            else:
+                # Preserve pipeline membership/category/granularity and any
+                # other proven execution mechanics; only the bounded allocator
+                # fields are UI-owned.
+                requested = values["config"]
+                config = dict(split_action.config or {})
+                for key in ("algorithm", "basis", "buckets"):
+                    config[key] = requested[key]
+                split_action.config = config
+                split_action.is_active = True
+                split_action.version += 1
+                split_action.modified_by = request.user
+                split_action.full_clean()
+                split_action.save(update_fields=(
+                    "config", "is_active", "version", "modified_by", "modified_on",
+                ))
+                response = {
+                    "strategy": "SPLIT_BY_UNIT_VALUE", "action_id": split_action.pk,
+                    "config": split_action.config,
+                }
+        self._audit("RULE_ALLOCATION_UPDATED", rule=rule, extra={"strategy": values["strategy"]})
+        return Response(response)
 
     def _execute(self, request, *, persist):
         try:

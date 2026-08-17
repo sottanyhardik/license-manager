@@ -19,6 +19,12 @@ class _Rule:
     priority: int
 
 
+@dataclass(frozen=True)
+class _Action:
+    action_type: str
+    config: dict
+
+
 def _configuration(code):
     document = get_legacy_planner_config(code)
     specs = next(action["config"]["rules"] for action in document["actions"] if action["action_type"] == "MATCH")
@@ -64,6 +70,31 @@ class SionPlanningExecutionTests(SimpleTestCase):
             configuration=_configuration("E5"),
         )
         self.assertEqual(legacy, bridged)
+
+    def test_e5_configured_split_action_is_used_by_canonical_adapter(self):
+        config = _configuration("E5")
+        split = _Action("SPLIT", {
+            "algorithm": "SPLIT_BY_UNIT_VALUE",
+            "basis": "BALANCE_CIF_PER_QUANTITY",
+            "category": "MILK PRODUCTS",
+            "buckets": [
+                {"code": "SWP", "min_price": "0.00", "max_price": "1.50", "reference_price": "1.50"},
+                {"code": "DWP", "min_price": "1.50", "max_price": "6.50", "reference_price": "6.50"},
+            ],
+        })
+        configured = ResolvedPlannerConfiguration(
+            config.sion_code, config.rules, config.output_by_rule_key, (split,),
+        )
+        result = SionPlanningExecutionService.execute(
+            type("Sion", (), {"norm_class": "E5"})(),
+            [{"record_id": "milk", "hs_code": "0404", "description": "milk", "quantity": "1000"}],
+            "3500", configuration=configured,
+        )
+        self.assertEqual([(line.step, line.planned_qty, line.planned_cif) for line in result.lines], [
+            ("SWP", Decimal("600.000"), Decimal("900.0000")),
+            ("DWP", Decimal("400.000"), Decimal("2600.0000")),
+        ])
+        self.assertEqual(result.remaining_cif, Decimal("0"))
 
     def test_db_rule_order_is_first_match_authority(self):
         config = _configuration("E5")

@@ -1317,11 +1317,6 @@ class SionPlanningRule(AuditModel):
         related_name="sion_planning_rules",
         help_text="Where matched items are allocated to",
     )
-    percentage_constraint = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True,
-        validators=[MinValueValidator(DEC_0)],
-        help_text="Maximum percentage of total eligible license quantity that can be allocated to this rule's output item (e.g., 50.00 for 50%). Null means no constraint.",
-    )
     name = models.CharField(max_length=255)
     version = models.PositiveIntegerField(default=1)
     expression = models.JSONField(default=dict)

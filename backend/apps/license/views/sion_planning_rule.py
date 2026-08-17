@@ -54,7 +54,7 @@ class LicensePlanRequestSerializer(serializers.Serializer):
 class RuleAllocationStrategySerializer(serializers.Serializer):
     """Bounded UI contract backed by the canonical SPLIT action config."""
 
-    strategy = serializers.ChoiceField(choices=("STANDARD", "SPLIT_BY_UNIT_VALUE", "SPLIT_BY_PERCENTAGE"))
+    strategy = serializers.ChoiceField(choices=("STANDARD", "SPLIT_BY_UNIT_VALUE"))
     config = serializers.JSONField(required=False)
 
     def validate(self, values):
@@ -68,8 +68,6 @@ class RuleAllocationStrategySerializer(serializers.Serializer):
 
         if strategy == "SPLIT_BY_UNIT_VALUE":
             return self._validate_unit_value_config(config)
-        elif strategy == "SPLIT_BY_PERCENTAGE":
-            return self._validate_percentage_config(config)
 
         return values
 
@@ -110,12 +108,6 @@ class RuleAllocationStrategySerializer(serializers.Serializer):
             if next_min != current_max or next_max <= current_max or next_ref <= current_ref:
                 raise serializers.ValidationError({"config": f"Buckets {i + 1} and {i + 2} must be adjacent and ordered."})
         return {"strategy": "SPLIT_BY_UNIT_VALUE", "config": config}
-
-    def _validate_percentage_config(self, config):
-        """Validate SPLIT_BY_PERCENTAGE configuration."""
-        # Percentage config is loaded from the rule; user provides no custom config
-        # Config validation happens when the rule is retrieved
-        return {"strategy": "SPLIT_BY_PERCENTAGE", "config": config or {}}
 
 
 class SionPlanningRuleViewSet(viewsets.ModelViewSet):

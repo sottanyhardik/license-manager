@@ -74,7 +74,9 @@ describe("SION-first planning workspace", () => {
     it("confirms Force All and submits ALL mode through the same API", async () => {
         vi.mocked(rulesApi.planSavedSionRules).mockResolvedValue({ status: "COMPLETED" });
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
-        fireEvent.click(await screen.findByRole("button", { name: "Force All" }));
+        const forceButton = await screen.findByRole("button", { name: "Force All" });
+        await waitFor(() => expect(forceButton).toBeEnabled());
+        fireEvent.click(forceButton);
         expect(screen.getByRole("alertdialog", { name: "Force re-plan E5" })).toBeInTheDocument();
         fireEvent.click(screen.getAllByRole("button", { name: "Force All" })[1]);
         await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "ALL"));

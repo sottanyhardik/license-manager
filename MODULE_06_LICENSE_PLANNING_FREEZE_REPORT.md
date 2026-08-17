@@ -141,6 +141,20 @@ priority, evaluates them, aggregates their non-overlapping item lines and makes
 one canonical write per license. Requests containing `rules` or `expression`
 are rejected.
 
+The workspace now offers **New Only** and **Force All** through this same
+endpoint. NEW is the safe default and skips licenses already at least 99%
+planned against their live balance. ALL requires a warning confirmation and
+reprocesses the full eligible universe for the selected SION, preserving the
+legacy command meaning. Empty or omitted license filters still mean the normal
+eligible universe.
+
+`python manage.py plan_norms` is now only an input/output adapter over
+`SionPlanningExecutionService`. Positional and `--sion` selection, `--new`,
+`--all`, and `--dry-run` all use the same active DB-rule load and domain result
+as the API. A SION row lock prevents concurrent UI and CLI runs for the same
+norm. E126/E132/A3627 remain centralized compatibility adapters, so their
+DB-classifier cutover is not claimed complete.
+
 Priority is read-only in the normal serializer. `SionRulePriorityService`
 assigns new rules at the next per-SION position under a SION row lock,
 normalizes active positions after retirement, and owns the atomic `reorder`
@@ -226,6 +240,9 @@ prices, and batch-loads financial balances for the applicable license set.
 - Frontend full regression: 397 passed across 53 files (the removed file was
   the retired duplicate NormRowPlanner test).
 - Frontend typecheck and production build: passed.
+- Dual-mode UI/API/CLI focused backend suite: 36 passed.
+- Fresh focused frontend dual-mode suite: 12 passed; typecheck passed.
+- Django system check and migration drift check: passed.
 - Local migration 0019: applied and runtime columns verified.
 - E1/E5 cross-SION preview and reorder isolation: passed.
 - Focused Module 05 regression suite: 25 passed.

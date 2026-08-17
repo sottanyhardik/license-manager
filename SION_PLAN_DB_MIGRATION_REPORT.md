@@ -53,6 +53,26 @@ E126/E132/A3627 remain on their existing execution adapters until their
 low-level self-classifiers can accept the same resolved DB configuration
 without changing split, preservation, grouping or weighted-price mechanics.
 
+### Canonical NEW / FORCE ALL execution (2026-08-17)
+
+The REST endpoint and `plan_norms` command now invoke the same
+`SionPlanningExecutionService` with mode `NEW` or `ALL`. Both reload active DB
+rules for the selected SION in priority order; neither accepts browser rules.
+
+- `NEW` is the backward-compatible default. It uses active licenses with
+  positive live balance and skips licenses already planned to at least 99%.
+- `ALL` preserves legacy `--all`: reprocess the full eligible universe for one
+  selected SION. It never means every SION.
+- Empty or omitted `license_ids` selects the normal eligible universe.
+- `--dry-run` invokes the same service with persistence disabled.
+- A SION row lock serializes API and command runs across rule reload,
+  calculation, and persistence.
+
+Supported forms include `plan_norms E1`, `plan_norms --sion E1 --new`, and
+`plan_norms --sion E1 --all`. E1/E5 use DB classification plus proven legacy
+mechanics. E126/E132/A3627 remain centralized transitional factory adapters
+and are not claimed as DB-classifier cutovers.
+
 ### plan-sion 400 resolution
 
 The exact local failure was reproduced: omitted and empty `license_ids` both

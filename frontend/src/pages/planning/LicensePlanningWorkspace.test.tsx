@@ -34,17 +34,17 @@ describe("SION-first planning workspace", () => {
         vi.mocked(rulesApi.planSavedSionRules).mockResolvedValue({ rules_executed: [{ id: 4, priority: 10 }] });
         render(<MemoryRouter initialEntries={["/planning?license_id=42"]}><LicensePlanningWorkspace /></MemoryRouter>);
         fireEvent.keyDown(screen.getByLabelText("SION Norm"), { key: "ArrowDown" }); fireEvent.click(await screen.findByText("E5"));
-        fireEvent.click(await screen.findByRole("button", { name: /PLAN E5/ }));
-        await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7));
-        expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7);
+        fireEvent.click(await screen.findByRole("button", { name: "New Only" }));
+        await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "NEW"));
+        expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "NEW");
     });
     it("does not enable preview or PLAN when only inactive rules are returned", async () => {
         vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...existing, is_active: false }]);
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
-        const planButton = await screen.findByRole("button", { name: /PLAN E5/ });
+        const planButton = await screen.findByRole("button", { name: "New Only" });
+        await waitFor(() => expect(screen.getByText(/Activate and save at least one rule/)).toBeInTheDocument());
         expect(planButton).toBeDisabled();
         expect(screen.getByRole("button", { name: /Preview E5 Plan/ })).toBeDisabled();
-        expect(screen.getByText(/Activate and save at least one rule/)).toBeInTheDocument();
         fireEvent.click(planButton);
         expect(rulesApi.planSavedSionRules).not.toHaveBeenCalled();
     });
@@ -68,8 +68,17 @@ describe("SION-first planning workspace", () => {
         const previewButton = await screen.findByRole("button", { name: /Preview E5 Plan/ });
         await waitFor(() => expect(previewButton).toBeEnabled());
         fireEvent.click(previewButton);
-        await waitFor(() => expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7));
+        await waitFor(() => expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "NEW"));
         expect(rulesApi.planSavedSionRules).not.toHaveBeenCalled();
+    });
+    it("confirms Force All and submits ALL mode through the same API", async () => {
+        vi.mocked(rulesApi.planSavedSionRules).mockResolvedValue({ status: "COMPLETED" });
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: "Force All" }));
+        expect(screen.getByRole("alertdialog", { name: "Force re-plan E5" })).toBeInTheDocument();
+        fireEvent.click(screen.getAllByRole("button", { name: "Force All" })[1]);
+        await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "ALL"));
+        expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "ALL");
     });
     it("protects a dirty editor and discards all norm-specific state on switch", async () => {
         vi.mocked(rulesApi.fetchSionPlanningRules).mockImplementation(async (id) => id === 7 ? [existing] : []);

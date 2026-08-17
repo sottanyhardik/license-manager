@@ -44,11 +44,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
     bulkUpsertItemPlans,
     deleteItemPlan,
     fetchItemPlans,
     fetchLicense,
 } from "../../services/api/licenseApi";
+import { planLicense } from "../../services/api/planningRuleApi";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure helpers
@@ -412,6 +425,8 @@ export default function PlanningEditor({
     licenseId, licenseNumber, balanceCif = 0, canWrite, onSaved,
 }: PlanningEditorProps) {
     const [loading, setLoading]           = useState(false);
+    const [isPlanning, setIsPlanning]     = useState(false);
+    const [showForceConfirm, setShowForceConfirm] = useState(false);
 
     const [groups, setGroups]             = useState<Group[]>([]);
     const [savedGroups, setSavedGroups]   = useState<Group[]>([]);
@@ -656,8 +671,41 @@ export default function PlanningEditor({
         }
     }, [groups, editingGroupId, load, onSaved]);
 
-    // ── Auto Plan (E1) ────────────────────────────────────────────────────────
+    // ── Auto Plan ────────────────────────────────────────────────────────
 
+    const handlePlan = useCallback(async (mode: "NEW" | "ALL") => {
+        if (!licenseId || isPlanning) return;
+        setIsPlanning(true);
+        try {
+            const result = await planLicense(Number(licenseId), mode);
+            const siansExecuted = result?.total_results?.sions_executed || 0;
+            const linesWritten = result?.total_results?.total_lines_written || 0;
+
+            let message = "";
+            if (linesWritten === 0) {
+                message = "Planning already up to date. No new eligible items were found.";
+            } else if (mode === "ALL") {
+                message = `Force re-plan completed: ${siansExecuted} SION${siansExecuted !== 1 ? 's' : ''}, ${linesWritten} line${linesWritten !== 1 ? 's' : ''} processed`;
+            } else {
+                message = `Planning completed: ${siansExecuted} SION${siansExecuted !== 1 ? 's' : ''}, ${linesWritten} line${linesWritten !== 1 ? 's' : ''} planned`;
+            }
+
+            toast.success(message);
+            await load();
+            onSaved?.();
+        } catch (error) {
+            const message = error && typeof error === 'object' && 'response' in error
+                ? (error as any).response?.data?.error || (error as any).response?.data?.detail || 'Failed to plan license'
+                : 'Failed to plan license';
+            toast.error(message);
+        } finally {
+            setIsPlanning(false);
+            setShowForceConfirm(false);
+        }
+    }, [licenseId, isPlanning, load, onSaved]);
+
+    const handleAutoPlan = () => handlePlan("NEW");
+    const handleForceReplan = () => setShowForceConfirm(true);
 
     // ── Derived totals ─────────────────────────────────────────────────────────
 
@@ -722,7 +770,64 @@ export default function PlanningEditor({
                         </span>
                     )}
                 </div>
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={handleAutoPlan}
+                        disabled={isPlanning}
+                        size="sm"
+                        className="gap-2 bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100"
+                    >
+                        {isPlanning ? (
+                            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                        ) : (
+                            <Target className="size-3.5" aria-hidden="true" />
+                        )}
+                        {isPlanning ? "Planning..." : "Auto Plan"}
+                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="px-2"
+                                disabled={isPlanning}
+                            >
+                                <ChevronDown className="size-4" aria-hidden="true" />
+                                <span className="sr-only">Planning options</span>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={handleAutoPlan} disabled={isPlanning}>
+                                Auto Plan — New Only
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleForceReplan} disabled={isPlanning}>
+                                Force Re-plan
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </div>
+
+            <Dialog open={showForceConfirm} onOpenChange={setShowForceConfirm}>
+                <DialogContent>
+                    <DialogTitle>Re-plan this license?</DialogTitle>
+                    <DialogDescription className="py-4">
+                        Existing planning for license {licenseNumber} will be
+                        recalculated using the current saved planning rules.
+                    </DialogDescription>
+                    <div className="flex gap-2 justify-end">
+                        <Button variant="outline" onClick={() => setShowForceConfirm(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => handlePlan("ALL")}
+                        >
+                            Force Re-plan
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* ── Summary cards (CIF only) ──────────────────────────── */}
             <div className="grid grid-cols-3 gap-2">

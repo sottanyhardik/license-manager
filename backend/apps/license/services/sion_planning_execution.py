@@ -184,10 +184,10 @@ class SionPlanningExecutionService:
 
     @classmethod
     def supports(cls, sion) -> bool:
-        if sion.norm_class.strip().upper() not in cls._registry:
-            return False
-        from apps.license.models import SionPlanningProfile
-        return SionPlanningProfile.objects.filter(sion=sion).exists()
+        # Adapter dispatch is a property of the canonical SION code.  A
+        # missing optional migration profile must not send E1/E5 through the
+        # generic planner (which has different price-conflict semantics).
+        return sion.norm_class.strip().upper() in cls._registry
 
     @classmethod
     def resolve_configuration(cls, sion) -> ResolvedPlannerConfiguration:
@@ -206,20 +206,31 @@ class SionPlanningExecutionService:
         profile = SionPlanningProfile.objects.filter(sion=sion).order_by(
             "-is_active", "-version", "-pk",
         ).prefetch_related("actions").first()
-        if profile is None:
-            raise PlannerConfigurationError("The selected SION has no active execution profile.")
         output_by_rule_key: dict[str, str] = {}
-        for action in profile.actions.filter(is_active=True).order_by("priority", "pk"):
-            output_by_rule_key.update(action.config.get("rule_outputs", {}))
+        if profile is not None:
+            for action in profile.actions.filter(is_active=True).order_by("priority", "pk"):
+                output_by_rule_key.update(action.config.get("rule_outputs", {}))
+        # UI-created rules already carry their execution bucket.  Use it
+        # directly so DB rules remain executable even when an older database
+        # predates the optional profile migration.  Rule name is the UI's
+        # bucket definition for newly-created rules that have no hidden
+        # execution_output field.
+        import re
+        for rule in rules:
+            output = (rule.execution_output or re.sub(r"^\s*\d+\s*[-–—.]?\s*", "", rule.name)).strip()
+            if output:
+                if rule.stable_key:
+                    output_by_rule_key.setdefault(str(rule.stable_key), output)
+                output_by_rule_key.setdefault(f"pk:{rule.pk}", output)
         allowed_outputs = set(output_by_rule_key.values())
         for rule in rules:
             if rule.execution_output:
-                if rule.execution_output not in allowed_outputs:
+                if profile is not None and rule.execution_output not in allowed_outputs:
                     raise PlannerConfigurationError(
                         f"Saved rule {rule.pk} has unsupported execution output {rule.execution_output!r}."
                     )
                 continue
-            if rule.stable_key and rule.stable_key in output_by_rule_key:
+            if (rule.stable_key and rule.stable_key in output_by_rule_key) or f"pk:{rule.pk}" in output_by_rule_key:
                 continue
             raise PlannerConfigurationError(
                 f"Saved rule {rule.pk} has no execution output. Save an execution bucket before planning."

@@ -142,6 +142,13 @@ def test_plan_sion_api_uses_db_classifier_and_preserves_legacy_mechanics(
     assert force_all.data["mode"] == "ALL"
     assert force_all.data["write_results"][0]["status"] == "PLANNED"
 
+    force_all_without_license_ids = client.post(
+        "/api/sion-planning-rules/plan-sion/",
+        {"sion_id": sions[code].pk, "mode": "ALL"}, format="json",
+    )
+    assert force_all_without_license_ids.status_code == 200, force_all_without_license_ids.data
+    assert force_all_without_license_ids.data["mode"] == "ALL"
+
     LicenseItemPlan.objects.filter(license=license_obj).update(
         planned_quantity=Decimal("0.001"), planned_cif_fc=Decimal("0.01"),
     )
@@ -158,6 +165,26 @@ def test_plan_sion_rejects_unknown_mode_before_execution():
     serializer = SionPlanRequestSerializer(data={"sion_id": 1, "mode": "EVERYTHING"})
     assert not serializer.is_valid()
     assert "mode" in serializer.errors
+
+
+def test_registered_sion_uses_db_rules_when_optional_profile_is_absent():
+    head = HeadSIONNormsModel.objects.create(name="Profile-independent bridge")
+    e1 = SionNormClassModel.objects.create(
+        head_norm=head, norm_class="E1", is_active=True,
+    )
+    rule = SionPlanningRule.objects.create(
+        sion=e1, name="001 COCOA MASS", expression={
+            "operator": "OR", "conditions": [{
+                "field": "HSN", "operator": "CONTAINS", "value": "1803",
+            }],
+        }, max_unit_price=Decimal("10"), unit="kg", priority=1,
+        is_active=True, execution_output="",
+    )
+
+    assert SionPlanningExecutionService.supports(e1)
+    configuration = SionPlanningExecutionService.resolve_configuration(e1)
+    assert configuration.rules == (rule,)
+    assert configuration.output_by_rule_key[f"pk:{rule.pk}"] == "COCOA MASS"
 
 
 def test_force_all_plans_every_eligible_e1_license_and_is_idempotent():

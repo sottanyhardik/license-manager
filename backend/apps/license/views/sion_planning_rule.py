@@ -242,16 +242,18 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         if request.method == "GET":
             if not split_action or not split_action.is_active:
                 return Response({"strategy": "STANDARD", "action_id": getattr(split_action, "pk", None)})
+            action_config = split_action.config or {}
+            strategy = "SPLIT_BY_PERCENTAGE" if action_config.get("algorithm") == "SPLIT_BY_PERCENTAGE" else "SPLIT_BY_UNIT_VALUE"
             return Response({
-                "strategy": "SPLIT_BY_UNIT_VALUE", "action_id": split_action.pk,
-                "config": split_action.config,
+                "strategy": strategy, "action_id": split_action.pk,
+                "config": action_config,
             })
 
         serializer = RuleAllocationStrategySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
         with transaction.atomic():
-            if not split_action and values["strategy"] == "SPLIT_BY_UNIT_VALUE":
+            if not split_action and values["strategy"] in ("SPLIT_BY_UNIT_VALUE", "SPLIT_BY_PERCENTAGE"):
                 profile = SionPlanningProfile.objects.filter(
                     sion_id=rule.sion_id, is_active=True,
                 ).order_by("-version", "-pk").first()
@@ -287,10 +289,41 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 split_action.modified_by = request.user
                 split_action.save(update_fields=("is_active", "modified_by", "modified_on"))
                 response = {"strategy": "STANDARD", "action_id": split_action.pk}
+            elif values["strategy"] == "SPLIT_BY_PERCENTAGE":
+                # Load all percentage-constrained rules for this SION
+                percentage_rules = SionPlanningRule.objects.filter(
+                    sion_id=rule.sion_id,
+                    percentage_constraint__isnull=False,
+                ).exclude(percentage_constraint=Decimal("0")).order_by("output_item__name")
+
+                config = dict(split_action.config or {})
+                config["source_rule_id"] = rule.pk
+                config["category"] = (rule.execution_output or rule.name).strip()
+                config["algorithm"] = "SPLIT_BY_PERCENTAGE"
+                config["sion_id"] = rule.sion_id
+                config["percentage_rules"] = [
+                    {
+                        "rule_id": r.pk,
+                        "output_code": (r.output_item.name if r.output_item else "").upper(),
+                        "percentage": str(r.percentage_constraint),
+                    }
+                    for r in percentage_rules
+                ]
+
+                split_action.config = config
+                split_action.is_active = True
+                split_action.version += 1
+                split_action.modified_by = request.user
+                split_action.full_clean()
+                split_action.save(update_fields=(
+                    "config", "is_active", "version", "modified_by", "modified_on",
+                ))
+                response = {
+                    "strategy": "SPLIT_BY_PERCENTAGE", "action_id": split_action.pk,
+                    "config": split_action.config,
+                }
             else:
-                # Preserve pipeline membership/category/granularity and any
-                # other proven execution mechanics; only the bounded allocator
-                # fields are UI-owned.
+                # SPLIT_BY_UNIT_VALUE
                 requested = values["config"]
                 config = dict(split_action.config or {})
                 config["source_rule_id"] = rule.pk

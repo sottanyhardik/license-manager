@@ -102,59 +102,68 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
 
     const rows = data?.rows ?? [];
     const norm = data?.norm;
+    const canPlan = !!norm;
 
     return (
         <div>
-            <div className="mb-6 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-lg font-semibold">
-                    <div className="size-5 rounded-full bg-blue-100 flex items-center justify-center">
-                        <div className="size-2 rounded-full bg-blue-600" />
+            <div className="mb-6 flex items-center justify-between gap-4">
+                <div>
+                    <h3 className="flex items-center gap-2 text-lg font-semibold mb-2">
+                        <div className="size-5 rounded-full bg-blue-100 flex items-center justify-center">
+                            <div className="size-2 rounded-full bg-blue-600" />
+                        </div>
+                        Plan utilization
+                    </h3>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">SION Norm</span>
+                        <Badge variant={norm ? "info" : "secondary"}>{norm || "—"}</Badge>
                     </div>
-                    Plan utilization
-                </h3>
-                <div className="flex items-center gap-2">
-                    <Button
-                        onClick={handleAutoPlan}
-                        disabled={isPlanning || !norm}
-                        size="sm"
-                        variant="outline"
-                        className="gap-2 text-amber-600 border-amber-200 hover:bg-amber-50"
-                    >
-                        {isPlanning ? (
-                            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                        ) : (
-                            <Target className="size-3.5" aria-hidden="true" />
-                        )}
-                        {isPlanning ? "Planning..." : "Auto Plan"}
-                    </Button>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="px-2"
-                                disabled={isPlanning || !norm}
-                            >
-                                <ChevronDown className="size-4" aria-hidden="true" />
-                                <span className="sr-only">Planning options</span>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={handleAutoPlan} disabled={isPlanning}>
-                                Auto Plan — New Only
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleForceReplan} disabled={isPlanning}>
-                                Force Re-plan
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
                 </div>
-            </div>
-
-            <div className="mb-4 flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">SION Norm</span>
-                    <Badge variant={norm ? "info" : "secondary"}>{norm || "—"}</Badge>
+                <div className="flex flex-col items-end gap-2">
+                    <div className="flex items-center gap-2">
+                        {canPlan ? (
+                            <>
+                                <Button
+                                    onClick={handleAutoPlan}
+                                    disabled={isPlanning}
+                                    size="sm"
+                                    className="gap-2 bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100"
+                                >
+                                    {isPlanning ? (
+                                        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                                    ) : (
+                                        <Target className="size-3.5" aria-hidden="true" />
+                                    )}
+                                    {isPlanning ? "Planning..." : "Auto Plan"}
+                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="px-2"
+                                            disabled={isPlanning}
+                                        >
+                                            <ChevronDown className="size-4" aria-hidden="true" />
+                                            <span className="sr-only">Planning options</span>
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48">
+                                        <DropdownMenuItem onClick={handleAutoPlan} disabled={isPlanning}>
+                                            Auto Plan — New Only
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={handleForceReplan} disabled={isPlanning}>
+                                            Force Re-plan
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </>
+                        ) : (
+                            <div className="text-xs text-muted-foreground italic">
+                                No supported export norm detected
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LicensePlanningWorkspace, { planningPath } from "./LicensePlanningWorkspace";
@@ -80,6 +80,43 @@ describe("SION-first planning workspace", () => {
         fireEvent.click(await screen.findByRole("button", { name: "Group" }));
         expect(screen.getByLabelText("Nested group logic")).toBeInTheDocument();
         expect(screen.getAllByLabelText(/Condition 1 field/).length).toBeGreaterThan(1);
+    });
+    it("removes all match rules only after destructive confirmation and marks the draft dirty", async () => {
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: /Edit/ }));
+        fireEvent.click(screen.getByRole("button", { name: "Remove All Match Rules" }));
+        expect(screen.getByText("Remove all match rules?")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+        expect(screen.getByLabelText("Condition 1 field")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Remove All Match Rules" }));
+        fireEvent.click(screen.getByRole("button", { name: "Remove All" }));
+        expect(screen.queryByLabelText("Condition 1 field")).not.toBeInTheDocument();
+        expect(screen.getByText("No match rules configured. Add a condition or group.")).toBeInTheDocument();
+        expect(screen.getByText(/Unsaved changes/)).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Remove All Match Rules" })).not.toBeInTheDocument();
+    });
+    it("removes a populated nested group only after confirmation while retaining condition removal", async () => {
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: /Edit/ }));
+        fireEvent.click(screen.getByRole("button", { name: "Group" }));
+        fireEvent.click(screen.getByRole("button", { name: "Remove Group" }));
+        const dialog = screen.getByRole("alertdialog");
+        expect(within(dialog).getByText("Remove populated group?")).toBeInTheDocument();
+        fireEvent.click(within(dialog).getByRole("button", { name: "Remove Group" }));
+        expect(screen.queryByLabelText("Nested group logic")).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Remove" })).toBeInTheDocument();
+    });
+    it("removes an empty nested group immediately without confirmation and never offers root removal", async () => {
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: /Edit/ }));
+        fireEvent.click(screen.getByRole("button", { name: "Group" }));
+        const removeButtons = screen.getAllByRole("button", { name: "Remove" });
+        fireEvent.click(removeButtons[removeButtons.length - 1]);
+        expect(screen.getAllByText("No match rules configured. Add a condition or group.")).toHaveLength(1);
+        fireEvent.click(screen.getByRole("button", { name: "Remove Group" }));
+        expect(screen.queryByText("Remove populated group?")).not.toBeInTheDocument();
+        expect(screen.queryByLabelText("Nested group logic")).not.toBeInTheDocument();
+        expect(screen.getByText("Match rules")).toBeInTheDocument();
     });
     it("loads SION from the URL and keeps the editor closed until New or Edit", async () => {
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);

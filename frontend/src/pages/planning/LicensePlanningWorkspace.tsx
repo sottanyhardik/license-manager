@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, ChevronRight, Eye, Loader2, Pencil, Plus, TestTube2, Zap } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, ChevronRight, Eye, Loader2, Pencil, Plus, TestTube2, Trash2, Zap } from "lucide-react";
 import Select from "react-select";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/api/axios";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { createSionPlanningRule, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, reorderSionPlanningRules, testSionPlanningRule, updateSionPlanningRule, type RuleCondition, type RuleGroup, type SionPlanningMode, type SionPlanningPreview, type SionPlanningPreviewLicense, type SionPlanningRule } from "@/services/api/planningRuleApi";
 
 export function planningPath(licenseId?: string | number | null, origin?: string): string { const p = new URLSearchParams(); if (licenseId) p.set("license_id", String(licenseId)); if (origin) p.set("origin", origin); return `/planning${p.size ? `?${p}` : ""}`; }
@@ -13,14 +14,23 @@ const emptyCondition = (): RuleCondition => ({ field: "HSN", comparator: "CONTAI
 const emptyRule = (sion: number): SionPlanningRule => ({ sion, name: "", expression: { operator: "AND", conditions: [emptyCondition()] }, max_unit_price: "", unit: "KG", priority: 0, is_active: true });
 const isGroup = (node: RuleCondition | RuleGroup): node is RuleGroup => "conditions" in node;
 
-function GroupEditor({ group, onChange, depth = 0 }: { group: RuleGroup; onChange: (g: RuleGroup) => void; depth?: number }) {
+function GroupEditor({ group, onChange, depth = 0, onRemove }: { group: RuleGroup; onChange: (g: RuleGroup) => void; depth?: number; onRemove?: () => void }) {
+    const [confirmation, setConfirmation] = useState<"all" | "group" | null>(null);
     const replace = (index: number, node: RuleCondition | RuleGroup) => onChange({ ...group, conditions: group.conditions.map((old, i) => i === index ? node : old) });
+    const clearAll = () => { onChange({ operator: "AND", conditions: [] }); setConfirmation(null); };
+    const removeGroup = () => { onRemove?.(); setConfirmation(null); };
     return <fieldset className="rounded-lg border p-3"><legend className="px-1 text-xs font-semibold">{depth ? "Nested group" : "Match rules"}</legend>
+        <div className="flex flex-wrap items-center justify-between gap-2">
         <label className="text-xs">Logic <select aria-label={depth ? "Nested group logic" : "Rule logic"} value={group.operator} onChange={(e) => onChange({ ...group, operator: e.target.value as "AND" | "OR" })} className="ml-2 rounded border px-2 py-1"><option value="AND">ALL (AND)</option><option value="OR">ANY (OR)</option></select></label>
+        {depth === 0 ? group.conditions.length > 0 && <Button size="sm" variant="destructive" onClick={() => setConfirmation("all")}><Trash2 className="size-3" />Remove All Match Rules</Button> : <Button size="sm" variant="outline" className="text-destructive" onClick={() => group.conditions.length ? setConfirmation("group") : removeGroup()}><Trash2 className="size-3" />Remove Group</Button>}
+        </div>
         <div className="mt-2 space-y-2">{group.conditions.map((node, index) => isGroup(node)
-            ? <GroupEditor key={index} group={node} depth={depth + 1} onChange={(value) => replace(index, value)} />
+            ? <GroupEditor key={index} group={node} depth={depth + 1} onChange={(value) => replace(index, value)} onRemove={() => onChange({ ...group, conditions: group.conditions.filter((_, i) => i !== index) })} />
             : <div key={index} className="grid gap-2 sm:grid-cols-[180px_160px_1fr_auto]"><select aria-label={`Condition ${index + 1} field`} value={node.field} onChange={(e) => replace(index, { ...node, field: e.target.value as RuleCondition["field"] })} className="rounded border px-2"><option value="HSN">HSN</option><option value="PRODUCT_DESCRIPTION">Product Description</option></select><select aria-label={`Condition ${index + 1} comparator`} value={node.comparator} onChange={(e) => replace(index, { ...node, comparator: e.target.value as RuleCondition["comparator"] })} className="rounded border px-2"><option value="CONTAINS">Contains</option><option value="NOT_CONTAINS">Does not contain</option></select><input aria-label={`Condition ${index + 1} value`} value={node.value} onChange={(e) => replace(index, { ...node, value: e.target.value })} className="rounded border px-2" /><Button variant="ghost" onClick={() => onChange({ ...group, conditions: group.conditions.filter((_, i) => i !== index) })}>Remove</Button></div>)}</div>
+        {!group.conditions.length && <p className="mt-3 rounded border border-dashed p-3 text-center text-xs text-muted-foreground">No match rules configured. Add a condition or group.</p>}
         <div className="mt-2 flex gap-2"><Button size="sm" variant="outline" onClick={() => onChange({ ...group, conditions: [...group.conditions, emptyCondition()] })}><Plus className="size-3" />Condition</Button><Button size="sm" variant="outline" onClick={() => onChange({ ...group, conditions: [...group.conditions, { operator: "AND", conditions: [emptyCondition()] }] })}><Plus className="size-3" />Group</Button></div>
+        <ConfirmDialog show={confirmation === "all"} title="Remove all match rules?" message="This clears every condition and nested group from this rule. Save the rule to apply the change." severity="danger" confirmText="Remove All" onConfirm={clearAll} onCancel={() => setConfirmation(null)} />
+        <ConfirmDialog show={confirmation === "group"} title="Remove populated group?" message="This removes the group and every condition or nested group inside it." severity="danger" confirmText="Remove Group" onConfirm={removeGroup} onCancel={() => setConfirmation(null)} />
     </fieldset>;
 }
 

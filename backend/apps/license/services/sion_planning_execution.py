@@ -242,6 +242,8 @@ class SionPlanningExecutionService:
     @classmethod
     def _eligible_licenses(cls, sion, license_ids=None, *, company_id=None):
         from apps.license.models import LicenseDetailsModel
+        from django.db.models import Q
+        from django.utils import timezone
         from apps.license.services.canonical_planning_service import (
             CanonicalPlanningService, CompanyIsolationError,
         )
@@ -249,6 +251,10 @@ class SionPlanningExecutionService:
         base = LicenseDetailsModel.objects.filter(
             export_license__norm_class=sion,
             flags__is_active=True,
+            flags__is_expired=False,
+        ).filter(
+            Q(license_expiry_date__isnull=True)
+            | Q(license_expiry_date__gte=timezone.localdate()),
         )
         if license_ids:
             ids = CanonicalPlanningService._strict_id_list(license_ids, "license_ids")
@@ -504,7 +510,19 @@ class SionPlanningExecutionService:
                     "remaining_balance_cif": remaining,
                     "status": "PLANNED" if persist else "PREVIEWED",
                 }
-                if persist:
+                if not canonical_lines:
+                    # A license-level Planned badge is canonically derived from
+                    # LicenseItemPlan existence. Never claim PLANNED (or erase a
+                    # valid existing plan) when the active rules produced no
+                    # persistable line.
+                    result["status"] = "SKIPPED_NO_MATCH"
+                    if persist:
+                        result["write_result"] = {
+                            "license_id": license_obj.pk,
+                            "status": "SKIPPED_NO_MATCH",
+                            "reason": "Active saved rules produced no persistable planning lines.",
+                        }
+                elif persist:
                     result["write_result"] = CanonicalPlanningService.build_canonical_plan(
                         license_id=license_obj.pk, norm_class=sion.norm_class,
                         items=canonical_lines,
@@ -512,6 +530,7 @@ class SionPlanningExecutionService:
                         company_id=company_id,
                     )
                 results.append(result)
+        raw_results = results
         if not persist:
             results = cls._group_preview(results, licenses, configuration, sion)
         rules = [{"id": rule.pk, "version": rule.version, "priority": rule.priority}
@@ -524,23 +543,39 @@ class SionPlanningExecutionService:
             "licenses": results,
             "results": results,
             "write_results": [row["write_result"] for row in results] if persist else [],
-            "eligible_licenses": len(results),
+            "eligible_licenses": len(licenses),
+            "matched_licenses": len(results),
             "planned_licenses": sum(
-                bool(row.get("lines")) and row.get("status") != "SKIPPED_ALREADY_PLANNED"
-                for row in results
+                bool(row.get("lines")) and row.get("status") not in {
+                    "SKIPPED_ALREADY_PLANNED", "SKIPPED_NO_MATCH",
+                }
+                for row in raw_results
             ),
             "already_planned": sum(
-                row.get("status") == "SKIPPED_ALREADY_PLANNED" for row in results
+                row.get("status") == "SKIPPED_ALREADY_PLANNED" for row in raw_results
             ),
-            "matched_items": sum(len(row.get("lines", ())) for row in results),
+            "skipped_count": sum(
+                str(row.get("status", "")).startswith("SKIPPED") for row in raw_results
+            ),
+            "failed_count": 0,
+            "excluded_licenses": [
+                {
+                    "license_id": row["license_id"],
+                    "license_number": row.get("license_number"),
+                    "reason": row["status"],
+                }
+                for row in raw_results if row.get("status") == "SKIPPED_NO_MATCH"
+            ],
+            "matched_items": sum(len(row.get("lines", ())) for row in raw_results),
             "summary": {
                 "rules": len(rules),
                 "rules_processed": len(rules),
                 "active_rules": len(rules),
-                "eligible_licenses": len(results),
-                "matched_items": sum(len(row.get("lines", ())) for row in results),
+                "eligible_licenses": len(licenses),
+                "matched_licenses": len(results),
+                "matched_items": sum(len(row.get("lines", ())) for row in raw_results),
                 "already_planned": sum(
-                    row.get("status") == "SKIPPED_ALREADY_PLANNED" for row in results
+                    row.get("status") == "SKIPPED_ALREADY_PLANNED" for row in raw_results
                 ),
                 "licenses_matched": len(results),
                 "licenses_new": sum(row.get("change_status") == "NEW" for row in results),

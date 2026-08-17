@@ -95,6 +95,43 @@ has its pre-existing per-license query behavior; changing that adapter is
 deferred because this UX correction intentionally does not alter proven
 planner mechanics.
 
+### E1 FORCE ALL population correction (2026-08-17)
+
+The reported one-license result was not caused by `.first()`, pagination,
+company grouping, a loop return, or a uniqueness constraint. The service
+selected and visited all eight local active, non-expired E1 licenses with
+positive live CIF. Only one produced rows because the live DB contained two
+manually saved expressions whose additional description predicates were much
+narrower than the audited E1 classifier. Empty results were then misleadingly
+labelled `PLANNED`, although the license-list badge correctly derives Planned
+from `Exists(LicenseItemPlan)`.
+
+Migration 0024 retains all historical rule versions, deactivates the incomplete
+active subset, and activates the complete audited eight-rule E1 classifier as
+version 2. Runtime execution remains DB-driven. Eligibility now explicitly
+excludes expired flags/dates as well as inactive and non-positive-live-balance
+licenses. An empty computed plan is `SKIPPED_NO_MATCH`; it neither claims
+success nor deletes an existing valid plan. Results expose eligible, planned,
+skipped, failed, and explicit exclusion counts.
+
+Local FORCE ALL was executed twice. Both runs selected 8, planned 6, skipped 2,
+failed 0, and produced exactly 13 plan rows with no duplicates:
+
+| License | Before | Live CIF | Eligible to persist? | After | Reason |
+|---|---|---:|---|---|---|
+| 0311051359 | Planned | 196.48 | Yes | Planned (1 row) | E1 rule match |
+| 0311051945 | Active | 78,025.16 | Yes | Planned (4 rows) | E1 rule matches |
+| 0311051200 | Active | 298,648.74 | Yes | Planned (1 row) | E1 rule match |
+| 0311051201 | Active | 854,892.36 | No | Active | No E1 planning category produced a line |
+| 0311053224 | Active | 21,767.78 | Yes | Planned (3 rows) | E1 rule matches |
+| 0310833996 | Active | 28.77 | No | Active | Planner produced no persistable line at available CIF/minimum quantity |
+| 0311054050 | Active | 120,024.49 | Yes | Planned (1 row) | E1 rule match |
+| 5611004885 | Active | 169,492.39 | Yes | Planned (3 rows) | E1 rule matches |
+
+Four additional active E1 records with zero live CIF were excluded as
+exhausted before planning. Normal API calls remain tenant-scoped; the trusted
+management command processes the complete cross-company E1 population.
+
 ### plan-sion 400 resolution
 
 The exact local failure was reproduced: omitted and empty `license_ids` both

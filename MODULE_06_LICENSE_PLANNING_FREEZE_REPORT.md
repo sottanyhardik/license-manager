@@ -255,6 +255,9 @@ prices, and batch-loads financial balances for the applicable license set.
 - Django system check and migration drift check: passed.
 - License-grouped preview backend integration: 46 passed.
 - License-grouped preview frontend/API suite: 14 passed; typecheck passed.
+- E1 FORCE ALL/configuration regression: 65 focused backend tests passed.
+- Local E1 FORCE ALL reconciliation: 8 selected, 6 planned, 2 explicitly
+  excluded, 0 failed; identical second run and 13 non-duplicated plan rows.
 - Local migration 0019: applied and runtime columns verified.
 - E1/E5 cross-SION preview and reorder isolation: passed.
 - Focused Module 05 regression suite: 25 passed.

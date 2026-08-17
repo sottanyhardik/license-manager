@@ -128,6 +128,8 @@ class Command(BaseCommand):
         matched = summary.get("matched_items", result.get("matched_items", 0))
         planned = result.get("planned_licenses", summary.get("planned_licenses", 0))
         already = result.get("already_planned", summary.get("already_planned", 0))
+        skipped = result.get("skipped_count", summary.get("skipped_count", 0))
+        failed = result.get("failed_count", summary.get("failed_count", 0))
         shortages = result.get("shortages", summary.get("shortages", 0))
 
         self.stdout.write("")
@@ -139,6 +141,8 @@ class Command(BaseCommand):
         self.stdout.write(f"  Matched items       : {matched}")
         self.stdout.write(f"  Planned licenses    : {planned}")
         self.stdout.write(f"  Already planned     : {already}")
+        self.stdout.write(f"  Skipped             : {skipped}")
+        self.stdout.write(f"  Failed              : {failed}")
         self.stdout.write(f"  Shortages           : {shortages}")
         self.stdout.write(f"  Execution time      : {_fmt_duration(monotonic() - started)}")
         # Stable labels retained for scripts which parsed the legacy summary.

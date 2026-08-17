@@ -158,3 +158,77 @@ def test_plan_sion_rejects_unknown_mode_before_execution():
     serializer = SionPlanRequestSerializer(data={"sion_id": 1, "mode": "EVERYTHING"})
     assert not serializer.is_valid()
     assert "mode" in serializer.errors
+
+
+def test_force_all_plans_every_eligible_e1_license_and_is_idempotent():
+    """The batch universe is never reduced to its first license or company."""
+    head = HeadSIONNormsModel.objects.create(name="Force-all population")
+    e1 = SionNormClassModel.objects.create(head_norm=head, norm_class="E1", is_active=True)
+    other = SionNormClassModel.objects.create(head_norm=head, norm_class="E5", is_active=True)
+    import_e1_e5_profiles(activate=True)
+    SionPlanningRule.objects.filter(sion=e1).update(is_active=True)
+
+    companies = [
+        CompanyModel.objects.create(iec=f"FORCE-{index}", name=f"Force {index}")
+        for index in range(2)
+    ]
+
+    def make_license(number, *, norm=e1, balance="1000", expired=False, company=None, hsn_prefix="0802"):
+        license_obj = LicenseDetailsModel.objects.create(
+            exporter=company or companies[0], license_number=number,
+            license_date=date.today(),
+            license_expiry_date=date.today() - timedelta(days=1) if expired else date.today() + timedelta(days=30),
+        )
+        LicenseExportItemModel.objects.create(
+            license=license_obj, norm_class=norm, cif_fc=Decimal(balance),
+        )
+        hs = HSCodeModel.objects.create(
+            hs_code=f"{hsn_prefix}{license_obj.pk:04d}", product_description="Almond", unit="kg",
+        )
+        LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, hs_code=hs, description="Almond",
+            unit="kg", quantity=Decimal("100"), available_quantity=Decimal("100"),
+        )
+        return license_obj
+
+    eligible = [
+        make_license(f"FORCE-E1-{index}", company=companies[index % 2])
+        for index in range(5)
+    ]
+    exhausted = make_license("FORCE-EXHAUSTED", balance="0")
+    expired = make_license("FORCE-EXPIRED", expired=True)
+    non_e1 = make_license("FORCE-E5", norm=other)
+    existing_unmatched = make_license("FORCE-EXISTING", hsn_prefix="9999")
+    existing_item = existing_unmatched.import_license.get()
+    existing_plan = LicenseItemPlan.objects.create(
+        license=existing_unmatched, import_item=existing_item,
+        planned_quantity=Decimal("1"), unit_price=Decimal("1"),
+        planned_cif_fc=Decimal("1"),
+    )
+
+    first = SionPlanningExecutionService.plan_sion(e1, mode="ALL", company_id=None)
+    assert first["eligible_licenses"] == 6
+    assert first["planned_licenses"] == 5
+    assert first["skipped_count"] == 1
+    assert first["failed_count"] == 0
+    assert {row["license_id"] for row in first["write_results"]} == {
+        *(row.pk for row in eligible), existing_unmatched.pk,
+    }
+    assert sum(row["status"] == "PLANNED" for row in first["write_results"]) == 5
+    assert first["excluded_licenses"] == [{
+        "license_id": existing_unmatched.pk,
+        "license_number": existing_unmatched.license_number,
+        "reason": "SKIPPED_NO_MATCH",
+    }]
+    assert LicenseItemPlan.objects.filter(pk=existing_plan.pk).exists()
+    assert all(LicenseItemPlan.objects.filter(license=row).exists() for row in eligible)
+    assert not LicenseItemPlan.objects.filter(
+        license_id__in=[exhausted.pk, expired.pk, non_e1.pk],
+    ).exists()
+
+    line_count = LicenseItemPlan.objects.filter(license_id__in=[row.pk for row in eligible]).count()
+    second = SionPlanningExecutionService.plan_sion(e1, mode="ALL", company_id=None)
+    assert second["planned_licenses"] == 5
+    assert LicenseItemPlan.objects.filter(
+        license_id__in=[row.pk for row in eligible],
+    ).count() == line_count

@@ -35,6 +35,24 @@ prove the generic numerical primitives, but the live auto-plan adapters also
 carry physical-group anchoring and existing split-preservation behavior that
 still requires read-only real-data shadow coverage before lossless cutover.
 
+## Transitional legacy-mechanics bridge
+
+`SionPlanningExecutionService` is now the single temporary adapter registry.
+For E1 and E5 it loads active DB rules in persisted priority order, resolves
+their profile-owned output categories, performs classification from those DB
+expressions, and passes the resulting typed items into the unchanged
+`plan_e1_items` / `plan_e5_items` waterfall functions. Focused old-versus-DB
+tests compare the complete result objects exactly and pass for both engines.
+
+The SION-first API explicitly accepts omitted or empty `license_ids`; both
+forms resolve the eligible company-scoped DFIA universe. The frontend now
+omits an empty filter for PLAN and Preview. Non-empty identifiers remain an
+optional restriction with the existing tenant checks.
+
+E126/E132/A3627 remain on their existing execution adapters until their
+low-level self-classifiers can accept the same resolved DB configuration
+without changing split, preservation, grouping or weighted-price mechanics.
+
 ## Inventory and classification
 
 | Source | SION | Rule / execution order | Price (USD/unit) | Runtime caller | Classification | DB representable |

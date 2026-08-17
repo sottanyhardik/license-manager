@@ -191,10 +191,12 @@ current-price ceiling, but not exact item-tag precedence, assigned planning
 prices, shared-CIF waterfalls, minimum/floored quantities, multi-line splits,
 milk formulas, mop-up, rebalancing, preservation or weighted-price selection.
 
-No lossy seed migration was created and no active legacy caller was deleted:
-either action would fail the mandatory old/new golden-equivalence gate. These
-capabilities must first become generic DB action/allocation primitives, after
-which each legacy planner can be shadowed on identical inputs before cutover.
+No active legacy caller was deleted before equivalence. The generic primitives
+and deterministic inactive backfill have now been implemented.
+Persisted database profiles pass exact golden comparison for E1 (2 cases), E5
+(3), E126 (2), E132 (2), and A3627 (2), with zero differences. Cutover remains
+disabled because live-data shadow coverage must additionally prove physical
+group anchoring and preservation of previously generated split commitments.
 
 ## Local database verification
 

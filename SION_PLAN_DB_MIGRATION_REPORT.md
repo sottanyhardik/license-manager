@@ -1,6 +1,39 @@
 # SION plan database migration report
 
-Status: **BLOCKED BEFORE CONVERSION — exact equivalence is not representable by the current schema**
+Status: **GENERIC SCHEMA/ENGINE AND INACTIVE DB BACKFILL COMPLETE; RUNTIME CUTOVER GATED**
+
+## Implemented expansion (2026-08-17)
+
+- `SionPlanningProfile`, ordered `SionPlanningAction`,
+  `SionPlanningOutputMapping`, and auditable `SionPlanningRun` models landed in
+  migrations 0020/0021. Rules now have immutable stable migration keys.
+- `DatabaseDrivenSionPlanner` executes the closed generic action vocabulary
+  without SION-code dispatch: first-match predicates, grouping, mapped and
+  structured pricing, CIF waterfalls, milk splits, ratio splits, quantity
+  flooring, mop-up, value-gain rebalancing, rounding, and output mapping.
+- Safe expression support now includes item-name context, word tokens and
+  negative prefix matching. Formula configuration is whitelisted and never
+  evaluated as source code.
+- Deterministic E1, E5, E126, E132 and A3627 profiles/rules/actions/mappings
+  were imported into the local database, inactive by design. Re-running the
+  importer creates no duplicates.
+- `compare_sion_planner` and `compare_all_sion_planners` compare ordered row
+  identity, Decimal price/quantity/value, splits and remaining CIF.
+
+Exact persisted-DB golden comparison result:
+
+| SION | Cases | Differences | Result |
+|---|---:|---:|---|
+| E1 | 2 | 0 | PASS |
+| E5 | 3 | 0 | PASS |
+| E126 | 2 | 0 | PASS |
+| E132 | 2 | 0 | PASS |
+| A3627 | 2 | 0 | PASS |
+
+Runtime callers have deliberately not been switched yet. The golden datasets
+prove the generic numerical primitives, but the live auto-plan adapters also
+carry physical-group anchoring and existing split-preservation behavior that
+still requires read-only real-data shadow coverage before lossless cutover.
 
 ## Inventory and classification
 
@@ -53,7 +86,9 @@ The local DB currently has zero `SionPlanningRule` rows, so old/new real-data eq
 - Inventory/classification: **PASS**
 - Caller tracing: **PASS**
 - Semantic extraction: **PASS**
-- Current-schema representability: **FAIL**
-- DB conversion/equivalence: **NOT RUN — would be lossy**
+- Generic-schema representability: **PASS for audited golden contracts**
+- Inactive DB conversion/idempotency: **PASS**
+- Persisted-DB golden equivalence: **PASS (11 cases)**
+- Read-only current-data equivalence: **PENDING**
 - Zero active hardcoded runtime rules: **FAIL**
 - Freeze: **WITHHELD**

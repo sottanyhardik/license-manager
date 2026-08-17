@@ -60,6 +60,11 @@ class ResolvedPlannerConfiguration:
         return result
 
     def classify(self, record: dict[str, Any]) -> str | None:
+        matched = self.match(record)
+        return matched[1] if matched else None
+
+    def match(self, record: dict[str, Any]):
+        """Return ``(rule, output)`` for the first saved priority match."""
         context = {
             "hs_code": record.get("hs_code", record.get("hsn", "")),
             "description": record.get("description", record.get("product_description", "")),
@@ -79,7 +84,7 @@ class ResolvedPlannerConfiguration:
             if evaluate_expression(expression, context):
                 explicit_output = getattr(rule, "execution_output", "") if not isinstance(rule, dict) else rule.get("execution_output", "")
                 if explicit_output:
-                    return explicit_output
+                    return rule, explicit_output
                 stable_key = rule.stable_key if hasattr(rule, "stable_key") else rule.get("stable_key")
                 output = self.output_by_rule_key.get(str(stable_key or ""))
                 if not output:
@@ -89,7 +94,7 @@ class ResolvedPlannerConfiguration:
                     raise PlannerConfigurationError(
                         f"Saved rule {stable_key or getattr(rule, 'pk', '<unknown>')} has no execution output mapping."
                     )
-                return output
+                return rule, output
         return None
 
 
@@ -273,6 +278,155 @@ class SionPlanningExecutionService:
             ) from exc
         return adapter.compute_license(license_obj, configuration, preview=preview)
 
+    @staticmethod
+    def _decimal(value) -> Decimal:
+        return Decimal(str(value or 0))
+
+    @classmethod
+    def _group_preview(cls, results, licenses, configuration, sion):
+        """Attach canonical existing/proposed snapshots to unique license DTOs.
+
+        Import items, their item names and current plans use a fixed bulk query set;
+        this intentionally lives in the execution service so REST, CLI and any
+        future preview consumer observe exactly the same comparison.
+        """
+        from apps.license.models import LicenseImportItemsModel, LicenseItemPlan
+
+        license_by_id = {row.pk: row for row in licenses}
+        result_ids = [row["license_id"] for row in results]
+        if len(result_ids) != len(set(result_ids)):
+            raise PlannerConfigurationError(
+                "Canonical preview produced duplicate top-level license results."
+            )
+        ids = sorted(license_by_id)
+        import_items = list(
+            LicenseImportItemsModel.objects.filter(license_id__in=ids)
+            .select_related("hs_code").prefetch_related("items")
+            .order_by("license_id", "serial_number", "pk")
+        )
+        matched_by_license: dict[int, list[dict[str, Any]]] = {pk: [] for pk in ids}
+        for item in import_items:
+            item_names = [row.name for row in item.items.all()]
+            match = configuration.match({
+                "record_id": item.pk,
+                "item_key": ", ".join(sorted(item_names)) if item_names else (item.description or "-"),
+                "hs_code": item.hs_code.hs_code if item.hs_code_id else "",
+                "description": item.description or "",
+                "available_quantity": item.available_quantity,
+                "quantity": item.quantity,
+                "unit": item.unit,
+                "serial_number": item.serial_number,
+            })
+            if match:
+                rule, output = match
+                matched_by_license[item.license_id].append({
+                    "import_item_id": item.pk,
+                    "serial_number": item.serial_number,
+                    "hsn": item.hs_code.hs_code if item.hs_code_id else "",
+                    "product_description": item.description or "",
+                    "unit": item.unit or "",
+                    "available_quantity": item.available_quantity,
+                    "rule_id": rule.pk,
+                    "rule_name": rule.name,
+                    "rule_priority": rule.priority,
+                    "max_unit_price": rule.max_unit_price,
+                    "execution_output": output,
+                })
+
+        existing_by_license: dict[int, list[dict[str, Any]]] = {pk: [] for pk in ids}
+        current_rows = LicenseItemPlan.objects.filter(license_id__in=ids).values(
+            "license_id", "import_item_id", "item_name_id", "planned_quantity",
+            "unit_price", "planned_cif_fc", "remaining_quantity", "remaining_cif_fc",
+            "note", "planning_rule_id", "planning_rule_version", "planning_rule_priority",
+        ).order_by("license_id", "planning_rule_priority", "import_item_id", "pk")
+        for plan in current_rows:
+            existing_by_license[plan["license_id"]].append(dict(plan))
+
+        def plan_summary(lines, *, proposed=False):
+            qty_key = "requested_quantity" if proposed else "planned_quantity"
+            return {
+                "item_count": len(lines),
+                "total_quantity": sum((cls._decimal(row.get(qty_key)) for row in lines), Decimal("0")),
+                "total_value": sum((
+                    cls._decimal(row.get(qty_key)) * cls._decimal(row.get("unit_price"))
+                    for row in lines
+                ), Decimal("0")),
+                "items": lines,
+            }
+
+        from apps.license.services.canonical_planning_service import quantize_cif, quantize_qty
+
+        def plan_signature(row, *, proposed=False):
+            qty = quantize_qty(row.get("requested_quantity" if proposed else "planned_quantity", 0))
+            price = quantize_cif(row.get("unit_price", 0))
+            cif = quantize_cif(qty * price) if proposed else quantize_cif(row.get("planned_cif_fc", 0))
+            return (
+                int(row.get("import_item_id") or 0), row.get("item_name_id"), qty,
+                price, cif, row.get("note") or "", row.get("planning_rule_id"),
+                row.get("planning_rule_version"), row.get("planning_rule_priority"),
+            )
+
+        grouped = []
+        for raw in results:
+            license_id = raw["license_id"]
+            proposed = list(raw.get("lines", ()))
+            existing = existing_by_license.get(license_id, [])
+            matched = matched_by_license.get(license_id, [])
+            proposed_by_item = {}
+            for line in proposed:
+                proposed_by_item.setdefault(line["import_item_id"], []).append(line)
+            existing_by_item = {}
+            for line in existing:
+                existing_by_item.setdefault(line["import_item_id"], []).append(line)
+            children = []
+            for detail in matched:
+                proposed_lines = proposed_by_item.get(detail["import_item_id"], [])
+                existing_lines = existing_by_item.get(detail["import_item_id"], [])
+                proposed_qty = sum((cls._decimal(row["requested_quantity"]) for row in proposed_lines), Decimal("0"))
+                current_qty = sum((cls._decimal(row["planned_quantity"]) for row in existing_lines), Decimal("0"))
+                children.append({
+                    **detail,
+                    "current_planned_quantity": current_qty,
+                    "proposed_planned_quantity": proposed_qty,
+                    "quantity_change": proposed_qty - current_qty,
+                    "current_unit_price": existing_lines[0]["unit_price"] if existing_lines else None,
+                    "proposed_unit_price": proposed_lines[0]["unit_price"] if proposed_lines else None,
+                })
+            has_shortage = (
+                bool(matched) and not proposed and raw.get("status") != "SKIPPED_ALREADY_PLANNED"
+            ) or bool(raw.get("has_shortage")) or raw.get("status") == "SHORTAGE" or any(
+                cls._decimal(row.get("shortage_quantity", row.get("shortage_qty"))) > 0
+                for row in proposed
+            )
+            if raw.get("status") == "SKIPPED_ALREADY_PLANNED":
+                change_status = "SKIPPED"
+            elif has_shortage:
+                change_status = "SHORTAGE"
+            elif not existing and proposed:
+                change_status = "NEW"
+            else:
+                # Same canonical identity as build_canonical_plan, evaluated
+                # from the bulk-loaded snapshot to avoid one query per license.
+                current_signature = sorted(repr(plan_signature(row)) for row in existing)
+                proposed_signature = sorted(repr(plan_signature(row, proposed=True)) for row in proposed)
+                change_status = "NO_CHANGE" if current_signature == proposed_signature else "CHANGE"
+            rule_ids = {row["rule_id"] for row in matched}
+            rules = sorted({row["rule_priority"] for row in matched})
+            grouped.append({
+                **raw,
+                "sion": sion.norm_class,
+                "matched_item_count": len(matched),
+                "matched_rule_count": len(rule_ids),
+                "matched_rule_priorities": rules,
+                "existing_plan": plan_summary(existing),
+                "proposed_plan": plan_summary(proposed, proposed=True),
+                "change_status": change_status,
+                "has_shortage": has_shortage,
+                "items": children,
+            })
+        rank = {"CHANGE": 0, "NEW": 1, "SHORTAGE": 2, "NO_CHANGE": 3, "SKIPPED": 4}
+        return sorted(grouped, key=lambda row: (rank[row["change_status"]], row["license_id"]))
+
     @classmethod
     def plan_sion(
         cls, sion, license_ids=None, *, company_id=None, persist=True,
@@ -280,7 +434,9 @@ class SionPlanningExecutionService:
     ):
         """Execute saved DB classification through the proven E1/E5 mechanics."""
         from django.db import transaction
-        from apps.license.services.canonical_planning_service import CanonicalPlanningService
+        from apps.license.services.canonical_planning_service import (
+            ALREADY_PLANNED_THRESHOLD, CanonicalPlanningService,
+        )
 
         mode = normalize_plan_mode(mode)
         results = []
@@ -293,11 +449,22 @@ class SionPlanningExecutionService:
             licenses, live_balances = cls._eligible_licenses(
                 sion, license_ids, company_id=company_id,
             )
+            planned_cif_by_license = {}
+            if mode == PLAN_MODE_NEW:
+                from django.db.models import Sum
+                from apps.license.models import LicenseItemPlan
+                planned_cif_by_license = {
+                    row["license_id"]: cls._decimal(row["total"])
+                    for row in LicenseItemPlan.objects.filter(
+                        license_id__in=[license_obj.pk for license_obj in licenses],
+                    ).values("license_id").annotate(total=Sum("planned_cif_fc"))
+                }
             for license_obj in licenses:
                 if (
                     mode == PLAN_MODE_NEW
-                    and CanonicalPlanningService._is_already_planned(
-                        license_obj, Decimal(str(live_balances[license_obj.pk])),
+                    and planned_cif_by_license.get(license_obj.pk, Decimal("0")) > 0
+                    and planned_cif_by_license[license_obj.pk] >= (
+                        Decimal(str(live_balances[license_obj.pk])) * ALREADY_PLANNED_THRESHOLD
                     )
                 ):
                     results.append({
@@ -339,6 +506,8 @@ class SionPlanningExecutionService:
                         company_id=company_id,
                     )
                 results.append(result)
+        if not persist:
+            results = cls._group_preview(results, licenses, configuration, sion)
         rules = [{"id": rule.pk, "version": rule.version, "priority": rule.priority}
                  for rule in configuration.rules]
         return {
@@ -366,6 +535,12 @@ class SionPlanningExecutionService:
                 "already_planned": sum(
                     row.get("status") == "SKIPPED_ALREADY_PLANNED" for row in results
                 ),
+                "licenses_matched": len(results),
+                "licenses_new": sum(row.get("change_status") == "NEW" for row in results),
+                "licenses_changed": sum(row.get("change_status") == "CHANGE" for row in results),
+                "licenses_unchanged": sum(row.get("change_status") == "NO_CHANGE" for row in results),
+                "licenses_shortage": sum(row.get("change_status") == "SHORTAGE" for row in results),
+                "licenses_skipped": sum(row.get("change_status") == "SKIPPED" for row in results),
             },
             "can_plan": True,
         }

@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 from apps.core.models import CompanyModel, HeadSIONNormsModel, HSCodeModel, SionNormClassModel
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
-    SionPlanningRule,
+    LicenseItemPlan, SionPlanningRule,
 )
 from apps.license.services.e1_auto_plan import compute_e1_auto_plan
 from apps.license.services.e5_auto_plan import compute_e5_auto_plan
@@ -73,6 +73,13 @@ def test_plan_sion_api_uses_db_classifier_and_preserves_legacy_mechanics(
         for row in legacy_lines
     ]
     assert Decimal(str(preview.data["licenses"][0]["remaining_balance_cif"])) == Decimal(str(legacy_remaining))
+    preview_license = preview.data["licenses"][0]
+    assert preview_license["change_status"] == "NEW"
+    assert preview_license["matched_item_count"] == 1
+    assert preview_license["matched_rule_count"] == 1
+    assert preview_license["items"][0]["rule_priority"] >= 1
+    assert preview.data["summary"]["licenses_new"] == 1
+    assert len({row["license_id"] for row in preview.data["licenses"]}) == len(preview.data["licenses"])
 
     planned = client.post(
         "/api/sion-planning-rules/plan-sion/",
@@ -82,6 +89,17 @@ def test_plan_sion_api_uses_db_classifier_and_preserves_legacy_mechanics(
     assert planned.data["sion"] == code
     assert planned.data["licenses"][0]["license_id"] == license_obj.pk
     assert planned.data["write_results"][0]["status"] == "PLANNED"
+
+    current_preview = client.post(
+        "/api/sion-planning-rules/preview-sion/",
+        {"sion_id": sions[code].pk, "mode": "ALL"}, format="json",
+    )
+    assert current_preview.status_code == 200, current_preview.data
+    current_license = current_preview.data["licenses"][0]
+    assert current_license["change_status"] == "NO_CHANGE"
+    assert current_license["existing_plan"]["item_count"] == len(legacy_lines)
+    assert current_license["proposed_plan"]["item_count"] == len(legacy_lines)
+    assert current_preview.data["summary"]["licenses_unchanged"] == 1
 
     new_again = client.post(
         "/api/sion-planning-rules/plan-sion/",
@@ -98,6 +116,17 @@ def test_plan_sion_api_uses_db_classifier_and_preserves_legacy_mechanics(
     assert force_all.status_code == 200, force_all.data
     assert force_all.data["mode"] == "ALL"
     assert force_all.data["write_results"][0]["status"] == "PLANNED"
+
+    LicenseItemPlan.objects.filter(license=license_obj).update(
+        planned_quantity=Decimal("0.001"), planned_cif_fc=Decimal("0.01"),
+    )
+    changed_preview = client.post(
+        "/api/sion-planning-rules/preview-sion/",
+        {"sion_id": sions[code].pk, "mode": "ALL"}, format="json",
+    )
+    assert changed_preview.status_code == 200, changed_preview.data
+    assert changed_preview.data["licenses"][0]["change_status"] == "CHANGE"
+    assert changed_preview.data["summary"]["licenses_changed"] == 1
 
 
 def test_plan_sion_rejects_unknown_mode_before_execution():

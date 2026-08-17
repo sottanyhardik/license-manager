@@ -202,7 +202,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         try:
             result = SionRulePlanningService.preview_sion(
                 identifiers["sion_id"], identifiers.get("license_ids"),
-                company_id=self._company_id(),
+                company_id=self._company_id(), mode=identifiers["mode"],
             )
         except CompanyIsolationError as exc:
             return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)

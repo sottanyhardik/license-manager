@@ -467,7 +467,7 @@ class SionRulePlanningService:
             }
 
     @staticmethod
-    def preview_sion(sion_id, license_ids=None, *, company_id=None):
+    def preview_sion(sion_id, license_ids=None, *, company_id=None, mode="NEW"):
         """Read-only simulation of all saved active rules in priority order.
 
         This deliberately accepts identifiers only. Rule JSON from a browser is
@@ -483,7 +483,7 @@ class SionRulePlanningService:
         from apps.license.services.sion_planning_execution import SionPlanningExecutionService
         if SionPlanningExecutionService.supports(sion):
             return SionPlanningExecutionService.plan_sion(
-                sion, license_ids, company_id=company_id, persist=False,
+                sion, license_ids, company_id=company_id, persist=False, mode=mode,
             )
         rules = SionRulePlanningService._saved_rules(sion)
         if not rules:

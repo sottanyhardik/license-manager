@@ -1306,6 +1306,7 @@ class SionPlanningRule(AuditModel):
         "core.SionNormClassModel", on_delete=models.PROTECT,
         related_name="planning_rules", db_index=True,
     )
+    stable_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
     name = models.CharField(max_length=255)
     version = models.PositiveIntegerField(default=1)
     expression = models.JSONField(default=dict)

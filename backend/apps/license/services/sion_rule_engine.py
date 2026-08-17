@@ -24,11 +24,17 @@ MAX_NODES = 128
 FIELDS = {
     "available_qty", "total_qty", "available_value", "cif_fc",
     "license_balance_cif", "hs_code", "description", "condition_type",
-    "is_restricted", "unit", "serial_number",
+    "is_restricted", "unit", "serial_number", "item_key",
 }
-FIELD_ALIASES = {"HSN": "hs_code", "PRODUCT_DESCRIPTION": "description"}
+FIELD_ALIASES = {
+    "HSN": "hs_code", "HSN_DIGITS": "hs_code",
+    "PRODUCT_DESCRIPTION": "description", "ITEM_KEY": "item_key",
+}
 BOOL_OPS = {"and", "or", "not"}
-CMP_OPS = {"eq", "ne", "gt", "gte", "lt", "lte", "contains", "not_contains", "in", "starts_with"}
+CMP_OPS = {
+    "eq", "ne", "gt", "gte", "lt", "lte", "contains", "not_contains",
+    "in", "starts_with", "not_starts_with", "word_contains",
+}
 
 
 def _op(node):
@@ -121,6 +127,14 @@ def evaluate_expression(expression: dict, context: dict) -> bool:
             return contained if op == "contains" else not contained
         if op == "starts_with":
             return _normalized_text(field, left).startswith(_normalized_text(field, right))
+        if op == "not_starts_with":
+            return not _normalized_text(field, left).startswith(_normalized_text(field, right))
+        if op == "word_contains":
+            import re
+            return bool(re.search(
+                rf"(?<![0-9a-z]){re.escape(_normalized_text(field, right))}(?![0-9a-z])",
+                _normalized_text(field, left),
+            ))
         if op == "in":
             return isinstance(right, list) and any(
                 str(left).casefold() == str(value).casefold() for value in right
@@ -147,6 +161,7 @@ def _item_context(item, license_balance):
         "is_restricted": item.is_restricted,
         "unit": item.unit,
         "serial_number": item.serial_number,
+        "item_key": ", ".join(sorted(name.name for name in item.items.all())),
     }
 
 

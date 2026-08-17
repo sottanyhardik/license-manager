@@ -248,6 +248,7 @@ E5_PROFILE: dict[str, Any] = {
 
 
 _CONFIGS = {"E1": E1_PROFILE, "E5": E5_PROFILE}
+LEGACY_PLANNER_CONFIG_BY_SION = _CONFIGS
 
 
 def get_legacy_planner_config(sion_code: str) -> dict[str, Any]:

@@ -6,7 +6,10 @@ import pytest
 from django.test import SimpleTestCase
 
 from apps.core.models import HeadSIONNormsModel, SionNormClassModel
-from apps.license.models import SionPlanningAction, SionPlanningOutputMapping, SionPlanningProfile
+from apps.license.models import (
+    SionPlanningAction, SionPlanningOutputMapping, SionPlanningProfile,
+    SionPlanningRule,
+)
 from apps.license.services.e1_plan import E1Item, plan_e1_items
 from apps.license.services.e5_plan import E5Item, plan_e5_items
 from apps.license.services.sion_planner_config.e1_e5 import LEGACY_PLANNER_CONFIGS, get_legacy_planner_config
@@ -81,6 +84,9 @@ def test_e1_e5_import_is_idempotent_and_does_not_activate_cutover():
     assert SionPlanningProfile.objects.count() == 2
     assert SionPlanningAction.objects.count() == 19
     assert SionPlanningOutputMapping.objects.count() == 5
+    assert SionPlanningRule.objects.count() == 17
+    assert all(SionPlanningRule.objects.values_list("stable_key", flat=True))
+    assert not SionPlanningRule.objects.filter(is_active=True).exists()
     assert not SionPlanningProfile.objects.filter(is_active=True).exists()
     assert list(first[0].actions.filter(is_active=True).values_list("priority", flat=True)) == list(range(1, 12))
     assert list(first[1].actions.filter(is_active=True).values_list("priority", flat=True)) == list(range(1, 9))

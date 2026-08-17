@@ -19,10 +19,8 @@ def import_planner_definition(norm_code: str, definition: dict, *, user=None) ->
     """Upsert one audited definition without activating it.
 
     Stable profile/action/mapping keys are the write identity.  The pre-existing
-    rule schema has no stable-key column, so migrated rules use their immutable
-    audited name + version identity; their separate stable key is retained in
-    each output mapping's config until the canonical rule model gains that
-    field.  This importer never deletes rows or activates a profile.
+    Rules, actions, mappings and profiles all use their immutable audited
+    stable keys. This importer never deletes rows or activates a profile.
     """
     sion = SionNormClassModel.objects.select_for_update().get(norm_class__iexact=norm_code)
     profile_data = definition["profile"]
@@ -42,8 +40,9 @@ def import_planner_definition(norm_code: str, definition: dict, *, user=None) ->
     rule_created_count = 0
     for data in definition["rules"]:
         rule, created = SionPlanningRule.objects.update_or_create(
-            sion=sion, name=data["name"], version=1,
+            stable_key=data["stable_key"],
             defaults={
+                "sion": sion, "name": data["name"], "version": 1,
                 "expression": data["expression"],
                 "max_unit_price": Decimal(data["max_unit_price"]),
                 "unit": data["unit"],
@@ -58,11 +57,16 @@ def import_planner_definition(norm_code: str, definition: dict, *, user=None) ->
 
     action_created_count = 0
     for data in definition["actions"]:
+        action_config = dict(data["config"])
+        if data["action_type"] == "MATCH":
+            action_config["rule_outputs"] = {
+                row["stable_key"]: row["output_key"] for row in definition["rules"]
+            }
         _, created = SionPlanningAction.objects.update_or_create(
             profile=profile, stable_key=data["stable_key"],
             defaults={
                 "action_type": data["action_type"], "priority": data["priority"],
-                "config": data["config"], "version": 1, "is_active": True,
+                "config": action_config, "version": 1, "is_active": True,
                 **({"created_by": user, "modified_by": user} if user else {}),
             },
         )

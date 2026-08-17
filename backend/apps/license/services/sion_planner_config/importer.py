@@ -11,6 +11,7 @@ from apps.license.models import (
     SionPlanningAction,
     SionPlanningOutputMapping,
     SionPlanningProfile,
+    SionPlanningRule,
 )
 from apps.license.services.sion_planner_config.e1_e5 import LEGACY_PLANNER_CONFIGS
 from apps.license.services.sion_planning_profile import SionPlanningProfileService
@@ -42,16 +43,54 @@ def import_profile_document(document, *, activate=False):
 
     # Avoid transient unique-priority collisions when an audited order changes.
     profile.actions.update(is_active=False)
+    match_specs = next(
+        (spec["config"].get("rules", ()) for spec in document["actions"] if spec["action_type"] == "MATCH"),
+        (),
+    )
+    category_rates = {
+        spec["config"].get("category"): spec["config"].get("rate")
+        for spec in document["actions"]
+        if spec["action_type"] == "ALLOCATE" and spec["config"].get("category")
+    }
+    category_rates.update({
+        "MILK PRODUCTS": "6.50", "EGG ALBUMIN": "25.00",
+        "EGG ALBUMIN / WPC": "25.00", "WHEAT FLOUR": "0.00",
+        "PALM KERNEL OIL": "1.80", "RBD PALMOLEIN": "1.20",
+        "REMAINING OILS": "5.00", "DIETARY FIBRE": "3.00",
+    })
+    rule_outputs = {}
+    for index, spec in enumerate(match_specs, start=1):
+        stable_key = f"{document['sion_code']}:RULE:{index:03d}"
+        category = spec["category"]
+        rule, _ = SionPlanningRule.objects.update_or_create(
+            stable_key=stable_key,
+            defaults={
+                "sion": sion,
+                "name": f"{index:03d} {category}",
+                "version": document["version"],
+                "expression": spec["expression"],
+                "max_unit_price": Decimal(category_rates.get(category, "0")),
+                "unit": KG,
+                "priority": index,
+                "is_active": False,
+            },
+        )
+        rule_outputs[rule.stable_key] = category
+
     action_keys = []
     for spec in document["actions"]:
         action_keys.append(spec["stable_key"])
+        config = dict(spec["config"])
+        if spec["action_type"] == "MATCH":
+            config.pop("rules", None)
+            config["rule_outputs"] = rule_outputs
         SionPlanningAction.objects.update_or_create(
             profile=profile,
             stable_key=spec["stable_key"],
             defaults={
                 "action_type": spec["action_type"],
                 "priority": spec["priority"],
-                "config": spec["config"],
+                "config": config,
                 "version": document["version"],
                 "is_active": True,
             },
@@ -86,4 +125,3 @@ def import_profile_document(document, *, activate=False):
 def import_e1_e5_profiles(*, activate=False):
     """Persist both profiles; safe to call repeatedly without duplicates."""
     return [import_profile_document(document, activate=activate) for document in LEGACY_PLANNER_CONFIGS]
-

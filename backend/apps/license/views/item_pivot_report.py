@@ -622,6 +622,9 @@ class ItemPivotReportView(APIView):
         # single source of truth a planned cell's HSN/Description/Total/
         # Allotted/Debited/Balance must come from, never a cross-item merge.
         import_item_ledger_by_id = {}
+        # Map item_name_id -> first import_item_id tagged with that item_name.
+        # Used to infer import_item_id when LicenseItemPlan.import_item_id is NULL.
+        item_name_to_import_item_id = {}
         for _lo in valid_licenses:
             for _ii in _lo.import_license.all():
                 import_qty_by_import_item[_ii.id] = _ii.quantity
@@ -636,6 +639,10 @@ class ItemPivotReportView(APIView):
                 for _it in _ii.items.all():
                     if _it.id not in item_name_str_by_id:
                         item_name_str_by_id[_it.id] = _it.name
+                    # Map: if this is the FIRST import item tagged with this item_name,
+                    # record it (for NULL import_item_id inference later).
+                    if _it.id not in item_name_to_import_item_id:
+                        item_name_to_import_item_id[_it.id] = _ii.id
 
         # license_id -> {item_id: {'q': planned qty, 'cif': planned CIF-FC}}.
         # Attributed to the plan LINE's own item_name (not the import item's
@@ -690,22 +697,12 @@ class ItemPivotReportView(APIView):
             _iid = _pl['import_item_id']
 
             # FIX: If import_item_id is NULL (legacy plans or split items),
-            # infer it from the item_name tag. Find the first import item
-            # tagged with this item_name — that's the source being planned.
-            if _iid is None:
-                _inferred_iid = None
-                for _ii in _lo.import_license.all():
-                    for _it in _ii.items.all():
-                        if _it.id == _iname:
-                            _inferred_iid = _ii.id
-                            break
-                    if _inferred_iid is not None:
-                        break
-                # If we found a source import item for this item_name, use it.
-                # Otherwise keep _iid as None (which will result in available_qty=0,
-                # correct for synthetic items with no source import).
-                if _inferred_iid is not None:
-                    _iid = _inferred_iid
+            # infer it from the item_name tag. Look up the first import item
+            # that's tagged with this item_name — that's the source being planned.
+            if _iid is None and _iname is not None:
+                _iid = item_name_to_import_item_id.get(_iname)
+                # If no mapping found, _iid stays None (correct for purely synthetic
+                # items like "Split Item Name" with no corresponding import item).
 
             _planned_items = _cell.setdefault('planned_import_items', {})
             if _iid not in _planned_items:

@@ -283,12 +283,16 @@ class SionPlanningExecutionService:
         from apps.license.services.canonical_planning_service import CanonicalPlanningService
 
         mode = normalize_plan_mode(mode)
-        configuration = cls.resolve_configuration(sion)
-        licenses, live_balances = cls._eligible_licenses(
-            sion, license_ids, company_id=company_id,
-        )
         results = []
         with transaction.atomic():
+            # One SION-wide lock serializes API and management-command runs.
+            # The API may already hold this row lock; reacquiring it in the
+            # nested transaction is harmless and keeps direct callers safe.
+            sion = type(sion).objects.select_for_update().get(pk=sion.pk)
+            configuration = cls.resolve_configuration(sion)
+            licenses, live_balances = cls._eligible_licenses(
+                sion, license_ids, company_id=company_id,
+            )
             for license_obj in licenses:
                 if (
                     mode == PLAN_MODE_NEW

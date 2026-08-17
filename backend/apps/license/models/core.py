@@ -1286,6 +1286,46 @@ class LicenseItemPlan(AuditModel):
         return f"Plan item={self.import_item_id}: qty={self.planned_quantity} cif_fc={self.planned_cif_fc}"
 
 
+class SionPlanningRule(AuditModel):
+    """Versioned, data-driven rule used to select SION planning lines.
+
+    ``expression`` is interpreted only by the bounded evaluator in
+    ``services.sion_rule_engine``; it is never evaluated as Python/SQL.
+    Historical versions remain rows for auditability, while only active rules
+    participate in planning.
+    """
+    sion = models.ForeignKey(
+        "core.SionNormClassModel", on_delete=models.PROTECT,
+        related_name="planning_rules", db_index=True,
+    )
+    name = models.CharField(max_length=255)
+    version = models.PositiveIntegerField(default=1)
+    expression = models.JSONField(default=dict)
+    max_unit_price = models.DecimalField(
+        max_digits=15, decimal_places=2, validators=[MinValueValidator(DEC_0)],
+    )
+    unit = models.CharField(max_length=10, choices=UNIT_CHOICES)
+    priority = models.IntegerField(default=100, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ("sion_id", "priority", "name", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("sion", "name", "version"),
+                name="uniq_sion_planning_rule_version",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(max_unit_price__gte=DEC_0),
+                name="sion_rule_nonnegative_max_price",
+            ),
+        ]
+        indexes = [models.Index(fields=("sion", "is_active", "priority"))]
+
+    def __str__(self):
+        return f"{self.sion.norm_class}: {self.name} v{self.version}"
+
+
 # -----------------------------
 # Documents
 # -----------------------------

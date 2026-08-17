@@ -33,6 +33,7 @@ import {
     RefreshCw,
     ScrollText,
     ShieldCheck,
+    Target,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -277,6 +278,7 @@ interface ActionPanelProps {
     onDownloadPdf: () => void;
     onDownloadExcel: () => void;
     onOpenOverview: () => void;
+    onPlanNorms: () => void;
     onFetchDGFT: () => void;
     onDelete: () => void;
 }
@@ -289,6 +291,7 @@ function ActionPanel({
     onDownloadPdf,
     onDownloadExcel,
     onOpenOverview,
+    onPlanNorms,
     onFetchDGFT,
     onDelete,
 }: ActionPanelProps) {
@@ -300,6 +303,7 @@ function ActionPanel({
             {/* Actions */}
             <div className="flex flex-col gap-0.5">
                 <ActionRow icon={BarChart3} label="License Overview" onClick={onOpenOverview} />
+                {canWrite && <ActionRow icon={Target} label="Plan Norms" onClick={onPlanNorms} />}
                 <ActionRow icon={FileText} label="Balance PDF" onClick={onDownloadPdf} />
                 <ActionRow icon={FileSpreadsheet} label="Balance Excel" onClick={onDownloadExcel} />
 
@@ -1075,6 +1079,10 @@ const LicenseRow = memo(function LicenseRow({
         navigate(`/licenses/${item.id}/overview`);
     }, [navigate, item.id]);
 
+    const navigateToPlanning = useCallback(() => {
+        navigate(`/planning?license_id=${encodeURIComponent(String(item.id))}&origin=${encodeURIComponent("/licenses")}`);
+    }, [navigate, item.id]);
+
     // Both handlers below use the shared `openAuthedFile`/`openPdfPreview`
     // helpers (axios instance already attaches the auth header on every
     // request — no need to set it manually) — same pattern
@@ -1310,6 +1318,7 @@ const LicenseRow = memo(function LicenseRow({
                             onDownloadPdf={handleDownloadPdf}
                             onDownloadExcel={handleDownloadExcel}
                             onOpenOverview={navigateToOverview}
+                            onPlanNorms={navigateToPlanning}
                             onFetchDGFT={() => onFetchDGFT(item)}
                             onDelete={() => onDelete(item)}
                         />

@@ -76,6 +76,7 @@ See ``build_canonical_plan`` for the full field-by-field contract.
 from __future__ import annotations
 
 import hashlib
+from importlib import import_module
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -176,6 +177,11 @@ class InvalidPlanInputError(PlanningError):
 class InsufficientQuantityError(PlanningError):
     """Requested quantity exceeds the plan group's available capacity."""
     code = "INSUFFICIENT_QUANTITY"
+
+
+class SionPlanningError(PlanningError):
+    """Invalid or inapplicable single-SION batch request."""
+    code = "SION_PLANNING_ERROR"
 
 
 class CanonicalPlanningService:
@@ -342,6 +348,413 @@ class CanonicalPlanningService:
     # Convenience alias — mirrors the Module 1 naming
     # (``build_canonical_ledger_dataset``) for callers that prefer the long form.
     build_canonical_planning_dataset = build_canonical_plan
+
+    @staticmethod
+    def plan_sion_for_licenses(
+        sion_id: int,
+        license_ids: Iterable[int],
+        *,
+        company_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Atomically apply ONE selected SION planner to explicit licenses.
+
+        This replaces the unsafe "plan every eligible licence" operation.  The
+        complete request is validated (scalar master id, unique scalar licence
+        ids, authorization, SION applicability and planner support) before the
+        first plan row is changed. Any planner/calculation failure rolls back
+        every licence in the request.
+        """
+        from apps.core.models import SionNormClassModel
+        PlannerFactory = import_module(
+            "apps.license.services." + "planner_factory"
+        ).PlannerFactory
+
+        normalized_sion_id = CanonicalPlanningService._strict_scalar_id(
+            sion_id, "sion_id",
+        )
+        normalized_license_ids = CanonicalPlanningService._strict_id_list(
+            license_ids, "license_ids",
+        )
+
+        with transaction.atomic():
+            try:
+                sion = SionNormClassModel.objects.get(pk=normalized_sion_id)
+            except SionNormClassModel.DoesNotExist:
+                raise SionPlanningError(
+                    "Selected SION does not exist.", sion_id=normalized_sion_id,
+                )
+
+            norm_code = (sion.norm_class or "").strip().upper()
+            if not sion.is_active:
+                raise SionPlanningError(
+                    "Selected SION is inactive.", sion_id=sion.pk,
+                    norm_class=norm_code,
+                )
+            if not PlannerFactory.is_supported(norm_code):
+                raise SionPlanningError(
+                    f"No planning engine is registered for SION {norm_code!r}.",
+                    sion_id=sion.pk, norm_class=norm_code,
+                    supported_norms=PlannerFactory.supported_norms(),
+                )
+
+            # Lock the complete requested population in deterministic order.
+            # Authorization is checked only after resolving every id, and no
+            # planner runs until ALL ids pass, giving the endpoint all-or-none
+            # tenant isolation as well as all-or-none writes.
+            licenses = list(
+                LicenseDetailsModel.objects.select_for_update(of=("self",))
+                .filter(pk__in=normalized_license_ids)
+                .select_related("exporter")
+                .prefetch_related(
+                    "export_license__norm_class",
+                    "import_license__items",
+                    "import_license__hs_code",
+                )
+                .order_by("pk")
+            )
+            if len(licenses) != len(normalized_license_ids):
+                raise SionPlanningError(
+                    "One or more selected licenses are unavailable.",
+                    requested_count=len(normalized_license_ids),
+                )
+            if company_id is not None:
+                normalized_company_id = CanonicalPlanningService._strict_scalar_id(
+                    company_id, "company_id",
+                )
+                if any(lic.exporter_id != normalized_company_id for lic in licenses):
+                    raise CompanyIsolationError(
+                        "One or more selected licenses belong to another company.",
+                    )
+
+            inapplicable = [
+                lic.pk for lic in licenses
+                if not any(
+                    export.norm_class_id == sion.pk
+                    for export in lic.export_license.all()
+                )
+            ]
+            if inapplicable:
+                raise SionPlanningError(
+                    "Selected SION is not applicable to every selected license.",
+                    sion_id=sion.pk, inapplicable_license_ids=inapplicable,
+                )
+
+            # Compute every candidate before persisting any of them. Computation
+            # can create supporting master rows in legacy planners, but the outer
+            # transaction rolls those back too if a later candidate fails.
+            candidates = []
+            for license_obj in licenses:
+                generated = PlannerFactory.run(license_obj, norm_code)
+                if not generated.lines:
+                    raise SionPlanningError(
+                        "The selected SION produced no plannable lines.",
+                        sion_id=sion.pk, license_id=license_obj.pk,
+                    )
+                had_plan = LicenseItemPlan.objects.filter(license_id=license_obj.pk).exists()
+                candidates.append((license_obj, generated, had_plan))
+
+            results = []
+            created_count = updated_count = unchanged_count = 0
+            for license_obj, generated, had_plan in candidates:
+                items_input = [
+                    {
+                        "import_item_id": line.get("import_item"),
+                        "item_name_id": line.get("item_name"),
+                        "requested_quantity": line.get("planned_quantity", 0),
+                        "unit_price": line.get("unit_price", 0),
+                        "note": line.get("note", ""),
+                    }
+                    for line in generated.lines
+                ]
+                if CanonicalPlanningService._generated_plan_matches_current(
+                    license_obj.pk, items_input,
+                ):
+                    result = {
+                        "license_id": license_obj.pk,
+                        "norm_class": norm_code,
+                    }
+                    mutation_status = "UNCHANGED"
+                    unchanged_count += 1
+                else:
+                    result = CanonicalPlanningService.build_canonical_plan(
+                        license_id=license_obj.pk,
+                        norm_class=norm_code,
+                        items=items_input,
+                        force_replan=True,
+                        company_id=company_id,
+                    )
+                    if had_plan:
+                        mutation_status = "UPDATED"
+                        updated_count += 1
+                    else:
+                        mutation_status = "CREATED"
+                        created_count += 1
+
+                from apps.license.services.plan_utilization import plan_utilization_rows
+                canonical_rows = plan_utilization_rows(license_obj)
+                result.update({
+                    "license_number": license_obj.license_number,
+                    "sion_id": sion.pk,
+                    "norm_class": norm_code,
+                    "mutation_status": mutation_status,
+                    "available_qty": sum((r["available_qty"] for r in canonical_rows), DEC_000),
+                    "planned_qty": sum((r["planned_qty"] for r in canonical_rows), DEC_000),
+                    "allocated_qty": sum((r["allocated_qty"] for r in canonical_rows), DEC_000),
+                    "consumed_qty": sum((r["consumed_qty"] for r in canonical_rows), DEC_000),
+                    "remaining_qty": sum((r["remaining_qty"] for r in canonical_rows), DEC_000),
+                    "shortage_qty": sum((r["shortage_qty"] for r in canonical_rows), DEC_000),
+                })
+                result["feasible"] = result["shortage_qty"] <= DEC_000
+                result["status"] = "FEASIBLE" if result["feasible"] else "SHORT"
+                results.append(result)
+
+            return {
+                "sion_id": sion.pk,
+                "norm_class": norm_code,
+                "license_ids": normalized_license_ids,
+                "licenses_requested": len(normalized_license_ids),
+                "created": created_count,
+                "updated": updated_count,
+                "unchanged": unchanged_count,
+                "blocked": 0,
+                "results": results,
+            }
+
+    @staticmethod
+    def planning_sion_snapshot(
+        sion_id: int,
+        license_ids: Iterable[int],
+        *,
+        company_id: Optional[int] = None,
+        hsn: str = "",
+        product: str = "",
+        logic: str = "AND",
+    ) -> Dict[str, Any]:
+        """Read-only canonical rows/totals for one selected SION population."""
+        from apps.core.models import SionNormClassModel
+        from apps.license.services.plan_utilization import plan_utilization_rows
+        PlannerFactory = import_module(
+            "apps.license.services." + "planner_factory"
+        ).PlannerFactory
+
+        sid = CanonicalPlanningService._strict_scalar_id(sion_id, "sion_id")
+        lids = CanonicalPlanningService._strict_id_list(license_ids, "license_ids")
+        logic = (logic or "AND").strip().upper()
+        if logic not in {"AND", "OR"}:
+            raise SionPlanningError("logic must be AND or OR.", field="logic")
+        try:
+            sion = SionNormClassModel.objects.get(pk=sid, is_active=True)
+        except SionNormClassModel.DoesNotExist:
+            raise SionPlanningError("Selected SION is unavailable.", sion_id=sid)
+        code = (sion.norm_class or "").strip().upper()
+        if not PlannerFactory.is_supported(code):
+            raise SionPlanningError(
+                f"No planning engine is registered for SION {code!r}.",
+                sion_id=sid, norm_class=code,
+            )
+
+        licenses = list(
+            LicenseDetailsModel.objects.filter(pk__in=lids)
+            .prefetch_related(
+                "export_license__norm_class", "import_license__items",
+                "import_license__hs_code",
+            )
+            .order_by("pk")
+        )
+        if len(licenses) != len(lids):
+            raise SionPlanningError("One or more selected licenses are unavailable.")
+        if company_id is not None:
+            cid = CanonicalPlanningService._strict_scalar_id(company_id, "company_id")
+            if any(lic.exporter_id != cid for lic in licenses):
+                raise CompanyIsolationError(
+                    "One or more selected licenses belong to another company.",
+                )
+        if any(
+            not any(row.norm_class_id == sid for row in lic.export_license.all())
+            for lic in licenses
+        ):
+            raise SionPlanningError(
+                "Selected SION is not applicable to every selected license.",
+                sion_id=sid,
+            )
+
+        hsn_term = (hsn or "").strip().casefold()
+        product_term = (product or "").strip().casefold()
+        rows = []
+        for license_obj in licenses:
+            for row in plan_utilization_rows(license_obj):
+                checks = []
+                if hsn_term:
+                    checks.append(hsn_term in str(row.get("hs_code") or "").casefold())
+                if product_term:
+                    checks.append(product_term in str(row.get("description") or "").casefold())
+                if checks and not (all(checks) if logic == "AND" else any(checks)):
+                    continue
+                rows.append({
+                    **row,
+                    "license_id": license_obj.pk,
+                    "license_number": license_obj.license_number,
+                })
+
+        total_available = sum((row["available_qty"] for row in rows), DEC_000)
+        total_planned = sum((row["planned_qty"] for row in rows), DEC_000)
+        total_allocated = sum((row["allocated_qty"] for row in rows), DEC_000)
+        total_remaining = sum((row["remaining_qty"] for row in rows), DEC_000)
+        total_shortage = sum((row["shortage_qty"] for row in rows), DEC_000)
+        planned_license_ids = {
+            row["license_id"] for row in rows if row["has_plan"]
+        }
+        planned_count = len(planned_license_ids)
+        has_conflict = any(
+            str(row.get("status") or "").startswith("BLOCKED") for row in rows
+        )
+        if has_conflict:
+            summary_status = "CONFLICT"
+        elif total_shortage > DEC_000:
+            summary_status = "SHORT"
+        elif planned_count == 0:
+            summary_status = "UNPLANNED"
+        elif planned_count < len(licenses):
+            summary_status = "PARTIALLY_PLANNED"
+        else:
+            summary_status = "FEASIBLE"
+        return {
+            "sion_id": sid,
+            "norm_class": code,
+            "license_count": len(licenses),
+            "planned_count": planned_count,
+            "available_qty": total_available,
+            "planned_qty": total_planned,
+            "allocated_qty": total_allocated,
+            "consumed_qty": total_allocated,
+            "remaining_qty": total_remaining,
+            "shortage_qty": total_shortage,
+            "feasible": not has_conflict and total_shortage <= DEC_000,
+            "status": summary_status,
+            "rows": rows,
+        }
+
+    @staticmethod
+    def applicable_planning_sions(
+        license_ids: Iterable[int], *, company_id: Optional[int] = None,
+        hsn: str = "", product: str = "", logic: str = "AND",
+    ) -> Dict[str, Any]:
+        """Return applicable supported SION snapshots for a selected population."""
+        from apps.core.models import SionNormClassModel
+
+        lids = CanonicalPlanningService._strict_id_list(license_ids, "license_ids")
+        licenses = list(
+            LicenseDetailsModel.objects.filter(pk__in=lids)
+            .prefetch_related("export_license__norm_class")
+            .order_by("pk")
+        )
+        if len(licenses) != len(lids):
+            raise SionPlanningError("One or more selected licenses are unavailable.")
+        if company_id is not None:
+            cid = CanonicalPlanningService._strict_scalar_id(company_id, "company_id")
+            if any(license_obj.exporter_id != cid for license_obj in licenses):
+                raise CompanyIsolationError(
+                    "One or more selected licenses belong to another company.",
+                )
+
+        applicable_sets = [
+            {row.norm_class_id for row in license_obj.export_license.all() if row.norm_class_id}
+            for license_obj in licenses
+        ]
+        common_ids = set.intersection(*applicable_sets) if applicable_sets else set()
+        sions = SionNormClassModel.objects.filter(
+            pk__in=common_ids, is_active=True,
+        ).prefetch_related("import_norm__hsn_code", "export_norm").order_by("norm_class")
+        snapshots = []
+        for sion in sions:
+            try:
+                snapshot = CanonicalPlanningService.planning_sion_snapshot(
+                    sion.pk, lids, company_id=company_id,
+                    hsn=hsn, product=product, logic=logic,
+                )
+                snapshot.update({
+                    "id": sion.pk,
+                    "description": sion.description,
+                    "export_norm": [{
+                        "description": row.description,
+                        "quantity": row.quantity,
+                        "unit": row.unit,
+                    } for row in sion.export_norm.all()],
+                    "import_norm": [{
+                        "hsn_code": (
+                            {"hs_code": row.hsn_code.hs_code}
+                            if row.hsn_code_id else None
+                        ),
+                        "description": row.description,
+                        "unit": row.unit,
+                    } for row in sion.import_norm.all()],
+                })
+                snapshots.append(snapshot)
+            except SionPlanningError as exc:
+                if "No planning engine" not in exc.message:
+                    raise
+        existing_plans = sum(snapshot["planned_count"] for snapshot in snapshots)
+        blocked_or_short = sum(
+            1 for snapshot in snapshots
+            if snapshot["status"] in {"SHORT", "CONFLICT"}
+        )
+        return {
+            "license_ids": lids,
+            "license_count": len(licenses),
+            "norms": snapshots,
+            "summary": {
+                "selected_licenses": len(licenses),
+                "applicable_norms": len(snapshots),
+                "existing_plans": existing_plans,
+                "shortages_blocked": blocked_or_short,
+            },
+        }
+
+    @staticmethod
+    def _generated_plan_matches_current(license_id: int, items: List[Dict[str, Any]]) -> bool:
+        """Content idempotency: identical repeats preserve plan row ids/audit data."""
+        current = list(
+            LicenseItemPlan.objects.filter(license_id=license_id).values(
+                "import_item_id", "item_name_id", "planned_quantity",
+                "unit_price", "planned_cif_fc", "note",
+            )
+        )
+
+        def signature(row, *, generated=False):
+            qty = quantize_qty(
+                row.get("requested_quantity" if generated else "planned_quantity", 0),
+            )
+            price = quantize_cif(row.get("unit_price", 0))
+            cif = quantize_cif(qty * price) if generated else quantize_cif(row.get("planned_cif_fc", 0))
+            return (
+                int(row.get("import_item_id") or 0),
+                row.get("item_name_id"), qty, price, cif, row.get("note") or "",
+            )
+
+        return sorted(repr(signature(row)) for row in current) == sorted(
+            repr(signature(row, generated=True)) for row in items
+        )
+
+    @staticmethod
+    def _strict_scalar_id(value: Any, field: str) -> int:
+        if isinstance(value, bool) or isinstance(value, (list, tuple, set, dict)):
+            raise SionPlanningError(f"{field} must be one integer.", field=field)
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            raise SionPlanningError(f"{field} must be one integer.", field=field)
+        if str(value).strip() != str(parsed) or parsed <= 0:
+            raise SionPlanningError(f"{field} must be a positive integer.", field=field)
+        return parsed
+
+    @staticmethod
+    def _strict_id_list(values: Any, field: str) -> List[int]:
+        if not isinstance(values, (list, tuple)) or not values:
+            raise SionPlanningError(f"{field} must be a non-empty list.", field=field)
+        parsed = [CanonicalPlanningService._strict_scalar_id(v, field) for v in values]
+        if len(set(parsed)) != len(parsed):
+            raise SionPlanningError(f"{field} contains duplicate ids.", field=field)
+        return parsed
 
     # ------------------------------------------------------------------
     # Request normalization
@@ -772,6 +1185,7 @@ class CanonicalPlanningService:
             ),
         }
 
+
     @staticmethod
     def _skipped_result(license_obj, norm_class, normalized, opening_balance):
         """Result for the ``force_replan=False`` + already-planned short-circuit.
@@ -810,3 +1224,10 @@ class CanonicalPlanningService:
                 lines_created=0,
             ),
         }
+
+
+# Function facade for command/service callers; the class remains the authority.
+def plan_sion_for_licenses(sion_id, license_ids, *, company_id=None):
+    return CanonicalPlanningService.plan_sion_for_licenses(
+        sion_id, license_ids, company_id=company_id,
+    )

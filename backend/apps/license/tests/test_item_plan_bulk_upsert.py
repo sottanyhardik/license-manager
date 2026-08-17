@@ -32,11 +32,13 @@ BULK_UPSERT_URL = "/api/license-item-plans/bulk-upsert/"
 
 
 @pytest.fixture
-def license_manager_client(db):
+def license_manager_client(db, tartaric_acid_license):
+    license_obj = tartaric_acid_license[0]
     user = User.objects.create_user(
         username="item-plan-manager",
         email="item-plan-manager@example.com",
         password="RoleP@ssw0rd123",
+        company=license_obj.exporter,
     )
     group, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(group)

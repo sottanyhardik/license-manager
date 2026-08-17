@@ -21,6 +21,7 @@ read-only actions.
 """
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import NotFound
 
 from apps.license.views.license_balance_ledger import _json_safe
 
@@ -87,6 +88,9 @@ def add_license_overview_actions(viewset_class):
         from apps.license.services.plan_utilization import plan_utilization_rows
 
         license_obj = self.get_object()
+        user = request.user
+        if not user.is_superuser and license_obj.exporter_id != getattr(user, "company_id", None):
+            raise NotFound("License not found.")
         data = {
             "norm": detect_norm(license_obj),
             "rows": plan_utilization_rows(license_obj),

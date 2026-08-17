@@ -77,11 +77,18 @@ def plan_group_key(item) -> str:
     re-derive groups client-side)."""
     hsn = _hsn_of(item)
     desc = _normalize_text(_description_of(item))
+    # Historical keys implicitly meant KG because that is the model default.
+    # Preserve those stable keys, but suffix every non-KG unit so quantities
+    # such as MT/PCS can never be pooled with KG (or with each other) without
+    # an explicit conversion registry.  There is no such registry in the
+    # current schema, therefore separation is the only lossless behavior.
+    unit = _normalize_text(getattr(item, "unit", "") or "KG")
+    unit_suffix = "" if unit == "KG" else f"|U:{unit}"
     if desc:
-        return f"{hsn}|{desc}"
+        return f"{hsn}|{desc}{unit_suffix}"
     names = _item_names_of(item)
     if names:
-        return f"{hsn}|N:" + ", ".join(names).upper()
+        return f"{hsn}|N:" + ", ".join(names).upper() + unit_suffix
     return f"ID:{getattr(item, 'id', None)}"
 
 

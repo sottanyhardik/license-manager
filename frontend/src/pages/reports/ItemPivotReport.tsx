@@ -10,11 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle, Zap } from "lucide-react";
+import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
-import { autoPlanAll } from "../../services/api/licenseApi";
 import NormCardGrid from "./NormCardGrid";
+import NormRowPlanner from "../../components/planning/NormRowPlanner";
 import ItemPivotFilters from "./ItemPivotFilters";
 import { openAuthedFile } from "../../utils/documentDownload";
 import { usePurchaseStatusOptions } from "../../hooks/useMasterOptions";
@@ -211,7 +211,7 @@ export default function ItemPivotReport() {
     // Filter states
     const [selectedCompanies, setSelectedCompanies] = useState([]);
     const [excludeCompanies, setExcludeCompanies] = useState([]);
-    const [, setSionNorms] = useState([]);
+    const [sionNorms, setSionNorms] = useState([]);
     const [filtersCollapsed, setFiltersCollapsed] = useState(false);
     const [activeNormTab, setActiveNormTab] = useState(null);
     const [availableNorms, setAvailableNorms] = useState([]);
@@ -239,12 +239,6 @@ export default function ItemPivotReport() {
     // Utilization planning panel (same component the licenses page uses).
     const [showPlanModal, setShowPlanModal] = useState(false);
     const [planLicense, setPlanLicense] = useState(null); // { id, number, balance }
-    const [autoPlanning, setAutoPlanning] = useState(false);
-    const [autoPlanSummary, setAutoPlanSummary] = useState<{
-        total: number; planned: number; already_planned: number;
-        skipped_unknown_norm: number; failed: number;
-        errors: { license: string; error: string }[];
-    } | null>(null);
 
     // AbortController ref — cancels the previous in-flight loadReport request
     // when a new one starts, preventing stale responses from overwriting fresh data.
@@ -279,7 +273,7 @@ export default function ItemPivotReport() {
     const loadFilterOptions = async () => {
         try {
             // Load SION norms (only active ones)
-            const normsResponse = await api.get('masters/sion-classes/?is_active=true');
+            const normsResponse = await api.get('masters/sion-classes/?is_active=true&page_size=500');
             const normsData = normsResponse.data?.results || normsResponse.data || [];
             setSionNorms(Array.isArray(normsData) ? normsData : []);
         } catch (error) {
@@ -464,25 +458,6 @@ export default function ItemPivotReport() {
         purchaseStatusOptions.every(o => purchaseStatus.includes(o.value));
     const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active' || expiryDateFrom || expiryDateTo || !isDefaultPurchaseStatus;
 
-    const handleAutoPlanAll = async () => {
-        if (!window.confirm(
-            'Auto Plan All DFIA will run the plan algorithm on every eligible E1/E5/E132 license ' +
-            '(skipping those already ≥ 99 % planned).\n\nThis may take a while. Continue?'
-        )) return;
-        setAutoPlanning(true);
-        setAutoPlanSummary(null);
-        try {
-            const result = await autoPlanAll();
-            setAutoPlanSummary(result);
-        } catch (err: unknown) {
-            const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-                || 'Auto Plan All failed. Please try again.';
-            toast.error(msg);
-        } finally {
-            setAutoPlanning(false);
-        }
-    };
-
     const getTotalLicenseCount = () => {
         if (!reportData) return 0;
         let total = 0;
@@ -502,6 +477,16 @@ export default function ItemPivotReport() {
         });
         return total;
     };
+
+    const planningLicenses = Array.from(new Map(
+        Object.values(reportData?.licenses_by_norm_notification?.[activeNormTab] || {})
+            .flatMap((rows: any) => Array.isArray(rows) ? rows : [])
+            .filter((license: any) => Number.isInteger(Number(license.id ?? license.license_id)))
+            .map((license: any) => [Number(license.id ?? license.license_id), {
+                id: Number(license.id ?? license.license_id),
+                number: String(license.license_number || license.id || license.license_id),
+            }]),
+    ).values());
 
     return (
         <div className="min-h-screen bg-background">
@@ -567,17 +552,6 @@ export default function ItemPivotReport() {
                         {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
                         {downloading ? 'Generating…' : 'Excel'}
                     </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAutoPlanAll}
-                        disabled={autoPlanning}
-                        className="gap-1.5 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 font-semibold"
-                        title="Run Auto Plan on every eligible DFIA license (E1 / E5 / E132)"
-                    >
-                        {autoPlanning ? <Loader2 className="size-3.5 animate-spin" /> : <Zap className="size-3.5" />}
-                        {autoPlanning ? 'Planning…' : 'Auto Plan All DFIA'}
-                    </Button>
                 </div>
             </div>
 
@@ -596,6 +570,14 @@ export default function ItemPivotReport() {
                     isDefaultPurchaseStatus={isDefaultPurchaseStatus}
                 />
             )}
+
+            <NormRowPlanner
+                norms={sionNorms.filter((norm: any) => availableNorms.some((available: any) =>
+                    String(available?.norm_class ?? available) === String(norm.norm_class),
+                ))}
+                licenses={planningLicenses}
+                onPlanned={() => { if (activeNormTab) loadReport(activeNormTab); }}
+            />
 
             {/* Norm Tabs — redesigned */}
             <NormCardGrid
@@ -1640,51 +1622,6 @@ export default function ItemPivotReport() {
                 balanceCif={planLicense?.balance || 0}
                 onSaved={() => { if (activeNormTab) loadReport(activeNormTab); }}
             />
-
-            {/* Auto Plan All — summary dialog */}
-            {autoPlanSummary && (
-                <Dialog open={!!autoPlanSummary} onOpenChange={(o) => { if (!o) setAutoPlanSummary(null); }}>
-                    <DialogContent className="max-w-md">
-                        <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
-                                <Zap className="size-4 text-amber-600" aria-hidden="true" />
-                                Auto Plan Completed
-                            </DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-2 py-2 text-sm">
-                            {[
-                                ['Total Licenses Processed', autoPlanSummary.total],
-                                ['Successfully Planned',     autoPlanSummary.planned],
-                                ['Already Planned',          autoPlanSummary.already_planned],
-                                ['Skipped (unknown norm)',   autoPlanSummary.skipped_unknown_norm],
-                                ['Failed',                  autoPlanSummary.failed],
-                            ].map(([label, value]) => (
-                                <div key={String(label)} className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
-                                    <span className="text-muted-foreground">{label}</span>
-                                    <span className="font-bold tabular-nums">{value}</span>
-                                </div>
-                            ))}
-                        </div>
-                        {autoPlanSummary.errors.length > 0 && (
-                            <details className="mt-1">
-                                <summary className="cursor-pointer text-[11px] text-destructive font-medium">
-                                    {autoPlanSummary.errors.length} error(s) — click to expand
-                                </summary>
-                                <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
-                                    {autoPlanSummary.errors.map((e, i) => (
-                                        <div key={i} className="rounded bg-destructive/5 px-2 py-1 text-[11px]">
-                                            <span className="font-semibold">{e.license}:</span> {e.error}
-                                        </div>
-                                    ))}
-                                </div>
-                            </details>
-                        )}
-                        <DialogFooter>
-                            <Button size="sm" onClick={() => setAutoPlanSummary(null)}>Close</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            )}
         </div>
     );
 }

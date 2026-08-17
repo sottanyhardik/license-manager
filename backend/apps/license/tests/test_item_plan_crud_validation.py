@@ -34,11 +34,13 @@ PLANS_URL = "/api/license-item-plans/"
 
 
 @pytest.fixture
-def license_manager_client(db):
+def license_manager_client(db, planned_license):
+    license_obj, _ = planned_license
     user = User.objects.create_user(
         username="item-plan-crud-manager",
         email="item-plan-crud-manager@example.com",
         password="RoleP@ssw0rd123",
+        company=license_obj.exporter,
     )
     group, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(group)
@@ -266,6 +268,7 @@ def test_concurrent_creates_cannot_collectively_exceed_capacity():
     user = User.objects.create_user(
         username="item-plan-concurrent", email="item-plan-concurrent@example.com",
         password="RoleP@ssw0rd123",
+        company=company,
     )
     group, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(group)
@@ -295,7 +298,7 @@ def test_concurrent_creates_cannot_collectively_exceed_capacity():
 
 
 @pytest.mark.django_db
-def test_zero_available_balance_blocks_any_positive_plan(license_manager_client, db):
+def test_zero_available_balance_blocks_any_positive_plan(db):
     company = CompanyModel.objects.create(iec="7234567890", name="Zero Balance Exporter")
     license_obj = LicenseDetailsModel.objects.create(
         license_number="PLAN-CRUD-ZERO",
@@ -308,5 +311,11 @@ def test_zero_available_balance_blocks_any_positive_plan(license_manager_client,
         license=license_obj, serial_number=1, description="Zero Item",
         quantity=Decimal("0.000"), available_quantity=Decimal("0.000"),
     )
-    resp = _create(license_manager_client, item, "0.001", "0.01")
+    user = User.objects.create_user(
+        username="item-plan-zero", email="item-plan-zero@example.com",
+        password="RoleP@ssw0rd123", company=company,
+    )
+    group, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
+    user.groups.add(group)
+    resp = _create(_authed_client(user), item, "0.001", "0.01")
     assert resp.status_code == 400, resp.data

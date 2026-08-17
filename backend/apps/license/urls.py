@@ -14,6 +14,7 @@ from apps.license.views.inventory_balance_report import InventoryBalanceReportVi
 from apps.license.views.inventory_balance_viewset import InventoryBalanceViewSet
 from apps.license.views.license_items import LicenseItemViewSet
 from apps.license.views.item_plan import LicenseItemPlanViewSet
+from apps.license.views.sion_planning_rule import SionPlanningRuleViewSet
 from apps.license.views.dashboard import DashboardDataView
 from apps.license.views.ledger_upload import LedgerUploadView, LedgerTaskStatusView
 from apps.license.views.ledger import LicenseLedgerViewSet
@@ -26,6 +27,7 @@ router.register(r"licenses", LicenseDetailsViewSet, basename="licenses")
 router.register(r"license-actions", LicenseActionViewSet, basename="license-actions")
 router.register(r"license-items", LicenseItemViewSet, basename="license-items")
 router.register(r"license-item-plans", LicenseItemPlanViewSet, basename="license-item-plans")
+router.register(r"sion-planning-rules", SionPlanningRuleViewSet, basename="sion-planning-rules")
 router.register(r"license-ledger", LicenseLedgerViewSet, basename="license-ledger")
 router.register(r"inventory-balance", InventoryBalanceViewSet, basename="inventory-balance")
 router.register(r"expiring-licenses", ExpiringLicensesViewSet, basename="expiring-licenses")

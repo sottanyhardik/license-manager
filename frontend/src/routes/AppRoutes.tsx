@@ -44,6 +44,7 @@ const LedgerUpload = lazy(() => import("../pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("../pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("../pages/LicenseLedgerDetail"));
 const LicenseOverviewPage = lazy(() => import("../pages/license-overview/LicenseOverviewPage"));
+const LicensePlanningWorkspace = lazy(() => import("../pages/planning/LicensePlanningWorkspace"));
 const PDFViewer = lazy(() => import("../pages/PDFViewer"));
 
 /** Old `/licenses/:id/balance` bookmarks/links redirect to the new Overview page — explicit absolute target (built from the route's own `:id` param) rather than a relative `Navigate` path, so the destination is unambiguous. */
@@ -112,6 +113,11 @@ export default function AppRoutes() {
                 <Route path="/licenses/:id/edit" element={
                     <ProtectedRoute requiredRole="LICENSE_MANAGER">
                         <AdminLayout><MasterForm /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/planning" element={
+                    <ProtectedRoute requiredRole="LICENSE_MANAGER">
+                        <AdminLayout><LicensePlanningWorkspace /></AdminLayout>
                     </ProtectedRoute>
                 } />
 

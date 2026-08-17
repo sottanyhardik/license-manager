@@ -203,45 +203,27 @@ export const deleteItemPlan = async (planId) => {
     return response.data;
 };
 
-/**
- * Compute the norm-based (E1/E5/E132) plan to pre-fill the manual plan.
- * Returns { norm, plan: { <item_id>: {planned_quantity, unit_price, planned_cif} } }.
- */
-export const fetchNormPrefill = async (licenseId) => {
-    const response = await api.get('license-item-plans/norm-prefill/', {params: {license: licenseId}});
+/** Apply exactly one selected SION master row to explicitly selected licenses. */
+export const planNorm = async (licenseIds, sionId) => {
+    const response = await api.post('license-item-plans/plan-norm/', {
+        license_ids: licenseIds,
+        sion_id: sionId,
+    });
     return response.data;
 };
 
-/**
- * Compute AND save an E1 auto-plan for a license (8-step waterfall).
- * Only valid for E1 licenses — returns an error for other norms.
- * Full-replace semantics: any existing manual plan is overwritten.
- * Returns { norm, planned, remaining_cif, lines }.
- * @deprecated Use autoPlan() — the unified endpoint handles both E1 and E5.
- */
-export const e1AutoPlan = async (licenseId) => {
-    const response = await api.post('license-item-plans/e1-auto-plan/', {license: licenseId});
+export const fetchPlanningNorm = async ({licenseIds, sionId, hsn = '', product = '', logic = 'AND'}) => {
+    const response = await api.get('license-item-plans/planning-norms/', {params: {
+        license_ids: licenseIds.join(','), sion_id: sionId, hsn, product, logic,
+    }});
     return response.data;
 };
 
-/**
- * Unified Auto Plan — detects the licence norm (E1 or E5) on the server and
- * runs the appropriate waterfall, then saves the result in one transaction.
- * Full-replace semantics: any existing manual plan is overwritten.
- * Returns { norm, planned, remaining_cif, lines }.
- */
-export const autoPlan = async (licenseId) => {
-    const response = await api.post('license-item-plans/auto-plan/', {license: licenseId});
-    return response.data;
-};
-
-/**
- * Batch Auto Plan — runs Auto Plan for every eligible DFIA license (E1/E5/E132).
- * Skips licenses that are already ≥99% planned.  Failures are isolated per-license.
- * Returns { total, planned, already_planned, skipped_unknown_norm, failed, errors }.
- */
-export const autoPlanAll = async () => {
-    const response = await api.post('license-item-plans/auto-plan-all/', {});
+/** Canonical common-applicable SION snapshots for an authorized license population. */
+export const fetchApplicablePlanningNorms = async (licenseIds, filters = {}) => {
+    const response = await api.get('license-item-plans/planning-norms/', {params: {
+        license_ids: licenseIds.join(','), ...filters,
+    }});
     return response.data;
 };
 
@@ -268,5 +250,4 @@ export default {
     createItemPlan,
     updateItemPlan,
     deleteItemPlan,
-    fetchNormPrefill,
 };

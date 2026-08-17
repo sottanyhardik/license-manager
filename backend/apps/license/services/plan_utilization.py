@@ -31,6 +31,12 @@ from typing import Any, Dict, List, Optional
 from apps.core.constants import DEC_0, DEC_000
 
 
+STATUS_FEASIBLE = "FEASIBLE"
+STATUS_SHORT = "SHORT"
+STATUS_UNPLANNED = "UNPLANNED"
+STATUS_BLOCKED_UNIT_MISMATCH = "BLOCKED_UNIT_MISMATCH"
+
+
 def _dec(value, default: Decimal = DEC_000) -> Decimal:
     if value is None:
         return default
@@ -94,29 +100,22 @@ def plan_utilization_rows(
         Python (not via `.order_by()`, which would issue a fresh query
         against any prefetch cache the caller already populated).
     """
-    from apps.license.services.plan_enforcement import plan_status_for, plan_status_for_ids
+    from apps.license.services.plan_enforcement import plan_status_for, plan_status_for_items
     from apps.license.services.plan_grouping import plan_group_key
     from apps.license.services.plan_reporting import plan_map_for_license
 
-    # `group_ids_of(representative)` (called inside `plan_status_for`) always
-    # re-queries the license's FULL import-item list from the DB, scoped only
-    # by `license_id` — it has no notion of a caller-filtered subset. When
-    # `items` was left at its default (i.e. IS that same full, unfiltered
-    # license-scoped set), the `member_ids` we build below while grouping is
-    # therefore guaranteed set-identical to what `group_ids_of` would return
-    # for that group's representative — same license, same `plan_group_key`,
-    # same universe of items. In that case we call `plan_status_for_ids`
-    # directly with the already-computed `member_ids` and skip
-    # `group_ids_of`'s redundant DB round-trip entirely (this is the hot path
-    # for every production caller — none pass an explicit `items` override).
-    # A caller that DOES pass a filtered `items` subset gets the original,
-    # always-correct `plan_status_for(representative)` path unchanged, since
-    # its `member_ids` would only cover the filtered subset, not necessarily
-    # the item's whole plan-group.
+    # The default full-license path can use the batched status service below.
+    # A caller-supplied filtered subset retains `plan_status_for` because its
+    # local member ids may not represent the complete physical group.
     _items_explicit = items is not None
     if items is None:
         items = list(license_obj.import_license.all())
     items = sorted(items, key=lambda it: it.serial_number or 0)
+
+    # Resolve every group's original/allotted/baseline totals in one batched
+    # pass.  The former per-group `plan_status_for_ids` path repeated aggregate
+    # queries for every row and grew linearly with the number of planning items.
+    status_by_item = None if _items_explicit else plan_status_for_items(items)
 
     if plan_map is None:
         plan_map = plan_map_for_license(license_obj.id)
@@ -135,6 +134,7 @@ def plan_utilization_rows(
                 "hs_code": None,
                 "serials": [],
                 "member_ids": [],
+                "_units": set(),
                 "_item_name_ids": set(),
                 "item_names": [],
                 "available_quantity": DEC_000,
@@ -147,6 +147,7 @@ def plan_utilization_rows(
 
         group["serials"].append(item.serial_number)
         group["member_ids"].append(item.id)
+        group["_units"].add((item.unit or "KG").strip().upper())
         if not group["hs_code"]:
             hs = getattr(item, "hs_code", None)
             if hs and getattr(hs, "hs_code", None):
@@ -168,6 +169,7 @@ def plan_utilization_rows(
         group = groups[key]
         representative = group.pop("_representative")
         group.pop("_item_name_ids")
+        units = sorted(unit for unit in group.pop("_units") if unit)
         group["serials"] = sorted(group["serials"])
         group["item_names"].sort(key=lambda n: (n["name"] or "").casefold())
         if not group["description"]:
@@ -178,9 +180,12 @@ def plan_utilization_rows(
         if _items_explicit:
             status = plan_status_for(representative)
         else:
-            status = plan_status_for_ids(group["member_ids"])
+            status = status_by_item.get(representative.id)
         if status is None:
             group["has_plan"] = False
+            planned = DEC_000
+            allocated = DEC_000
+            remaining = DEC_000
         else:
             group["has_plan"] = True
             group["original_quantity"] = status["original_quantity"]
@@ -189,6 +194,64 @@ def plan_utilization_rows(
             group["original_cif_fc"] = status["original_cif_fc"]
             group["used_cif_fc"] = status["used_cif_fc"]
             group["remaining_cif_fc"] = status["remaining_cif_fc"]
+            planned = _dec(status["original_quantity"])
+            # Canonical Module 06 uses the lifetime-cap interpretation already
+            # enforced by allotment: original plan versus ALL live allocation.
+            # ``used_quantity`` remains the legacy cycle/since-replan display.
+            allocated = _dec(status["allocated_quantity"])
+            remaining = max(DEC_000, planned - allocated)
+
+        # Canonical Module 06 planning result.  The older fields above remain
+        # for API compatibility, but all new consumers should use these names.
+        #
+        # ``planned_qty`` is the fixed target captured when the plan is saved.
+        # ``allocated_qty``/``consumed_qty`` is the all-time live allocation
+        # against the same physical group. Therefore feasibility compares the
+        # unallocated plan remainder with CURRENT item availability. Comparing
+        # current availability with the original lifetime target is the source of
+        # the misleading "Available < Planned" production display.
+        available = _dec(group["available_quantity"])
+        unit_mismatch = len(units) > 1
+        shortage = max(DEC_000, remaining - available)
+        excess = max(DEC_000, available - remaining)
+        if unit_mismatch:
+            canonical_status = STATUS_BLOCKED_UNIT_MISMATCH
+            feasible = False
+        elif not group["has_plan"]:
+            canonical_status = STATUS_UNPLANNED
+            feasible = True
+        elif shortage > DEC_000:
+            canonical_status = STATUS_SHORT
+            feasible = False
+        else:
+            canonical_status = STATUS_FEASIBLE
+            feasible = True
+
+        group.update({
+            "source_unit": units[0] if len(units) == 1 else None,
+            "planning_unit": units[0] if len(units) == 1 else None,
+            # No conversion is performed: a planning group is required to have
+            # one unit.  Mixed-unit groups are explicitly blocked above.
+            "unit_conversion": Decimal("1") if len(units) == 1 else None,
+            "available_qty": available,
+            "planned_qty": planned,
+            "allocated_qty": allocated,
+            "consumed_qty": allocated,
+            "remaining_qty": remaining,
+            "shortage_qty": shortage,
+            "excess_qty": excess,
+            "feasible": feasible,
+            "status": canonical_status,
+            "source_records": {
+                "license_id": license_obj.id,
+                "import_item_ids": list(group["member_ids"]),
+                "plan_line_ids": [
+                    split.get("id", split.get("plan_line_id"))
+                    for split in group["splits"]
+                    if split.get("id", split.get("plan_line_id")) is not None
+                ],
+            },
+        })
 
         rows.append(group)
 

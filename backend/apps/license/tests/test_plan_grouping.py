@@ -102,6 +102,19 @@ def test_plan_grouping_merges_same_hsn_and_normalized_description(license_obj):
 
 
 @pytest.mark.django_db
+def test_plan_grouping_never_compares_different_units(license_obj):
+    hsn = _hs("29181400")
+    item_kg = _import_item(license_obj, 1, "Tartaric Acid", hs_code=hsn)
+    item_mt = _import_item(license_obj, 2, "Tartaric Acid", hs_code=hsn)
+    item_mt.unit = "MT"
+    item_mt.save(update_fields=["unit"])
+
+    assert plan_group_key(item_kg) != plan_group_key(item_mt)
+    assert group_ids_of(item_kg) == [item_kg.id]
+    assert group_ids_of(item_mt) == [item_mt.id]
+
+
+@pytest.mark.django_db
 def test_plan_grouping_real_world_mixed_hsn_description_group(license_obj):
     # Reproduces license 0311009149's real shape: three import items share
     # one description but split across two HSNs (29181400 / 29181200). The

@@ -17,11 +17,8 @@ interface PlanningTabProps {
  * that never varies within the table, and avoids a column that would be
  * 100% identical top-to-bottom.
  *
- * "Available Qty/CIF" and "Remaining Qty/CIF" are two columns showing the
- * SAME `remaining_quantity`/`remaining_cif_fc` values on purpose — the
- * backend's `plan_status_for()` has no distinct "Available" concept (see
- * `types.ts`). Rows with `has_plan === false` render "—" for every numeric
- * column (more honest than a fabricated `0` for a group with no plan at all).
+ * Quantity feasibility and shortage are supplied by the canonical backend
+ * planning service. This component deliberately performs no planning maths.
  */
 export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
     const { data, isLoading, isError, error } = useLicenseOverviewPlanning(licenseId, isActive);
@@ -30,8 +27,8 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Loading plan utilization…
+            <div role="status" aria-live="polite" className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading plan utilization…
             </div>
         );
     }
@@ -62,11 +59,11 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
                             <th scope="col" className="px-3 py-2 text-left font-semibold">Export Product</th>
                             <th scope="col" className="px-3 py-2 text-left font-semibold">HSN Code</th>
                             <th scope="col" className="px-3 py-2 text-right font-semibold">Planned Qty</th>
-                            <th scope="col" className="px-3 py-2 text-right font-semibold">Planned CIF</th>
+                            <th scope="col" className="px-3 py-2 text-right font-semibold">Allocated Qty</th>
                             <th scope="col" className="px-3 py-2 text-right font-semibold">Available Qty</th>
-                            <th scope="col" className="px-3 py-2 text-right font-semibold">Available CIF</th>
                             <th scope="col" className="px-3 py-2 text-right font-semibold">Remaining Qty</th>
-                            <th scope="col" className="px-3 py-2 text-right font-semibold">Remaining CIF</th>
+                            <th scope="col" className="px-3 py-2 text-right font-semibold">Shortage Qty</th>
+                            <th scope="col" className="px-3 py-2 text-left font-semibold">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -78,17 +75,23 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
                             </tr>
                         )}
                         {rows.map((row) => (
-                            <tr key={row.group_id} className="border-t border-border/60 hover:bg-muted/20">
+                            <tr key={row.group_id} className="border-t border-border/60 hover:bg-muted/20" data-planning-status={row.status}>
                                 <td className="px-3 py-2">{row.description}</td>
                                 <td className="px-3 py-2">{row.hs_code ?? "—"}</td>
                                 {row.has_plan ? (
                                     <>
-                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.original_quantity)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.original_cif_fc)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.remaining_quantity)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.remaining_cif_fc)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.remaining_quantity)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.remaining_cif_fc)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.planned_qty)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.allocated_qty)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.available_qty)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.remaining_qty)}</td>
+                                        <td className={`px-3 py-2 text-right tabular-nums font-semibold ${row.status === "SHORT" ? "text-destructive" : ""}`}>{fmtNum(row.shortage_qty)}</td>
+                                        <td className="px-3 py-2">
+                                            <Badge variant={row.status === "FEASIBLE" ? "success" : "destructive"}>
+                                                {row.status === "BLOCKED_UNIT_MISMATCH"
+                                                    ? "Blocked: unit mismatch"
+                                                    : row.status === "SHORT" ? `Short by ${fmtNum(row.shortage_qty)}` : "Feasible"}
+                                            </Badge>
+                                        </td>
                                     </>
                                 ) : (
                                     <>
@@ -97,7 +100,7 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
                                         <td className="px-3 py-2 text-right text-muted-foreground">—</td>
                                         <td className="px-3 py-2 text-right text-muted-foreground">—</td>
                                         <td className="px-3 py-2 text-right text-muted-foreground">—</td>
-                                        <td className="px-3 py-2 text-right text-muted-foreground">—</td>
+                                        <td className="px-3 py-2"><Badge variant="secondary">Unplanned</Badge></td>
                                     </>
                                 )}
                             </tr>

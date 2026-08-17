@@ -9,7 +9,9 @@ from rest_framework import serializers
 
 from apps.core.models import ItemNameModel
 from apps.core.serializers.fields import IndianDateField
-from apps.license.models import IncentiveLicense, LicenseItemPlan, LicenseImportItemsModel
+from apps.license.models import (
+    IncentiveLicense, LicenseItemPlan, LicenseImportItemsModel, SionPlanningRule,
+)
 
 DECIMAL_ZERO = Decimal("0.00")
 
@@ -116,3 +118,38 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
             "modified_on", "modified_by_username",
         ]
         read_only_fields = ["license"]
+
+
+class SionPlanningRuleSerializer(serializers.ModelSerializer):
+    unit = serializers.CharField(max_length=10)
+    sion_code = serializers.CharField(source="sion.norm_class", read_only=True)
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+    modified_by_username = serializers.CharField(source="modified_by.username", read_only=True)
+
+    class Meta:
+        model = SionPlanningRule
+        fields = (
+            "id", "sion", "sion_code", "name", "version", "expression",
+            "max_unit_price", "unit", "priority", "is_active",
+            "created_on", "created_by_username", "modified_on",
+            "modified_by_username",
+        )
+        read_only_fields = (
+            "version", "created_on", "created_by_username", "modified_on",
+            "modified_by_username",
+        )
+
+    def validate_expression(self, value):
+        from apps.license.services.sion_rule_engine import validate_expression
+        try:
+            validate_expression(value)
+        except Exception as exc:
+            raise serializers.ValidationError(getattr(exc, "messages", [str(exc)])) from exc
+        return value
+
+    def validate_unit(self, value):
+        from apps.core.constants import UNIT_CHOICES
+        normalized = str(value).strip().lower()
+        if normalized not in {code for code, _label in UNIT_CHOICES}:
+            raise serializers.ValidationError("Unsupported planning unit.")
+        return normalized

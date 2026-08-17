@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { FileSpreadsheet, FileText, Loader2, Target } from "lucide-react";
 
 import api from "@/api/axios";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import PermissionGate from "@/components/PermissionGate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { openPdfPreview } from "@/utils/pdfPreview";
 import { openAuthedFile } from "@/utils/documentDownload";
@@ -51,6 +52,8 @@ const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
  */
 export default function LicenseOverviewPage() {
     const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams, setSearchParams] = useSearchParams();
 
     const rawTab = searchParams.get("tab");
@@ -110,6 +113,11 @@ export default function LicenseOverviewPage() {
                 description={summary?.importer ?? undefined}
                 actions={
                     <>
+                        <PermissionGate role="LICENSE_MANAGER" anyRole={undefined}>
+                            <Button size="sm" onClick={() => id && navigate(`/planning?license_id=${encodeURIComponent(id)}&origin=${encodeURIComponent(`/licenses/${id}/overview${location.search}`)}`)}>
+                                <Target className="size-4" />Plan Norms
+                            </Button>
+                        </PermissionGate>
                         <Button size="sm" variant="outline" onClick={handleDownloadPdf} disabled={downloadingPdf}>
                             {downloadingPdf ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
                             Download PDF

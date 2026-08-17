@@ -306,13 +306,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         import_rows = data.get('import_license') if isinstance(data, dict) else None
         if import_rows:
-            from apps.license.services.plan_enforcement import plan_status_for
+            from apps.license.services.plan_enforcement import plan_status_for_items
             items_by_id = {it.id: it for it in instance.import_license.all()}
+            status_by_id = plan_status_for_items(items_by_id.values())
             for row in import_rows:
                 item = items_by_id.get(row.get('id'))
                 if item is None:
                     continue
-                plan_status = plan_status_for(item)
+                plan_status = status_by_id.get(item.id)
                 row['has_plan'] = plan_status is not None
                 if plan_status is not None:
                     row['original_planned_quantity'] = str(plan_status['original_quantity'])
@@ -328,6 +329,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'available_quantity', 'total_quantity', 'balance_cif_fc',
             'original_quantity', 'used_quantity', 'remaining_quantity',
             'original_cif_fc', 'used_cif_fc', 'remaining_cif_fc',
+            'unit_conversion', 'available_qty', 'planned_qty',
+            'allocated_qty', 'consumed_qty', 'remaining_qty',
+            'shortage_qty', 'excess_qty',
         )
         data['plan_utilization'] = [
             {**row, **{f: str(row[f]) for f in _decimal_fields if f in row}}
@@ -408,6 +412,18 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             self.default_filters = {}
 
         qs = super().get_queryset()
+
+        # License records are tenant-owned. Role permissions decide whether a
+        # user may use this API; the queryset decides which company's objects
+        # they may address, including detail actions selected directly by URL
+        # (for example ``/<id>/plan-utilization/``).  Keeping the scope here
+        # makes ``get_object()`` return 404 for foreign IDs across every
+        # licence-detail action instead of relying on each action to remember
+        # an object-level company check.
+        user = self.request.user
+        if user.is_authenticated and not user.is_superuser:
+            company_id = getattr(user, 'company_id', None)
+            qs = qs.filter(exporter_id=company_id) if company_id else qs.none()
 
         # Restore original default filters if they were cleared
         if skip_default_filters:

@@ -7,6 +7,7 @@ from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.core.models import CompanyModel, HSCodeModel, ItemNameModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.license.services.plan_enforcement import save_plan_lines_for_license
+from apps.license.services.plan_enforcement import plan_status_for_items
 from apps.license.services.plan_utilization import plan_utilization_rows
 
 
@@ -133,6 +134,15 @@ def test_splits_and_plan_status_are_unioned_and_group_level(license_obj, company
     assert row["original_cif_fc"] == Decimal("12.00")
     assert row["used_cif_fc"] == Decimal("8.00")
     assert row["remaining_cif_fc"] == Decimal("4.00")
+    assert row["available_qty"] == Decimal("16.000")
+    assert row["planned_qty"] == Decimal("6.000")
+    assert row["allocated_qty"] == Decimal("4.000")
+    assert row["consumed_qty"] == Decimal("4.000")
+    assert row["remaining_qty"] == Decimal("2.000")
+    assert row["shortage_qty"] == Decimal("0.000")
+    assert row["feasible"] is True
+    assert row["status"] == "FEASIBLE"
+    assert row["planning_unit"] == "KG"
     assert len(row["splits"]) == 1
     assert row["splits"][0]["planned_quantity"] == 6.0
 
@@ -145,6 +155,43 @@ def test_has_plan_false_when_group_has_no_plan_rows(license_obj):
 
     assert rows[0]["has_plan"] is False
     assert "original_quantity" not in rows[0]
+    assert rows[0]["status"] == "UNPLANNED"
+
+
+@pytest.mark.django_db
+def test_true_shortage_is_explicit_and_never_clamped(license_obj):
+    item = _import_item(
+        license_obj, 1, "Short item", quantity=Decimal("10.000"),
+        available_quantity=Decimal("5.000"),
+    )
+    save_plan_lines_for_license(license_obj, [{
+        "import_item": item.id,
+        "planned_quantity": Decimal("10.000"),
+        "unit_price": Decimal("1.00"),
+        "planned_cif_fc": Decimal("10.00"),
+    }])
+
+    row = plan_utilization_rows(license_obj)[0]
+
+    assert row["planned_qty"] == Decimal("10.000")
+    assert row["available_qty"] == Decimal("5.000")
+    assert row["remaining_qty"] == Decimal("10.000")
+    assert row["shortage_qty"] == Decimal("5.000")
+    assert row["feasible"] is False
+    assert row["status"] == "SHORT"
+
+
+@pytest.mark.django_db
+def test_mixed_units_are_separate_instead_of_summed_as_comparable(license_obj):
+    hs = HSCodeModel.objects.create(hs_code="99999999")
+    _import_item(license_obj, 1, "Same product", hs_code=hs, unit="KG")
+    _import_item(license_obj, 2, "Same product", hs_code=hs, unit="MT")
+
+    rows = plan_utilization_rows(license_obj)
+
+    assert len(rows) == 2
+    assert {row["source_unit"] for row in rows} == {"KG", "MT"}
+    assert all(row["unit_conversion"] == Decimal("1") for row in rows)
 
 
 @pytest.mark.django_db
@@ -195,3 +242,96 @@ def test_handles_no_import_items_without_error():
         import_license = _FakeManager()
 
     assert plan_utilization_rows(_FakeLicense(), plan_map={}) == []
+
+
+@pytest.mark.django_db
+def test_canonical_allocation_is_all_time_while_legacy_used_is_since_plan(
+    license_obj, company,
+):
+    """Do not compare current availability with an undrained original plan.
+
+    The pre-plan allotment is intentionally captured by the legacy baseline,
+    so ``used_quantity`` remains zero for backwards compatibility.  Module 06
+    canonical fields instead expose the all-time allocation and derive the
+    actual remaining plan from it.
+    """
+    item = _import_item(
+        license_obj, 1, "Milk Solids", quantity=Decimal("10.000"),
+        available_quantity=Decimal("6.000"), unit="kg",
+    )
+    allotment = _allotment(company)
+    AllotmentItems.objects.create(
+        allotment=allotment, item=item,
+        qty=Decimal("4.000"), cif_fc=Decimal("8.00"),
+    )
+    save_plan_lines_for_license(license_obj, [{
+        "import_item": item.id,
+        "planned_quantity": Decimal("10.000"),
+        "unit_price": Decimal("2.00"),
+        "planned_cif_fc": Decimal("20.00"),
+    }])
+
+    (row,) = plan_utilization_rows(license_obj)
+
+    assert row["used_quantity"] == Decimal("0.000")  # legacy, since baseline
+    assert row["allocated_qty"] == Decimal("4.000")  # canonical, all time
+    assert row["consumed_qty"] == Decimal("4.000")
+    assert row["planned_qty"] == Decimal("10.000")
+    assert row["remaining_qty"] == Decimal("6.000")
+    assert row["available_qty"] == Decimal("6.000")
+    assert row["shortage_qty"] == Decimal("0.000")
+    assert row["feasible"] is True
+    assert row["status"] == "FEASIBLE"
+
+
+@pytest.mark.django_db
+def test_canonical_shortage_is_explicit_and_never_clamps_the_plan(license_obj):
+    item = _import_item(
+        license_obj, 1, "Cocoa", quantity=Decimal("10.000"),
+        available_quantity=Decimal("3.000"), unit="kg",
+    )
+    save_plan_lines_for_license(license_obj, [{
+        "import_item": item.id,
+        "planned_quantity": Decimal("5.000"),
+        "unit_price": Decimal("1.00"),
+        "planned_cif_fc": Decimal("5.00"),
+    }])
+
+    (row,) = plan_utilization_rows(license_obj)
+
+    assert row["planned_qty"] == Decimal("5.000")
+    assert row["remaining_qty"] == Decimal("5.000")
+    assert row["available_qty"] == Decimal("3.000")
+    assert row["shortage_qty"] == Decimal("2.000")
+    assert row["feasible"] is False
+    assert row["status"] == "SHORT"
+
+
+@pytest.mark.django_db
+def test_batched_plan_status_query_count_does_not_grow_per_item(
+    license_obj, django_assert_num_queries,
+):
+    raw_items = [
+        _import_item(license_obj, serial, f"Performance item {serial}")
+        for serial in range(1, 11)
+    ]
+    save_plan_lines_for_license(license_obj, [
+        {
+            "import_item": item.id,
+            "planned_quantity": Decimal("1.000"),
+            "unit_price": Decimal("1.00"),
+            "planned_cif_fc": Decimal("1.00"),
+        }
+        for item in raw_items
+    ])
+    items = list(
+        license_obj.import_license.select_related("hs_code").prefetch_related("items")
+    )
+
+    # siblings + item-name prefetch + plans + live allotments: fixed at four
+    # queries for the full license, not four aggregates per planning group.
+    with django_assert_num_queries(4):
+        statuses = plan_status_for_items(items)
+
+    assert len(statuses) == 10
+    assert all(status is not None for status in statuses.values())

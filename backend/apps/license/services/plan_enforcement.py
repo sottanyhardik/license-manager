@@ -232,9 +232,11 @@ def plan_status_for_ids(gids) -> dict | None:
     used_val = max(DEC_0, current_used_val - baseline["bv"])
     return {
         "original_quantity": original_qty,
+        "allocated_quantity": current_used_qty,
         "used_quantity": used_qty,
         "remaining_quantity": original_qty - used_qty,
         "original_cif_fc": original_val,
+        "allocated_cif_fc": current_used_val,
         "used_cif_fc": used_val,
         "remaining_cif_fc": original_val - used_val,
     }
@@ -376,9 +378,11 @@ def plan_status_for_items(items) -> dict:
         used_val = max(DEC_0, current_used_val - baseline_val)
         result[it.id] = {
             "original_quantity": original_qty,
+            "allocated_quantity": current_used_qty,
             "used_quantity": used_qty,
             "remaining_quantity": original_qty - used_qty,
             "original_cif_fc": original_val,
+            "allocated_cif_fc": current_used_val,
             "used_cif_fc": used_val,
             "remaining_cif_fc": original_val - used_val,
         }

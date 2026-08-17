@@ -170,6 +170,16 @@ export interface LicenseOverviewPlanRow {
     remaining_cif_fc?: number;
     used_quantity?: number;
     used_cif_fc?: number;
+    /** Canonical planning quantities/status. Consumers must not re-derive these. */
+    available_qty: number;
+    planned_qty: number;
+    allocated_qty: number;
+    consumed_qty: number;
+    remaining_qty: number;
+    shortage_qty: number;
+    excess_qty: number;
+    feasible: boolean;
+    status: "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
 }
 
 export interface LicenseOverviewPlanUtilization {

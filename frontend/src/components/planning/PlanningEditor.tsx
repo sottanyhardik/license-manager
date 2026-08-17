@@ -15,7 +15,7 @@
  * No global "Edit Planning" mode. No full-page toggle. No modals inside.
  *
  * Business logic — identical in tab and modal:
- *   fetchLicense / fetchItemPlans / bulkUpsertItemPlans / fetchNormPrefill
+ *   fetchLicense / fetchItemPlans / bulkUpsertItemPlans
  *   3-way auto-calc  ·  remaining cap per split  ·  bulkUpsert on save
  */
 
@@ -35,10 +35,8 @@ import {
     Save,
     Target,
     Trash2,
-    Wand2,
     X,
     XCircle,
-    Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -46,12 +44,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-    autoPlan,
     bulkUpsertItemPlans,
     deleteItemPlan,
     fetchItemPlans,
     fetchLicense,
-    fetchNormPrefill,
 } from "../../services/api/licenseApi";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -127,9 +123,12 @@ interface Group {
     original_planned_cif_fc?: number;
     used_planned_cif_fc?: number;
     remaining_planned_cif_fc?: number;
+    planning_status?: "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
+    shortage_qty?: number;
+    feasible?: boolean;
 }
 
-type PlanStatus = "not_planned" | "partial" | "completed" | "over";
+type PlanStatus = "not_planned" | "partial" | "completed" | "over" | "blocked";
 
 export interface PlanningEditorProps {
     licenseId: number;
@@ -145,6 +144,15 @@ export interface PlanningEditorProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function groupStatus(g: Group): PlanStatus {
+    // Persisted feasibility is canonical backend data. Local arithmetic below
+    // is retained only as a fallback for a new, unsaved draft.
+    if (g.planning_status === "BLOCKED_UNIT_MISMATCH") return "blocked";
+    if (g.planning_status === "SHORT") return "over";
+    if (g.planning_status === "FEASIBLE") {
+        return (g.remaining_planned_quantity ?? 0) <= 1e-6 ? "completed" : "partial";
+    }
+    if (g.planning_status === "UNPLANNED") return "not_planned";
+
     const planned = g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
     if (planned <= 0) return "not_planned";
 
@@ -175,6 +183,7 @@ const STATUS_CFG: Record<PlanStatus, { label: string; Icon: React.ElementType; b
     partial:     { label: "Partially Planned", Icon: MinusCircle,  badge: "bg-amber-50 text-amber-700 ring-1 ring-amber-200" },
     completed:   { label: "Planned",           Icon: CheckCircle2, badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" },
     over:        { label: "Over Planned",      Icon: XCircle,      badge: "bg-destructive/10 text-destructive ring-1 ring-destructive/30" },
+    blocked:     { label: "Blocked: Unit Mismatch", Icon: XCircle, badge: "bg-destructive/10 text-destructive ring-1 ring-destructive/30" },
 };
 
 function StatusBadge({ status }: { status: PlanStatus }) {
@@ -302,21 +311,19 @@ function SplitCard({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function InlineEditor({
-    group, poolBalance, allGroups, saving, prefilling,
+    group, poolBalance, allGroups, saving,
     onChange, onAddSplit, onRemoveSplit,
-    onSave, onCancel, onPrefill,
+    onSave, onCancel,
 }: {
     group: Group;
     poolBalance: number;
     allGroups: Group[];
     saving: boolean;
-    prefilling: boolean;
     onChange: (key: string, field: string, value: string) => void;
     onAddSplit: () => void;
     onRemoveSplit: (key: string) => void;
     onSave: () => void;
     onCancel: () => void;
-    onPrefill: () => void;
 }) {
     const planned    = group.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
     const plannedCif = group.splits.reduce((s, sp) => s + num(sp.planned_cif_fc), 0);
@@ -381,11 +388,6 @@ function InlineEditor({
 
             {/* Action bar */}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <Button variant="ghost" size="sm" onClick={onPrefill}
-                    disabled={saving || prefilling} className="h-7 gap-1.5 text-xs text-muted-foreground">
-                    {prefilling ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />}
-                    Prefill from norm
-                </Button>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={onCancel}
                         disabled={saving} className="h-7 gap-1.5 text-xs">
@@ -410,8 +412,6 @@ export default function PlanningEditor({
     licenseId, licenseNumber, balanceCif = 0, canWrite, onSaved,
 }: PlanningEditorProps) {
     const [loading, setLoading]           = useState(false);
-    const [prefilling, setPrefilling]     = useState(false);
-    const [autoPlanning, setAutoPlanning] = useState(false);
 
     const [groups, setGroups]             = useState<Group[]>([]);
     const [savedGroups, setSavedGroups]   = useState<Group[]>([]);
@@ -477,6 +477,8 @@ export default function PlanningEditor({
                 has_plan?: boolean;
                 original_quantity?: string | number; used_quantity?: string | number; remaining_quantity?: string | number;
                 original_cif_fc?: string | number; used_cif_fc?: string | number; remaining_cif_fc?: string | number;
+                shortage_qty?: string | number; feasible?: boolean;
+                status?: "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
             }[] = Array.isArray(license?.plan_utilization) ? license.plan_utilization : [];
 
             const built: Group[] = groupRows.map((grp) => {
@@ -508,6 +510,9 @@ export default function PlanningEditor({
                     group.used_planned_cif_fc        = Number(grp.used_cif_fc ?? 0);
                     group.remaining_planned_cif_fc    = Number(grp.remaining_cif_fc ?? 0);
                 }
+                group.planning_status = grp.status;
+                group.shortage_qty = Number(grp.shortage_qty ?? 0);
+                group.feasible = grp.feasible;
                 return group;
             });
 
@@ -651,67 +656,8 @@ export default function PlanningEditor({
         }
     }, [groups, editingGroupId, load, onSaved]);
 
-    // ── Prefill (scoped to the open editor) ───────────────────────────────────
-
-    const handlePrefill = useCallback(async () => {
-        setPrefilling(true);
-        try {
-            const { norm, plan } = await fetchNormPrefill(licenseId);
-            if (!norm) { toast.error("No E1/E5/E132 norm found for this license"); return; }
-            let filled = 0;
-            setGroups((prev) => prev.map((g) => {
-                if (g.id !== editingGroupId) return g;
-                let q = 0, c = 0;
-                g.memberIds.forEach((mid) => {
-                    const p = (plan as Record<string, { planned_quantity?: number; planned_cif?: number }>)?.[String(mid)];
-                    if (p) { q += Number(p.planned_quantity || 0); c += Number(p.planned_cif || 0); }
-                });
-                if (q > 0 || c > 0) {
-                    filled++;
-                    return {
-                        ...g,
-                        splits: [{
-                            key: nextKey(), id: null,
-                            item_name: "", planned_quantity: q ? fmt3(q) : "",
-                            unit_price: q ? String(round2(c / q)) : "",
-                            planned_cif_fc: c ? fmt2(c) : "", note: "",
-                        }],
-                    };
-                }
-                return g;
-            }));
-            if (filled > 0) toast.success(`Prefilled from ${norm} — review and Save`);
-            else toast.info("No norm data available for this item");
-        } catch { toast.error("Failed to compute norm plan"); }
-        finally { setPrefilling(false); }
-    }, [licenseId, editingGroupId]);
-
     // ── Auto Plan (E1) ────────────────────────────────────────────────────────
 
-    const handleAutoPlan = useCallback(async () => {
-        const hasPlan = groups.some((g) => g.splits.some((s) => s.id !== null));
-        if (hasPlan) {
-            const ok = window.confirm(
-                "Auto Plan will replace your current plan with E1-calculated splits.\n\nContinue?"
-            );
-            if (!ok) return;
-        }
-        setAutoPlanning(true);
-        try {
-            const result = await autoPlan(licenseId);
-            toast.success(
-                `Auto Plan applied — ${result.planned} line(s) saved. ` +
-                `Remaining CIF: $${Number(result.remaining_cif).toFixed(2)}`
-            );
-            await load();
-            onSaved?.();
-        } catch (err: unknown) {
-            const data = (err as { response?: { data?: { error?: string } } })?.response?.data;
-            toast.error(data?.error || "Auto Plan failed. Please try again.");
-        } finally {
-            setAutoPlanning(false);
-        }
-    }, [groups, licenseId, load, onSaved]);
 
     // ── Derived totals ─────────────────────────────────────────────────────────
 
@@ -776,19 +722,6 @@ export default function PlanningEditor({
                         </span>
                     )}
                 </div>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAutoPlan}
-                    disabled={loading || autoPlanning}
-                    className="h-7 gap-1.5 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 text-xs font-semibold"
-                    title="Auto-compute and save plan using E1 classification rules (8-step waterfall: Confectionery, Cocoa Mass, Milk DWP/SWP, WPC, Fruit Juice, Tartaric Acid, Aluminium Foil, Polypropylene)"
-                >
-                    {autoPlanning
-                        ? <Loader2 className="size-3.5 animate-spin" />
-                        : <Zap className="size-3.5" />}
-                    Auto Plan
-                </Button>
             </div>
 
             {/* ── Summary cards (CIF only) ──────────────────────────── */}
@@ -1004,13 +937,11 @@ export default function PlanningEditor({
                                                         poolBalance={poolBalance}
                                                         allGroups={groups}
                                                         saving={isSaving}
-                                                        prefilling={prefilling}
                                                         onChange={(key, field, value) => changeSplit(g.id, key, field, value)}
                                                         onAddSplit={() => addSplit(g.id)}
                                                         onRemoveSplit={(key) => removeSplit(g.id, key)}
                                                         onSave={() => saveGroup(g.id)}
                                                         onCancel={cancelEditor}
-                                                        onPrefill={handlePrefill}
                                                     />
                                                 </td>
                                             </tr>

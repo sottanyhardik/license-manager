@@ -30,7 +30,6 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.license.models import LicenseDetailsModel, LicenseItemPlan
-from apps.license.services.norm_plan import detect_norm
 from apps.license.services.planner_factory import PlannerFactory
 
 
@@ -174,9 +173,14 @@ class Command(BaseCommand):
                 # filter: not eligible at all, not counted anywhere below.
                 continue
 
-            # Verify norm at runtime.
-            detected = detect_norm(lic)
-            if detected != norms_class:
+            # Exact selected-SION applicability. Never choose the first export
+            # row: a licence may legitimately carry several SION metadata rows.
+            applicable_norms = {
+                (row.norm_class.norm_class or "").strip().upper()
+                for row in lic.export_license.all()
+                if row.norm_class_id
+            }
+            if norms_class not in applicable_norms:
                 skipped_norm += 1
                 continue
 

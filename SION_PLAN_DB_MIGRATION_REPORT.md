@@ -132,6 +132,25 @@ Four additional active E1 records with zero live CIF were excluded as
 exhausted before planning. Normal API calls remain tenant-scoped; the trusted
 management command processes the complete cross-company E1 population.
 
+### Controlled match-tree reset (2026-08-17)
+
+The shared rule editor now offers **Remove All Match Rules** only when the root
+contains conditions/groups. The project confirmation dialog identifies the
+rule and states that price, unit, priority, and the rule itself remain. Confirm
+clears editor state to `{operator: "AND", conditions: []}`; persistence still
+requires the normal Save action, so dirty/discard/switch protections and
+version history remain unchanged. Populated nested groups have a confirmed
+Remove Group action; empty new groups are removed directly and the root cannot
+be removed.
+
+Backend normalization prunes empty nested groups while retaining exactly one
+empty root. Empty AND/OR roots explicitly evaluate false—never Python's
+vacuous `all([])` truth—and therefore match zero items in rule tests, preview,
+NEW, FORCE ALL, and command execution. Generic FORCE ALL now also omits empty
+license batches instead of risking replacement with an empty plan. Versioned
+save preserves the internal execution-output mapping, rule identity/priority,
+other rules, and historical versions.
+
 ### plan-sion 400 resolution
 
 The exact local failure was reproduced: omitted and empty `license_ids` both

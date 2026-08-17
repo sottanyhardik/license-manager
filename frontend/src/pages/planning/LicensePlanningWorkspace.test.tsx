@@ -86,12 +86,14 @@ describe("SION-first planning workspace", () => {
         fireEvent.click(await screen.findByRole("button", { name: /Edit/ }));
         fireEvent.click(screen.getByRole("button", { name: "Remove All Match Rules" }));
         expect(screen.getByText("Remove all match rules?")).toBeInTheDocument();
+        expect(screen.getByText(/"Sugar rule"/)).toBeInTheDocument();
+        expect(screen.getByText(/price, unit and priority will remain/)).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
         expect(screen.getByLabelText("Condition 1 field")).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Remove All Match Rules" }));
         fireEvent.click(screen.getByRole("button", { name: "Remove All" }));
         expect(screen.queryByLabelText("Condition 1 field")).not.toBeInTheDocument();
-        expect(screen.getByText("No match rules configured. Add a condition or group.")).toBeInTheDocument();
+        expect(screen.getByText("No match conditions defined. This rule currently matches no items.")).toBeInTheDocument();
         expect(screen.getByText(/Unsaved changes/)).toBeInTheDocument();
         expect(screen.queryByRole("button", { name: "Remove All Match Rules" })).not.toBeInTheDocument();
     });
@@ -112,7 +114,7 @@ describe("SION-first planning workspace", () => {
         fireEvent.click(screen.getByRole("button", { name: "Group" }));
         const removeButtons = screen.getAllByRole("button", { name: "Remove" });
         fireEvent.click(removeButtons[removeButtons.length - 1]);
-        expect(screen.getAllByText("No match rules configured. Add a condition or group.")).toHaveLength(1);
+        expect(screen.getAllByText("No match conditions defined. This rule currently matches no items.")).toHaveLength(1);
         fireEvent.click(screen.getByRole("button", { name: "Remove Group" }));
         expect(screen.queryByText("Remove populated group?")).not.toBeInTheDocument();
         expect(screen.queryByLabelText("Nested group logic")).not.toBeInTheDocument();

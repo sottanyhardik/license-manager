@@ -307,6 +307,16 @@ def test_versioned_clear_expression_is_match_none_and_preserves_execution_output
     assert evaluate_expression(replacement.expression, {
         "hs_code": "08029900", "description": "Other Confectionery",
     }) is False
+    for endpoint, mode in (
+        ("preview-sion", "NEW"), ("plan-sion", "NEW"), ("plan-sion", "ALL"),
+    ):
+        execution = client.post(
+            f"/api/sion-planning-rules/{endpoint}/",
+            {"sion_id": sion.pk, "mode": mode}, format="json",
+        )
+        assert execution.status_code == 200, execution.data
+        assert execution.data["licenses"] == [], (endpoint, mode, execution.data)
+    assert not LicenseItemPlan.objects.filter(license=_license_obj).exists()
     rule.refresh_from_db()
     untouched.refresh_from_db()
     assert rule.is_active is False

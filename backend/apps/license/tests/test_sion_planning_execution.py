@@ -80,6 +80,28 @@ class SionPlanningExecutionTests(SimpleTestCase):
         with self.assertRaisesRegex(PlannerConfigurationError, "no execution output mapping"):
             broken.classify(_rows()[0])
 
+    def test_cleared_db_rule_matches_nothing_without_disabling_other_rules(self):
+        config = _configuration("E1")
+        cleared_first = _Rule(
+            config.rules[0].stable_key,
+            {"operator": "AND", "conditions": []},
+            config.rules[0].priority,
+        )
+        cleared = ResolvedPlannerConfiguration(
+            "E1", (cleared_first, *config.rules[1:]), config.output_by_rule_key,
+        )
+        records = [
+            {"record_id": "conf", "item_key": "other confectionery", "hs_code": "080211", "description": "almond", "quantity": "100"},
+            {"record_id": "cocoa", "item_key": "cocoa", "hs_code": "180300", "description": "cocoa", "quantity": "10"},
+        ]
+
+        result = SionPlanningExecutionService.execute(
+            type("Sion", (), {"norm_class": "E1"})(), records, "1000",
+            configuration=cleared,
+        )
+
+        self.assertEqual([line.key for line in result.lines], ["cocoa"])
+
     def test_registry_has_no_dispatch_branches(self):
         self.assertEqual(
             set(SionPlanningExecutionService._registry),

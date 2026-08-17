@@ -488,6 +488,12 @@ class SionRulePlanningService:
             license_numbers = {}
             for rule, preview in zip(rules, previews):
                 for result in preview["results"]:
+                    if not result["matched_lines"]:
+                        # A cleared rule is match-none. Do not create an empty
+                        # license batch entry: FORCE ALL would otherwise pass
+                        # an empty plan to the canonical writer and erase an
+                        # existing valid plan.
+                        continue
                     license_id = result["license_id"]
                     license_numbers[license_id] = result["license_number"]
                     target = by_license.setdefault(license_id, [])

@@ -15,6 +15,27 @@ export async function updateSionPlanningRule(id: number, payload: Partial<SionPl
     return (await api.patch(`sion-planning-rules/${id}/`, payload)).data;
 }
 export type SionPlanningMode = "NEW" | "ALL";
+export type SionPlanningChangeStatus = "NEW" | "CHANGE" | "NO_CHANGE" | "SHORTAGE" | "SKIPPED";
+export type SionPlanningPreviewItem = {
+    id?: number; item_id?: number; import_item_id?: number; rule_id?: number; rule_uid?: string; rule_name?: string; rule_priority?: number;
+    item_name?: string; description?: string; product_description?: string; hsn?: string; hsn_code?: string; unit?: string;
+    current_unit_price?: string; unit_price?: string; max_unit_price?: string; price_status?: string;
+    available_qty?: string; available_quantity?: string; existing_planned_qty?: string; current_planned_quantity?: string;
+    proposed_planned_qty?: string; proposed_planned_quantity?: string; quantity_change?: string; shortage_qty?: string; status?: string;
+};
+export type SionPlanningPreviewLicense = {
+    license_id: number; license_number: string; license_type?: string; sion?: string;
+    matched_item_count: number; matched_rule_count: number; matched_rule_priorities?: number[];
+    existing_plan?: Record<string, unknown> | null; proposed_plan?: Record<string, unknown> | null;
+    existing_plan_summary?: string; proposed_plan_summary?: string;
+    change_status: SionPlanningChangeStatus; has_shortage: boolean; shortage_qty?: string;
+    status?: string; items: SionPlanningPreviewItem[];
+};
+export type SionPlanningPreview = {
+    sion?: string; mode?: SionPlanningMode; rules_processed?: number | unknown[]; rules_executed?: unknown[];
+    summary?: { licenses_matched?: number; licenses_new?: number; licenses_changed?: number; licenses_unchanged?: number; licenses_shortage?: number; licenses_skipped?: number; rules_processed?: number };
+    licenses?: SionPlanningPreviewLicense[]; conflicts?: unknown[];
+};
 
 function planningPayload(sionId: number, mode: SionPlanningMode, licenseIds?: number[]) {
     return licenseIds?.length ? { sion_id: sionId, mode, license_ids: licenseIds } : { sion_id: sionId, mode };
@@ -27,7 +48,7 @@ export async function testSionPlanningRule(id: number, licenseIds?: number[]) {
 export async function planSavedSionRules(sionId: number, mode: SionPlanningMode = "NEW", licenseIds?: number[]) {
     return (await api.post("sion-planning-rules/plan-sion/", planningPayload(sionId, mode, licenseIds))).data;
 }
-export async function previewSavedSionRules(sionId: number, mode: SionPlanningMode = "NEW", licenseIds?: number[]) {
+export async function previewSavedSionRules(sionId: number, mode: SionPlanningMode = "NEW", licenseIds?: number[]): Promise<SionPlanningPreview> {
     return (await api.post("sion-planning-rules/preview-sion/", planningPayload(sionId, mode, licenseIds))).data;
 }
 export async function reorderSionPlanningRules(sionId: number, ruleOrder: number[]): Promise<SionPlanningRule[]> {

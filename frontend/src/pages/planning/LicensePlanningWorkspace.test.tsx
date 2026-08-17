@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LicensePlanningWorkspace, { planningPath } from "./LicensePlanningWorkspace";
 import * as rulesApi from "@/services/api/planningRuleApi";
@@ -7,9 +7,10 @@ import * as rulesApi from "@/services/api/planningRuleApi";
 vi.mock("@/api/axios", () => ({ default: { get: vi.fn().mockResolvedValue({ data: [{ id: 6, norm_class: "E1" }, { id: 7, norm_class: "E5" }] }) } }));
 vi.mock("@/services/api/planningRuleApi", () => ({ fetchSionPlanningRules: vi.fn(), createSionPlanningRule: vi.fn(), updateSionPlanningRule: vi.fn(), testSionPlanningRule: vi.fn(), previewSavedSionRules: vi.fn(), planSavedSionRules: vi.fn(), reorderSionPlanningRules: vi.fn() }));
 const existing = { id: 4, sion: 7, name: "Sugar rule", expression: { operator: "AND" as const, conditions: [{ field: "HSN" as const, comparator: "CONTAINS" as const, value: "1701" }] }, max_unit_price: "2.70", unit: "KG", priority: 10, is_active: true };
+const groupedPreview = { sion: "E5", mode: "NEW" as const, rules_processed: 2, summary: { licenses_matched: 1, licenses_new: 0, licenses_changed: 1, licenses_unchanged: 0, licenses_shortage: 0, rules_processed: 2 }, licenses: [{ license_id: 42, license_number: "LIC-42", sion: "E5", matched_item_count: 2, matched_rule_count: 2, matched_rule_priorities: [1, 2], existing_plan_summary: "10 KG", proposed_plan_summary: "12 KG", existing_plan: {}, proposed_plan: {}, change_status: "CHANGE" as const, has_shortage: false, status: "FEASIBLE", items: [{ item_id: 1, rule_priority: 1, rule_name: "Sugar rule", item_name: "Sugar", hsn_code: "1701", unit: "KG", available_qty: "10.000", existing_planned_qty: "8.000", proposed_planned_qty: "10.000", max_unit_price: "2.70", status: "FEASIBLE" }, { item_id: 2, rule_priority: 2, rule_name: "WPC rule", item_name: "WPC", hsn_code: "3502", available_qty: "2.000", existing_planned_qty: "2.000", proposed_planned_qty: "2.000", max_unit_price: "25.00" }] }], conflicts: [] };
 
 describe("SION-first planning workspace", () => {
-    beforeEach(() => { vi.clearAllMocks(); vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([existing]); vi.mocked(rulesApi.updateSionPlanningRule).mockResolvedValue(existing); vi.mocked(rulesApi.testSionPlanningRule).mockResolvedValue({ licenses_requested: 1, results: [{ license_id: 42, license_number: "LIC-42", matched_lines: [{ id: 1, item_name: "Sugar", hsn_code: "1701", unit: "KG", available_qty: "10.000", status: "FEASIBLE" }] }], conflicts: [] }); });
+    beforeEach(() => { vi.clearAllMocks(); vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([existing]); vi.mocked(rulesApi.updateSionPlanningRule).mockResolvedValue(existing); vi.mocked(rulesApi.testSionPlanningRule).mockResolvedValue(groupedPreview); vi.mocked(rulesApi.previewSavedSionRules).mockResolvedValue(groupedPreview); });
     it("preserves optional license context in the route", () => expect(planningPath(42, "/licenses")).toBe("/planning?license_id=42&origin=%2Flicenses"));
     it("is SION-first and loads existing rules after selection", async () => {
         render(<MemoryRouter initialEntries={["/planning?license_id=42"]}><LicensePlanningWorkspace /></MemoryRouter>);
@@ -26,9 +27,33 @@ describe("SION-first planning workspace", () => {
         fireEvent.click(await screen.findByRole("button", { name: /Edit/ }));
         fireEvent.click(await screen.findByRole("button", { name: /Test Saved Rule/ }));
         await waitFor(() => expect(rulesApi.testSionPlanningRule).toHaveBeenCalledWith(4));
-        expect(await screen.findByText("Sugar")).toBeInTheDocument();
-        expect(screen.getByText("1701")).toBeInTheDocument();
-        expect(screen.getByText("10.000")).toBeInTheDocument();
+        fireEvent.click(await screen.findByRole("button", { name: "View items for LIC-42" }));
+        expect(await screen.findByText("#1 Sugar rule")).toBeInTheDocument();
+        expect(screen.getByText(/HSN: 1701/)).toBeInTheDocument();
+        expect(screen.getByText(/Available: 10.000/)).toBeInTheDocument();
+    });
+    it("renders one license row with backend counts and preserves child items", async () => {
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        const previewButton = await screen.findByRole("button", { name: /Preview E5 Plan/ });
+        await waitFor(() => expect(previewButton).toBeEnabled());
+        fireEvent.click(previewButton);
+        expect(await screen.findByText(/Matched Licenses:/)).toBeInTheDocument();
+        expect(screen.getAllByText("LIC-42")).toHaveLength(1);
+        expect(screen.getByText("CHANGE")).toBeInTheDocument();
+        expect(screen.getByText("10 KG")).toBeInTheDocument();
+        expect(screen.getByText("12 KG")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "View items for LIC-42" }));
+        expect(screen.getByText("#1 Sugar rule")).toBeInTheDocument();
+        expect(screen.getByText("#2 WPC rule")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Hide items for LIC-42" })).toHaveAttribute("aria-expanded", "true");
+    });
+    it("opens the established canonical license planning route", async () => {
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><Routes><Route path="/planning" element={<LicensePlanningWorkspace />} /><Route path="/licenses/:id/overview" element={<p>Canonical license plan</p>} /></Routes></MemoryRouter>);
+        const previewButton = await screen.findByRole("button", { name: /Preview E5 Plan/ });
+        await waitFor(() => expect(previewButton).toBeEnabled());
+        fireEvent.click(previewButton);
+        fireEvent.click(await screen.findByRole("button", { name: "View Plan" }));
+        expect(await screen.findByText("Canonical license plan")).toBeInTheDocument();
     });
     it("plans by SION id using saved database rules only", async () => {
         vi.mocked(rulesApi.planSavedSionRules).mockResolvedValue({ rules_executed: [{ id: 4, priority: 10 }] });
@@ -63,7 +88,7 @@ describe("SION-first planning workspace", () => {
         expect(rulesApi.fetchSionPlanningRules).toHaveBeenCalledWith(7);
     });
     it("previews the selected SION without invoking PLAN", async () => {
-        vi.mocked(rulesApi.previewSavedSionRules).mockResolvedValue({ rules_processed: 1, results: [] });
+        vi.mocked(rulesApi.previewSavedSionRules).mockResolvedValue({ sion: "E5", rules_processed: 1, licenses: [] });
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
         const previewButton = await screen.findByRole("button", { name: /Preview E5 Plan/ });
         await waitFor(() => expect(previewButton).toBeEnabled());

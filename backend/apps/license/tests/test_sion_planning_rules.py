@@ -148,6 +148,29 @@ def test_repeated_plan_is_idempotent(rule_world):
     assert list(LicenseItemPlan.objects.values_list("pk", flat=True)) == plan_ids
 
 
+@pytest.mark.parametrize("endpoint", ("plan-sion", "preview-sion"))
+@pytest.mark.parametrize("include_empty_license_ids", (False, True))
+def test_sion_first_api_uses_eligible_company_licenses_when_filter_is_omitted_or_empty(
+    rule_world, endpoint, include_empty_license_ids,
+):
+    """An empty license filter is the SION-first contract, not invalid input."""
+    company, sion, license_obj, _item, _rule = rule_world
+    client, _user = _client(company)
+    payload = {"sion_id": sion.pk}
+    if include_empty_license_ids:
+        payload["license_ids"] = []
+
+    response = client.post(
+        f"/api/sion-planning-rules/{endpoint}/", payload, format="json",
+    )
+
+    assert response.status_code == 200, response.data
+    assert response.data["sion_id"] == sion.pk
+    assert len(response.data["licenses"]) == 1
+    assert response.data["licenses"][0]["license_id"] == license_obj.pk
+    assert response.data["licenses"][0]["license_number"] == license_obj.license_number
+
+
 @pytest.mark.django_db(transaction=True)
 def test_concurrent_identical_plan_creates_one_stable_row(rule_world):
     import threading

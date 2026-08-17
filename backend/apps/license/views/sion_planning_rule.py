@@ -1,7 +1,7 @@
 import logging
 
 from django.db import transaction
-from rest_framework import status, viewsets
+from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -16,6 +16,22 @@ from apps.license.services.sion_rule_engine import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class SionPlanRequestSerializer(serializers.Serializer):
+    """Identifiers accepted by norm-first preview and planning actions.
+
+    An omitted or empty ``license_ids`` value deliberately means the normal
+    company-scoped universe of eligible DFIAs.  A non-empty list is only an
+    optional restriction; it is never required to plan a SION.
+    """
+
+    sion_id = serializers.IntegerField(required=True, min_value=1)
+    license_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+    )
 
 
 class SionPlanningRuleViewSet(viewsets.ModelViewSet):
@@ -145,9 +161,12 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 {"error": "Planning accepts only saved database rules."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        request_serializer = SionPlanRequestSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+        identifiers = request_serializer.validated_data
         try:
             result = SionRulePlanningService.plan_sion(
-                request.data.get("sion_id"), request.data.get("license_ids"),
+                identifiers["sion_id"], identifiers.get("license_ids"),
                 company_id=self._company_id(),
             )
         except CompanyIsolationError as exc:
@@ -169,9 +188,12 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 {"error": "Preview accepts only saved database rules."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        request_serializer = SionPlanRequestSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+        identifiers = request_serializer.validated_data
         try:
             result = SionRulePlanningService.preview_sion(
-                request.data.get("sion_id"), request.data.get("license_ids"),
+                identifiers["sion_id"], identifiers.get("license_ids"),
                 company_id=self._company_id(),
             )
         except CompanyIsolationError as exc:

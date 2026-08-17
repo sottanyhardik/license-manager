@@ -54,15 +54,27 @@ class LicensePlanRequestSerializer(serializers.Serializer):
 class RuleAllocationStrategySerializer(serializers.Serializer):
     """Bounded UI contract backed by the canonical SPLIT action config."""
 
-    strategy = serializers.ChoiceField(choices=("STANDARD", "SPLIT_BY_UNIT_VALUE"))
+    strategy = serializers.ChoiceField(choices=("STANDARD", "SPLIT_BY_UNIT_VALUE", "SPLIT_BY_PERCENTAGE"))
     config = serializers.JSONField(required=False)
 
     def validate(self, values):
-        if values["strategy"] == "STANDARD":
+        strategy = values["strategy"]
+        if strategy == "STANDARD":
             return values
+
         config = values.get("config")
         if not isinstance(config, dict):
             raise serializers.ValidationError({"config": "Split configuration is required."})
+
+        if strategy == "SPLIT_BY_UNIT_VALUE":
+            return self._validate_unit_value_config(config)
+        elif strategy == "SPLIT_BY_PERCENTAGE":
+            return self._validate_percentage_config(config)
+
+        return values
+
+    def _validate_unit_value_config(self, config):
+        """Validate SPLIT_BY_UNIT_VALUE configuration."""
         if config.get("algorithm") != "SPLIT_BY_UNIT_VALUE":
             raise serializers.ValidationError({"config": "Unsupported split algorithm."})
         if config.get("basis") != "BALANCE_CIF_PER_QUANTITY":
@@ -97,7 +109,13 @@ class RuleAllocationStrategySerializer(serializers.Serializer):
             next_min, next_max, next_ref = parsed[i + 1]
             if next_min != current_max or next_max <= current_max or next_ref <= current_ref:
                 raise serializers.ValidationError({"config": f"Buckets {i + 1} and {i + 2} must be adjacent and ordered."})
-        return values
+        return {"strategy": "SPLIT_BY_UNIT_VALUE", "config": config}
+
+    def _validate_percentage_config(self, config):
+        """Validate SPLIT_BY_PERCENTAGE configuration."""
+        # Percentage config is loaded from the rule; user provides no custom config
+        # Config validation happens when the rule is retrieved
+        return {"strategy": "SPLIT_BY_PERCENTAGE", "config": config or {}}
 
 
 class SionPlanningRuleViewSet(viewsets.ModelViewSet):

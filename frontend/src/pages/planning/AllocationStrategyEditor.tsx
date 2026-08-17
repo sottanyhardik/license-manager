@@ -56,6 +56,7 @@ export function AllocationStrategyEditor({ value, onChange, disabled = false, er
             <select aria-label="Allocation strategy" value={value.strategy} disabled={disabled} onChange={(event) => changeStrategy(event.target.value)} className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm">
                 <option value="STANDARD">Standard</option>
                 <option value="SPLIT_BY_UNIT_VALUE">Split by Unit Value</option>
+                <option value="SPLIT_BY_PERCENTAGE">Split by %</option>
             </select>
         </label>
         {splitConfig && <div className="rounded-md border bg-muted/20 p-3">

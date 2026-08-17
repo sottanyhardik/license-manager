@@ -14,6 +14,7 @@ from apps.license.models import (
 from apps.license.services.e1_auto_plan import compute_e1_auto_plan
 from apps.license.services.e5_auto_plan import compute_e5_auto_plan
 from apps.license.services.sion_planner_config.importer import import_e1_e5_profiles
+from apps.license.views.sion_planning_rule import SionPlanRequestSerializer
 
 
 pytestmark = pytest.mark.django_db
@@ -49,6 +50,11 @@ def test_plan_sion_api_uses_db_classifier_and_preserves_legacy_mechanics(
         unit="kg", quantity=Decimal("100"), available_quantity=Decimal("100"),
     )
 
+    legacy_lines, _ = legacy_compute(license_obj)
+    # Make this fixture fully planned after its first write so the established
+    # NEW/default >=99% guard is observable.  ALL must still rebuild it.
+    planned_cif = sum(Decimal(str(row["planned_cif_fc"])) for row in legacy_lines)
+    LicenseExportItemModel.objects.filter(license=license_obj).update(cif_fc=planned_cif)
     legacy_lines, legacy_remaining = legacy_compute(license_obj)
     user = get_user_model().objects.create_user(username=f"bridge-{code}", company=company)
     role, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
@@ -76,3 +82,25 @@ def test_plan_sion_api_uses_db_classifier_and_preserves_legacy_mechanics(
     assert planned.data["sion"] == code
     assert planned.data["licenses"][0]["license_id"] == license_obj.pk
     assert planned.data["write_results"][0]["status"] == "PLANNED"
+
+    new_again = client.post(
+        "/api/sion-planning-rules/plan-sion/",
+        {"sion_id": sions[code].pk, "mode": "NEW"}, format="json",
+    )
+    assert new_again.status_code == 200, new_again.data
+    assert new_again.data["mode"] == "NEW"
+    assert new_again.data["write_results"][0]["status"] == "SKIPPED_ALREADY_PLANNED"
+
+    force_all = client.post(
+        "/api/sion-planning-rules/plan-sion/",
+        {"sion_id": sions[code].pk, "mode": "ALL", "license_ids": []}, format="json",
+    )
+    assert force_all.status_code == 200, force_all.data
+    assert force_all.data["mode"] == "ALL"
+    assert force_all.data["write_results"][0]["status"] == "PLANNED"
+
+
+def test_plan_sion_rejects_unknown_mode_before_execution():
+    serializer = SionPlanRequestSerializer(data={"sion_id": 1, "mode": "EVERYTHING"})
+    assert not serializer.is_valid()
+    assert "mode" in serializer.errors

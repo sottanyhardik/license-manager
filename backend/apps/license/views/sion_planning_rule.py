@@ -32,6 +32,9 @@ class SionPlanRequestSerializer(serializers.Serializer):
         required=False,
         allow_empty=True,
     )
+    mode = serializers.ChoiceField(
+        choices=("NEW", "ALL"), required=False, default="NEW",
+    )
 
 
 class SionPlanningRuleViewSet(viewsets.ModelViewSet):
@@ -169,6 +172,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             result = SionRulePlanningService.plan_sion(
                 identifiers["sion_id"], identifiers.get("license_ids"),
                 company_id=self._company_id(),
+                mode=identifiers["mode"],
             )
         except CompanyIsolationError as exc:
             return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
@@ -177,7 +181,10 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             return Response(payload, status=status.HTTP_400_BAD_REQUEST)
         self._audit(
             "SION_PLAN_EXECUTED", sion_id=result["sion_id"],
-            extra={"rules_executed": result["rules_executed"]},
+            extra={
+                "rules_executed": result["rules_executed"],
+                "mode": result["mode"],
+            },
         )
         return Response(result)
 

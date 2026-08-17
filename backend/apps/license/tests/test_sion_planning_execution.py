@@ -81,5 +81,7 @@ class SionPlanningExecutionTests(SimpleTestCase):
             broken.classify(_rows()[0])
 
     def test_registry_has_no_dispatch_branches(self):
-        self.assertEqual(set(SionPlanningExecutionService._registry), {"E1", "E5"})
-
+        self.assertEqual(
+            set(SionPlanningExecutionService._registry),
+            {"E1", "E5", "E126", "E132", "A3627"},
+        )

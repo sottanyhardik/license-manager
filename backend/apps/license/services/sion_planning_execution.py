@@ -18,6 +18,27 @@ class PlannerConfigurationError(ValueError):
     pass
 
 
+PLAN_MODE_NEW = "NEW"
+PLAN_MODE_ALL = "ALL"
+PLAN_MODES = frozenset((PLAN_MODE_NEW, PLAN_MODE_ALL))
+
+
+def normalize_plan_mode(mode: str | None) -> str:
+    """Return the canonical execution mode used by every planning interface.
+
+    Historically ``plan_norms`` skipped licences already planned to at least
+    99% unless ``--all`` was supplied.  ``NEW`` and ``ALL`` deliberately map
+    to that existing ``force_replan`` contract instead of introducing another
+    definition of "already planned" here.
+    """
+    normalized = str(mode or PLAN_MODE_NEW).strip().upper()
+    if normalized not in PLAN_MODES:
+        raise PlannerConfigurationError(
+            f"Unsupported planning mode {mode!r}. Expected NEW or ALL."
+        )
+    return normalized
+
+
 class LegacyPlannerAdapter(Protocol):
     def execute(self, records: list[dict[str, Any]], balance_cif: Any, configuration: "ResolvedPlannerConfiguration", *, options: dict[str, Any] | None = None): ...
     def compute_license(self, license_obj, configuration: "ResolvedPlannerConfiguration", *, preview: bool): ...
@@ -120,10 +141,37 @@ class _E5Adapter:
         )
 
 
+class _LegacyFactoryAdapter:
+    """Central compatibility bridge for planners not yet DB-classified.
+
+    E126/E132/A3627 still contain proven mechanics and configuration together.
+    Keeping this fallback in the one registry preserves existing CLI callers
+    while their classifiers are migrated; API/CLI dispatch must not re-create
+    PlannerFactory branches of their own.
+    """
+    requires_configuration = False
+
+    def execute(self, records, balance_cif, configuration, *, options=None):
+        raise PlannerConfigurationError(
+            f"Record-level execution is not available for {configuration.sion_code}."
+        )
+
+    def compute_license(self, license_obj, configuration, *, preview):
+        from apps.license.services.planner_factory import PlannerFactory
+        result = PlannerFactory.run(license_obj, configuration.sion_code)
+        return result.lines, result.remaining_cif
+
+
 class SionPlanningExecutionService:
     """One registry and configuration loader for transitional execution."""
 
-    _registry: dict[str, LegacyPlannerAdapter] = {"E1": _E1Adapter(), "E5": _E5Adapter()}
+    _registry: dict[str, LegacyPlannerAdapter] = {
+        "E1": _E1Adapter(),
+        "E5": _E5Adapter(),
+        "E126": _LegacyFactoryAdapter(),
+        "E132": _LegacyFactoryAdapter(),
+        "A3627": _LegacyFactoryAdapter(),
+    }
 
     @classmethod
     def register(cls, sion_code: str, adapter: LegacyPlannerAdapter) -> None:
@@ -144,6 +192,11 @@ class SionPlanningExecutionService:
             sion=sion, is_active=True,
         ).order_by("priority", "pk"))
         if not rules:
+            adapter = cls._registry.get(sion.norm_class.strip().upper())
+            if adapter is not None and not getattr(adapter, "requires_configuration", True):
+                return ResolvedPlannerConfiguration(
+                    sion.norm_class.strip().upper(), (), {},
+                )
             raise PlannerConfigurationError("The selected SION has no active saved rules.")
         profile = SionPlanningProfile.objects.filter(sion=sion).order_by(
             "-is_active", "-version", "-pk",
@@ -188,7 +241,10 @@ class SionPlanningExecutionService:
             CanonicalPlanningService, CompanyIsolationError,
         )
 
-        base = LicenseDetailsModel.objects.filter(export_license__norm_class=sion)
+        base = LicenseDetailsModel.objects.filter(
+            export_license__norm_class=sion,
+            flags__is_active=True,
+        )
         if license_ids:
             ids = CanonicalPlanningService._strict_id_list(license_ids, "license_ids")
             base = base.filter(pk__in=ids)
@@ -200,7 +256,12 @@ class SionPlanningExecutionService:
             raise PlannerConfigurationError("One or more selected licenses are unavailable for this SION.")
         if company_id is not None and any(row.exporter_id != int(company_id) for row in licenses):
             raise CompanyIsolationError("One or more selected licenses belong to another company.")
-        return licenses
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        live_balances = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
+            [row.pk for row in licenses]
+        )
+        licenses = [row for row in licenses if live_balances.get(row.pk, Decimal("0")) > 0]
+        return licenses, live_balances
 
     @classmethod
     def _compute_license(cls, license_obj, configuration, *, preview):
@@ -213,16 +274,41 @@ class SionPlanningExecutionService:
         return adapter.compute_license(license_obj, configuration, preview=preview)
 
     @classmethod
-    def plan_sion(cls, sion, license_ids=None, *, company_id=None, persist=True):
+    def plan_sion(
+        cls, sion, license_ids=None, *, company_id=None, persist=True,
+        mode=PLAN_MODE_NEW,
+    ):
         """Execute saved DB classification through the proven E1/E5 mechanics."""
         from django.db import transaction
         from apps.license.services.canonical_planning_service import CanonicalPlanningService
 
+        mode = normalize_plan_mode(mode)
         configuration = cls.resolve_configuration(sion)
-        licenses = cls._eligible_licenses(sion, license_ids, company_id=company_id)
+        licenses, live_balances = cls._eligible_licenses(
+            sion, license_ids, company_id=company_id,
+        )
         results = []
         with transaction.atomic():
             for license_obj in licenses:
+                if (
+                    mode == PLAN_MODE_NEW
+                    and CanonicalPlanningService._is_already_planned(
+                        license_obj, Decimal(str(live_balances[license_obj.pk])),
+                    )
+                ):
+                    results.append({
+                        "license_id": license_obj.pk,
+                        "license_number": license_obj.license_number,
+                        "lines": [],
+                        "status": "SKIPPED_ALREADY_PLANNED",
+                        **({
+                            "write_result": {
+                                "license_id": license_obj.pk,
+                                "status": "SKIPPED_ALREADY_PLANNED",
+                            },
+                        } if persist else {}),
+                    })
+                    continue
                 lines, remaining = cls._compute_license(
                     license_obj, configuration, preview=not persist,
                 )
@@ -239,11 +325,14 @@ class SionPlanningExecutionService:
                     "license_number": license_obj.license_number,
                     "lines": canonical_lines,
                     "remaining_balance_cif": remaining,
+                    "status": "PLANNED" if persist else "PREVIEWED",
                 }
                 if persist:
                     result["write_result"] = CanonicalPlanningService.build_canonical_plan(
                         license_id=license_obj.pk, norm_class=sion.norm_class,
-                        items=canonical_lines, force_replan=True, company_id=company_id,
+                        items=canonical_lines,
+                        force_replan=mode == PLAN_MODE_ALL,
+                        company_id=company_id,
                     )
                 results.append(result)
         rules = [{"id": rule.pk, "version": rule.version, "priority": rule.priority}
@@ -251,18 +340,28 @@ class SionPlanningExecutionService:
         return {
             "sion_id": sion.pk,
             "sion": sion.norm_class,
+            "mode": mode,
             "rules_executed" if persist else "rules_processed": rules,
             "licenses": results,
             "results": results,
             "write_results": [row["write_result"] for row in results] if persist else [],
             "eligible_licenses": len(results),
-            "planned_licenses": sum(bool(row.get("lines")) for row in results),
+            "planned_licenses": sum(
+                bool(row.get("lines")) and row.get("status") != "SKIPPED_ALREADY_PLANNED"
+                for row in results
+            ),
+            "already_planned": sum(
+                row.get("status") == "SKIPPED_ALREADY_PLANNED" for row in results
+            ),
             "matched_items": sum(len(row.get("lines", ())) for row in results),
             "summary": {
                 "rules": len(rules),
                 "active_rules": len(rules),
                 "eligible_licenses": len(results),
                 "matched_items": sum(len(row.get("lines", ())) for row in results),
+                "already_planned": sum(
+                    row.get("status") == "SKIPPED_ALREADY_PLANNED" for row in results
+                ),
             },
             "can_plan": True,
         }

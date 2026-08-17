@@ -389,14 +389,17 @@ class SionRulePlanningService:
             return preview
 
     @staticmethod
-    def plan_sion(sion_id, license_ids=None, *, company_id=None):
+    def plan_sion(sion_id, license_ids=None, *, company_id=None, mode="NEW"):
         """Reload and execute all persisted active rules in DB priority order."""
+        from apps.license.services.sion_planning_execution import normalize_plan_mode
+        mode = normalize_plan_mode(mode)
         with transaction.atomic():
             sion = SionRulePriorityService._lock_sion(sion_id)
             from apps.license.services.sion_planning_execution import SionPlanningExecutionService
             if SionPlanningExecutionService.supports(sion):
                 return SionPlanningExecutionService.plan_sion(
                     sion, license_ids, company_id=company_id, persist=True,
+                    mode=mode,
                 )
             rules = list(SionPlanningRule.objects.select_for_update().filter(
                 sion=sion, is_active=True,
@@ -439,16 +442,20 @@ class SionRulePlanningService:
             writes = []
             for license_id in locked_ids:
                 lines = by_license[license_id]
-                if CanonicalPlanningService._generated_plan_matches_current(license_id, lines):
+                if (
+                    mode == "NEW"
+                    and CanonicalPlanningService._generated_plan_matches_current(license_id, lines)
+                ):
                     writes.append({"license_id": license_id, "mutation_status": "UNCHANGED"})
                 else:
                     writes.append(CanonicalPlanningService.build_canonical_plan(
                         license_id=license_id, norm_class=sion.norm_class,
-                        items=lines, force_replan=True, company_id=company_id,
+                        items=lines, force_replan=mode == "ALL", company_id=company_id,
                     ))
             return {
                 "sion_id": sion.pk,
                 "sion": sion.norm_class,
+                "mode": mode,
                 "rules_executed": [{
                     "id": rule.pk, "version": rule.version, "priority": rule.priority,
                 } for rule in rules],

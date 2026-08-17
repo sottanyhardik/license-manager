@@ -265,6 +265,19 @@ def test_crud_versions_and_delete_retires_history(rule_world):
     assert SionPlanningRule.objects.filter(name="API Rule").count() == 2
 
 
+def test_versioned_edit_preserves_execution_mapping_identity(rule_world):
+    company, _sion, _license_obj, _item, rule = rule_world
+    rule.stable_key = "TEST:RULE:001"
+    rule.save(update_fields=("stable_key",))
+    client, _user = _client(company)
+    response = client.patch(
+        f"/api/sion-planning-rules/{rule.pk}/",
+        {"max_unit_price": "3.10"}, format="json",
+    )
+    assert response.status_code == 200, response.data
+    assert SionPlanningRule.objects.get(pk=response.data["id"]).stable_key == rule.stable_key
+
+
 def test_database_priority_assignment_is_sion_scoped_and_reorder_persists(rule_world):
     company, sion, _license_obj, _item, existing = rule_world
     client, _user = _client(company)

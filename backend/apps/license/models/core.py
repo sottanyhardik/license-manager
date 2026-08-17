@@ -1306,7 +1306,7 @@ class SionPlanningRule(AuditModel):
         "core.SionNormClassModel", on_delete=models.PROTECT,
         related_name="planning_rules", db_index=True,
     )
-    stable_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    stable_key = models.CharField(max_length=120, null=True, blank=True, db_index=True)
     name = models.CharField(max_length=255)
     version = models.PositiveIntegerField(default=1)
     expression = models.JSONField(default=dict)
@@ -1320,6 +1320,11 @@ class SionPlanningRule(AuditModel):
     class Meta:
         ordering = ("sion_id", "priority", "name", "-version")
         constraints = [
+            models.UniqueConstraint(
+                fields=("sion", "stable_key", "version"),
+                condition=models.Q(stable_key__isnull=False),
+                name="uniq_sion_rule_stable_key_version",
+            ),
             models.UniqueConstraint(
                 fields=("sion", "name", "version"),
                 name="uniq_sion_planning_rule_version",

@@ -92,7 +92,8 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             current.modified_by = request.user
             current.save(update_fields=("is_active", "modified_on", "modified_by"))
             created = SionPlanningRule.objects.create(
-                **values, sion=current.sion, priority=current.priority,
+                **values, sion=current.sion, stable_key=current.stable_key,
+                priority=current.priority,
                 version=current.version + 1,
                 created_by=request.user, modified_by=request.user,
             )

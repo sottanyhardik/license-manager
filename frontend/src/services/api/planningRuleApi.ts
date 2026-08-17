@@ -14,14 +14,19 @@ export async function createSionPlanningRule(payload: SionPlanningRule): Promise
 export async function updateSionPlanningRule(id: number, payload: Partial<SionPlanningRule>): Promise<SionPlanningRule> {
     return (await api.patch(`sion-planning-rules/${id}/`, payload)).data;
 }
-export async function testSionPlanningRule(id: number, licenseIds: number[] = []) {
-    return (await api.post(`sion-planning-rules/${id}/test/`, { license_ids: licenseIds })).data;
+function planningPayload(sionId: number, licenseIds?: number[]) {
+    return licenseIds?.length ? { sion_id: sionId, license_ids: licenseIds } : { sion_id: sionId };
 }
-export async function planSavedSionRules(sionId: number, licenseIds: number[] = []) {
-    return (await api.post("sion-planning-rules/plan-sion/", { sion_id: sionId, license_ids: licenseIds })).data;
+
+export async function testSionPlanningRule(id: number, licenseIds?: number[]) {
+    const payload = licenseIds?.length ? { license_ids: licenseIds } : {};
+    return (await api.post(`sion-planning-rules/${id}/test/`, payload)).data;
 }
-export async function previewSavedSionRules(sionId: number, licenseIds: number[] = []) {
-    return (await api.post("sion-planning-rules/preview-sion/", { sion_id: sionId, license_ids: licenseIds })).data;
+export async function planSavedSionRules(sionId: number, licenseIds?: number[]) {
+    return (await api.post("sion-planning-rules/plan-sion/", planningPayload(sionId, licenseIds))).data;
+}
+export async function previewSavedSionRules(sionId: number, licenseIds?: number[]) {
+    return (await api.post("sion-planning-rules/preview-sion/", planningPayload(sionId, licenseIds))).data;
 }
 export async function reorderSionPlanningRules(sionId: number, ruleOrder: number[]): Promise<SionPlanningRule[]> {
     return (await api.post("sion-planning-rules/reorder/", { sion_id: sionId, rule_order: ruleOrder })).data;

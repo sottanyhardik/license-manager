@@ -25,7 +25,7 @@ describe("SION-first planning workspace", () => {
         fireEvent.keyDown(screen.getByLabelText("SION Norm"), { key: "ArrowDown" }); fireEvent.click(await screen.findByText("E5"));
         fireEvent.click(await screen.findByRole("button", { name: /Edit/ }));
         fireEvent.click(await screen.findByRole("button", { name: /Test Saved Rule/ }));
-        await waitFor(() => expect(rulesApi.testSionPlanningRule).toHaveBeenCalledWith(4, [42]));
+        await waitFor(() => expect(rulesApi.testSionPlanningRule).toHaveBeenCalledWith(4));
         expect(await screen.findByText("Sugar")).toBeInTheDocument();
         expect(screen.getByText("1701")).toBeInTheDocument();
         expect(screen.getByText("10.000")).toBeInTheDocument();
@@ -35,7 +35,8 @@ describe("SION-first planning workspace", () => {
         render(<MemoryRouter initialEntries={["/planning?license_id=42"]}><LicensePlanningWorkspace /></MemoryRouter>);
         fireEvent.keyDown(screen.getByLabelText("SION Norm"), { key: "ArrowDown" }); fireEvent.click(await screen.findByText("E5"));
         fireEvent.click(await screen.findByRole("button", { name: /PLAN E5/ }));
-        await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, [42]));
+        await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7));
+        expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7);
     });
     it("supports nested ALL/ANY groups and accessible condition fields", async () => {
         render(<MemoryRouter initialEntries={["/planning"]}><LicensePlanningWorkspace /></MemoryRouter>);
@@ -57,7 +58,7 @@ describe("SION-first planning workspace", () => {
         const previewButton = await screen.findByRole("button", { name: /Preview E5 Plan/ });
         await waitFor(() => expect(previewButton).toBeEnabled());
         fireEvent.click(previewButton);
-        await waitFor(() => expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, []));
+        await waitFor(() => expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7));
         expect(rulesApi.planSavedSionRules).not.toHaveBeenCalled();
     });
     it("protects a dirty editor and discards all norm-specific state on switch", async () => {

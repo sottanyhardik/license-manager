@@ -155,7 +155,7 @@ describe("SION-first planning workspace", () => {
         const forceButton = await screen.findByRole("button", { name: "Force All" });
         await waitFor(() => expect(forceButton).toBeEnabled());
         fireEvent.click(forceButton);
-        expect(screen.getByRole("alertdialog", { name: "Force re-plan E5" })).toBeInTheDocument();
+        expect(screen.getByRole("alertdialog", { name: "Force re-plan E5?" })).toBeInTheDocument();
         fireEvent.click(screen.getAllByRole("button", { name: "Force All" })[1]);
         await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "ALL"));
         expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "ALL");

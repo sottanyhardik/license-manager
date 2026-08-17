@@ -53,6 +53,26 @@ E126/E132/A3627 remain on their existing execution adapters until their
 low-level self-classifiers can accept the same resolved DB configuration
 without changing split, preservation, grouping or weighted-price mechanics.
 
+### plan-sion 400 resolution
+
+The exact local failure was reproduced: omitted and empty `license_ids` both
+reached execution, then the simplified current-price path rejected three E1
+items as `MISSING` because their master unit price was zero. It was not a
+license-list validation failure.
+
+E1/E5 plan and preview now select the transitional execution bridge whenever a
+persisted profile exists. DB expressions classify items in priority order;
+`execution_output` supplies the explicit legacy bucket; DB maximum prices
+override the applicable fixed/WPC rate; and the existing auto-plan grouping,
+waterfall, split, flooring and output construction remain unchanged. Migration
+0023 backfills the two approved pre-existing E1 UI rules without priority-based
+inference.
+
+Local read-only verification for SION id 1 now returns the same successful
+result for omitted and empty license filters: E1, 25 eligible licenses, two
+matched legacy-engine lines, `can_plan=true`. Focused endpoint/bridge/E1/E5
+regression: 49 passed.
+
 ## Inventory and classification
 
 | Source | SION | Rule / execution order | Price (USD/unit) | Runtime caller | Classification | DB representable |

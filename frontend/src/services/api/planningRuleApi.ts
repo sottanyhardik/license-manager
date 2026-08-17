@@ -20,6 +20,9 @@ export async function testSionPlanningRule(id: number, licenseIds: number[] = []
 export async function planSavedSionRules(sionId: number, licenseIds: number[] = []) {
     return (await api.post("sion-planning-rules/plan-sion/", { sion_id: sionId, license_ids: licenseIds })).data;
 }
+export async function previewSavedSionRules(sionId: number, licenseIds: number[] = []) {
+    return (await api.post("sion-planning-rules/preview-sion/", { sion_id: sionId, license_ids: licenseIds })).data;
+}
 export async function reorderSionPlanningRules(sionId: number, ruleOrder: number[]): Promise<SionPlanningRule[]> {
     return (await api.post("sion-planning-rules/reorder/", { sion_id: sionId, rule_order: ruleOrder })).data;
 }

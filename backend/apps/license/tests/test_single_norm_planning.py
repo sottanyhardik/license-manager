@@ -207,26 +207,12 @@ def test_repeat_is_idempotent_and_duplicate_license_ids_are_rejected(
         )
 
 
-def test_plan_norm_endpoint_enforces_company_and_retired_bulk_route_is_unavailable(
-    planning_world, monkeypatch,
-):
+def test_legacy_planning_write_routes_are_unavailable(planning_world):
     world = planning_world
-    _fake_planner(monkeypatch)
     client = _client(world["company_a"])
 
-    ok = client.post(PLAN_NORM_URL, {
-        "sion_id": world["e5"].pk,
-        "license_ids": [world["multi"].pk],
-    }, format="json")
-    assert ok.status_code == 200
-
-    forbidden = client.post(PLAN_NORM_URL, {
-        "sion_id": world["e5"].pk,
-        "license_ids": [world["foreign"].pk],
-    }, format="json")
-    assert forbidden.status_code == 403
-
     retired_routes = (
+        ("post", PLAN_NORM_URL),
         ("post", "/api/license-item-plans/auto-plan-all/"),
         ("post", "/api/license-item-plans/auto-plan/"),
         ("post", "/api/license-item-plans/e1-auto-plan/"),

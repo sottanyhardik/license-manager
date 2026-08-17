@@ -160,3 +160,23 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             extra={"rules_executed": result["rules_executed"]},
         )
         return Response(result)
+
+    @action(detail=False, methods=("post",), url_path="preview-sion")
+    def preview_sion(self, request):
+        """Preview the selected norm using saved DB rules, without writes."""
+        if "rules" in request.data or "expression" in request.data:
+            return Response(
+                {"error": "Preview accepts only saved database rules."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = SionRulePlanningService.preview_sion(
+                request.data.get("sion_id"), request.data.get("license_ids"),
+                company_id=self._company_id(),
+            )
+        except CompanyIsolationError as exc:
+            return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
+        except (PlanningError, ValueError, TypeError) as exc:
+            payload = exc.as_dict() if isinstance(exc, PlanningError) else {"error": str(exc)}
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)

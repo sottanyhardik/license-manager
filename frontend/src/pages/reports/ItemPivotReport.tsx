@@ -14,7 +14,6 @@ import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileTe
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
-import NormRowPlanner from "../../components/planning/NormRowPlanner";
 import ItemPivotFilters from "./ItemPivotFilters";
 import { openAuthedFile } from "../../utils/documentDownload";
 import { usePurchaseStatusOptions } from "../../hooks/useMasterOptions";
@@ -211,7 +210,6 @@ export default function ItemPivotReport() {
     // Filter states
     const [selectedCompanies, setSelectedCompanies] = useState([]);
     const [excludeCompanies, setExcludeCompanies] = useState([]);
-    const [sionNorms, setSionNorms] = useState([]);
     const [filtersCollapsed, setFiltersCollapsed] = useState(false);
     const [activeNormTab, setActiveNormTab] = useState(null);
     const [availableNorms, setAvailableNorms] = useState([]);
@@ -258,7 +256,6 @@ export default function ItemPivotReport() {
     const { makeRef: makeFrozenColRef, offsets: frozenColOffsets } = useFrozenColumnOffsets(pivotGroupKeys);
 
     useEffect(() => {
-        loadFilterOptions();
         loadAvailableNorms();
     }, []);
 
@@ -269,20 +266,6 @@ export default function ItemPivotReport() {
             loadAvailableNorms();
         }
     }, [minBalance, licenseStatus]);
-
-    const loadFilterOptions = async () => {
-        try {
-            // Load SION norms (only active ones)
-            const normsResponse = await api.get('masters/sion-classes/?is_active=true&page_size=500');
-            const normsData = normsResponse.data?.results || normsResponse.data || [];
-            setSionNorms(Array.isArray(normsData) ? normsData : []);
-        } catch (error) {
-            setSionNorms([]);
-        }
-        // Purchase Status options come from the shared usePurchaseStatusOptions
-        // hook (Purchase Status master, is_active-only, display_order/label
-        // ordering) — no per-page fetch needed here anymore.
-    };
 
     const loadAvailableNorms = async () => {
         try {
@@ -478,16 +461,6 @@ export default function ItemPivotReport() {
         return total;
     };
 
-    const planningLicenses = Array.from(new Map(
-        Object.values(reportData?.licenses_by_norm_notification?.[activeNormTab] || {})
-            .flatMap((rows: any) => Array.isArray(rows) ? rows : [])
-            .filter((license: any) => Number.isInteger(Number(license.id ?? license.license_id)))
-            .map((license: any) => [Number(license.id ?? license.license_id), {
-                id: Number(license.id ?? license.license_id),
-                number: String(license.license_number || license.id || license.license_id),
-            }]),
-    ).values());
-
     return (
         <div className="min-h-screen bg-background">
             {/* Tabler-style page header */}
@@ -570,14 +543,6 @@ export default function ItemPivotReport() {
                     isDefaultPurchaseStatus={isDefaultPurchaseStatus}
                 />
             )}
-
-            <NormRowPlanner
-                norms={sionNorms.filter((norm: any) => availableNorms.some((available: any) =>
-                    String(available?.norm_class ?? available) === String(norm.norm_class),
-                ))}
-                licenses={planningLicenses}
-                onPlanned={() => { if (activeNormTab) loadReport(activeNormTab); }}
-            />
 
             {/* Norm Tabs — redesigned */}
             <NormCardGrid

@@ -199,6 +199,9 @@ def test_rule_api_permissions_and_company_isolation(rule_world):
     assert viewer_client.post(
         "/api/sion-planning-rules/plan-sion/", {"sion_id": sion.pk}, format="json",
     ).status_code == 403
+    assert viewer_client.post(
+        "/api/sion-planning-rules/preview-sion/", {"sion_id": sion.pk}, format="json",
+    ).status_code == 403
 
     foreign_company = CompanyModel.objects.create(iec="9200000002", name="Foreign Rule")
     foreign_license = LicenseDetailsModel.objects.create(
@@ -296,3 +299,64 @@ def test_plan_sion_uses_only_saved_active_rules_and_records_provenance(rule_worl
     assert plan.planning_rule_id == rule.pk
     assert plan.planning_rule_version == 1
     assert plan.planning_rule_priority == 1
+
+
+def test_sion_preview_is_read_only_database_driven_and_isolated(rule_world):
+    company, sion, license_obj, _item, rule = rule_world
+    client, _user = _client(company)
+    before = LicenseItemPlan.objects.count()
+    rejected = client.post("/api/sion-planning-rules/preview-sion/", {
+        "sion_id": sion.pk, "license_ids": [license_obj.pk],
+        "rules": [{"expression": {"operator": "OR", "conditions": []}}],
+    }, format="json")
+    assert rejected.status_code == 400
+
+    response = client.post("/api/sion-planning-rules/preview-sion/", {
+        "sion_id": sion.pk, "license_ids": [license_obj.pk],
+    }, format="json")
+    assert response.status_code == 200, response.data
+    assert response.data["rules_processed"] == [{
+        "id": rule.pk, "version": rule.version, "priority": rule.priority,
+    }]
+    assert response.data["licenses"][0]["status"] == "NOT_PLANNED"
+    assert LicenseItemPlan.objects.count() == before
+
+    other_sion = SionNormClassModel.objects.create(
+        head_norm=sion.head_norm, norm_class="R79", is_active=True,
+    )
+    SionPlanningRule.objects.create(
+        sion=other_sion, name="Other norm only", unit="kg",
+        max_unit_price=Decimal("9.00"), priority=1,
+        expression={"field": "HSN", "comparator": "CONTAINS", "value": "1701"},
+    )
+    response = client.post("/api/sion-planning-rules/preview-sion/", {
+        "sion_id": sion.pk, "license_ids": [license_obj.pk],
+    }, format="json")
+    assert [row["id"] for row in response.data["rules_processed"]] == [rule.pk]
+
+
+def test_norm_preview_runs_canonical_waterfall_in_saved_priority_order(rule_world):
+    company, sion, license_obj, _item, first = rule_world
+    hs = HSCodeModel.objects.create(
+        hs_code="009999", product_description="Second", unit_price=Decimal("2.00"), unit="kg",
+    )
+    LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=2, hs_code=hs, description="Second",
+        unit="kg", quantity=Decimal("10.000"), available_quantity=Decimal("10.000"),
+    )
+    second = SionPlanningRule.objects.create(
+        sion=sion, name="Second", unit="kg", max_unit_price=Decimal("2.00"), priority=2,
+        expression={"field": "HSN", "comparator": "CONTAINS", "value": "9999"},
+    )
+    result = SionRulePlanningService.preview_sion(
+        sion.pk, [license_obj.pk], company_id=company.pk,
+    )
+    assert [row["id"] for row in result["rules_processed"]] == [first.pk, second.pk]
+    allocated = result["licenses"][0]["allocated_items"]
+    assert [row["planning_rule_id"] for row in allocated] == [first.pk, second.pk]
+    assert [row["priority"] for row in allocated] == [1, 2]
+    assert result["licenses"][0]["remaining_balance_cif"] == (
+        result["licenses"][0]["opening_balance_cif"]
+        - sum(row["planned_cif_fc"] for row in allocated)
+    )
+    assert not LicenseItemPlan.objects.exists()

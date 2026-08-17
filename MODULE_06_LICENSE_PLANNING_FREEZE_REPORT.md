@@ -155,6 +155,43 @@ Plan are disabled while the selected editor differs from the last backend
 response; switching SION discards the prior draft and reloads that SION's active
 rules from the API in database order.
 
+## Reusable SION-specific workspace
+
+There is one route and one implementation: `/planning?sion=<canonical code or
+id>`. E1, E5, E132, PP and future active SION masters all render
+`LicensePlanningWorkspace`; no norm-specific planning page, hook, matcher or API
+exists. The heading and actions are data-driven (`E1 Planning`, `Preview E1
+Plan`, `PLAN E1`) while the selector options come from the SION master.
+
+The ordered rule list uses persisted priorities with shared up/down reorder
+controls. New/Edit opens the common nested rule editor; otherwise the large
+editor remains closed. Switching norms clears rule, preview and result state.
+Dirty switches offer Save and switch, Discard and switch, or Cancel. Empty
+norms display a safe New Rule state and never inherit another norm's rules.
+
+`POST /api/sion-planning-rules/preview-sion/` reloads the selected SION's saved
+active rules and runs the same canonical priority waterfall in memory. It
+returns rule provenance, matched item/price data, existing plans, proposed
+quantity, shortage, conflicts and remaining CIF without writes. PLAN uses the
+same DB ordering and performs one atomic canonical write per license; later
+rules therefore see capacity remaining after earlier priorities.
+
+The prior Item Pivot `NormRowPlanner`, its client helpers, and the hardcoded
+`license-item-plans/plan-norm` write route were retired. The historical E1/E5/
+E126/E132 calculation modules remain only for legacy reporting and internal
+compatibility; they are not reachable from the Module 06 planning UI or its
+write API.
+
+## Local database verification
+
+Migration `0019_sion_rule_priority_and_provenance` was applied successfully to
+the local PostgreSQL database and the provenance columns were queried without
+error. Canonical SION masters E1, E5, E132 and PP exist. The current database
+contains zero SION planning rules for all four, so each correctly renders the
+no-rules state. No example business rule was invented or inserted merely to
+make the database non-empty; full E1/E5 persistence, isolation, reorder,
+preview and PLAN behavior is covered transactionally by the regression suite.
+
 ## Security
 
 `LicenseItemPlanViewSet` is tenant scoped for list, retrieve, create, update, and delete. `LicenseDetailsViewSet` now applies the same company scope centrally, closing the URL-selected `plan-utilization` IDOR and protecting detail/overview actions used during planning preselection. Single-SION planning validates the complete requested license set before computation and locks license rows in deterministic order. A missing, inapplicable, inactive, unsupported, or cross-company selection rolls back the entire request. Cross-company identifiers do not expose or mutate planning data; superuser behavior remains explicit.
@@ -168,20 +205,14 @@ prices, and batch-loads financial balances for the applicable license set.
 
 ## Verification
 
-- Database authority, priority, reorder, request-tampering and provenance
-  coverage is included in the 24-test SION rule suite.
-- Combined SION rules plus broader canonical planning, single-SION, security,
-  grouping, utilization and plan CRUD regression: 144 passed.
-- SION-first workspace focused tests: 5 passed.
-- Integrated focused backend planning/security suite: 49 passed.
-- Explicit single-SION contract/workspace envelope: 13 passed.
-- Combined single-SION, planning-security and detail target: 17 passed.
-- Tenant/detail authorization audit: 19 passed.
-- Planning workspace/UI acceptance: 16 passed.
+- Reusable SION backend/model/API suite: 95 passed.
+- Frontend SION workspace: 8 focused tests passed.
+- Frontend full regression: 397 passed across 53 files (the removed file was
+  the retired duplicate NormRowPlanner test).
+- Frontend typecheck and production build: passed.
+- Local migration 0019: applied and runtime columns verified.
+- E1/E5 cross-SION preview and reorder isolation: passed.
 - Focused Module 05 regression suite: 25 passed.
-- Frontend full regression: 399 passed across 54 files.
-- Frontend typecheck: passed.
-- Frontend production build: passed.
 - Migration drift check: no changes detected.
 - Django system check: passed with zero issues.
 - Full backend regression: 1,027 passed and 37 skipped before an unrelated pre-existing stale test failed in `test_idor_fixes_p0_p1.py`. Its fixture supplies removed `BillOfEntryModel` fields (`boe_number`, `boe_date`, `exporter_id`) and an invalid `port_id=1`, so the repository-wide regression gate is not green.

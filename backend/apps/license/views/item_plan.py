@@ -206,27 +206,6 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=False, methods=["post"], url_path="plan-norm")
-    def plan_norm(self, request):
-        """Plan explicit licenses with one explicit canonical SION master."""
-        from apps.license.services.canonical_planning_service import (
-            CompanyIsolationError,
-            PlanningError,
-            plan_sion_for_licenses,
-        )
-
-        try:
-            result = plan_sion_for_licenses(
-                request.data.get("sion_id"),
-                request.data.get("license_ids"),
-                company_id=self._company_id(),
-            )
-        except CompanyIsolationError as exc:
-            return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
-        except PlanningError as exc:
-            return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
-        return Response(result, status=status.HTTP_200_OK)
-
     @action(detail=False, methods=["get"], url_path="planning-norms")
     def planning_norms(self, request):
         """Canonical selected-SION rows and totals; no client aggregation."""

@@ -203,30 +203,6 @@ export const deleteItemPlan = async (planId) => {
     return response.data;
 };
 
-/** Apply exactly one selected SION master row to explicitly selected licenses. */
-export const planNorm = async (licenseIds, sionId) => {
-    const response = await api.post('license-item-plans/plan-norm/', {
-        license_ids: licenseIds,
-        sion_id: sionId,
-    });
-    return response.data;
-};
-
-export const fetchPlanningNorm = async ({licenseIds, sionId, hsn = '', product = '', logic = 'AND'}) => {
-    const response = await api.get('license-item-plans/planning-norms/', {params: {
-        license_ids: licenseIds.join(','), sion_id: sionId, hsn, product, logic,
-    }});
-    return response.data;
-};
-
-/** Canonical common-applicable SION snapshots for an authorized license population. */
-export const fetchApplicablePlanningNorms = async (licenseIds, filters = {}) => {
-    const response = await api.get('license-item-plans/planning-norms/', {params: {
-        license_ids: licenseIds.join(','), ...filters,
-    }});
-    return response.data;
-};
-
 export default {
     fetchLicenseList,
     fetchLicense,

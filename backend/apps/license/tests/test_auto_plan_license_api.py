@@ -2,6 +2,10 @@
 
 Tests for plan-license and plan-licenses actions that resolve SION norms from
 license export manifest and execute planning through Module 06.
+
+NOTE: Tests for plan-licenses endpoint are marked as deprecated (skipped) because
+the endpoint was removed in Phase 2D.6 consolidation. All bulk planning should now
+route through /planning page via plan-sion endpoint.
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -272,8 +276,9 @@ def test_plan_license_all_mode_replans_existing(setup_planning_env):
     assert response2.data["applicable_sions"][0]["status"] == "EXECUTED"
 
 
+@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_bulk_single_license(setup_planning_env):
-    """Test plan-licenses with a single license in the list."""
+    """Test plan-licenses with a single license in the list (DEPRECATED)."""
     env = setup_planning_env
     license_obj = _make_test_license(
         env["company"], "TEST-BULK-1", sion=env["sions"]["E1"]
@@ -297,8 +302,9 @@ def test_plan_licenses_bulk_single_license(setup_planning_env):
     assert data["summary"]["total_sions"] == 1
 
 
+@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_bulk_multiple_licenses_same_sion(setup_planning_env):
-    """Test plan-licenses with multiple licenses, same SION."""
+    """Test plan-licenses with multiple licenses, same SION (DEPRECATED)."""
     env = setup_planning_env
     licenses = []
     for i in range(2):
@@ -323,8 +329,9 @@ def test_plan_licenses_bulk_multiple_licenses_same_sion(setup_planning_env):
     assert data["summary"]["total_sions"] == 1
 
 
+@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_bulk_multiple_licenses_multiple_sions(setup_planning_env):
-    """Test plan-licenses with multiple licenses and multiple SIONs."""
+    """Test plan-licenses with multiple licenses and multiple SIONs (DEPRECATED)."""
     env = setup_planning_env
     # License 1: E1 only
     lic1 = _make_test_license(
@@ -370,8 +377,9 @@ def test_plan_licenses_bulk_multiple_licenses_multiple_sions(setup_planning_env)
     assert "E5" in sion_codes
 
 
+@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_empty_list(setup_planning_env):
-    """Test plan-licenses rejects empty license list."""
+    """Test plan-licenses rejects empty license list (DEPRECATED)."""
     env = setup_planning_env
     response = env["client"].post(
         "/api/sion-planning-rules/plan-licenses/",
@@ -382,8 +390,9 @@ def test_plan_licenses_empty_list(setup_planning_env):
     assert response.status_code == 400
 
 
+@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_one_license_fails(setup_planning_env):
-    """Test that plan-licenses fails if any license cannot be loaded."""
+    """Test that plan-licenses fails if any license cannot be loaded (DEPRECATED)."""
     env = setup_planning_env
     good_lic = _make_test_license(
         env["company"], "TEST-GOOD", sion=env["sions"]["E1"]
@@ -446,6 +455,7 @@ def test_plan_license_default_mode_is_new(setup_planning_env):
     assert response.data["mode"] == "NEW"
 
 
+@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_default_mode_is_new(setup_planning_env):
     """Test that default mode is NEW when not specified for bulk endpoint."""
     env = setup_planning_env
@@ -508,8 +518,9 @@ def test_plan_license_response_structure(setup_planning_env):
     assert "total_lines_written" in data["total_results"]
 
 
+@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_response_structure(setup_planning_env):
-    """Test the exact response structure of plan-licenses endpoint."""
+    """Test the exact response structure of plan-licenses endpoint (DEPRECATED)."""
     env = setup_planning_env
     license_obj = _make_test_license(
         env["company"], "TEST-BULK-RESPONSE", sion=env["sions"]["E1"]

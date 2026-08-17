@@ -563,7 +563,7 @@ class ItemPivotReportView(APIView):
         # build here.  The _missing_planned block further below re-admits any item
         # that a user actually planned even if it is outside the allow-set, so
         # intentional manual plans are always surfaced.
-        from apps.license.services.e1_auto_plan import E1_PLANNABLE_NAMES as _E1_PLANNABLE
+        from apps.license.services.e1_plan import E1_PLANNABLE_NAMES as _E1_PLANNABLE
         _NORM_ALLOW: dict[str, frozenset[str]] = {
             'E1': _E1_PLANNABLE,
         }

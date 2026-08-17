@@ -1,17 +1,19 @@
-"""Central bridge from persisted SION rules to proven legacy mechanics.
+"""Database-driven SION planning orchestration.
 
-This is intentionally migration infrastructure.  Classification is owned by
-saved database rules; allocation remains in the mature E1/E5 waterfall
-functions.  Dispatch is kept here so views, reports and exports never grow
-norm-specific branches.
+All planning is driven by persisted SION rules and profiles stored in the
+database. Classification and allocation logic is centralized in the generic
+planning engine, eliminating norm-specific dispatch.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Protocol
+from typing import Any
+
+from django.db import transaction
 
 from apps.license.services.sion_rule_engine import evaluate_expression
+from apps.license.services.output_item_resolver import OutputItemResolver
 
 
 class PlannerConfigurationError(ValueError):
@@ -37,11 +39,6 @@ def normalize_plan_mode(mode: str | None) -> str:
             f"Unsupported planning mode {mode!r}. Expected NEW or ALL."
         )
     return normalized
-
-
-class LegacyPlannerAdapter(Protocol):
-    def execute(self, records: list[dict[str, Any]], balance_cif: Any, configuration: "ResolvedPlannerConfiguration", *, options: dict[str, Any] | None = None): ...
-    def compute_license(self, license_obj, configuration: "ResolvedPlannerConfiguration", *, preview: bool): ...
 
 
 @dataclass(frozen=True)
@@ -118,97 +115,8 @@ class ResolvedPlannerConfiguration:
         return None
 
 
-class _E1Adapter:
-    def execute(self, records, balance_cif, configuration, *, options=None):
-        from apps.license.services.e1_plan import E1Item, plan_e1_items
-
-        items = []
-        for index, record in enumerate(records):
-            category = configuration.classify(record)
-            if category:
-                items.append(E1Item(
-                    record.get("record_id", record.get("id", index)), category,
-                    Decimal(str(record.get("available_quantity", record.get("quantity", record.get("qty", 0))))),
-                ))
-        options = options or {}
-        return plan_e1_items(items, balance_cif, min_plan_qty=Decimal(str(options.get("min_plan_qty", 0))))
-
-    def compute_license(self, license_obj, configuration, *, preview):
-        from apps.license.services.e1_auto_plan import compute_e1_auto_plan
-        return compute_e1_auto_plan(
-            license_obj, configuration=configuration, create_item_names=not preview,
-        )
-
-
-class _E5Adapter:
-    def execute(self, records, balance_cif, configuration, *, options=None):
-        from apps.license.services.e5_plan import E5Item, plan_e5_items
-
-        items = []
-        for index, record in enumerate(records):
-            category = configuration.classify(record)
-            if category:
-                items.append(E5Item(
-                    record.get("record_id", record.get("id", index)), category,
-                    Decimal(str(record.get("available_quantity", record.get("quantity", record.get("qty", 0))))),
-                ))
-        options = options or {}
-        return plan_e5_items(
-            items, balance_cif,
-            min_plan_qty=Decimal(str(options.get("min_plan_qty", 0))),
-            floor_qty=bool(options.get("floor_qty", False)),
-            split_allocation_config=configuration.split_action_for_category("MILK PRODUCTS"),
-        )
-
-    def compute_license(self, license_obj, configuration, *, preview):
-        from apps.license.services.e5_auto_plan import compute_e5_auto_plan
-        return compute_e5_auto_plan(
-            license_obj, configuration=configuration, create_item_names=not preview,
-        )
-
-
-class _LegacyFactoryAdapter:
-    """Central compatibility bridge for planners not yet DB-classified.
-
-    E126/E132/A3627 still contain proven mechanics and configuration together.
-    Keeping this fallback in the one registry preserves existing CLI callers
-    while their classifiers are migrated; API/CLI dispatch must not re-create
-    PlannerFactory branches of their own.
-    """
-    requires_configuration = False
-
-    def execute(self, records, balance_cif, configuration, *, options=None):
-        raise PlannerConfigurationError(
-            f"Record-level execution is not available for {configuration.sion_code}."
-        )
-
-    def compute_license(self, license_obj, configuration, *, preview):
-        from apps.license.services.planner_factory import PlannerFactory
-        result = PlannerFactory.run(license_obj, configuration.sion_code)
-        return result.lines, result.remaining_cif
-
-
 class SionPlanningExecutionService:
-    """One registry and configuration loader for transitional execution."""
-
-    _registry: dict[str, LegacyPlannerAdapter] = {
-        "E1": _E1Adapter(),
-        "E5": _E5Adapter(),
-        "E126": _LegacyFactoryAdapter(),
-        "E132": _LegacyFactoryAdapter(),
-        "A3627": _LegacyFactoryAdapter(),
-    }
-
-    @classmethod
-    def register(cls, sion_code: str, adapter: LegacyPlannerAdapter) -> None:
-        cls._registry[sion_code.strip().upper()] = adapter
-
-    @classmethod
-    def supports(cls, sion) -> bool:
-        # Adapter dispatch is a property of the canonical SION code.  A
-        # missing optional migration profile must not send E1/E5 through the
-        # generic planner (which has different price-conflict semantics).
-        return sion.norm_class.strip().upper() in cls._registry
+    """Generic database-driven planning orchestration for all SIONs."""
 
     @classmethod
     def resolve_configuration(cls, sion) -> ResolvedPlannerConfiguration:
@@ -218,12 +126,10 @@ class SionPlanningExecutionService:
             sion=sion, is_active=True,
         ).order_by("priority", "pk"))
         if not rules:
-            adapter = cls._registry.get(sion.norm_class.strip().upper())
-            if adapter is not None and not getattr(adapter, "requires_configuration", True):
-                return ResolvedPlannerConfiguration(
-                    sion.norm_class.strip().upper(), (), {},
-                )
-            raise PlannerConfigurationError("The selected SION has no active saved rules.")
+            raise PlannerConfigurationError(
+                f"The selected SION {sion.norm_class} has no active saved rules. "
+                "Database rules are required for all planning operations."
+            )
         profile = SionPlanningProfile.objects.filter(sion=sion).order_by(
             "-is_active", "-version", "-pk",
         ).prefetch_related("actions").first()
@@ -262,17 +168,6 @@ class SionPlanningExecutionService:
         )
 
     @classmethod
-    def execute(cls, sion, records, balance_cif, *, options=None, configuration=None):
-        configuration = configuration or cls.resolve_configuration(sion)
-        try:
-            adapter = cls._registry[configuration.sion_code]
-        except KeyError as exc:
-            raise PlannerConfigurationError(
-                f"No transitional execution adapter is registered for {configuration.sion_code}."
-            ) from exc
-        return adapter.execute(list(records), balance_cif, configuration, options=options)
-
-    @classmethod
     def _eligible_licenses(cls, sion, license_ids=None, *, company_id=None):
         from apps.license.models import LicenseDetailsModel
         from django.db.models import Q
@@ -308,14 +203,158 @@ class SionPlanningExecutionService:
         return licenses, live_balances
 
     @classmethod
-    def _compute_license(cls, license_obj, configuration, *, preview):
-        try:
-            adapter = cls._registry[configuration.sion_code]
-        except KeyError as exc:
-            raise PlannerConfigurationError(
-                f"No transitional execution adapter is registered for {configuration.sion_code}."
-            ) from exc
-        return adapter.compute_license(license_obj, configuration, preview=preview)
+    def _compute_license(cls, license_obj, sion, *, preview):
+        """Compute planned lines using database-driven rules and generic planner."""
+        from apps.license.services.database_driven_sion_planner import DatabaseDrivenSionPlanner
+        from apps.license.models import LicenseImportItemsModel, SionPlanningProfile
+
+        # Collect import items as records for the generic planner
+        import_items = list(
+            LicenseImportItemsModel.objects.filter(license=license_obj)
+            .select_related("hs_code").prefetch_related("items")
+            .order_by("pk")
+        )
+        records = []
+        for item in import_items:
+            item_names = [row.name for row in item.items.all()]
+            records.append({
+                "record_id": item.pk,
+                "item_key": ", ".join(sorted(item_names)) if item_names else (item.description or "-"),
+                "hs_code": item.hs_code.hs_code if item.hs_code_id else "",
+                "description": item.description or "",
+                "available_quantity": item.available_quantity,
+                "quantity": item.quantity,
+                "unit": item.unit or "",
+                "serial_number": item.serial_number,
+            })
+
+        # Get the balance for planning
+        balance_cif = Decimal(str(license_obj.get_balance_cif or 0))
+
+        # Load the profile if it exists; use generic execution
+        profile = SionPlanningProfile.objects.filter(sion=sion).order_by(
+            "-is_active", "-version", "-pk",
+        ).prefetch_related("actions", "output_mappings").first()
+
+        planner = DatabaseDrivenSionPlanner()
+        if profile:
+            result = planner.execute_profile(profile, records, balance_cif)
+        else:
+            # Generic rules-based planning when no profile exists
+            # Uses database rules directly without legacy profile machinery
+            result = cls._compute_license_generic(
+                license_obj, sion, records, balance_cif, preview=preview
+            )
+
+        # Convert planner output to canonical format expected by plan_sion()
+        lines = []
+        for row in result.rows:
+            lines.append({
+                "import_item": row.record_id,
+                "planned_quantity": row.quantity,
+                "unit_price": row.unit_price,
+                "planning_rule_id": None,  # Will be populated by rule matching
+                "planning_rule_version": None,
+                "planning_rule_priority": None,
+                "allocation_provenance": {},
+            })
+
+        return lines, result.remaining_cif
+
+    @classmethod
+    def _compute_license_generic(
+        cls,
+        license_obj,
+        sion,
+        records: list[dict[str, Any]],
+        balance_cif: Decimal,
+        *,
+        preview: bool,
+    ) -> "DatabaseDrivenPlanResult":
+        """Generic rules-based planning without requiring a legacy profile.
+
+        Executes active database rules against import items directly,
+        auto-creating output ItemNameModels as needed during execution.
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+            sion: SionNormClassModel instance
+            records: List of import item records with hs_code, description, qty, etc.
+            balance_cif: Available CIF for allocation
+            preview: If True, don't persist ItemNameModel creation (preview only)
+
+        Returns:
+            DatabaseDrivenPlanResult with planned rows and remaining CIF
+        """
+        from apps.license.services.database_driven_sion_planner import (
+            DatabaseDrivenPlanResult, PlanningRow, InvalidPlannerConfiguration
+        )
+        from apps.license.models import SionPlanningRule
+
+        # Get the configuration (rules)
+        configuration = cls.resolve_configuration(sion)
+
+        # Match and plan each record
+        rows = []
+        remaining_cif = balance_cif
+
+        for record in records:
+            match = configuration.match(record)
+            if not match:
+                continue
+
+            rule, output = match
+
+            # During execution (not preview), auto-create missing output items
+            if not preview:
+                try:
+                    with transaction.atomic():
+                        output_item = OutputItemResolver.resolve_or_create(rule)
+                except Exception as exc:
+                    raise InvalidPlannerConfiguration(
+                        f"Failed to resolve output item for rule {rule.pk} ({rule.name}): {exc}"
+                    ) from exc
+
+            # Simple allocation: use available qty up to balance, priced at max_unit_price
+            available_qty = Decimal(str(record.get("available_quantity", 0)))
+            if available_qty <= 0:
+                continue
+
+            # Calculate quantity that fits within balance
+            unit_price = rule.max_unit_price or Decimal("0")
+            if unit_price > 0:
+                qty_by_balance = remaining_cif / unit_price
+                planned_qty = min(available_qty, qty_by_balance)
+            else:
+                # Free items get all available quantity
+                planned_qty = available_qty
+
+            if planned_qty <= 0:
+                continue
+
+            # Calculate actual CIF consumed
+            actual_value = planned_qty * unit_price
+            remaining_cif -= actual_value
+
+            # Add to result rows
+            rows.append(
+                PlanningRow(
+                    record_id=str(record.get("record_id", "")),
+                    category=output,
+                    output_key=output,
+                    quantity=planned_qty,
+                    unit_price=unit_price,
+                    value=actual_value,
+                    source_output=None,
+                )
+            )
+
+        # Return in the format expected by _compute_license caller
+        return DatabaseDrivenPlanResult(
+            rows=rows,
+            remaining_cif=max(remaining_cif, Decimal("0")),
+            metadata={"method": "generic_rules"},
+        )
 
     @staticmethod
     def _decimal(value) -> Decimal:
@@ -555,7 +594,7 @@ class SionPlanningExecutionService:
                     })
                     continue
                 lines, remaining = cls._compute_license(
-                    license_obj, configuration, preview=not persist,
+                    license_obj, sion, preview=not persist,
                 )
                 canonical_lines = [{
                     "import_item_id": row["import_item"],

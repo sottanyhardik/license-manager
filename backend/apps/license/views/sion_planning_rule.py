@@ -68,8 +68,8 @@ class RuleAllocationStrategySerializer(serializers.Serializer):
         if config.get("basis") != "BALANCE_CIF_PER_QUANTITY":
             raise serializers.ValidationError({"config": "Unsupported allocation basis."})
         buckets = config.get("buckets")
-        if not isinstance(buckets, list) or len(buckets) != 2:
-            raise serializers.ValidationError({"config": "Exactly two allocation buckets are required."})
+        if not isinstance(buckets, list) or len(buckets) < 2:
+            raise serializers.ValidationError({"config": "At least two allocation buckets are required."})
         parsed = []
         codes = set()
         for index, bucket in enumerate(buckets):
@@ -91,9 +91,12 @@ class RuleAllocationStrategySerializer(serializers.Serializer):
             ):
                 raise serializers.ValidationError({"config": f"Bucket {index + 1} has an invalid price band."})
             parsed.append((minimum, maximum, reference))
-        lower, upper = parsed
-        if upper[0] != lower[1] or upper[1] <= lower[1] or upper[2] <= lower[2]:
-            raise serializers.ValidationError({"config": "Bucket bands must be adjacent and ordered."})
+        # Validate that buckets are adjacent and ordered
+        for i in range(len(parsed) - 1):
+            current_min, current_max, current_ref = parsed[i]
+            next_min, next_max, next_ref = parsed[i + 1]
+            if next_min != current_max or next_max <= current_max or next_ref <= current_ref:
+                raise serializers.ValidationError({"config": f"Buckets {i + 1} and {i + 2} must be adjacent and ordered."})
         return values
 
 
@@ -426,7 +429,16 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=("post",), url_path="plan-license")
     def plan_license(self, request):
-        """Plan a single license through all applicable SION norms."""
+        """Plan a single license through all applicable SION norms.
+
+        INTERNAL: This endpoint is used by the /planning page and related planning
+        workflows. It auto-discovers applicable SIONs for a license and plans through
+        all of them. This is an alternative to plan-sion (SION-first planning) but
+        both flow through the same execution engine.
+
+        For new planning integrations, prefer plan-sion and have the caller specify
+        the SION directly.
+        """
         request_serializer = LicenseIdOnlySerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
         values = request_serializer.validated_data
@@ -490,113 +502,3 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             },
         })
 
-    @action(detail=False, methods=("post",), url_path="plan-licenses")
-    def plan_licenses(self, request):
-        """Plan multiple licenses through all applicable SION norms."""
-        request_serializer = BulkLicensePlanningSerializer(data=request.data)
-        request_serializer.is_valid(raise_exception=True)
-        values = request_serializer.validated_data
-
-        license_ids = values["license_ids"]
-        mode = values["mode"]
-
-        # Load all licenses and collect their SIONs
-        licenses_by_id = {}
-        license_sions_map = {}
-        all_sions = set()
-
-        for license_id in license_ids:
-            try:
-                license_obj, sion_ids = self._resolve_sions_for_license(
-                    license_id, company_id=self._company_id()
-                )
-                licenses_by_id[license_id] = license_obj
-                license_sions_map[license_id] = sion_ids
-                all_sions.update(sion_ids)
-            except CompanyIsolationError as exc:
-                return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
-            except PlanningError as exc:
-                return Response(
-                    exc.as_dict(),
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        # Plan each SION with all its applicable licenses
-        results_by_license = {lid: [] for lid in license_ids}
-        sion_execution_log = []
-
-        for sion_id in sorted(all_sions):
-            applicable_license_ids = [
-                lid for lid, sion_ids in license_sions_map.items()
-                if sion_id in sion_ids
-            ]
-
-            try:
-                with transaction.atomic():
-                    result = SionRulePlanningService.plan_sion(
-                        sion_id, license_ids=applicable_license_ids,
-                        company_id=self._company_id(),
-                        mode=mode,
-                    )
-            except CompanyIsolationError as exc:
-                return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
-            except PlanningError as exc:
-                return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
-
-            sion_code = result.get("sion", "UNKNOWN")
-            sion_execution_log.append({
-                "sion_id": sion_id,
-                "sion_code": sion_code,
-                "licenses_executed": len(applicable_license_ids),
-                "rules_executed": result.get("rules_executed", []),
-            })
-
-            # Attach results to each license
-            for write_result in result.get("write_results", []):
-                lid = write_result.get("license_id")
-                if lid in results_by_license:
-                    results_by_license[lid].append({
-                        "sion_id": sion_id,
-                        "sion_code": sion_code,
-                        "write_result": write_result,
-                    })
-
-        # Assemble response per license
-        licenses_processed = []
-        total_lines = 0
-
-        for license_id in license_ids:
-            license_obj = licenses_by_id[license_id]
-            lines_written = sum(
-                len(wr.get("write_result", {}).get("write_results", []))
-                for wr in results_by_license[license_id]
-            )
-            total_lines += lines_written
-
-            licenses_processed.append({
-                "license_id": license_id,
-                "license_number": license_obj.license_number,
-                "applicable_sions": results_by_license[license_id],
-                "total_lines_written": lines_written,
-            })
-
-        self._audit(
-            "LICENSES_PLAN_EXECUTED",
-            extra={
-                "licenses_count": len(license_ids),
-                "sions_count": len(all_sions),
-                "mode": mode,
-                "total_lines": total_lines,
-            },
-        )
-
-        return Response({
-            "mode": mode,
-            "licenses_processed": licenses_processed,
-            "summary": {
-                "total_licenses": len(license_ids),
-                "total_sions": len(all_sions),
-                "total_lines_written": total_lines,
-                "sion_execution_log": sion_execution_log,
-            },
-        })

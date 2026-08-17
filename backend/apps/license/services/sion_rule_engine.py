@@ -457,91 +457,28 @@ class SionRulePlanningService:
 
     @staticmethod
     def plan_sion(sion_id, license_ids=None, *, company_id=None, mode="NEW"):
-        """Reload and execute all persisted active rules in DB priority order."""
-        from apps.license.services.sion_planning_execution import normalize_plan_mode
+        """Reload and execute all persisted active rules in DB priority order using generic engine."""
+        from apps.license.services.sion_planning_execution import (
+            normalize_plan_mode, SionPlanningExecutionService, PlannerConfigurationError,
+        )
+        from apps.license.services.canonical_planning_service import NoActivePlanningRulesError
+
         mode = normalize_plan_mode(mode)
         with transaction.atomic():
             sion = SionRulePriorityService._lock_sion(sion_id)
-            from apps.license.services.sion_planning_execution import SionPlanningExecutionService
-            if SionPlanningExecutionService.supports(sion):
+            # ALL planning paths unified on generic engine
+            try:
                 return SionPlanningExecutionService.plan_sion(
                     sion, license_ids, company_id=company_id, persist=True,
                     mode=mode,
                 )
-            rules = list(SionPlanningRule.objects.select_for_update().filter(
-                sion=sion, is_active=True,
-            ).order_by("priority", "pk"))
-            if not rules:
-                raise SionPlanningError("The selected SION has no active saved rules.")
-
-            previews = [
-                SionRulePlanningService.preview(rule, license_ids, company_id=company_id)
-                for rule in rules
-            ]
-            conflicts = [conflict for preview in previews for conflict in preview["conflicts"]]
-            if conflicts:
-                raise SionPlanningError(
-                    "Saved rule conflicts must be resolved before planning.", conflicts=conflicts,
-                )
-
-            by_license = {}
-            license_numbers = {}
-            for rule, preview in zip(rules, previews):
-                for result in preview["results"]:
-                    if not result["matched_lines"]:
-                        # A cleared rule is match-none. Do not create an empty
-                        # license batch entry: FORCE ALL would otherwise pass
-                        # an empty plan to the canonical writer and erase an
-                        # existing valid plan.
-                        continue
-                    license_id = result["license_id"]
-                    license_numbers[license_id] = result["license_number"]
-                    target = by_license.setdefault(license_id, [])
-                    target.extend({
-                        "import_item_id": line["import_item_id"],
-                        "requested_quantity": line["planned_quantity"],
-                        "unit_price": line["current_unit_price"],
-                        "priority": rule.priority,
-                        "note": f"SION rule {rule.pk} v{rule.version}",
-                        "planning_rule_id": rule.pk,
-                        "planning_rule_version": rule.version,
-                        "planning_rule_priority": rule.priority,
-                    } for line in result["matched_lines"])
-
-            locked_ids = sorted(by_license)
-            list(LicenseDetailsModel.objects.select_for_update().filter(
-                pk__in=locked_ids,
-            ).order_by("pk").values_list("pk", flat=True))
-            writes = []
-            for license_id in locked_ids:
-                lines = by_license[license_id]
-                if (
-                    mode == "NEW"
-                    and CanonicalPlanningService._generated_plan_matches_current(license_id, lines)
-                ):
-                    writes.append({"license_id": license_id, "mutation_status": "UNCHANGED"})
-                else:
-                    writes.append(CanonicalPlanningService.build_canonical_plan(
-                        license_id=license_id, norm_class=sion.norm_class,
-                        items=lines, force_replan=mode == "ALL", company_id=company_id,
-                    ))
-            return {
-                "sion_id": sion.pk,
-                "sion": sion.norm_class,
-                "mode": mode,
-                "rules_executed": [{
-                    "id": rule.pk, "version": rule.version, "priority": rule.priority,
-                } for rule in rules],
-                "licenses": [{
-                    "license_id": license_id,
-                    "license_number": license_numbers.get(license_id),
-                } for license_id in locked_ids],
-                "write_results": writes,
-            }
+            except PlannerConfigurationError as exc:
+                # No active rules: return NO_ACTIVE_PLANNING_RULES error response
+                raise NoActivePlanningRulesError(str(exc)) from exc
 
     @staticmethod
     def preview_sion(sion_id, license_ids=None, *, company_id=None, mode="NEW"):
-        """Read-only simulation of all saved active rules in priority order.
+        """Read-only simulation of all saved active rules in priority order using generic engine.
 
         This deliberately accepts identifiers only. Rule JSON from a browser is
         never an execution input. The canonical waterfall is run in memory, so
@@ -553,101 +490,16 @@ class SionRulePlanningService:
             sion = SionNormClassModel.objects.get(pk=sion_id)
         except (TypeError, ValueError, SionNormClassModel.DoesNotExist) as exc:
             raise SionPlanningError("A valid canonical sion_id is required.") from exc
-        from apps.license.services.sion_planning_execution import SionPlanningExecutionService
-        if SionPlanningExecutionService.supports(sion):
+        from apps.license.services.sion_planning_execution import (
+            SionPlanningExecutionService, PlannerConfigurationError,
+        )
+        from apps.license.services.canonical_planning_service import NoActivePlanningRulesError
+
+        # ALL planning paths unified on generic engine
+        try:
             return SionPlanningExecutionService.plan_sion(
                 sion, license_ids, company_id=company_id, persist=False, mode=mode,
             )
-        rules = SionRulePlanningService._saved_rules(sion)
-        if not rules:
-            raise SionPlanningError("The selected SION has no active saved rules.")
-
-        previews = [
-            SionRulePlanningService.preview(rule, license_ids, company_id=company_id)
-            for rule in rules
-        ]
-        conflicts = [row for preview in previews for row in preview["conflicts"]]
-        by_license, license_numbers, details_by_license = {}, {}, {}
-        for rule, preview in zip(rules, previews):
-            for result in preview["results"]:
-                license_id = result["license_id"]
-                license_numbers[license_id] = result["license_number"]
-                for line in result["matched_lines"]:
-                    by_license.setdefault(license_id, []).append({
-                        "import_item_id": line["import_item_id"],
-                        "requested_quantity": line["planned_quantity"],
-                        "unit_price": line["current_unit_price"],
-                        "priority": rule.priority,
-                        "planning_rule_id": rule.pk,
-                        "planning_rule_version": rule.version,
-                        "planning_rule_priority": rule.priority,
-                        "note": f"SION rule {rule.pk} v{rule.version}",
-                    })
-                    details_by_license.setdefault(license_id, {})[line["import_item_id"]] = {
-                        **line, "rule_id": rule.pk, "rule_name": rule.name,
-                        "rule_version": rule.version, "rule_priority": rule.priority,
-                    }
-
-        simulated = []
-        for license_obj in LicenseDetailsModel.objects.filter(
-            pk__in=by_license,
-        ).select_related("exporter").prefetch_related("import_license__hs_code", "import_license__items"):
-            CanonicalPlanningService._assert_company_isolation(license_obj, company_id)
-            normalized = CanonicalPlanningService._normalize_request(by_license[license_obj.pk])
-            items_by_id = {item.pk: item for item in license_obj.import_license.all()}
-            CanonicalPlanningService._assert_items_belong_to_license(
-                normalized, items_by_id, license_obj,
-            )
-            opening = Decimal(str(license_obj.get_balance_cif or 0))
-            allocated, remaining = CanonicalPlanningService._run_waterfall(
-                normalized, items_by_id, opening,
-            )
-            matched_lines = []
-            for row in allocated:
-                detail = details_by_license[license_obj.pk][row["import_item_id"]]
-                shortage = max(row["requested_quantity"] - row["allocated_quantity"], Decimal("0"))
-                matched_lines.append({
-                    **detail,
-                    "proposed_planned_qty": row["allocated_quantity"],
-                    "shortage_qty": shortage,
-                    "status": "SHORTAGE" if shortage else "ELIGIBLE",
-                })
-            simulated.append({
-                "license_id": license_obj.pk,
-                "license_number": license_numbers.get(license_obj.pk),
-                "status": (
-                    "CONFLICT" if conflicts else
-                    "SHORTAGE" if any(row["allocated_quantity"] < row["requested_quantity"] for row in allocated)
-                    else "PLANNED" if CanonicalPlanningService._generated_plan_matches_current(
-                        license_obj.pk, by_license[license_obj.pk],
-                    ) else "NOT_PLANNED"
-                ),
-                "opening_balance_cif": opening,
-                "remaining_balance_cif": remaining,
-                "allocated_items": allocated,
-                "matched_lines": matched_lines,
-            })
-        return {
-            "sion_id": sion.pk,
-            "sion": sion.norm_class,
-            "rules_processed": [{
-                "id": rule.pk, "version": rule.version, "priority": rule.priority,
-            } for rule in rules],
-            "licenses": sorted(simulated, key=lambda row: row["license_id"]),
-            "results": sorted(simulated, key=lambda row: row["license_id"]),
-            "conflicts": conflicts,
-            "can_plan": not conflicts,
-            "summary": {
-                "rules": len(rules),
-                "active_rules": len(rules),
-                "existing_plans": sum(
-                    1 for row in simulated for line in row["matched_lines"]
-                    if line["existing_planned_qty"] > 0
-                ),
-                "shortages": sum(
-                    1 for row in simulated for line in row["matched_lines"]
-                    if line["shortage_qty"] > 0
-                ),
-                "conflicts": len(conflicts),
-            },
-        }
+        except PlannerConfigurationError as exc:
+            # No active rules: return NO_ACTIVE_PLANNING_RULES error response
+            raise NoActivePlanningRulesError(str(exc)) from exc

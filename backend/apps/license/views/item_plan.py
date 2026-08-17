@@ -1,13 +1,16 @@
 # license/views/item_plan.py
 """
-CRUD + bulk-upsert for per-import-item utilization plans (LicenseItemPlan).
+Read-only CRUD + bulk-upsert for per-import-item utilization plans (LicenseItemPlan).
+
+All plan line writes must be routed through the /planning page workflow.
 
 Endpoints (mounted under /api/):
-    GET    /api/license-item-plans/?license=<id>        list plan lines
-    POST   /api/license-item-plans/                     create one line
-    PATCH  /api/license-item-plans/<id>/                update one line (modify-plan modal)
-    DELETE /api/license-item-plans/<id>/                remove one line
+    GET    /api/license-item-plans/?license=<id>        list plan lines (read-only)
+    POST   /api/license-item-plans/                     DISABLED - use /planning page
+    PATCH  /api/license-item-plans/<id>/                DISABLED - use /planning page
+    DELETE /api/license-item-plans/<id>/                remove one line (delete split children)
     POST   /api/license-item-plans/bulk-upsert/         create/update many lines (planning panel)
+    GET    /api/license-item-plans/planning-norms/     list norms for selected licenses (read-only)
 """
 from decimal import Decimal
 
@@ -135,24 +138,19 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         if company_id is not None and item.license.exporter_id != company_id:
             raise PermissionDenied("This planning item belongs to another company.")
 
-    def perform_create(self, serializer):
-        item = serializer.validated_data["import_item"]
-        self._assert_item_access(item)
-        planned_quantity = serializer.validated_data.get("planned_quantity", 0)
-        planned_cif_fc = serializer.validated_data.get("planned_cif_fc", 0)
-        with transaction.atomic():
-            _validate_plan_line_cap(item, planned_quantity, planned_cif_fc)
-            serializer.save()
+    def create(self, request, *args, **kwargs):
+        """Direct plan line creation is disabled. Use /planning page instead."""
+        raise PermissionDenied(
+            "Plan lines can only be created through the /planning page using "
+            "bulk-upsert or via SionRulePlanningService. Direct POST is not allowed."
+        )
 
-    def perform_update(self, serializer):
-        instance = serializer.instance
-        item = serializer.validated_data.get("import_item", instance.import_item)
-        self._assert_item_access(item)
-        planned_quantity = serializer.validated_data.get("planned_quantity", instance.planned_quantity)
-        planned_cif_fc = serializer.validated_data.get("planned_cif_fc", instance.planned_cif_fc)
-        with transaction.atomic():
-            _validate_plan_line_cap(item, planned_quantity, planned_cif_fc, exclude_plan_id=instance.pk)
-            serializer.save()
+    def update(self, request, *args, **kwargs):
+        """Direct plan line updates are disabled. Use /planning page instead."""
+        raise PermissionDenied(
+            "Plan lines can only be updated through the /planning page using "
+            "bulk-upsert or via SionRulePlanningService. Direct PATCH is not allowed."
+        )
 
     @action(detail=False, methods=["post"], url_path="bulk-upsert")
     def bulk_upsert(self, request):

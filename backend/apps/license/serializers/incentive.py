@@ -123,6 +123,7 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
 class SionPlanningRuleSerializer(serializers.ModelSerializer):
     unit = serializers.CharField(max_length=10)
     sion_code = serializers.CharField(source="sion.norm_class", read_only=True)
+    output_item_name = serializers.CharField(source="output_item.name", read_only=True, allow_null=True)
     created_by_username = serializers.CharField(source="created_by.username", read_only=True)
     modified_by_username = serializers.CharField(source="modified_by.username", read_only=True)
 
@@ -131,12 +132,13 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
         fields = (
             "id", "sion", "sion_code", "name", "version", "expression",
             "max_unit_price", "unit", "priority", "is_active", "execution_output",
+            "output_item", "output_item_name",
             "created_on", "created_by_username", "modified_on",
             "modified_by_username",
         )
         read_only_fields = (
             "version", "priority", "created_on", "created_by_username", "modified_on",
-            "modified_by_username",
+            "modified_by_username", "output_item_name",
         )
 
     def validate_expression(self, value):

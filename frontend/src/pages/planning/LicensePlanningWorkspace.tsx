@@ -14,6 +14,7 @@ import { ExpressionTreeEditor, emptyRuleCondition } from "./ExpressionTreeEditor
 import { getConditionDisplay } from "./ruleConditionDisplay";
 import { SplitAllocationPreview } from "./SplitAllocationPreview";
 import { AllocationStrategyEditor } from "./AllocationStrategyEditor";
+import { validatePlanningRule, hasValidationErrors, type RuleFormErrors } from "./ruleFormValidation";
 
 // This workspace contains actions, never form submissions. Keeping the native
 // type explicit prevents a future surrounding form from turning any editor
@@ -76,6 +77,8 @@ export default function LicensePlanningWorkspace() {
     const [allocationDraft, setAllocationDraft] = useState<RuleAllocationStrategy | null>(null);
     const [savedAllocation, setSavedAllocation] = useState<RuleAllocationStrategy | null>(null);
     const [allocationByRule, setAllocationByRule] = useState<Record<number, RuleAllocationStrategy>>({});
+    const [formErrors, setFormErrors] = useState<RuleFormErrors>({});
+    const [itemNames, setItemNames] = useState<Array<{ id: number; name: string }>>([]);
     const preserveScroll = () => {
         const host = document.getElementById("main-content");
         if (!host) return () => undefined;
@@ -104,10 +107,33 @@ export default function LicensePlanningWorkspace() {
             .catch(() => { if (current) setAllocationByRule({}); });
         return () => { current = false; };
     }, [rules]);
+
+    useEffect(() => {
+        let current = true;
+        api.get("masters/item-names/", { params: { is_active: true, page_size: 1000, ordering: "name" } })
+            .then(({ data }) => {
+                if (current) setItemNames(data?.results ?? data ?? []);
+            })
+            .catch(() => {
+                if (current) setItemNames([]);
+            });
+        return () => { current = false; };
+    }, []);
     const savedDraft = draft?.id ? rules.find((rule) => rule.id === draft.id) : null;
     const ruleHasUnsavedChanges = !!draft && (!savedDraft || JSON.stringify(draft) !== JSON.stringify(savedDraft));
     const allocationHasUnsavedChanges = !!draft && !!allocationDraft && JSON.stringify(allocationDraft) !== JSON.stringify(savedAllocation);
     const hasUnsavedChanges = ruleHasUnsavedChanges || allocationHasUnsavedChanges;
+
+    // Validate form whenever draft or allocation changes
+    useEffect(() => {
+        if (draft && allocationDraft) {
+            const errors = validatePlanningRule(draft, allocationDraft);
+            setFormErrors(errors);
+        } else if (draft) {
+            const errors = validatePlanningRule(draft, null);
+            setFormErrors(errors);
+        }
+    }, [draft, allocationDraft]);
     const changeAllocationStrategy = (next: RuleAllocationStrategy) => {
         setAllocationDraft(next);
         if (draft && !draft.max_unit_price && next.strategy === "SPLIT_BY_UNIT_VALUE") {
@@ -161,14 +187,55 @@ export default function LicensePlanningWorkspace() {
                         {draft ? <>
                             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                                 <div><h2 className="font-semibold">{draft.id ? `Edit Rule #${draft.priority}` : `New ${sionLabel} Rule`}</h2><p className="text-xs text-muted-foreground">{draft.id ? `Version ${draft.version ?? "—"}` : "Define a new database-backed planning rule"}</p></div>
-                                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px_100px_auto]"><label className="text-xs">Rule Name<input aria-label="Rule name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="mt-1 h-9 w-full rounded-md border px-2" /></label><label className="text-xs">Max Price<input required aria-required="true" aria-invalid={!draft.max_unit_price} aria-describedby={!draft.max_unit_price ? "max-price-required" : undefined} aria-label="Maximum unit price" inputMode="decimal" value={draft.max_unit_price} onChange={(e) => /^\d*(\.\d*)?$/.test(e.target.value) && setDraft({ ...draft, max_unit_price: e.target.value })} className="mt-1 h-9 w-full rounded-md border px-2" />{!draft.max_unit_price && <span id="max-price-required" className="mt-1 block text-[11px] text-destructive">Required</span>}</label><label className="text-xs">Unit<input aria-label="Planning unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} className="mt-1 h-9 w-full rounded-md border px-2" /></label><label className="flex items-center gap-2 self-end pb-2 text-xs"><input aria-label="Rule active" type="checkbox" checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />Active</label></div>
-                                {allocationDraft && <AllocationStrategyEditor value={allocationDraft} onChange={changeAllocationStrategy} disabled={!!busy} />}
+                                <div className="space-y-3">
+                                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px_100px_auto]">
+                                        <div>
+                                            <label className="text-xs">Rule Name</label>
+                                            <input aria-label="Rule name" aria-invalid={!!formErrors.name} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={`mt-1 h-9 w-full rounded-md border px-2 ${formErrors.name ? "border-destructive" : ""}`} />
+                                            {formErrors.name && <span className="mt-1 block text-[11px] text-destructive">{formErrors.name}</span>}
+                                        </div>
+                                        <div>
+                                            <label className="text-xs">Max Price</label>
+                                            <input required aria-required="true" aria-invalid={!!formErrors.max_unit_price} aria-label="Maximum unit price" inputMode="decimal" value={draft.max_unit_price} onChange={(e) => /^\d*(\.\d*)?$/.test(e.target.value) && setDraft({ ...draft, max_unit_price: e.target.value })} className={`mt-1 h-9 w-full rounded-md border px-2 ${formErrors.max_unit_price ? "border-destructive" : ""}`} />
+                                            {formErrors.max_unit_price && <span className="mt-1 block text-[11px] text-destructive">{formErrors.max_unit_price}</span>}
+                                        </div>
+                                        <div>
+                                            <label className="text-xs">Unit</label>
+                                            <input aria-label="Planning unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} className="mt-1 h-9 w-full rounded-md border px-2" />
+                                            {formErrors.unit && <span className="mt-1 block text-[11px] text-destructive">{formErrors.unit}</span>}
+                                        </div>
+                                        <label className="flex items-center gap-2 self-end pb-2 text-xs"><input aria-label="Rule active" type="checkbox" checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />Active</label>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs">Output Item</label>
+                                        <select aria-label="Output item" aria-invalid={!!formErrors.output_item} value={draft.output_item ?? ""} onChange={(e) => setDraft({ ...draft, output_item: e.target.value ? parseInt(e.target.value, 10) : null })} className={`mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm ${formErrors.output_item ? "border-destructive" : ""}`}>
+                                            <option value="">— Select output item —</option>
+                                            {itemNames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                                        </select>
+                                        {formErrors.output_item && <span className="mt-1 block text-[11px] text-destructive">{formErrors.output_item}</span>}
+                                    </div>
+                                </div>
+                                {allocationDraft && <AllocationStrategyEditor value={allocationDraft} onChange={changeAllocationStrategy} disabled={!!busy} errors={formErrors} />}
                                 <ExpressionTreeEditor group={draft.expression} ruleName={draft.name} onChange={(expression) => setDraft({ ...draft, expression })} />
                             </div>
-                            <div aria-label="Rule edit actions" className="sticky bottom-0 flex min-h-14 items-center gap-2 border-t bg-card/95 px-4 py-2 backdrop-blur"><span className={`mr-auto text-xs font-medium ${hasUnsavedChanges ? "text-warning" : "text-success"}`}>{hasUnsavedChanges ? "● Unsaved changes" : "✓ Saved"}</span><Button variant="outline" onClick={() => setDraft(null)}>Discard</Button>{draft.id && <Button variant="outline" onClick={testRule} disabled={!!busy || hasUnsavedChanges}>{busy === "test" ? <Loader2 className="size-4 animate-spin" /> : <TestTube2 className="size-4" />}Test Rule</Button>}<Button onClick={async () => { if (busy) return; const restore = preserveScroll(); setBusy("save"); try { await save(); } catch { toast.error("Unable to save rule"); } finally { setBusy(null); restore(); } }} disabled={!!busy || !draft.name || !draft.max_unit_price || !draft.unit || !hasUnsavedChanges}>{busy === "save" && <Loader2 className="size-4 animate-spin" />}Save</Button></div>
+                            <div aria-label="Rule edit actions" className="sticky bottom-0 flex min-h-14 items-center gap-2 border-t bg-card/95 px-4 py-2 backdrop-blur">
+                                <span className={`mr-auto text-xs font-medium ${hasValidationErrors(formErrors) ? "text-destructive" : hasUnsavedChanges ? "text-warning" : "text-success"}`}>
+                                    {hasValidationErrors(formErrors) ? "❌ Errors present" : hasUnsavedChanges ? "● Unsaved changes" : "✓ Saved"}
+                                </span>
+                                <Button variant="outline" onClick={() => setDraft(null)}>Discard</Button>
+                                {draft.id && <Button variant="outline" onClick={testRule} disabled={!!busy || hasUnsavedChanges}>{busy === "test" ? <Loader2 className="size-4 animate-spin" /> : <TestTube2 className="size-4" />}Test Rule</Button>}
+                                <Button onClick={async () => { if (busy) return; const restore = preserveScroll(); setBusy("save"); try { await save(); } catch { toast.error("Unable to save rule"); } finally { setBusy(null); restore(); } }} disabled={!!busy || hasValidationErrors(formErrors) || !hasUnsavedChanges}>
+                                    {busy === "save" && <Loader2 className="size-4 animate-spin" />}Save
+                                </Button>
+                            </div>
                         </> : selectedRule ? <div className="space-y-5 p-5">
                             <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rule #{selectedRule.priority}</p><h2 className="text-lg font-semibold">{selectedRule.name}</h2><p className="mt-1 text-xs text-muted-foreground">Version {selectedRule.version ?? "—"} · Updated {selectedRule.modified_on ? new Date(selectedRule.modified_on).toLocaleString() : "—"}</p></div><Badge variant={selectedRule.is_active ? "default" : "secondary"}>{selectedRule.is_active ? "Active" : "Inactive"}</Badge></div>
-                            <dl className="grid grid-cols-2 gap-3 rounded-md bg-muted/30 p-3 text-sm"><div><dt className="text-xs text-muted-foreground">Max Price</dt><dd className="font-medium">{selectedRule.max_unit_price} / {selectedRule.unit}</dd></div><div><dt className="text-xs text-muted-foreground">Priority</dt><dd className="font-medium">#{selectedRule.priority}</dd></div></dl>
+                            <dl className="grid grid-cols-2 gap-3 rounded-md bg-muted/30 p-3 text-sm">
+                                <div><dt className="text-xs text-muted-foreground">Max Price</dt><dd className="font-medium">{selectedRule.max_unit_price} / {selectedRule.unit}</dd></div>
+                                <div><dt className="text-xs text-muted-foreground">Priority</dt><dd className="font-medium">#{selectedRule.priority}</dd></div>
+                                {selectedRule.output_item && <div><dt className="text-xs text-muted-foreground">Output Item</dt><dd className="font-medium">{selectedRule.output_item_name ?? "—"}</dd></div>}
+                            </dl>
                             <AllocationStrategySummary value={selectedRule.id ? allocationByRule[selectedRule.id] : undefined} />
                             <div><h3 className="mb-2 text-sm font-semibold">Match Logic</h3><ExpressionSummary group={selectedRule.expression} /></div>
                             <div className="flex justify-end gap-2 border-t pt-3"><Button variant="outline" onClick={runSelectedTest} disabled={!!busy}><TestTube2 className="size-4" />Test Rule</Button><Button onClick={() => beginEdit(selectedRule)}><Pencil className="size-4" />Edit</Button></div>

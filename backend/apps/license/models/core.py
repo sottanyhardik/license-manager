@@ -1312,6 +1312,11 @@ class SionPlanningRule(AuditModel):
         max_length=120, blank=True, default="",
         help_text="Legacy execution bucket supplied by the SION planning profile/UI.",
     )
+    output_item = models.ForeignKey(
+        "core.ItemNameModel", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="sion_planning_rules",
+        help_text="Where matched items are allocated to",
+    )
     name = models.CharField(max_length=255)
     version = models.PositiveIntegerField(default=1)
     expression = models.JSONField(default=dict)

@@ -184,6 +184,11 @@ class SionPlanningError(PlanningError):
     code = "SION_PLANNING_ERROR"
 
 
+class NoActivePlanningRulesError(PlanningError):
+    """No active planning rules configured for the selected SION."""
+    code = "NO_ACTIVE_PLANNING_RULES"
+
+
 class CanonicalPlanningService:
     """Single authoritative source for building and persisting a license item plan."""
 

@@ -16,9 +16,6 @@ from collections import Counter  # noqa: E402
 from apps.core.models import SionNormClassModel  # noqa: E402
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel  # noqa: E402
 from apps.license.services.norm_plan import detect_norm  # noqa: E402
-from apps.license.services.planner_factory import PlannerFactory  # noqa: E402
-
-
 def main():
     pp = SionNormClassModel.objects.filter(norm_class="PP").first()
     print("SionNormClassModel row for code 'PP':", pp, "is_active=", getattr(pp, "is_active", None))
@@ -34,8 +31,7 @@ def main():
     detect_counts = Counter(detect_norm(lic) for lic in LicenseDetailsModel.objects.all())
     print("\ndetect_norm() distribution (blank = no norm recognised at all):", dict(detect_counts))
 
-    print("\nPlannerFactory.supported_norms():", PlannerFactory.supported_norms())
-    print("PlannerFactory.is_supported('PP'):", PlannerFactory.is_supported("PP"))
+    print("\nNote: PlannerFactory has been removed. All planning now uses database-driven rules only.")
 
 
 if __name__ == "__main__":

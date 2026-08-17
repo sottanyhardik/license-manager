@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AlertTriangle, Loader2, ArrowRight } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useLicenseOverviewPlanning } from "./useLicenseOverviewPlanning";
 import { extractApiError, fmtNum } from "./licenseOverviewHelpers";
 
@@ -22,6 +23,7 @@ interface PlanningTabProps {
  * planning service. This component deliberately performs no planning maths.
  */
 export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
+    const navigate = useNavigate();
     const { data, isLoading, isError, error } = useLicenseOverviewPlanning(licenseId, isActive);
 
     if (!isActive) return null;
@@ -60,10 +62,6 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
                     <Badge variant={norm ? "info" : "secondary"}>{norm || "—"}</Badge>
                 </div>
             </div>
-            <div className="text-xs text-muted-foreground italic mb-4">
-                To plan this license, use the Plan tab in the license accordion at /licenses
-            </div>
-
             <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-sm">
                     <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
@@ -81,8 +79,19 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
                     <tbody>
                         {rows.length === 0 && (
                             <tr>
-                                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
-                                    No export product groups on this licence.
+                                <td colSpan={8} className="px-3 py-6 text-center">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <p className="text-sm text-muted-foreground">No export product groups on this licence.</p>
+                                        <Button
+                                            size="sm"
+                                            variant="default"
+                                            onClick={() => navigate(`/planning?license=${licenseId}`)}
+                                            className="gap-2"
+                                        >
+                                            Go to SION Planning
+                                            <ArrowRight className="size-4" />
+                                        </Button>
+                                    </div>
                                 </td>
                             </tr>
                         )}

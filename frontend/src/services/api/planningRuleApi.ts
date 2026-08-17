@@ -27,7 +27,22 @@ export type SplitAllocationConfig = {
 export type RuleAllocationStrategy =
     | { strategy: "STANDARD"; action_id?: number }
     | { strategy: "SPLIT_BY_UNIT_VALUE"; action_id?: number; config: SplitAllocationConfig };
-export type SionPlanningRule = { id?: number; sion: number; name: string; expression: RuleGroup; max_unit_price: string; unit: string; priority: number; is_active: boolean; execution_output?: string; version?: number; modified_on?: string; modified_by_username?: string };
+export type SionPlanningRule = {
+    id?: number;
+    sion: number;
+    name: string;
+    expression: RuleGroup;
+    max_unit_price: string;
+    unit: string;
+    priority: number;
+    is_active: boolean;
+    execution_output?: string;
+    output_item?: number | null;
+    output_item_name?: string | null;
+    version?: number;
+    modified_on?: string;
+    modified_by_username?: string;
+};
 
 function safeRuleExpression(value: unknown): RuleGroup {
     if (!value || typeof value !== "object") return { operator: "AND", conditions: [] };

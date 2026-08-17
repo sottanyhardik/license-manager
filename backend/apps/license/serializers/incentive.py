@@ -140,8 +140,9 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
         )
 
     def validate_expression(self, value):
-        from apps.license.services.sion_rule_engine import validate_expression
+        from apps.license.services.sion_rule_engine import normalize_expression, validate_expression
         try:
+            value = normalize_expression(value)
             validate_expression(value)
         except Exception as exc:
             raise serializers.ValidationError(getattr(exc, "messages", [str(exc)])) from exc

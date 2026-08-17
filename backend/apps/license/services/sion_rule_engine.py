@@ -42,7 +42,61 @@ def _op(node):
     return {"equals": "eq", "not_equals": "ne"}.get(op, op)
 
 
+def normalize_expression(expression: Any) -> dict:
+    """Return a safe expression with empty editor groups removed.
+
+    The rule editor necessarily has a transient empty root while a rule is
+    being cleared or built.  Persisting that state is safe and useful, but it
+    must mean *match nothing* (never the vacuous truth of ``all([])``).
+    Empty groups below the root carry no business predicate and are pruned so
+    they cannot unexpectedly turn an otherwise valid AND/OR tree true/false.
+    """
+    if not isinstance(expression, dict):
+        raise ValidationError("Every rule expression node must be an object.")
+    count = 0
+
+    def walk(node, *, root=False, depth=0):
+        nonlocal count
+        count += 1
+        if count > MAX_NODES or depth > MAX_DEPTH:
+            raise ValidationError("Rule expression is too large or deeply nested.")
+        if not isinstance(node, dict):
+            raise ValidationError("Every rule expression node must be an object.")
+        op = _op(node)
+        # An entirely empty root is the canonical disabled/match-none shape.
+        if root and not node:
+            return {"operator": "AND", "conditions": []}
+        if op in {"and", "or"}:
+            children = node.get("args", node.get("conditions"))
+            if not isinstance(children, list):
+                raise ValidationError(f"{op.upper()} requires a conditions list.")
+            normalized = []
+            for child in children:
+                child = walk(child, depth=depth + 1)
+                if child is not None:
+                    normalized.append(child)
+            if not normalized:
+                return {"operator": op.upper(), "conditions": []} if root else None
+            return {"operator": op.upper(), "conditions": normalized}
+        if op == "not":
+            child = node.get("arg", node.get("condition"))
+            if child is None and isinstance(node.get("conditions"), list):
+                if len(node["conditions"]) > 1:
+                    raise ValidationError("NOT requires exactly one condition.")
+                child = node["conditions"][0] if node["conditions"] else None
+            normalized = walk(child, depth=depth + 1) if child is not None else None
+            if normalized is None:
+                if root:
+                    raise ValidationError("NOT requires one condition.")
+                return None
+            return {"operator": "NOT", "conditions": [normalized]}
+        return dict(node)
+
+    return walk(expression, root=True)
+
+
 def validate_expression(expression: Any) -> None:
+    expression = normalize_expression(expression)
     count = 0
     leaves = set()
 
@@ -56,8 +110,12 @@ def validate_expression(expression: Any) -> None:
         op = _op(node)
         if op in {"and", "or"}:
             children = node.get("args", node.get("conditions"))
-            if not isinstance(children, list) or not children:
-                raise ValidationError(f"{op.upper()} requires a non-empty conditions list.")
+            if not isinstance(children, list):
+                raise ValidationError(f"{op.upper()} requires a conditions list.")
+            if not children and depth == 0:
+                return
+            if not children:
+                raise ValidationError(f"Nested {op.upper()} requires a condition.")
             for child in children:
                 walk(child, depth + 1)
             return
@@ -101,7 +159,16 @@ def _normalized_text(field, value):
 
 
 def evaluate_expression(expression: dict, context: dict) -> bool:
+    expression = normalize_expression(expression)
     validate_expression(expression)
+
+    # An empty root is explicitly match-none.  Do not let Python's
+    # mathematically-correct ``all([]) is True`` turn a cleared rule into a
+    # match-all production rule.
+    if _op(expression) in {"and", "or"} and not expression.get(
+        "args", expression.get("conditions")
+    ):
+        return False
 
     def evaluate(node):
         op = _op(node)

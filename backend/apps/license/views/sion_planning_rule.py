@@ -87,7 +87,10 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         values = {
             field: serializer.validated_data.get(field, getattr(current, field))
-            for field in ("name", "expression", "max_unit_price", "unit", "is_active")
+            for field in (
+                "name", "expression", "max_unit_price", "unit", "is_active",
+                "execution_output",
+            )
         }
         with transaction.atomic():
             SionRulePriorityService._lock_sion(current.sion_id)

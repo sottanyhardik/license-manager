@@ -278,6 +278,44 @@ def test_versioned_edit_preserves_execution_mapping_identity(rule_world):
     assert SionPlanningRule.objects.get(pk=response.data["id"]).stable_key == rule.stable_key
 
 
+def test_versioned_clear_expression_is_match_none_and_preserves_execution_output(rule_world):
+    company, sion, _license_obj, _item, rule = rule_world
+    rule.stable_key = "TEST:RULE:CLEAR"
+    rule.execution_output = "OTHER CONFECTIONERY INGREDIENTS"
+    rule.save(update_fields=("stable_key", "execution_output"))
+    untouched = SionPlanningRule.objects.create(
+        sion=sion, stable_key="TEST:RULE:OTHER", name="Other", version=1,
+        unit="kg", max_unit_price=Decimal("9.00"), priority=2,
+        execution_output="EGG ALBUMIN",
+        expression={"field": "HSN", "comparator": "CONTAINS", "value": "3502"},
+    )
+    client, _user = _client(company)
+
+    response = client.patch(
+        f"/api/sion-planning-rules/{rule.pk}/",
+        {"expression": {"operator": "AND", "conditions": [
+            {"operator": "OR", "conditions": []},
+        ]}},
+        format="json",
+    )
+
+    assert response.status_code == 200, response.data
+    replacement = SionPlanningRule.objects.get(pk=response.data["id"])
+    assert replacement.version == rule.version + 1
+    assert replacement.expression == {"operator": "AND", "conditions": []}
+    assert replacement.execution_output == "OTHER CONFECTIONERY INGREDIENTS"
+    assert evaluate_expression(replacement.expression, {
+        "hs_code": "08029900", "description": "Other Confectionery",
+    }) is False
+    rule.refresh_from_db()
+    untouched.refresh_from_db()
+    assert rule.is_active is False
+    assert untouched.is_active is True
+    assert untouched.expression == {
+        "field": "HSN", "comparator": "CONTAINS", "value": "3502",
+    }
+
+
 def test_database_priority_assignment_is_sion_scoped_and_reorder_persists(rule_world):
     company, sion, _license_obj, _item, existing = rule_world
     client, _user = _client(company)

@@ -135,6 +135,20 @@ describe("SION-first planning workspace", () => {
         await waitFor(() => expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "NEW"));
         expect(rulesApi.planSavedSionRules).not.toHaveBeenCalled();
     });
+    it("keeps the workspace scroll position stable across async actions and uses non-submit buttons", async () => {
+        vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
+        const { container } = render(<main id="main-content"><MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter></main>);
+        const host = container.querySelector<HTMLElement>("#main-content")!;
+        host.scrollTop = 640;
+        const previewButton = await screen.findByRole("button", { name: /Preview E5 Plan/ });
+        await waitFor(() => expect(previewButton).toBeEnabled());
+        expect(previewButton).toHaveAttribute("type", "button");
+        fireEvent.click(previewButton);
+        await waitFor(() => expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "NEW"));
+        expect(host.scrollTop).toBe(640);
+        expect(screen.getByLabelText("Planning action status")).toHaveClass("min-h-9");
+        vi.unstubAllGlobals();
+    });
     it("confirms Force All and submits ALL mode through the same API", async () => {
         vi.mocked(rulesApi.planSavedSionRules).mockResolvedValue({ status: "COMPLETED" });
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);

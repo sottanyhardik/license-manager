@@ -177,10 +177,24 @@ same DB ordering and performs one atomic canonical write per license; later
 rules therefore see capacity remaining after earlier priorities.
 
 The prior Item Pivot `NormRowPlanner`, its client helpers, and the hardcoded
-`license-item-plans/plan-norm` write route were retired. The historical E1/E5/
-E126/E132 calculation modules remain only for legacy reporting and internal
-compatibility; they are not reachable from the Module 06 planning UI or its
-write API.
+`license-item-plans/plan-norm` write route were retired. E1/E5/E126/E132/A3627
+modules are not reachable from the new Module 06 UI/API, but a repository-wide
+audit proved they remain active through `plan_norms`, reports, Balance Excel,
+seed tooling, and callable compatibility services. They cannot yet be retired.
+
+## Legacy-to-database migration audit
+
+`SION_PLAN_DB_MIGRATION_REPORT.md` contains the source/caller/rule mapping.
+Five active planners exist: E1, E5, E126, E132 and A3627; no standalone PP
+planner was found. The current rule model represents Boolean predicates and a
+current-price ceiling, but not exact item-tag precedence, assigned planning
+prices, shared-CIF waterfalls, minimum/floored quantities, multi-line splits,
+milk formulas, mop-up, rebalancing, preservation or weighted-price selection.
+
+No lossy seed migration was created and no active legacy caller was deleted:
+either action would fail the mandatory old/new golden-equivalence gate. These
+capabilities must first become generic DB action/allocation primitives, after
+which each legacy planner can be shadowed on identical inputs before cutover.
 
 ## Local database verification
 
@@ -219,4 +233,7 @@ prices, and batch-loads financial balances for the applicable license set.
 
 ## Freeze decision
 
-All Module 06 implementation, real-data, security, performance, frontend, and Module 05 isolation gates pass. The formal `MODULE 06 — LICENSE PLANNING — FROZEN` declaration is intentionally withheld because the mandated full-backend regression gate is not fully passing for the unrelated stale fixture described above.
+The formal `MODULE 06 — LICENSE PLANNING — FROZEN` declaration is withheld for
+two independent reasons: the stale full-backend BOE fixture described above,
+and the active legacy-planner migration gap. The reusable SION-first workspace
+is green, but zero-hardcoded-runtime and old/new equivalence are not satisfied.

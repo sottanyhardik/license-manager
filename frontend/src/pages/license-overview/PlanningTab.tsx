@@ -1,24 +1,9 @@
 import { useState } from "react";
-import { AlertTriangle, Loader2, Target, ChevronDown } from "lucide-react";
-import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { useLicenseOverviewPlanning } from "./useLicenseOverviewPlanning";
 import { extractApiError, fmtNum } from "./licenseOverviewHelpers";
-import { planLicense } from "@/services/api/planningRuleApi";
 
 interface PlanningTabProps {
     licenseId: string | number | undefined;
@@ -37,49 +22,7 @@ interface PlanningTabProps {
  * planning service. This component deliberately performs no planning maths.
  */
 export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
-    const { data, isLoading, isError, error, refetch } = useLicenseOverviewPlanning(licenseId, isActive);
-    const [isPlanning, setIsPlanning] = useState(false);
-    const [showForceConfirm, setShowForceConfirm] = useState(false);
-
-    const handlePlan = async (mode: "NEW" | "ALL") => {
-        if (!licenseId || isPlanning) return;
-        setIsPlanning(true);
-        try {
-            const result = await planLicense(Number(licenseId), mode);
-            const siansExecuted = result?.total_results?.sions_executed || 0;
-            const linesWritten = result?.total_results?.total_lines_written || 0;
-
-            // Build result message based on what happened
-            let message = "";
-            if (linesWritten === 0) {
-                message = "Planning already up to date. No new eligible items were found.";
-            } else if (mode === "ALL") {
-                message = `Force re-plan completed: ${siansExecuted} SION${siansExecuted !== 1 ? 's' : ''}, ${linesWritten} line${linesWritten !== 1 ? 's' : ''} processed`;
-            } else {
-                message = `Planning completed: ${siansExecuted} SION${siansExecuted !== 1 ? 's' : ''}, ${linesWritten} line${linesWritten !== 1 ? 's' : ''} planned`;
-            }
-
-            toast.success(message);
-            // Refetch the planning data to show updated plan info
-            refetch?.();
-        } catch (error) {
-            const message = error && typeof error === 'object' && 'response' in error
-                ? (error as any).response?.data?.error || (error as any).response?.data?.detail || 'Failed to plan license'
-                : 'Failed to plan license';
-            toast.error(message);
-        } finally {
-            setIsPlanning(false);
-            setShowForceConfirm(false);
-        }
-    };
-
-    const handleAutoPlan = () => {
-        handlePlan("NEW");
-    };
-
-    const handleForceReplan = () => {
-        setShowForceConfirm(true);
-    };
+    const { data, isLoading, isError, error } = useLicenseOverviewPlanning(licenseId, isActive);
 
     if (!isActive) return null;
 
@@ -102,91 +45,24 @@ export default function PlanningTab({ licenseId, isActive }: PlanningTabProps) {
 
     const rows = data?.rows ?? [];
     const norm = data?.norm;
-    const canPlan = !!norm;
 
     return (
         <div>
-            <div className="mb-6 flex items-center justify-between gap-4">
-                <div>
-                    <h3 className="flex items-center gap-2 text-lg font-semibold mb-2">
-                        <div className="size-5 rounded-full bg-blue-100 flex items-center justify-center">
-                            <div className="size-2 rounded-full bg-blue-600" />
-                        </div>
-                        Plan utilization
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">SION Norm</span>
-                        <Badge variant={norm ? "info" : "secondary"}>{norm || "—"}</Badge>
+            <div className="mb-6">
+                <h3 className="flex items-center gap-2 text-lg font-semibold mb-2">
+                    <div className="size-5 rounded-full bg-blue-100 flex items-center justify-center">
+                        <div className="size-2 rounded-full bg-blue-600" />
                     </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                    <div className="flex items-center gap-2">
-                        {canPlan ? (
-                            <>
-                                <Button
-                                    onClick={handleAutoPlan}
-                                    disabled={isPlanning}
-                                    size="sm"
-                                    className="gap-2 bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100"
-                                >
-                                    {isPlanning ? (
-                                        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                                    ) : (
-                                        <Target className="size-3.5" aria-hidden="true" />
-                                    )}
-                                    {isPlanning ? "Planning..." : "Auto Plan"}
-                                </Button>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="px-2"
-                                            disabled={isPlanning}
-                                        >
-                                            <ChevronDown className="size-4" aria-hidden="true" />
-                                            <span className="sr-only">Planning options</span>
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-48">
-                                        <DropdownMenuItem onClick={handleAutoPlan} disabled={isPlanning}>
-                                            Auto Plan — New Only
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={handleForceReplan} disabled={isPlanning}>
-                                            Force Re-plan
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </>
-                        ) : (
-                            <div className="text-xs text-muted-foreground italic">
-                                No supported export norm detected
-                            </div>
-                        )}
-                    </div>
+                    Plan utilization
+                </h3>
+                <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">SION Norm</span>
+                    <Badge variant={norm ? "info" : "secondary"}>{norm || "—"}</Badge>
                 </div>
             </div>
-
-            <Dialog open={showForceConfirm} onOpenChange={setShowForceConfirm}>
-                <DialogContent>
-                    <DialogTitle>Re-plan this license?</DialogTitle>
-                    <DialogDescription className="py-4">
-                        Existing planning for license {data?.license_number} will be
-                        recalculated using the current saved {norm} rules.
-                    </DialogDescription>
-                    <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setShowForceConfirm(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={() => handlePlan("ALL")}
-                        >
-                            Force Re-plan
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <div className="text-xs text-muted-foreground italic mb-4">
+                To plan this license, use the Plan tab in the license accordion at /licenses
+            </div>
 
             <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-sm">

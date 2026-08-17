@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import api from "@/api/axios";
-import { planSavedSionRules, previewSavedSionRules } from "./planningRuleApi";
+import { fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules } from "./planningRuleApi";
 
-vi.mock("@/api/axios", () => ({ default: { post: vi.fn() } }));
+vi.mock("@/api/axios", () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 
 describe("SION planning request payloads", () => {
     beforeEach(() => {
@@ -26,5 +26,17 @@ describe("SION planning request payloads", () => {
             mode: "ALL",
             license_ids: [10, 20],
         });
+    });
+
+    it("normalizes missing and historical leaf expressions for safe rendering", async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: [
+            { id: 1, expression: undefined },
+            { id: 2, expression: { field: "HSN", comparator: "CONTAINS", value: "1701" } },
+        ] });
+
+        const rules = await fetchSionPlanningRules(7);
+
+        expect(rules[0].expression).toEqual({ operator: "AND", conditions: [] });
+        expect(rules[1].expression).toEqual({ operator: "AND", conditions: [{ field: "HSN", comparator: "CONTAINS", value: "1701" }] });
     });
 });

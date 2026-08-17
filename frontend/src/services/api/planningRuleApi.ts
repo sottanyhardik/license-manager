@@ -4,9 +4,29 @@ export type RuleCondition = { field: "HSN" | "PRODUCT_DESCRIPTION"; comparator: 
 export type RuleGroup = { operator: "AND" | "OR"; conditions: Array<RuleCondition | RuleGroup> };
 export type SionPlanningRule = { id?: number; sion: number; name: string; expression: RuleGroup; max_unit_price: string; unit: string; priority: number; is_active: boolean; version?: number; modified_on?: string; modified_by_username?: string };
 
+function safeRuleExpression(value: unknown): RuleGroup {
+    if (!value || typeof value !== "object") return { operator: "AND", conditions: [] };
+    const node = value as Record<string, unknown>;
+    const rawChildren = Array.isArray(node.conditions) ? node.conditions : Array.isArray(node.args) ? node.args : null;
+    if (rawChildren) {
+        const operator = String(node.operator ?? "AND").toUpperCase() === "OR" ? "OR" : "AND";
+        return { operator, conditions: rawChildren.filter((child) => child && typeof child === "object").map((child) => {
+            const candidate = child as Record<string, unknown>;
+            return Array.isArray(candidate.conditions) || Array.isArray(candidate.args) ? safeRuleExpression(candidate) : candidate as RuleCondition;
+        }) };
+    }
+    // Historical rules may contain a single leaf at the root. The editor and
+    // read view consistently operate on one canonical root group.
+    return node.field ? { operator: "AND", conditions: [node as RuleCondition] } : { operator: "AND", conditions: [] };
+}
+
+function normalizeRule(rule: SionPlanningRule): SionPlanningRule {
+    return { ...rule, expression: safeRuleExpression(rule.expression) };
+}
+
 export async function fetchSionPlanningRules(sion: number): Promise<SionPlanningRule[]> {
     const { data } = await api.get("sion-planning-rules/", { params: { sion, is_active: true } });
-    return data?.results ?? data ?? [];
+    return (data?.results ?? data ?? []).map(normalizeRule);
 }
 export async function createSionPlanningRule(payload: SionPlanningRule): Promise<SionPlanningRule> {
     return (await api.post("sion-planning-rules/", payload)).data;

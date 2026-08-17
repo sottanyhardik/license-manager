@@ -339,7 +339,7 @@ class CanonicalPlanningService:
                 license_obj.pk, norm_label, allocated_items,
             )
 
-            return {
+            result = {
                 "plan_id": plan_id,
                 "license_id": license_obj.pk,
                 "norm_class": norm_label,
@@ -352,6 +352,7 @@ class CanonicalPlanningService:
                     lines_created=len(created),
                 ),
             }
+            return result
 
     # Convenience alias — mirrors the Module 1 naming
     # (``build_canonical_ledger_dataset``) for callers that prefer the long form.

@@ -156,6 +156,8 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
     """
     from apps.license.models import LicenseItemPlan
 
+    lines = list(lines)  # Convert to list to be able to iterate multiple times and check length
+
     items_by_id = {it.id: it for it in license_obj.import_license.all()}
     baseline_cache: dict[int, tuple[Decimal, Decimal]] = {}
 

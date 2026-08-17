@@ -237,11 +237,17 @@ class SionPlanningExecutionService:
         ).prefetch_related("actions", "output_mappings").first()
 
         planner = DatabaseDrivenSionPlanner()
-        if profile:
+        # A profile with no active actions is equivalent to no profile.
+        # Fall back to generic rules-based planning in this case.
+        has_active_actions = (
+            profile and profile.actions.filter(is_active=True).exists()
+        )
+        if profile and has_active_actions:
             result = planner.execute_profile(profile, records, balance_cif)
         else:
-            # Generic rules-based planning when no profile exists
-            # Uses database rules directly without legacy profile machinery
+            # Generic rules-based planning when no profile exists or profile
+            # has no active actions. Uses database rules directly without
+            # legacy profile machinery.
             result = cls._compute_license_generic(
                 license_obj, sion, records, balance_cif, preview=preview
             )

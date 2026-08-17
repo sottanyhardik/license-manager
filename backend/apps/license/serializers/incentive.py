@@ -132,7 +132,7 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
         fields = (
             "id", "sion", "sion_code", "name", "version", "expression",
             "max_unit_price", "unit", "priority", "is_active", "execution_output",
-            "output_item", "output_item_name",
+            "output_item", "output_item_name", "percentage_constraint",
             "created_on", "created_by_username", "modified_on",
             "modified_by_username",
         )

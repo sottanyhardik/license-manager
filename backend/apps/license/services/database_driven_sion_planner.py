@@ -140,6 +140,9 @@ class DatabaseDrivenSionPlanner:
         if algorithm in {"MILK_0404_MAXIMISE_DWP", "ORDERED_MILK_0404_THEN_WPC_3502"}:
             self._execute_deferred_split(state, config)
             return
+        if algorithm == "SPLIT_BY_UNIT_VALUE":
+            self._split_by_unit_value(state, config)
+            return
         source = config["source_output"]
         targets = config["targets"]
         expanded = []
@@ -154,6 +157,57 @@ class DatabaseDrivenSionPlanner:
                 child["quantity"] = _quantity(record) * decimal(ratio)
                 child["available_quantity"] = child["quantity"]
                 expanded.append(child)
+        state.records = expanded
+
+    def _split_by_unit_value(self, state: "_State", config: dict[str, Any]) -> None:
+        """Split matched records across output buckets based on unit price.
+
+        UI-created SPLIT rules use buckets with min_price/max_price ranges.
+        This allocates the entire quantity to the bucket whose range contains the item's unit price.
+        """
+        category = config.get("category")
+        buckets = config.get("buckets", [])
+        if not buckets:
+            return
+
+        # Build a price-to-output map from buckets
+        price_buckets = []
+        for bucket in buckets:
+            price_buckets.append({
+                "code": bucket.get("code"),
+                "min_price": decimal(bucket.get("min_price", "0")),
+                "max_price": decimal(bucket.get("max_price", "0")),
+                "reference_price": decimal(bucket.get("reference_price", "0")),
+            })
+
+        expanded = []
+        for record in state.records:
+            # Keep non-matching records unchanged
+            if record.get("matched_output") != category:
+                expanded.append(record)
+                continue
+
+            # Determine which bucket this record belongs to based on unit price
+            unit_price = decimal(record.get("unit_price", "0"))
+            assigned_bucket = None
+
+            for bucket in price_buckets:
+                if bucket["min_price"] <= unit_price <= bucket["max_price"]:
+                    assigned_bucket = bucket
+                    break
+
+            # If unit price doesn't match any bucket, skip this record
+            if assigned_bucket is None:
+                expanded.append(record)
+                continue
+
+            # Create a child record for the assigned bucket
+            child = deepcopy(record)
+            child["matched_output"] = assigned_bucket["code"]
+            child["source_output"] = category
+            # Quantity is not split - entire quantity goes to the matched bucket
+            expanded.append(child)
+
         state.records = expanded
 
     def _action_group(self, state: "_State", config: dict[str, Any]) -> None:

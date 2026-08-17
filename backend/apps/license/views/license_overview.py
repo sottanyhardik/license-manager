@@ -90,7 +90,6 @@ def add_license_overview_actions(viewset_class):
         to disappear for some licenses (e.g., 0311021261) despite having E1 norm.
         """
         from django.db.models import prefetch_related_objects
-        from apps.license.models import License
         from apps.license.services.norm_plan import detect_norm
         from apps.license.services.plan_utilization import plan_utilization_rows
 

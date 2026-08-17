@@ -152,7 +152,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             field: serializer.validated_data.get(field, getattr(current, field))
             for field in (
                 "name", "expression", "max_unit_price", "unit", "is_active",
-                "execution_output",
+                "execution_output", "output_item",
             )
         }
         with transaction.atomic():

@@ -6,3 +6,4 @@ holds the standalone Invoice/InvoiceItem pair.
 """
 from .core import *  # noqa: F401,F403
 from .invoice import Invoice, InvoiceItem  # noqa: F401
+from .sion_input_alias import SionCanonicalInput, SionInputAlias  # noqa: F401

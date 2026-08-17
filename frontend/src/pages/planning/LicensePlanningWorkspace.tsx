@@ -222,7 +222,7 @@ export default function LicensePlanningWorkspace() {
                                         {formErrors.output_item && <span className="mt-1 block text-[11px] text-destructive">{formErrors.output_item}</span>}
                                     </div>
                                 </div>
-                                {allocationDraft && <AllocationStrategyEditor value={allocationDraft} onChange={changeAllocationStrategy} disabled={!!busy} errors={formErrors} />}
+                                {allocationDraft && <AllocationStrategyEditor value={allocationDraft} onChange={changeAllocationStrategy} disabled={!!busy} errors={formErrors} ruleId={draft?.id} />}
                                 <ExpressionTreeEditor group={draft.expression} ruleName={draft.name} onChange={(expression) => setDraft({ ...draft, expression })} />
                             </div>
                             <div aria-label="Rule edit actions" className="sticky bottom-0 flex min-h-14 items-center gap-2 border-t bg-card/95 px-4 py-2 backdrop-blur">

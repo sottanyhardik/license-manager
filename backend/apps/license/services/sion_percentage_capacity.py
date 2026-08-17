@@ -5,10 +5,13 @@ Handles:
 - Aggregating current usage (planning, allotments, BOE)
 - Determining remaining capacity
 - Validating new Planning requests against caps
+
+Works generically for any SION norm and any number of inputs.
 """
 from decimal import Decimal
 from typing import Dict, Optional
 
+from apps.core.models import SionNormClassModel, ItemNameModel
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, SionPlanningRule, LicenseItemPlan
 )
@@ -16,6 +19,7 @@ from apps.allotment.models import AllotmentItems
 from apps.bill_of_entry.models import RowDetails
 from apps.core.constants import DEC_0
 from .sion_product_classifier import SionProductClassifier, CanonicalInput
+from .sion_rule_resolver import SionRuleResolver
 
 
 class SionPercentageCapacity:
@@ -308,3 +312,149 @@ class SionPercentageCapacity:
             return min(max_quantities)
 
         return DEC_0
+
+    # ========== GENERIC METHODS (work with any norm/input) ==========
+
+    @staticmethod
+    def get_percentage_cap_for_canonical_input(
+        license_obj: LicenseDetailsModel,
+        sion_id: int,
+        canonical_input_code: str,
+        percentage: Decimal,
+    ) -> Decimal:
+        """Calculate percentage cap for a canonical input code (generic version).
+
+        This generic version accepts string canonical input codes instead of
+        the CanonicalInput enum, allowing it to work with any norm's inputs.
+
+        Args:
+            license_obj: The license
+            sion_id: SionNormClassModel.id
+            canonical_input_code: String code (e.g., 'PKO', 'OLIVE_OIL', custom codes)
+            percentage: The percentage constraint (e.g., Decimal("50.00"))
+
+        Returns:
+            The quantity cap
+        """
+        total = SionPercentageCapacity.get_total_eligible_quantity(license_obj, sion_id)
+        if total <= DEC_0 or percentage <= DEC_0:
+            return DEC_0
+
+        cap = (total * percentage / Decimal("100")).quantize(
+            Decimal("0.01"), rounding="ROUND_HALF_UP"
+        )
+        return cap
+
+    @staticmethod
+    def get_remaining_capacity_for_canonical_input(
+        license_obj: LicenseDetailsModel,
+        sion_id: int,
+        sion: Optional[SionNormClassModel],
+        canonical_input_code: str,
+        percentage: Decimal,
+    ) -> Decimal:
+        """Calculate remaining capacity for a canonical input (generic version).
+
+        Formula:
+            remaining = cap - (planned + allotted + debited)
+
+        Args:
+            license_obj: The license
+            sion_id: SionNormClassModel.id
+            sion: The actual SION object (for product classification)
+            canonical_input_code: String code
+            percentage: Its percentage constraint
+
+        Returns:
+            Remaining capacity (may be negative if already exceeded)
+        """
+        cap = SionPercentageCapacity.get_percentage_cap_for_canonical_input(
+            license_obj, sion_id, canonical_input_code, percentage
+        )
+
+        # Get planned for this input using generic resolver
+        plans = LicenseItemPlan.objects.filter(
+            license=license_obj,
+        ).select_related("item_name")
+
+        planned = DEC_0
+        for plan in plans:
+            if plan.item_name:
+                item_name = getattr(plan.item_name, "name", "")
+                resolved = SionRuleResolver.resolve_canonical_input(item_name, sion)
+                if resolved.canonical_code == canonical_input_code:
+                    planned += plan.planned_quantity or DEC_0
+
+        # Get allotted for this input
+        allotted = DEC_0
+        try:
+            items = AllotmentItems.objects.filter(
+                allotment__license=license_obj,
+            ).select_related("item")
+            for item in items:
+                if item.item:
+                    item_name = getattr(item.item, "name", "")
+                    resolved = SionRuleResolver.resolve_canonical_input(item_name, sion)
+                    if resolved.canonical_code == canonical_input_code:
+                        allotted += item.qty or DEC_0
+        except Exception:
+            allotted = DEC_0
+
+        # Get debited for this input
+        debited = DEC_0
+        try:
+            rows = RowDetails.objects.filter(
+                bill_of_entry__allotment__license=license_obj,
+            ).select_related("bill_of_entry")
+            for row in rows:
+                product_name = row.bill_of_entry.product_name or ""
+                resolved = SionRuleResolver.resolve_canonical_input(product_name, sion)
+                if resolved.canonical_code == canonical_input_code:
+                    debited += row.qty or DEC_0
+        except Exception:
+            debited = DEC_0
+
+        used = planned + allotted + debited
+        remaining = cap - used
+
+        return remaining
+
+    @staticmethod
+    def can_allocate_to_canonical_input(
+        license_obj: LicenseDetailsModel,
+        sion_id: int,
+        sion: Optional[SionNormClassModel],
+        canonical_input_code: str,
+        percentage: Decimal,
+        requested_qty: Decimal,
+    ) -> tuple[bool, Optional[str]]:
+        """Check if a quantity can be allocated to a canonical input (generic version).
+
+        Args:
+            license_obj: The license
+            sion_id: SionNormClassModel.id
+            sion: The actual SION object
+            canonical_input_code: String code
+            percentage: Its percentage constraint
+            requested_qty: The quantity being requested
+
+        Returns:
+            Tuple of (is_allowed, error_message)
+        """
+        if not canonical_input_code or canonical_input_code == "UNMAPPED" or requested_qty <= DEC_0:
+            return True, None  # No cap applies
+
+        remaining = SionPercentageCapacity.get_remaining_capacity_for_canonical_input(
+            license_obj, sion_id, sion, canonical_input_code, percentage
+        )
+
+        if remaining < requested_qty:
+            cap = SionPercentageCapacity.get_percentage_cap_for_canonical_input(
+                license_obj, sion_id, canonical_input_code, percentage
+            )
+            return False, (
+                f"{canonical_input_code} allocation exceeds remaining capacity. "
+                f"Cap: {cap}, Requested: {requested_qty}, Remaining: {remaining}"
+            )
+
+        return True, None

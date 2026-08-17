@@ -1331,6 +1331,23 @@ class SionPlanningRule(AuditModel):
         validators=[MinValueValidator(DEC_0), MaxValueValidator(Decimal("100"))],
         help_text="Percentage cap for this input under the parent SION norm (e.g., 50.00 for E126 PKO)",
     )
+    rule_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('PERCENTAGE_CAP', 'Master percentage cap'),
+            ('SPLIT_PERCENTAGE', 'Split by percentage'),
+            ('QUANTITY_CAP', 'Quantity cap'),
+        ],
+        default='PERCENTAGE_CAP',
+        help_text='Type of rule: master percentage cap or transaction split strategy'
+    )
+    rule_group_id = models.CharField(
+        max_length=120,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='Identifier for grouping related rules (e.g., "E126_50_50_split")'
+    )
 
     class Meta:
         ordering = ("sion_id", "priority", "name", "-version")
@@ -1357,6 +1374,53 @@ class SionPlanningRule(AuditModel):
 
     def __str__(self):
         return f"{self.sion.norm_class}: {self.name} v{self.version}"
+
+
+class SionInputAliasConfig(AuditModel):
+    """Maps raw product names to canonical input codes for SION rules.
+
+    Allows different norms/output items to classify products differently while
+    maintaining a central definition of canonical input names and their aliases.
+    """
+    canonical_input_code = models.CharField(
+        max_length=100, db_index=True,
+        help_text="Canonical code (e.g., 'PKO', 'OLIVE_OIL', 'CHEESE', or custom for extended norms)"
+    )
+    alias_normalized = models.CharField(
+        max_length=255, db_index=True, unique=True,
+        help_text="Normalized alias for exact matching (uppercase, normalized whitespace)"
+    )
+    sion = models.ForeignKey(
+        'core.SionNormClassModel', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='input_aliases',
+        help_text="If set, this alias applies only to this SION norm"
+    )
+    output_item = models.ForeignKey(
+        'core.ItemNameModel', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='sion_input_aliases',
+        help_text="If set, this alias applies only to this output item within the SION"
+    )
+    source_description = models.TextField(
+        blank=True,
+        help_text="Source or reason for this mapping (e.g., 'From E126 specification')"
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ('canonical_input_code', 'alias_normalized')
+        indexes = [
+            models.Index(fields=('sion', 'output_item', 'canonical_input_code')),
+            models.Index(fields=('sion', 'alias_normalized')),
+            models.Index(fields=('alias_normalized', 'is_active')),
+        ]
+
+    def __str__(self):
+        scope = ""
+        if self.sion and self.output_item:
+            scope = f" ({self.sion.norm_class}/{self.output_item.name})"
+        elif self.sion:
+            scope = f" ({self.sion.norm_class})"
+        return f"{self.alias_normalized} → {self.canonical_input_code}{scope}"
 
 
 PLANNING_ACTION_TYPES = (

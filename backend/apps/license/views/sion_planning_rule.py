@@ -292,17 +292,39 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 split_action.save(update_fields=("is_active", "modified_by", "modified_on"))
                 response = {"strategy": "STANDARD", "action_id": split_action.pk}
             elif values["strategy"] == "SPLIT_BY_PERCENTAGE":
-                # Load all percentage-constrained rules for this SION
+                # Load percentage-constrained rules for this rule's output item + SION
+                # Using the new generic resolver, rules are scoped to (output_item, sion)
+                if not rule.output_item_id:
+                    return Response({
+                        "error": "Split by percentage requires the rule to have an output item."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
                 percentage_rules = SionPlanningRule.objects.filter(
                     sion_id=rule.sion_id,
+                    output_item_id=rule.output_item_id,
                     percentage_constraint__isnull=False,
-                ).exclude(percentage_constraint=Decimal("0")).order_by("output_item__name")
+                ).exclude(percentage_constraint=Decimal("0")).order_by("name")
+
+                if not percentage_rules.exists():
+                    return Response({
+                        "error": f"No percentage rules configured for output item {rule.output_item}. "
+                                 f"Create rules with percentage constraints before enabling Split by %."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # Validate that percentages sum to 100%
+                total_pct = sum(Decimal(str(r.percentage_constraint)) for r in percentage_rules)
+                if total_pct != Decimal("100"):
+                    return Response({
+                        "error": f"Split rule percentages must sum to 100%, got {total_pct}. "
+                                 f"Adjust rules for {rule.output_item} to reach 100%."
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
                 config = dict(split_action.config or {})
                 config["source_rule_id"] = rule.pk
                 config["category"] = (rule.execution_output or rule.name).strip()
                 config["algorithm"] = "SPLIT_BY_PERCENTAGE"
                 config["sion_id"] = rule.sion_id
+                config["output_item_id"] = rule.output_item_id
                 config["percentage_rules"] = [
                     {
                         "rule_id": r.pk,

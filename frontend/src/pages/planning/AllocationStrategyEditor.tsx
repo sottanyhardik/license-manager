@@ -26,20 +26,33 @@ type Props = {
     onChange: (value: RuleAllocationStrategy) => void;
     disabled?: boolean;
     errors?: Record<string, string>;
+    ruleId?: number;
 };
 
 const decimalPattern = /^\d*(\.\d*)?$/;
 
 /** Configures boundaries only. Split arithmetic remains exclusively backend-owned. */
-export function AllocationStrategyEditor({ value, onChange, disabled = false, errors = {} }: Props) {
+export function AllocationStrategyEditor({ value, onChange, disabled = false, errors = {}, ruleId }: Props) {
     const splitConfig = value.strategy === "SPLIT_BY_UNIT_VALUE" ? value.config : null;
     const percentageConfig = value.strategy === "SPLIT_BY_PERCENTAGE" ? (value.config as PercentageAllocationInfo) : null;
 
-    const changeStrategy = (strategy: string) => {
+    const changeStrategy = async (strategy: string) => {
         if (strategy === "SPLIT_BY_UNIT_VALUE") {
             onChange({ strategy: "SPLIT_BY_UNIT_VALUE", config: DEFAULT_SPLIT_CONFIG });
         } else if (strategy === "SPLIT_BY_PERCENTAGE") {
-            onChange({ strategy: "SPLIT_BY_PERCENTAGE", config: {} });
+            // When SPLIT_BY_PERCENTAGE is selected, immediately fetch the current rules from backend
+            // rather than waiting for Save to populate them
+            if (ruleId) {
+                try {
+                    const allocation = await (await import("@/services/api/planningRuleApi")).fetchRuleAllocationStrategy(ruleId);
+                    onChange(allocation);
+                } catch {
+                    // If fetch fails, fall back to empty config and let the user save to see validation error
+                    onChange({ strategy: "SPLIT_BY_PERCENTAGE", config: {} });
+                }
+            } else {
+                onChange({ strategy: "SPLIT_BY_PERCENTAGE", config: {} });
+            }
         } else {
             onChange({ strategy: "STANDARD" });
         }

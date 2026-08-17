@@ -83,7 +83,14 @@ def add_license_overview_actions(viewset_class):
         returns a single license-level SION norm ('E1'/'E5'/'E132'/''), not
         a per-plan-group value, so the Planning tab's "SION Norm" column is
         the same value for every row rather than a new per-row field.
+
+        CRITICAL FIX: Explicitly prefetch export_license.norm_class relationship.
+        Without this, norm_class FK may be lazily evaluated as None even when
+        the relationship exists in the database. This caused Auto Plan button
+        to disappear for some licenses (e.g., 0311021261) despite having E1 norm.
         """
+        from django.db.models import prefetch_related_objects
+        from apps.license.models import License
         from apps.license.services.norm_plan import detect_norm
         from apps.license.services.plan_utilization import plan_utilization_rows
 
@@ -91,8 +98,14 @@ def add_license_overview_actions(viewset_class):
         user = request.user
         if not user.is_superuser and license_obj.exporter_id != getattr(user, "company_id", None):
             raise NotFound("License not found.")
+
+        # CRITICAL: Explicitly prefetch the export_license.norm_class relationship
+        # so detect_norm() can access it without lazy evaluation
+        prefetch_related_objects([license_obj], 'export_license__norm_class')
+
         data = {
             "norm": detect_norm(license_obj),
+            "license_number": license_obj.license_number,
             "rows": plan_utilization_rows(license_obj),
         }
         return Response(_json_safe(data))

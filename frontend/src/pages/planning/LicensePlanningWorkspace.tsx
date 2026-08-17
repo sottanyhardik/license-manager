@@ -64,10 +64,16 @@ function ExpressionSummary({ group, depth = 0 }: { group: SionPlanningRule["expr
 
 function AllocationStrategySummary({ value }: { value?: RuleAllocationStrategy }) {
     if (!value || value.strategy === "STANDARD") return <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Standard</p></div>;
-    return <section aria-label="Planning strategy summary" className="space-y-2">
+    if (value.strategy === "SPLIT_BY_PERCENTAGE") return <section aria-label="Planning strategy summary" className="space-y-2">
+        <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Split by %</p></div>
+        <div><h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Percentage Rules</h4><p className="mt-1 text-xs text-muted-foreground">{value.config?.percentage_rules?.length ?? 0} rules configured</p></div>
+    </section>;
+    // SPLIT_BY_UNIT_VALUE
+    if ("buckets" in value.config) return <section aria-label="Planning strategy summary" className="space-y-2">
         <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Split by Unit Value</p></div>
         <div><h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Split Outputs</h4><div className="mt-1 grid gap-2 sm:grid-cols-2">{value.config.buckets.map((bucket) => <div key={bucket.code} className="rounded border p-2 text-xs"><strong>{bucket.code}</strong><p className="text-muted-foreground">{bucket.min_price} – {bucket.max_price} · Reference {bucket.reference_price}</p></div>)}</div></div>
     </section>;
+    return <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Unknown strategy</p></div>;
 }
 
 export default function LicensePlanningWorkspace() {
@@ -136,7 +142,7 @@ export default function LicensePlanningWorkspace() {
     }, [draft, allocationDraft]);
     const changeAllocationStrategy = (next: RuleAllocationStrategy) => {
         setAllocationDraft(next);
-        if (draft && !draft.max_unit_price && next.strategy === "SPLIT_BY_UNIT_VALUE") {
+        if (draft && !draft.max_unit_price && next.strategy === "SPLIT_BY_UNIT_VALUE" && "buckets" in next.config) {
             const configuredMaximum = next.config.buckets[next.config.buckets.length - 1]?.max_price;
             if (configuredMaximum) setDraft({ ...draft, max_unit_price: configuredMaximum });
         }

@@ -24,9 +24,20 @@ export type SplitAllocationConfig = {
     basis: "BALANCE_CIF_PER_QUANTITY";
     buckets: SplitAllocationBucket[];
 };
+
+export type PercentageAllocationConfig = {
+    sion_id?: number;
+    percentage_rules?: Array<{
+        rule_id: number;
+        output_code: string;
+        percentage: string;
+    }>;
+};
+
 export type RuleAllocationStrategy =
     | { strategy: "STANDARD"; action_id?: number }
-    | { strategy: "SPLIT_BY_UNIT_VALUE"; action_id?: number; config: SplitAllocationConfig };
+    | { strategy: "SPLIT_BY_UNIT_VALUE"; action_id?: number; config: SplitAllocationConfig }
+    | { strategy: "SPLIT_BY_PERCENTAGE"; action_id?: number; config?: PercentageAllocationConfig };
 export type SionPlanningRule = {
     id?: number;
     sion: number;

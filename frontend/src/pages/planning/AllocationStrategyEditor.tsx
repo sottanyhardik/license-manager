@@ -11,6 +11,16 @@ const DEFAULT_SPLIT_CONFIG: SplitAllocationConfig = {
     ],
 };
 
+type PercentageAllocationInfo = {
+    strategy: "SPLIT_BY_PERCENTAGE";
+    sion_id?: number;
+    percentage_rules?: Array<{
+        rule_id: number;
+        output_code: string;
+        percentage: string;
+    }>;
+};
+
 type Props = {
     value: RuleAllocationStrategy;
     onChange: (value: RuleAllocationStrategy) => void;
@@ -23,9 +33,17 @@ const decimalPattern = /^\d*(\.\d*)?$/;
 /** Configures boundaries only. Split arithmetic remains exclusively backend-owned. */
 export function AllocationStrategyEditor({ value, onChange, disabled = false, errors = {} }: Props) {
     const splitConfig = value.strategy === "SPLIT_BY_UNIT_VALUE" ? value.config : null;
-    const changeStrategy = (strategy: string) => onChange(strategy === "SPLIT_BY_UNIT_VALUE"
-        ? { strategy: "SPLIT_BY_UNIT_VALUE", config: DEFAULT_SPLIT_CONFIG }
-        : { strategy: "STANDARD" });
+    const percentageConfig = value.strategy === "SPLIT_BY_PERCENTAGE" ? (value.config as PercentageAllocationInfo) : null;
+
+    const changeStrategy = (strategy: string) => {
+        if (strategy === "SPLIT_BY_UNIT_VALUE") {
+            onChange({ strategy: "SPLIT_BY_UNIT_VALUE", config: DEFAULT_SPLIT_CONFIG });
+        } else if (strategy === "SPLIT_BY_PERCENTAGE") {
+            onChange({ strategy: "SPLIT_BY_PERCENTAGE", config: {} });
+        } else {
+            onChange({ strategy: "STANDARD" });
+        }
+    };
 
     const changeBucket = (index: number, field: keyof SplitAllocationBucket, nextValue: string) => {
         if (!splitConfig || (field !== "code" && !decimalPattern.test(nextValue))) return;
@@ -59,6 +77,7 @@ export function AllocationStrategyEditor({ value, onChange, disabled = false, er
             <select aria-label="Allocation strategy" value={value.strategy} disabled={disabled} onChange={(event) => changeStrategy(event.target.value)} className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm">
                 <option value="STANDARD">Standard</option>
                 <option value="SPLIT_BY_UNIT_VALUE">Split by Unit Value</option>
+                <option value="SPLIT_BY_PERCENTAGE">Split by %</option>
             </select>
         </label>
         {splitConfig && <div className="rounded-md border bg-muted/20 p-3">
@@ -74,6 +93,24 @@ export function AllocationStrategyEditor({ value, onChange, disabled = false, er
             <div className="mt-2 flex gap-2">
                 <Button type="button" size="sm" variant="outline" onClick={addBucket} disabled={disabled}> + Add Bucket</Button>
             </div>
+            {errors.split && <p className="mt-2 text-xs text-destructive">{errors.split}</p>}
+        </div>}
+
+        {percentageConfig && <div className="rounded-md border bg-muted/20 p-3">
+            <p className="mb-2 text-xs text-muted-foreground"><strong>Percentage Allocation</strong> · Quantity is allocated according to configured percentage constraints.</p>
+            {percentageConfig.percentage_rules && percentageConfig.percentage_rules.length > 0 ? (
+                <div className="overflow-x-auto"><table className="w-full text-xs">
+                    <thead><tr className="border-b text-left text-muted-foreground"><th className="pb-2">Input</th><th className="pb-2 text-right">Percentage</th></tr></thead>
+                    <tbody>{percentageConfig.percentage_rules.map((rule) => (
+                        <tr key={rule.rule_id} className="border-b last:border-0">
+                            <td className="py-2">{rule.output_code}</td>
+                            <td className="py-2 text-right">{rule.percentage}%</td>
+                        </tr>
+                    ))}</tbody>
+                </table></div>
+            ) : (
+                <p className="text-xs text-muted-foreground">No percentage rules configured for this SION.</p>
+            )}
             {errors.split && <p className="mt-2 text-xs text-destructive">{errors.split}</p>}
         </div>}
     </section>;

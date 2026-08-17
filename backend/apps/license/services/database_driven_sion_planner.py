@@ -143,6 +143,9 @@ class DatabaseDrivenSionPlanner:
         if algorithm == "SPLIT_BY_UNIT_VALUE":
             self._split_by_unit_value(state, config)
             return
+        if algorithm == "SPLIT_BY_PERCENTAGE":
+            self._split_by_percentage(state, config)
+            return
         source = config["source_output"]
         targets = config["targets"]
         expanded = []
@@ -207,6 +210,68 @@ class DatabaseDrivenSionPlanner:
             child["source_output"] = category
             # Quantity is not split - entire quantity goes to the matched bucket
             expanded.append(child)
+
+        state.records = expanded
+
+    def _split_by_percentage(self, state: "_State", config: dict[str, Any]) -> None:
+        """Split matched records across outputs based on percentage constraints.
+
+        Uses SION percentage rules to allocate quantity proportionally to each output.
+        The percentage_rules in config specify each output and its percentage.
+
+        Formula: allocated_qty = total_qty × percentage / 100
+        """
+        category = config.get("category")
+        percentage_rules = config.get("percentage_rules", [])
+
+        if not category or not percentage_rules:
+            return
+
+        # Verify percentages total to 100
+        total_percentage = sum(
+            decimal(rule.get("percentage", "0")) for rule in percentage_rules
+        )
+        if total_percentage != Decimal("100"):
+            # Configuration error - percentages don't sum to 100
+            # For now, pass through records unchanged (will be caught in validation)
+            return
+
+        expanded = []
+        for record in state.records:
+            # Keep non-matching records unchanged
+            if record.get("matched_output") != category:
+                expanded.append(record)
+                continue
+
+            # Split this record according to percentages
+            total_qty = _quantity(record)
+            source_output = category
+
+            for rule_config in percentage_rules:
+                output_code = rule_config.get("output_code")
+                percentage = decimal(rule_config.get("percentage", "0"))
+
+                if not output_code or percentage <= ZERO:
+                    continue
+
+                # Calculate allocated quantity for this percentage
+                allocated_qty = (total_qty * percentage / Decimal("100")).quantize(
+                    Decimal("0.001"), rounding="ROUND_HALF_UP"
+                )
+
+                # Create a child record for this percentage output
+                child = deepcopy(record)
+                child["matched_output"] = output_code
+                child["source_output"] = source_output
+                child["quantity"] = allocated_qty
+                child["available_quantity"] = allocated_qty
+                child["allocation_provenance"] = {
+                    "allocation_strategy": "SPLIT_BY_PERCENTAGE",
+                    "original_quantity": str(total_qty),
+                    "percentage": str(percentage),
+                    "output": output_code,
+                }
+                expanded.append(child)
 
         state.records = expanded
 

@@ -8,7 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, Optional
 
 from django.conf import settings
-from django.core.validators import RegexValidator, MinValueValidator
+from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import Count, Sum, DecimalField, Value
@@ -1326,6 +1326,11 @@ class SionPlanningRule(AuditModel):
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES)
     priority = models.IntegerField(default=100, db_index=True)
     is_active = models.BooleanField(default=True, db_index=True)
+    percentage_constraint = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(DEC_0), MaxValueValidator(Decimal("100"))],
+        help_text="Percentage cap for this input under the parent SION norm (e.g., 50.00 for E126 PKO)",
+    )
 
     class Meta:
         ordering = ("sion_id", "priority", "name", "-version")

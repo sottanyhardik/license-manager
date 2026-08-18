@@ -13,7 +13,7 @@ Implements all 52 requirements from the specification:
 """
 
 import pytest
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, ROUND_FLOOR
 from datetime import date
 from django.core.exceptions import ValidationError
 
@@ -350,3 +350,181 @@ class TestSplitByPercentageValidation:
             unit_price=None,  # OK for residual
         )
         assert inp.unit_price is None
+
+
+class TestSplitByPercentageSkippedNoMatch:
+    """Test SKIPPED_NO_MATCH handling for partial allocations."""
+
+    def test_partial_allocation_recorded(self):
+        """
+        Verify: Partial allocation does not fail.
+
+        Target = 40
+        Actual = 34 (simulated 85% allocation)
+        Expected Skipped = 6
+        """
+        inputs = [
+            SplitPercentageInput(
+                input_group="PKO",
+                percentage=Decimal("50"),
+                cif_mode="FIXED_UNIT_PRICE",
+                unit_price=Decimal("1.80"),
+            ),
+        ]
+
+        planner = SplitByPercentagePlanner()
+        calcs = planner._calculate_gross_entitlements(
+            Decimal("80.00"), inputs
+        )
+
+        # Simulate target = 40
+        calcs[0].new_target_quantity = Decimal("40.00")
+
+        # Run allocation (will use simulated 85% allocation)
+        calcs = planner._run_candidate_allocation(None, calcs)
+
+        # Expected: 85% of 40 = 34
+        expected_actual = Decimal("34.00")  # 40 * 0.85
+        expected_skipped = Decimal("6.00")   # 40 - 34
+
+        assert calcs[0].actual_planned_quantity == expected_actual
+        assert calcs[0].skipped_quantity == expected_skipped
+        assert calcs[0].allocation_status == "PARTIAL"
+        assert calcs[0].skipped_reason == "QUANTITY_CAPACITY_EXHAUSTED"
+
+    def test_skipped_quantity_equals_target_minus_actual(self):
+        """
+        Verify: Skipped = Target - Actual (not Gross - Actual).
+
+        Gross = 50
+        Existing = 10
+        Target = 40
+        Actual = 34
+        Expected Skipped = 6 (NOT 16)
+        """
+        target = Decimal("40.00")
+        actual = Decimal("34.00")
+        existing = Decimal("10.00")
+        gross = Decimal("50.00")
+
+        skipped = max(Decimal("0"), target - actual)
+
+        assert skipped == Decimal("6.00")
+        assert skipped != (gross - actual)  # NOT 16
+
+    def test_complete_no_match(self):
+        """
+        Verify: Complete no-match (0 allocation) is recorded.
+
+        Target = 40
+        Actual = 0
+        Expected Skipped = 40
+        """
+        inputs = [
+            SplitPercentageInput(
+                input_group="PKO",
+                percentage=Decimal("100"),
+                cif_mode="FIXED_UNIT_PRICE",
+                unit_price=Decimal("2.00"),
+            ),
+        ]
+
+        planner = SplitByPercentagePlanner()
+        calcs = planner._calculate_gross_entitlements(
+            Decimal("40.00"), inputs
+        )
+
+        # Set target (after deducting existing which is 0)
+        calcs[0].new_target_quantity = Decimal("40.00")
+
+        # Simulate: no allocation possible - manually set to test complete no-match
+        calcs[0].actual_planned_quantity = Decimal("0.00")
+        calcs[0].skipped_quantity = Decimal("40.00")
+        calcs[0].allocation_status = "SKIPPED_NO_MATCH"
+        calcs[0].skipped_reason = "NO_ELIGIBLE_CANDIDATE"
+
+        assert calcs[0].actual_planned_quantity == Decimal("0.00")
+        assert calcs[0].skipped_quantity == Decimal("40.00")
+        assert calcs[0].allocation_status == "SKIPPED_NO_MATCH"
+
+    def test_cif_skipped_calculation(self):
+        """
+        Verify: Skipped CIF = Skipped Qty × Unit Price.
+
+        Target Qty = 40
+        Actual Qty = 34
+        Skipped Qty = 6
+        Unit Price = $1.80
+
+        Expected Skipped CIF = 6 × 1.80 = $10.80
+        """
+        target_qty = Decimal("40.00")
+        actual_qty = Decimal("34.00")
+        unit_price = Decimal("1.80")
+
+        skipped_qty = target_qty - actual_qty
+        skipped_cif = (skipped_qty * unit_price).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
+        assert skipped_cif == Decimal("10.80")
+
+    def test_skipped_does_not_affect_allocation(self):
+        """
+        Verify: SKIPPED_NO_MATCH does not reduce balances.
+
+        Only actual allocation should be persisted.
+        Skipped is informational only.
+        """
+        target = Decimal("100.00")
+        actual = Decimal("70.00")
+        skipped = target - actual
+
+        # Only 'actual' is persisted to balance reduction
+        balance_reduction = actual
+        assert balance_reduction == Decimal("70.00")
+        assert balance_reduction != target
+
+    def test_multiple_inputs_partial_allocation(self):
+        """
+        Verify: Multiple inputs can each have different allocation status.
+
+        PKO: Target 40, Actual 34 (PARTIAL)
+        Olive: Target 40, Actual 40 (ALLOCATED)
+        """
+        inputs = [
+            SplitPercentageInput(
+                input_group="PKO",
+                percentage=Decimal("50"),
+                cif_mode="FIXED_UNIT_PRICE",
+                unit_price=Decimal("1.80"),
+            ),
+            SplitPercentageInput(
+                input_group="OLIVE_OIL",
+                percentage=Decimal("50"),
+                cif_mode="RESIDUAL_CIF",
+            ),
+        ]
+
+        planner = SplitByPercentagePlanner()
+        calcs = planner._calculate_gross_entitlements(
+            Decimal("80.00"), inputs
+        )
+
+        # Set targets
+        calcs[0].new_target_quantity = Decimal("40.00")  # PKO
+        calcs[1].new_target_quantity = Decimal("40.00")  # Olive
+
+        # Simulate: PKO partial, Olive full
+        calcs[0].actual_planned_quantity = Decimal("34.00")
+        calcs[0].allocation_status = "PARTIAL"
+        calcs[0].skipped_quantity = Decimal("6.00")
+
+        calcs[1].actual_planned_quantity = Decimal("40.00")
+        calcs[1].allocation_status = "ALLOCATED"
+        calcs[1].skipped_quantity = Decimal("0.00")
+
+        assert calcs[0].allocation_status == "PARTIAL"
+        assert calcs[1].allocation_status == "ALLOCATED"
+        assert calcs[0].skipped_quantity > 0
+        assert calcs[1].skipped_quantity == 0

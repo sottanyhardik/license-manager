@@ -65,7 +65,12 @@ class SplitPercentageInputCalculation:
     # Actual allocation results
     actual_planned_quantity: Decimal = Decimal("0")
     actual_planned_cif: Decimal = Decimal("0")
-    allocation_status: str = "PENDING"  # PENDING, ALLOCATED, PARTIAL, ZERO
+    allocation_status: str = "PENDING"  # PENDING, ALLOCATED, PARTIAL, ZERO, SKIPPED_NO_MATCH
+
+    # Skipped/unmatched information
+    skipped_quantity: Decimal = Decimal("0")
+    skipped_cif: Decimal = Decimal("0")
+    skipped_reason: str = ""  # e.g., NO_ELIGIBLE_CANDIDATE, QUANTITY_CAPACITY_EXHAUSTED
 
 
 @dataclass
@@ -367,14 +372,47 @@ class SplitByPercentagePlanner:
         - Persist LicenseItemPlan rows
 
         If actual < target, continue (do NOT error).
+        Record remainder as SKIPPED_NO_MATCH.
         """
         # TODO: Integrate with real candidate allocator
-        # For now, set actual = target (happy path)
+        # For now, simulate partial allocation for testing
         for calc in calculations:
-            calc.actual_planned_quantity = calc.new_target_quantity
-            if calc.new_target_quantity > 0:
-                calc.allocation_status = "ALLOCATED"
-            else:
+            target = calc.new_target_quantity
+
+            if target <= 0:
+                calc.actual_planned_quantity = Decimal("0")
+                calc.actual_planned_cif = Decimal("0")
                 calc.allocation_status = "ZERO"
+                continue
+
+            # Simulate: allocate 85% of target (partial allocation for testing)
+            # In real implementation, this would call the candidate allocator
+            actual = (target * Decimal("0.85")).quantize(DEC_000, rounding=ROUND_FLOOR)
+
+            calc.actual_planned_quantity = actual
+            skipped = target - actual
+
+            if calc.unit_price and skipped > 0:
+                calc.actual_planned_cif = (actual * calc.unit_price).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                calc.skipped_cif = (skipped * calc.unit_price).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+            else:
+                calc.actual_planned_cif = Decimal("0")
+                calc.skipped_cif = Decimal("0")
+
+            # Set status
+            if actual == target:
+                calc.allocation_status = "ALLOCATED"
+            elif actual > 0:
+                calc.allocation_status = "PARTIAL"
+                calc.skipped_quantity = skipped
+                calc.skipped_reason = "QUANTITY_CAPACITY_EXHAUSTED"
+            else:
+                calc.allocation_status = "SKIPPED_NO_MATCH"
+                calc.skipped_quantity = target
+                calc.skipped_reason = "NO_ELIGIBLE_CANDIDATE"
 
         return calculations

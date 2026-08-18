@@ -296,7 +296,7 @@ def _write_notification_summary_block(worksheet, summary, title):
     worksheet.append(_xlsx_safe_row([section_header_cell]))
 
     column_header_row = []
-    for header in ('Item', 'Available', 'Planned Qty', 'Unit Price', 'Planned CIF'):
+    for header in ('Item', 'Available', 'Remaining Qty', 'Unit Price', 'Remaining CIF'):
         cell = WriteOnlyCell(worksheet, value=header)
         cell.font = Font(bold=True, color='FFFFFF')
         cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
@@ -581,6 +581,8 @@ class ItemPivotReportView(APIView):
         # unaffected. Column headers remain the union across the report; the
         # filtering is per row/cell in _build_license_row().
         from apps.license.models import LicenseItemPlan
+        from apps.license.services.planning_operational_snapshot import planning_operational_snapshots
+        from apps.license.services.planning_usage_reconciliation import reconcile_license_plans
 
         # import_item_id -> first attached item id, mirroring how a plan's
         # totals are attributed to a single item name in _build_license_row().
@@ -631,8 +633,22 @@ class ItemPivotReportView(APIView):
         # import item's first attached name. The key set doubles as "which
         # items this DFIA planned" for the per-row filter below.
         plan_totals_by_license = defaultdict(
-            lambda: defaultdict(lambda: {'q': Decimal('0.000'), 'cif': Decimal('0.00')})
+            lambda: defaultdict(lambda: {
+                'q': Decimal('0.000'), 'cif': Decimal('0.00'),
+                'theoretical_q': Decimal('0.000'), 'theoretical_cif': Decimal('0.00'),
+            })
         )
+        # Operational summaries must use the same group reconciliation as the
+        # Plan tab. Keep theoretical totals alongside them for audit; never
+        # derive utilization-driven reallocations independently in this report.
+        reconciliation_by_plan_id = {}
+        operational_snapshot_by_plan_id = {}
+        for _lo in valid_licenses:
+            _reconciliation = reconcile_license_plans(_lo.id)
+            reconciliation_by_plan_id.update(_reconciliation['plans'])
+            operational_snapshot_by_plan_id.update(
+                planning_operational_snapshots(_lo.id, reconciliation=_reconciliation)
+            )
         planned_item_ids_all = set()
         # Same query already fetches every LicenseItemPlan row for this page —
         # also keep the raw per-line split (item_name/qty/price/cif) so a
@@ -641,14 +657,24 @@ class ItemPivotReportView(APIView):
         # fully populated, below.
         for _pl in (LicenseItemPlan.objects
                     .filter(license_id__in=[_lo.id for _lo in valid_licenses])
-                    .values('license_id', 'import_item_id', 'item_name_id',
+                    .values('id', 'license_id', 'import_item_id', 'item_name_id',
                             'planned_quantity', 'unit_price', 'planned_cif_fc')):
             _iname = _pl['item_name_id'] or first_item_of_import.get(_pl['import_item_id'])
             if _iname is None:
                 continue
             _cell = plan_totals_by_license[_pl['license_id']][_iname]
-            _cell['q'] += _pl['planned_quantity'] or Decimal('0')
-            _cell['cif'] += _pl['planned_cif_fc'] or Decimal('0')
+            _cell['operational_snapshot'] = operational_snapshot_by_plan_id.get(_pl['id'])
+            _reconciled = reconciliation_by_plan_id.get(_pl['id'], {})
+            _operational_qty = _reconciled.get(
+                'remaining_quantity', _pl['planned_quantity'] or Decimal('0'),
+            )
+            _operational_cif = _reconciled.get(
+                'remaining_cif', _pl['planned_cif_fc'] or Decimal('0'),
+            )
+            _cell['q'] += _operational_qty
+            _cell['cif'] += _operational_cif
+            _cell['theoretical_q'] += _pl['planned_quantity'] or Decimal('0')
+            _cell['theoretical_cif'] += _pl['planned_cif_fc'] or Decimal('0')
             _cell.setdefault('splits', []).append({
                 # Resolved to a name string in the pass below, once all_items
                 # (including manually-planned-but-inactive items) is complete.
@@ -656,6 +682,8 @@ class ItemPivotReportView(APIView):
                 'planned_quantity': float(_pl['planned_quantity'] or 0),
                 'unit_price': float(_pl['unit_price'] or 0),
                 'planned_cif_fc': float(_pl['planned_cif_fc'] or 0),
+                'remaining_quantity': float(_operational_qty),
+                'remaining_cif': float(_operational_cif),
             })
             planned_item_ids_all.add(_iname)
             # Track import reference once per planned-item cell (first plan line wins).
@@ -701,8 +729,8 @@ class ItemPivotReportView(APIView):
             # Multiple plan lines can reference the same import item (e.g. a
             # milk item's DWP + SWP split) — sum ONLY the planned qty/CIF,
             # never the ledger fields, which belong to the item itself.
-            _planned_items[_iid]['planned_quantity'] += _pl['planned_quantity'] or Decimal('0')
-            _planned_items[_iid]['planned_cif_fc'] += _pl['planned_cif_fc'] or Decimal('0')
+            _planned_items[_iid]['planned_quantity'] += _operational_qty
+            _planned_items[_iid]['planned_cif_fc'] += _operational_cif
 
         # A manually-planned item must appear as a column even if it is INACTIVE
         # in the master (is_active=False) — the user explicitly planned it, so it
@@ -1466,6 +1494,17 @@ class ItemPivotReportView(APIView):
                     _debited_quantity = float(item_data['debited_quantity'])
                     _available_quantity = float(item_data['available_quantity'])
 
+                # A saved plan references one representative import row even
+                # when its SION rule matched a larger source group. Replace
+                # only the ledger quantity columns with the canonical group
+                # snapshot; plan and reconciliation columns remain separate.
+                _snapshot = _item_plan.get('operational_snapshot')
+                if _snapshot:
+                    _quantity = float(_snapshot['original_total_qty'])
+                    _allotted_quantity = float(_snapshot['unlinked_allotment_qty'])
+                    _debited_quantity = float(_snapshot['boe_debited_qty'])
+                    _available_quantity = float(_snapshot['balance_qty'])
+
                 row_data['items'][item_name] = {
                     'hs_code': _hs_code,
                     'description': _description,
@@ -1486,18 +1525,25 @@ class ItemPivotReportView(APIView):
                     # planned_cif), sourced per plan-line item_name.
                     'plan_quantity': float(_item_plan.get('q') or 0),
                     'plan_cif': float(_item_plan.get('cif') or 0),
+                    'theoretical_plan_quantity': float(_item_plan.get('theoretical_q') or 0),
+                    'theoretical_plan_cif': float(_item_plan.get('theoretical_cif') or 0),
+                    'original_total_qty': float(_snapshot['original_total_qty']) if _snapshot else _quantity,
+                    'boe_debited_qty': float(_snapshot['boe_debited_qty']) if _snapshot else _debited_quantity,
+                    'unlinked_allotment_qty': float(_snapshot['unlinked_allotment_qty']) if _snapshot else _allotted_quantity,
+                    'balance_qty': float(_snapshot['balance_qty']) if _snapshot else _available_quantity,
                     # The single manual-vs-norm selection rule — see
                     # _effective_planned_cif's docstring. Every consumer
                     # should read this instead of re-deriving the rule.
-                    'effective_planned_cif': _effective_planned_cif(
-                        float(_item_plan.get('q') or 0), float(_item_plan.get('cif') or 0), planned_cif,
+                    'effective_planned_cif': (
+                        float(_item_plan.get('cif') or 0)
+                        if _has_manual else _effective_planned_cif(0, 0, planned_cif)
                     ),
                     # Quantity counterpart to effective_planned_cif — see
                     # _effective_planned_quantity's docstring. First consumer
                     # is _build_notification_summary's Pass 3 (Phase 2B.2B).
-                    'effective_planned_quantity': _effective_planned_quantity(
-                        float(_item_plan.get('q') or 0), float(_item_plan.get('cif') or 0),
-                        _available_quantity,
+                    'effective_planned_quantity': (
+                        float(_item_plan.get('q') or 0)
+                        if _has_manual else _effective_planned_quantity(0, 0, _available_quantity)
                     ),
                     # Raw per-line split breakdown (item_name/qty/unit_price/
                     # cif) for the "Planning Splits" sheet — same source as
@@ -1650,7 +1696,7 @@ class ItemPivotReportView(APIView):
                         # the bulk Balance report cell-for-cell.
                         headers.extend([
                             f"{item_name} Plan Qty",
-                            f"{item_name} Planned CIF",
+                            f"{item_name} Remaining CIF",
                         ])
                         item_headers.extend(headers)
 
@@ -1851,7 +1897,7 @@ class ItemPivotReportView(APIView):
             splits_ws = workbook.create_sheet(title="Planning Splits")
             split_header_row = []
             for header in ('License No', 'Product', 'Item Name', 'Split',
-                           'Unit Price', 'Planned Qty', 'Planned CIF'):
+                           'Unit Price', 'Remaining Qty', 'Remaining CIF'):
                 cell = WriteOnlyCell(splits_ws, value=header)
                 cell.font = Font(bold=True, color='FFFFFF')
                 cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')

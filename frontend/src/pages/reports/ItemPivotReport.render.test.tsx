@@ -298,13 +298,11 @@ describe("ItemPivotReport — merged vs. genuinely-distinct import items", () =>
         expect(within(row).getAllByText(/\d+ items/)).toHaveLength(1);
     });
 
-    it("renders a license-level Planned CIF column after Alloted CIF, summing every item column's own planned CIF", async () => {
+    it("renders license and item Remaining CIF columns after reconciliation", async () => {
         await renderAndSelectNorm();
         const row = screen.getByText("LIC-MERGE-TEST").closest("tr") as HTMLElement;
 
-        // One "Planned CIF" header for the new license-level sticky column,
-        // plus one per item column (their own per-product "Planned CIF").
-        expect(screen.getAllByRole("columnheader", { name: "Planned CIF" }).length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByRole("columnheader", { name: "Remaining CIF" }).length).toBeGreaterThanOrEqual(1);
 
         // FRUIT JUICE - E1 (no manual plan) contributes its norm-derived
         // planned_cif (750); PP - E1 (manually planned) contributes its
@@ -468,7 +466,7 @@ describe("ItemPivotReport — Notification/Norm Summary panel (Phase 2B.2B backe
         // Grand-total row: total_available/total_planned_qty/blended_unit_price/
         // total_planned_cif, all read directly (blended_unit_price is not
         // recomputed client-side as planned/qty).
-        const totalRow = within(panel).getByText("TOTAL PLANNED CIF ($)").closest("tr") as HTMLElement;
+        const totalRow = within(panel).getByText("TOTAL REMAINING CIF ($)").closest("tr") as HTMLElement;
         expect(within(totalRow).getByText("444.44")).toBeInTheDocument();
         expect(within(totalRow).getByText("22.22")).toBeInTheDocument();
         expect(within(totalRow).getByText("15.00")).toBeInTheDocument();
@@ -493,7 +491,7 @@ describe("ItemPivotReport — Notification/Norm Summary panel (Phase 2B.2B backe
         expect(within(fruitRow).getByText("21.12")).toBeInTheDocument();
         expect(within(fruitRow).getByText("232.32")).toBeInTheDocument();
 
-        const totalRow = within(card).getByText("TOTAL PLANNED CIF ($)").closest("tr") as HTMLElement;
+        const totalRow = within(card).getByText("TOTAL REMAINING CIF ($)").closest("tr") as HTMLElement;
         expect(within(totalRow).getByText("666.66")).toBeInTheDocument();
         expect(within(totalRow).getByText("33.33")).toBeInTheDocument();
         expect(within(totalRow).getByText("16.67")).toBeInTheDocument();

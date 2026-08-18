@@ -720,7 +720,7 @@ export default function ItemPivotReport() {
                                                         </th>
                                                         <th scope="col" className="text-right" style={{minWidth: '100px'}}>Alloted CIF
                                                         </th>
-                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Planned CIF
+                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Remaining CIF
                                                         </th>
                                                         </>)}
                                                         <th scope="col" className="text-right" style={{
@@ -837,7 +837,7 @@ export default function ItemPivotReport() {
                                                                 )}
                                                                 {/* Manual plan when present, else norm unit price / planned CIF */}
                                                                 <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty</th>
-                                                                <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Planned CIF</th>
+                                                                <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Remaining CIF</th>
                                                                 {item.name === 'RUTILE - A3627' && (
                                                                     <th scope="col" className="text-right" style={{
                                                                         minWidth: '100px',
@@ -1229,9 +1229,9 @@ export default function ItemPivotReport() {
                                                                     <th scope="col" style={{width: '70px'}}>Sr No</th>
                                                                     <th scope="col" style={{width: '460px'}}>Item Name</th>
                                                                     <th scope="col" className="text-right" style={{width: '220px'}}>Available Balance QTY</th>
-                                                                    <th scope="col" className="text-right" style={{width: '150px'}}>Planned Qty</th>
+                                                                    <th scope="col" className="text-right" style={{width: '150px'}}>Remaining Qty</th>
                                                                     <th scope="col" className="text-right" style={{width: '170px'}}>Unit Price</th>
-                                                                    <th scope="col" className="text-right" style={{width: '300px'}}>Total Planned CIF ($)</th>
+                                                                    <th scope="col" className="text-right" style={{width: '300px'}}>Total Remaining CIF ($)</th>
                                                                 </tr>
                                                                 </thead>
                                                                 <tbody>
@@ -1320,7 +1320,7 @@ export default function ItemPivotReport() {
                                                                 )}
                                                                 {/* Grand-total row for the Summary table. */}
                                                                 <tr className="table-success">
-                                                                    <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
+                                                                    <td colSpan={2} className="text-center font-bold">TOTAL REMAINING CIF ($)</td>
                                                                     <td className="text-right font-bold">
                                                                         {formatIndianNumber(summary.total_available || 0, 2)}
                                                                     </td>
@@ -1385,9 +1385,9 @@ export default function ItemPivotReport() {
                                                             <th scope="col" style={{ width: '50px' }}>Sr No</th>
                                                             <th scope="col" style={{ width: '400px' }}>Item Name</th>
                                                             <th scope="col" className="text-right" style={{ width: '220px' }}>Available Balance QTY</th>
-                                                            <th scope="col" className="text-right" style={{ width: '150px' }}>Planned Qty</th>
+                                                            <th scope="col" className="text-right" style={{ width: '150px' }}>Remaining Qty</th>
                                                             <th scope="col" className="text-right" style={{ width: '170px' }}>Unit Price</th>
-                                                            <th scope="col" className="text-right" style={{ width: '300px' }}>Total Planned CIF ($)</th>
+                                                            <th scope="col" className="text-right" style={{ width: '300px' }}>Total Remaining CIF ($)</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -1422,7 +1422,7 @@ export default function ItemPivotReport() {
 
                                                         {/* Grand total */}
                                                         <tr className="table-primary font-bold">
-                                                            <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
+                                                            <td colSpan={2} className="text-center font-bold">TOTAL REMAINING CIF ($)</td>
                                                             <td className="text-right font-bold">
                                                                 {formatIndianNumber(ns.total_available || 0, 2)}
                                                             </td>

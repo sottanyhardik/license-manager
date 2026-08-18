@@ -114,6 +114,12 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
     unlinked_allotment_cif = serializers.SerializerMethodField(read_only=True)
     effective_used_quantity = serializers.SerializerMethodField(read_only=True)
     effective_used_cif = serializers.SerializerMethodField(read_only=True)
+    percentage_theoretical_quantity = serializers.SerializerMethodField(read_only=True)
+    percentage_theoretical_cif = serializers.SerializerMethodField(read_only=True)
+    theoretical_quantity = serializers.SerializerMethodField(read_only=True)
+    theoretical_cif = serializers.SerializerMethodField(read_only=True)
+    reconciled_planned_quantity = serializers.SerializerMethodField(read_only=True)
+    reconciled_planned_cif = serializers.SerializerMethodField(read_only=True)
     remaining_quantity = serializers.SerializerMethodField(read_only=True)
     remaining_cif = serializers.SerializerMethodField(read_only=True)
     excess_quantity = serializers.SerializerMethodField(read_only=True)
@@ -166,6 +172,24 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
     def get_effective_used_cif(self, obj):
         return self._reconciliation_value(obj, "effective_used_cif")
 
+    def get_percentage_theoretical_quantity(self, obj):
+        return self._reconciliation_value(obj, "percentage_theoretical_quantity", obj.planned_quantity)
+
+    def get_percentage_theoretical_cif(self, obj):
+        return self._reconciliation_value(obj, "percentage_theoretical_cif", obj.planned_cif_fc)
+
+    def get_theoretical_quantity(self, obj):
+        return self._reconciliation_value(obj, "theoretical_quantity", obj.planned_quantity)
+
+    def get_theoretical_cif(self, obj):
+        return self._reconciliation_value(obj, "theoretical_cif", obj.planned_cif_fc)
+
+    def get_reconciled_planned_quantity(self, obj):
+        return self._reconciliation_value(obj, "reconciled_planned_quantity", obj.planned_quantity)
+
+    def get_reconciled_planned_cif(self, obj):
+        return self._reconciliation_value(obj, "reconciled_planned_cif", obj.planned_cif_fc)
+
     def get_remaining_quantity(self, obj):
         return self._reconciliation_value(obj, "remaining_quantity", obj.planned_quantity)
 
@@ -209,6 +233,9 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
             "planning_family", "boe_used_quantity", "boe_used_cif",
             "unlinked_allotment_quantity", "unlinked_allotment_cif",
             "effective_used_quantity", "effective_used_cif",
+            "percentage_theoretical_quantity", "percentage_theoretical_cif",
+            "theoretical_quantity", "theoretical_cif",
+            "reconciled_planned_quantity", "reconciled_planned_cif",
             "remaining_quantity", "remaining_cif", "excess_quantity", "excess_cif",
             "reconciliation_status", "status", "unmapped_usage", "needs_rebuild",
         ]

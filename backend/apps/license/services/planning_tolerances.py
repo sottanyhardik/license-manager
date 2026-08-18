@@ -8,6 +8,7 @@ from decimal import Decimal
 
 PLANNING_AVAILABLE_QTY_TOLERANCE = Decimal("200.000")
 PLANNING_BALANCE_CIF_TOLERANCE = Decimal("500.00")
+PLANNING_REMAINING_QTY_TOLERANCE = Decimal("100.000")
 
 
 def _decimal(value) -> Decimal:
@@ -30,3 +31,16 @@ def effective_planning_balance_cif(value) -> Decimal:
     if Decimal("0") <= value < PLANNING_BALANCE_CIF_TOLERANCE:
         return Decimal("0.00")
     return value
+
+
+def apply_remaining_plan_tolerance(quantity, cif) -> tuple[Decimal, Decimal]:
+    """Ignore a strictly-positive final plan residual below 100 quantity.
+
+    Negative values are genuine excess signals and the exact 100 boundary is
+    intentionally retained. The raw/model values are never mutated.
+    """
+    quantity = _decimal(quantity)
+    cif = _decimal(cif)
+    if Decimal("0") < quantity < PLANNING_REMAINING_QTY_TOLERANCE:
+        return Decimal("0.000"), Decimal("0.00")
+    return quantity, cif

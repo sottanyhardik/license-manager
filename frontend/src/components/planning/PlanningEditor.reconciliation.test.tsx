@@ -45,6 +45,8 @@ vi.mock("../../services/api/licenseApi", () => ({
         unlinked_allotment_cif: "0.00",
         effective_used_quantity: "0.000",
         effective_used_cif: "0.00",
+        reconciled_planned_quantity: "321138.000",
+        reconciled_planned_cif: "578048.40",
         remaining_quantity: "321138.000",
         remaining_cif: "578048.40",
         excess_quantity: "0.000",
@@ -64,6 +66,8 @@ vi.mock("../../services/api/licenseApi", () => ({
         unlinked_allotment_cif: "130033.87",
         effective_used_quantity: "77997.840",
         effective_used_cif: "415016.85",
+        reconciled_planned_quantity: "321139.000",
+        reconciled_planned_cif: "1605695.00",
         remaining_quantity: "243141.160",
         remaining_cif: "1190678.15",
         excess_quantity: "0.000",
@@ -97,15 +101,13 @@ describe("PlanningEditor reconciliation", () => {
         const parentRow = screen.getByText("Fats and oils").closest("tr");
         expect(parentRow).not.toBeNull();
         const parent = within(parentRow!);
-        expect(parent.getByText("564,279.160")).toBeInTheDocument();
-        expect(parent.getByText("of 642,277.000 planned")).toBeInTheDocument();
-        expect(parent.getByText("$1,768,726.55")).toBeInTheDocument();
-        expect(parent.getByText("of $2,183,743.40 planned")).toBeInTheDocument();
+        expect(parent.getAllByText("642,277.000")).toHaveLength(2);
+        expect(parent.getByText("$2,183,743.40")).toBeInTheDocument();
         expect(parent.getByText("77,997.840")).toBeInTheDocument();
         expect(parent.queryByText("Over Planned")).not.toBeInTheDocument();
         expect(parent.getByText("Planned")).toBeInTheDocument();
 
-        expect(screen.getByText("Effective Remaining CIF")).toBeInTheDocument();
-        expect(screen.getAllByText("$1,768,726.55").length).toBeGreaterThanOrEqual(2);
+        expect(screen.getAllByText("Reconciled Planned CIF")).toHaveLength(3);
+        expect(screen.getAllByText("$2,183,743.40").length).toBeGreaterThanOrEqual(2);
     });
 });

@@ -79,10 +79,15 @@ def rows_for_splits(splits: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     name, so grouping by it would create one spurious column per untagged
     split instead of one shared "Unassigned" column.
     """
+    def quantity_of(split):
+        return split.get('remaining_quantity') if 'remaining_quantity' in split else split.get('planned_quantity')
+
+    def cif_of(split):
+        return split.get('remaining_cif') if 'remaining_cif' in split else split.get('planned_cif_fc')
+
     visible = [
         s for s in (splits or [])
-        if float(s.get('planned_quantity') or 0) > 0
-        or float(s.get('planned_cif_fc') or 0) > 0
+        if float(quantity_of(s) or 0) > 0 or float(cif_of(s) or 0) > 0
     ]
     rows: List[Dict[str, Any]] = []
     for i, sp in enumerate(visible):
@@ -96,8 +101,8 @@ def rows_for_splits(splits: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
             'indented_label': f'  └ {item_name_label}',
             'unit_price': unit_price,
             'unit_price_label': f'@ ${unit_price:,.2f}/unit' if unit_price else '',
-            'planned_quantity': float(sp.get('planned_quantity') or 0),
-            'planned_cif_fc': float(sp.get('planned_cif_fc') or 0),
+            'planned_quantity': float(quantity_of(sp) or 0),
+            'planned_cif_fc': float(cif_of(sp) or 0),
         })
     return rows
 

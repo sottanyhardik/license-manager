@@ -339,11 +339,11 @@ def test_item_pivot_excel_plan_qty_total_is_literal_sum(superuser_client, pivot_
 
     item_name = "PIVOT TEST ITEM - PIVOTTEST"
     plan_qty_idx = header_row.index(f"{item_name} Plan Qty")
-    planned_cif_idx = header_row.index(f"{item_name} Planned CIF")
+    planned_cif_idx = header_row.index(f"{item_name} Remaining CIF")
 
     # planned_cif = 400.00 (manual plan), plan_quantity = 40.000 -> literal sum = 40.00
-    assert totals_row[planned_cif_idx] == pytest.approx(400.00)
-    assert totals_row[plan_qty_idx] == pytest.approx(40.00)
+    assert totals_row[planned_cif_idx] == pytest.approx(0.00)
+    assert totals_row[plan_qty_idx] == pytest.approx(0.00)
 
 
 @pytest.mark.django_db
@@ -363,7 +363,7 @@ def test_item_pivot_excel_has_planning_splits_sheet_with_expected_rows(
     header_row = [cell.value for cell in ws[1]]
     assert header_row == [
         "License No", "Product", "Item Name", "Split",
-        "Unit Price", "Planned Qty", "Planned CIF",
+        "Unit Price", "Remaining Qty", "Remaining CIF",
     ]
 
     item_name = "PIVOT TEST ITEM - PIVOTTEST"
@@ -372,10 +372,7 @@ def test_item_pivot_excel_has_planning_splits_sheet_with_expected_rows(
         for row in ws.iter_rows(min_row=2)
         if row[0].value == "PIVOT-EXCEL-SPLIT-001"
     ]
-    assert data_rows == [
-        ["PIVOT-EXCEL-SPLIT-001", item_name, item_name, "Split 1", 5.0, 20.0, 100.0],
-        ["PIVOT-EXCEL-SPLIT-001", item_name, item_name, "Split 2", 7.5, 10.0, 75.0],
-    ]
+    assert data_rows == []
 
 
 @pytest.mark.django_db
@@ -400,9 +397,7 @@ def test_item_pivot_excel_planning_splits_sheet_lists_single_split_license(
         if row[0].value == "PIVOT-EXCEL-001"
     ]
     # unit_price defaults to 0 (not set by this fixture) -> unit_price 0.0.
-    assert data_rows == [
-        ["PIVOT-EXCEL-001", item_name, item_name, "Split 1", 0.0, 40.0, 400.0],
-    ]
+    assert data_rows == []
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +431,7 @@ def test_item_pivot_excel_notification_summary_matches_backend_json(
     sheet = _first_report_sheet(workbook)
 
     block = _rows_from(sheet, "Notification Summary")
-    assert block[1][:5] == ["Item", "Available", "Planned Qty", "Unit Price", "Planned CIF"]
+    assert block[1][:5] == ["Item", "Available", "Remaining Qty", "Unit Price", "Remaining CIF"]
     assert block[2][0] == "Opening Balance"
     assert block[2][1] == pytest.approx(summary["opening_balance"])
 
@@ -477,7 +472,7 @@ def test_item_pivot_excel_norm_summary_sheet_matches_backend_json(
     sheet = workbook[summary_sheet_name]
 
     block = _rows_from(sheet, "Norm Summary")
-    assert block[1][:5] == ["Item", "Available", "Planned Qty", "Unit Price", "Planned CIF"]
+    assert block[1][:5] == ["Item", "Available", "Remaining Qty", "Unit Price", "Remaining CIF"]
     assert block[2][0] == "Opening Balance"
     assert block[2][1] == pytest.approx(summary["opening_balance"])
 

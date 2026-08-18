@@ -138,6 +138,12 @@ interface Split {
     unlinked_allotment_cif?: string;
     effective_used_quantity?: string;
     effective_used_cif?: string;
+    percentage_theoretical_quantity?: string;
+    percentage_theoretical_cif?: string;
+    theoretical_quantity?: string;
+    theoretical_cif?: string;
+    reconciled_planned_quantity?: string;
+    reconciled_planned_cif?: string;
     remaining_quantity?: string;
     remaining_cif?: string;
     excess_quantity?: string;
@@ -535,6 +541,9 @@ export default function PlanningEditor({
                 boe_used_quantity?: string; boe_used_cif?: string;
                 unlinked_allotment_quantity?: string; unlinked_allotment_cif?: string;
                 effective_used_quantity?: string; effective_used_cif?: string;
+                percentage_theoretical_quantity?: string; percentage_theoretical_cif?: string;
+                theoretical_quantity?: string; theoretical_cif?: string;
+                reconciled_planned_quantity?: string; reconciled_planned_cif?: string;
                 remaining_quantity?: string; remaining_cif?: string;
                 excess_quantity?: string; excess_cif?: string;
                 reconciliation_status?: Split["reconciliation_status"];
@@ -559,6 +568,12 @@ export default function PlanningEditor({
                     unlinked_allotment_cif: p.unlinked_allotment_cif,
                     effective_used_quantity: p.effective_used_quantity,
                     effective_used_cif: p.effective_used_cif,
+                    percentage_theoretical_quantity: p.percentage_theoretical_quantity,
+                    percentage_theoretical_cif: p.percentage_theoretical_cif,
+                    theoretical_quantity: p.theoretical_quantity,
+                    theoretical_cif: p.theoretical_cif,
+                    reconciled_planned_quantity: p.reconciled_planned_quantity,
+                    reconciled_planned_cif: p.reconciled_planned_cif,
                     remaining_quantity: p.remaining_quantity,
                     remaining_cif: p.remaining_cif,
                     excess_quantity: p.excess_quantity,
@@ -622,15 +637,19 @@ export default function PlanningEditor({
                 if (reconciledSplits.length > 0) {
                     group.has_plan = true;
                     group.has_reconciliation = true;
-                    group.original_planned_quantity = splits.reduce((sum, split) => sum + num(split.planned_quantity), 0);
-                    group.original_planned_cif_fc = splits.reduce((sum, split) => sum + num(split.planned_cif_fc), 0);
+                    group.original_planned_quantity = splits.reduce(
+                        (sum, split) => sum + num(split.theoretical_quantity ?? split.reconciled_planned_quantity ?? split.planned_quantity), 0,
+                    );
+                    group.original_planned_cif_fc = splits.reduce(
+                        (sum, split) => sum + num(split.theoretical_cif ?? split.reconciled_planned_cif ?? split.planned_cif_fc), 0,
+                    );
                     group.used_planned_quantity = splits.reduce((sum, split) => sum + num(split.effective_used_quantity), 0);
                     group.used_planned_cif_fc = splits.reduce((sum, split) => sum + num(split.effective_used_cif), 0);
                     group.remaining_planned_quantity = splits.reduce(
-                        (sum, split) => sum + num(split.remaining_quantity ?? split.planned_quantity), 0,
+                        (sum, split) => sum + num(split.remaining_quantity), 0,
                     );
                     group.remaining_planned_cif_fc = splits.reduce(
-                        (sum, split) => sum + num(split.remaining_cif ?? split.planned_cif_fc), 0,
+                        (sum, split) => sum + num(split.remaining_cif), 0,
                     );
                     group.reconciliation_manual_required = splits.some((split) =>
                         split.reconciliation_status === "MANUAL_PLANNING_REQUIRED"
@@ -876,8 +895,12 @@ export default function PlanningEditor({
         let lastUpdated: string | null = null;
         groups.forEach((g) => {
             totalAvail   += g.available_quantity;
-            const groupTheoreticalQty = g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
-            const groupTheoreticalCif = g.splits.reduce((s, sp) => s + num(sp.planned_cif_fc), 0);
+            const groupTheoreticalQty = g.splits.reduce(
+                (s, sp) => s + num(sp.theoretical_quantity ?? sp.reconciled_planned_quantity ?? sp.planned_quantity), 0,
+            );
+            const groupTheoreticalCif = g.splits.reduce(
+                (s, sp) => s + num(sp.theoretical_cif ?? sp.reconciled_planned_cif ?? sp.planned_cif_fc), 0,
+            );
             theoreticalPlanned += groupTheoreticalQty;
             theoreticalCif += groupTheoreticalCif;
             effectivePlanned += g.has_reconciliation ? (g.remaining_planned_quantity ?? 0) : groupTheoreticalQty;
@@ -1010,7 +1033,7 @@ export default function PlanningEditor({
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                 <SummaryCard label="License Total CIF" value={fmtUsd(licenseTotalCif)} variant="muted" />
                 <SummaryCard label="Theoretical Planned CIF" value={fmtUsd(totals.theoreticalCif)} variant={totals.theoreticalCif > 0 ? "primary" : "muted"} />
-                <SummaryCard label="Effective Remaining CIF" value={fmtUsd(totals.effectiveCif)} variant={totals.effectiveCif > 0 ? "primary" : "muted"} />
+                <SummaryCard label="Reconciled Planned CIF" value={fmtUsd(totals.effectiveCif)} variant={totals.effectiveCif > 0 ? "primary" : "muted"} />
                 <SummaryCard
                     label={totals.cifRemaining < -1e-6 ? "Operational Excess CIF" : "Operational Available CIF"}
                     value={fmtUsd(Math.abs(totals.cifRemaining))}
@@ -1071,18 +1094,13 @@ export default function PlanningEditor({
                                 const isExpanded   = hasSplitRows && (expandedIds[g.id] ?? true);
                                 const splitRowsId  = `plan-splits-${g.id}`;
 
-                                // "Planned Qty/CIF" show the live Remaining (Original minus
-                                // usage since this plan was last saved) as the headline number
-                                // when the group has a tracked plan — that's the actionable
-                                // "how much can still be allotted" figure. The true Original
-                                // (what was actually entered/auto-planned) stays visible as a
-                                // "of X" sub-line so re-planning intent is never hidden, just
-                                // no longer the number that drives the Over-Planned badge.
+                                // Planned Qty/CIF are the license-specific actual-first
+                                // allocation. Remaining is explicit beneath it; status still
+                                // derives from the backend-toleranced remaining values.
                                 const showRemaining  = g.has_plan === true && g.remaining_planned_quantity != null;
                                 const showRemainingCif = g.has_plan === true && g.remaining_planned_cif_fc != null;
-                                const displayQty      = showRemaining ? g.remaining_planned_quantity ?? planned : planned;
-                                const displayCif      = showRemainingCif ? g.remaining_planned_cif_fc ?? plannedCif : plannedCif;
-                                const qtyDiffersFromOriginal = showRemaining && Math.abs((g.original_planned_quantity ?? 0) - displayQty) > 1e-6;
+                                const displayQty      = g.original_planned_quantity ?? planned;
+                                const displayCif      = g.original_planned_cif_fc ?? plannedCif;
 
                                 return (
                                     <Fragment key={g.id}>
@@ -1129,8 +1147,8 @@ export default function PlanningEditor({
                                                 {planned > 0 ? (
                                                     <>
                                                         <span className={displayQty < -1e-6 ? "text-destructive" : undefined}>{fmtQty(displayQty)}</span>
-                                                        {qtyDiffersFromOriginal && (
-                                                            <div className="text-[10px] font-normal text-muted-foreground">of {fmtQty(g.original_planned_quantity)} planned</div>
+                                                        {showRemaining && (
+                                                            <div className="text-[10px] font-normal text-muted-foreground">{fmtQty(g.remaining_planned_quantity)} remaining</div>
                                                         )}
                                                     </>
                                                 ) : <span className="font-normal text-muted-foreground">—</span>}
@@ -1144,8 +1162,8 @@ export default function PlanningEditor({
                                                 {plannedCif > 0 ? (
                                                     <>
                                                         <span className={cn("font-semibold", displayCif < -1e-6 ? "text-destructive" : "text-primary")}>{fmtUsd(displayCif)}</span>
-                                                        {qtyDiffersFromOriginal && (
-                                                            <div className="text-[10px] font-normal text-muted-foreground">of {fmtUsd(g.original_planned_cif_fc)} planned</div>
+                                                        {showRemainingCif && (
+                                                            <div className="text-[10px] font-normal text-muted-foreground">{fmtUsd(g.remaining_planned_cif_fc)} remaining</div>
                                                         )}
                                                     </>
                                                 ) : <span className="text-muted-foreground">—</span>}
@@ -1208,12 +1226,16 @@ export default function PlanningEditor({
                                                     </div>
                                                     <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-5">
                                                         {[
-                                                            ["Theoretical Qty", fmtQty(num(sp.planned_quantity))],
-                                                            ["Theoretical CIF", fmtUsd(num(sp.planned_cif_fc))],
+                                                            ["Original Percentage Qty", fmtQty(num(sp.percentage_theoretical_quantity ?? sp.planned_quantity))],
+                                                            ["Original Percentage CIF", fmtUsd(num(sp.percentage_theoretical_cif ?? sp.planned_cif_fc))],
+                                                            ["Theoretical Qty", fmtQty(num(sp.theoretical_quantity ?? sp.reconciled_planned_quantity ?? sp.planned_quantity))],
+                                                            ["Theoretical CIF", fmtUsd(num(sp.theoretical_cif ?? sp.reconciled_planned_cif ?? sp.planned_cif_fc))],
                                                             ["BOE Used Qty", fmtQty(num(sp.boe_used_quantity))],
                                                             ["BOE Used CIF", fmtUsd(num(sp.boe_used_cif))],
                                                             ["Unlinked Allotment Qty", fmtQty(num(sp.unlinked_allotment_quantity))],
                                                             ["Unlinked Allotment CIF", fmtUsd(num(sp.unlinked_allotment_cif))],
+                                                            ["Reconciled Planned Qty", fmtQty(num(sp.reconciled_planned_quantity ?? sp.planned_quantity))],
+                                                            ["Reconciled Planned CIF", fmtUsd(num(sp.reconciled_planned_cif ?? sp.planned_cif_fc))],
                                                             ["Remaining Qty", fmtQty(num(sp.remaining_quantity))],
                                                             ["Remaining CIF", fmtUsd(num(sp.remaining_cif))],
                                                             ["Excess Qty", fmtQty(num(sp.excess_quantity))],

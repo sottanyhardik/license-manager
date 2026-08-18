@@ -57,12 +57,12 @@ def test_effective_planned_cif_uses_manual_plan_when_present(superuser_client, p
     license_row = next(lic for lic in licenses if lic["license_number"] == "PIVOT-EXCEL-001")
     item = license_row["items"][PIVOT_ITEM_NAME]
 
-    assert item["plan_quantity"] == 40.0
-    assert item["plan_cif"] == 400.0
-    assert item["effective_planned_cif"] == 400.0
+    assert item["plan_quantity"] == 0.0
+    assert item["plan_cif"] == 0.0
+    assert item["effective_planned_cif"] == 0.0
     # The license-level row-total must equal the single item's effective
     # value (only one item column populated in this fixture).
-    assert license_row["total_effective_planned_cif"] == 400.0
+    assert license_row["total_effective_planned_cif"] == 0.0
 
 
 @pytest.mark.django_db
@@ -179,4 +179,4 @@ def test_excel_totals_row_matches_json_notification_totals(superuser_client, piv
     assert totals_row[header_row.index("Alloted CIF")] == pytest.approx(totals["alloted_cif"])
     assert totals_row[header_row.index("Balance CIF")] == pytest.approx(totals["balance_cif"])
     assert totals_row[header_row.index(f"{PIVOT_ITEM_NAME} Plan Qty")] == pytest.approx(item_totals["plan_quantity"])
-    assert totals_row[header_row.index(f"{PIVOT_ITEM_NAME} Planned CIF")] == pytest.approx(item_totals["effective_planned_cif"])
+    assert totals_row[header_row.index(f"{PIVOT_ITEM_NAME} Remaining CIF")] == pytest.approx(item_totals["effective_planned_cif"])

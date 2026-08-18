@@ -1046,19 +1046,14 @@ class CanonicalPlanningService:
             capacity = group_capacity_left[group_key]
 
             requested = row["requested_quantity"]
-            if requested > capacity:
-                raise InsufficientQuantityError(
-                    f"Import item {item.id}: requested quantity {requested} exceeds "
-                    f"available capacity {capacity} for plan group {group_key!r}",
-                    import_item_id=item.id,
-                    group_key=group_key,
-                    requested_quantity=str(requested),
-                    available_capacity=str(capacity),
-                )
+            # For Split-by-% and other strategies, if requested > capacity,
+            # allocate the maximum valid amount (capacity) and continue.
+            # Do not raise an error. Status will indicate the constraint.
+            allocatable = min(requested, capacity)
 
             allocated_qty, unit_price, planned_cif, line_status = (
                 CanonicalPlanningService._allocate_one(
-                    requested, row["requested_unit_price"], remaining_balance,
+                    allocatable, row["requested_unit_price"], remaining_balance,
                 )
             )
 

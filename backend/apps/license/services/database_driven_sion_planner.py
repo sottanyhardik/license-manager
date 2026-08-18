@@ -214,10 +214,11 @@ class DatabaseDrivenSionPlanner:
         state.records = expanded
 
     def _split_by_percentage(self, state: "_State", config: dict[str, Any]) -> None:
-        """Split matched records across outputs based on percentage constraints.
+        """Split matched records across outputs based on percentage constraints with unit pricing.
 
-        Supports both legacy percentage_rules and new rows format.
+        Supports both legacy percentage_rules and new rows format with unit_price.
         Formula: allocated_qty = total_qty × percentage / 100
+                 planned_cif = allocated_qty × unit_price
         """
         category = config.get("category")
 
@@ -230,6 +231,7 @@ class DatabaseDrivenSionPlanner:
                 {
                     "output_code": row.get("output_code", "").upper(),
                     "percentage": row.get("percentage", "0"),
+                    "unit_price": row.get("unit_price", "0"),
                 }
                 for row in rows
             ]
@@ -238,6 +240,7 @@ class DatabaseDrivenSionPlanner:
                 {
                     "output_code": rule.get("output_code", "").upper(),
                     "percentage": rule.get("percentage", "0"),
+                    "unit_price": rule.get("unit_price", "0"),
                 }
                 for rule in percentage_rules
             ]
@@ -263,6 +266,7 @@ class DatabaseDrivenSionPlanner:
             for item_config in percentage_items:
                 output_code = item_config.get("output_code")
                 percentage = decimal(item_config.get("percentage", "0"))
+                unit_price = decimal(item_config.get("unit_price", "0"))
 
                 if not output_code or percentage <= ZERO:
                     continue
@@ -276,10 +280,13 @@ class DatabaseDrivenSionPlanner:
                 child["source_output"] = source_output
                 child["quantity"] = allocated_qty
                 child["available_quantity"] = allocated_qty
+                # Store unit_price for later CIF calculation
+                child["unit_price"] = unit_price
                 child["allocation_provenance"] = {
                     "allocation_strategy": "SPLIT_BY_PERCENTAGE",
                     "original_quantity": str(total_qty),
                     "percentage": str(percentage),
+                    "unit_price": str(unit_price),
                     "output": output_code,
                 }
                 expanded.append(child)
@@ -364,18 +371,22 @@ class DatabaseDrivenSionPlanner:
             total = sum((_quantity(row) for row in records), ZERO)
             effective = min(rate, state.remaining / total) if total and state.remaining > 0 else ZERO
             for row in records:
-                state.emit(row, output or row["matched_output"], _quantity(row), effective)
+                # Use pre-set unit_price from percentage allocation if available
+                row_rate = decimal(row.get("unit_price")) if row.get("unit_price") is not None else effective
+                state.emit(row, output or row["matched_output"], _quantity(row), row_rate)
             state.remaining -= min(state.remaining, total * rate)
             return
         for row in records:
             if state.remaining <= 0:
                 break
             quantity = _quantity(row)
-            effective = rate
-            if quantity * rate > state.remaining:
+            # Use pre-set unit_price from percentage allocation if available
+            effective = decimal(row.get("unit_price")) if row.get("unit_price") is not None else rate
+            if quantity * effective > state.remaining and row.get("unit_price") is None:
+                # Only apply balance constraint if not using fixed percentage unit_price
                 policy = config.get("auto_insufficient_balance") if floor else config.get("reporting_insufficient_balance")
                 if policy in {"KEEP_RATE_FLOOR_QUANTITY", "FLOOR_QUANTITY_KEEP_RATE"}:
-                    quantity = (state.remaining / rate).to_integral_value(rounding=ROUND_FLOOR)
+                    quantity = (state.remaining / effective).to_integral_value(rounding=ROUND_FLOOR)
                 else:
                     effective = state.remaining / quantity
             value = quantity * effective
@@ -386,16 +397,17 @@ class DatabaseDrivenSionPlanner:
         for output in config["order"]:
             rate = state.price_for(output)
             for record in state.for_outputs([output]):
-                if state.remaining <= 0 or rate <= 0:
+                # Use pre-set unit_price from percentage allocation if available
+                record_rate = decimal(record.get("unit_price")) if record.get("unit_price") is not None else rate
+                if state.remaining <= 0 or record_rate <= 0:
                     continue
                 quantity = _quantity(record)
-                if quantity * rate > state.remaining:
-                    if config.get("partial_mode") == "REDUCE_QUANTITY":
-                        quantity = (state.remaining / rate).to_integral_value(rounding=ROUND_FLOOR)
-                    else:
-                        rate = state.remaining / quantity
-                state.emit(record, output, quantity, rate)
-                state.remaining -= quantity * rate
+                # Always apply CIF constraint - even with fixed unit_price from SPLIT_BY_PERCENTAGE
+                if quantity * record_rate > state.remaining:
+                    # Reduce quantity to fit within remaining CIF balance
+                    quantity = (state.remaining / record_rate).to_integral_value(rounding=ROUND_FLOOR)
+                state.emit(record, output, quantity, record_rate)
+                state.remaining -= quantity * record_rate
 
     def _action_rebalance(self, state: "_State", config: dict[str, Any]) -> None:
         if config.get("mode") != "VALUE_GAIN_SHIFT" or state.remaining <= 0:

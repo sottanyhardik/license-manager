@@ -64,10 +64,14 @@ function ExpressionSummary({ group, depth = 0 }: { group: SionPlanningRule["expr
 
 function AllocationStrategySummary({ value }: { value?: RuleAllocationStrategy }) {
     if (!value || value.strategy === "STANDARD") return <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Standard</p></div>;
-    if (value.strategy === "SPLIT_BY_PERCENTAGE") return <section aria-label="Planning strategy summary" className="space-y-2">
-        <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Split by %</p></div>
-        <div><h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Percentage Rules</h4><p className="mt-1 text-xs text-muted-foreground">{value.config?.percentage_rules?.length ?? 0} rules configured</p></div>
-    </section>;
+    if (value.strategy === "SPLIT_BY_PERCENTAGE") {
+        const config = value.config as any;
+        const rowCount = (config?.rows?.length || config?.percentage_rules?.length) ?? 0;
+        return <section aria-label="Planning strategy summary" className="space-y-2">
+            <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Split by %</p></div>
+            <div><h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Percentage Configuration</h4><p className="mt-1 text-xs text-muted-foreground">{rowCount} rows configured</p></div>
+        </section>;
+    }
     // SPLIT_BY_UNIT_VALUE
     if ("buckets" in value.config) return <section aria-label="Planning strategy summary" className="space-y-2">
         <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Split by Unit Value</p></div>

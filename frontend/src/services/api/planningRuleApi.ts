@@ -34,10 +34,23 @@ export type PercentageAllocationConfig = {
     }>;
 };
 
+export type PercentageAllocationEditableConfig = {
+    algorithm: "SPLIT_BY_PERCENTAGE";
+    rows: Array<{
+        id?: string;
+        input_item_id: number | null;
+        output_code?: string;
+        percentage: string;
+        unit_price: string;
+        allocated_quantity?: string;
+        planned_cif?: string;
+    }>;
+};
+
 export type RuleAllocationStrategy =
     | { strategy: "STANDARD"; action_id?: number }
     | { strategy: "SPLIT_BY_UNIT_VALUE"; action_id?: number; config: SplitAllocationConfig }
-    | { strategy: "SPLIT_BY_PERCENTAGE"; action_id?: number; config?: PercentageAllocationConfig };
+    | { strategy: "SPLIT_BY_PERCENTAGE"; action_id?: number; config?: PercentageAllocationConfig | PercentageAllocationEditableConfig };
 export type SionPlanningRule = {
     id?: number;
     sion: number;

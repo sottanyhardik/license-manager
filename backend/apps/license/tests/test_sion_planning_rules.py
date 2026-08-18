@@ -225,26 +225,29 @@ def test_split_by_percentage_rejects_duplicate_input_codes(rule_world):
         f"/api/sion-planning-rules/{rule.pk}/allocation-strategy/", payload, format="json",
     )
     assert response.status_code == 400
-    assert "Duplicate" in response.data.get("config", "")
+    assert "Duplicate" in str(response.data.get("config", ""))
 
 
 def test_split_by_percentage_loads_from_master_rules_as_defaults(rule_world):
     company, sion, _license_obj, _item, rule = rule_world
     from apps.core.models import ItemNameModel
+    from apps.license.services.sion_rule_engine import SionRulePriorityService
 
-    output_item_1 = ItemNameModel.objects.create(name="PKO")
-    output_item_2 = ItemNameModel.objects.create(name="OLIVE_OIL")
-    rule.output_item = output_item_1
+    output_item = ItemNameModel.objects.create(name="PKO")
+    rule.output_item = output_item
     rule.save(update_fields=("output_item",))
 
+    # Create master percentage rules for this output item
+    next_prio = SionRulePriorityService.next_priority(sion.pk)
     master_rule_1 = SionPlanningRule.objects.create(
-        sion=sion, name="PKO Cap", unit="kg", max_unit_price=Decimal("2.50"),
-        priority=2, output_item=output_item_1, percentage_constraint=Decimal("50.00"),
+        sion=sion, name="PKO Percentage Cap", unit="kg", max_unit_price=Decimal("2.50"),
+        priority=next_prio, output_item=output_item, percentage_constraint=Decimal("50.00"),
         expression={},
     )
+    next_prio = SionRulePriorityService.next_priority(sion.pk)
     master_rule_2 = SionPlanningRule.objects.create(
-        sion=sion, name="Olive Cap", unit="kg", max_unit_price=Decimal("2.50"),
-        priority=3, output_item=output_item_2, percentage_constraint=Decimal("50.00"),
+        sion=sion, name="PKO Alternative", unit="kg", max_unit_price=Decimal("3.00"),
+        priority=next_prio, output_item=output_item, percentage_constraint=Decimal("50.00"),
         expression={},
     )
 
@@ -263,7 +266,6 @@ def test_split_by_percentage_loads_from_master_rules_as_defaults(rule_world):
     assert len(action.config.get("rows", [])) == 2
     percentages = {row["output_code"]: row["percentage"] for row in action.config.get("rows", [])}
     assert percentages.get("PKO") == "50.00"
-    assert percentages.get("OLIVE_OIL") == "50.00"
 
 
 def test_safe_nested_expression_normalizes_case_space_and_hsn_zeroes():

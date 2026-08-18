@@ -1,7 +1,8 @@
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { RuleAllocationStrategy, SplitAllocationBucket, SplitAllocationConfig } from "@/services/api/planningRuleApi";
-import { useState, useMemo, useEffect } from "react";
+import type { RuleAllocationStrategy, SplitAllocationBucket, SplitAllocationConfig, PercentageAllocationEditableConfig } from "@/services/api/planningRuleApi";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { ItemNameAsyncSelect } from "@/components/item-async-select";
 
 const DEFAULT_SPLIT_CONFIG: SplitAllocationConfig = {
     algorithm: "SPLIT_BY_UNIT_VALUE",
@@ -13,14 +14,11 @@ const DEFAULT_SPLIT_CONFIG: SplitAllocationConfig = {
 };
 
 type PercentageAllocationRow = {
-    id: string;
-    output_code: string;
+    id?: string;
+    input_item_id: number | null;
+    output_code?: string;
     percentage: string;
-};
-
-type PercentageAllocationConfig = {
-    algorithm: "SPLIT_BY_PERCENTAGE";
-    rows: PercentageAllocationRow[];
+    unit_price: string;
 };
 
 type PercentageAllocationInfo = {
@@ -40,46 +38,99 @@ type Props = {
     disabled?: boolean;
     errors?: Record<string, string>;
     ruleId?: number;
+    planningQuantity?: string;
 };
 
 const decimalPattern = /^\d*(\.\d*)?$/;
 
-function convertLegacyPercentageConfig(legacyConfig: PercentageAllocationInfo): PercentageAllocationConfig {
-    if (legacyConfig.percentage_rules && legacyConfig.percentage_rules.length > 0) {
-        return {
-            algorithm: "SPLIT_BY_PERCENTAGE",
-            rows: legacyConfig.percentage_rules.map((rule, idx) => ({
-                id: `row-${idx}`,
-                output_code: rule.output_code,
-                percentage: rule.percentage,
-            })),
-        };
-    }
-    return { algorithm: "SPLIT_BY_PERCENTAGE", rows: [] };
+function parseDecimal(value: string | number | undefined): number {
+    if (!value) return 0;
+    const num = parseFloat(String(value));
+    return isFinite(num) ? num : 0;
 }
 
-/** Configures boundaries only. Split arithmetic remains exclusively backend-owned. */
-export function AllocationStrategyEditor({ value, onChange, disabled = false, errors = {}, ruleId }: Props) {
+function extractPercentageRows(config: any): PercentageAllocationRow[] {
+    if (!config) return [];
+    if ('rows' in config && Array.isArray(config.rows)) {
+        return config.rows.map((row: any) => ({
+            id: row.id || `row-${Date.now()}-${Math.random()}`,
+            input_item_id: row.input_item_id ?? null,
+            output_code: row.output_code,
+            percentage: String(row.percentage || "0"),
+            unit_price: String(row.unit_price || "0"),
+        }));
+    }
+    if ('percentage_rules' in config && Array.isArray(config.percentage_rules) && config.percentage_rules.length > 0) {
+        return config.percentage_rules.map((rule: any, idx: number) => ({
+            id: `row-${idx}`,
+            input_item_id: rule.input_item_id ?? null,
+            output_code: rule.output_code,
+            percentage: String(rule.percentage || "0"),
+            unit_price: String(rule.unit_price || "0"),
+        }));
+    }
+    return [];
+}
+
+export function AllocationStrategyEditor({ value, onChange, disabled = false, errors = {}, ruleId, planningQuantity }: Props) {
     const splitConfig = value.strategy === "SPLIT_BY_UNIT_VALUE" ? value.config : null;
-    const legacyPercentageConfig = value.strategy === "SPLIT_BY_PERCENTAGE" ? (value.config as PercentageAllocationInfo) : null;
+    const legacyPercentageConfig = value.strategy === "SPLIT_BY_PERCENTAGE" ? (value.config as any) : null;
 
     const [percentageRows, setPercentageRows] = useState<PercentageAllocationRow[]>(() => {
         if (legacyPercentageConfig) {
-            return convertLegacyPercentageConfig(legacyPercentageConfig);
+            return extractPercentageRows(legacyPercentageConfig);
         }
         return [];
     });
 
+    const planningQty = parseDecimal(planningQuantity);
+
+    const percentagePreview = useMemo(() => {
+        if (!Array.isArray(percentageRows)) return [];
+        if (planningQty <= 0) {
+            return percentageRows.map(row => ({
+                ...row,
+                allocatedQty: "—",
+                plannedCif: "—",
+            }));
+        }
+        return percentageRows.map(row => {
+            const pct = parseDecimal(row.percentage);
+            const unitPrice = parseDecimal(row.unit_price);
+            const allocatedQty = planningQty * (pct / 100);
+            const plannedCif = allocatedQty * unitPrice;
+            return {
+                ...row,
+                allocatedQty: allocatedQty.toFixed(3),
+                plannedCif: plannedCif.toFixed(2),
+            };
+        });
+    }, [percentageRows, planningQty]);
+
     const percentageTotalPercentage = useMemo(() => {
-        return percentageRows.reduce((sum, row) => {
-            const pct = parseFloat(row.percentage) || 0;
-            return sum + pct;
-        }, 0);
+        if (!Array.isArray(percentageRows)) return 0;
+        return percentageRows.reduce((sum, row) => sum + parseDecimal(row.percentage), 0);
     }, [percentageRows]);
+
+    const totalAllocatedQty = useMemo(() => {
+        if (planningQty <= 0) return 0;
+        return percentagePreview.reduce((sum, row) => {
+            const val = row.allocatedQty === "—" ? 0 : parseDecimal(row.allocatedQty);
+            return sum + val;
+        }, 0);
+    }, [percentagePreview, planningQty]);
+
+    const totalPlannedCif = useMemo(() => {
+        if (planningQty <= 0) return 0;
+        return percentagePreview.reduce((sum, row) => {
+            const val = row.plannedCif === "—" ? 0 : parseDecimal(row.plannedCif);
+            return sum + val;
+        }, 0);
+    }, [percentagePreview, planningQty]);
 
     useEffect(() => {
         if (legacyPercentageConfig && value.strategy === "SPLIT_BY_PERCENTAGE") {
-            setPercentageRows(convertLegacyPercentageConfig(legacyPercentageConfig));
+            setPercentageRows(extractPercentageRows(legacyPercentageConfig));
         }
     }, [legacyPercentageConfig, value.strategy]);
 
@@ -92,14 +143,16 @@ export function AllocationStrategyEditor({ value, onChange, disabled = false, er
                     const allocation = await (await import("@/services/api/planningRuleApi")).fetchRuleAllocationStrategy(ruleId);
                     onChange(allocation);
                     if (allocation.strategy === "SPLIT_BY_PERCENTAGE") {
-                        setPercentageRows(convertLegacyPercentageConfig(allocation.config as PercentageAllocationInfo));
+                        setPercentageRows(extractPercentageRows(allocation.config as any));
                     }
                 } catch {
-                    onChange({ strategy: "SPLIT_BY_PERCENTAGE", config: { algorithm: "SPLIT_BY_PERCENTAGE", rows: [] } });
+                    const config: PercentageAllocationEditableConfig = { algorithm: "SPLIT_BY_PERCENTAGE", rows: [] };
+                    onChange({ strategy: "SPLIT_BY_PERCENTAGE", config });
                     setPercentageRows([]);
                 }
             } else {
-                onChange({ strategy: "SPLIT_BY_PERCENTAGE", config: { algorithm: "SPLIT_BY_PERCENTAGE", rows: [] } });
+                const config: PercentageAllocationEditableConfig = { algorithm: "SPLIT_BY_PERCENTAGE", rows: [] };
+                onChange({ strategy: "SPLIT_BY_PERCENTAGE", config });
                 setPercentageRows([]);
             }
         } else {
@@ -130,31 +183,36 @@ export function AllocationStrategyEditor({ value, onChange, disabled = false, er
         onChange({ strategy: "SPLIT_BY_UNIT_VALUE", action_id: value.action_id, config: { ...splitConfig, buckets: newBuckets } });
     };
 
-    const changePercentageRow = (index: number, field: keyof PercentageAllocationRow, nextValue: string) => {
-        if (field === "percentage" && !decimalPattern.test(nextValue)) return;
-        const newRows = percentageRows.map((row, rowIndex) =>
-            rowIndex === index ? { ...row, [field]: nextValue } : row
-        );
+    const changePercentageRow = (index: number, field: keyof PercentageAllocationRow, nextValue: string | number | null) => {
+        if ((field === "percentage" || field === "unit_price") && typeof nextValue === "string" && !decimalPattern.test(nextValue)) return;
+        const newRows = percentageRows.map((row, rowIndex) => {
+            if (rowIndex !== index) return row;
+            return { ...row, [field]: nextValue };
+        });
         setPercentageRows(newRows);
+        const config: PercentageAllocationEditableConfig = { algorithm: "SPLIT_BY_PERCENTAGE", rows: newRows };
         onChange({
             strategy: "SPLIT_BY_PERCENTAGE",
             action_id: value.action_id,
-            config: { algorithm: "SPLIT_BY_PERCENTAGE", rows: newRows },
+            config,
         });
     };
 
     const addPercentageRow = () => {
         const newRow: PercentageAllocationRow = {
-            id: `row-${Date.now()}`,
+            id: `row-${Date.now()}-${Math.random()}`,
+            input_item_id: null,
             output_code: "",
             percentage: "0.00",
+            unit_price: "0.00",
         };
         const newRows = [...percentageRows, newRow];
         setPercentageRows(newRows);
+        const config: PercentageAllocationEditableConfig = { algorithm: "SPLIT_BY_PERCENTAGE", rows: newRows };
         onChange({
             strategy: "SPLIT_BY_PERCENTAGE",
             action_id: value.action_id,
-            config: { algorithm: "SPLIT_BY_PERCENTAGE", rows: newRows },
+            config,
         });
     };
 
@@ -162,10 +220,11 @@ export function AllocationStrategyEditor({ value, onChange, disabled = false, er
         if (percentageRows.length < 1) return;
         const newRows = percentageRows.filter((_, i) => i !== index);
         setPercentageRows(newRows);
+        const config: PercentageAllocationEditableConfig = { algorithm: "SPLIT_BY_PERCENTAGE", rows: newRows };
         onChange({
             strategy: "SPLIT_BY_PERCENTAGE",
             action_id: value.action_id,
-            config: { algorithm: "SPLIT_BY_PERCENTAGE", rows: newRows },
+            config,
         });
     };
 
@@ -198,24 +257,32 @@ export function AllocationStrategyEditor({ value, onChange, disabled = false, er
         </div>}
 
         {value.strategy === "SPLIT_BY_PERCENTAGE" && <div className="rounded-md border bg-muted/20 p-3">
-            <p className="mb-2 text-xs text-muted-foreground"><strong>Percentage Allocation</strong> · Basis: Planning Quantity / Available Capacity. Percentages are saved in the planning action configuration.</p>
+            <p className="mb-2 text-xs text-muted-foreground"><strong>Percentage Allocation</strong> · Basis: Total Planning Quantity. Quantity is split by percentage; CIF is calculated using each row's Unit Price.</p>
             {percentageRows && percentageRows.length > 0 ? (
-                <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-xs">
-                    <thead><tr className="border-b text-left text-muted-foreground"><th className="pb-2">Input / Bucket</th><th className="pb-2">Percentage</th><th className="pb-2 w-8"></th></tr></thead>
-                    <tbody>{percentageRows.map((row, index) => <tr key={row.id} className="border-b last:border-0">
-                        <td className="py-2"><input aria-label={`Percentage row ${index + 1} input code`} value={row.output_code} disabled={disabled} onChange={(event) => changePercentageRow(index, "output_code", event.target.value.toUpperCase())} className="h-8 w-40 rounded border bg-background px-2 font-medium" /></td>
-                        <td className="py-2"><div className="flex items-center gap-1"><input aria-label={`${row.output_code} percentage`} inputMode="decimal" value={row.percentage} disabled={disabled} onChange={(event) => changePercentageRow(index, "percentage", event.target.value)} className="h-8 w-20 rounded border bg-background px-2 tabular-nums" /><span className="text-muted-foreground">%</span></div></td>
-                        <td className="py-2"><button type="button" onClick={() => removePercentageRow(index)} disabled={disabled} className="flex size-5 items-center justify-center rounded text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50" aria-label={`Remove percentage row ${index + 1}`}><Trash2 className="size-3" /></button></td>
-                    </tr>)}</tbody>
+                <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-xs">
+                    <thead><tr className="border-b text-left text-muted-foreground"><th className="pb-2">Input / Bucket</th><th className="pb-2">Percentage</th><th className="pb-2">Unit Price</th><th className="pb-2">Planned Qty</th><th className="pb-2">Planned CIF</th><th className="pb-2 w-8"></th></tr></thead>
+                    <tbody>{percentageRows.map((row, index) => {
+                        const preview = percentagePreview[index];
+                        return <tr key={row.id} className="border-b last:border-0">
+                            <td className="py-2"><ItemNameAsyncSelect value={row.input_item_id} disabled={disabled} onChange={(itemId) => changePercentageRow(index, "input_item_id", itemId)} /></td>
+                            <td className="py-2"><div className="flex items-center gap-1"><input aria-label={`Row ${index + 1} percentage`} inputMode="decimal" value={row.percentage} disabled={disabled} onChange={(event) => changePercentageRow(index, "percentage", event.target.value)} className="h-8 w-20 rounded border bg-background px-2 tabular-nums" /><span className="text-muted-foreground">%</span></div></td>
+                            <td className="py-2"><input aria-label={`Row ${index + 1} unit price`} inputMode="decimal" value={row.unit_price} disabled={disabled} onChange={(event) => changePercentageRow(index, "unit_price", event.target.value)} className="h-8 w-20 rounded border bg-background px-2 tabular-nums" /></td>
+                            <td className="py-2 tabular-nums text-muted-foreground">{preview ? preview.allocatedQty : "—"}</td>
+                            <td className="py-2 tabular-nums text-muted-foreground">{preview ? `$${preview.plannedCif}` : "—"}</td>
+                            <td className="py-2"><button type="button" onClick={() => removePercentageRow(index)} disabled={disabled} className="flex size-5 items-center justify-center rounded text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50" aria-label={`Remove row ${index + 1}`}><Trash2 className="size-3" /></button></td>
+                        </tr>;
+                    })}</tbody>
                 </table></div>
             ) : (
                 <p className="text-xs text-muted-foreground">No percentage configuration has been created yet. <button type="button" onClick={addPercentageRow} disabled={disabled} className="inline text-blue-500 hover:underline">[+ Add Percentage Row]</button></p>
             )}
             <div className="mt-2 flex gap-2 justify-between items-center">
                 <Button type="button" size="sm" variant="outline" onClick={addPercentageRow} disabled={disabled}> + Add Percentage Row</Button>
-                <div className="text-xs text-muted-foreground">
-                    Total: <span className={percentageTotalPercentage === 100 ? "text-green-600" : "text-yellow-600"}>{percentageTotalPercentage.toFixed(2)}%</span>
-                    {percentageTotalPercentage !== 100 && <span className="ml-2">{percentageTotalPercentage < 100 ? `${(100 - percentageTotalPercentage).toFixed(2)}% remaining` : `${(percentageTotalPercentage - 100).toFixed(2)}% over`}</span>}
+                <div className="text-xs text-muted-foreground space-y-1">
+                    <div>Total %: <span className={percentageTotalPercentage === 100 ? "text-green-600 font-medium" : "text-yellow-600"}>{percentageTotalPercentage.toFixed(2)}%</span>
+                    {percentageTotalPercentage !== 100 && <span className="ml-2">({percentageTotalPercentage < 100 ? `${(100 - percentageTotalPercentage).toFixed(2)}% remaining` : `${(percentageTotalPercentage - 100).toFixed(2)}% over`})</span>}</div>
+                    <div>Planning Quantity: <span className="font-medium">{planningQty > 0 ? planningQty.toFixed(3) : "—"}</span></div>
+                    <div>Total Planned CIF: <span className="font-medium">${totalPlannedCif.toFixed(2)}</span></div>
                 </div>
             </div>
             {errors.split && <p className="mt-2 text-xs text-destructive">{errors.split}</p>}

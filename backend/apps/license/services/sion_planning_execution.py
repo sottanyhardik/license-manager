@@ -265,7 +265,7 @@ class SionPlanningExecutionService:
                 "allocation_provenance": {},
             })
 
-        return lines, result.remaining_cif
+        return lines, result.remaining_cif, result.metadata
 
     @classmethod
     def _compute_license_generic(
@@ -599,7 +599,7 @@ class SionPlanningExecutionService:
                         } if persist else {}),
                     })
                     continue
-                lines, remaining = cls._compute_license(
+                lines, remaining, planning_metadata = cls._compute_license(
                     license_obj, sion, preview=not persist,
                 )
                 canonical_lines = [{

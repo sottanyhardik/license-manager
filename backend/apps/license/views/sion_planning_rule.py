@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.permissions import LicensePermission
+from apps.core.models import ItemNameModel
 from apps.license.models import LicenseDetailsModel, SionPlanningAction, SionPlanningProfile, SionPlanningRule
 from apps.license.serializers import SionPlanningRuleSerializer
 from apps.license.serializers.incentive import (
@@ -115,24 +116,47 @@ class RuleAllocationStrategySerializer(serializers.Serializer):
     def _validate_percentage_config(self, config):
         """Validate SPLIT_BY_PERCENTAGE configuration.
 
+        Validates input_item_id, percentage, and unit_price.
+        Derives output_code server-side from ItemNameModel.name.
         Supports both master-rule-derived configs and user-edited percentage rows.
+        If rows is empty, we'll attempt to load from master rules.
+        If rows has entries, they must be valid and sum to 100%.
         """
         if not isinstance(config, dict):
             raise serializers.ValidationError({"config": "Configuration must be an object."})
 
         rows = config.get("rows", [])
-        if isinstance(rows, list):
-            codes = set()
+        if isinstance(rows, list) and len(rows) > 0:
+            seen_item_ids = set()
             total_pct = Decimal("0")
+            normalized_rows = []
+
             for index, row in enumerate(rows):
                 if not isinstance(row, dict):
                     raise serializers.ValidationError({"config": f"Row {index + 1} must be an object."})
-                code = str(row.get("output_code", "")).strip().upper() if isinstance(row, dict) else ""
-                if not code:
-                    raise serializers.ValidationError({"config": f"Row {index + 1} requires an input code."})
-                if code in codes:
-                    raise serializers.ValidationError({"config": f"Duplicate input code: {code}"})
-                codes.add(code)
+
+                # Extract and validate input_item_id
+                input_item_id = row.get("input_item_id")
+
+                # input_item_id can be null/None, but if provided, must be a positive integer
+                if input_item_id is not None:
+                    try:
+                        input_item_id = int(input_item_id)
+                        if input_item_id <= 0:
+                            raise ValueError()
+                    except (TypeError, ValueError):
+                        raise serializers.ValidationError({"config": f"Row {index + 1} input_item_id must be a positive integer."})
+
+                    # Check if ItemNameModel exists
+                    if not ItemNameModel.objects.filter(pk=input_item_id).exists():
+                        raise serializers.ValidationError({"config": f"Row {index + 1} references non-existent item."})
+
+                    # Check for duplicates (only among non-null IDs)
+                    if input_item_id in seen_item_ids:
+                        raise serializers.ValidationError({"config": f"Duplicate input item: {input_item_id}"})
+                    seen_item_ids.add(input_item_id)
+
+                # Validate percentage
                 try:
                     percentage = Decimal(str(row.get("percentage", "0")))
                 except (InvalidOperation, TypeError, ValueError):
@@ -140,8 +164,42 @@ class RuleAllocationStrategySerializer(serializers.Serializer):
                 if not percentage.is_finite() or percentage < 0 or percentage > 100:
                     raise serializers.ValidationError({"config": f"Row {index + 1} percentage must be between 0 and 100."})
                 total_pct += percentage
+
+                # Validate unit_price
+                try:
+                    unit_price = Decimal(str(row.get("unit_price", "0")))
+                except (InvalidOperation, TypeError, ValueError):
+                    raise serializers.ValidationError({"config": f"Row {index + 1} unit_price must be a decimal."})
+                if not unit_price.is_finite() or unit_price < 0:
+                    raise serializers.ValidationError({"config": f"Row {index + 1} unit_price must be a non-negative decimal."})
+
+                # Derive output_code from ItemNameModel
+                output_code = ""
+                if input_item_id is not None:
+                    try:
+                        item = ItemNameModel.objects.get(pk=input_item_id)
+                        output_code = item.name.upper() if item.name else ""
+                    except ItemNameModel.DoesNotExist:
+                        # Should not happen because we checked existence above, but be safe
+                        output_code = ""
+                else:
+                    output_code = "UNKNOWN"
+
+                # Build normalized row with input_item_id, derived output_code, percentage, and unit_price
+                normalized_row = dict(row)
+                normalized_row["input_item_id"] = input_item_id
+                normalized_row["output_code"] = output_code
+                normalized_row["percentage"] = str(percentage)
+                normalized_row["unit_price"] = str(unit_price)
+                normalized_rows.append(normalized_row)
+
             if total_pct != Decimal("100"):
                 raise serializers.ValidationError({"config": f"Percentages must sum to 100%, got {total_pct}."})
+
+            # Return with normalized rows (both ID and derived code)
+            result_config = dict(config)
+            result_config["rows"] = normalized_rows
+            return {"strategy": "SPLIT_BY_PERCENTAGE", "config": result_config}
 
         return {"strategy": "SPLIT_BY_PERCENTAGE", "config": config}
 
@@ -289,6 +347,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                             response_config["rows"] = [
                                 {
                                     "id": f"row-{r.pk}",
+                                    "input_item_id": r.output_item_id,
                                     "output_code": (r.output_item.name if r.output_item else "").upper(),
                                     "percentage": str(r.percentage_constraint),
                                 }
@@ -371,6 +430,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                                 config["rows"] = [
                                     {
                                         "id": f"row-{r.pk}",
+                                        "input_item_id": r.output_item_id,
                                         "output_code": (r.output_item.name if r.output_item else "").upper(),
                                         "percentage": str(r.percentage_constraint),
                                     }

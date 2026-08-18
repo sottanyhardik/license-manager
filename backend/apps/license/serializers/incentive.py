@@ -107,9 +107,95 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
     # both the Plan tab and the Plan modal.
     modified_on = serializers.DateTimeField(read_only=True)
     modified_by_username = serializers.SerializerMethodField(read_only=True)
+    planning_family = serializers.SerializerMethodField(read_only=True)
+    boe_used_quantity = serializers.SerializerMethodField(read_only=True)
+    boe_used_cif = serializers.SerializerMethodField(read_only=True)
+    unlinked_allotment_quantity = serializers.SerializerMethodField(read_only=True)
+    unlinked_allotment_cif = serializers.SerializerMethodField(read_only=True)
+    effective_used_quantity = serializers.SerializerMethodField(read_only=True)
+    effective_used_cif = serializers.SerializerMethodField(read_only=True)
+    remaining_quantity = serializers.SerializerMethodField(read_only=True)
+    remaining_cif = serializers.SerializerMethodField(read_only=True)
+    excess_quantity = serializers.SerializerMethodField(read_only=True)
+    excess_cif = serializers.SerializerMethodField(read_only=True)
+    reconciliation_status = serializers.SerializerMethodField(read_only=True)
+    status = serializers.SerializerMethodField(read_only=True)
+    unmapped_usage = serializers.SerializerMethodField(read_only=True)
+    needs_rebuild = serializers.SerializerMethodField(read_only=True)
 
     def get_modified_by_username(self, obj):
         return obj.modified_by.username if obj.modified_by_id else None
+
+    def _reconciliation(self, obj):
+        from apps.license.services.planning_usage_reconciliation import reconcile_license_plans
+
+        cache = self.context.setdefault("planning_usage_reconciliation", {})
+        license_id = obj.license_id or obj.import_item.license_id
+        if license_id not in cache:
+            cache[license_id] = reconcile_license_plans(license_id)
+        return cache[license_id]
+
+    def _reconciliation_value(self, obj, key, default="0"):
+        value = self._reconciliation(obj)["plans"].get(obj.id, {}).get(key, default)
+        if value is None:
+            return None
+        if key.endswith("quantity"):
+            return f"{Decimal(value):.3f}"
+        if key.endswith("cif"):
+            return f"{Decimal(value):.2f}"
+        return str(value)
+
+    def get_planning_family(self, obj):
+        return self._reconciliation_value(obj, "planning_family", None)
+
+    def get_boe_used_quantity(self, obj):
+        return self._reconciliation_value(obj, "boe_used_quantity")
+
+    def get_boe_used_cif(self, obj):
+        return self._reconciliation_value(obj, "boe_used_cif")
+
+    def get_unlinked_allotment_quantity(self, obj):
+        return self._reconciliation_value(obj, "unlinked_allotment_quantity")
+
+    def get_unlinked_allotment_cif(self, obj):
+        return self._reconciliation_value(obj, "unlinked_allotment_cif")
+
+    def get_effective_used_quantity(self, obj):
+        return self._reconciliation_value(obj, "effective_used_quantity")
+
+    def get_effective_used_cif(self, obj):
+        return self._reconciliation_value(obj, "effective_used_cif")
+
+    def get_remaining_quantity(self, obj):
+        return self._reconciliation_value(obj, "remaining_quantity", obj.planned_quantity)
+
+    def get_remaining_cif(self, obj):
+        return self._reconciliation_value(obj, "remaining_cif", obj.planned_cif_fc)
+
+    def get_excess_quantity(self, obj):
+        return self._reconciliation_value(obj, "excess_quantity")
+
+    def get_excess_cif(self, obj):
+        return self._reconciliation_value(obj, "excess_cif")
+
+    def get_reconciliation_status(self, obj):
+        return self._reconciliation_value(obj, "reconciliation_status", "NOT_USED")
+
+    def get_status(self, obj):
+        return self.get_reconciliation_status(obj)
+
+    def get_unmapped_usage(self, obj):
+        rows = self._reconciliation(obj)["unmapped_usage"]
+        return [{**row, "quantity": str(row["quantity"]), "cif_fc": str(row["cif_fc"])} for row in rows]
+
+    def get_needs_rebuild(self, obj):
+        """A saved plan is stale when its versioned rule has a newer active version."""
+        if not obj.planning_rule_id:
+            return False
+        rule = obj.planning_rule
+        return SionPlanningRule.objects.filter(
+            stable_key=rule.stable_key, is_active=True,
+        ).exclude(pk=obj.planning_rule_id).exists()
 
     class Meta:
         model = LicenseItemPlan
@@ -120,6 +206,11 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
             "item_description", "serial_number", "license_number",
             "item_available_quantity", "item_total_quantity",
             "modified_on", "modified_by_username",
+            "planning_family", "boe_used_quantity", "boe_used_cif",
+            "unlinked_allotment_quantity", "unlinked_allotment_cif",
+            "effective_used_quantity", "effective_used_cif",
+            "remaining_quantity", "remaining_cif", "excess_quantity", "excess_cif",
+            "reconciliation_status", "status", "unmapped_usage", "needs_rebuild",
         ]
         read_only_fields = ["license"]
 

@@ -147,6 +147,84 @@ class TestStrategySerializerValidation:
         assert rule.percentage_rows.count() == 2
 
 
+class TestPercentageRuleVersionedUpdate:
+    def _rule(self, setup):
+        rule = SionPlanningRule.objects.create(
+            sion=setup["sion"], name="PKO & OIL", version=2, priority=1,
+            strategy="SPLIT_BY_PERCENT", expression={"operator": "AND", "conditions": []},
+            max_unit_price=Decimal("10.00"), unit="kg", is_active=True,
+        )
+        SionPlanningPercentageRow.objects.create(
+            rule=rule, import_item=setup["pko_item"], percentage=Decimal("50.00"),
+            unit_price=Decimal("1.80"), priority=0,
+        )
+        SionPlanningPercentageRow.objects.create(
+            rule=rule, import_item=setup["olive_item"], percentage=Decimal("50.00"),
+            unit_price=Decimal("5.00"), priority=1,
+        )
+        return rule
+
+    def _payload(self, setup, pko="40.00", olive="60.00"):
+        return {
+            "sion": setup["sion"].pk, "name": "PKO & OIL",
+            "strategy": "SPLIT_BY_PERCENT",
+            "expression": {"operator": "AND", "conditions": []},
+            "max_unit_price": "10.00", "unit": "kg", "is_active": True,
+            "percentage_rows": [
+                {"import_item": setup["pko_item"].pk, "percentage": pko,
+                 "unit_price": "1.80", "priority": 0},
+                {"import_item": setup["olive_item"].pk, "percentage": olive,
+                 "unit_price": "5.00", "priority": 1},
+            ],
+        }
+
+    def test_patch_creates_active_version_with_edited_decimal_rows(self, redesign_setup):
+        current = self._rule(redesign_setup)
+        response = redesign_setup["client"].patch(
+            f"/api/sion-planning-rules/{current.pk}/",
+            self._payload(redesign_setup), format="json",
+        )
+        assert response.status_code == 200, response.data
+        created = SionPlanningRule.objects.get(pk=response.data["id"])
+        current.refresh_from_db()
+        assert current.is_active is False
+        assert created.is_active is True
+        assert created.version == 3
+        assert list(created.percentage_rows.order_by("priority").values_list("percentage", "unit_price")) == [
+            (Decimal("40.00"), Decimal("1.80")),
+            (Decimal("60.00"), Decimal("5.00")),
+        ]
+
+        changed_back = redesign_setup["client"].patch(
+            f"/api/sion-planning-rules/{created.pk}/",
+            self._payload(redesign_setup, "50.00", "50.00"), format="json",
+        )
+        assert changed_back.status_code == 200, changed_back.data
+        newest = SionPlanningRule.objects.get(pk=changed_back.data["id"])
+        assert newest.version == 4
+        assert list(newest.percentage_rows.order_by("priority").values_list("percentage", flat=True)) == [
+            Decimal("50.00"), Decimal("50.00"),
+        ]
+
+    @pytest.mark.parametrize("rows", [
+        (("40.00", "50.00", "pko", "olive")),
+        (("50.00", "50.00", "pko", "pko")),
+    ])
+    def test_patch_rejects_invalid_total_and_duplicate_items(self, redesign_setup, rows):
+        current = self._rule(redesign_setup)
+        pko_pct, olive_pct, first_name, second_name = rows
+        payload = self._payload(redesign_setup, pko_pct, olive_pct)
+        payload["percentage_rows"][0]["import_item"] = redesign_setup[f"{first_name}_item"].pk
+        payload["percentage_rows"][1]["import_item"] = redesign_setup[f"{second_name}_item"].pk
+        response = redesign_setup["client"].patch(
+            f"/api/sion-planning-rules/{current.pk}/", payload, format="json",
+        )
+        assert response.status_code == 400
+        current.refresh_from_db()
+        assert current.is_active is True
+        assert SionPlanningRule.objects.filter(stable_key=current.stable_key).count() == 1
+
+
 class TestAutoPlanning:
     """Test Auto Plan with new architecture."""
 

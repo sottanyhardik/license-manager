@@ -183,6 +183,10 @@ class SplitPercentIncompleteError(PlanningError):
     code = "SPLIT_PERCENT_INCOMPLETE"
 
 
+class SplitPercentQuantityMismatchError(PlanningError):
+    code = "SPLIT_PERCENT_QUANTITY_MISMATCH"
+
+
 class SionPlanningError(PlanningError):
     """Invalid or inapplicable single-SION batch request."""
     code = "SION_PLANNING_ERROR"

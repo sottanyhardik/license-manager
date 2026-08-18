@@ -202,14 +202,21 @@ class SionPlanningExecutionService:
         # When force_plan=True, don't filter out licenses with zero balance_cif
         # They can still be planned; balance_cif becomes informational
         if not force_plan:
-            licenses = [row for row in licenses if live_balances.get(row.pk, Decimal("0")) > 0]
+            from apps.license.services.planning_tolerances import effective_planning_balance_cif
+            licenses = [
+                row for row in licenses
+                if effective_planning_balance_cif(live_balances.get(row.pk, Decimal("0"))) > 0
+            ]
         return licenses, live_balances
 
     @classmethod
     def _compute_license_new_architecture(cls, license_obj, sion, strategy_rules, *, preview, force_plan=False):
         """Build the full theoretical plan directly from strategy configuration."""
         from apps.license.models import LicenseImportItemsModel, LicenseExportItemModel
-        from apps.license.services.canonical_planning_service import SplitPercentIncompleteError
+        from apps.license.services.canonical_planning_service import (
+            SplitPercentIncompleteError,
+            SplitPercentQuantityMismatchError,
+        )
 
         import_items = list(
             LicenseImportItemsModel.objects.filter(license=license_obj)
@@ -315,18 +322,19 @@ class SionPlanningExecutionService:
                 total_planning_quantity = original_group_quantity(matched_source)
                 generated = 0
                 assigned_nominal = Decimal("0")
+                generated_quantity_total = Decimal("0")
                 rule_percent_total = sum((row.percentage for row in configured), Decimal("0"))
                 use_global_split = rule_percent_total != Decimal("100") and global_percent_total == Decimal("100")
                 for row_index, row in enumerate(configured):
                     raw_nominal = total_planning_quantity * row.percentage / Decimal("100")
-                    # The entitlement is a whole-kg quantity. Allocate rounding
-                    # remainder to the final configured row so the configured
-                    # percentages still account for the complete entitlement.
+                    # Plan quantities are Decimal(_, 3), not whole kilograms.
+                    # Allocate any sub-milligram rounding remainder to the final
+                    # row so a 100% rule conserves the source entitlement.
                     if use_global_split:
                         nominal = (
                             total_planning_quantity - global_assigned_nominal
                             if global_percent_index == len(percent_rows_flat) - 1
-                            else raw_nominal.quantize(Decimal("1"), rounding=ROUND_DOWN)
+                            else raw_nominal.quantize(Decimal("0.001"), rounding=ROUND_DOWN)
                         )
                         global_assigned_nominal += nominal
                         global_percent_index += 1
@@ -334,10 +342,14 @@ class SionPlanningExecutionService:
                         nominal = (
                             total_planning_quantity - assigned_nominal
                             if row_index == len(configured) - 1
-                            else raw_nominal.quantize(Decimal("1"), rounding=ROUND_DOWN)
+                            else raw_nominal.quantize(Decimal("0.001"), rounding=ROUND_DOWN)
                         )
                     assigned_nominal += nominal
-                    final_quantity = min(nominal, row.max_quantity) if row.max_quantity is not None else nominal
+                    # ``max_quantity`` is retained for legacy data/audit only.
+                    # Percentage is authoritative for SPLIT_BY_PERCENT; no cap
+                    # is enforced without a future explicit opt-in flag.
+                    final_quantity = nominal
+                    generated_quantity_total += final_quantity
                     generated += int(add_line(rule, row.import_item, matched_by_row[row.pk], final_quantity,
                                               row.unit_price, {
                         "strategy": "SPLIT_BY_PERCENT",
@@ -345,7 +357,9 @@ class SionPlanningExecutionService:
                         "total_planning_quantity": str(total_planning_quantity),
                         "raw_nominal_quantity": str(raw_nominal),
                         "nominal_quantity": str(nominal),
-                        "max_quantity": str(row.max_quantity) if row.max_quantity is not None else None,
+                        "legacy_max_quantity_ignored": (
+                            str(row.max_quantity) if row.max_quantity is not None else None
+                        ),
                         "quantity_source": "original_import_group_quantity",
                     }))
                     diagnostics.append({
@@ -359,6 +373,19 @@ class SionPlanningExecutionService:
                         "Not every configured SPLIT_BY_PERCENT row produced a plan line.",
                         rule_id=rule.pk, configured_rows=len(configured), generated_rows=generated,
                         rows=diagnostics,
+                    )
+                if (
+                    configured
+                    and total_planning_quantity > 0
+                    and rule_percent_total == Decimal("100")
+                    and abs(generated_quantity_total - total_planning_quantity) > Decimal("0.001")
+                ):
+                    raise SplitPercentQuantityMismatchError(
+                        "A 100% SPLIT_BY_PERCENT rule did not allocate the full source quantity.",
+                        rule_id=rule.pk,
+                        source_quantity=str(total_planning_quantity),
+                        generated_quantity=str(generated_quantity_total),
+                        percentage_total=str(rule_percent_total),
                     )
 
         planned_cif = sum((line["planned_cif"] for line in all_lines), Decimal("0"))
@@ -932,6 +959,9 @@ class SionPlanningExecutionService:
                     ).values("license_id").annotate(total=Sum("planned_cif_fc"))
                 }
             for license_obj in licenses:
+                from apps.license.services.planning_tolerances import effective_planning_balance_cif
+                raw_balance_cif = cls._decimal(live_balances[license_obj.pk])
+                effective_balance_cif = effective_planning_balance_cif(raw_balance_cif)
                 if (
                     # Only skip ALREADY_PLANNED check when force_plan is True
                     # force_plan means rebuild everything, not "add only new"
@@ -939,7 +969,7 @@ class SionPlanningExecutionService:
                     and mode == PLAN_MODE_NEW
                     and planned_cif_by_license.get(license_obj.pk, Decimal("0")) > 0
                     and planned_cif_by_license[license_obj.pk] >= (
-                        Decimal(str(live_balances[license_obj.pk])) * ALREADY_PLANNED_THRESHOLD
+                        effective_balance_cif * ALREADY_PLANNED_THRESHOLD
                     )
                 ):
                     results.append({
@@ -947,6 +977,9 @@ class SionPlanningExecutionService:
                         "license_number": license_obj.license_number,
                         "lines": [],
                         "status": "SKIPPED_ALREADY_PLANNED",
+                        "raw_balance_cif": raw_balance_cif,
+                        "effective_balance_cif": effective_balance_cif,
+                        "balance_cif_ignored_by_tolerance": raw_balance_cif != effective_balance_cif,
                         **({
                             "write_result": {
                                 "license_id": license_obj.pk,
@@ -976,6 +1009,9 @@ class SionPlanningExecutionService:
                     "lines": canonical_lines,
                     "remaining_balance_cif": remaining,
                     "status": "PLANNED" if persist else "PREVIEWED",
+                    "raw_balance_cif": raw_balance_cif,
+                    "effective_balance_cif": effective_balance_cif,
+                    "balance_cif_ignored_by_tolerance": raw_balance_cif != effective_balance_cif,
                 }
                 if not canonical_lines:
                     # A license-level Planned badge is canonically derived from

@@ -170,9 +170,9 @@ function UnitValueStrategySection({
   };
 
   const updateRow = (index: number, field: keyof UnitValueRow, value: any) => {
-    const newRows = [...rows];
-    (newRows[index] as any)[field] = value;
-    onChange(newRows);
+    onChange(rows.map((row, rowIndex) =>
+      rowIndex === index ? { ...row, [field]: value } : row,
+    ));
   };
 
   const removeRow = (index: number) => {
@@ -199,6 +199,7 @@ function UnitValueStrategySection({
             <div>
               <label className="text-xs text-gray-600">Min Unit Price</label>
               <input
+                aria-label={`Minimum unit price row ${idx + 1}`}
                 type="text"
                 value={row.min_unit_price}
                 inputMode="decimal"
@@ -211,6 +212,7 @@ function UnitValueStrategySection({
             <div>
               <label className="text-xs text-gray-600">Max Unit Price</label>
               <input
+                aria-label={`Maximum unit price row ${idx + 1}`}
                 type="text"
                 value={row.max_unit_price}
                 inputMode="decimal"
@@ -275,9 +277,9 @@ function PercentageStrategySection({
   };
 
   const updateRow = (index: number, field: keyof PercentageRow, value: any) => {
-    const newRows = [...rows];
-    (newRows[index] as any)[field] = value;
-    onChange(newRows);
+    onChange(rows.map((row, rowIndex) =>
+      rowIndex === index ? { ...row, [field]: value } : row,
+    ));
   };
 
   const removeRow = (index: number) => {
@@ -304,6 +306,7 @@ function PercentageStrategySection({
             <div>
               <label className="text-xs text-gray-600">Percentage</label>
               <input
+                aria-label={`Percentage row ${idx + 1}`}
                 type="text"
                 value={row.percentage}
                 inputMode="decimal"
@@ -316,6 +319,7 @@ function PercentageStrategySection({
             <div>
               <label className="text-xs text-gray-600">Unit Price</label>
               <input
+                aria-label={`Unit price row ${idx + 1}`}
                 type="text"
                 value={row.unit_price}
                 inputMode="decimal"
@@ -337,8 +341,12 @@ function PercentageStrategySection({
       ))}
       <div className="bg-blue-50 p-2 rounded">
         <p className="text-sm font-medium">Total: {totalPercentage.toFixed(2)}%</p>
-        {totalPercentage !== 100 && totalPercentage > 0 && (
-          <p className="text-xs text-red-600">Must equal 100% to save</p>
+        {Math.abs(totalPercentage - 100) > 0.001 && (
+          <p className="text-xs text-red-600">
+            {totalPercentage < 100
+              ? `${(100 - totalPercentage).toFixed(2)}% remaining — Percentages must total 100%.`
+              : `${(totalPercentage - 100).toFixed(2)}% over — Percentages must total 100%.`}
+          </p>
         )}
       </div>
       <button

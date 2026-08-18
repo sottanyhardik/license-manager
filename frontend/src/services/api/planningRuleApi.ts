@@ -33,6 +33,7 @@ export type PercentageRow = {
     import_item: number;
     percentage: string;
     unit_price: string;
+    max_quantity?: string | null;
     priority?: number;
 };
 
@@ -152,6 +153,7 @@ export type SionPlanningPreview = {
     total_results?: { sions_executed?: number; total_lines_written?: number }; total_lines_written?: number;
     summary?: { licenses_matched?: number; licenses_new?: number; licenses_changed?: number; licenses_unchanged?: number; licenses_shortage?: number; licenses_skipped?: number; rules_processed?: number };
     licenses?: SionPlanningPreviewLicense[]; conflicts?: unknown[];
+    diagnostics?: { skip_reasons?: Array<{ item_key: string; reason: string }> };
 };
 
 function planningPayload(sionId: number, mode: SionPlanningMode, licenseIds?: number[]) {

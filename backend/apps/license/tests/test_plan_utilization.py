@@ -174,8 +174,11 @@ def test_true_shortage_is_explicit_and_never_clamped(license_obj):
     row = plan_utilization_rows(license_obj)[0]
 
     assert row["planned_qty"] == Decimal("10.000")
-    assert row["available_qty"] == Decimal("5.000")
     assert row["remaining_qty"] == Decimal("10.000")
+    # Operational availability below 200 is exposed as zero for final status,
+    # while canonical shortage arithmetic retains the raw balance.
+    assert row["available_qty"] == Decimal("5.000")
+    assert row["effective_available_qty"] == Decimal("0.000")
     assert row["shortage_qty"] == Decimal("5.000")
     assert row["feasible"] is False
     assert row["status"] == "SHORT"

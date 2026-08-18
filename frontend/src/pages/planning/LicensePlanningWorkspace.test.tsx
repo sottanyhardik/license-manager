@@ -42,7 +42,7 @@ describe("SION-first planning workspace", () => {
     it("never submits a blank max price and seeds it from a new split configuration", async () => {
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
         fireEvent.click(await screen.findByRole("button", { name: "Add Rule" }));
-        const save = screen.getByRole("button", { name: "Save" });
+        const save = screen.getByRole("button", { name: "Save Changes" });
         expect(screen.getByLabelText("Maximum unit price")).toHaveAttribute("aria-invalid", "true");
         expect(save).toBeDisabled();
         await userEvent.selectOptions(screen.getByLabelText("Allocation strategy"), "SPLIT_BY_UNIT_VALUE");
@@ -182,7 +182,7 @@ describe("SION-first planning workspace", () => {
         fireEvent.click(screen.getByRole("button", { name: "Edit" }));
         expect(screen.getByLabelText("Rule editor")).toBeInTheDocument();
         expect(screen.getByLabelText("Rule edit actions")).toHaveClass("sticky");
-        for (const label of ["Discard", "Test Rule", "Save"]) {
+        for (const label of ["Discard", "Test Rule", "Save Changes"]) {
             expect(within(screen.getByLabelText("Rule edit actions")).getByRole("button", { name: label })).toHaveAttribute("type", "button");
         }
     });
@@ -205,12 +205,68 @@ describe("SION-first planning workspace", () => {
         fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
         fireEvent.click(screen.getByRole("button", { name: "Group" }));
         fireEvent.change(screen.getByLabelText("Rule name"), { target: { value: "Updated sugar rule" } });
-        fireEvent.click(screen.getByRole("button", { name: "Save" }));
+        fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
         await waitFor(() => expect(rulesApi.updateSionPlanningRule).toHaveBeenCalled());
         expect(screen.getByLabelText("Rule editor")).toBeInTheDocument();
         expect(screen.getByDisplayValue("Updated sugar rule")).toBeInTheDocument();
         expect(screen.getByText(/E5 · 1 rules · 1 active/)).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Collapse ALL group" })).toHaveAttribute("aria-expanded", "true");
+        expect(screen.getByText("✓ Saved")).toBeInTheDocument();
+    });
+    it("saves the visible 40/60 percentage draft, survives blur, and hydrates the new version", async () => {
+        const percentRule = {
+            ...existing,
+            name: "PKO & OIL",
+            strategy: "SPLIT_BY_PERCENT" as const,
+            import_item: null,
+            version: 2,
+            percentage_rows: [
+                { id: 11, import_item: 201, percentage: "50.00", unit_price: "1.80", priority: 0 },
+                { id: 12, import_item: 202, percentage: "50.00", unit_price: "5.00", priority: 1 },
+            ],
+        };
+        const updatedRule = {
+            ...percentRule,
+            id: 5,
+            version: 3,
+            percentage_rows: [
+                { id: 13, import_item: 201, percentage: "40.00", unit_price: "1.80", priority: 0 },
+                { id: 14, import_item: 202, percentage: "60.00", unit_price: "5.00", priority: 1 },
+            ],
+        };
+        vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValueOnce([percentRule]).mockResolvedValue([updatedRule]);
+        vi.mocked(rulesApi.fetchSionImportItem).mockImplementation(async (_sion, id) => ({ id, name: id === 201 ? "PALM KERNEL OIL - E126" : "OLIVE OIL - E126" }));
+        vi.mocked(rulesApi.updateSionPlanningRule).mockResolvedValue(updatedRule);
+
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+        const pko = await screen.findByLabelText("Percentage row 1");
+        const olive = screen.getByLabelText("Percentage row 2");
+        fireEvent.change(pko, { target: { value: "40" } });
+        fireEvent.blur(pko);
+        expect(pko).toHaveValue("40");
+        expect(screen.getByText("Total: 90.00%")).toBeInTheDocument();
+        expect(screen.getByText(/10.00% remaining — Percentages must total 100%/)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Save Changes" })).toBeDisabled();
+
+        fireEvent.change(olive, { target: { value: "60" } });
+        expect(screen.getByText("Total: 100.00%")).toBeInTheDocument();
+        expect(screen.getByText(/Unsaved changes/)).toBeInTheDocument();
+        const saveButton = screen.getByRole("button", { name: "Save Changes" });
+        expect(saveButton).toBeEnabled();
+        fireEvent.click(saveButton);
+
+        await waitFor(() => expect(rulesApi.updateSionPlanningRule).toHaveBeenCalledWith(4, expect.objectContaining({
+            strategy: "SPLIT_BY_PERCENT",
+            percentage_rows: [
+                expect.objectContaining({ import_item: 201, percentage: "40.00", unit_price: "1.80" }),
+                expect.objectContaining({ import_item: 202, percentage: "60.00", unit_price: "5.00" }),
+            ],
+        })));
+        expect(await screen.findByLabelText("Percentage row 1")).toHaveValue("40.00");
+        expect(screen.getByLabelText("Percentage row 2")).toHaveValue("60.00");
+        expect(screen.getByLabelText("Unit price row 1")).toHaveValue("1.80");
+        expect(screen.getByLabelText("Unit price row 2")).toHaveValue("5.00");
         expect(screen.getByText("✓ Saved")).toBeInTheDocument();
     });
     it("previews the selected SION without invoking PLAN", async () => {

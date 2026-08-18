@@ -19,7 +19,7 @@
  *   3-way auto-calc  ·  remaining cap per split  ·  bulkUpsert on save
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
     AlertTriangle,
     BookOpen,
@@ -60,8 +60,8 @@ import {
     deleteItemPlan,
     fetchItemPlans,
     fetchLicense,
-} from "../../services/api/licenseApi";
-import { autoPlanLicense, planLicense } from "../../services/api/planningRuleApi";
+} from "@/services/api/licenseApi";
+import { autoPlanLicense, planLicense } from "@/services/api/planningRuleApi";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure helpers
@@ -80,6 +80,27 @@ const emptySplit = (): Split => ({
     key: nextKey(), id: null,
     item_name: "", planned_quantity: "", unit_price: "", planned_cif_fc: "", note: "",
 });
+
+const cloneSplits = (splits: Split[]): Split[] => splits.map((split) => ({ ...split }));
+const cloneGroups = (groups: Group[]): Group[] => groups.map((group) => ({
+    ...group,
+    serials: [...group.serials],
+    memberIds: [...group.memberIds],
+    itemNames: group.itemNames.map((item) => ({ ...item })),
+    splits: cloneSplits(group.splits),
+}));
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+    if (!error || typeof error !== "object" || !("response" in error)) return fallback;
+    const response = (error as { response?: { data?: unknown } }).response;
+    const data = response?.data;
+    if (!data || typeof data !== "object") return fallback;
+    for (const key of ["message", "error", "detail"] as const) {
+        const value = (data as Record<string, unknown>)[key];
+        if (typeof value === "string" && value.trim()) return value;
+    }
+    return fallback;
+}
 
 // A split "counts" for display once it carries a real quantity or CIF — mirrors
 // the same filter the Download License Excel exporter uses (see
@@ -111,6 +132,18 @@ interface Split {
     note: string;
     modified_on?: string | null;
     modified_by_username?: string | null;
+    boe_used_quantity?: string;
+    boe_used_cif?: string;
+    unlinked_allotment_quantity?: string;
+    unlinked_allotment_cif?: string;
+    effective_used_quantity?: string;
+    effective_used_cif?: string;
+    remaining_quantity?: string;
+    remaining_cif?: string;
+    excess_quantity?: string;
+    excess_cif?: string;
+    reconciliation_status?: "NOT_USED" | "PARTIALLY_UTILIZED" | "FULLY_UTILIZED" | "MANUAL_PLANNING_REQUIRED";
+    needs_rebuild?: boolean;
 }
 
 interface Group {
@@ -121,6 +154,9 @@ interface Group {
     memberIds: number[];
     total_quantity: number;
     available_quantity: number;
+    effective_available_quantity: number;
+    license_balance_cif: number;
+    effective_license_balance_cif: number;
     balance_cif_fc: number;
     itemNames: { id: number; name: string }[];
     splits: Split[];
@@ -137,6 +173,9 @@ interface Group {
     original_planned_cif_fc?: number;
     used_planned_cif_fc?: number;
     remaining_planned_cif_fc?: number;
+    has_reconciliation?: boolean;
+    reconciliation_manual_required?: boolean;
+    operational_status?: "PLANNED" | "MANUAL_PLANNING_REQUIRED" | "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
     planning_status?: "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
     shortage_qty?: number;
     feasible?: boolean;
@@ -158,6 +197,39 @@ export interface PlanningEditorProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function groupStatus(g: Group): PlanStatus {
+    if (g.effective_available_quantity < 0 || g.effective_license_balance_cif < 0) return "over";
+
+    // Reconciled child rows are authoritative for the operational plan.  The
+    // backend group status predates BOE/allotment reconciliation and compares
+    // theoretical planning with availability, which can incorrectly report
+    // "Over Planned" after legitimate utilization.
+    if (g.has_reconciliation) {
+        if (g.reconciliation_manual_required) return "over";
+        if (g.operational_status === "MANUAL_PLANNING_REQUIRED") return "over";
+        if (g.operational_status === "PLANNED") return "completed";
+        // Operational completion uses backend-normalized live balances. Small
+        // non-negative residuals are zeroed centrally by the backend; negative
+        // balances remain visible as genuine excess/manual-review conditions.
+        const theoreticalQty = g.original_planned_quantity ?? 0;
+        const theoreticalCif = g.original_planned_cif_fc ?? 0;
+        if (theoreticalQty <= 1e-6 && theoreticalCif <= 1e-6) return "not_planned";
+        if (g.effective_license_balance_cif === 0) return "completed";
+        if (g.effective_available_quantity === 0) return "completed";
+        const remainingQty = g.remaining_planned_quantity ?? 0;
+        const remainingCif = g.remaining_planned_cif_fc ?? 0;
+        if (remainingQty <= 1e-6 && remainingCif <= 1e-6) return "completed";
+        return "partial";
+    }
+
+    if (g.operational_status === "MANUAL_PLANNING_REQUIRED") return "over";
+    if (g.operational_status === "PLANNED") return "completed";
+
+    if (g.has_plan && (
+        g.effective_license_balance_cif === 0 || g.effective_available_quantity === 0
+    )) {
+        return "completed";
+    }
+
     // Persisted feasibility is canonical backend data. Local arithmetic below
     // is retained only as a fallback for a new, unsaved draft.
     if (g.planning_status === "BLOCKED_UNIT_MISMATCH") return "blocked";
@@ -340,7 +412,6 @@ function InlineEditor({
     onCancel: () => void;
 }) {
     const planned    = group.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
-    const plannedCif = group.splits.reduce((s, sp) => s + num(sp.planned_cif_fc), 0);
     const remaining  = group.available_quantity - planned;
     const qtyOver    = planned > group.available_quantity + 1e-6;
 
@@ -348,8 +419,6 @@ function InlineEditor({
     const totalCif     = allGroups.reduce((s, g) => s + g.splits.reduce((ss, sp) => ss + num(sp.planned_cif_fc), 0), 0);
     const cifRemaining = poolBalance - totalCif;
     const cifOver      = cifRemaining < -1e-6;
-
-    const hasErrors = qtyOver;
 
     return (
         <div className="border-t border-border/50 bg-muted/5 px-4 pb-4 pt-3">
@@ -408,7 +477,7 @@ function InlineEditor({
                         <X className="size-3.5" />Cancel
                     </Button>
                     <Button size="sm" onClick={onSave}
-                        disabled={saving || hasErrors} className="h-7 gap-1.5 text-xs">
+                        disabled={saving || qtyOver} className="h-7 gap-1.5 text-xs">
                         {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
                         Save Changes
                     </Button>
@@ -463,6 +532,13 @@ export default function PlanningEditor({
                 planned_quantity?: number | null; unit_price?: number | null;
                 planned_cif_fc?: number | null; note?: string | null;
                 modified_on?: string | null; modified_by_username?: string | null;
+                boe_used_quantity?: string; boe_used_cif?: string;
+                unlinked_allotment_quantity?: string; unlinked_allotment_cif?: string;
+                effective_used_quantity?: string; effective_used_cif?: string;
+                remaining_quantity?: string; remaining_cif?: string;
+                excess_quantity?: string; excess_cif?: string;
+                reconciliation_status?: Split["reconciliation_status"];
+                needs_rebuild?: boolean;
             }[] = Array.isArray(rawPlans) ? rawPlans : (rawPlans as { results?: unknown[] })?.results ?? [];
 
             const splitsByItem: Record<number, Split[]> = {};
@@ -477,6 +553,18 @@ export default function PlanningEditor({
                     note:             p.note ?? "",
                     modified_on:           p.modified_on,
                     modified_by_username:  p.modified_by_username,
+                    boe_used_quantity: p.boe_used_quantity,
+                    boe_used_cif: p.boe_used_cif,
+                    unlinked_allotment_quantity: p.unlinked_allotment_quantity,
+                    unlinked_allotment_cif: p.unlinked_allotment_cif,
+                    effective_used_quantity: p.effective_used_quantity,
+                    effective_used_cif: p.effective_used_cif,
+                    remaining_quantity: p.remaining_quantity,
+                    remaining_cif: p.remaining_cif,
+                    excess_quantity: p.excess_quantity,
+                    excess_cif: p.excess_cif,
+                    reconciliation_status: p.reconciliation_status,
+                    needs_rebuild: p.needs_rebuild,
                 });
             });
 
@@ -492,12 +580,16 @@ export default function PlanningEditor({
                 serials?: number[]; member_ids?: number[];
                 item_names?: { id: number; name: string }[];
                 available_quantity?: string | number; total_quantity?: string | number;
+                effective_available_quantity?: string | number;
+                license_balance_cif?: string | number;
+                effective_license_balance_cif?: string | number;
                 balance_cif_fc?: string | number;
                 has_plan?: boolean;
                 original_quantity?: string | number; used_quantity?: string | number; remaining_quantity?: string | number;
                 original_cif_fc?: string | number; used_cif_fc?: string | number; remaining_cif_fc?: string | number;
                 shortage_qty?: string | number; feasible?: boolean;
                 status?: "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
+                operational_status?: Group["operational_status"];
             }[] = Array.isArray(license?.plan_utilization) ? license.plan_utilization : [];
 
             const built: Group[] = groupRows.map((grp) => {
@@ -514,13 +606,38 @@ export default function PlanningEditor({
                     memberIds,
                     total_quantity: Number(grp.total_quantity ?? 0),
                     available_quantity: Number(grp.available_quantity ?? 0),
+                    effective_available_quantity: Number(grp.effective_available_quantity ?? grp.available_quantity ?? 0),
+                    license_balance_cif: Number(grp.license_balance_cif ?? license?.get_balance_cif ?? 0),
+                    effective_license_balance_cif: Number(
+                        grp.effective_license_balance_cif ?? grp.license_balance_cif ?? license?.get_balance_cif ?? 0,
+                    ),
                     balance_cif_fc: Number(grp.balance_cif_fc ?? 0),
                     itemNames: grp.item_names ?? [],
                     splits: splits.length ? splits : [emptySplit()],
+                    operational_status: grp.operational_status,
                 };
-                // Plan status is already group-level (computed server-side
-                // across the whole group), so it's take-as-is, never summed.
-                if (grp.has_plan) {
+                const reconciledSplits = splits.filter((split) =>
+                    split.remaining_quantity != null && split.remaining_cif != null,
+                );
+                if (reconciledSplits.length > 0) {
+                    group.has_plan = true;
+                    group.has_reconciliation = true;
+                    group.original_planned_quantity = splits.reduce((sum, split) => sum + num(split.planned_quantity), 0);
+                    group.original_planned_cif_fc = splits.reduce((sum, split) => sum + num(split.planned_cif_fc), 0);
+                    group.used_planned_quantity = splits.reduce((sum, split) => sum + num(split.effective_used_quantity), 0);
+                    group.used_planned_cif_fc = splits.reduce((sum, split) => sum + num(split.effective_used_cif), 0);
+                    group.remaining_planned_quantity = splits.reduce(
+                        (sum, split) => sum + num(split.remaining_quantity ?? split.planned_quantity), 0,
+                    );
+                    group.remaining_planned_cif_fc = splits.reduce(
+                        (sum, split) => sum + num(split.remaining_cif ?? split.planned_cif_fc), 0,
+                    );
+                    group.reconciliation_manual_required = splits.some((split) =>
+                        split.reconciliation_status === "MANUAL_PLANNING_REQUIRED"
+                        || num(split.excess_quantity) > 1e-6
+                        || num(split.excess_cif) > 1e-6,
+                    );
+                } else if (grp.has_plan) {
                     group.has_plan = true;
                     group.original_planned_quantity  = Number(grp.original_quantity ?? 0);
                     group.used_planned_quantity      = Number(grp.used_quantity ?? 0);
@@ -529,14 +646,16 @@ export default function PlanningEditor({
                     group.used_planned_cif_fc        = Number(grp.used_cif_fc ?? 0);
                     group.remaining_planned_cif_fc    = Number(grp.remaining_cif_fc ?? 0);
                 }
-                group.planning_status = grp.status;
+                // Retain the legacy status only for records that do not yet
+                // have child-level reconciliation data.
+                group.planning_status = group.has_reconciliation ? undefined : grp.status;
                 group.shortage_qty = Number(grp.shortage_qty ?? 0);
                 group.feasible = grp.feasible;
                 return group;
             });
 
             setGroups(built);
-            setSavedGroups(JSON.parse(JSON.stringify(built)));
+            setSavedGroups(cloneGroups(built));
             setPoolBalance(Number(license?.balance_cif ?? balanceCif) || 0);
             const exportItems = Array.isArray(license?.export_license) ? license.export_license : [];
             const totalCif = exportItems.reduce(
@@ -549,7 +668,7 @@ export default function PlanningEditor({
         finally { setLoading(false); }
     }, [licenseId, balanceCif]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { void load(); }, [load]);
 
     // ── Edit / Cancel ─────────────────────────────────────────────────────────
 
@@ -557,7 +676,7 @@ export default function PlanningEditor({
         setGroups((prev) => prev.map((g) => {
             if (g.id === editingGroupId) {
                 const saved = savedGroups.find((s) => s.id === editingGroupId);
-                return saved ? { ...g, splits: JSON.parse(JSON.stringify(saved.splits)) } : g;
+                return saved ? { ...g, splits: cloneSplits(saved.splits) } : g;
             }
             return g;
         }));
@@ -568,7 +687,7 @@ export default function PlanningEditor({
         if (editingGroupId === null) return;
         const saved = savedGroups.find((s) => s.id === editingGroupId);
         setGroups((prev) => prev.map((g) =>
-            g.id === editingGroupId && saved ? { ...g, splits: JSON.parse(JSON.stringify(saved.splits)) } : g,
+            g.id === editingGroupId && saved ? { ...g, splits: cloneSplits(saved.splits) } : g,
         ));
         setEditingGroupId(null);
     }, [editingGroupId, savedGroups]);
@@ -642,7 +761,7 @@ export default function PlanningEditor({
             await bulkUpsertItemPlans(licenseId, lines);
             toast.success(`Saved — ${g.description}`);
             setSavedGroups((prev) => prev.map((sg) =>
-                sg.id === gId ? { ...sg, splits: JSON.parse(JSON.stringify(g.splits)) } : sg,
+                sg.id === gId ? { ...sg, splits: cloneSplits(g.splits) } : sg,
             ));
             setEditingGroupId(null);
             await load();
@@ -691,7 +810,7 @@ export default function PlanningEditor({
             const siansExecuted = result?.total_results?.sions_executed || 0;
             const linesWritten = result?.total_results?.total_lines_written || 0;
 
-            let message = "";
+            let message: string;
             if (linesWritten === 0) {
                 message = "Planning already up to date. No new eligible items were found.";
             } else if (mode === "ALL") {
@@ -703,11 +822,8 @@ export default function PlanningEditor({
             toast.success(message);
             await load();
             onSaved?.();
-        } catch (error) {
-            const message = error && typeof error === 'object' && 'response' in error
-                ? (error as any).response?.data?.error || (error as any).response?.data?.detail || 'Failed to plan license'
-                : 'Failed to plan license';
-            toast.error(message);
+        } catch (error: unknown) {
+            toast.error(apiErrorMessage(error, "Failed to plan license"));
         } finally {
             setIsPlanning(false);
             setShowForceConfirm(false);
@@ -724,16 +840,15 @@ export default function PlanningEditor({
             const linesWritten = result?.total_lines_written || 0;
             const sionCode = result?.sion_code || 'Unknown';
 
-            let message = "";
+            let message: string;
             if (linesWritten === 0) {
                 // Check if there are diagnostics explaining why no items were planned
-                const diagnostics = (result as any)?.diagnostics;
-                if (diagnostics && diagnostics.skip_reasons && diagnostics.skip_reasons.length > 0) {
+                const diagnostics = result.diagnostics;
+                if (diagnostics?.skip_reasons?.length) {
                     const reasons = diagnostics.skip_reasons
-                        .map((r: any) => `${r.item_key}: ${r.reason}`)
+                        .map((reason) => `${reason.item_key}: ${reason.reason}`)
                         .join('; ');
                     message = `Planning completed for ${sionCode}: No items planned. Reasons: ${reasons}`;
-                    console.warn('[Auto Plan] Skip reasons:', diagnostics.skip_reasons);
                 } else {
                     message = `Planning completed for ${sionCode}: No new eligible items were found.`;
                 }
@@ -744,13 +859,8 @@ export default function PlanningEditor({
             toast.success(message);
             await load();
             onSaved?.();
-        } catch (error) {
-            console.error('[Auto Plan] Error caught:', error);
-            const message = error && typeof error === 'object' && 'response' in error
-                ? (error as any).response?.data?.message || (error as any).response?.data?.error || (error as any).response?.data?.detail || 'Failed to auto-plan license'
-                : 'Failed to auto-plan license';
-            console.error('[Auto Plan] Error message:', message);
-            toast.error(message);
+        } catch (error: unknown) {
+            toast.error(apiErrorMessage(error, "Failed to auto-plan license"));
         } finally {
             setIsPlanning(false);
         }
@@ -761,12 +871,19 @@ export default function PlanningEditor({
     // ── Derived totals ─────────────────────────────────────────────────────────
 
     const totals = useMemo(() => {
-        let totalAvail = 0, totalPlanned = 0, totalCif = 0;
+        let totalAvail = 0, theoreticalPlanned = 0, theoreticalCif = 0;
+        let effectivePlanned = 0, effectiveCif = 0, usedQuantity = 0, usedCif = 0;
         let lastUpdated: string | null = null;
         groups.forEach((g) => {
             totalAvail   += g.available_quantity;
-            totalPlanned += g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
-            totalCif     += g.splits.reduce((s, sp) => s + num(sp.planned_cif_fc), 0);
+            const groupTheoreticalQty = g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
+            const groupTheoreticalCif = g.splits.reduce((s, sp) => s + num(sp.planned_cif_fc), 0);
+            theoreticalPlanned += groupTheoreticalQty;
+            theoreticalCif += groupTheoreticalCif;
+            effectivePlanned += g.has_reconciliation ? (g.remaining_planned_quantity ?? 0) : groupTheoreticalQty;
+            effectiveCif += g.has_reconciliation ? (g.remaining_planned_cif_fc ?? 0) : groupTheoreticalCif;
+            usedQuantity += g.has_reconciliation ? (g.used_planned_quantity ?? 0) : 0;
+            usedCif += g.has_reconciliation ? (g.used_planned_cif_fc ?? 0) : 0;
             g.splits.forEach((sp) => {
                 if (sp.modified_on) {
                     const d = new Date(sp.modified_on);
@@ -782,9 +899,10 @@ export default function PlanningEditor({
               })
             : null;
         return {
-            totalAvail, totalPlanned,
-            remaining: totalAvail - totalPlanned,
-            totalCif, cifRemaining: licenseTotalCif - totalCif,
+            totalAvail, theoreticalPlanned, theoreticalCif,
+            effectivePlanned, effectiveCif, usedQuantity, usedCif,
+            remaining: totalAvail - effectivePlanned,
+            cifRemaining: licenseTotalCif - effectiveCif,
             lastUpdatedLabel,
         };
     }, [groups, licenseTotalCif]);
@@ -889,20 +1007,21 @@ export default function PlanningEditor({
             </Dialog>
 
             {/* ── Summary cards (CIF only) ──────────────────────────── */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                 <SummaryCard label="License Total CIF" value={fmtUsd(licenseTotalCif)} variant="muted" />
-                <SummaryCard label="Theoretical Planned CIF" value={fmtUsd(totals.totalCif)} variant={totals.totalCif > 0 ? "primary" : "muted"} />
+                <SummaryCard label="Theoretical Planned CIF" value={fmtUsd(totals.theoreticalCif)} variant={totals.theoreticalCif > 0 ? "primary" : "muted"} />
+                <SummaryCard label="Effective Remaining CIF" value={fmtUsd(totals.effectiveCif)} variant={totals.effectiveCif > 0 ? "primary" : "muted"} />
                 <SummaryCard
-                    label={totals.cifRemaining < -1e-6 ? "Excess CIF" : "Unused CIF"}
+                    label={totals.cifRemaining < -1e-6 ? "Operational Excess CIF" : "Operational Available CIF"}
                     value={fmtUsd(Math.abs(totals.cifRemaining))}
-                    variant={totals.cifRemaining < -1e-6 ? "danger" : totals.totalCif > 0 ? "success" : "muted"}
+                    variant={totals.cifRemaining < -1e-6 ? "danger" : totals.effectiveCif > 0 ? "success" : "muted"}
                 />
             </div>
             {totals.cifRemaining < -1e-6 && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
                     <div className="font-semibold text-destructive">Manual Planning Required</div>
                     <div className="text-xs text-muted-foreground">
-                        The theoretical plan exceeds License Total CIF by {fmtUsd(Math.abs(totals.cifRemaining))}. Reason: TOTAL_CIF_EXCEEDED.
+                        The effective remaining plan exceeds License Total CIF by {fmtUsd(Math.abs(totals.cifRemaining))}. Reason: TOTAL_CIF_EXCEEDED.
                     </div>
                 </div>
             )}
@@ -959,13 +1078,14 @@ export default function PlanningEditor({
                                 // (what was actually entered/auto-planned) stays visible as a
                                 // "of X" sub-line so re-planning intent is never hidden, just
                                 // no longer the number that drives the Over-Planned badge.
-                                const showRemaining  = g.has_plan && g.remaining_planned_quantity != null;
-                                const displayQty      = showRemaining ? g.remaining_planned_quantity! : planned;
-                                const displayCif       = showRemaining ? g.remaining_planned_cif_fc! : plannedCif;
+                                const showRemaining  = g.has_plan === true && g.remaining_planned_quantity != null;
+                                const showRemainingCif = g.has_plan === true && g.remaining_planned_cif_fc != null;
+                                const displayQty      = showRemaining ? g.remaining_planned_quantity ?? planned : planned;
+                                const displayCif      = showRemainingCif ? g.remaining_planned_cif_fc ?? plannedCif : plannedCif;
                                 const qtyDiffersFromOriginal = showRemaining && Math.abs((g.original_planned_quantity ?? 0) - displayQty) > 1e-6;
 
                                 return (
-                                    <>
+                                    <Fragment key={g.id}>
                                         <tr
                                             key={g.id}
                                             className={cn(
@@ -1035,7 +1155,7 @@ export default function PlanningEditor({
                                                     showRemaining ? "text-foreground" :
                                                     rem < -1e-6 ? "text-destructive" :
                                                     rem < 1e-6 && planned > 0 ? "text-emerald-700" : "text-muted-foreground",
-                                                )}>{fmtQty(showRemaining ? g.used_planned_quantity! : rem)}</span>
+                                                )}>{fmtQty(showRemaining ? g.used_planned_quantity ?? 0 : rem)}</span>
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 {isEditing ? (
@@ -1076,28 +1196,31 @@ export default function PlanningEditor({
                                                 id={si === 0 ? splitRowsId : undefined}
                                                 className="border-b border-border/30 bg-primary/[0.02]"
                                             >
-                                                <td className="px-4 py-1.5 pl-11">
-                                                    <div className="flex items-baseline gap-1.5 text-[12px]">
+                                                <td colSpan={10} className="px-4 py-2 pl-11">
+                                                    <div className="flex flex-wrap items-center gap-2 text-[12px]">
                                                         <span className="text-muted-foreground/50" aria-hidden="true">└</span>
                                                         <span className="text-muted-foreground">Planning Item:</span>
                                                         <span className="font-medium text-foreground">{splitLabel(sp, g, si)}</span>
+                                                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9.5px] font-semibold text-muted-foreground">
+                                                            {(sp.reconciliation_status ?? "NOT_USED").replace(/_/g, " ")}
+                                                        </span>
+                                                        {sp.needs_rebuild && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9.5px] font-semibold text-amber-800">Needs Rebuild</span>}
                                                     </div>
+                                                    <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-5">
+                                                        {[
+                                                            ["Theoretical Qty", fmtQty(num(sp.planned_quantity))],
+                                                            ["Theoretical CIF", fmtUsd(num(sp.planned_cif_fc))],
+                                                            ["BOE Used Qty", fmtQty(num(sp.boe_used_quantity))],
+                                                            ["BOE Used CIF", fmtUsd(num(sp.boe_used_cif))],
+                                                            ["Unlinked Allotment Qty", fmtQty(num(sp.unlinked_allotment_quantity))],
+                                                            ["Unlinked Allotment CIF", fmtUsd(num(sp.unlinked_allotment_cif))],
+                                                            ["Remaining Qty", fmtQty(num(sp.remaining_quantity))],
+                                                            ["Remaining CIF", fmtUsd(num(sp.remaining_cif))],
+                                                            ["Excess Qty", fmtQty(num(sp.excess_quantity))],
+                                                            ["Excess CIF", fmtUsd(num(sp.excess_cif))],
+                                                        ].map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="font-medium tabular-nums">{value}</dd></div>)}
+                                                    </dl>
                                                 </td>
-                                                <td className="px-4 py-1.5" />
-                                                <td className="px-4 py-1.5" />
-                                                <td className="px-4 py-1.5">
-                                                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9.5px] font-semibold text-muted-foreground">Planned</span>
-                                                </td>
-                                                <td className="px-4 py-1.5" />
-                                                <td className="px-4 py-1.5 text-right text-[12px] tabular-nums">{fmtQty(num(sp.planned_quantity))}</td>
-                                                <td className="px-4 py-1.5 text-right text-[12px] tabular-nums text-muted-foreground">
-                                                    {num(sp.unit_price) > 0 ? `$${num(sp.unit_price).toFixed(2)}` : "—"}
-                                                </td>
-                                                <td className="px-4 py-1.5 text-right text-[12px] tabular-nums text-primary">
-                                                    {fmtUsd(num(sp.planned_cif_fc))}
-                                                </td>
-                                                <td className="px-4 py-1.5" />
-                                                <td className="px-4 py-1.5" />
                                             </tr>
                                         ))}
 
@@ -1118,7 +1241,7 @@ export default function PlanningEditor({
                                                 </td>
                                             </tr>
                                         )}
-                                    </>
+                                    </Fragment>
                                 );
                             })}
 
@@ -1130,11 +1253,11 @@ export default function PlanningEditor({
                                     <td />
                                     <td />
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.totalAvail)}</td>
-                                    <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.totalPlanned)}</td>
+                                    <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.effectivePlanned)}</td>
                                     <td />{/* Unit Price — rate, not summed */}
-                                    <td className="px-4 py-2 text-right tabular-nums text-primary">{fmtUsd(totals.totalCif)}</td>
+                                    <td className="px-4 py-2 text-right tabular-nums text-primary">{fmtUsd(totals.effectiveCif)}</td>
                                     <td className="px-4 py-2 text-right tabular-nums">
-                                        <span className={cn(totals.remaining < -1e-6 ? "text-destructive" : "text-emerald-700")}>{fmtQty(totals.remaining)}</span>
+                                        <span className="text-foreground">{fmtQty(totals.usedQuantity)}</span>
                                     </td>
                                     <td />
                                 </tr>

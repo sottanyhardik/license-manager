@@ -29,6 +29,10 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from apps.core.constants import DEC_0, DEC_000
+from apps.license.services.planning_tolerances import (
+    effective_planning_available_quantity,
+    effective_planning_balance_cif,
+)
 
 
 STATUS_FEASIBLE = "FEASIBLE"
@@ -164,6 +168,8 @@ def plan_utilization_rows(
         if member_plan:
             group["splits"].extend(member_plan.get("splits", []))
 
+    license_balance_cif = _dec(getattr(license_obj, "get_balance_cif", DEC_0), DEC_0)
+    effective_license_balance_cif = effective_planning_balance_cif(license_balance_cif)
     rows: List[Dict[str, Any]] = []
     for key in order:
         group = groups[key]
@@ -210,8 +216,15 @@ def plan_utilization_rows(
         # unallocated plan remainder with CURRENT item availability. Comparing
         # current availability with the original lifetime target is the source of
         # the misleading "Available < Planned" production display.
+        # Preserve the canonical live balances and apply tolerances only to
+        # operational feasibility/status.  Theoretical plan and persisted
+        # model values remain untouched.
         available = _dec(group["available_quantity"])
+        effective_available = effective_planning_available_quantity(available)
         unit_mismatch = len(units) > 1
+        # Shortage/excess describe the underlying plan and therefore retain
+        # raw arithmetic. Tolerances are exposed separately for the final
+        # operational completion status consumed by the UI.
         shortage = max(DEC_000, remaining - available)
         excess = max(DEC_000, available - remaining)
         if unit_mismatch:
@@ -227,6 +240,15 @@ def plan_utilization_rows(
             canonical_status = STATUS_FEASIBLE
             feasible = True
 
+        planner_cif_exhausted = effective_license_balance_cif == DEC_0
+        planner_quantity_exhausted = effective_available == DEC_000
+        if effective_license_balance_cif < DEC_0 or effective_available < DEC_000:
+            operational_status = "MANUAL_PLANNING_REQUIRED"
+        elif planner_cif_exhausted or planner_quantity_exhausted:
+            operational_status = "PLANNED"
+        else:
+            operational_status = canonical_status
+
         group.update({
             "source_unit": units[0] if len(units) == 1 else None,
             "planning_unit": units[0] if len(units) == 1 else None,
@@ -234,6 +256,16 @@ def plan_utilization_rows(
             # one unit.  Mixed-unit groups are explicitly blocked above.
             "unit_conversion": Decimal("1") if len(units) == 1 else None,
             "available_qty": available,
+            "effective_available_quantity": effective_available,
+            "effective_available_qty": effective_available,
+            "license_balance_cif": license_balance_cif,
+            "effective_license_balance_cif": effective_license_balance_cif,
+            "balance_cif_ignored_by_tolerance": (
+                license_balance_cif != effective_license_balance_cif
+            ),
+            "planner_cif_exhausted": planner_cif_exhausted,
+            "planner_quantity_exhausted": planner_quantity_exhausted,
+            "operational_status": operational_status,
             "planned_qty": planned,
             "allocated_qty": allocated,
             "consumed_qty": allocated,

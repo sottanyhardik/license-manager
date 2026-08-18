@@ -120,7 +120,34 @@ export default function LicensePlanningWorkspace() {
     // by an older/cached API response.
     const activeSavedRules = rules.filter((rule) => rule.id != null && rule.is_active);
     const canExecuteSion = activeSavedRules.length > 0 && !hasUnsavedChanges;
-    const save = async () => { if (!draft) return null; const { priority: _databasePriority, output_item: _obsoleteOutputItem, ...payload } = draft; const saved = ruleHasUnsavedChanges ? (draft.id ? await updateSionPlanningRule(draft.id, payload) : await createSionPlanningRule(payload as SionPlanningRule)) : draft; const fresh = [...await fetchSionPlanningRules(saved.sion)].sort((a, b) => a.priority - b.priority); setRules(fresh); const persisted = fresh.find((rule) => rule.id === saved.id) ?? saved; setDraft(persisted); setSelectedRuleId(persisted.id ?? null); toast.success("Rule saved"); return saved; };
+    const save = async () => {
+        if (!draft || !allocationDraft || !hasUnsavedChanges) return null;
+        const { priority: _databasePriority, output_item: _obsoleteOutputItem, ...ruleFields } = draft;
+        const percentageRows = allocationDraft.percentage_rows?.map((row) => ({
+            import_item: row.import_item,
+            percentage: Number(row.percentage || 0).toFixed(2),
+            unit_price: Number(row.unit_price || 0).toFixed(2),
+            ...(row.max_quantity != null ? { max_quantity: row.max_quantity } : {}),
+            ...(row.priority != null ? { priority: row.priority } : {}),
+        }));
+        const payload = {
+            ...ruleFields,
+            strategy: allocationDraft.strategy,
+            import_item: allocationDraft.import_item,
+            unit_value_rows: allocationDraft.unit_value_rows,
+            percentage_rows: percentageRows,
+        };
+        const saved = draft.id
+            ? await updateSionPlanningRule(draft.id, payload)
+            : await createSionPlanningRule(payload as SionPlanningRule);
+        const fresh = [...await fetchSionPlanningRules(saved.sion)].sort((a, b) => a.priority - b.priority);
+        const persisted = fresh.find((rule) => rule.id === saved.id) ?? saved;
+        setRules(fresh);
+        setDraft(persisted);
+        setSelectedRuleId(persisted.id ?? null);
+        toast.success("Rule saved");
+        return persisted;
+    };
     const testRule = async () => { if (busy || !draft?.id || hasUnsavedChanges) return; const restore = preserveScroll(); setBusy("test"); setError(""); try { setPreview(await testSionPlanningRule(draft.id)); setActiveTab("preview"); toast.success("Rule test completed"); } catch { toast.error("Rule test failed"); } finally { setBusy(null); restore(); } };
     const planSion = async (mode: SionPlanningMode) => { if (busy || !sion || !canExecuteSion) return; const restore = preserveScroll(); setConfirmForceAll(false); setBusy(mode === "ALL" ? "plan-all" : "plan-new"); setError(""); try { await planSavedSionRules(sion, mode); setPreview(await previewSavedSionRules(sion, mode)); setActiveTab("preview"); toast.success(mode === "ALL" ? `${sionLabel} full eligible universe reprocessed` : `${sionLabel} new eligible data planned`); setRules(await fetchSionPlanningRules(sion)); } catch { toast.error("Planning failed"); } finally { setBusy(null); restore(); } };
     const selectedSion = sions.find((row) => row.id === sion); const sionLabel = selectedSion?.norm_class ?? "SION";
@@ -149,7 +176,7 @@ export default function LicensePlanningWorkspace() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
             <TabsList><TabsTrigger value="rules">Rules ({rules.length})</TabsTrigger><TabsTrigger value="preview">Plan Preview {preview?.licenses?.length ? `(${preview.licenses.length})` : ""}</TabsTrigger></TabsList>
             <TabsContent value="rules">
-                <section aria-label="Rule workspace" className="grid min-h-[620px] overflow-hidden rounded-lg border bg-card lg:grid-cols-[minmax(320px,38%)_minmax(0,62%)]">
+                <section aria-label="Rule workspace" className="grid h-[calc(100dvh-14.5rem)] min-h-[210px] overflow-hidden rounded-lg border bg-card lg:grid-cols-[minmax(320px,38%)_minmax(0,62%)]">
                     <div className="border-b lg:border-b-0 lg:border-r">
                         <div className="flex items-center gap-2 border-b p-3"><div className="relative flex-1"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><input aria-label="Search rules" value={ruleSearch} onChange={(event) => setRuleSearch(event.target.value)} placeholder="Search rules…" className="h-9 w-full rounded-md border bg-background pl-8 pr-2 text-sm" /></div><Button size="sm" onClick={() => { setDraft(emptyRule(sion)); setSelectedRuleId(null); }}><Plus className="size-4" />Add Rule</Button></div>
                         <div className="max-h-[560px] overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-muted/80 text-left text-xs text-muted-foreground"><tr><th className="w-12 px-3 py-2">#</th><th className="px-2 py-2">Rule</th><th className="px-2 py-2">Max</th><th className="w-12 py-2"></th></tr></thead><tbody>{filteredRules.map((rule) => {
@@ -185,14 +212,14 @@ export default function LicensePlanningWorkspace() {
                                 {allocationDraft && <AllocationStrategyEditor sionId={sion} value={allocationDraft} onChange={changeAllocationStrategy} onStandardItemSelected={(name) => setDraft((current) => current ? { ...current, name } : current)} disabled={!!busy} errors={formErrors} ruleId={draft?.id} />}
                                 <ExpressionTreeEditor group={draft.expression} ruleName={draft.name} onChange={(expression) => setDraft({ ...draft, expression })} />
                             </div>
-                            <div aria-label="Rule edit actions" className="sticky bottom-0 flex min-h-14 items-center gap-2 border-t bg-card/95 px-4 py-2 backdrop-blur">
+                            <div aria-label="Rule edit actions" className="sticky bottom-0 z-20 flex min-h-14 shrink-0 items-center gap-2 border-t bg-card/95 px-4 py-2 backdrop-blur">
                                 <span className={`mr-auto text-xs font-medium ${hasValidationErrors(formErrors) ? "text-destructive" : hasUnsavedChanges ? "text-warning" : "text-success"}`}>
-                                    {hasValidationErrors(formErrors) ? "❌ Errors present" : hasUnsavedChanges ? "● Unsaved changes" : "✓ Saved"}
+                                    {hasValidationErrors(formErrors) ? (formErrors.percentage_rows ?? "❌ Errors present") : hasUnsavedChanges ? "● Unsaved changes" : "✓ Saved"}
                                 </span>
                                 <Button variant="outline" onClick={() => setDraft(null)}>Discard</Button>
                                 {draft.id && <Button variant="outline" onClick={testRule} disabled={!!busy || hasUnsavedChanges}>{busy === "test" ? <Loader2 className="size-4 animate-spin" /> : <TestTube2 className="size-4" />}Test Rule</Button>}
                                 <Button onClick={async () => { if (busy) return; const restore = preserveScroll(); setBusy("save"); try { await save(); } catch { toast.error("Unable to save rule"); } finally { setBusy(null); restore(); } }} disabled={!!busy || hasValidationErrors(formErrors) || !hasUnsavedChanges}>
-                                    {busy === "save" && <Loader2 className="size-4 animate-spin" />}Save
+                                    {busy === "save" && <Loader2 className="size-4 animate-spin" />}Save Changes
                                 </Button>
                             </div>
                         </> : selectedRule ? <div className="space-y-5 p-5">

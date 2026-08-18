@@ -1,5 +1,6 @@
 # license/views/license.py
 import logging
+from decimal import Decimal
 from django.db import transaction
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -337,6 +338,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'original_quantity', 'used_quantity', 'remaining_quantity',
             'original_cif_fc', 'used_cif_fc', 'remaining_cif_fc',
             'unit_conversion', 'available_qty', 'planned_qty',
+            'effective_available_quantity', 'effective_available_qty',
+            'license_balance_cif', 'effective_license_balance_cif',
             'allocated_qty', 'consumed_qty', 'remaining_qty',
             'shortage_qty', 'excess_qty',
         )
@@ -344,6 +347,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             {**row, **{f: str(row[f]) for f in _decimal_fields if f in row}}
             for row in plan_utilization_rows(instance)
         ]
+        from apps.license.services.planning_tolerances import effective_planning_balance_cif
+        raw_planning_balance = Decimal(str(instance.get_balance_cif or 0))
+        effective_planning_balance = effective_planning_balance_cif(raw_planning_balance)
+        data['planning_balance_cif'] = {
+            'raw_balance_cif': str(raw_planning_balance),
+            'effective_balance_cif': str(effective_planning_balance),
+            'balance_cif_ignored_by_tolerance': raw_planning_balance != effective_planning_balance,
+        }
 
         # Attach canonical license plan presentation (single source of truth)
         try:
@@ -821,6 +832,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             "total_lines_written": total_lines_written,
             "theoretical_plan_generated": bool(result.get("write_results")),
         }
+        from apps.license.services.planning_tolerances import effective_planning_balance_cif
+        raw_planning_balance = Decimal(str(license_obj.get_balance_cif or 0))
+        effective_planning_balance = effective_planning_balance_cif(raw_planning_balance)
+        response_data.update({
+            "raw_balance_cif": raw_planning_balance,
+            "effective_balance_cif": effective_planning_balance,
+            "balance_cif_ignored_by_tolerance": raw_planning_balance != effective_planning_balance,
+            "planner_cif_exhausted": effective_planning_balance == Decimal("0"),
+        })
         if manual_results:
             summary = manual_results[0].get("allocation_summary", {})
             response_data.update({

@@ -299,11 +299,11 @@ class TestSplitByPercentageStrategy:
             strategy="SPLIT_BY_PERCENT",
         )
         SionPlanningPercentageRow.objects.create(
-            rule=percent, import_item=pko, percentage=Decimal("50"),
+            rule=percent, import_item=pko, percentage=Decimal("40"),
             unit_price=Decimal("1.80"), max_quantity=Decimal("321138"), priority=1,
         )
         SionPlanningPercentageRow.objects.create(
-            rule=percent, import_item=olive, percentage=Decimal("50"),
+            rule=percent, import_item=olive, percentage=Decimal("60"),
             unit_price=Decimal("5.00"), max_quantity=Decimal("321139"), priority=2,
         )
         license_obj = LicenseDetailsModel.objects.create(
@@ -315,20 +315,20 @@ class TestSplitByPercentageStrategy:
         )
         food_row = LicenseImportItemsModel.objects.create(
             license=license_obj, serial_number=1, description="Food additives",
-            unit="KG", quantity=Decimal("226081.840"), available_quantity=Decimal("0"),
+            unit="KG", quantity=Decimal("226081.000"), available_quantity=Decimal("0"),
         )
         food_row.items.add(food)
         oil_row = LicenseImportItemsModel.objects.create(
             license=license_obj, serial_number=2, description="Relevant fats and oils",
-            unit="KG", quantity=Decimal("642277.970"), available_quantity=Decimal("0"),
+            unit="KG", quantity=Decimal("642277.000"), available_quantity=Decimal("0"),
         )
         oil_row.items.add(pko, olive)
 
         response = setup["client"].post(f"/api/licenses/{license_obj.pk}/auto-plan/")
         assert response.status_code == 200
         assert response.data["status"] == "MANUAL_PLANNING_REQUIRED"
-        assert Decimal(str(response.data["total_theoretical_cif"])) == Decimal("2794162.10")
-        assert Decimal(str(response.data["excess_cif"])) == Decimal("21607.94")
+        assert Decimal(str(response.data["total_theoretical_cif"])) == Decimal("2999689.14")
+        assert Decimal(str(response.data["excess_cif"])) == Decimal("227134.98")
 
         plans = {row.item_name.name: row for row in LicenseItemPlan.objects.filter(
             license=license_obj,
@@ -336,12 +336,13 @@ class TestSplitByPercentageStrategy:
         assert set(plans) == {food.name, pko.name, olive.name}
         assert (plans[food.name].planned_cif_fc, plans[pko.name].planned_quantity,
                 plans[pko.name].unit_price, plans[pko.name].planned_cif_fc) == (
-            Decimal("610418.70"), Decimal("321138.000"), Decimal("1.80"), Decimal("578048.40"),
+            Decimal("610418.70"), Decimal("256910.800"), Decimal("1.80"), Decimal("462439.44"),
         )
         assert (plans[olive.name].planned_quantity, plans[olive.name].unit_price,
                 plans[olive.name].planned_cif_fc) == (
-            Decimal("321139.000"), Decimal("5.00"), Decimal("1605695.00"),
+            Decimal("385366.200"), Decimal("5.00"), Decimal("1926831.00"),
         )
+        assert sum((plans[name].planned_quantity for name in (pko.name, olive.name)), Decimal("0")) == Decimal("642277.000")
 
         api_response = setup["client"].get(f"/api/license-item-plans/?license={license_obj.pk}")
         rows = api_response.data.get("results", api_response.data)

@@ -107,6 +107,16 @@ def add_license_overview_actions(viewset_class):
             "license_number": license_obj.license_number,
             "rows": plan_utilization_rows(license_obj),
         }
+        from decimal import Decimal
+        from apps.license.services.planning_tolerances import effective_planning_balance_cif
+        raw_balance = Decimal(str(license_obj.get_balance_cif or 0))
+        effective_balance = effective_planning_balance_cif(raw_balance)
+        data.update({
+            "raw_balance_cif": raw_balance,
+            "effective_balance_cif": effective_balance,
+            "balance_cif_ignored_by_tolerance": raw_balance != effective_balance,
+            "planner_cif_exhausted": effective_balance == Decimal("0"),
+        })
         return Response(_json_safe(data))
 
     for method in (

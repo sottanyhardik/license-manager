@@ -27,6 +27,7 @@ export interface LicenseOverviewSummaryCounts {
 }
 
 export interface LicenseOverviewSummary {
+    balance_cif?: string | number | null;
     license_number: string | null;
     /** = `LicenseDetailsModel.registration_number` — no field literally
      * named "authorisation number" exists on the backend. */

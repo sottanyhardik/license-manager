@@ -8,49 +8,34 @@ export type RuleCondition = {
 };
 export type RuleGroup = { operator: "AND" | "OR"; conditions: Array<RuleCondition | RuleGroup> };
 
-/**
- * UI representation of the canonical SionPlanningAction.config for a SPLIT
- * action. Prices remain strings so the browser never converts planning
- * decimals to IEEE-754 numbers.
- */
-export type SplitAllocationBucket = {
-    code: string;
-    min_price: string;
-    max_price: string;
-    reference_price: string;
-};
-export type SplitAllocationConfig = {
-    algorithm: "SPLIT_BY_UNIT_VALUE";
-    basis: "BALANCE_CIF_PER_QUANTITY";
-    buckets: SplitAllocationBucket[];
+export type PlanningStrategy = "STANDARD" | "SPLIT_BY_UNIT_VALUE" | "SPLIT_BY_PERCENT";
+export type SplitAllocationBucket = { code: string; min_price: string; max_price: string; reference_price: string };
+export type SplitAllocationConfig = { algorithm: "SPLIT_BY_UNIT_VALUE"; basis: "BALANCE_CIF_PER_QUANTITY"; buckets: SplitAllocationBucket[] };
+export type RuleAllocationStrategy = {
+    strategy?: PlanningStrategy;
+    import_item?: number | null;
+    unit_value_rows?: UnitValueRow[];
+    percentage_rows?: PercentageRow[];
+    config?: SplitAllocationConfig | Record<string, unknown>;
 };
 
-export type PercentageAllocationConfig = {
-    sion_id?: number;
-    percentage_rules?: Array<{
-        rule_id: number;
-        output_code: string;
-        percentage: string;
-    }>;
+export type UnitValueRow = {
+    id?: number;
+    import_item: number;
+    min_unit_price: string;
+    max_unit_price: string;
+    preferred_unit_price: string;
+    priority?: number;
 };
 
-export type PercentageAllocationEditableConfig = {
-    algorithm: "SPLIT_BY_PERCENTAGE";
-    rows: Array<{
-        id?: string;
-        input_item_id: number | null;
-        output_code?: string;
-        percentage: string;
-        unit_price: string;
-        allocated_quantity?: string;
-        planned_cif?: string;
-    }>;
+export type PercentageRow = {
+    id?: number;
+    import_item: number;
+    percentage: string;
+    unit_price: string;
+    priority?: number;
 };
 
-export type RuleAllocationStrategy =
-    | { strategy: "STANDARD"; action_id?: number }
-    | { strategy: "SPLIT_BY_UNIT_VALUE"; action_id?: number; config: SplitAllocationConfig }
-    | { strategy: "SPLIT_BY_PERCENTAGE"; action_id?: number; config?: PercentageAllocationConfig | PercentageAllocationEditableConfig };
 export type SionPlanningRule = {
     id?: number;
     sion: number;
@@ -61,8 +46,14 @@ export type SionPlanningRule = {
     priority: number;
     is_active: boolean;
     execution_output?: string;
+    strategy?: PlanningStrategy;
+    import_item?: number | null;
+    standard_item_name?: string | null;
+    unit_value_rows?: UnitValueRow[];
+    percentage_rows?: PercentageRow[];
+    percentage_constraint?: string | number | null;
+    rule_type?: string;
     output_item?: number | null;
-    output_item_name?: string | null;
     version?: number;
     modified_on?: string;
     modified_by_username?: string;
@@ -79,8 +70,6 @@ function safeRuleExpression(value: unknown): RuleGroup {
             return Array.isArray(candidate.conditions) || Array.isArray(candidate.args) ? safeRuleExpression(candidate) : candidate as RuleCondition;
         }) };
     }
-    // Historical rules may contain a single leaf at the root. The editor and
-    // read view consistently operate on one canonical root group.
     return node.field ? { operator: "AND", conditions: [node as RuleCondition] } : { operator: "AND", conditions: [] };
 }
 
@@ -98,9 +87,39 @@ export async function createSionPlanningRule(payload: SionPlanningRule): Promise
 export async function updateSionPlanningRule(id: number, payload: Partial<SionPlanningRule>): Promise<SionPlanningRule> {
     return (await api.patch(`sion-planning-rules/${id}/`, payload)).data;
 }
+export type ImportItemOption = { id: number; name: string; unit?: string; sionCode?: string };
+export type ImportItemPage = { items: ImportItemOption[]; nextPage: number | null };
+
+function normalizeImportItems(data: unknown): ImportItemPage {
+    const payload = data as { results?: unknown[]; next?: string | null } | unknown[] | null;
+    const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.results) ? payload.results : [];
+    const items = rows.flatMap((raw) => {
+        if (!raw || typeof raw !== "object") return [];
+        const item = raw as Record<string, unknown>;
+        const id = Number(item.id);
+        const name = typeof item.name === "string" ? item.name : "";
+        if (!Number.isInteger(id) || !name) return [];
+        return [{ id, name, unit: typeof item.unit === "string" ? item.unit : undefined,
+            sionCode: typeof item.sion_code === "string" ? item.sion_code : undefined }];
+    });
+    const next = !Array.isArray(payload) && payload?.next ? new URL(payload.next, window.location.origin).searchParams.get("page") : null;
+    return { items, nextPage: next ? Number(next) : null };
+}
+
+export async function searchSionImportItems(sionId: number, search = "", page = 1): Promise<ImportItemPage> {
+    const { data } = await api.get("sion-planning-rules/import-items/", { params: { sion_id: sionId, search, page } });
+    return normalizeImportItems(data);
+}
+
+export async function fetchSionImportItem(sionId: number, itemId: number): Promise<ImportItemOption | null> {
+    const { data } = await api.get("sion-planning-rules/import-items/", { params: { sion_id: sionId, item_id: itemId } });
+    return normalizeImportItems(data).items[0] ?? null;
+}
+/** @deprecated Retained for older planning surfaces during their migration. */
 export async function fetchRuleAllocationStrategy(id: number): Promise<RuleAllocationStrategy> {
     return (await api.get(`sion-planning-rules/${id}/allocation-strategy/`)).data;
 }
+/** @deprecated Retained for older planning surfaces during their migration. */
 export async function updateRuleAllocationStrategy(id: number, payload: RuleAllocationStrategy): Promise<RuleAllocationStrategy> {
     return (await api.patch(`sion-planning-rules/${id}/allocation-strategy/`, payload)).data;
 }
@@ -114,21 +133,10 @@ export type SionPlanningPreviewItem = {
     proposed_planned_qty?: string; proposed_planned_quantity?: string; quantity_change?: string; shortage_qty?: string; status?: string;
     allocation?: SplitAllocationPreview;
 };
-export type SplitAllocationPreviewLine = {
-    bucket: string;
-    quantity: string;
-    unit_price: string;
-    cif: string;
-};
+export type SplitAllocationPreviewLine = { bucket: string; quantity: string; unit_price: string; cif: string };
 export type SplitAllocationPreview = {
-    strategy: "SPLIT_BY_UNIT_VALUE";
-    status: "ALLOCATED" | "BLOCKED" | "PRECISION_CONFLICT" | "ZERO_AVAILABLE_QUANTITY" | string;
-    total_quantity: string;
-    balance_cif: string;
-    effective_unit_price?: string;
-    quantity_remaining: string;
-    cif_remaining: string;
-    reason?: string;
+    strategy: "SPLIT_BY_UNIT_VALUE"; status: string; total_quantity: string; balance_cif: string;
+    effective_unit_price?: string; quantity_remaining: string; cif_remaining: string; reason?: string;
     lines: SplitAllocationPreviewLine[];
 };
 export type SionPlanningPreviewLicense = {
@@ -140,7 +148,8 @@ export type SionPlanningPreviewLicense = {
     status?: string; items: SionPlanningPreviewItem[];
 };
 export type SionPlanningPreview = {
-    sion?: string; mode?: SionPlanningMode; rules_processed?: number | unknown[]; rules_executed?: unknown[];
+    sion?: string; sion_code?: string; mode?: SionPlanningMode; rules_processed?: number | unknown[]; rules_executed?: unknown[];
+    total_results?: { sions_executed?: number; total_lines_written?: number }; total_lines_written?: number;
     summary?: { licenses_matched?: number; licenses_new?: number; licenses_changed?: number; licenses_unchanged?: number; licenses_shortage?: number; licenses_skipped?: number; rules_processed?: number };
     licenses?: SionPlanningPreviewLicense[]; conflicts?: unknown[];
 };
@@ -164,4 +173,14 @@ export async function reorderSionPlanningRules(sionId: number, ruleOrder: number
 }
 export async function planLicense(licenseId: number, mode: SionPlanningMode = "NEW"): Promise<SionPlanningPreview> {
     return (await api.post("sion-planning-rules/plan-license/", { license_id: licenseId, mode })).data;
+}
+
+export async function autoPlanLicense(licenseId: number): Promise<SionPlanningPreview> {
+    try {
+        const response = await api.post(`licenses/${licenseId}/auto-plan/`);
+        return response.data;
+    } catch (error) {
+        console.error('[autoPlanLicense] Error:', error);
+        throw error;
+    }
 }

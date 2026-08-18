@@ -9,12 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { createSionPlanningRule, fetchRuleAllocationStrategy, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, reorderSionPlanningRules, testSionPlanningRule, updateRuleAllocationStrategy, updateSionPlanningRule, type RuleAllocationStrategy, type SionPlanningMode, type SionPlanningPreview, type SionPlanningPreviewLicense, type SionPlanningRule } from "@/services/api/planningRuleApi";
-import { ExpressionTreeEditor, emptyRuleCondition } from "./ExpressionTreeEditor";
-import { getConditionDisplay } from "./ruleConditionDisplay";
+import { createSionPlanningRule, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, reorderSionPlanningRules, testSionPlanningRule, updateSionPlanningRule, type RuleAllocationStrategy, type SionPlanningMode, type SionPlanningPreview, type SionPlanningPreviewLicense, type SionPlanningRule } from "@/services/api/planningRuleApi";
 import { SplitAllocationPreview } from "./SplitAllocationPreview";
 import { AllocationStrategyEditor } from "./AllocationStrategyEditor";
 import { validatePlanningRule, hasValidationErrors, type RuleFormErrors } from "./ruleFormValidation";
+import { ExpressionTreeEditor, emptyRuleCondition } from "./ExpressionTreeEditor";
 
 // This workspace contains actions, never form submissions. Keeping the native
 // type explicit prevents a future surrounding form from turning any editor
@@ -53,31 +52,10 @@ function LicensePreview({ preview, onViewPlan }: { preview: SionPlanningPreview;
     </section>;
 }
 
-function ExpressionSummary({ group, depth = 0 }: { group: SionPlanningRule["expression"]; depth?: number }) {
-    return <div className={depth ? "ml-3 border-l border-border pl-3" : ""}>
-        <p className="py-1 text-xs font-semibold">{group.operator === "AND" ? "ALL" : "ANY"} <span className="font-normal text-muted-foreground">· {group.conditions.length} items</span></p>
-        <div className="space-y-1">{group.conditions.map((node, index) => "conditions" in node
-            ? <ExpressionSummary key={index} group={node} depth={depth + 1} />
-            : (() => { const display = getConditionDisplay(node); return <p key={index} className="ml-3 border-l border-border py-1 pl-3 text-xs"><span className="font-medium">{display.fieldLabel}</span> <span className="text-muted-foreground">{display.operatorLabel}</span> {display.value || "—"}</p>; })())}</div>
-    </div>;
-}
-
-function AllocationStrategySummary({ value }: { value?: RuleAllocationStrategy }) {
-    if (!value || value.strategy === "STANDARD") return <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Standard</p></div>;
-    if (value.strategy === "SPLIT_BY_PERCENTAGE") {
-        const config = value.config as any;
-        const rowCount = (config?.rows?.length || config?.percentage_rules?.length) ?? 0;
-        return <section aria-label="Planning strategy summary" className="space-y-2">
-            <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Split by %</p></div>
-            <div><h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Percentage Configuration</h4><p className="mt-1 text-xs text-muted-foreground">{rowCount} rows configured</p></div>
-        </section>;
-    }
-    // SPLIT_BY_UNIT_VALUE
-    if ("buckets" in value.config) return <section aria-label="Planning strategy summary" className="space-y-2">
-        <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Split by Unit Value</p></div>
-        <div><h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Split Outputs</h4><div className="mt-1 grid gap-2 sm:grid-cols-2">{value.config.buckets.map((bucket) => <div key={bucket.code} className="rounded border p-2 text-xs"><strong>{bucket.code}</strong><p className="text-muted-foreground">{bucket.min_price} – {bucket.max_price} · Reference {bucket.reference_price}</p></div>)}</div></div>
-    </section>;
-    return <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">Unknown strategy</p></div>;
+function AllocationStrategySummary({ rule }: { rule?: SionPlanningRule }) {
+    if (!rule) return null;
+    const strategyLabel = { STANDARD: "Standard", SPLIT_BY_UNIT_VALUE: "Split by Unit Value", SPLIT_BY_PERCENT: "Split by %" }[rule.strategy || "STANDARD"];
+    return <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">{strategyLabel}</p></div>;
 }
 
 export default function LicensePlanningWorkspace() {
@@ -86,9 +64,7 @@ export default function LicensePlanningWorkspace() {
     const [sions, setSions] = useState<any[]>([]); const [sion, setSion] = useState<number | null>(null); const [rules, setRules] = useState<SionPlanningRule[]>([]); const [draft, setDraft] = useState<SionPlanningRule | null>(null); const [selectedRuleId, setSelectedRuleId] = useState<number | null>(null); const [activeTab, setActiveTab] = useState("rules"); const [ruleSearch, setRuleSearch] = useState(""); const [pendingSion, setPendingSion] = useState<number | null | undefined>(undefined); const [confirmForceAll, setConfirmForceAll] = useState(false); const [busy, setBusy] = useState<"save" | "test" | "preview" | "plan-new" | "plan-all" | "deactivate" | "reorder" | null>(null); const [preview, setPreview] = useState<SionPlanningPreview | null>(null); const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
     const [allocationDraft, setAllocationDraft] = useState<RuleAllocationStrategy | null>(null);
     const [savedAllocation, setSavedAllocation] = useState<RuleAllocationStrategy | null>(null);
-    const [allocationByRule, setAllocationByRule] = useState<Record<number, RuleAllocationStrategy>>({});
     const [formErrors, setFormErrors] = useState<RuleFormErrors>({});
-    const [itemNames, setItemNames] = useState<Array<{ id: number; name: string }>>([]);
     const preserveScroll = () => {
         const host = document.getElementById("main-content");
         if (!host) return () => undefined;
@@ -99,37 +75,26 @@ export default function LicensePlanningWorkspace() {
     };
     useEffect(() => { setLoading(true); api.get("masters/sion-classes/", { params: { is_active: true, page_size: 500, ordering: "norm_class" } }).then(({ data }) => { const rows = data?.results ?? data ?? []; setSions(rows); const requested = params.get("sion"); if (requested) { const match = rows.find((row: any) => String(row.id) === requested || String(row.norm_class).toUpperCase() === requested.toUpperCase()); if (match) setSion(match.id); } }).catch(() => setError("Unable to load SION norms.")).finally(() => setLoading(false)); }, []);
     useEffect(() => { if (!sion) { setRules([]); setDraft(null); setSelectedRuleId(null); setPreview(null); return; } setLoading(true); setError(""); setDraft(null); setPreview(null); fetchSionPlanningRules(sion).then((rows) => { const ordered = [...rows].sort((a, b) => a.priority - b.priority); setRules(ordered); setSelectedRuleId(ordered[0]?.id ?? null); }).catch(() => setError("Unable to load planning rules.")).finally(() => setLoading(false)); }, [sion]);
-    useEffect(() => {
-        let current = true;
-        if (!draft?.id) { setAllocationDraft({ strategy: "STANDARD" }); setSavedAllocation({ strategy: "STANDARD" }); return () => { current = false; }; }
-        fetchRuleAllocationStrategy(draft.id).then((strategy) => {
-            if (current) { setAllocationDraft(strategy); setSavedAllocation(strategy); }
-        }).catch(() => {
-            if (current) { setAllocationDraft({ strategy: "STANDARD" }); setSavedAllocation({ strategy: "STANDARD" }); }
-        });
-        return () => { current = false; };
-    }, [draft?.id]);
-    useEffect(() => {
-        let current = true;
-        const ids = rules.flatMap((rule) => rule.id == null ? [] : [rule.id]);
-        Promise.all(ids.map(async (id) => [id, await fetchRuleAllocationStrategy(id)] as const))
-            .then((entries) => { if (current) setAllocationByRule(Object.fromEntries(entries)); })
-            .catch(() => { if (current) setAllocationByRule({}); });
-        return () => { current = false; };
-    }, [rules]);
-
-    useEffect(() => {
-        let current = true;
-        api.get("masters/item-names/", { params: { is_active: true, page_size: 1000, ordering: "name" } })
-            .then(({ data }) => {
-                if (current) setItemNames(data?.results ?? data ?? []);
-            })
-            .catch(() => {
-                if (current) setItemNames([]);
-            });
-        return () => { current = false; };
-    }, []);
     const savedDraft = draft?.id ? rules.find((rule) => rule.id === draft.id) : null;
+    useEffect(() => {
+        if (!draft) { setAllocationDraft({}); setSavedAllocation({}); return; }
+        const allocation = {
+            strategy: draft.strategy,
+            import_item: draft.import_item,
+            unit_value_rows: draft.unit_value_rows,
+            percentage_rows: draft.percentage_rows,
+        };
+        setAllocationDraft(allocation);
+        if (savedDraft) {
+            setSavedAllocation({
+                strategy: savedDraft.strategy,
+                import_item: savedDraft.import_item,
+                unit_value_rows: savedDraft.unit_value_rows,
+                percentage_rows: savedDraft.percentage_rows,
+            });
+        }
+    }, [draft, savedDraft]);
+
     const ruleHasUnsavedChanges = !!draft && (!savedDraft || JSON.stringify(draft) !== JSON.stringify(savedDraft));
     const allocationHasUnsavedChanges = !!draft && !!allocationDraft && JSON.stringify(allocationDraft) !== JSON.stringify(savedAllocation);
     const hasUnsavedChanges = ruleHasUnsavedChanges || allocationHasUnsavedChanges;
@@ -144,11 +109,10 @@ export default function LicensePlanningWorkspace() {
             setFormErrors(errors);
         }
     }, [draft, allocationDraft]);
-    const changeAllocationStrategy = (next: RuleAllocationStrategy) => {
+    const changeAllocationStrategy = (next: any) => {
         setAllocationDraft(next);
-        if (draft && !draft.max_unit_price && next.strategy === "SPLIT_BY_UNIT_VALUE" && "buckets" in next.config) {
-            const configuredMaximum = next.config.buckets[next.config.buckets.length - 1]?.max_price;
-            if (configuredMaximum) setDraft({ ...draft, max_unit_price: configuredMaximum });
+        if (draft) {
+            setDraft({ ...draft, strategy: next.strategy, import_item: next.import_item, unit_value_rows: next.unit_value_rows, percentage_rows: next.percentage_rows });
         }
     };
     // PLAN/Preview execute saved active database rules only. Keep the UI gate
@@ -156,7 +120,7 @@ export default function LicensePlanningWorkspace() {
     // by an older/cached API response.
     const activeSavedRules = rules.filter((rule) => rule.id != null && rule.is_active);
     const canExecuteSion = activeSavedRules.length > 0 && !hasUnsavedChanges;
-    const save = async () => { if (!draft) return null; const { priority: _databasePriority, ...payload } = draft; const saved = ruleHasUnsavedChanges ? (draft.id ? await updateSionPlanningRule(draft.id, payload) : await createSionPlanningRule(payload as SionPlanningRule)) : draft; if (allocationHasUnsavedChanges && allocationDraft && saved.id) { const persistedAllocation = await updateRuleAllocationStrategy(saved.id, allocationDraft); setAllocationDraft(persistedAllocation); setSavedAllocation(persistedAllocation); } const fresh = [...await fetchSionPlanningRules(saved.sion)].sort((a, b) => a.priority - b.priority); setRules(fresh); const persisted = fresh.find((rule) => rule.id === saved.id) ?? saved; setDraft(persisted); setSelectedRuleId(persisted.id ?? null); toast.success("Rule saved"); return saved; };
+    const save = async () => { if (!draft) return null; const { priority: _databasePriority, output_item: _obsoleteOutputItem, ...payload } = draft; const saved = ruleHasUnsavedChanges ? (draft.id ? await updateSionPlanningRule(draft.id, payload) : await createSionPlanningRule(payload as SionPlanningRule)) : draft; const fresh = [...await fetchSionPlanningRules(saved.sion)].sort((a, b) => a.priority - b.priority); setRules(fresh); const persisted = fresh.find((rule) => rule.id === saved.id) ?? saved; setDraft(persisted); setSelectedRuleId(persisted.id ?? null); toast.success("Rule saved"); return saved; };
     const testRule = async () => { if (busy || !draft?.id || hasUnsavedChanges) return; const restore = preserveScroll(); setBusy("test"); setError(""); try { setPreview(await testSionPlanningRule(draft.id)); setActiveTab("preview"); toast.success("Rule test completed"); } catch { toast.error("Rule test failed"); } finally { setBusy(null); restore(); } };
     const planSion = async (mode: SionPlanningMode) => { if (busy || !sion || !canExecuteSion) return; const restore = preserveScroll(); setConfirmForceAll(false); setBusy(mode === "ALL" ? "plan-all" : "plan-new"); setError(""); try { await planSavedSionRules(sion, mode); setPreview(await previewSavedSionRules(sion, mode)); setActiveTab("preview"); toast.success(mode === "ALL" ? `${sionLabel} full eligible universe reprocessed` : `${sionLabel} new eligible data planned`); setRules(await fetchSionPlanningRules(sion)); } catch { toast.error("Planning failed"); } finally { setBusy(null); restore(); } };
     const selectedSion = sions.find((row) => row.id === sion); const sionLabel = selectedSion?.norm_class ?? "SION";
@@ -189,8 +153,8 @@ export default function LicensePlanningWorkspace() {
                     <div className="border-b lg:border-b-0 lg:border-r">
                         <div className="flex items-center gap-2 border-b p-3"><div className="relative flex-1"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><input aria-label="Search rules" value={ruleSearch} onChange={(event) => setRuleSearch(event.target.value)} placeholder="Search rules…" className="h-9 w-full rounded-md border bg-background pl-8 pr-2 text-sm" /></div><Button size="sm" onClick={() => { setDraft(emptyRule(sion)); setSelectedRuleId(null); }}><Plus className="size-4" />Add Rule</Button></div>
                         <div className="max-h-[560px] overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-muted/80 text-left text-xs text-muted-foreground"><tr><th className="w-12 px-3 py-2">#</th><th className="px-2 py-2">Rule</th><th className="px-2 py-2">Max</th><th className="w-12 py-2"></th></tr></thead><tbody>{filteredRules.map((rule) => {
-                            const index = rules.findIndex((item) => item.id === rule.id); const selected = selectedRuleId === rule.id; const strategy = rule.id ? allocationByRule[rule.id] : undefined;
-                            return <tr key={rule.id} className={`border-t ${selected ? "bg-primary/5" : "hover:bg-muted/30"}`}><td className="px-3 py-2 font-semibold">{rule.priority}</td><td className="p-0"><button type="button" aria-current={selected ? "true" : undefined} className="w-full px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={() => { if (!hasUnsavedChanges) { setSelectedRuleId(rule.id ?? null); setDraft(null); } }}><span className="block truncate font-medium">{rule.name}</span><span className="flex items-center gap-2 text-[11px] text-muted-foreground">{strategy?.strategy === "SPLIT_BY_UNIT_VALUE" && <Badge variant="outline" className="h-4 px-1 text-[9px]">Split</Badge>}<Badge variant={rule.is_active ? "default" : "secondary"} className="h-4 px-1 text-[9px]">{rule.is_active ? "Active" : "Inactive"}</Badge>v{rule.version ?? "—"} · {rule.unit}</span></button></td><td className="px-2 tabular-nums">{rule.max_unit_price}</td><td><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label={`Actions for ${rule.name}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => { setSelectedRuleId(rule.id ?? null); setDraft(null); }}>View</DropdownMenuItem><DropdownMenuItem onSelect={() => beginEdit(rule)}>Edit</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem disabled={index === 0 || !!busy} onSelect={() => reorder(index, -1)}><ArrowUp />Move Up</DropdownMenuItem><DropdownMenuItem disabled={index === rules.length - 1 || !!busy} onSelect={() => reorder(index, 1)}><ArrowDown />Move Down</DropdownMenuItem></DropdownMenuContent></DropdownMenu></td></tr>;
+                            const index = rules.findIndex((item) => item.id === rule.id); const selected = selectedRuleId === rule.id;
+                            return <tr key={rule.id} className={`border-t ${selected ? "bg-primary/5" : "hover:bg-muted/30"}`}><td className="px-3 py-2 font-semibold">{rule.priority}</td><td className="p-0"><button type="button" aria-current={selected ? "true" : undefined} className="w-full px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={() => { if (!hasUnsavedChanges) { setSelectedRuleId(rule.id ?? null); setDraft(null); } }}><span className="block truncate font-medium">{rule.name}</span><span className="flex items-center gap-2 text-[11px] text-muted-foreground">{rule.strategy === "SPLIT_BY_UNIT_VALUE" && <Badge variant="outline" className="h-4 px-1 text-[9px]">Split</Badge>}{rule.strategy === "SPLIT_BY_PERCENT" && <Badge variant="outline" className="h-4 px-1 text-[9px]">%</Badge>}<Badge variant={rule.is_active ? "default" : "secondary"} className="h-4 px-1 text-[9px]">{rule.is_active ? "Active" : "Inactive"}</Badge>v{rule.version ?? "—"} · {rule.unit}</span></button></td><td className="px-2 tabular-nums">{rule.max_unit_price}</td><td><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label={`Actions for ${rule.name}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => { setSelectedRuleId(rule.id ?? null); setDraft(null); }}>View</DropdownMenuItem><DropdownMenuItem onSelect={() => beginEdit(rule)}>Edit</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem disabled={index === 0 || !!busy} onSelect={() => reorder(index, -1)}><ArrowUp />Move Up</DropdownMenuItem><DropdownMenuItem disabled={index === rules.length - 1 || !!busy} onSelect={() => reorder(index, 1)}><ArrowDown />Move Down</DropdownMenuItem></DropdownMenuContent></DropdownMenu></td></tr>;
                         })}</tbody></table>{!filteredRules.length && <p className="p-8 text-center text-sm text-muted-foreground">No rules match this search.</p>}</div>
                     </div>
                     <section aria-label={draft ? "Rule editor" : "Rule detail"} className="flex min-h-0 flex-col">
@@ -217,16 +181,8 @@ export default function LicensePlanningWorkspace() {
                                         <label className="flex items-center gap-2 self-end pb-2 text-xs"><input aria-label="Rule active" type="checkbox" checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />Active</label>
                                     </div>
 
-                                    <div>
-                                        <label className="text-xs">Output Item</label>
-                                        <select aria-label="Output item" aria-invalid={!!formErrors.output_item} value={draft.output_item ?? ""} onChange={(e) => setDraft({ ...draft, output_item: e.target.value ? parseInt(e.target.value, 10) : null })} className={`mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm ${formErrors.output_item ? "border-destructive" : ""}`}>
-                                            <option value="">— Select output item —</option>
-                                            {itemNames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                                        </select>
-                                        {formErrors.output_item && <span className="mt-1 block text-[11px] text-destructive">{formErrors.output_item}</span>}
-                                    </div>
                                 </div>
-                                {allocationDraft && <AllocationStrategyEditor value={allocationDraft} onChange={changeAllocationStrategy} disabled={!!busy} errors={formErrors} ruleId={draft?.id} />}
+                                {allocationDraft && <AllocationStrategyEditor sionId={sion} value={allocationDraft} onChange={changeAllocationStrategy} onStandardItemSelected={(name) => setDraft((current) => current ? { ...current, name } : current)} disabled={!!busy} errors={formErrors} ruleId={draft?.id} />}
                                 <ExpressionTreeEditor group={draft.expression} ruleName={draft.name} onChange={(expression) => setDraft({ ...draft, expression })} />
                             </div>
                             <div aria-label="Rule edit actions" className="sticky bottom-0 flex min-h-14 items-center gap-2 border-t bg-card/95 px-4 py-2 backdrop-blur">
@@ -242,12 +198,12 @@ export default function LicensePlanningWorkspace() {
                         </> : selectedRule ? <div className="space-y-5 p-5">
                             <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rule #{selectedRule.priority}</p><h2 className="text-lg font-semibold">{selectedRule.name}</h2><p className="mt-1 text-xs text-muted-foreground">Version {selectedRule.version ?? "—"} · Updated {selectedRule.modified_on ? new Date(selectedRule.modified_on).toLocaleString() : "—"}</p></div><Badge variant={selectedRule.is_active ? "default" : "secondary"}>{selectedRule.is_active ? "Active" : "Inactive"}</Badge></div>
                             <dl className="grid grid-cols-2 gap-3 rounded-md bg-muted/30 p-3 text-sm">
-                                <div><dt className="text-xs text-muted-foreground">Max Price</dt><dd className="font-medium">{selectedRule.max_unit_price} / {selectedRule.unit}</dd></div>
+                                <div><dt className="text-xs text-muted-foreground">Strategy</dt><dd className="font-medium">{selectedRule.strategy ?? "Legacy"}</dd></div>
                                 <div><dt className="text-xs text-muted-foreground">Priority</dt><dd className="font-medium">#{selectedRule.priority}</dd></div>
-                                {selectedRule.output_item && <div><dt className="text-xs text-muted-foreground">Output Item</dt><dd className="font-medium">{selectedRule.output_item_name ?? "—"}</dd></div>}
+                                {selectedRule.strategy === "STANDARD" && selectedRule.standard_item_name && <div><dt className="text-xs text-muted-foreground">Import Item</dt><dd className="font-medium">{selectedRule.standard_item_name}</dd></div>}
+                                <div><dt className="text-xs text-muted-foreground">Max Price</dt><dd className="font-medium">{selectedRule.max_unit_price} / {selectedRule.unit}</dd></div>
                             </dl>
-                            <AllocationStrategySummary value={selectedRule.id ? allocationByRule[selectedRule.id] : undefined} />
-                            <div><h3 className="mb-2 text-sm font-semibold">Match Logic</h3><ExpressionSummary group={selectedRule.expression} /></div>
+                            <AllocationStrategySummary rule={selectedRule} />
                             <div className="flex justify-end gap-2 border-t pt-3"><Button variant="outline" onClick={runSelectedTest} disabled={!!busy}><TestTube2 className="size-4" />Test Rule</Button><Button onClick={() => beginEdit(selectedRule)}><Pencil className="size-4" />Edit</Button></div>
                         </div> : <div className="grid flex-1 place-items-center p-8 text-sm text-muted-foreground">Select a rule to inspect its details.</div>}
                     </section>

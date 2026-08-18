@@ -456,8 +456,16 @@ class SionRulePlanningService:
             return preview
 
     @staticmethod
-    def plan_sion(sion_id, license_ids=None, *, company_id=None, mode="NEW"):
-        """Reload and execute all persisted active rules in DB priority order using generic engine."""
+    def plan_sion(sion_id, license_ids=None, *, company_id=None, mode="NEW", force_plan=False):
+        """Reload and execute all persisted active rules in DB priority order using generic engine.
+
+        Args:
+            sion_id: SION norm ID
+            license_ids: Optional list of license IDs to plan
+            company_id: Optional company ID for isolation
+            mode: Planning mode ("NEW" or "ALL")
+            force_plan: If True, bypass availability constraints and plan using SION rules only
+        """
         from apps.license.services.sion_planning_execution import (
             normalize_plan_mode, SionPlanningExecutionService, PlannerConfigurationError,
         )
@@ -470,7 +478,7 @@ class SionRulePlanningService:
             try:
                 return SionPlanningExecutionService.plan_sion(
                     sion, license_ids, company_id=company_id, persist=True,
-                    mode=mode,
+                    mode=mode, force_plan=force_plan,
                 )
             except PlannerConfigurationError as exc:
                 # No active rules: return NO_ACTIVE_PLANNING_RULES error response

@@ -1,15 +1,16 @@
 import logging
+import re
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Max, Q
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.permissions import LicensePermission
 from apps.core.models import ItemNameModel
-from apps.license.models import LicenseDetailsModel, SionPlanningAction, SionPlanningProfile, SionPlanningRule
+from apps.license.models import LicenseDetailsModel, SionInputAliasConfig, SionPlanningAction, SionPlanningProfile, SionPlanningRule
 from apps.license.serializers import SionPlanningRuleSerializer
 from apps.license.serializers.incentive import (
     BulkLicensePlanningSerializer, LicenseIdOnlySerializer,
@@ -215,6 +216,72 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             "sion", "created_by", "modified_by",
         ).all()
 
+    @action(detail=False, methods=("get",), url_path="import-items")
+    def import_items(self, request):
+        """Search active import items belonging to one exact SION norm."""
+        try:
+            sion_id = int(request.query_params.get("sion_id", ""))
+        except (TypeError, ValueError):
+            return Response(
+                {"sion_id": "A valid SION id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        items = ItemNameModel.objects.filter(
+            sion_norm_class_id=sion_id,
+            is_active=True,
+        ).select_related("sion_norm_class")
+        search = request.query_params.get("search", "").strip()
+        if search:
+            search_filter = Q(name__icontains=search) | Q(group__name__icontains=search)
+            scoped_aliases = SionInputAliasConfig.objects.filter(
+                Q(sion_id=sion_id) | Q(sion__isnull=True),
+                is_active=True,
+            )
+            canonical_codes = scoped_aliases.filter(
+                Q(canonical_input_code__icontains=search) | Q(alias_normalized__icontains=search)
+            ).values_list("canonical_input_code", flat=True)
+            aliases = scoped_aliases.filter(
+                canonical_input_code__in=canonical_codes,
+            ).values_list("alias_normalized", flat=True)
+            for alias in aliases:
+                search_filter |= Q(name__icontains=alias)
+            compact_search = re.sub(r"[^A-Za-z0-9]", "", search)
+            if 2 <= len(compact_search) <= 6:
+                acronym_pattern = r"(^|[^A-Za-z0-9])" + r"[A-Za-z0-9]*[^A-Za-z0-9]+".join(
+                    re.escape(character) for character in compact_search
+                )
+                search_filter |= Q(name__iregex=acronym_pattern)
+            items = items.filter(search_filter)
+
+        item_id = request.query_params.get("item_id")
+        if item_id:
+            try:
+                items = items.filter(pk=int(item_id))
+            except (TypeError, ValueError):
+                return Response(
+                    {"item_id": "A valid item id is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        items = items.order_by("display_order", "name")
+        page = self.paginate_queryset(items)
+        source = page if page is not None else items
+        data = [
+            {
+                "id": item.pk,
+                "name": item.name,
+                "sion_code": item.sion_norm_class.norm_class,
+            }
+            for item in source
+        ]
+        if page is not None:
+            response = self.get_paginated_response(data)
+        else:
+            response = Response(data)
+        response["Cache-Control"] = "no-store"
+        return response
+
     def _audit(self, event, *, rule=None, sion_id=None, extra=None):
         from apps.core.models import ActivityLog
         try:
@@ -252,11 +319,13 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         was_active = current.is_active
         serializer = self.get_serializer(current, data=request.data, partial=kwargs.pop("partial", False))
         serializer.is_valid(raise_exception=True)
+        unit_value_rows = serializer.validated_data.get("unit_value_rows")
+        percentage_rows = serializer.validated_data.get("percentage_rows")
         values = {
             field: serializer.validated_data.get(field, getattr(current, field))
             for field in (
                 "name", "expression", "max_unit_price", "unit", "is_active",
-                "execution_output", "output_item",
+                "execution_output", "import_item", "strategy",
             )
         }
         with transaction.atomic():
@@ -272,6 +341,24 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             )
             if not created.is_active:
                 SionRulePriorityService.normalize(current.sion_id)
+            if unit_value_rows is None:
+                unit_value_rows = [
+                    {"import_item": row.import_item, "min_unit_price": row.min_unit_price,
+                     "max_unit_price": row.max_unit_price, "preferred_unit_price": row.preferred_unit_price,
+                     "priority": row.priority}
+                    for row in current.unit_value_rows.all()
+                ]
+            if percentage_rows is None:
+                percentage_rows = [
+                    {"import_item": row.import_item, "percentage": row.percentage,
+                     "unit_price": row.unit_price, "max_quantity": row.max_quantity,
+                     "priority": row.priority}
+                    for row in current.percentage_rows.all()
+                ]
+            for row_data in unit_value_rows:
+                created.unit_value_rows.create(**row_data)
+            for row_data in percentage_rows:
+                created.percentage_rows.create(**row_data)
         event = (
             "RULE_DEACTIVATED" if not created.is_active
             else "RULE_ACTIVATED" if not was_active
@@ -319,158 +406,6 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 if output in categories:
                     return candidate
         return actions[0] if len(actions) == 1 else None
-
-    @action(detail=True, methods=("get", "patch"), url_path="allocation-strategy")
-    def allocation_strategy(self, request, pk=None):
-        """Read/update the rule's canonical profile SPLIT action; never copy it onto the rule."""
-        rule = self.get_object()
-        split_action = self._allocation_action_for(rule)
-        if request.method == "GET":
-            if not split_action or not split_action.is_active:
-                return Response({"strategy": "STANDARD", "action_id": getattr(split_action, "pk", None)})
-            action_config = split_action.config or {}
-            strategy = "SPLIT_BY_PERCENTAGE" if action_config.get("algorithm") == "SPLIT_BY_PERCENTAGE" else "SPLIT_BY_UNIT_VALUE"
-
-            if strategy == "SPLIT_BY_PERCENTAGE":
-                response_config = dict(action_config)
-                rows = action_config.get("rows", [])
-                if not rows:
-                    percentage_rules = SionPlanningRule.objects.filter(
-                        sion_id=rule.sion_id,
-                        output_item_id=rule.output_item_id,
-                        percentage_constraint__isnull=False,
-                    ).exclude(percentage_constraint=Decimal("0")).order_by("name") if rule.output_item_id else SionPlanningRule.objects.none()
-
-                    if percentage_rules.exists():
-                        total_pct = sum(Decimal(str(r.percentage_constraint)) for r in percentage_rules)
-                        if total_pct == Decimal("100"):
-                            response_config["rows"] = [
-                                {
-                                    "id": f"row-{r.pk}",
-                                    "input_item_id": r.output_item_id,
-                                    "output_code": (r.output_item.name if r.output_item else "").upper(),
-                                    "percentage": str(r.percentage_constraint),
-                                }
-                                for r in percentage_rules
-                            ]
-                    else:
-                        response_config["rows"] = rows
-
-                return Response({
-                    "strategy": strategy, "action_id": split_action.pk,
-                    "config": response_config,
-                })
-
-            return Response({
-                "strategy": strategy, "action_id": split_action.pk,
-                "config": action_config,
-            })
-
-        serializer = RuleAllocationStrategySerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        values = serializer.validated_data
-        with transaction.atomic():
-            if not split_action and values["strategy"] in ("SPLIT_BY_UNIT_VALUE", "SPLIT_BY_PERCENTAGE"):
-                profile = SionPlanningProfile.objects.filter(
-                    sion_id=rule.sion_id, is_active=True,
-                ).order_by("-version", "-pk").first()
-                if profile is None:
-                    profile = SionPlanningProfile.objects.create(
-                        sion_id=rule.sion_id,
-                        stable_key=f"{rule.sion.norm_class}:PROFILE:UI:{rule.pk}",
-                        strategy_type="ACTION_PIPELINE",
-                        config={},
-                        is_active=True,
-                        created_by=request.user,
-                        modified_by=request.user,
-                    )
-                next_priority = (profile.actions.aggregate(value=Max("priority"))["value"] or 0) + 1
-                split_action = SionPlanningAction.objects.create(
-                    profile=profile,
-                    stable_key=f"{rule.sion.norm_class}:RULE:{rule.pk}:SPLIT",
-                    action_type="SPLIT",
-                    priority=next_priority,
-                    config={
-                        "source_rule_id": rule.pk,
-                        "category": (rule.execution_output or rule.name).strip(),
-                    },
-                    is_active=False,
-                    created_by=request.user,
-                    modified_by=request.user,
-                )
-            if split_action is None:
-                return Response({"strategy": "STANDARD"})
-            split_action = SionPlanningAction.objects.select_for_update().get(pk=split_action.pk)
-            if values["strategy"] == "STANDARD":
-                split_action.is_active = False
-                split_action.modified_by = request.user
-                split_action.save(update_fields=("is_active", "modified_by", "modified_on"))
-                response = {"strategy": "STANDARD", "action_id": split_action.pk}
-            elif values["strategy"] == "SPLIT_BY_PERCENTAGE":
-                requested = values["config"]
-                config = dict(split_action.config or {})
-                config["source_rule_id"] = rule.pk
-                config["category"] = (rule.execution_output or rule.name).strip()
-                config["algorithm"] = "SPLIT_BY_PERCENTAGE"
-
-                rows = requested.get("rows", [])
-                if rows:
-                    config["rows"] = rows
-                elif not config.get("rows"):
-                    if rule.output_item_id:
-                        percentage_rules = SionPlanningRule.objects.filter(
-                            sion_id=rule.sion_id,
-                            output_item_id=rule.output_item_id,
-                            percentage_constraint__isnull=False,
-                        ).exclude(percentage_constraint=Decimal("0")).order_by("name")
-
-                        if percentage_rules.exists():
-                            total_pct = sum(Decimal(str(r.percentage_constraint)) for r in percentage_rules)
-                            if total_pct == Decimal("100"):
-                                config["rows"] = [
-                                    {
-                                        "id": f"row-{r.pk}",
-                                        "input_item_id": r.output_item_id,
-                                        "output_code": (r.output_item.name if r.output_item else "").upper(),
-                                        "percentage": str(r.percentage_constraint),
-                                    }
-                                    for r in percentage_rules
-                                ]
-
-                split_action.config = config
-                split_action.is_active = True
-                split_action.version += 1
-                split_action.modified_by = request.user
-                split_action.full_clean()
-                split_action.save(update_fields=(
-                    "config", "is_active", "version", "modified_by", "modified_on",
-                ))
-                response = {
-                    "strategy": "SPLIT_BY_PERCENTAGE", "action_id": split_action.pk,
-                    "config": split_action.config,
-                }
-            else:
-                # SPLIT_BY_UNIT_VALUE
-                requested = values["config"]
-                config = dict(split_action.config or {})
-                config["source_rule_id"] = rule.pk
-                config["category"] = (rule.execution_output or rule.name).strip()
-                for key in ("algorithm", "basis", "buckets"):
-                    config[key] = requested[key]
-                split_action.config = config
-                split_action.is_active = True
-                split_action.version += 1
-                split_action.modified_by = request.user
-                split_action.full_clean()
-                split_action.save(update_fields=(
-                    "config", "is_active", "version", "modified_by", "modified_on",
-                ))
-                response = {
-                    "strategy": "SPLIT_BY_UNIT_VALUE", "action_id": split_action.pk,
-                    "config": split_action.config,
-                }
-        self._audit("RULE_ALLOCATION_UPDATED", rule=rule, extra={"strategy": values["strategy"]})
-        return Response(response)
 
     def _execute(self, request, *, persist):
         try:
@@ -605,6 +540,58 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
 
         return license_obj, sion_ids
 
+    @staticmethod
+    def _resolve_sion_for_license(license_id):
+        """Load license and determine its single SION norm.
+
+        Enforces the one-license-one-SION rule: a license must resolve to
+        exactly one SION norm, no more, no less.
+
+        Returns: (license_obj, sion_id)
+        Raises: PlanningError if no SION or multiple SIONs found
+        """
+        license_obj = (
+            LicenseDetailsModel.objects
+            .filter(pk=license_id)
+            .select_related("exporter")
+            .prefetch_related("export_license__norm_class")
+            .first()
+        )
+        if not license_obj:
+            raise PlanningError(
+                f"License {license_id} not found.",
+                code="LICENSE_NOT_FOUND",
+            )
+
+        export_items = license_obj.export_license.all()
+        if not export_items.exists():
+            raise PlanningError(
+                f"License {license_id} has no export manifest.",
+                code="NO_EXPORT_MANIFEST",
+            )
+
+        sion_ids = sorted(set(
+            item.norm_class_id
+            for item in export_items
+            if item.norm_class_id is not None
+        ))
+
+        if not sion_ids:
+            raise PlanningError(
+                f"License {license_obj.license_number} has no SION norm.",
+                code="NO_SION",
+            )
+
+        unique_sion_ids = set(sion_ids)
+        if len(unique_sion_ids) > 1:
+            raise PlanningError(
+                f"License {license_obj.license_number} resolves to multiple SION norms. "
+                "A license must have exactly one SION.",
+                code="MULTIPLE_SIONS",
+            )
+
+        return license_obj, next(iter(unique_sion_ids))
+
     @action(detail=False, methods=("post",), url_path="plan-license")
     def plan_license(self, request):
         """Plan a single license through all applicable SION norms.
@@ -679,4 +666,3 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 ),
             },
         })
-

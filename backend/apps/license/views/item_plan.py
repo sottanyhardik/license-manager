@@ -104,7 +104,7 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
     """Manage a licence's per-item utilization plan."""
     queryset = (
         LicenseItemPlan.objects
-        .select_related("import_item", "import_item__license", "license")
+        .select_related("import_item", "import_item__license", "item_name", "license")
         .all()
     )
     serializer_class = LicenseItemPlanSerializer

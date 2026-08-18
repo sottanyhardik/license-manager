@@ -179,6 +179,10 @@ class InsufficientQuantityError(PlanningError):
     code = "INSUFFICIENT_QUANTITY"
 
 
+class SplitPercentIncompleteError(PlanningError):
+    code = "SPLIT_PERCENT_INCOMPLETE"
+
+
 class SionPlanningError(PlanningError):
     """Invalid or inapplicable single-SION batch request."""
     code = "SION_PLANNING_ERROR"
@@ -353,6 +357,99 @@ class CanonicalPlanningService:
                 ),
             }
             return result
+
+    @staticmethod
+    def build_theoretical_strategy_plan(
+        license_id: int,
+        norm_class: str,
+        items: Iterable[Dict[str, Any]],
+        total_cif_ceiling,
+        company_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Persist a full strategy-driven plan without live-balance waterfall caps.
+
+        New strategy rules describe the theoretical plan itself. Availability,
+        allotment, debit and current balance belong to later reconciliation and
+        therefore must not alter these rows during generation.
+        """
+        normalized = CanonicalPlanningService._normalize_request(items)
+        ceiling = quantize_cif(total_cif_ceiling)
+        with transaction.atomic():
+            license_obj = CanonicalPlanningService._lock_license(license_id)
+            CanonicalPlanningService._assert_company_isolation(license_obj, company_id)
+            items_by_id = {
+                item.pk: item
+                for item in LicenseImportItemsModel.objects.select_for_update(of=("self",)).filter(
+                    license_id=license_obj.pk,
+                )
+            }
+            CanonicalPlanningService._assert_items_belong_to_license(
+                normalized, items_by_id, license_obj,
+            )
+
+            allocated_items = []
+            for row in normalized:
+                planned_cif = quantize_cif(row["requested_quantity"] * row["requested_unit_price"])
+                allocated_items.append({
+                    **row,
+                    "allocated_quantity": row["requested_quantity"],
+                    "unit_price": row["requested_unit_price"],
+                    "planned_cif_fc": planned_cif,
+                    "status": LINE_ALLOCATED,
+                })
+            consumed = sum((row["planned_cif_fc"] for row in allocated_items), DEC_0)
+            excess_cif = max(consumed - ceiling, DEC_0)
+            review_status = (
+                "MANUAL_PLANNING_REQUIRED" if excess_cif > DEC_0 else "READY"
+            )
+
+            plan_lines = [{
+                "import_item": row["import_item_id"],
+                "item_name": row["item_name_id"],
+                "planned_quantity": row["allocated_quantity"],
+                "unit_price": row["unit_price"],
+                "planned_cif_fc": row["planned_cif_fc"],
+                "note": row["note"],
+                "planning_rule_id": row["planning_rule_id"],
+                "planning_rule_version": row["planning_rule_version"],
+                "planning_rule_priority": row["planning_rule_priority"],
+                "allocation_provenance": row["allocation_provenance"],
+            } for row in allocated_items if row["allocated_quantity"] > DEC_000]
+            created = save_plan_lines_for_license(license_obj, plan_lines, delete_existing=True)
+            return {
+                "plan_id": CanonicalPlanningService._compute_plan_id(
+                    license_obj.pk, norm_class.strip().upper(), allocated_items,
+                ),
+                "license_id": license_obj.pk,
+                "norm_class": norm_class.strip().upper(),
+                "status": review_status if excess_cif > DEC_0 else STATUS_PLANNED,
+                "theoretical_plan_generated": True,
+                "review_status": review_status,
+                "review_reason": "TOTAL_CIF_EXCEEDED" if excess_cif > DEC_0 else None,
+                "excess_cif": excess_cif,
+                "allocated_items": allocated_items,
+                "allocation_summary": {
+                    "opening_balance_cif": ceiling,
+                    "consumed_cif": consumed,
+                    "remaining_balance_cif": ceiling - consumed,
+                    "total_theoretical_cif": consumed,
+                    "license_total_cif": ceiling,
+                    "excess_cif": excess_cif,
+                    "review_status": review_status,
+                    "review_reason": "TOTAL_CIF_EXCEEDED" if excess_cif > DEC_0 else None,
+                    "total_requested_quantity": sum(
+                        (row["requested_quantity"] for row in allocated_items), DEC_000,
+                    ),
+                    "total_allocated_quantity": sum(
+                        (row["allocated_quantity"] for row in allocated_items), DEC_000,
+                    ),
+                    "items_requested": len(allocated_items),
+                    "lines_created": len(created),
+                    "items_zero_quantity": 0,
+                    "fully_allocated": True,
+                    "theoretical_strategy_plan": True,
+                },
+            }
 
     # Convenience alias — mirrors the Module 1 naming
     # (``build_canonical_ledger_dataset``) for callers that prefer the long form.

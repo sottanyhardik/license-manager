@@ -1,6 +1,6 @@
 /**
- * PlanningEditor — shared planning core used by both PlanTab and
- * LicensePlanningPanel (modal).
+ * PlanningEditor — shared planning core used by both License Overview
+ * and LicensePlanningPanel (modal).
  *
  * Behaviour (Notion / Airtable / GitHub Projects pattern):
  *   • Always in view mode — a clean read-only table.
@@ -61,7 +61,7 @@ import {
     fetchItemPlans,
     fetchLicense,
 } from "../../services/api/licenseApi";
-import { planLicense } from "../../services/api/planningRuleApi";
+import { autoPlanLicense, planLicense } from "../../services/api/planningRuleApi";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure helpers
@@ -88,12 +88,12 @@ const emptySplit = (): Split => ({
 const validSplitsOf = (g: Group): Split[] =>
     g.splits.filter((sp) => num(sp.planned_quantity) > 0 || num(sp.planned_cif_fc) > 0);
 
-// Resolve a split's stored item_name (an id, as string) to its display label.
-// Falls back to "Split N" — same fallback the Excel exporter uses — for splits
-// saved without a specific item name tag.
+// Prefer the plan API's authoritative item-name label. The parent group's
+// selectable names are only a compatibility fallback for older responses.
 const splitLabel = (sp: Split, group: Group, index: number): string => {
+    if (sp.planning_item_name) return sp.planning_item_name;
     const name = group.itemNames.find((n) => String(n.id) === sp.item_name)?.name;
-    return name || `Split ${index + 1}`;
+    return name || `Planning item ${index + 1}`;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +104,7 @@ interface Split {
     key: string;
     id: number | null;
     item_name: string;
+    planning_item_name?: string | null;
     planned_quantity: string;
     unit_price: string;
     planned_cif_fc: string;
@@ -431,6 +432,7 @@ export default function PlanningEditor({
     const [groups, setGroups]             = useState<Group[]>([]);
     const [savedGroups, setSavedGroups]   = useState<Group[]>([]);
     const [poolBalance, setPoolBalance]   = useState(Number(balanceCif) || 0);
+    const [licenseTotalCif, setLicenseTotalCif] = useState(Number(balanceCif) || 0);
 
     const [editingGroupId, setEditingGroupId]   = useState<number | null>(null);
     const [savingGroupId, setSavingGroupId]     = useState<number | null>(null);
@@ -457,6 +459,7 @@ export default function PlanningEditor({
             ]);
             const planList: {
                 id: number; import_item: number; item_name?: number | null;
+                planning_item_name?: string | null; item_name_label?: string | null;
                 planned_quantity?: number | null; unit_price?: number | null;
                 planned_cif_fc?: number | null; note?: string | null;
                 modified_on?: string | null; modified_by_username?: string | null;
@@ -467,6 +470,7 @@ export default function PlanningEditor({
                 (splitsByItem[p.import_item] ||= []).push({
                     key: nextKey(), id: p.id,
                     item_name:        p.item_name != null ? String(p.item_name) : "",
+                    planning_item_name: p.planning_item_name ?? p.item_name_label ?? null,
                     planned_quantity: p.planned_quantity != null ? String(p.planned_quantity) : "",
                     unit_price:       p.unit_price != null ? String(p.unit_price) : "",
                     planned_cif_fc:   p.planned_cif_fc != null ? String(p.planned_cif_fc) : "",
@@ -534,6 +538,12 @@ export default function PlanningEditor({
             setGroups(built);
             setSavedGroups(JSON.parse(JSON.stringify(built)));
             setPoolBalance(Number(license?.balance_cif ?? balanceCif) || 0);
+            const exportItems = Array.isArray(license?.export_license) ? license.export_license : [];
+            const totalCif = exportItems.reduce(
+                (sum: number, item: { cif_fc?: string | number | null }) => sum + Number(item.cif_fc ?? 0),
+                0,
+            );
+            setLicenseTotalCif(totalCif || Number(license?.total_cif ?? balanceCif) || 0);
             setEditingGroupId(null);
         } catch { toast.error("Failed to load plan data"); }
         finally { setLoading(false); }
@@ -704,7 +714,48 @@ export default function PlanningEditor({
         }
     }, [licenseId, isPlanning, load, onSaved]);
 
-    const handleAutoPlan = () => handlePlan("NEW");
+    const handleAutoPlan = useCallback(async () => {
+        if (!licenseId || isPlanning) {
+            return;
+        }
+        setIsPlanning(true);
+        try {
+            const result = await autoPlanLicense(Number(licenseId));
+            const linesWritten = result?.total_lines_written || 0;
+            const sionCode = result?.sion_code || 'Unknown';
+
+            let message = "";
+            if (linesWritten === 0) {
+                // Check if there are diagnostics explaining why no items were planned
+                const diagnostics = (result as any)?.diagnostics;
+                if (diagnostics && diagnostics.skip_reasons && diagnostics.skip_reasons.length > 0) {
+                    const reasons = diagnostics.skip_reasons
+                        .map((r: any) => `${r.item_key}: ${r.reason}`)
+                        .join('; ');
+                    message = `Planning completed for ${sionCode}: No items planned. Reasons: ${reasons}`;
+                    console.warn('[Auto Plan] Skip reasons:', diagnostics.skip_reasons);
+                } else {
+                    message = `Planning completed for ${sionCode}: No new eligible items were found.`;
+                }
+            } else {
+                message = `Auto-planning completed for ${sionCode}: ${linesWritten} line${linesWritten !== 1 ? 's' : ''} planned`;
+            }
+
+            toast.success(message);
+            await load();
+            onSaved?.();
+        } catch (error) {
+            console.error('[Auto Plan] Error caught:', error);
+            const message = error && typeof error === 'object' && 'response' in error
+                ? (error as any).response?.data?.message || (error as any).response?.data?.error || (error as any).response?.data?.detail || 'Failed to auto-plan license'
+                : 'Failed to auto-plan license';
+            console.error('[Auto Plan] Error message:', message);
+            toast.error(message);
+        } finally {
+            setIsPlanning(false);
+        }
+    }, [licenseId, isPlanning, load, onSaved]);
+
     const handleForceReplan = () => setShowForceConfirm(true);
 
     // ── Derived totals ─────────────────────────────────────────────────────────
@@ -733,10 +784,10 @@ export default function PlanningEditor({
         return {
             totalAvail, totalPlanned,
             remaining: totalAvail - totalPlanned,
-            totalCif, cifRemaining: poolBalance - totalCif,
+            totalCif, cifRemaining: licenseTotalCif - totalCif,
             lastUpdatedLabel,
         };
-    }, [groups, poolBalance]);
+    }, [groups, licenseTotalCif]);
 
     const anyPlanExists = groups.some((g) => g.splits.some((s) => s.id !== null));
 
@@ -772,6 +823,7 @@ export default function PlanningEditor({
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
+                        type="button"
                         onClick={handleAutoPlan}
                         disabled={isPlanning}
                         size="sm"
@@ -797,8 +849,15 @@ export default function PlanningEditor({
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={handleAutoPlan} disabled={isPlanning}>
-                                Auto Plan — New Only
+                            <DropdownMenuItem asChild>
+                                <button
+                                    type="button"
+                                    onClick={handleAutoPlan}
+                                    disabled={isPlanning}
+                                    className="w-full cursor-pointer"
+                                >
+                                    Auto Plan — New Only
+                                </button>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={handleForceReplan} disabled={isPlanning}>
                                 Force Re-plan
@@ -831,12 +890,22 @@ export default function PlanningEditor({
 
             {/* ── Summary cards (CIF only) ──────────────────────────── */}
             <div className="grid grid-cols-3 gap-2">
-                <SummaryCard label="Balance CIF"   value={fmtUsd(poolBalance)} variant="muted" />
-                <SummaryCard label="Planned CIF"   value={fmtUsd(totals.totalCif)} variant={totals.totalCif > 0 ? "primary" : "muted"} />
-                <SummaryCard label="Remaining CIF"
-                    value={fmtUsd(Math.max(0, totals.cifRemaining))}
-                    variant={totals.cifRemaining < -1e-6 ? "danger" : totals.totalCif > 0 ? "success" : "muted"} />
+                <SummaryCard label="License Total CIF" value={fmtUsd(licenseTotalCif)} variant="muted" />
+                <SummaryCard label="Theoretical Planned CIF" value={fmtUsd(totals.totalCif)} variant={totals.totalCif > 0 ? "primary" : "muted"} />
+                <SummaryCard
+                    label={totals.cifRemaining < -1e-6 ? "Excess CIF" : "Unused CIF"}
+                    value={fmtUsd(Math.abs(totals.cifRemaining))}
+                    variant={totals.cifRemaining < -1e-6 ? "danger" : totals.totalCif > 0 ? "success" : "muted"}
+                />
             </div>
+            {totals.cifRemaining < -1e-6 && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+                    <div className="font-semibold text-destructive">Manual Planning Required</div>
+                    <div className="text-xs text-muted-foreground">
+                        The theoretical plan exceeds License Total CIF by {fmtUsd(Math.abs(totals.cifRemaining))}. Reason: TOTAL_CIF_EXCEEDED.
+                    </div>
+                </div>
+            )}
 
             {/* ── Planned Items table ──────────────────────────────── */}
             <div className="overflow-hidden rounded-xl border border-border/60">
@@ -1017,9 +1086,7 @@ export default function PlanningEditor({
                                                 <td className="px-4 py-1.5" />
                                                 <td className="px-4 py-1.5" />
                                                 <td className="px-4 py-1.5">
-                                                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9.5px] font-semibold text-muted-foreground">
-                                                        Split {si + 1}
-                                                    </span>
+                                                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9.5px] font-semibold text-muted-foreground">Planned</span>
                                                 </td>
                                                 <td className="px-4 py-1.5" />
                                                 <td className="px-4 py-1.5 text-right text-[12px] tabular-nums">{fmtQty(num(sp.planned_quantity))}</td>

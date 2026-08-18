@@ -4,8 +4,9 @@ export interface RuleFormErrors extends Record<string, any> {
     name?: string;
     max_unit_price?: string;
     unit?: string;
-    expression?: string;
-    output_item?: string;
+    import_item?: string;
+    unit_value_rows?: string;
+    percentage_rows?: string;
     split?: string;
     split_buckets?: Record<number, Record<string, string>>;
     residual_policy?: string;
@@ -40,18 +41,25 @@ export function validatePlanningRule(
         errors.unit = "Unit is required";
     }
 
-    // Validate expression (at least one condition)
-    if (!rule.expression || !rule.expression.conditions || rule.expression.conditions.length === 0) {
-        errors.expression = "At least one match condition is required";
+    const strategy = allocation?.strategy ?? rule.strategy ?? "STANDARD";
+    if (strategy === "STANDARD" && !allocation?.import_item) {
+        errors.import_item = "Import item is required";
     }
-
-    // Validate output_item (required for most strategies)
-    if (!rule.output_item) {
-        errors.output_item = "Output item is required";
+    if (strategy === "SPLIT_BY_UNIT_VALUE" && !allocation?.unit_value_rows?.length) {
+        errors.unit_value_rows = "Add at least one import item";
+    }
+    if (strategy === "SPLIT_BY_PERCENT") {
+        const rows = allocation?.percentage_rows ?? [];
+        if (!rows.length) errors.percentage_rows = "Add at least one import item";
+        else if (Math.abs(rows.reduce((sum, row) => sum + Number(row.percentage || 0), 0) - 100) > 0.001) {
+            errors.percentage_rows = "Percentages must total 100%";
+        }
+        const ids = rows.map((row) => row.import_item).filter(Boolean);
+        if (new Set(ids).size !== ids.length) errors.percentage_rows = "Each import item may only be selected once";
     }
 
     // Validate split allocation if applicable
-    if (allocation && allocation.strategy === "SPLIT_BY_UNIT_VALUE" && allocation.config) {
+    if (allocation && allocation.strategy === "SPLIT_BY_UNIT_VALUE" && allocation.config && "buckets" in allocation.config) {
         const { buckets } = allocation.config;
 
         if (!Array.isArray(buckets) || buckets.length < 2) {

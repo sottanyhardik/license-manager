@@ -16,7 +16,7 @@ import { useLicenseOverviewSummary } from "./useLicenseOverviewSummary";
 import OverviewTab from "./OverviewTab";
 import BoesTab from "./BoesTab";
 import AllotmentsTab from "./AllotmentsTab";
-import PlanningTab from "./PlanningTab";
+import PlanningEditor from "@/components/planning/PlanningEditor";
 import ItemsTab from "./ItemsTab";
 import InvoiceLedgerTab from "./InvoiceLedgerTab";
 
@@ -152,7 +152,14 @@ export default function LicenseOverviewPage() {
                     <AllotmentsTab licenseId={id} isActive={activeTab === "allotments"} />
                 </TabsContent>
                 <TabsContent value="planning">
-                    <PlanningTab licenseId={id} isActive={activeTab === "planning"} />
+                    {id && (
+                        <PlanningEditor
+                            licenseId={parseInt(id, 10)}
+                            licenseNumber={summary?.license_number || ""}
+                            balanceCif={summary?.balance_cif ? parseFloat(String(summary.balance_cif)) : 0}
+                            canWrite={true}
+                        />
+                    )}
                 </TabsContent>
                 <TabsContent value="items">
                     <ItemsTab licenseId={id} isActive={activeTab === "items"} />

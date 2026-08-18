@@ -1,7 +1,9 @@
 # license/views/license.py
 import logging
+from django.db import transaction
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework import status
 
 logger = logging.getLogger(__name__)
 
@@ -759,6 +761,89 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         from apps.license.services.exporters.license_balance_excel import build_balance_excel_unused
         license_obj = self.get_object()
         return build_balance_excel_unused(license_obj)
+
+    @action(detail=True, methods=['post'], url_path='auto-plan')
+    def auto_plan(self, request, pk=None):
+        """Auto-plan a single license using its single SION norm.
+
+        POST /api/licenses/{license_id}/auto-plan/
+
+        Loads the license from the URL, resolves its single SION norm,
+        runs the shared planning engine, atomically rebuilds the saved
+        plan for that license, and returns the result.
+        """
+        from django.db import transaction
+        from rest_framework import status
+        from apps.license.services.canonical_planning_service import PlanningError
+        from apps.license.services.sion_rule_engine import SionRulePlanningService
+        from apps.license.views.sion_planning_rule import SionPlanningRuleViewSet
+
+        license_obj = self.get_object()
+
+        try:
+            _, sion_id = SionPlanningRuleViewSet._resolve_sion_for_license(
+                license_obj.pk
+            )
+        except PlanningError as exc:
+            return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                result = SionRulePlanningService.plan_sion(
+                    sion_id,
+                    license_ids=[license_obj.pk],
+                    mode="ALL",
+                    force_plan=True,
+                )
+        except PlanningError as exc:
+            return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
+
+        total_lines_written = sum(
+            wr.get("allocation_summary", {}).get("lines_created", len(wr.get("allocated_items", [])))
+            for wr in result.get("write_results", [])
+        )
+
+        manual_results = [
+            row for row in result.get("write_results", [])
+            if row.get("review_status") == "MANUAL_PLANNING_REQUIRED"
+        ]
+        response_data = {
+            "license_id": license_obj.pk,
+            "license_number": license_obj.license_number,
+            "status": (
+                "MANUAL_PLANNING_REQUIRED" if manual_results
+                else "EXECUTED" if result.get("write_results") else "SKIPPED"
+            ),
+            "sion_id": sion_id,
+            "sion_code": result.get("sion"),
+            "rules_executed": result.get("rules_executed", []),
+            "write_results": result.get("write_results", []),
+            "total_lines_written": total_lines_written,
+            "theoretical_plan_generated": bool(result.get("write_results")),
+        }
+        if manual_results:
+            summary = manual_results[0].get("allocation_summary", {})
+            response_data.update({
+                "review_status": "MANUAL_PLANNING_REQUIRED",
+                "review_reason": "TOTAL_CIF_EXCEEDED",
+                "total_theoretical_cif": summary.get("total_theoretical_cif"),
+                "license_total_cif": summary.get("license_total_cif"),
+                "excess_cif": summary.get("excess_cif"),
+            })
+
+        # Add diagnostic metadata if available (especially for understanding why planning failed)
+        if result.get("metadata"):
+            metadata = result["metadata"]
+            if metadata.get("warning"):
+                response_data["warning"] = metadata["warning"]
+            if metadata.get("skip_reasons") and not result.get("write_results"):
+                response_data["diagnostics"] = {
+                    "total_records_evaluated": metadata.get("total_records_evaluated", 0),
+                    "total_rows_planned": metadata.get("total_rows_planned", 0),
+                    "skip_reasons": metadata.get("skip_reasons", []),
+                }
+
+        return Response(response_data)
 
     @action(detail=True, methods=['get'], url_path='merged-documents')
     def merged_documents(self, request, pk=None):

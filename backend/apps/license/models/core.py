@@ -1312,10 +1312,10 @@ class SionPlanningRule(AuditModel):
         max_length=120, blank=True, default="",
         help_text="Legacy execution bucket supplied by the SION planning profile/UI.",
     )
-    output_item = models.ForeignKey(
+    import_item = models.ForeignKey(
         "core.ItemNameModel", on_delete=models.PROTECT, null=True, blank=True,
         related_name="sion_planning_rules",
-        help_text="Where matched items are allocated to",
+        help_text="Import item this rule plans (STANDARD strategy)",
     )
     name = models.CharField(max_length=255)
     version = models.PositiveIntegerField(default=1)
@@ -1335,7 +1335,7 @@ class SionPlanningRule(AuditModel):
         max_length=50,
         choices=[
             ('PERCENTAGE_CAP', 'Master percentage cap'),
-            ('SPLIT_PERCENTAGE', 'Split by percentage'),
+            ('SPLIT_BY_PERCENTAGE', 'Split by percentage'),
             ('QUANTITY_CAP', 'Quantity cap'),
         ],
         default='PERCENTAGE_CAP',
@@ -1347,6 +1347,18 @@ class SionPlanningRule(AuditModel):
         blank=True,
         db_index=True,
         help_text='Identifier for grouping related rules (e.g., "E126_50_50_split")'
+    )
+    strategy = models.CharField(
+        max_length=30,
+        choices=[
+            ('STANDARD', 'Standard'),
+            ('SPLIT_BY_UNIT_VALUE', 'Split by Unit Value'),
+            ('SPLIT_BY_PERCENT', 'Split by %'),
+        ],
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='Planning strategy for this rule (null = legacy dispatch path)',
     )
 
     class Meta:
@@ -1374,6 +1386,75 @@ class SionPlanningRule(AuditModel):
 
     def __str__(self):
         return f"{self.sion.norm_class}: {self.name} v{self.version}"
+
+
+class SionPlanningUnitValueRow(AuditModel):
+    """Unit-Value allocation row: one import item with min/max/preferred price band."""
+    rule = models.ForeignKey(
+        SionPlanningRule, on_delete=models.CASCADE, related_name="unit_value_rows"
+    )
+    import_item = models.ForeignKey(
+        "core.ItemNameModel", on_delete=models.PROTECT, related_name="+"
+    )
+    min_unit_price = models.DecimalField(
+        max_digits=15, decimal_places=2, validators=[MinValueValidator(DEC_0)]
+    )
+    max_unit_price = models.DecimalField(
+        max_digits=15, decimal_places=2, validators=[MinValueValidator(DEC_0)]
+    )
+    preferred_unit_price = models.DecimalField(
+        max_digits=15, decimal_places=2, validators=[MinValueValidator(DEC_0)]
+    )
+    priority = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("rule_id", "priority", "pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("rule", "import_item"), name="uniq_unit_value_row_per_item"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(max_unit_price__gte=models.F("min_unit_price")),
+                name="unit_value_max_gte_min",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(preferred_unit_price__gte=models.F("min_unit_price"))
+                & models.Q(preferred_unit_price__lte=models.F("max_unit_price")),
+                name="unit_value_preferred_in_range",
+            ),
+        ]
+
+
+class SionPlanningPercentageRow(AuditModel):
+    """Percentage allocation row: one import item with percentage + unit price."""
+    rule = models.ForeignKey(
+        SionPlanningRule, on_delete=models.CASCADE, related_name="percentage_rows"
+    )
+    import_item = models.ForeignKey(
+        "core.ItemNameModel", on_delete=models.PROTECT, related_name="+"
+    )
+    percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(DEC_0), MaxValueValidator(Decimal("100"))],
+    )
+    unit_price = models.DecimalField(
+        max_digits=15, decimal_places=2, validators=[MinValueValidator(DEC_0)]
+    )
+    max_quantity = models.DecimalField(
+        max_digits=15, decimal_places=3, null=True, blank=True,
+        validators=[MinValueValidator(DEC_000)],
+        help_text="Optional theoretical quantity ceiling applied after the percentage split.",
+    )
+    priority = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("rule_id", "priority", "pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("rule", "import_item"), name="uniq_percentage_row_per_item"
+            ),
+        ]
 
 
 class SionInputAliasConfig(AuditModel):

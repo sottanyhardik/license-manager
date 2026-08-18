@@ -1,17 +1,23 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render as testingLibraryRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LicensePlanningWorkspace, { planningPath } from "./LicensePlanningWorkspace";
 import * as rulesApi from "@/services/api/planningRuleApi";
 
 vi.mock("@/api/axios", () => ({ default: { get: vi.fn().mockResolvedValue({ data: [{ id: 6, norm_class: "E1" }, { id: 7, norm_class: "E5" }] }) } }));
-vi.mock("@/services/api/planningRuleApi", () => ({ fetchSionPlanningRules: vi.fn(), createSionPlanningRule: vi.fn(), updateSionPlanningRule: vi.fn(), fetchRuleAllocationStrategy: vi.fn(), updateRuleAllocationStrategy: vi.fn(), testSionPlanningRule: vi.fn(), previewSavedSionRules: vi.fn(), planSavedSionRules: vi.fn(), reorderSionPlanningRules: vi.fn() }));
-const existing = { id: 4, sion: 7, name: "Sugar rule", expression: { operator: "AND" as const, conditions: [{ field: "HSN" as const, comparator: "CONTAINS" as const, value: "1701" }] }, max_unit_price: "2.70", unit: "KG", priority: 10, is_active: true };
+vi.mock("@/services/api/planningRuleApi", () => ({ fetchSionPlanningRules: vi.fn(), createSionPlanningRule: vi.fn(), updateSionPlanningRule: vi.fn(), searchSionImportItems: vi.fn(), fetchSionImportItem: vi.fn(), testSionPlanningRule: vi.fn(), previewSavedSionRules: vi.fn(), planSavedSionRules: vi.fn(), reorderSionPlanningRules: vi.fn() }));
+const existing = { id: 4, sion: 7, name: "Sugar rule", expression: { operator: "AND" as const, conditions: [{ field: "HSN" as const, comparator: "CONTAINS" as const, value: "1701" }] }, max_unit_price: "2.70", unit: "KG", priority: 10, is_active: true, strategy: "STANDARD" as const, import_item: 101, standard_item_name: "Sugar - E5", unit_value_rows: [], percentage_rows: [] };
 const groupedPreview = { sion: "E5", mode: "NEW" as const, rules_processed: 2, summary: { licenses_matched: 1, licenses_new: 0, licenses_changed: 1, licenses_unchanged: 0, licenses_shortage: 0, rules_processed: 2 }, licenses: [{ license_id: 42, license_number: "LIC-42", sion: "E5", matched_item_count: 2, matched_rule_count: 2, matched_rule_priorities: [1, 2], existing_plan_summary: "10 KG", proposed_plan_summary: "12 KG", existing_plan: {}, proposed_plan: {}, change_status: "CHANGE" as const, has_shortage: false, status: "FEASIBLE", items: [{ item_id: 1, rule_priority: 1, rule_name: "Sugar rule", item_name: "Sugar", hsn_code: "1701", unit: "KG", available_qty: "10.000", existing_planned_qty: "8.000", proposed_planned_qty: "10.000", max_unit_price: "2.70", status: "FEASIBLE" }, { item_id: 2, rule_priority: 2, rule_name: "WPC rule", item_name: "WPC", hsn_code: "3502", available_qty: "2.000", existing_planned_qty: "2.000", proposed_planned_qty: "2.000", max_unit_price: "25.00" }] }], conflicts: [] };
 
+const render = (ui: React.ReactElement) => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    return testingLibraryRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+};
+
 describe("SION-first planning workspace", () => {
-    beforeEach(() => { vi.clearAllMocks(); vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([existing]); vi.mocked(rulesApi.fetchRuleAllocationStrategy).mockResolvedValue({ strategy: "STANDARD" }); vi.mocked(rulesApi.updateSionPlanningRule).mockResolvedValue(existing); vi.mocked(rulesApi.testSionPlanningRule).mockResolvedValue(groupedPreview); vi.mocked(rulesApi.previewSavedSionRules).mockResolvedValue(groupedPreview); });
+    beforeEach(() => { vi.clearAllMocks(); vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([existing]); vi.mocked(rulesApi.searchSionImportItems).mockResolvedValue({ items: [], nextPage: null }); vi.mocked(rulesApi.fetchSionImportItem).mockResolvedValue({ id: 101, name: "Sugar - E5" }); vi.mocked(rulesApi.updateSionPlanningRule).mockResolvedValue(existing); vi.mocked(rulesApi.testSionPlanningRule).mockResolvedValue(groupedPreview); vi.mocked(rulesApi.previewSavedSionRules).mockResolvedValue(groupedPreview); });
     it("preserves optional license context in the route", () => expect(planningPath(42, "/licenses")).toBe("/planning?license_id=42&origin=%2Flicenses"));
     it("is SION-first and loads existing rules after selection", async () => {
         render(<MemoryRouter initialEntries={["/planning?license_id=42"]}><LicensePlanningWorkspace /></MemoryRouter>);
@@ -23,22 +29,15 @@ describe("SION-first planning workspace", () => {
         expect(screen.getByLabelText("Rule logic")).toHaveValue("AND");
     });
     it("shows a DB-backed split badge, detail summary, and editable planning strategy", async () => {
-        vi.mocked(rulesApi.fetchRuleAllocationStrategy).mockResolvedValue({
-            strategy: "SPLIT_BY_UNIT_VALUE", config: {
-                algorithm: "SPLIT_BY_UNIT_VALUE", basis: "BALANCE_CIF_PER_QUANTITY",
-                buckets: [
-                    { code: "SWP", min_price: "0.00", max_price: "1.50", reference_price: "1.50" },
-                    { code: "DWP", min_price: "1.50", max_price: "6.50", reference_price: "6.50" },
-                ],
-            },
-        });
+        vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...existing, strategy: "SPLIT_BY_UNIT_VALUE", unit_value_rows: [{ import_item: 101, min_unit_price: "0.00", max_unit_price: "1.50", preferred_unit_price: "1.50", priority: 0 }] }]);
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
         expect(await screen.findByText("Split")).toBeInTheDocument();
         expect(screen.getByText("Split by Unit Value")).toBeInTheDocument();
-        expect(screen.getByText("0.00 – 1.50 · Reference 1.50")).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Edit" }));
         expect(await screen.findByLabelText("Allocation strategy")).toHaveValue("SPLIT_BY_UNIT_VALUE");
-        expect(screen.getByLabelText("SWP max price")).toHaveValue("1.50");
+        expect(await screen.findByText("Sugar - E5")).toBeInTheDocument();
+        expect(screen.getByDisplayValue("0.00")).toBeInTheDocument();
+        expect(screen.getAllByDisplayValue("1.50")).toHaveLength(2);
     });
     it("never submits a blank max price and seeds it from a new split configuration", async () => {
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
@@ -47,7 +46,8 @@ describe("SION-first planning workspace", () => {
         expect(screen.getByLabelText("Maximum unit price")).toHaveAttribute("aria-invalid", "true");
         expect(save).toBeDisabled();
         await userEvent.selectOptions(screen.getByLabelText("Allocation strategy"), "SPLIT_BY_UNIT_VALUE");
-        expect(screen.getByLabelText("Maximum unit price")).toHaveValue("6.50");
+        expect(screen.getByLabelText("Maximum unit price")).toHaveValue("");
+        expect(save).toBeDisabled();
     });
     it("renders a mixed ANY expression exactly as returned and keeps edit semantics identical", async () => {
         vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...existing, priority: 2, expression: { operator: "OR", conditions: [
@@ -55,12 +55,8 @@ describe("SION-first planning workspace", () => {
             { field: "PRODUCT_DESCRIPTION", operator: "CONTAINS", value: "1803" },
         ] } }]);
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
-
-        expect(await screen.findByText("ANY", { exact: false })).toHaveTextContent("ANY · 2 items");
-        expect(screen.getByText((_, element) => element?.tagName === "P" && element.textContent === "HSN contains 1803")).toBeInTheDocument();
-        expect(screen.getByText((_, element) => element?.tagName === "P" && element.textContent === "Product Description contains 1803")).toBeInTheDocument();
-
-        fireEvent.click(screen.getByRole("button", { name: /Edit/ }));
+        fireEvent.click(await screen.findByRole("button", { name: /Edit/ }));
+        expect(screen.getByLabelText("Rule logic")).toHaveValue("OR");
         expect(screen.getByLabelText("Condition 1 field")).toHaveValue("HSN");
         expect(screen.getByLabelText("Condition 1 comparator")).toHaveValue("CONTAINS");
         expect(screen.getByLabelText("Condition 2 field")).toHaveValue("PRODUCT_DESCRIPTION");

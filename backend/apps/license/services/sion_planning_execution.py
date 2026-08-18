@@ -7,7 +7,7 @@ planning engine, eliminating norm-specific dispatch.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from typing import Any
 
 from django.db import transaction
@@ -168,7 +168,7 @@ class SionPlanningExecutionService:
         )
 
     @classmethod
-    def _eligible_licenses(cls, sion, license_ids=None, *, company_id=None):
+    def _eligible_licenses(cls, sion, license_ids=None, *, company_id=None, force_plan=False):
         from apps.license.models import LicenseDetailsModel
         from django.db.models import Q
         from django.utils import timezone
@@ -199,14 +199,247 @@ class SionPlanningExecutionService:
         live_balances = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
             [row.pk for row in licenses]
         )
-        licenses = [row for row in licenses if live_balances.get(row.pk, Decimal("0")) > 0]
+        # When force_plan=True, don't filter out licenses with zero balance_cif
+        # They can still be planned; balance_cif becomes informational
+        if not force_plan:
+            licenses = [row for row in licenses if live_balances.get(row.pk, Decimal("0")) > 0]
         return licenses, live_balances
 
     @classmethod
-    def _compute_license(cls, license_obj, sion, *, preview):
-        """Compute planned lines using database-driven rules and generic planner."""
+    def _compute_license_new_architecture(cls, license_obj, sion, strategy_rules, *, preview, force_plan=False):
+        """Build the full theoretical plan directly from strategy configuration."""
+        from apps.license.models import LicenseImportItemsModel, LicenseExportItemModel
+        from apps.license.services.canonical_planning_service import SplitPercentIncompleteError
+
+        import_items = list(
+            LicenseImportItemsModel.objects.filter(license=license_obj)
+            .select_related("hs_code").prefetch_related("items").order_by("pk")
+        )
+        item_name_ids = {item.pk: {name.pk for name in item.items.all()} for item in import_items}
+        total_cif = sum(
+            (Decimal(str(value or 0)) for value in LicenseExportItemModel.objects.filter(
+                license=license_obj, norm_class=sion,
+            ).values_list("cif_fc", flat=True)),
+            Decimal("0"),
+        )
+
+        def matching_group(item_name_id):
+            matched = [item for item in import_items if item_name_id in item_name_ids[item.pk]]
+            # A single physical entitlement row is unambiguous even when an
+            # older import did not populate its item-name M2M classification.
+            return matched or (import_items if len(import_items) == 1 else [])
+
+        def source_group(rule, fallback_item_name_id=None):
+            expression = rule.expression if isinstance(rule.expression, dict) else {}
+            children = expression.get("conditions", expression.get("args", []))
+            if children or expression.get("field"):
+                matched = []
+                for item in import_items:
+                    record = {
+                        "hs_code": item.hs_code.hs_code if item.hs_code_id else "",
+                        "description": item.description or "",
+                        "item_key": ", ".join(
+                            sorted(name.name for name in item.items.all())
+                        ),
+                        "total_qty": item.quantity,
+                        "available_qty": item.available_quantity,
+                        "unit": item.unit or "",
+                        "serial_number": item.serial_number,
+                    }
+                    if evaluate_expression(expression, record):
+                        matched.append(item)
+                return matched
+            # Compatibility for pre-redesign strategy records created with an
+            # empty expression. Newly edited rules use explicit match logic.
+            return matching_group(fallback_item_name_id) if fallback_item_name_id else []
+
+        def original_group_quantity(group):
+            # Entitlements are recorded at 3dp, while this SION plans whole kg.
+            return sum((Decimal(str(item.quantity or 0)) for item in group), Decimal("0")).quantize(
+                Decimal("1"), rounding=ROUND_DOWN,
+            )
+
+        def add_line(rule, item_name, group, quantity, price, provenance):
+            if not group or quantity <= 0:
+                return False
+            all_lines.append({
+                "import_item": group[0].pk,
+                "item_name": item_name.pk,
+                "planned_quantity": quantity,
+                "unit_price": price,
+                "planned_cif": quantity * price,
+                "planning_rule_id": rule.pk,
+                "planning_rule_version": rule.version,
+                "planning_rule_priority": rule.priority,
+                "allocation_provenance": provenance,
+            })
+            return True
+
+        all_lines = []
+        diagnostics = []
+        percent_rows_flat = [
+            row
+            for percent_rule in strategy_rules if percent_rule.strategy == "SPLIT_BY_PERCENT"
+            for row in percent_rule.percentage_rows.all().order_by("priority", "pk")
+        ]
+        global_percent_total = sum((row.percentage for row in percent_rows_flat), Decimal("0"))
+        global_percent_index = 0
+        global_assigned_nominal = Decimal("0")
+        for rule in strategy_rules:
+            if rule.strategy == "STANDARD":
+                group = source_group(rule, rule.import_item_id) if rule.import_item_id else []
+                quantity = original_group_quantity(group)
+                add_line(rule, rule.import_item, group, quantity, rule.max_unit_price, {
+                    "strategy": "STANDARD", "quantity_source": "original_import_group_quantity",
+                })
+                continue
+
+            if rule.strategy == "SPLIT_BY_UNIT_VALUE":
+                for row in rule.unit_value_rows.all().order_by("priority", "pk"):
+                    group = source_group(rule, row.import_item_id)
+                    quantity = original_group_quantity(group)
+                    add_line(rule, row.import_item, group, quantity, row.preferred_unit_price, {
+                        "strategy": "SPLIT_BY_UNIT_VALUE",
+                        "quantity_source": "original_import_group_quantity",
+                        "min_unit_price": str(row.min_unit_price),
+                        "max_unit_price": str(row.max_unit_price),
+                    })
+                continue
+
+            if rule.strategy == "SPLIT_BY_PERCENT":
+                configured = list(rule.percentage_rows.all().order_by("priority", "pk"))
+                # All rows in one percentage rule describe alternate labels for the
+                # same entitlement group. Count each physical import row once.
+                matched_source = source_group(rule, configured[0].import_item_id if configured else None)
+                matched_by_row = {row.pk: matched_source for row in configured}
+                total_planning_quantity = original_group_quantity(matched_source)
+                generated = 0
+                assigned_nominal = Decimal("0")
+                rule_percent_total = sum((row.percentage for row in configured), Decimal("0"))
+                use_global_split = rule_percent_total != Decimal("100") and global_percent_total == Decimal("100")
+                for row_index, row in enumerate(configured):
+                    raw_nominal = total_planning_quantity * row.percentage / Decimal("100")
+                    # The entitlement is a whole-kg quantity. Allocate rounding
+                    # remainder to the final configured row so the configured
+                    # percentages still account for the complete entitlement.
+                    if use_global_split:
+                        nominal = (
+                            total_planning_quantity - global_assigned_nominal
+                            if global_percent_index == len(percent_rows_flat) - 1
+                            else raw_nominal.quantize(Decimal("1"), rounding=ROUND_DOWN)
+                        )
+                        global_assigned_nominal += nominal
+                        global_percent_index += 1
+                    else:
+                        nominal = (
+                            total_planning_quantity - assigned_nominal
+                            if row_index == len(configured) - 1
+                            else raw_nominal.quantize(Decimal("1"), rounding=ROUND_DOWN)
+                        )
+                    assigned_nominal += nominal
+                    final_quantity = min(nominal, row.max_quantity) if row.max_quantity is not None else nominal
+                    generated += int(add_line(rule, row.import_item, matched_by_row[row.pk], final_quantity,
+                                              row.unit_price, {
+                        "strategy": "SPLIT_BY_PERCENT",
+                        "percentage": str(row.percentage),
+                        "total_planning_quantity": str(total_planning_quantity),
+                        "raw_nominal_quantity": str(raw_nominal),
+                        "nominal_quantity": str(nominal),
+                        "max_quantity": str(row.max_quantity) if row.max_quantity is not None else None,
+                        "quantity_source": "original_import_group_quantity",
+                    }))
+                    diagnostics.append({
+                        "rule_id": rule.pk, "row_id": row.pk, "item_name": row.import_item.name,
+                        "raw_nominal_quantity": str(raw_nominal),
+                        "nominal_quantity": str(nominal), "max_quantity": str(row.max_quantity),
+                        "generated": bool(matched_by_row[row.pk] and final_quantity > 0),
+                    })
+                if configured and total_planning_quantity > 0 and generated != len(configured):
+                    raise SplitPercentIncompleteError(
+                        "Not every configured SPLIT_BY_PERCENT row produced a plan line.",
+                        rule_id=rule.pk, configured_rows=len(configured), generated_rows=generated,
+                        rows=diagnostics,
+                    )
+
+        planned_cif = sum((line["planned_cif"] for line in all_lines), Decimal("0"))
+        return all_lines, total_cif - planned_cif, {
+            "architecture": "strategy", "total_cif": total_cif,
+            "total_planned_cif": planned_cif, "percentage_rows": diagnostics,
+        }
+
+    @classmethod
+    def _compute_license_split_by_percentage_new(cls, license_obj, sion, percent_rules, *, total_qty, total_cif, preview):
+        """Split by percentage using per-row unit price for CIF calculation.
+
+        Args:
+            percent_rules: List of SionPlanningRule with strategy="SPLIT_BY_PERCENT"
+            total_qty: Total license quantity
+            total_cif: Total license CIF
+        """
+        from apps.license.services.database_driven_sion_planner import DatabaseDrivenPlanResult, PlanningRow
+
+        rows = []
+        for rule in percent_rules:
+            for row in rule.percentage_rows.all().order_by("priority"):
+                planned_qty = total_qty * (row.percentage / Decimal("100"))
+                planned_cif = planned_qty * row.unit_price
+
+                rows.append(PlanningRow(
+                    record_id=None,
+                    category=row.import_item.name.upper(),
+                    output_key=row.import_item.name.upper(),
+                    quantity=planned_qty,
+                    unit_price=row.unit_price,
+                    value=planned_cif,
+                ))
+
+        result = DatabaseDrivenPlanResult(
+            rows=rows,
+            remaining_cif=total_cif,  # Percentage rules don't consume balance
+            metadata={"strategy": "SPLIT_BY_PERCENT"}
+        )
+        return result
+
+    @classmethod
+    def _compute_license(cls, license_obj, sion, *, preview, force_plan=False):
+        """Compute planned lines using database-driven rules and generic planner.
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+            sion: SionNormClassModel instance
+            preview: If True, don't persist ItemNameModel creation
+            force_plan: If True, bypass availability constraints
+        """
         from apps.license.services.database_driven_sion_planner import DatabaseDrivenSionPlanner
-        from apps.license.models import LicenseImportItemsModel, SionPlanningProfile
+        from apps.license.models import LicenseImportItemsModel, SionPlanningProfile, SionPlanningRule
+
+        # NEW ARCHITECTURE: Check for rules with strategy set (new dispatch path)
+        active_rules = list(SionPlanningRule.objects.filter(sion=sion, is_active=True).order_by("priority"))
+        strategy_rules = [r for r in active_rules if r.strategy]
+
+        if strategy_rules:
+            # New architecture: dispatch by strategy
+            return cls._compute_license_new_architecture(
+                license_obj, sion, strategy_rules, preview=preview, force_plan=force_plan
+            )
+
+        # LEGACY ARCHITECTURE: fallback to old dispatch path (strategy=None rules)
+        # Check if all active rules use SPLIT_BY_PERCENTAGE strategy
+        if active_rules and all(r.rule_type == 'SPLIT_BY_PERCENTAGE' for r in active_rules):
+            split_result = cls._compute_license_split_by_percentage(license_obj, sion, active_rules, preview=preview)
+            # Convert SPLIT_BY_PERCENTAGE result to canonical format
+            lines = []
+            for row in split_result.rows:
+                lines.append({
+                    "import_item": row.record_id,
+                    "planned_quantity": row.quantity,
+                    "unit_price": row.unit_price,
+                    "planning_rule_id": None,
+                    "planning_rule_version": None,
+                    "planning_rule_priority": None,
+                    "allocation_provenance": {"strategy": "SPLIT_BY_PERCENTAGE"},
+                })
+            return lines, split_result.remaining_cif, split_result.metadata
 
         # Collect import items as records for the generic planner
         import_items = list(
@@ -249,7 +482,7 @@ class SionPlanningExecutionService:
             # has no active actions. Uses database rules directly without
             # legacy profile machinery.
             result = cls._compute_license_generic(
-                license_obj, sion, records, balance_cif, preview=preview
+                license_obj, sion, records, balance_cif, preview=preview, force_plan=force_plan
             )
 
         # Convert planner output to canonical format expected by plan_sion()
@@ -262,10 +495,72 @@ class SionPlanningExecutionService:
                 "planning_rule_id": None,  # Will be populated by rule matching
                 "planning_rule_version": None,
                 "planning_rule_priority": None,
-                "allocation_provenance": {},
+                "allocation_provenance": result.metadata.get("strategy") == "SPLIT_BY_PERCENTAGE" and {
+                    "strategy": "SPLIT_BY_PERCENTAGE"
+                } or {},
             })
 
         return lines, result.remaining_cif, result.metadata
+
+    @classmethod
+    def _compute_license_split_by_percentage(cls, license_obj, sion, rules, *, preview: bool):
+        """Calculate plan for SPLIT_BY_PERCENTAGE strategy without matching import items.
+
+        Each rule with a percentage_constraint generates one planned line:
+        - planned_quantity = total_quantity × percentage_constraint / 100
+        - planned_cif = total_cif × percentage_constraint / 100
+
+        This bypasses import-item matching and uses SION rule percentages directly.
+        """
+        from apps.license.services.database_driven_sion_planner import DatabaseDrivenPlanResult, PlanningRow
+        from apps.license.models import LicenseExportItemModel
+
+        # Calculate total quantity and CIF from all import items
+        from apps.license.models import LicenseImportItemsModel
+        first_import_item = LicenseImportItemsModel.objects.filter(
+            license=license_obj,
+        ).order_by("pk").first()
+        total_qty = Decimal('0')
+        for item in LicenseImportItemsModel.objects.filter(license=license_obj):
+            total_qty += Decimal(str(item.quantity or 0))
+
+        # Calculate total CIF from export items for the SION
+        total_cif = Decimal('0')
+        for export_item in LicenseExportItemModel.objects.filter(license=license_obj, norm_class=sion):
+            total_cif += Decimal(str(export_item.cif_fc or 0))
+
+        rows = []
+        for rule in rules:
+            if not rule.percentage_constraint:
+                continue
+
+            percentage = Decimal(str(rule.percentage_constraint))
+            planned_qty = total_qty * (percentage / Decimal('100'))
+            planned_cif = total_cif * (percentage / Decimal('100'))
+
+            if first_import_item is None:
+                continue
+            row = PlanningRow(
+                record_id=first_import_item.pk,
+                category=(rule.execution_output or rule.name).strip(),
+                output_key=(rule.import_item.name if rule.import_item else rule.name).upper(),
+                quantity=planned_qty,
+                unit_price=(planned_cif / planned_qty) if planned_qty else Decimal("0"),
+                value=planned_cif,
+            )
+            rows.append(row)
+
+        # Return result with no remaining CIF constraint for SPLIT_BY_PERCENTAGE
+        result = DatabaseDrivenPlanResult(
+            rows=rows,
+            remaining_cif=total_cif,  # Don't deduct; percentage rules don't consume balance
+            metadata={
+                "strategy": "SPLIT_BY_PERCENTAGE",
+                "total_quantity": str(total_qty),
+                "total_cif": str(total_cif),
+            }
+        )
+        return result
 
     @classmethod
     def _compute_license_generic(
@@ -276,6 +571,7 @@ class SionPlanningExecutionService:
         balance_cif: Decimal,
         *,
         preview: bool,
+        force_plan: bool = False,
     ) -> "DatabaseDrivenPlanResult":
         """Generic rules-based planning without requiring a legacy profile.
 
@@ -288,6 +584,7 @@ class SionPlanningExecutionService:
             records: List of import item records with hs_code, description, qty, etc.
             balance_cif: Available CIF for allocation
             preview: If True, don't persist ItemNameModel creation (preview only)
+            force_plan: If True, bypass availability and balance_cif constraints
 
         Returns:
             DatabaseDrivenPlanResult with planned rows and remaining CIF
@@ -303,10 +600,19 @@ class SionPlanningExecutionService:
         # Match and plan each record
         rows = []
         remaining_cif = balance_cif
+        skip_reasons = []  # Track why items were skipped for diagnostics
 
         for record in records:
+            record_id = record.get("record_id", "unknown")
+            item_key = record.get("item_key", "-")
             match = configuration.match(record)
+
             if not match:
+                skip_reasons.append({
+                    "record_id": record_id,
+                    "item_key": item_key,
+                    "reason": "NO_RULE_MATCH"
+                })
                 continue
 
             rule, output = match
@@ -321,15 +627,36 @@ class SionPlanningExecutionService:
                         f"Failed to resolve output item for rule {rule.pk} ({rule.name}): {exc}"
                     ) from exc
 
-            # Simple allocation: use available qty up to balance, priced at max_unit_price
+            # Get the total quantity available
             available_qty = Decimal(str(record.get("available_quantity", 0)))
-            if available_qty <= 0:
+            total_imported_qty = Decimal(str(record.get("quantity", 0)))
+
+            # For force_plan, use the total imported quantity; otherwise use available_qty
+            if force_plan:
+                total_qty = total_imported_qty
+            else:
+                total_qty = available_qty
+
+            if total_qty <= 0:
+                skip_reasons.append({
+                    "record_id": record_id,
+                    "item_key": item_key,
+                    "reason": "ZERO_QUANTITY",
+                    "total_imported_qty": str(total_imported_qty),
+                    "available_qty": str(available_qty),
+                    "force_plan": force_plan
+                })
                 continue
 
-            # Calculate quantity that fits within balance
+            # Calculate quantity that fits within balance (or planned quantity if force_plan)
             unit_price = rule.max_unit_price or Decimal("0")
-            if unit_price > 0:
-                qty_by_balance = remaining_cif / unit_price
+
+            if force_plan:
+                # Force plan: use the full required quantity, treat balance as warning only
+                planned_qty = total_qty
+            elif unit_price > 0:
+                # Normal planning: cap by both available qty and balance
+                qty_by_balance = remaining_cif / unit_price if remaining_cif > 0 else Decimal("0")
                 planned_qty = min(available_qty, qty_by_balance)
             else:
                 # Free items get all available quantity
@@ -356,10 +683,27 @@ class SionPlanningExecutionService:
             )
 
         # Return in the format expected by _compute_license caller
+        # Include diagnostic info about skipped items
+        metadata = {
+            "method": "generic_rules",
+            "force_plan": force_plan,
+            "total_records_evaluated": len(records),
+            "total_rows_planned": len(rows),
+            "skip_reasons": skip_reasons if not rows and records else [],
+        }
+
+        # CRITICAL: If force_plan=True and we have records but no planned rows,
+        # this is a configuration/matching error that should be reported
+        if force_plan and records and not rows:
+            metadata["warning"] = (
+                f"Force plan enabled but no planning rows generated for "
+                f"{len(records)} import items. Check SION rule matching and configuration."
+            )
+
         return DatabaseDrivenPlanResult(
             rows=rows,
             remaining_cif=max(remaining_cif, Decimal("0")),
-            metadata={"method": "generic_rules"},
+            metadata=metadata,
         )
 
     @staticmethod
@@ -549,9 +893,18 @@ class SionPlanningExecutionService:
     @classmethod
     def plan_sion(
         cls, sion, license_ids=None, *, company_id=None, persist=True,
-        mode=PLAN_MODE_NEW,
+        mode=PLAN_MODE_NEW, force_plan=False,
     ):
-        """Execute saved DB classification through the proven E1/E5 mechanics."""
+        """Execute saved DB classification through the proven E1/E5 mechanics.
+
+        Args:
+            sion: SionNormClassModel instance
+            license_ids: Optional list of license IDs to plan
+            company_id: Optional company ID for isolation
+            persist: If True, save results to database
+            mode: Planning mode (NEW or ALL)
+            force_plan: If True, bypass balance_cif > 0 filter and availability caps
+        """
         from django.db import transaction
         from apps.license.services.canonical_planning_service import (
             ALREADY_PLANNED_THRESHOLD, CanonicalPlanningService,
@@ -566,7 +919,7 @@ class SionPlanningExecutionService:
             sion = type(sion).objects.select_for_update().get(pk=sion.pk)
             configuration = cls.resolve_configuration(sion)
             licenses, live_balances = cls._eligible_licenses(
-                sion, license_ids, company_id=company_id,
+                sion, license_ids, company_id=company_id, force_plan=force_plan,
             )
             planned_cif_by_license = {}
             if mode == PLAN_MODE_NEW:
@@ -580,7 +933,10 @@ class SionPlanningExecutionService:
                 }
             for license_obj in licenses:
                 if (
-                    mode == PLAN_MODE_NEW
+                    # Only skip ALREADY_PLANNED check when force_plan is True
+                    # force_plan means rebuild everything, not "add only new"
+                    not force_plan
+                    and mode == PLAN_MODE_NEW
                     and planned_cif_by_license.get(license_obj.pk, Decimal("0")) > 0
                     and planned_cif_by_license[license_obj.pk] >= (
                         Decimal(str(live_balances[license_obj.pk])) * ALREADY_PLANNED_THRESHOLD
@@ -600,7 +956,7 @@ class SionPlanningExecutionService:
                     })
                     continue
                 lines, remaining, planning_metadata = cls._compute_license(
-                    license_obj, sion, preview=not persist,
+                    license_obj, sion, preview=not persist, force_plan=force_plan,
                 )
                 canonical_lines = [{
                     "import_item_id": row["import_item"],
@@ -634,12 +990,21 @@ class SionPlanningExecutionService:
                             "reason": "Active saved rules produced no persistable planning lines.",
                         }
                 elif persist:
-                    result["write_result"] = CanonicalPlanningService.build_canonical_plan(
-                        license_id=license_obj.pk, norm_class=sion.norm_class,
-                        items=canonical_lines,
-                        force_replan=mode == PLAN_MODE_ALL,
-                        company_id=company_id,
-                    )
+                    if planning_metadata.get("architecture") == "strategy":
+                        result["write_result"] = CanonicalPlanningService.build_theoretical_strategy_plan(
+                            license_id=license_obj.pk,
+                            norm_class=sion.norm_class,
+                            items=canonical_lines,
+                            total_cif_ceiling=planning_metadata["total_cif"],
+                            company_id=company_id,
+                        )
+                    else:
+                        result["write_result"] = CanonicalPlanningService.build_canonical_plan(
+                            license_id=license_obj.pk, norm_class=sion.norm_class,
+                            items=canonical_lines,
+                            force_replan=mode == PLAN_MODE_ALL,
+                            company_id=company_id,
+                        )
                 results.append(result)
         raw_results = results
         if not persist:

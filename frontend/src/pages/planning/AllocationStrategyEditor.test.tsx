@@ -1,148 +1,101 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render as testingLibraryRender, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AllocationStrategyEditor } from "./AllocationStrategyEditor";
 import { SplitAllocationPreview } from "./SplitAllocationPreview";
 
+vi.mock("@/services/api/planningRuleApi", () => ({
+    searchSionImportItems: vi.fn().mockResolvedValue({ items: [], nextPage: null }),
+    fetchSionImportItem: vi.fn().mockResolvedValue(null),
+}));
+
+const render = (ui: React.ReactElement) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    return testingLibraryRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+};
+
 describe("AllocationStrategyEditor", () => {
-    it("offers standard and generic split strategies", async () => {
+    it("offers all Level 1 strategies and clears strategy-specific rows on change", async () => {
         const onChange = vi.fn();
-        render(<AllocationStrategyEditor value={{ strategy: "STANDARD" }} onChange={onChange} />);
+        render(<AllocationStrategyEditor sionId={7} value={{ strategy: "STANDARD" }} onChange={onChange} />);
+
+        expect(screen.getByRole("option", { name: "Standard (single item)" })).toBeInTheDocument();
+        expect(screen.getByRole("option", { name: "Split by Unit Value" })).toBeInTheDocument();
+        expect(screen.getByRole("option", { name: "Split by %" })).toBeInTheDocument();
         await userEvent.selectOptions(screen.getByLabelText("Allocation strategy"), "SPLIT_BY_UNIT_VALUE");
-        expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+        expect(onChange).toHaveBeenCalledWith({
             strategy: "SPLIT_BY_UNIT_VALUE",
-            config: expect.objectContaining({
-                algorithm: "SPLIT_BY_UNIT_VALUE",
-                basis: "BALANCE_CIF_PER_QUANTITY",
-                buckets: [
-                    { code: "SWP", min_price: "0.00", max_price: "1.50", reference_price: "1.50" },
-                    { code: "DWP", min_price: "1.50", max_price: "6.50", reference_price: "6.50" },
-                ],
-            }),
+            import_item: null,
+            unit_value_rows: [],
+            percentage_rows: [],
+        });
+    });
+
+    it("passes decimal unit-value row text through without calculating in React", () => {
+        const onChange = vi.fn();
+        render(<AllocationStrategyEditor sionId={7} value={{
+            strategy: "SPLIT_BY_UNIT_VALUE",
+            unit_value_rows: [{ import_item: 0, min_unit_price: "0.00", max_unit_price: "1.50", preferred_unit_price: "1.25" }],
+        }} onChange={onChange} />);
+
+        fireEvent.change(screen.getByDisplayValue("1.50"), { target: { value: "1.75" } });
+        expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+            unit_value_rows: [expect.objectContaining({ max_unit_price: "1.75" })],
         }));
     });
 
-    it("passes decimal boundary text through without calculating in React", async () => {
-        const onChange = vi.fn();
-        render(<AllocationStrategyEditor value={{ strategy: "SPLIT_BY_UNIT_VALUE", config: {
-            algorithm: "SPLIT_BY_UNIT_VALUE", basis: "BALANCE_CIF_PER_QUANTITY",
-            buckets: [{ code: "SWP", min_price: "0.00", max_price: "1.50", reference_price: "1.50" }],
-        } }} onChange={onChange} />);
-        const input = screen.getByLabelText("SWP max price");
-        fireEvent.change(input, { target: { value: "1.75" } });
-        expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ config: expect.objectContaining({ buckets: [expect.objectContaining({ max_price: "1.75" })] }) }));
+    it("renders an empty percentage strategy and its zero total", () => {
+        render(<AllocationStrategyEditor sionId={7} value={{ strategy: "SPLIT_BY_PERCENT", percentage_rows: [] }} onChange={vi.fn()} />);
+        expect(screen.getByText("Total: 0.00%")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "+ Add Item" })).toBeInTheDocument();
     });
 
-    it("handles percentage allocation with empty rows without crashing", () => {
-        const onChange = vi.fn();
-        render(<AllocationStrategyEditor value={{
-            strategy: "SPLIT_BY_PERCENTAGE",
-            config: { algorithm: "SPLIT_BY_PERCENTAGE", rows: [] },
-        }} onChange={onChange} />);
-        expect(screen.getByText(/No percentage configuration has been created yet/)).toBeInTheDocument();
-        expect(screen.getByText("0.00%")).toBeInTheDocument();
+    it("calculates the configured percentage-row total", () => {
+        render(<AllocationStrategyEditor sionId={7} value={{
+            strategy: "SPLIT_BY_PERCENT",
+            percentage_rows: [
+                { import_item: 0, percentage: "33.33", unit_price: "2.00" },
+                { import_item: 0, percentage: "33.33", unit_price: "3.00" },
+                { import_item: 0, percentage: "33.34", unit_price: "4.00" },
+            ],
+        }} onChange={vi.fn()} />);
+        expect(screen.getByText("Total: 100.00%")).toBeInTheDocument();
     });
 
-    it("handles percentage allocation with legacy API payload (percentage_rules)", () => {
+    it("adds a percentage row using the current API row shape", async () => {
         const onChange = vi.fn();
-        render(<AllocationStrategyEditor value={{
-            strategy: "SPLIT_BY_PERCENTAGE",
-            config: {
-                sion_id: 123,
-                percentage_rules: [
-                    { rule_id: 1, output_code: "OUTPUT1", percentage: "50.00" },
-                    { rule_id: 2, output_code: "OUTPUT2", percentage: "50.00" },
-                ],
-            } as any,
-        }} onChange={onChange} />);
-        expect(screen.getByDisplayValue("OUTPUT1")).toBeInTheDocument();
-        expect(screen.getByDisplayValue("OUTPUT2")).toBeInTheDocument();
-        expect(screen.getByText("100.00%")).toBeInTheDocument();
-    });
-
-    it("calculates percentage total correctly", () => {
-        const onChange = vi.fn();
-        render(<AllocationStrategyEditor value={{
-            strategy: "SPLIT_BY_PERCENTAGE",
-            config: {
-                algorithm: "SPLIT_BY_PERCENTAGE",
-                rows: [
-                    { id: "1", input_item_id: 1, output_code: "OUT1", percentage: "33.33", unit_price: "2.00" },
-                    { id: "2", input_item_id: 2, output_code: "OUT2", percentage: "33.33", unit_price: "3.00" },
-                    { id: "3", input_item_id: 3, output_code: "OUT3", percentage: "33.34", unit_price: "4.00" },
-                ],
-            },
-        }} onChange={onChange} />);
-        expect(screen.getByText("100.00%")).toBeInTheDocument();
-    });
-
-    it("adds percentage row with correct initial values", async () => {
-        const onChange = vi.fn();
-        render(<AllocationStrategyEditor value={{
-            strategy: "SPLIT_BY_PERCENTAGE",
-            config: { algorithm: "SPLIT_BY_PERCENTAGE", rows: [] },
-        }} onChange={onChange} />);
-        const addButtons = screen.getAllByText(/\+ Add Percentage Row/);
-        await userEvent.click(addButtons[1]);
+        render(<AllocationStrategyEditor sionId={7} value={{ strategy: "SPLIT_BY_PERCENT", percentage_rows: [] }} onChange={onChange} />);
+        await userEvent.click(screen.getByRole("button", { name: "+ Add Item" }));
         expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-            strategy: "SPLIT_BY_PERCENTAGE",
-            config: expect.objectContaining({
-                rows: expect.arrayContaining([
-                    expect.objectContaining({
-                        input_item_id: null,
-                        percentage: "0.00",
-                        unit_price: "0.00",
-                    }),
-                ]),
-            }),
+            percentage_rows: [{ import_item: 0, percentage: "0", unit_price: "0" }],
         }));
     });
 
-    it("removes percentage row", async () => {
+    it("removes only the selected percentage row", async () => {
         const onChange = vi.fn();
-        render(<AllocationStrategyEditor value={{
-            strategy: "SPLIT_BY_PERCENTAGE",
-            config: {
-                algorithm: "SPLIT_BY_PERCENTAGE",
-                rows: [
-                    { id: "1", input_item_id: 1, output_code: "OUT1", percentage: "50.00", unit_price: "2.00" },
-                    { id: "2", input_item_id: 2, output_code: "OUT2", percentage: "50.00", unit_price: "3.00" },
-                ],
-            },
+        render(<AllocationStrategyEditor sionId={7} value={{
+            strategy: "SPLIT_BY_PERCENT",
+            percentage_rows: [
+                { import_item: 0, percentage: "40.00", unit_price: "2.00" },
+                { import_item: 0, percentage: "60.00", unit_price: "3.00" },
+            ],
         }} onChange={onChange} />);
-        const removeButtons = screen.getAllByLabelText(/Remove row/);
-        await userEvent.click(removeButtons[0]);
+        await userEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
         expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-            config: expect.objectContaining({
-                rows: expect.arrayContaining([
-                    expect.objectContaining({ output_code: "OUT2" }),
-                ]),
-            }),
+            percentage_rows: [{ import_item: 0, percentage: "60.00", unit_price: "3.00" }],
         }));
     });
 
-    it("updates percentage value", async () => {
+    it("updates percentage decimal text in the configured row", () => {
         const onChange = vi.fn();
-        render(<AllocationStrategyEditor value={{
-            strategy: "SPLIT_BY_PERCENTAGE",
-            config: {
-                algorithm: "SPLIT_BY_PERCENTAGE",
-                rows: [
-                    { id: "1", input_item_id: 1, output_code: "OUT1", percentage: "50.00", unit_price: "2.00" },
-                ],
-            },
+        render(<AllocationStrategyEditor sionId={7} value={{
+            strategy: "SPLIT_BY_PERCENT",
+            percentage_rows: [{ import_item: 0, percentage: "50.00", unit_price: "2.00" }],
         }} onChange={onChange} />);
-        const percentageInputs = screen.getAllByDisplayValue("50.00");
-        fireEvent.change(percentageInputs[0], { target: { value: "75.50" } });
+        fireEvent.change(screen.getByDisplayValue("50.00"), { target: { value: "75.50" } });
         expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-            config: expect.objectContaining({
-                rows: expect.arrayContaining([
-                    expect.objectContaining({
-                        output_code: "OUT1",
-                        percentage: "75.50",
-                    }),
-                ]),
-            }),
+            percentage_rows: [expect.objectContaining({ percentage: "75.50" })],
         }));
     });
 });

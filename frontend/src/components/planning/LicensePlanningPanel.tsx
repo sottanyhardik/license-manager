@@ -1,8 +1,8 @@
 /**
  * LicensePlanningPanel — Dialog wrapper around the shared PlanningEditor core.
  *
- * The planning UI rendered inside is byte-for-byte identical to the PlanTab:
- * same components, same business logic, same inline-edit per-row pattern.
+ * The planning UI rendered inside is PlanningEditor — the single canonical
+ * planning component used everywhere (License Overview, Masters Licenses table, etc.).
  * This file only adds the Dialog chrome (open/close) and routes the onSaved
  * callback back to the caller (report refresh, list refresh, etc.).
  *

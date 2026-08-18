@@ -48,7 +48,7 @@ import { openDocument, openAuthedFile } from "../../../utils/documentDownload";
 import { saveFilterState } from "../../../utils/filterPersistence";
 import { selectLedgerDisplayRows } from "@/utils/ledgerDisplayRows";
 import LedgerTab from "./LedgerTab";
-import PlanTab from "./PlanTab";
+import PlanningEditor from "@/components/planning/PlanningEditor";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -1286,7 +1286,7 @@ const LicenseRow = memo(function LicenseRow({
                                                     />
                                                 )}
                                                 {tab.id === "plan" && (
-                                                    <PlanTab
+                                                    <PlanningEditor
                                                         licenseId={item.id}
                                                         licenseNumber={item.license_number}
                                                         balanceCif={Number(item.get_balance_cif || 0)}

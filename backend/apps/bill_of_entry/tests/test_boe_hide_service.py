@@ -28,6 +28,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from apps.bill_of_entry.models import BillOfEntryModel, OTH_INVOICE_MARKER, RowDetails
+from apps.bill_of_entry.serializers import BillOfEntrySerializer
 from apps.bill_of_entry.services.boe_service import (
     hide_boe, hide_boes_bulk, restore_boe, restore_boes_bulk,
 )
@@ -102,6 +103,38 @@ class BoeHideServiceFixtureMixin:
             email=f"{uuid.uuid4().hex[:8]}@example.com",
             password="testpass123!",
         )
+
+
+class BillOfEntryNestedRowUpdateTests(BoeHideServiceFixtureMixin, TestCase):
+    def test_update_ignores_header_planning_metadata_when_creating_row(self):
+        """Annotated planning metadata belongs to the BOE, not RowDetails.
+
+        A nested update without a row id uses ``update_or_create``.  The
+        metadata may be present in the validated nested payload after planning
+        mapping, but is not a RowDetails field and must never be passed as a
+        model default.
+        """
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj)
+        boe = self.make_boe(company)
+
+        serializer = BillOfEntrySerializer()
+        result = serializer.update(boe, {
+            "item_details": [{
+                "sr_number": item,
+                "cif_inr": Decimal("409649.00"),
+                "cif_fc": Decimal("4264.96"),
+                "qty": Decimal("3000.000"),
+                "planning_mapping_status": "MAPPED_EXPLICIT",
+                "planning_mapping_source": "USER_SELECTED",
+            }],
+        })
+
+        row = result.item_details.get(sr_number=item)
+        self.assertEqual(row.cif_inr, Decimal("409649.000"))
+        self.assertEqual(row.cif_fc, Decimal("4264.960"))
+        self.assertEqual(row.qty, Decimal("3000.000"))
 
 
 class HideBoeSpansMultipleLicensesTests(BoeHideServiceFixtureMixin, TestCase):

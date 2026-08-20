@@ -369,8 +369,17 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                 item_id = item_data.get('id')
 
                 # Prepare clean data
+                # Nested payloads can include BOE-level planning metadata from
+                # an annotated/read representation.  It belongs to the header,
+                # not RowDetails; passing it to update_or_create raises a
+                # FieldError when a row is created by `sr_number`.
                 item_data_clean = {k: v for k, v in item_data.items()
-                                  if k not in ['id', 'sr_number', 'license_number', 'item_description', 'hs_code']}
+                                  if k not in [
+                                      'id', 'sr_number', 'license_number',
+                                      'item_description', 'hs_code',
+                                      'planning_mapping_status',
+                                      'planning_mapping_source',
+                                  ]}
 
                 if item_id:
                     # Update existing item

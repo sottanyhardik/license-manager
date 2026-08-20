@@ -493,8 +493,13 @@ This contract defines how transactions flow through the license ledger calculati
 
 License Running Balance Formula:
 ================================
-Running Balance = Opening + SUM(PURCHASE amounts) - SUM(SALE amounts)
+Running Balance = Effective opening + SUM(PURCHASE amounts) - SUM(SALE amounts)
                   (COMMISSION excluded from sum)
+
+`Effective opening` is the historical brought-forward amount only when the
+effective canonical ledger does not already contain its positive PURCHASE
+acquisition.  A licence face value and that purchase describe one event, so
+they must never be added together.
 
 Company Utilization Formula:
 =============================

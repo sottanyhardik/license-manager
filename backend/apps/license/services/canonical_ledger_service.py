@@ -245,10 +245,24 @@ class CanonicalLedgerService:
         dataset['has_purchase_bill'] = has_purchase_bill
         dataset['purchase_bill_status'] = 'WITH_PURCHASE_BILL' if has_purchase_bill else 'NO_PURCHASE_BILL'
 
-        # Calculate opening balance (if any)
+        # The licence face value is a brought-forward opening only when the
+        # effective ledger does not already contain its acquisition.  A valid
+        # PURCHASE credit is that acquisition and must be counted exactly once.
         opening_balance = quantize_2dp(
             to_decimal(getattr(license_obj, 'opening_balance', None), DEC_0)
         )
+        has_valid_purchase = any(
+            # `raw_transactions` is the effective canonical collection: it
+            # already has the licence/company scope and canonical inclusion
+            # rules applied.  Only its acquisition event may replace an
+            # opening; another CREDIT (for example a future credit type) must
+            # never accidentally do so.
+            row.get('type') == 'PURCHASE'
+            and to_decimal(row.get('amount'), DEC_0) > DEC_0
+            for row in raw_transactions
+        )
+        if has_valid_purchase:
+            opening_balance = DEC_0
         if opening_balance > DEC_0:
             dataset['opening_balance'] = opening_balance
 

@@ -139,6 +139,48 @@ class BalanceLedgerGetTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.assertEqual(data["license"]["license_number"], license_obj.license_number)
         self.assertGreaterEqual(len(data["financial_ledger"]["rows"]), 2)  # opening + final at minimum
 
+    def test_api_returns_matching_purchase_once_balance_without_mismatch(self):
+        from apps.license.models import LicenseExportItemModel
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("89283.10"))
+        purchase = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_PURCHASE,
+            to_company=company,
+            invoice_number="PUR-API-ONCE",
+            invoice_date=datetime.now().date(),
+        )
+        LicenseTradeLine.objects.create(
+            trade=purchase, sr_number=item, description=item.description,
+            mode=LicenseTradeLine.MODE_CIF_INR, cif_fc=Decimal("89283.10"),
+            cif_inr=Decimal("7544426.95"),
+        )
+        sale = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_SALE,
+            from_company=company,
+            invoice_number="SALE-API-ONCE",
+            invoice_date=datetime.now().date(),
+        )
+        LicenseTradeLine.objects.create(
+            trade=sale, sr_number=item, description=item.description,
+            mode=LicenseTradeLine.MODE_CIF_INR, cif_fc=Decimal("80359.10"),
+            cif_inr=Decimal("6790343.95"),
+        )
+
+        response = self.client.get(f"/api/licenses/{license_obj.id}/balance-ledger/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        financial = response.data["financial_ledger"]
+        self.assertEqual(Decimal(str(financial["summary"]["computed_balance"])), Decimal("8924.00"))
+        self.assertEqual(Decimal(str(financial["summary"]["engine_balance"])), Decimal("8924.00"))
+        self.assertEqual(Decimal(str(response.data["reconciliation"]["difference"])), DEC_0)
+        self.assertFalse(financial["summary"]["mismatched"])
+        self.assertNotIn("MISMATCH vs Balance Engine", financial["rows"][-1]["remarks"])
+        self.assertFalse(any(warning["warning_type"] == "FINANCIAL_MISMATCH" for warning in response.data["warnings"]))
+
     def test_denies_authenticated_user_with_no_roles(self):
         company = self.make_company()
         license_obj = self.make_license(company)
@@ -695,6 +737,30 @@ class FinancialLedgerOpeningBalanceGateTests(LicenseBalanceLedgerFixtureMixin, R
         self.assertTrue(summary["has_purchase"])
         self.assertNotIn("opening", [r["row_kind"] for r in rows])
         self.assertEqual(summary["computed_balance"], Decimal("60000.00"))
+
+    def test_purchased_license_uses_one_acquisition_across_ledger_and_engine(self):
+        """The opening metadata and purchase are one acquisition, never two."""
+        from apps.license.models import LicenseExportItemModel
+
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("89283.10"))
+        self._make_purchase_trade(company, item, cif_fc=Decimal("89283.10"))
+        sale = self.make_sale_trade(company, invoice_number="SALE-ONCE-ACQUISITION")
+        self.make_trade_line(sale, item, cif_fc=Decimal("80359.10"))
+
+        dataset = LicenseBalanceLedgerBuilder.build(license_obj)
+        financial = dataset["financial_ledger"]
+        final_row = financial["rows"][-1]
+
+        self.assertEqual(final_row["running_balance"], Decimal("8924.00"))
+        self.assertEqual(financial["summary"]["computed_balance"], Decimal("8924.00"))
+        self.assertEqual(financial["summary"]["engine_balance"], Decimal("8924.00"))
+        self.assertEqual(dataset["reconciliation"]["difference"], DEC_0)
+        self.assertFalse(financial["summary"]["mismatched"])
+        self.assertNotIn("MISMATCH vs Balance Engine", final_row["remarks"])
+        self.assertFalse(any(warning["warning_type"] == "FINANCIAL_MISMATCH" for warning in dataset["warnings"]))
 
 
 class HiddenBoeOpeningBalanceGateTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase):

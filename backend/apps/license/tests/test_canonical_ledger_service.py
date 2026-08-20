@@ -193,12 +193,13 @@ class Scenario1SingleCompanySimpleFlow(CanonicalLedgerServiceTestBase):
     """
     Scenario 1: Single License, Single Company, Simple Flow
 
-    Opening: 1000.00
-    + PURCHASE (A): 500.00  → Balance: 1500.00
-    - SALE (A): 200.00      → Balance: 1300.00
+    Opening/acquisition metadata: 1000.00
+    + PURCHASE (A): 500.00  → Balance: 500.00
+    - SALE (A): 200.00      → Balance: 300.00
 
     Expected:
-    - License balance: 1300.00
+    - License balance: 300.00; the opening is the same acquisition represented
+      by the valid purchase and must not be counted twice.
     - Company A utilization: 300.00
     """
 
@@ -213,9 +214,66 @@ class Scenario1SingleCompanySimpleFlow(CanonicalLedgerServiceTestBase):
         result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
 
         # Assert
-        self.assertEqual(result['license_running_balance'], Decimal('1300.00'))
+        self.assertEqual(result['license_running_balance'], Decimal('300.00'))
         self.assertEqual(result['company_utilizations'][self.company_a.id]['utilization_balance'], Decimal('300.00'))
-        self.assertEqual(len(result['transactions']), 3)  # OPENING + PURCHASE + SALE
+        self.assertEqual(len(result['transactions']), 2)  # PURCHASE + SALE; no duplicate opening
+
+
+class PurchasedLicenseOpeningPolicyTests(CanonicalLedgerServiceTestBase):
+    def test_purchase_credit_is_counted_once_for_canonical_balance(self):
+        """89,283.10 purchase − 80,359.10 sale must be 8,924.00, not 98,207.10."""
+        self._set_opening_balance(Decimal('89283.10'))
+        self._create_purchase_trade(self.license, self.company_a, Decimal('89283.10'), date(2026, 1, 15))
+        self._create_sale_trade(self.license, self.company_a, Decimal('80359.10'), date(2026, 2, 1))
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+
+        self.assertEqual(result['opening_balance'], Decimal('0.00'))
+        self.assertEqual(result['license_running_balance'], Decimal('8924.00'))
+        self.assertEqual(result['transactions'][-1]['license_running_balance'], Decimal('8924.00'))
+        self.assertEqual([row['type'] for row in result['transactions']], ['PURCHASE', 'SALE'])
+
+    def test_purchase_only_uses_purchase_credit_not_duplicate_opening(self):
+        self._set_opening_balance(Decimal('89283.10'))
+        self._create_purchase_trade(self.license, self.company_a, Decimal('89283.10'))
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+
+        self.assertEqual(result['license_running_balance'], Decimal('89283.10'))
+        self.assertEqual(result['transactions'][0]['type'], 'PURCHASE')
+
+    def test_zero_purchase_does_not_suppress_legacy_opening_balance(self):
+        """A zero-value non-acquisition is not a valid purchase credit."""
+        self._set_opening_balance(Decimal('89283.10'))
+        self._create_purchase_trade(self.license, self.company_a, Decimal('0.00'))
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+
+        self.assertEqual(result['license_running_balance'], Decimal('89283.10'))
+        self.assertEqual(result['transactions'][0]['type'], 'OPENING')
+
+    def test_multiple_sales_are_subtracted_once_in_ledger_order(self):
+        self._set_opening_balance(Decimal('89283.10'))
+        self._create_purchase_trade(self.license, self.company_a, Decimal('89283.10'), date(2026, 1, 15))
+        self._create_sale_trade(self.license, self.company_a, Decimal('30000.00'), date(2026, 2, 1))
+        self._create_sale_trade(self.license, self.company_a, Decimal('50359.10'), date(2026, 2, 2))
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+
+        self.assertEqual(result['license_running_balance'], Decimal('8924.00'))
+        self.assertEqual(
+            [row['license_running_balance'] for row in result['transactions']],
+            [Decimal('89283.10'), Decimal('59283.10'), Decimal('8924.00')],
+        )
+
+    def test_complete_sale_closes_purchased_license_to_zero(self):
+        self._set_opening_balance(Decimal('89283.10'))
+        self._create_purchase_trade(self.license, self.company_a, Decimal('89283.10'))
+        self._create_sale_trade(self.license, self.company_a, Decimal('89283.10'))
+
+        result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
+
+        self.assertEqual(result['license_running_balance'], Decimal('0.00'))
 
 
 class Scenario2MultipleCompanies(CanonicalLedgerServiceTestBase):
@@ -250,7 +308,8 @@ class Scenario2MultipleCompanies(CanonicalLedgerServiceTestBase):
 
         result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
 
-        self.assertEqual(result['license_running_balance'], Decimal('2650.00'))
+        # Old result 2,650.00 included the 2,000.00 acquisition twice.
+        self.assertEqual(result['license_running_balance'], Decimal('650.00'))
         self.assertEqual(result['company_utilizations'][self.company_a.id]['utilization_balance'], Decimal('250.00'))
         self.assertEqual(result['company_utilizations'][self.company_b.id]['utilization_balance'], Decimal('300.00'))
         self.assertEqual(result['company_utilizations'][self.company_c.id]['utilization_balance'], Decimal('100.00'))
@@ -285,7 +344,8 @@ class Scenario3CommissionExcluded(CanonicalLedgerServiceTestBase):
         result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
 
         # CRITICAL: Balance does NOT include COMMISSION
-        self.assertEqual(result['license_running_balance'], Decimal('720.00'))
+        # Old result 720.00 included the 500.00 acquisition twice.
+        self.assertEqual(result['license_running_balance'], Decimal('220.00'))
         self.assertEqual(result['company_utilizations'][self.company_a.id]['utilization_balance'], Decimal('220.00'))
 
         # Company B should have 0 utilization (COMMISSION not counted)
@@ -337,8 +397,9 @@ class Scenario5DecimalPrecision(CanonicalLedgerServiceTestBase):
 
         # Must be exactly 2 decimal places
         balance = result['license_running_balance']
-        self.assertEqual(balance, Decimal('1055.56'))
-        self.assertEqual(str(balance), '1055.56')
+        # Old result 1,055.56 included the 1,000.00 acquisition twice.
+        self.assertEqual(balance, Decimal('55.56'))
+        self.assertEqual(str(balance), '55.56')
 
         company_balance = result['company_utilizations'][self.company_a.id]['utilization_balance']
         self.assertEqual(company_balance, Decimal('55.56'))
@@ -388,7 +449,8 @@ class Scenario7ZeroAmountTransactions(CanonicalLedgerServiceTestBase):
         result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
 
         # Zero-amount transactions should not affect balance
-        self.assertEqual(result['license_running_balance'], Decimal('1100.00'))
+        # The positive PURCHASE is the acquisition; zero PURCHASE does not alter it.
+        self.assertEqual(result['license_running_balance'], Decimal('100.00'))
         self.assertEqual(result['company_utilizations'][self.company_a.id]['utilization_balance'], Decimal('100.00'))
 
 
@@ -465,7 +527,8 @@ class Scenario12InterleavedCompanies(CanonicalLedgerServiceTestBase):
 
         result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
 
-        self.assertEqual(result['license_running_balance'], Decimal('3375.00'))
+        # Old result 3,375.00 included the 3,000.00 acquisition twice.
+        self.assertEqual(result['license_running_balance'], Decimal('375.00'))
         self.assertEqual(result['company_utilizations'][self.company_a.id]['utilization_balance'], Decimal('125.00'))
         self.assertEqual(result['company_utilizations'][self.company_b.id]['utilization_balance'], Decimal('100.00'))
         self.assertEqual(result['company_utilizations'][self.company_c.id]['utilization_balance'], Decimal('150.00'))
@@ -495,7 +558,8 @@ class Scenario13MultipleCompaniesWithCommission(CanonicalLedgerServiceTestBase):
 
         result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
 
-        self.assertEqual(result['license_running_balance'], Decimal('3100.00'))
+        # Old result 3,100.00 included the 2,000.00 acquisition twice.
+        self.assertEqual(result['license_running_balance'], Decimal('1100.00'))
         self.assertEqual(result['company_utilizations'][self.company_a.id]['utilization_balance'], Decimal('300.00'))
         self.assertEqual(result['company_utilizations'][self.company_b.id]['utilization_balance'], Decimal('500.00'))
         self.assertEqual(result['company_utilizations'][self.company_c.id]['utilization_balance'], Decimal('300.00'))
@@ -524,7 +588,9 @@ class Scenario8LargeDataset(CanonicalLedgerServiceTestBase):
     def test_scenario_8_large_dataset(self):
         self._set_opening_balance(Decimal('10000.00'))
 
-        running_total = Decimal('10000.00')
+        # Valid purchases establish this licence's acquisition; do not add the
+        # same 10,000.00 opening metadata to the complete trade history.
+        running_total = Decimal('0.00')
 
         # Company A: 50 transactions
         for i in range(25):
@@ -606,7 +672,7 @@ class Scenario11OpeningAndCompanyBalances(CanonicalLedgerServiceTestBase):
     - Company B: PURCHASE 2000, SALE 1000 (all sequential)
 
     Expected:
-    - License balance: 7500.00
+    - License balance: 2500.00 (the 5000.00 opening is represented by purchases)
     - Company A: 1500.00
     - Company B: 1000.00
     """
@@ -626,7 +692,8 @@ class Scenario11OpeningAndCompanyBalances(CanonicalLedgerServiceTestBase):
         result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
 
         # License balance: 5000 + 1000 + 1000 - 500 + 2000 - 1000 = 7500
-        self.assertEqual(result['license_running_balance'], Decimal('7500.00'))
+        # Old result 7,500.00 included the 5,000.00 acquisition twice.
+        self.assertEqual(result['license_running_balance'], Decimal('2500.00'))
 
         # Company A: 1000 + 1000 - 500 = 1500
         self.assertEqual(result['company_utilizations'][self.company_a.id]['utilization_balance'], Decimal('1500.00'))
@@ -649,7 +716,7 @@ class Scenario14ComprehensiveRealWorld(CanonicalLedgerServiceTestBase):
     - Spans 4 months
 
     Expected:
-    - License balance: 14800.00
+    - License balance: 4800.00 (the 10000.00 opening is represented by purchases)
     - Company A: 2100.00
     - Company B: 2000.00
     - Company C: 700.00
@@ -707,19 +774,9 @@ class Scenario14ComprehensiveRealWorld(CanonicalLedgerServiceTestBase):
         result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
 
         # Verify final balance
-        # Opening: 10000
-        # + A PURCHASE 2500 → 12500
-        # A COMMISSION 125 → (not counted) → 12500
-        # - A SALE 1000 → 11500
-        # + B PURCHASE 3500 → 15000
-        # + C PURCHASE 1500 → 16500
-        # B COMMISSION 175 → (not counted) → 16500
-        # - C SALE 800 → 15700
-        # + A PURCHASE 1200 → 16900
-        # - B SALE 1500 → 15400
-        # C COMMISSION 100 → (not counted) → 15400
-        # - A SALE 600 → 14800
-        self.assertEqual(result['license_running_balance'], Decimal('14800.00'))
+        # Purchases 8,700 − sales 3,900 = 4,800.  The old 14,800.00 result
+        # counted the 10,000.00 acquisition once as opening and again as trade.
+        self.assertEqual(result['license_running_balance'], Decimal('4800.00'))
 
         # Company A: 2500 - 1000 + 1200 - 600 = 2100
         self.assertEqual(result['company_utilizations'][self.company_a.id]['utilization_balance'], Decimal('2100.00'))

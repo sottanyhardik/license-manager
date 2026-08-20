@@ -167,12 +167,6 @@ export const fetchItemPlans = async (licenseId) => {
     return response.data;
 };
 
-/** Canonical, grouped utilization positions used by PlanningEditor. */
-export const fetchPlanUtilization = async (licenseId) => {
-    const response = await api.get(`licenses/${licenseId}/plan-utilization/`);
-    return response.data;
-};
-
 /**
  * Create/update many plan lines for a license in one call.
  * lines = [{import_item, planned_quantity, planned_cif_fc, planned_cif_inr?, note?}]
@@ -228,7 +222,6 @@ export default {
     updateLicenseFlags,
     fetchLicenseOptions,
     fetchItemPlans,
-    fetchPlanUtilization,
     bulkUpsertItemPlans,
     createItemPlan,
     updateItemPlan,

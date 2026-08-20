@@ -11,7 +11,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
-import PlanningEditor from "@/components/planning/PlanningEditor";
+import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
 import ItemPivotFilters from "./ItemPivotFilters";
@@ -1675,11 +1675,14 @@ export default function ItemPivotReport() {
             )}
 
             {/* Utilization planning — same panel the licenses page uses. */}
-            <Dialog open={showPlanModal} onOpenChange={(open) => { if (!open) { setShowPlanModal(false); setPlanLicense(null); } }}>
-                <DialogContent className="w-[98vw] max-w-[1800px] max-h-[95vh] overflow-y-auto">
-                    {planLicense?.id && <PlanningEditor licenseId={planLicense.id} licenseNumber={planLicense.number} balanceCif={planLicense.balance || 0} canWrite onSaved={() => { if (activeNormTab) loadReport(activeNormTab); }} />}
-                </DialogContent>
-            </Dialog>
+            <LicensePlanningPanel
+                show={showPlanModal}
+                onHide={() => { setShowPlanModal(false); setPlanLicense(null); }}
+                licenseId={planLicense?.id}
+                licenseNumber={planLicense?.number}
+                balanceCif={planLicense?.balance || 0}
+                onSaved={() => { if (activeNormTab) loadReport(activeNormTab); }}
+            />
         </div>
     );
 }

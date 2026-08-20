@@ -1,8 +1,6 @@
 /**
  * PlanningEditor — shared planning core used by both License Overview
- * It is the only planning-domain React component. Generic dialog chrome may
- * host it from callers, but no planning wrapper or alternate planning page
- * exists.
+ * and LicensePlanningPanel (modal).
  *
  * Behaviour (Notion / Airtable / GitHub Projects pattern):
  *   • Always in view mode — a clean read-only table.
@@ -62,7 +60,6 @@ import {
     deleteItemPlan,
     fetchItemPlans,
     fetchLicense,
-    fetchPlanUtilization,
 } from "@/services/api/licenseApi";
 import { autoPlanLicense, planLicense } from "@/services/api/planningRuleApi";
 
@@ -175,11 +172,6 @@ interface Group {
     total_qty?: number;
     total_utilized_qty?: number;
     balance_qty?: number;
-    effective_planned_qty?: number;
-    effective_planned_cif?: number;
-    requested_planned_qty?: number;
-    unit_price?: number;
-    backend_status?: string;
     available_quantity: number;
     effective_available_quantity: number;
     license_balance_cif: number;
@@ -212,10 +204,10 @@ interface Group {
 type PlanStatus = "not_planned" | "partial" | "completed" | "over" | "blocked";
 
 export interface PlanningEditorProps {
-    licenseId?: number;
-    licenseNumber?: string;
+    licenseId: number;
+    licenseNumber: string;
     balanceCif?: number;
-    canWrite?: boolean;
+    canWrite: boolean;
     /** Called after every successful per-row save so the parent can refresh its data. */
     onSaved?: () => void;
 }
@@ -225,14 +217,6 @@ export interface PlanningEditorProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function groupStatus(g: Group): PlanStatus {
-    if (g.backend_status) {
-        return ({
-            "not planned": "not_planned", "partially planned": "partial",
-            planned: "completed", "fully utilized": "completed",
-            "over utilized": "over", "over planned": "over",
-            feasible: "partial", unplanned: "not_planned", short: "over",
-        } as Record<string, PlanStatus>)[g.backend_status.toLowerCase().replace(/_/g, " ")] ?? "not_planned";
-    }
     if (g.presentation_status) {
         return ({ planned: "completed", partially_planned: "partial", fully_utilized: "completed", over_utilized: "over", over_planned: "over", not_planned: "not_planned" } as Record<string, PlanStatus>)[g.presentation_status] ?? "not_planned";
     }
@@ -532,12 +516,8 @@ function InlineEditor({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PlanningEditor({
-    licenseId: propLicenseId, licenseNumber = "", balanceCif = 0, canWrite = true, onSaved,
+    licenseId, licenseNumber, balanceCif = 0, canWrite, onSaved,
 }: PlanningEditorProps) {
-    // Keeping route parsing here lets `/planning?license=:id` render this
-    // component directly without introducing a planning-specific route wrapper.
-    const routeParams = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
-    const licenseId = propLicenseId ?? Number(routeParams.get("license") ?? routeParams.get("license_id") ?? 0);
     const [loading, setLoading]           = useState(false);
     const [isPlanning, setIsPlanning]     = useState(false);
     const [showForceConfirm, setShowForceConfirm] = useState(false);
@@ -567,9 +547,8 @@ export default function PlanningEditor({
         if (!licenseId) return;
         setLoading(true);
         try {
-            const [license, utilization, rawPlans] = await Promise.all([
+            const [license, rawPlans] = await Promise.all([
                 fetchLicense(licenseId),
-                fetchPlanUtilization(licenseId),
                 fetchItemPlans(licenseId),
             ]);
             const reconciliation = (license as { operational_reconciliation?: Record<string, string | number> }).operational_reconciliation;
@@ -655,9 +634,9 @@ export default function PlanningEditor({
                 group_id: number; description?: string | null; hs_code?: string | null;
                 serials?: number[]; member_ids?: number[];
                 item_names?: { id: number; name: string }[];
-                available_quantity?: string | number; available_qty?: string | number; total_quantity?: string | number;
+                available_quantity?: string | number; total_quantity?: string | number;
                 total_qty?: string | number; total_utilized_qty?: string | number; balance_qty?: string | number;
-                effective_available_quantity?: string | number; effective_available_qty?: string | number;
+                effective_available_quantity?: string | number;
                 license_balance_cif?: string | number;
                 effective_license_balance_cif?: string | number;
                 balance_cif_fc?: string | number;
@@ -668,10 +647,7 @@ export default function PlanningEditor({
                 status?: "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
                 presentation_status?: string;
                 operational_status?: Group["operational_status"];
-                planned_qty?: string | number; planned_cif?: string | number;
-                effective_planned_qty?: string | number; effective_planned_cif?: string | number;
-                requested_planned_qty?: string | number; unit_price?: string | number;
-            }[] = Array.isArray(utilization?.rows) ? utilization.rows : [];
+            }[] = Array.isArray(license?.plan_utilization) ? license.plan_utilization : [];
 
             const built: Group[] = groupRows.map((grp) => {
                 const memberIds = grp.member_ids ?? [];
@@ -689,13 +665,8 @@ export default function PlanningEditor({
                     total_qty: Number(grp.total_qty ?? grp.total_quantity ?? 0),
                     total_utilized_qty: Number(grp.total_utilized_qty ?? 0),
                     balance_qty: Number(grp.balance_qty ?? 0),
-                    effective_planned_qty: Number(grp.effective_planned_qty ?? grp.planned_qty ?? 0),
-                    effective_planned_cif: Number(grp.effective_planned_cif ?? grp.planned_cif ?? 0),
-                    requested_planned_qty: Number(grp.requested_planned_qty ?? 0),
-                    unit_price: Number(grp.unit_price ?? 0),
-                    backend_status: grp.status ?? grp.presentation_status,
-                    available_quantity: Number(grp.available_qty ?? grp.available_quantity ?? 0),
-                    effective_available_quantity: Number(grp.effective_available_qty ?? grp.effective_available_quantity ?? grp.available_qty ?? grp.available_quantity ?? 0),
+                    available_quantity: Number(grp.available_quantity ?? 0),
+                    effective_available_quantity: Number(grp.effective_available_quantity ?? grp.available_quantity ?? 0),
                     license_balance_cif: Number(grp.license_balance_cif ?? license?.get_balance_cif ?? 0),
                     effective_license_balance_cif: Number(
                         grp.effective_license_balance_cif ?? grp.license_balance_cif ?? license?.get_balance_cif ?? 0,
@@ -970,8 +941,12 @@ export default function PlanningEditor({
         let lastUpdated: string | null = null;
         groups.forEach((g) => {
             totalAvail   += g.available_quantity;
-            const groupTheoreticalQty = g.effective_planned_qty ?? 0;
-            const groupTheoreticalCif = g.effective_planned_cif ?? 0;
+            const groupTheoreticalQty = g.splits.reduce(
+                (s, sp) => s + num(sp.theoretical_quantity ?? sp.reconciled_planned_quantity ?? sp.planned_quantity), 0,
+            );
+            const groupTheoreticalCif = g.splits.reduce(
+                (s, sp) => s + num(sp.theoretical_cif ?? sp.reconciled_planned_cif ?? sp.planned_cif_fc), 0,
+            );
             theoreticalPlanned += groupTheoreticalQty;
             theoreticalCif += groupTheoreticalCif;
             // The table and KPI must use the persisted effective plan, never
@@ -1160,11 +1135,9 @@ export default function PlanningEditor({
                         <tbody>
                             {groups.map((g) => {
                                 const status     = groupStatus(g);
-                                // These are canonical presentation positions from the
-                                // plan-utilization endpoint. Do not reconstruct them
-                                // from plan lines (which are edit details only).
-                                const planned    = g.effective_planned_qty ?? 0;
-                                const plannedCif = g.effective_planned_cif ?? 0;
+                                const planned    = g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
+                                const plannedCif = g.splits.reduce((s, sp) => s + num(sp.effective_planned_cif), 0);
+                                const rem        = g.available_quantity - planned;
                                 const totalQty = g.total_qty ?? g.total_quantity;
                                 const totalUtilized = g.total_utilized_qty ?? 0;
                                 const balanceQty = g.balance_qty ?? 0;
@@ -1228,14 +1201,20 @@ export default function PlanningEditor({
                                             <td className="px-4 py-3 text-right tabular-nums">{fmtQty(totalUtilized)}</td>
                                             <td className="px-4 py-3 text-right tabular-nums">{fmtQty(g.available_quantity)}</td>
                                             <td className="px-4 py-3 text-right tabular-nums font-semibold">
-                                                <span className={displayQty < -1e-6 ? "text-destructive" : undefined}>{fmtQty(displayQty)}</span>
+                                                {planned > 0 ? (
+                                                    <span className={displayQty < -1e-6 ? "text-destructive" : undefined}>{fmtQty(displayQty)}</span>
+                                                ) : <span className="font-normal text-muted-foreground">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums">{fmtQty(balanceQty)}</td>
                                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                                                {fmtUsd(g.unit_price ?? (planned > 0 ? round2(plannedCif / planned) : 0))}
+                                                {planned > 0 && plannedCif > 0
+                                                    ? `$${round2(plannedCif / planned).toFixed(2)}`
+                                                    : <span>—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums">
-                                                <span className={cn("font-semibold", displayCif < -1e-6 ? "text-destructive" : "text-primary")}>{fmtUsd(displayCif)}</span>
+                                                {plannedCif > 0 ? (
+                                                    <span className={cn("font-semibold", displayCif < -1e-6 ? "text-destructive" : "text-primary")}>{fmtUsd(displayCif)}</span>
+                                                ) : <span className="text-muted-foreground">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 {isEditing ? (

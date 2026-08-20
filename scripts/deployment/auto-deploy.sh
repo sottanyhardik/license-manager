@@ -101,9 +101,9 @@ for name in DEPLOY_TARGET_HOST DEPLOY_TARGET_USER DEPLOY_REMOTE_ROOT DEPLOY_KNOW
 valid_absolute_command "$DEPLOY_BACKUP_COMMAND" || die 'DEPLOY_BACKUP_COMMAND must be an absolute single-line target executable path'
 for service in "$DEPLOY_WEB_SERVICE" "$DEPLOY_WORKER_SERVICE" "$DEPLOY_BEAT_SERVICE"; do valid_service_name "$service" || die 'Service names contain invalid characters'; done
 valid_https_url "$DEPLOY_HEALTH_URL" || die 'DEPLOY_HEALTH_URL must be an HTTPS URL'
-if [[ "$EXECUTE" -eq 1 ]]; then
-    for name in DJANGO_SECRET_KEY DATABASE_URL REDIS_URL CELERY_BROKER_URL CELERY_RESULT_BACKEND ALLOWED_HOSTS CSRF_TRUSTED_ORIGINS; do require_var "$name"; done
-fi
+# Legacy deployments read Django/database/Celery settings from the remote
+# checkout's backend/.env.  Do not require the operator's local shell to carry
+# those remote values.
 
 info "Deployment target: $ENVIRONMENT"
 info "Release SHA: ${RELEASE_SHA:0:12}"

@@ -1,13 +1,26 @@
 #!/usr/bin/env bash
-# Fail-closed release deployment entry point.
-# No host, credential, branch, or production default is stored in this repository.
+# Legacy production deployment entry point.
+# Defaults intentionally preserve the previous single-command production flow.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 STEP="argument parsing"
-ENVIRONMENT="" RELEASE_SHA="" DRY_RUN=1 PREFLIGHT_ONLY=0 CONFIRM_PRODUCTION=0 EXECUTE=0
+ENVIRONMENT="production" RELEASE_SHA="$(git -C "$PROJECT_ROOT" rev-parse HEAD)" DRY_RUN=0 PREFLIGHT_ONLY=0 CONFIRM_PRODUCTION=1 EXECUTE=1
+
+# Historical production defaults. Environment variables may still override
+# these values for a one-off target, but invoking this script with no arguments
+# uses the original license-manager deployment destination.
+DEPLOY_TARGET_HOST="${DEPLOY_TARGET_HOST:-143.110.252.201}"
+DEPLOY_TARGET_USER="${DEPLOY_TARGET_USER:-django}"
+DEPLOY_REMOTE_ROOT="${DEPLOY_REMOTE_ROOT:-/home/django/license-manager}"
+DEPLOY_KNOWN_HOSTS_FILE="${DEPLOY_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}"
+DEPLOY_BACKUP_COMMAND="${DEPLOY_BACKUP_COMMAND:-/home/django/license-manager/scripts/deployment/backup-db.sh}"
+DEPLOY_WEB_SERVICE="${DEPLOY_WEB_SERVICE:-gunicorn}"
+DEPLOY_WORKER_SERVICE="${DEPLOY_WORKER_SERVICE:-celery}"
+DEPLOY_BEAT_SERVICE="${DEPLOY_BEAT_SERVICE:-celery-beat}"
+DEPLOY_HEALTH_URL="${DEPLOY_HEALTH_URL:-https://license-manager.duckdns.org/api/health/}"
 
 on_error() {
     local status=$?

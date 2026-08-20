@@ -1664,6 +1664,21 @@ class ItemPivotReportView(APIView):
                         cell = totals["items"][item["key"]]
                         total_row.extend([None, None, cell["total_qty"], cell["allotted_qty"], cell["debited_qty"], cell["balance_qty"], None, cell["restriction_value"], cell["plan_qty"], cell["planned_cif"]])
                     sheet.append(total_row)
+                    sheet.append([])
+                    sheet.append(["ITEM SUMMARY", "SION", "LICENCES", "TOTAL QTY", "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY", "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF"])
+                    for item in group.get("item_summary", []):
+                        sheet.append([item["item_name"], item["sion"], item["license_count"], item["total_qty"], item["boe_used_qty"], item["allotted_qty"], item["available_qty"], item["planned_qty"], item["balance_qty"], item["available_cif"], item["planned_cif"], item["balance_cif"]])
+                    subtotal = group.get("item_summary_totals", {})
+                    sheet.append(["NOTIFICATION SUBTOTAL", None, subtotal.get("license_count"), subtotal.get("total_qty"), subtotal.get("boe_used_qty"), subtotal.get("allotted_qty"), subtotal.get("available_qty"), subtotal.get("planned_qty"), subtotal.get("balance_qty"), subtotal.get("available_cif"), subtotal.get("planned_cif"), subtotal.get("balance_cif")])
+                # ``_Summary`` keeps this additive sheet distinct from the
+                # existing per-notification matrix sheets for consumers that
+                # discover those sheets by name.
+                summary_sheet = workbook.create_sheet(title="TOTAL_Summary")
+                summary_sheet.append(["TOTAL SUMMARY — ALL NOTIFICATIONS", "SION", "LICENCES", "TOTAL QTY", "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY", "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF"])
+                for item in report_data.get("grand_total", {}).get("item_summary", []):
+                    summary_sheet.append([item["item_name"], item["sion"], item["license_count"], item["total_qty"], item["boe_used_qty"], item["allotted_qty"], item["available_qty"], item["planned_qty"], item["balance_qty"], item["available_cif"], item["planned_cif"], item["balance_cif"]])
+                grand = report_data.get("grand_total", {}).get("item_summary_totals", {})
+                summary_sheet.append(["GRAND TOTAL", None, grand.get("license_count"), grand.get("total_qty"), grand.get("boe_used_qty"), grand.get("allotted_qty"), grand.get("available_qty"), grand.get("planned_qty"), grand.get("balance_qty"), grand.get("available_cif"), grand.get("planned_cif"), grand.get("balance_cif")])
                 workbook.save(temp_file.name)
                 def canonical_stream():
                     with open(temp_file.name, 'rb') as generated:

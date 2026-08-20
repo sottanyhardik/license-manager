@@ -72,7 +72,9 @@ class ItemPivotService:
                 provenance = plan.allocation_provenance or {}
                 item_name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
                 sion = provenance.get("sion") or next((getattr(x.norm_class, "norm_class", "") for x in license_obj.export_license.all() if x.norm_class_id), "")
-                key = f"{sion}:{item_name.strip().upper().replace(' ', '_')}"
+                # The matrix key is identity based.  Names are presentation
+                # only: a canonical item with two SIONs must remain two cells.
+                key = f"{plan.item_name_id or 'unmapped'}:{sion}"
                 source_ids = [int(source_id) for source_id in provenance.get("source_item_ids", []) if str(source_id).isdigit()] or [plan.import_item_id]
                 source_items = [item_by_id[source_id] for source_id in source_ids if source_id in item_by_id]
                 is_percentage = provenance.get("strategy") in {"SPLIT_BY_PERCENT", "SPLIT_BY_PERCENTAGE"}
@@ -122,14 +124,23 @@ class ItemPivotService:
                 planned_cif += plan_cif
                 description = next((item.description for item in source_items if item.description), item_name)
                 hsn = next((item.hs_code.hs_code for item in source_items if item.hs_code_id), "")
+                source_total_qty = sum((_decimal(item.quantity) for item in source_items), ZERO_QTY)
+                source_total_cif = sum((_decimal(item.cif_fc) for item in source_items), ZERO_CIF)
+                source_used_cif = boe_cif + allot_cif
+                # Allocate only this target's adjusted share of its source
+                # balance.  Never repeat the full licence balance per item.
+                available_cif = ((source_total_cif - source_used_cif) * adjusted_total_qty / source_total_qty
+                                 if source_total_qty > ZERO_QTY else ZERO_CIF)
                 cells[key] = {
+                    "canonical_item_id": plan.item_name_id, "item_name": item_name, "sion": sion,
                     "hsn_code": hsn, "description": description, "total_qty": _text(adjusted_total_qty),
                     "percentage_target_qty": _text(percentage_target_qty), "own_excess_qty": _text(own_excess_qty),
                     "excess_other_item_qty": _text(excess_other_item_qty), "adjusted_total_qty": _text(adjusted_total_qty),
                     "allotted_qty": _text(allot_qty), "debited_qty": _text(boe_qty),
                     "boe_used_cif": _text(boe_cif), "allotted_cif": _text(allot_cif),
                     "balance_qty": _text(balance_qty), "plan_qty": _text(plan_qty),
-                    "planned_cif": _text(plan_cif), "restriction_percent": None,
+                    "planned_cif": _text(plan_cif), "effective_planned_qty": _text(plan_qty),
+                    "effective_planned_cif": _text(plan_cif), "available_cif": _text(available_cif), "restriction_percent": None,
                     "restriction_value": None,
                 }
                 # Add the column to the licence's notification/company group
@@ -150,8 +161,8 @@ class ItemPivotService:
                 provenance = plan.allocation_provenance or {}
                 name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
                 sion = provenance.get("sion") or next((getattr(x.norm_class, "norm_class", "") for x in license_obj.export_license.all() if x.norm_class_id), "")
-                key = f"{sion}:{name.strip().upper().replace(' ', '_')}"
-                group["item_groups"].setdefault(key, {"key": key, "name": name, "sion": sion, "priority": plan.planning_rule_priority or 999999, "sequence": plan.id})
+                key = f"{plan.item_name_id or 'unmapped'}:{sion}"
+                group["item_groups"].setdefault(key, {"key": key, "canonical_item_id": plan.item_name_id, "name": name, "sion": sion, "priority": plan.planning_rule_priority or 999999, "sequence": plan.id})
             issues = []
             for item_key, cell in cells.items():
                 adjusted_qty = _decimal(cell["adjusted_total_qty"])
@@ -208,6 +219,11 @@ class ItemPivotService:
             }
             groups.append(group)
         groups = sorted(groups, key=lambda row: (row["notification_number"], row["purchase_status"]["name"]))
+        # One pure projection is shared by per-notification and complete
+        # report summaries.  It consumes the matrix cells above verbatim.
+        from apps.license.services.item_pivot_item_summary import project_item_summary
+        for group in groups:
+            group.update(project_item_summary(group["licenses"]))
         all_licenses = [license_row for group in groups for license_row in group["licenses"]]
         summary = {
             "license_count": len({row["license_id"] for row in all_licenses}),
@@ -262,7 +278,8 @@ class ItemPivotService:
         global_summary = {key: _text(value) if isinstance(value, Decimal) else value for key, value in summary.items()}
         # Aliases make the report contract explicit while preserving the
         # existing consumers during the presentation-only migration.
+        grand_projection = project_item_summary(all_licenses)
         return {"groups": groups, "notification_groups": groups, "summary": global_summary,
                 "global_summary": global_summary, "items": items, "item_columns": [{"key": row["key"], "name": row["item_name"], "sion": row["sion"]} for row in items],
-                "grand_total": {"notification_count": len(groups), "license_count": global_summary["license_count"], "summary": global_summary, "item_summary": items},
+                "grand_total": {"notification_count": len(groups), "license_count": global_summary["license_count"], "summary": global_summary, **grand_projection},
                 "report_version": "canonical-item-pivot-v1"}

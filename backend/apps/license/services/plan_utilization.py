@@ -256,6 +256,15 @@ def plan_utilization_rows(
             # one unit.  Mixed-unit groups are explicitly blocked above.
             "unit_conversion": Decimal("1") if len(units) == 1 else None,
             "available_qty": available,
+            # Presentation positions are canonical, post-reconciliation values.
+            # The import item's available quantity already excludes BOE and
+            # allotment usage, so derive utilization once from the adjusted
+            # total and never include newly planned quantity.
+            "total_qty": max(_dec(group["total_quantity"]), DEC_000),
+            "total_utilized_qty": max(_dec(group["total_quantity"]) - available, DEC_000),
+            "balance_qty": max(available - planned, DEC_000),
+            "over_utilized_qty": max(available - _dec(group["total_quantity"]), DEC_000),
+            "over_planned_qty": max(planned - available, DEC_000),
             "effective_available_quantity": effective_available,
             "effective_available_qty": effective_available,
             "license_balance_cif": license_balance_cif,

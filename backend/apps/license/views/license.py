@@ -342,6 +342,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'license_balance_cif', 'effective_license_balance_cif',
             'allocated_qty', 'consumed_qty', 'remaining_qty',
             'shortage_qty', 'excess_qty',
+            'total_qty', 'total_utilized_qty', 'balance_qty',
+            'over_utilized_qty', 'over_planned_qty',
         )
         data['plan_utilization'] = [
             {**row, **{f: str(row[f]) for f in _decimal_fields if f in row}}

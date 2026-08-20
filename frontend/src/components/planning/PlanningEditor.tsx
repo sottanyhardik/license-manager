@@ -169,6 +169,9 @@ interface Group {
     hsCode?: string;
     memberIds: number[];
     total_quantity: number;
+    total_qty?: number;
+    total_utilized_qty?: number;
+    balance_qty?: number;
     available_quantity: number;
     effective_available_quantity: number;
     license_balance_cif: number;
@@ -628,6 +631,7 @@ export default function PlanningEditor({
                 serials?: number[]; member_ids?: number[];
                 item_names?: { id: number; name: string }[];
                 available_quantity?: string | number; total_quantity?: string | number;
+                total_qty?: string | number; total_utilized_qty?: string | number; balance_qty?: string | number;
                 effective_available_quantity?: string | number;
                 license_balance_cif?: string | number;
                 effective_license_balance_cif?: string | number;
@@ -653,6 +657,9 @@ export default function PlanningEditor({
                     hsCode: grp.hs_code || undefined,
                     memberIds,
                     total_quantity: Number(grp.total_quantity ?? 0),
+                    total_qty: Number(grp.total_qty ?? grp.total_quantity ?? 0),
+                    total_utilized_qty: Number(grp.total_utilized_qty ?? 0),
+                    balance_qty: Number(grp.balance_qty ?? 0),
                     available_quantity: Number(grp.available_quantity ?? 0),
                     effective_available_quantity: Number(grp.effective_available_quantity ?? grp.available_quantity ?? 0),
                     license_balance_cif: Number(grp.license_balance_cif ?? license?.get_balance_cif ?? 0),
@@ -1107,11 +1114,13 @@ export default function PlanningEditor({
                                 <th scope="col" className="px-4 py-2.5">HS Code</th>
                                 <th scope="col" className="px-4 py-2.5">S.No</th>
                                 <th scope="col" className="px-4 py-2.5">Status</th>
+                                <th scope="col" className="px-4 py-2.5 text-right">Total Qty</th>
+                                <th scope="col" className="px-4 py-2.5 text-right">Total Utilized Qty</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Available Qty</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Planned Qty</th>
+                                <th scope="col" className="px-4 py-2.5 text-right">Balance Qty</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Unit Price</th>
                                 <th scope="col" className="px-4 py-2.5 text-right">Planned CIF</th>
-                                <th scope="col" className="px-4 py-2.5 text-right">Used Qty</th>
                                 <th scope="col" className="px-4 py-2.5 text-center">Actions</th>
                             </tr>
                         </thead>
@@ -1121,6 +1130,9 @@ export default function PlanningEditor({
                                 const planned    = g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
                                 const plannedCif = g.splits.reduce((s, sp) => s + num(sp.effective_planned_cif), 0);
                                 const rem        = g.available_quantity - planned;
+                                const totalQty = g.total_qty ?? g.total_quantity;
+                                const totalUtilized = g.total_utilized_qty ?? 0;
+                                const balanceQty = g.balance_qty ?? 0;
                                 const isEditing  = editingGroupId === g.id;
                                 const isSaving   = savingGroupId === g.id;
                                 const splitRows  = validSplitsOf(g);
@@ -1179,6 +1191,8 @@ export default function PlanningEditor({
                                             <td className="px-4 py-3">
                                                 <StatusBadge status={status} />
                                             </td>
+                                            <td className="px-4 py-3 text-right tabular-nums">{fmtQty(totalQty)}</td>
+                                            <td className="px-4 py-3 text-right tabular-nums">{fmtQty(totalUtilized)}</td>
                                             <td className="px-4 py-3 text-right tabular-nums">{fmtQty(g.available_quantity)}</td>
                                             <td className="px-4 py-3 text-right tabular-nums font-semibold">
                                                 {planned > 0 ? (
@@ -1190,6 +1204,7 @@ export default function PlanningEditor({
                                                     </>
                                                 ) : <span className="font-normal text-muted-foreground">—</span>}
                                             </td>
+                                            <td className="px-4 py-3 text-right tabular-nums">{fmtQty(balanceQty)}</td>
                                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                                                 {planned > 0 && plannedCif > 0
                                                     ? `$${round2(plannedCif / planned).toFixed(2)}`
@@ -1204,13 +1219,6 @@ export default function PlanningEditor({
                                                         )}
                                                     </>
                                                 ) : <span className="text-muted-foreground">—</span>}
-                                            </td>
-                                            <td className="px-4 py-3 text-right tabular-nums">
-                                                <span className={cn("font-semibold",
-                                                    showRemaining ? "text-foreground" :
-                                                    rem < -1e-6 ? "text-destructive" :
-                                                    rem < 1e-6 && planned > 0 ? "text-emerald-700" : "text-muted-foreground",
-                                                )}>{fmtQty(showRemaining ? g.used_planned_quantity ?? 0 : rem)}</span>
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 {isEditing ? (
@@ -1251,7 +1259,7 @@ export default function PlanningEditor({
                                                 id={si === 0 ? splitRowsId : undefined}
                                                 className="border-b border-border/30 bg-primary/[0.02]"
                                             >
-                                                <td colSpan={10} className="px-4 py-2 pl-11">
+                                                <td colSpan={12} className="px-4 py-2 pl-11">
                                                     <div className="flex flex-wrap items-center gap-2 text-[12px]">
                                                         <span className="text-muted-foreground/50" aria-hidden="true">└</span>
                                                         <span className="text-muted-foreground">Planning Item:</span>

@@ -20,6 +20,7 @@ from apps.license.services.planning_usage_reconciliation import (
 )
 from apps.license.services.planning_tolerances import apply_remaining_plan_tolerance
 from apps.license.services.planning_operational_snapshot import planning_operational_snapshots
+from apps.license.services.item_usage import rollup_actual_boe_debits_for_license
 
 
 @pytest.mark.parametrize(("name", "family"), [
@@ -210,6 +211,38 @@ def test_reconciliation_subtracts_boe_and_only_unlinked_allotment(reconciliation
     assert payload["remaining_quantity"] == "296138.000"
     assert payload["remaining_cif"] == "533048.40"
     assert payload["status"] == "PARTIALLY_UTILIZED"
+
+
+@pytest.mark.django_db
+def test_boe_rollup_uses_only_canonical_selected_license_import_item_debits(reconciliation_setup):
+    """Neither planning mappings nor equal CIF values can widen/collapse BOE use."""
+    company, license_obj, import_item, _plan = reconciliation_setup
+    other_license = LicenseDetailsModel.objects.create(
+        exporter=company, license_number="OTHER-LICENSE", license_date=date.today(),
+        license_expiry_date=date.today() + timedelta(days=30),
+    )
+    other_item = LicenseImportItemsModel.objects.create(
+        license=other_license, serial_number=1, description="Same HSN/name is irrelevant",
+        unit="KG", quantity=Decimal("100"), available_quantity=Decimal("100"),
+    )
+    first = BillOfEntryModel.objects.create(company=company, bill_of_entry_number="CANONICAL-1")
+    second = BillOfEntryModel.objects.create(company=company, bill_of_entry_number="CANONICAL-2")
+    foreign = BillOfEntryModel.objects.create(company=company, bill_of_entry_number="FOREIGN")
+    # No planning_target_item is set on either valid row: that mapping is not
+    # an eligibility condition. Identical CIF values are two allocations.
+    row_one = RowDetails.objects.create(bill_of_entry=first, sr_number=import_item, transaction_type=DEBIT, qty=Decimal("10"), cif_fc=Decimal("25"))
+    row_two = RowDetails.objects.create(bill_of_entry=second, sr_number=import_item, transaction_type=DEBIT, qty=Decimal("20"), cif_fc=Decimal("25"))
+    RowDetails.objects.create(bill_of_entry=foreign, sr_number=other_item, transaction_type=DEBIT, qty=Decimal("99"), cif_fc=Decimal("999"))
+    # A DEBIT row without a BOE is a draft/non-completed source and excluded.
+    RowDetails.objects.create(sr_number=import_item, transaction_type=DEBIT, qty=Decimal("7"), cif_fc=Decimal("70"))
+
+    result = rollup_actual_boe_debits_for_license(license_obj)
+
+    assert [row.pk for row in result["rows"]] == [row_one.pk, row_two.pk]
+    assert result["row_count_before_aggregation"] == result["row_count_after_deduplication"] == 2
+    assert result["actual_boe_quantity"] == Decimal("30")
+    assert result["actual_boe_cif"] == Decimal("50")
+    assert result["per_import_item"][import_item.pk]["boe_used_cif"] == Decimal("50")
 
 
 @pytest.mark.django_db

@@ -37,3 +37,18 @@ export function withConditionOperator(condition: RuleCondition, operator: string
 
 export const MATCH_FIELDS = Object.entries(FIELD_LABELS);
 export const MATCH_OPERATORS = Object.entries(OPERATOR_LABELS);
+
+/** The planning rule UI intentionally exposes only the two safe text filters. */
+export const PLANNING_MATCH_FIELDS = MATCH_FIELDS.filter(([field]) =>
+    field === "HSN" || field === "PRODUCT_DESCRIPTION",
+);
+
+export function operatorsForPlanningField(field: string): Array<[string, string]> {
+    return String(field).toUpperCase() === "HSN"
+        ? [["STARTS_WITH", "starts with"], ["NOT_STARTS_WITH", "does not start with"]]
+        : [["CONTAINS", "contains"], ["NOT_CONTAINS", "does not contain"]];
+}
+
+export function defaultOperatorForPlanningField(field: string): string {
+    return operatorsForPlanningField(field)[0][0];
+}

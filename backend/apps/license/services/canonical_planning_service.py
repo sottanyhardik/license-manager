@@ -393,12 +393,30 @@ class CanonicalPlanningService:
 
             allocated_items = []
             for row in normalized:
-                planned_cif = quantize_cif(row["requested_quantity"] * row["requested_unit_price"])
+                provenance = dict(row["allocation_provenance"] or {})
+                theoretical_cif = quantize_cif(
+                    provenance.get("theoretical_cif", row["requested_quantity"] * row["requested_unit_price"])
+                )
+                # Strategy execution has already applied its single shared
+                # operational CIF waterfall. Preserve that capped amount;
+                # recalculating from quantity × price would overwrite the
+                # intentional theoretical/operational separation.
+                planned_cif = quantize_cif(
+                    provenance.get("operational_planned_cif", theoretical_cif)
+                )
+                provenance.setdefault("theoretical_quantity", str(row["requested_quantity"]))
+                provenance["theoretical_cif"] = str(theoretical_cif)
+                provenance["operational_planned_cif"] = str(planned_cif)
+                provenance.setdefault(
+                    "cif_status", "CAPPED" if planned_cif < theoretical_cif else "FULLY_FUNDED",
+                )
                 allocated_items.append({
                     **row,
                     "allocated_quantity": row["requested_quantity"],
                     "unit_price": row["requested_unit_price"],
                     "planned_cif_fc": planned_cif,
+                    "theoretical_cif": theoretical_cif,
+                    "allocation_provenance": provenance,
                     "status": LINE_ALLOCATED,
                 })
             consumed = sum((row["planned_cif_fc"] for row in allocated_items), DEC_0)
@@ -418,7 +436,13 @@ class CanonicalPlanningService:
                 "planning_rule_version": row["planning_rule_version"],
                 "planning_rule_priority": row["planning_rule_priority"],
                 "allocation_provenance": row["allocation_provenance"],
-            } for row in allocated_items if row["allocated_quantity"] > DEC_000]
+            } for row in allocated_items if (
+                row["allocated_quantity"] > DEC_000
+                # A fully-utilised percentage child remains a reportable
+                # component of the configured split, even though it has no
+                # future plan quantity/CIF.
+                or row["allocation_provenance"].get("strategy") == "SPLIT_BY_PERCENT"
+            )]
             created = save_plan_lines_for_license(license_obj, plan_lines, delete_existing=True)
             return {
                 "plan_id": CanonicalPlanningService._compute_plan_id(
@@ -436,7 +460,7 @@ class CanonicalPlanningService:
                     "opening_balance_cif": ceiling,
                     "consumed_cif": consumed,
                     "remaining_balance_cif": ceiling - consumed,
-                    "total_theoretical_cif": consumed,
+                "total_theoretical_cif": sum((row["theoretical_cif"] for row in allocated_items), DEC_0),
                     "license_total_cif": ceiling,
                     "excess_cif": excess_cif,
                     "review_status": review_status,

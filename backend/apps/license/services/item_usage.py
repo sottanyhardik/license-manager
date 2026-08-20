@@ -14,7 +14,61 @@ Before this module existed, this exact query pair (`RowDetails` DEBIT rows +
 All of those now call `get_item_usage()` below instead, so there is exactly
 one query to get right/optimize.
 """
+from collections import defaultdict
+from decimal import Decimal
+
 from apps.core.constants import DEBIT
+
+
+ZERO_CIF = Decimal("0.00")
+ZERO_QTY = Decimal("0.000")
+
+
+def eligible_boe_debits_for_license(license_obj):
+    """Canonical actual BOE debit allocations for one licence.
+
+    ``RowDetails.pk`` is the debit-allocation identity.  The query starts at
+    licence import items and deliberately has no optional planning, alias,
+    HSN, allotment, or header-value joins that could widen or multiply the
+    eligible financial population.
+    """
+    from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
+
+    return (
+        annotate_and_exclude_hidden(
+            RowDetails.objects.filter(
+                sr_number__license_id=license_obj.pk,
+                transaction_type=DEBIT,
+                bill_of_entry__isnull=False,
+            ),
+            boe_field="bill_of_entry",
+        )
+        .select_related("sr_number", "bill_of_entry")
+        .order_by("pk")
+    )
+
+
+def rollup_actual_boe_debits_for_license(license_obj):
+    """Aggregate canonical debit allocations once, before optional joins."""
+    rows = list(eligible_boe_debits_for_license(license_obj))
+    per_item = defaultdict(lambda: {
+        "boe_used_quantity": ZERO_QTY,
+        "boe_used_cif": ZERO_CIF,
+        "row_ids": [],
+    })
+    for row in rows:
+        bucket = per_item[row.sr_number_id]
+        bucket["boe_used_quantity"] += row.qty or ZERO_QTY
+        bucket["boe_used_cif"] += row.cif_fc or ZERO_CIF
+        bucket["row_ids"].append(row.pk)
+    return {
+        "rows": rows,
+        "row_count_before_aggregation": len(rows),
+        "row_count_after_deduplication": len({row.pk for row in rows}),
+        "actual_boe_quantity": sum((row.qty or ZERO_QTY for row in rows), ZERO_QTY),
+        "actual_boe_cif": sum((row.cif_fc or ZERO_CIF for row in rows), ZERO_CIF),
+        "per_import_item": dict(per_item),
+    }
 
 
 def get_item_usage(import_item):
@@ -33,18 +87,21 @@ def get_item_usage(import_item):
 
     boes = (
         annotate_and_exclude_hidden(
-            RowDetails.objects.filter(sr_number=import_item, transaction_type=DEBIT),
+            RowDetails.objects.filter(
+                sr_number=import_item, transaction_type=DEBIT,
+                bill_of_entry__isnull=False,
+            ),
             # Previous-owner "hidden" BOEs (genuinely hidden per audit
             # trail) are excluded — this usage query feeds live
             # balance/report figures (Item Summary drawer, Excel
             # exporters), never the Customs History audit view.
             boe_field="bill_of_entry",
         )
-        .select_related('bill_of_entry__company', 'bill_of_entry__port')
+        .select_related('bill_of_entry__company', 'bill_of_entry__port', 'bill_of_entry__planning_target_item')
     )
     allotments = (
         AllotmentItems.objects.filter(item=import_item, allotment__bill_of_entry__isnull=True)
-        .select_related('allotment__company')
+        .select_related('allotment__company', 'allotment__planning_target_item')
     )
     return {'boes': boes, 'allotments': allotments}
 
@@ -74,17 +131,20 @@ def get_item_usage_for_items(item_ids):
     boes_by_item = defaultdict(list)
     for row in (
         annotate_and_exclude_hidden(
-            RowDetails.objects.filter(sr_number_id__in=ids, transaction_type=DEBIT),
+            RowDetails.objects.filter(
+                sr_number_id__in=ids, transaction_type=DEBIT,
+                bill_of_entry__isnull=False,
+            ),
             boe_field="bill_of_entry",
         )
-        .select_related('bill_of_entry__company', 'bill_of_entry__port')
+        .select_related('bill_of_entry__company', 'bill_of_entry__port', 'bill_of_entry__planning_target_item')
     ):
         boes_by_item[row.sr_number_id].append(row)
 
     allotments_by_item = defaultdict(list)
     for row in (
         AllotmentItems.objects.filter(item_id__in=ids, allotment__bill_of_entry__isnull=True)
-        .select_related('allotment__company')
+        .select_related('allotment__company', 'allotment__planning_target_item')
     ):
         allotments_by_item[row.item_id].append(row)
 

@@ -59,11 +59,11 @@ def split_percent_setup():
 
 
 def make_split_percent_rules(sion):
-    """Create SPLIT_BY_PERCENT rules for E126 PKO and OLIVE_OIL using new architecture."""
+    """Create ONE SPLIT_BY_PERCENT rule with two sibling splits for E126 PKO and OLIVE_OIL."""
     from apps.core.models import ItemNameModel
     from apps.license.models import SionPlanningPercentageRow
 
-    # Create output items
+    # Create target commodities
     pko_item, _ = ItemNameModel.objects.get_or_create(
         name="PKO", defaults={"is_active": True}
     )
@@ -71,48 +71,39 @@ def make_split_percent_rules(sion):
         name="OLIVE_OIL", defaults={"is_active": True}
     )
 
-    # Create rules with new SPLIT_BY_PERCENT strategy
-    pko_rule = SionPlanningRule.objects.create(
+    # Create ONE rule with SPLIT_BY_PERCENT strategy
+    # It will split a single source (import item) across two commodities
+    split_rule = SionPlanningRule.objects.create(
         sion=sion,
-        name="PKO 50%",
+        name="50/50 Split: PKO & Olive Oil",
         expression={"operator": "AND", "conditions": []},
         max_unit_price=Decimal("100.00"),
         unit="KG",
         priority=1,
         is_active=True,
         strategy="SPLIT_BY_PERCENT",
-        import_item=pko_item,
+        import_item=pko_item,  # fallback for matching, but rows are authoritative
     )
 
-    # Create percentage row for PKO
-    SionPlanningPercentageRow.objects.create(
-        rule=pko_rule,
+    # Create percentage row for PKO (50%)
+    pko_row = SionPlanningPercentageRow.objects.create(
+        rule=split_rule,
         import_item=pko_item,
         percentage=Decimal("50"),
         unit_price=Decimal("2.70"),
+        priority=0,
     )
 
-    olive_rule = SionPlanningRule.objects.create(
-        sion=sion,
-        name="OLIVE_OIL 50%",
-        expression={"operator": "AND", "conditions": []},
-        max_unit_price=Decimal("100.00"),
-        unit="KG",
-        priority=2,
-        is_active=True,
-        strategy="SPLIT_BY_PERCENT",
-        import_item=olive_item,
-    )
-
-    # Create percentage row for OLIVE_OIL
-    SionPlanningPercentageRow.objects.create(
-        rule=olive_rule,
+    # Create percentage row for OLIVE_OIL (50%)
+    olive_row = SionPlanningPercentageRow.objects.create(
+        rule=split_rule,
         import_item=olive_item,
         percentage=Decimal("50"),
         unit_price=Decimal("4.00"),
+        priority=1,
     )
 
-    return pko_rule, olive_rule
+    return split_rule, (pko_row, olive_row)
 
 
 class TestSplitByPercentageStrategy:
@@ -146,17 +137,24 @@ class TestSplitByPercentageStrategy:
             quantity=Decimal("10000"), available_quantity=Decimal("10000"),
         )
 
+        # Verify rule was created correctly
+        rules = SionPlanningRule.objects.filter(sion=setup["sion"], is_active=True)
+        assert rules.count() == 1, f"Expected 1 rule, got {rules.count()}"
+        split_rule = rules.first()
+        assert split_rule.strategy == "SPLIT_BY_PERCENT"
+        assert split_rule.percentage_rows.count() == 2, "Expected 2 percentage rows in the split rule"
+
         # Call Auto Plan
         response = setup["client"].post(f"/api/licenses/{license_obj.pk}/auto-plan/")
 
-        assert response.status_code == 200
+        assert response.status_code == 200, f"Auto plan failed: {response.data}"
         data = response.data
         assert data["status"] == "EXECUTED"
         assert data["total_lines_written"] > 0
 
-        # Verify planning results
+        # Verify planning results - should have 2 plans, one for each sibling split
         plans = LicenseItemPlan.objects.filter(license=license_obj).order_by("planned_quantity")
-        assert plans.count() == 2  # PKO and OLIVE_OIL
+        assert plans.count() == 2, f"Expected 2 plans (PKO + OLIVE_OIL), got {plans.count()}"
 
         # Each rule should get 50% of total quantity
         expected_qty = Decimal("5000")  # 10000 × 50 / 100

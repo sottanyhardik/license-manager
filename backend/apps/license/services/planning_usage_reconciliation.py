@@ -5,13 +5,10 @@ does not participate in theoretical plan generation.
 """
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from decimal import Decimal, ROUND_DOWN
 
 from apps.allotment.models import AllotmentItems
-from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
-from apps.core.constants import DEBIT
 from apps.license.models import LicenseDetailsModel, LicenseItemPlan
 from apps.license.services.planning_tolerances import (
     apply_remaining_plan_tolerance,
@@ -22,34 +19,6 @@ from apps.license.services.planning_tolerances import (
 ZERO = Decimal("0")
 CIF_QUANTUM = Decimal("0.01")
 QTY_QUANTUM = Decimal("0.001")
-FAMILY_ALIASES = {
-    "PKO": frozenset({"PKO", "PALM KERNEL OIL", "PALM KERNEL"}),
-    "OLIVE_OIL": frozenset({"OLIVE OIL", "OLIVE"}),
-    "CHEESE": frozenset({"CHEESE", "CREAM", "BUTTER"}),
-    "FOOD_FLAVOUR": frozenset({"FOOD FLAVOUR", "FOOD FLAVOR"}),
-}
-_SION_SUFFIX = re.compile(r"\s*[-–—]\s*[A-Z]+\s*\d+[A-Z0-9]*\s*$", re.IGNORECASE)
-
-
-def normalize_product_name(value: str | None) -> str:
-    """Uppercase/collapse whitespace and remove a terminal SION code."""
-    normalized = " ".join((value or "").strip().split()).upper()
-    return _SION_SUFFIX.sub("", normalized).strip()
-
-
-def normalize_planning_family(value: str | None) -> str | None:
-    normalized = normalize_product_name(value)
-    for family, aliases in FAMILY_ALIASES.items():
-        if normalized in aliases:
-            return family
-    return None
-
-
-def _family_from_names(names) -> str | None:
-    families = {family for name in names if (family := normalize_planning_family(name))}
-    return next(iter(families)) if len(families) == 1 else None
-
-
 def _usage_bucket():
     return {
         "boe_used_quantity": ZERO,
@@ -110,29 +79,42 @@ def reconcile_split_allocation(source_qty, theoretical_rows, utilization_by_item
 
 
 def aggregate_license_usage(license_id: int) -> dict:
-    """Return family totals and explicit diagnostics for unmapped usage rows."""
-    totals = defaultdict(_usage_bucket)
+    """Return usage keyed by persisted source and canonical target identity.
+
+    Product-name/family inference is deliberately forbidden.  Ambiguous
+    history remains source-level and is surfaced, never silently assigned to
+    a split target.
+    """
+    mapped = defaultdict(_usage_bucket)
+    unmapped_by_source = defaultdict(_usage_bucket)
     unmapped = []
 
-    boe_rows = annotate_and_exclude_hidden(
-        RowDetails.objects.filter(sr_number__license_id=license_id, transaction_type=DEBIT),
-        boe_field="bill_of_entry",
-    ).select_related("bill_of_entry", "sr_number").prefetch_related("sr_number__items")
+    # This is the licence-import-item boundary. Planning target mapping below
+    # determines only child reconciliation; it cannot exclude a genuine BOE
+    # debit from licence-level actual usage.
+    from apps.license.models import LicenseDetailsModel
+    from apps.license.services.item_usage import eligible_boe_debits_for_license
+    license_obj = LicenseDetailsModel.objects.only("pk").get(pk=license_id)
+    boe_rows = eligible_boe_debits_for_license(license_obj).select_related(
+        "bill_of_entry__planning_target_item"
+    )
     for row in boe_rows:
-        master_names = [item.name for item in row.sr_number.items.all()]
-        transaction_product = row.bill_of_entry.product_name if row.bill_of_entry else ""
-        family = normalize_planning_family(transaction_product) or _family_from_names(master_names)
-        product = transaction_product or " / ".join(master_names)
-        if not family:
+        boe = row.bill_of_entry
+        if not boe or not boe.planning_target_item_id or boe.planning_mapping_status in {"INVALID_PERSISTED_TARGET", "UNMAPPED_AMBIGUOUS", "UNMAPPED_NO_TARGET"}:
+            bucket = unmapped_by_source[row.sr_number_id]
+            bucket["boe_used_quantity"] += row.qty or ZERO
+            bucket["boe_used_cif"] += row.cif_fc or ZERO
             unmapped.append({
                 "source": "BOE", "record_id": row.id,
                 "record_number": row.bill_of_entry.bill_of_entry_number if row.bill_of_entry else None,
-                "product_name": product, "quantity": row.qty or ZERO,
-                "cif_fc": row.cif_fc or ZERO,
+                "source_item_id": row.sr_number_id, "planning_target_item_id": None,
+                "quantity": row.qty or ZERO, "cif_fc": row.cif_fc or ZERO,
+                "mapping_status": boe.planning_mapping_status if boe else "UNMAPPED_AMBIGUOUS",
             })
             continue
-        totals[family]["boe_used_quantity"] += row.qty or ZERO
-        totals[family]["boe_used_cif"] += row.cif_fc or ZERO
+        bucket = mapped[(row.sr_number_id, boe.planning_target_item_id)]
+        bucket["boe_used_quantity"] += row.qty or ZERO
+        bucket["boe_used_cif"] += row.cif_fc or ZERO
 
     allotment_rows = (
         AllotmentItems.objects.filter(
@@ -141,27 +123,28 @@ def aggregate_license_usage(license_id: int) -> dict:
             allotment__is_boe=False,
             is_boe=False,
         )
-        .select_related("allotment", "item")
-        .prefetch_related("item__items")
+        .select_related("allotment", "item", "allotment__planning_target_item")
         .distinct()
     )
     for row in allotment_rows:
-        master_names = [item.name for item in row.item.items.all()] if row.item_id else []
-        transaction_product = row.allotment.item_name if row.allotment else ""
-        family = normalize_planning_family(transaction_product) or _family_from_names(master_names)
-        product = transaction_product or " / ".join(master_names)
-        if not family:
+        allotment = row.allotment
+        if not allotment or not allotment.planning_target_item_id or allotment.planning_mapping_status in {"INVALID_PERSISTED_TARGET", "UNMAPPED_AMBIGUOUS", "UNMAPPED_NO_TARGET"}:
+            bucket = unmapped_by_source[row.item_id]
+            bucket["unlinked_allotment_quantity"] += row.qty or ZERO
+            bucket["unlinked_allotment_cif"] += row.cif_fc or ZERO
             unmapped.append({
                 "source": "ALLOTMENT", "record_id": row.id,
                 "record_number": row.allotment.invoice if row.allotment else None,
-                "product_name": product, "quantity": row.qty or ZERO,
-                "cif_fc": row.cif_fc or ZERO,
+                "source_item_id": row.item_id, "planning_target_item_id": None,
+                "quantity": row.qty or ZERO, "cif_fc": row.cif_fc or ZERO,
+                "mapping_status": allotment.planning_mapping_status if allotment else "UNMAPPED_AMBIGUOUS",
             })
             continue
-        totals[family]["unlinked_allotment_quantity"] += row.qty or ZERO
-        totals[family]["unlinked_allotment_cif"] += row.cif_fc or ZERO
+        bucket = mapped[(row.item_id, allotment.planning_target_item_id)]
+        bucket["unlinked_allotment_quantity"] += row.qty or ZERO
+        bucket["unlinked_allotment_cif"] += row.cif_fc or ZERO
 
-    return {"families": dict(totals), "unmapped_usage": unmapped}
+    return {"mapped": dict(mapped), "unmapped_by_source": dict(unmapped_by_source), "unmapped_usage": unmapped}
 
 
 def apply_operational_cif_ceiling(rows, balance_cif):
@@ -171,6 +154,21 @@ def apply_operational_cif_ceiling(rows, balance_cif):
     tolerance. The deterministic order is planning-rule priority, then plan
     id. Historical BOE/allotment values are intentionally untouched.
     """
+    # Strategy Auto Plan already persisted a single canonical operational CIF
+    # allocation. Reapplying the unrelated live financial balance here would
+    # omit valid capped rows (for example the final WPC waterfall row) from
+    # reconciliation and reporting. Use the persisted run snapshot exactly.
+    strategy_openings = [
+        Decimal(str((plan.allocation_provenance or {}).get("opening_operational_cif")))
+        for plan, _row in rows
+        if (plan.allocation_provenance or {}).get("opening_operational_cif") is not None
+        and (plan.allocation_provenance or {}).get("operational_planned_cif") is not None
+    ]
+    if strategy_openings:
+        if len(set(strategy_openings)) != 1:
+            raise ValueError("Strategy plan rows have inconsistent opening operational CIF snapshots.")
+        return strategy_openings[0]
+
     effective_balance = effective_planning_balance_cif(balance_cif)
     # A negative financial balance is an excess/manual-review condition, not
     # negative future planning capacity.  It must never create a negative
@@ -220,7 +218,6 @@ def reconcile_license_plans(license_id: int) -> dict:
         .select_related("item_name", "import_item", "planning_rule")
         .order_by("id")
     )
-    family_remaining = {family: dict(values) for family, values in usage["families"].items()}
     by_plan_id = {}
     groups = defaultdict(list)
     for plan in plans:
@@ -231,14 +228,19 @@ def reconcile_license_plans(license_id: int) -> dict:
         usage_details = {}
         theoretical_rows = []
         for plan in group_plans:
-            family = normalize_planning_family(plan.item_name.name if plan.item_name_id else None)
-            available = family_remaining.get(family, _usage_bucket()) if family else _usage_bucket()
+            # A generated line may represent several source rows.  New
+            # canonical plans retain that immutable source list in provenance;
+            # legacy rows conservatively use their persisted anchor.
+            source_ids = (plan.allocation_provenance or {}).get("source_item_ids") or [plan.import_item_id]
+            available = _usage_bucket()
+            for source_id in source_ids:
+                values = usage["mapped"].get((int(source_id), plan.item_name_id), _usage_bucket())
+                for key in available:
+                    available[key] += values[key]
             committed = available["boe_used_quantity"] + available["unlinked_allotment_quantity"]
             row_usage[plan.id] = committed
-            usage_details[plan.id] = (family, available)
+            usage_details[plan.id] = (source_ids, available)
             theoretical_rows.append({"key": plan.id, "theoretical_qty": plan.planned_quantity or ZERO})
-            if family in family_remaining:
-                family_remaining[family] = _usage_bucket()
 
         # A split may be anchored to one representative import item while its
         # planner basis is the matched import *group* quantity. For a complete
@@ -249,7 +251,7 @@ def reconcile_license_plans(license_id: int) -> dict:
         group_results[import_item_id] = allocation
         allocated_by_id = {row["key"]: row for row in allocation["rows"]}
         for plan in group_plans:
-            family, available = usage_details[plan.id]
+            source_ids, available = usage_details[plan.id]
             committed_qty = row_usage[plan.id]
             committed_cif = available["boe_used_cif"] + available["unlinked_allotment_cif"]
             reconciled_qty = allocated_by_id[plan.id]["reconciled_qty"]
@@ -282,7 +284,20 @@ def reconcile_license_plans(license_id: int) -> dict:
             else:
                 status = "PARTIALLY_UTILIZED"
             by_plan_id[plan.id] = {
-                "planning_family": family, **available,
+                **available,
+                "planning_family": None,
+                "planning_target_item_id": plan.item_name_id,
+                "mapping_status": "MAPPED_EXPLICIT" if committed_qty else "NO_ACTUAL_USAGE",
+                "unmapped_actual_quantity": sum((
+                    usage["unmapped_by_source"].get(int(source_id), _usage_bucket())["boe_used_quantity"]
+                    + usage["unmapped_by_source"].get(int(source_id), _usage_bucket())["unlinked_allotment_quantity"]
+                    for source_id in source_ids
+                ), ZERO),
+                "unmapped_actual_cif": sum((
+                    usage["unmapped_by_source"].get(int(source_id), _usage_bucket())["boe_used_cif"]
+                    + usage["unmapped_by_source"].get(int(source_id), _usage_bucket())["unlinked_allotment_cif"]
+                    for source_id in source_ids
+                ), ZERO),
                 "effective_used_quantity": committed_qty,
                 "effective_used_cif": committed_cif,
                 "percentage_theoretical_quantity": plan.planned_quantity or ZERO,
@@ -300,10 +315,76 @@ def reconcile_license_plans(license_id: int) -> dict:
                 "reconciliation_status": status,
             }
 
+    # Final operational quantity cap. A source import item's available
+    # balance is shared by every plan target derived from it, so apply the
+    # cap once in deterministic planning priority order rather than letting
+    # each report independently clip a displayed grand total.
+    quantity_capacity = {
+        plan.import_item_id: max(Decimal(str(plan.import_item.available_quantity or 0)), ZERO)
+        for plan in plans
+    }
+    for plan in sorted(
+        plans,
+        key=lambda value: (value.planning_rule_priority or 999999, value.pk),
+    ):
+        row = by_plan_id[plan.id]
+        raw_qty = max(row["remaining_quantity"], ZERO)
+        available_qty = quantity_capacity[plan.import_item_id]
+        effective_qty = min(raw_qty, available_qty)
+        row["raw_remaining_quantity"] = raw_qty
+        row["available_balance_quantity"] = available_qty
+        row["effective_remaining_quantity"] = effective_qty
+        row["quantity_cap_applied"] = effective_qty < raw_qty
+        if effective_qty < raw_qty:
+            # Future CIF follows the quantity cap; historical committed CIF
+            # is already represented separately above and is never rewritten.
+            future_cif = row["remaining_cif"]
+            effective_cif = (
+                future_cif * effective_qty / raw_qty if raw_qty > ZERO else ZERO
+            )
+            row["remaining_quantity"] = effective_qty
+            row["remaining_cif"] = effective_cif.quantize(CIF_QUANTUM)
+        row["effective_remaining_cif"] = row["remaining_cif"]
+        quantity_capacity[plan.import_item_id] = max(available_qty - effective_qty, ZERO)
+
     license_obj = LicenseDetailsModel.objects.get(pk=license_id)
     effective_balance_cif = apply_operational_cif_ceiling(
         [(plan, by_plan_id[plan.id]) for plan in plans], license_obj.get_balance_cif,
     )
+    # Presentation and persistence share the same gross-CIF cap.  Apply a
+    # plan-specific CIF adjustment to percentage children only; quantities and
+    # configured rule prices remain immutable.  This prevents a stale
+    # "remaining CIF" from showing a theoretical Olive value after Food/PKO
+    # have consumed the actual balance.
+    from apps.license.models import LicenseExportItemModel
+    from apps.license.services.percentage_group_solver import reduce_high_rate_first
+    gross_cif = sum((Decimal(str(value or 0)) for value in LicenseExportItemModel.objects.filter(
+        license_id=license_id
+    ).values_list("cif_fc", flat=True)), ZERO)
+    actual_cif = sum((bucket["boe_used_cif"] + bucket["unlinked_allotment_cif"] for bucket in usage["mapped"].values()), ZERO)
+    actual_cif += sum((row["cif_fc"] for row in usage["unmapped_usage"]), ZERO)
+    actual_balance_cif = max(gross_cif - actual_cif, ZERO)
+    percentage_plans = [plan for plan in plans if (plan.allocation_provenance or {}).get("strategy") == "SPLIT_BY_PERCENT"]
+    other_plan_cif = sum((Decimal(str(plan.planned_cif_fc or 0)) for plan in plans if plan not in percentage_plans), ZERO)
+    if percentage_plans:
+        adjustment = reduce_high_rate_first(
+            prior_sequence_cif=other_plan_cif,
+            actual_balance_cif=actual_balance_cif,
+            members=[{
+                "plan_id": plan.id, "unit_rate": plan.unit_price or ZERO,
+                "new_planned_qty": plan.planned_quantity or ZERO,
+                "new_planned_cif": plan.planned_cif_fc or ZERO,
+                "member_sequence": plan.planning_rule_priority or 0,
+            } for plan in percentage_plans],
+        )
+        for member in adjustment["members"]:
+            row = by_plan_id[member["plan_id"]]
+            row.update({
+                "adjusted_planned_cif": member["new_planned_cif"],
+                "effective_unit_price": member["effective_unit_price"],
+                "cif_cap_adjustment": member["cif_cap_reduction_cif"],
+                "adjustment_reason": member["adjustment_reason"],
+            })
     return {
         "plans": by_plan_id,
         "groups": group_results,

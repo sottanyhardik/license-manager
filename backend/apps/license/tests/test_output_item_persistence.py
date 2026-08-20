@@ -45,7 +45,7 @@ class TestOutputItemPersistence:
 
     @pytest.fixture
     def planning_rule_with_item(self, sion_norm, authenticated_client):
-        """Create a planning rule with output_item."""
+        """Create a STANDARD planning rule with its canonical import target."""
         _, user = authenticated_client
         item = ItemNameModel.objects.create(
             name='Item A Test',
@@ -65,14 +65,15 @@ class TestOutputItemPersistence:
             unit='KG',
             priority=next_priority,
             is_active=True,
-            output_item=item,
+            import_item=item,
+            strategy="STANDARD",
             created_by=user,
             modified_by=user
         )
         return rule, item
 
     def test_output_item_persisted_on_update(self, authenticated_client, sion_norm, planning_rule_with_item):
-        """Test that output_item is persisted when updating a rule."""
+        """Test that a STANDARD target is versioned and persisted on update."""
         client, user = authenticated_client
         rule, item1 = planning_rule_with_item
 
@@ -85,14 +86,15 @@ class TestOutputItemPersistence:
 
         # Verify initial state
         rule_before = SionPlanningRule.objects.get(id=rule.id)
-        assert rule_before.output_item_id == item1.id
+        assert rule_before.import_item_id == item1.id
 
         # Update the rule via API to use item2
         response = client.patch(
             f'/api/sion-planning-rules/{rule.id}/',
             {
                 'name': 'Updated Rule',
-                'output_item': item2.id,
+                'import_item': item2.id,
+                'strategy': 'STANDARD',
                 'max_unit_price': '100.00',
                 'unit': 'KG',
                 'is_active': True,
@@ -104,29 +106,30 @@ class TestOutputItemPersistence:
         # Check response
         assert response.status_code == 200, f"Response: {response.data if hasattr(response, 'data') else response.content}"
         data = response.data if hasattr(response, 'data') else response.json()
-        assert data['output_item'] == item2.id
+        assert data['import_item'] == item2.id
 
         # Verify persisted value - get the NEW version created by the update
         all_rules = SionPlanningRule.objects.filter(stable_key=rule.stable_key).order_by('-version')
         new_rule = all_rules.first()
         assert new_rule is not None
-        assert new_rule.output_item_id == item2.id
+        assert new_rule.import_item_id == item2.id
 
-    def test_output_item_can_be_cleared(self, authenticated_client, sion_norm, planning_rule_with_item):
-        """Test that output_item can be cleared (set to null) when updating a rule."""
+    def test_standard_target_cannot_be_cleared(self, authenticated_client, sion_norm, planning_rule_with_item):
+        """STANDARD requires its one explicit canonical planning target."""
         client, user = authenticated_client
         rule, item1 = planning_rule_with_item
 
         # Verify initial state
         rule_before = SionPlanningRule.objects.get(id=rule.id)
-        assert rule_before.output_item_id == item1.id
+        assert rule_before.import_item_id == item1.id
 
         # Update the rule via API to clear the output_item
         response = client.patch(
             f'/api/sion-planning-rules/{rule.id}/',
             {
                 'name': 'Cleared Item Rule',
-                'output_item': None,
+                'import_item': None,
+                'strategy': 'STANDARD',
                 'max_unit_price': '100.00',
                 'unit': 'KG',
                 'is_active': True,
@@ -136,11 +139,5 @@ class TestOutputItemPersistence:
         )
 
         # Check response
-        assert response.status_code == 200
-        data = response.data if hasattr(response, 'data') else response.json()
-        assert data['output_item'] is None
-
-        # Verify persisted value
-        all_rules = SionPlanningRule.objects.filter(stable_key=rule.stable_key).order_by('-version')
-        new_rule = all_rules.first()
-        assert new_rule.output_item_id is None
+        assert response.status_code == 400
+        assert SionPlanningRule.objects.get(id=rule.id).import_item_id == item1.id

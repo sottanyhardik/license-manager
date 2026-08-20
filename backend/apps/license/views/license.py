@@ -355,6 +355,42 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'effective_balance_cif': str(effective_planning_balance),
             'balance_cif_ignored_by_tolerance': raw_planning_balance != effective_planning_balance,
         }
+        # Canonical gross-entitlement reconciliation for every planning
+        # consumer.  Never derive "available" by subtracting only plans: BOE
+        # and unlinked allotment CIF are actual historical utilization.
+        from apps.license.models import LicenseExportItemModel, LicenseItemPlan
+        from apps.license.services.planning_usage_reconciliation import aggregate_license_usage
+        usage = aggregate_license_usage(instance.pk)
+        actual_boe_cif = sum((v['boe_used_cif'] for v in usage['mapped'].values()), Decimal('0'))
+        actual_allotment_cif = sum((v['unlinked_allotment_cif'] for v in usage['mapped'].values()), Decimal('0'))
+        actual_boe_cif += sum((r['cif_fc'] for r in usage['unmapped_usage'] if r['source'] == 'BOE'), Decimal('0'))
+        actual_allotment_cif += sum((r['cif_fc'] for r in usage['unmapped_usage'] if r['source'] == 'ALLOTMENT'), Decimal('0'))
+        gross_cif = sum((Decimal(v or 0) for v in LicenseExportItemModel.objects.filter(license=instance).values_list('cif_fc', flat=True)), Decimal('0'))
+        # Leaf effective values are the one canonical planning aggregate.  A
+        # percentage line can have a calculated CIF-cap adjustment without a
+        # quantity change, so summing persisted candidate CIF is incorrect.
+        from apps.license.services.planning_usage_reconciliation import reconcile_license_plans
+        reconciliation = reconcile_license_plans(instance.pk)
+        plan_rows = LicenseItemPlan.objects.filter(license=instance).values_list('id', 'planned_cif_fc')
+        new_plan_cif = sum((
+            Decimal(str(reconciliation['plans'].get(plan_id, {}).get('adjusted_planned_cif', planned_cif or 0)))
+            for plan_id, planned_cif in plan_rows
+        ), Decimal('0'))
+        accounted_cif = actual_boe_cif + actual_allotment_cif + new_plan_cif
+        actual_balance_cif = max(gross_cif - actual_boe_cif - actual_allotment_cif, Decimal('0'))
+        data['operational_reconciliation'] = {
+            'cif_balance_basis': 'GROSS_EXPORT_ENTITLEMENT', 'license_total_cif': str(gross_cif),
+            'actual_boe_cif': str(actual_boe_cif), 'actual_allotment_cif': str(actual_allotment_cif),
+            'total_actual_cif': str(actual_boe_cif + actual_allotment_cif),
+            # Opening pool for new planning; it deliberately excludes all
+            # future/planned rows so actual CIF is never deducted twice.
+            'actual_balance_cif': str(actual_balance_cif),
+            'new_reconciled_planned_cif': str(new_plan_cif), 'new_planned_cif': str(new_plan_cif),
+            'total_accounted_cif': str(accounted_cif), 'final_balance_cif': str(max(gross_cif-accounted_cif, Decimal('0'))),
+            'balance_cif': str(max(gross_cif-accounted_cif, Decimal('0'))),
+            'overdrawn_cif': str(max(accounted_cif-gross_cif, Decimal('0'))),
+            'aggregation_level': 'leaf LicenseItemPlan rows; parent groups are not added again',
+        }
 
         # Attach canonical license plan presentation (single source of truth)
         try:
@@ -832,10 +868,22 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             "total_lines_written": total_lines_written,
             "theoretical_plan_generated": bool(result.get("write_results")),
         }
+        planner_run = (result.get("results") or [{}])[0]
+        response_data.update({
+            "planning_cif_ceiling": planner_run.get("planning_cif_ceiling", planner_run.get("opening_operational_cif")),
+            "remaining_planning_cif": planner_run.get("remaining_planning_cif", planner_run.get("remaining_operational_cif")),
+            "opening_operational_cif": planner_run.get("opening_operational_cif"),
+            "remaining_operational_cif": planner_run.get("remaining_operational_cif"),
+            "waterfall_trace": planner_run.get("waterfall_trace", []),
+        })
         from apps.license.services.planning_tolerances import effective_planning_balance_cif
         raw_planning_balance = Decimal(str(license_obj.get_balance_cif or 0))
         effective_planning_balance = effective_planning_balance_cif(raw_planning_balance)
         response_data.update({
+            # This is an independent live-ledger audit value.  It must never
+            # be reused as the planning waterfall opening capacity.
+            "live_financial_balance_cif": raw_planning_balance,
+            "actual_license_balance_cif": raw_planning_balance,
             "raw_balance_cif": raw_planning_balance,
             "effective_balance_cif": effective_planning_balance,
             "balance_cif_ignored_by_tolerance": raw_planning_balance != effective_planning_balance,

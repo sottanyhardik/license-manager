@@ -52,6 +52,12 @@ vi.mock("../../services/api/licenseApi", () => ({
         excess_quantity: "0.000",
         excess_cif: "0.00",
         reconciliation_status: "NOT_USED",
+        split_percentage: "40.00",
+        percentage_theoretical_quantity: "256911.188",
+        percentage_theoretical_cif: "462440.14",
+        remaining_entitlement_qty: "256911.188",
+        effective_planned_cif: "462440.14",
+        effective_unit_price: "1.80",
     }, {
         id: 100,
         import_item: 10,
@@ -73,6 +79,12 @@ vi.mock("../../services/api/licenseApi", () => ({
         excess_quantity: "0.000",
         excess_cif: "0.00",
         reconciliation_status: "PARTIALLY_UTILIZED",
+        split_percentage: "60.00",
+        percentage_theoretical_quantity: "385366.782",
+        percentage_theoretical_cif: "1610678.05",
+        remaining_entitlement_qty: "307368.942",
+        effective_planned_cif: "1284678.47",
+        effective_unit_price: "4.179597527",
     }]),
     bulkUpsertItemPlans: vi.fn(),
     deleteItemPlan: vi.fn(),
@@ -84,30 +96,38 @@ vi.mock("../../services/api/planningRuleApi", () => ({
 }));
 
 describe("PlanningEditor reconciliation", () => {
-    it("shows theoretical, BOE, unlinked-allotment, remaining, and excess values per item", async () => {
+    it("shows only approved percentage-split business fields", async () => {
         render(<PlanningEditor licenseId={1} licenseNumber="LEVEL2" canWrite />);
 
         expect(await screen.findByText("PALM KERNEL OIL - E126")).toBeInTheDocument();
         expect(screen.getByText("OLIVE OIL - E126")).toBeInTheDocument();
         expect(screen.getByText("PARTIALLY UTILIZED")).toBeInTheDocument();
-        for (const label of [
-            "Theoretical Qty", "Theoretical CIF", "BOE Used Qty", "BOE Used CIF",
-            "Unlinked Allotment Qty", "Unlinked Allotment CIF", "Remaining Qty",
-            "Remaining CIF", "Excess Qty", "Excess CIF",
-        ]) expect(screen.getAllByText(label)).toHaveLength(2);
-        expect(screen.getAllByText("243,141.160").length).toBeGreaterThanOrEqual(1);
-        expect(screen.getAllByText("$1,190,678.15").length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText("Percentage Target Qty")).toHaveLength(2);
+        expect(screen.getAllByText("Percentage Target CIF")).toHaveLength(2);
+        expect(screen.getAllByText("BOE Used Qty")).toHaveLength(1);
+        expect(screen.getAllByText("BOE Used CIF")).toHaveLength(1);
+        expect(screen.getAllByText("Unlinked Allotment Qty")).toHaveLength(1);
+        expect(screen.getAllByText("Unlinked Allotment CIF")).toHaveLength(1);
+        expect(screen.getAllByText("Remaining Qty")).toHaveLength(2);
+        expect(screen.getAllByText("Unit Price")).toHaveLength(3); // plus table header
+        expect(screen.getAllByText("Remaining CIF")).toHaveLength(2);
+        expect(screen.getByText("385,366.782")).toBeInTheDocument();
+        expect(screen.getByText("$1,610,678.05")).toBeInTheDocument();
+        expect(screen.getByText("307,368.942")).toBeInTheDocument();
+        expect(screen.getByText("$1,284,678.47")).toBeInTheDocument();
+        for (const hidden of [
+            "Candidate Planned CIF", "CIF Cap Adjustment", "Effective Planned CIF",
+            "Unfilled Target Qty", "Unfilled Target CIF", "Excess Qty", "Excess CIF",
+        ]) expect(screen.queryByText(hidden)).not.toBeInTheDocument();
 
         const parentRow = screen.getByText("Fats and oils").closest("tr");
         expect(parentRow).not.toBeNull();
         const parent = within(parentRow!);
         expect(parent.getAllByText("642,277.000")).toHaveLength(2);
-        expect(parent.getByText("$2,183,743.40")).toBeInTheDocument();
+        expect(parent.getByText("$1,747,118.61")).toBeInTheDocument();
         expect(parent.getByText("77,997.840")).toBeInTheDocument();
         expect(parent.queryByText("Over Planned")).not.toBeInTheDocument();
         expect(parent.getByText("Planned")).toBeInTheDocument();
 
-        expect(screen.getAllByText("Reconciled Planned CIF")).toHaveLength(3);
-        expect(screen.getAllByText("$2,183,743.40").length).toBeGreaterThanOrEqual(2);
     });
 });

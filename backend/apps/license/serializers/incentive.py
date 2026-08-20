@@ -98,6 +98,8 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
     item_available_quantity = serializers.DecimalField(
         source="import_item.available_quantity", max_digits=15, decimal_places=3, read_only=True
     )
+    actual_item_available_qty = serializers.SerializerMethodField(read_only=True)
+    actual_license_balance_cif = serializers.SerializerMethodField(read_only=True)
     item_total_quantity = serializers.DecimalField(
         source="import_item.quantity", max_digits=15, decimal_places=3, read_only=True
     )
@@ -122,15 +124,132 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
     reconciled_planned_cif = serializers.SerializerMethodField(read_only=True)
     remaining_quantity = serializers.SerializerMethodField(read_only=True)
     remaining_cif = serializers.SerializerMethodField(read_only=True)
+    raw_remaining_quantity = serializers.SerializerMethodField(read_only=True)
+    raw_remaining_cif = serializers.SerializerMethodField(read_only=True)
+    available_balance_quantity = serializers.SerializerMethodField(read_only=True)
+    effective_remaining_quantity = serializers.SerializerMethodField(read_only=True)
+    effective_remaining_cif = serializers.SerializerMethodField(read_only=True)
+    quantity_cap_applied = serializers.SerializerMethodField(read_only=True)
     excess_quantity = serializers.SerializerMethodField(read_only=True)
     excess_cif = serializers.SerializerMethodField(read_only=True)
     reconciliation_status = serializers.SerializerMethodField(read_only=True)
+    planning_target_item_id = serializers.SerializerMethodField(read_only=True)
+    mapping_status = serializers.SerializerMethodField(read_only=True)
+    unmapped_actual_quantity = serializers.SerializerMethodField(read_only=True)
+    unmapped_actual_cif = serializers.SerializerMethodField(read_only=True)
     status = serializers.SerializerMethodField(read_only=True)
     unmapped_usage = serializers.SerializerMethodField(read_only=True)
     needs_rebuild = serializers.SerializerMethodField(read_only=True)
+    percentage_base_qty = serializers.SerializerMethodField(read_only=True)
+    split_percentage = serializers.SerializerMethodField(read_only=True)
+    theoretical_target_qty = serializers.SerializerMethodField(read_only=True)
+    theoretical_target_cif = serializers.SerializerMethodField(read_only=True)
+    new_planned_qty = serializers.DecimalField(source="planned_quantity", max_digits=15, decimal_places=3, read_only=True)
+    new_planned_cif = serializers.DecimalField(source="planned_cif_fc", max_digits=15, decimal_places=2, read_only=True)
+    unfilled_target_qty = serializers.SerializerMethodField(read_only=True)
+    unfilled_target_cif = serializers.SerializerMethodField(read_only=True)
+    adjusted_planned_cif = serializers.SerializerMethodField(read_only=True)
+    effective_unit_price = serializers.SerializerMethodField(read_only=True)
+    candidate_planned_qty = serializers.SerializerMethodField(read_only=True)
+    effective_planned_qty = serializers.SerializerMethodField(read_only=True)
+    configured_unit_price = serializers.SerializerMethodField(read_only=True)
+    candidate_planned_cif = serializers.SerializerMethodField(read_only=True)
+    cif_cap_adjustment = serializers.SerializerMethodField(read_only=True)
+    effective_planned_cif = serializers.SerializerMethodField(read_only=True)
+    remaining_entitlement_qty = serializers.SerializerMethodField(read_only=True)
+    percentage_target_qty = serializers.SerializerMethodField(read_only=True)
+    excess_other_item_qty = serializers.SerializerMethodField(read_only=True)
+    excess_other_item_cif = serializers.SerializerMethodField(read_only=True)
+
+    def _provenance_decimal(self, obj, key, fallback=0):
+        return Decimal(str((obj.allocation_provenance or {}).get(key, fallback) or 0))
+
+    def get_percentage_base_qty(self, obj):
+        return f"{self._provenance_decimal(obj, 'percentage_base_qty'):.3f}"
+
+    def get_split_percentage(self, obj):
+        value = (obj.allocation_provenance or {}).get("percentage")
+        return f"{Decimal(str(value)):.2f}" if value is not None else None
+
+    def get_theoretical_target_qty(self, obj):
+        return f"{self._provenance_decimal(obj, 'theoretical_quantity', obj.planned_quantity):.3f}"
+
+    def get_theoretical_target_cif(self, obj):
+        return f"{self._provenance_decimal(obj, 'percentage_target_cif', self._provenance_decimal(obj, 'theoretical_cif', obj.planned_cif_fc)):.2f}"
+
+    def get_candidate_planned_qty(self, obj):
+        return f"{self._provenance_decimal(obj, 'candidate_planned_quantity', obj.planned_quantity):.3f}"
+
+    def get_effective_planned_qty(self, obj):
+        return f"{self._provenance_decimal(obj, 'effective_planned_quantity', obj.planned_quantity):.3f}"
+
+    def get_configured_unit_price(self, obj):
+        return f"{self._provenance_decimal(obj, 'configured_max_unit_price', obj.unit_price):.2f}"
+
+    def get_candidate_planned_cif(self, obj):
+        return f"{self._provenance_decimal(obj, 'candidate_planned_cif', obj.planned_cif_fc):.2f}"
+
+    def get_unfilled_target_qty(self, obj):
+        return f"{max(self._provenance_decimal(obj, 'theoretical_quantity', obj.planned_quantity) - Decimal(obj.planned_quantity or 0), Decimal('0')):.3f}"
+
+    def get_unfilled_target_cif(self, obj):
+        return f"{max(self._provenance_decimal(obj, 'theoretical_cif', obj.planned_cif_fc) - Decimal(obj.planned_cif_fc or 0), Decimal('0')):.2f}"
+
+    def get_adjusted_planned_cif(self, obj):
+        value = self._reconciliation(obj)["plans"].get(obj.id, {}).get("adjusted_planned_cif")
+        return f"{Decimal(value if value is not None else obj.planned_cif_fc or 0):.2f}"
+
+    def get_effective_unit_price(self, obj):
+        reconciled = self._reconciliation(obj)["plans"].get(obj.id, {})
+        cif = Decimal(reconciled.get("adjusted_planned_cif", obj.planned_cif_fc or 0))
+        qty = Decimal(obj.planned_quantity or 0)
+        return f"{(cif / qty if qty else Decimal('0')):.9f}"
+
+    def get_cif_cap_adjustment(self, obj):
+        value = (obj.allocation_provenance or {}).get(
+            "cif_cap_adjustment",
+            self._reconciliation(obj)["plans"].get(obj.id, {}).get("cif_cap_adjustment", 0),
+        )
+        return f"{Decimal(value):.2f}"
+
+    def get_effective_planned_cif(self, obj):
+        return self.get_adjusted_planned_cif(obj)
+
+    def get_percentage_target_qty(self, obj):
+        return f"{self._provenance_decimal(obj, 'theoretical_target_qty', obj.planned_quantity):.3f}"
+
+    def get_remaining_entitlement_qty(self, obj):
+        # This is target minus actual mapped BOE/allotment exactly once.  It
+        # is intentionally independent of any CIF-only price adjustment.
+        provenance = obj.allocation_provenance or {}
+        if 'audit_remaining_quantity' in provenance:
+            value = Decimal(str(provenance['audit_remaining_quantity'])) - Decimal(str(provenance.get('excess_other_item_quantity', 0)))
+            return f"{value:.3f}"
+        value = provenance.get('remaining_percentage_capacity')
+        if value is None:
+            target = self._provenance_decimal(obj, 'theoretical_target_qty', obj.planned_quantity)
+            actual = Decimal(self._reconciliation(obj)['plans'].get(obj.id, {}).get('effective_used_quantity', 0))
+            value = max(target - actual, Decimal('0'))
+        return f"{Decimal(value):.3f}"
+
+    def get_excess_other_item_qty(self, obj):
+        return f"{self._provenance_decimal(obj, 'excess_other_item_quantity'):.3f}"
+
+    def get_excess_other_item_cif(self, obj):
+        return f"{self._provenance_decimal(obj, 'excess_other_item_cif'):.2f}"
 
     def get_modified_by_username(self, obj):
         return obj.modified_by.username if obj.modified_by_id else None
+
+    def get_actual_item_available_qty(self, obj):
+        # The live, license-scoped source quantity; never a plan or Norm
+        # Summary aggregate.
+        return f"{Decimal(obj.import_item.available_quantity or 0):.3f}"
+
+    def get_actual_license_balance_cif(self, obj):
+        # Canonical financial balance after actual BOE/allotment utilization,
+        # before future planning projections.
+        return f"{Decimal(obj.license.get_balance_cif or 0):.2f}"
 
     def _reconciliation(self, obj):
         from apps.license.services.planning_usage_reconciliation import reconcile_license_plans
@@ -173,15 +292,23 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
         return self._reconciliation_value(obj, "effective_used_cif")
 
     def get_percentage_theoretical_quantity(self, obj):
-        return self._reconciliation_value(obj, "percentage_theoretical_quantity", obj.planned_quantity)
+        value = (obj.allocation_provenance or {}).get("theoretical_quantity", obj.planned_quantity)
+        return f"{Decimal(value):.3f}"
 
     def get_percentage_theoretical_cif(self, obj):
-        return self._reconciliation_value(obj, "percentage_theoretical_cif", obj.planned_cif_fc)
+        value = (obj.allocation_provenance or {}).get("theoretical_cif", obj.planned_cif_fc)
+        return f"{Decimal(value):.2f}"
 
     def get_theoretical_quantity(self, obj):
-        return self._reconciliation_value(obj, "theoretical_quantity", obj.planned_quantity)
+        value = (obj.allocation_provenance or {}).get("theoretical_quantity", obj.planned_quantity)
+        return f"{Decimal(value):.3f}"
 
     def get_theoretical_cif(self, obj):
+        # Strategy-waterfall rows retain uncapped CIF in provenance while
+        # planned_cif_fc is the operational CIF commitment.
+        theoretical = (obj.allocation_provenance or {}).get("theoretical_cif")
+        if theoretical is not None:
+            return f"{Decimal(theoretical):.2f}"
         return self._reconciliation_value(obj, "theoretical_cif", obj.planned_cif_fc)
 
     def get_reconciled_planned_quantity(self, obj):
@@ -196,6 +323,24 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
     def get_remaining_cif(self, obj):
         return self._reconciliation_value(obj, "remaining_cif", obj.planned_cif_fc)
 
+    def get_raw_remaining_quantity(self, obj):
+        return self._reconciliation_value(obj, "raw_remaining_quantity", obj.planned_quantity)
+
+    def get_raw_remaining_cif(self, obj):
+        return self._reconciliation_value(obj, "raw_remaining_cif", obj.planned_cif_fc)
+
+    def get_available_balance_quantity(self, obj):
+        return self._reconciliation_value(obj, "available_balance_quantity", obj.import_item.available_quantity)
+
+    def get_effective_remaining_quantity(self, obj):
+        return self._reconciliation_value(obj, "effective_remaining_quantity", obj.planned_quantity)
+
+    def get_effective_remaining_cif(self, obj):
+        return self._reconciliation_value(obj, "effective_remaining_cif", obj.planned_cif_fc)
+
+    def get_quantity_cap_applied(self, obj):
+        return bool(self._reconciliation(obj)["plans"].get(obj.id, {}).get("quantity_cap_applied", False))
+
     def get_excess_quantity(self, obj):
         return self._reconciliation_value(obj, "excess_quantity")
 
@@ -204,6 +349,18 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
 
     def get_reconciliation_status(self, obj):
         return self._reconciliation_value(obj, "reconciliation_status", "NOT_USED")
+
+    def get_planning_target_item_id(self, obj):
+        return obj.item_name_id
+
+    def get_mapping_status(self, obj):
+        return self._reconciliation_value(obj, "mapping_status", "NO_ACTUAL_USAGE")
+
+    def get_unmapped_actual_quantity(self, obj):
+        return self._reconciliation_value(obj, "unmapped_actual_quantity")
+
+    def get_unmapped_actual_cif(self, obj):
+        return self._reconciliation_value(obj, "unmapped_actual_cif")
 
     def get_status(self, obj):
         return self.get_reconciliation_status(obj)
@@ -217,9 +374,18 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
         if not obj.planning_rule_id:
             return False
         rule = obj.planning_rule
-        return SionPlanningRule.objects.filter(
-            stable_key=rule.stable_key, is_active=True,
-        ).exclude(pk=obj.planning_rule_id).exists()
+        # ``stable_key`` is not populated on older rules.  Filtering NULL
+        # stable keys alone groups every unrelated active rule together and
+        # makes every such plan permanently display "Needs Rebuild".
+        candidates = SionPlanningRule.objects.filter(is_active=True)
+        if rule.stable_key:
+            candidates = candidates.filter(stable_key=rule.stable_key)
+        else:
+            candidates = candidates.filter(
+                sion_id=rule.sion_id, name=rule.name,
+                priority=rule.priority, strategy=rule.strategy,
+            )
+        return candidates.exclude(pk=obj.planning_rule_id).exists()
 
     class Meta:
         model = LicenseItemPlan
@@ -228,7 +394,8 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
             "planning_item_id", "planning_item_name", "license",
             "planned_quantity", "unit_price", "planned_cif_fc", "planned_cif_inr", "note",
             "item_description", "serial_number", "license_number",
-            "item_available_quantity", "item_total_quantity",
+            "item_available_quantity", "item_total_quantity", "actual_item_available_qty",
+            "actual_license_balance_cif",
             "modified_on", "modified_by_username",
             "planning_family", "boe_used_quantity", "boe_used_cif",
             "unlinked_allotment_quantity", "unlinked_allotment_cif",
@@ -237,7 +404,17 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
             "theoretical_quantity", "theoretical_cif",
             "reconciled_planned_quantity", "reconciled_planned_cif",
             "remaining_quantity", "remaining_cif", "excess_quantity", "excess_cif",
+            "raw_remaining_quantity", "raw_remaining_cif", "available_balance_quantity",
+            "effective_remaining_quantity", "effective_remaining_cif", "quantity_cap_applied",
             "reconciliation_status", "status", "unmapped_usage", "needs_rebuild",
+            "percentage_base_qty", "split_percentage", "theoretical_target_qty", "theoretical_target_cif",
+            "new_planned_qty", "new_planned_cif", "unfilled_target_qty", "unfilled_target_cif",
+            "adjusted_planned_cif", "effective_unit_price",
+            "candidate_planned_qty", "effective_planned_qty", "configured_unit_price",
+            "candidate_planned_cif", "cif_cap_adjustment", "effective_planned_cif",
+            "percentage_target_qty", "remaining_entitlement_qty",
+            "excess_other_item_qty", "excess_other_item_cif",
+            "planning_target_item_id", "mapping_status", "unmapped_actual_quantity", "unmapped_actual_cif",
         ]
         read_only_fields = ["license"]
 
@@ -248,20 +425,15 @@ class SionPlanningUnitValueRowSerializer(serializers.ModelSerializer):
         fields = ("id", "import_item", "min_unit_price", "max_unit_price", "preferred_unit_price", "priority")
 
     def validate(self, data):
-        if data.get("max_unit_price") and data.get("min_unit_price"):
-            if data["max_unit_price"] < data["min_unit_price"]:
-                raise serializers.ValidationError(
-                    {"max_unit_price": "Must be >= min_unit_price."}
-                )
-        if data.get("preferred_unit_price"):
-            if data.get("min_unit_price") and data["preferred_unit_price"] < data["min_unit_price"]:
-                raise serializers.ValidationError(
-                    {"preferred_unit_price": "Must be >= min_unit_price."}
-                )
-            if data.get("max_unit_price") and data["preferred_unit_price"] > data["max_unit_price"]:
-                raise serializers.ValidationError(
-                    {"preferred_unit_price": "Must be <= max_unit_price."}
-                )
+        minimum = data.get("min_unit_price")
+        maximum = data.get("max_unit_price")
+        # A range must contain a positive-width interval.  Decimal fields and
+        # model validators enforce non-negative values; do not use truthiness
+        # here because Decimal("0") is an intentional valid value.
+        if minimum is not None and maximum is not None and maximum <= minimum:
+            raise serializers.ValidationError(
+                {"max_unit_price": "Must be greater than min_unit_price."}
+            )
         return data
 
 
@@ -333,7 +505,7 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"strategy": "STANDARD strategy requires import_item."}
                 )
-            if import_item.sion_norm_class_id != sion.id:
+            if not (import_item.norms.filter(pk=sion.id).exists() or import_item.sion_norm_class_id == sion.id):
                 raise serializers.ValidationError(
                     {"import_item": "Import item does not belong to this SION."},
                     code="IMPORT_ITEM_NOT_ALLOWED_FOR_SION",
@@ -352,7 +524,7 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
                 )
             for row_data in unit_value_rows:
                 import_item = row_data.get("import_item")
-                if import_item and import_item.sion_norm_class_id != sion.id:
+                if import_item and not (import_item.norms.filter(pk=sion.id).exists() or import_item.sion_norm_class_id == sion.id):
                     raise serializers.ValidationError(
                         {"unit_value_rows": f"Import item '{import_item.name}' does not belong to this SION."},
                         code="IMPORT_ITEM_NOT_ALLOWED_FOR_SION",
@@ -362,6 +534,16 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"unit_value_rows": "Each import item may only be selected once."}
                 )
+            # Input price bands are evaluated low-to-high.  A touching
+            # boundary is deterministic: it belongs to the lower band, while
+            # the next band is previous_max < price <= max.  Validate a sorted
+            # copy so visual/form row order does not affect save behaviour.
+            ordered_rows = sorted(unit_value_rows, key=lambda row: row["min_unit_price"])
+            for lower, upper in zip(ordered_rows, ordered_rows[1:]):
+                if upper["min_unit_price"] < lower["max_unit_price"]:
+                    raise serializers.ValidationError(
+                        {"unit_value_rows": "Price ranges overlap."}
+                    )
 
         # SPLIT_BY_PERCENT: require ≥1 rows, total==100, validate SION
         elif strategy == "SPLIT_BY_PERCENT":
@@ -377,7 +559,7 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
                 )
             for row_data in percentage_rows:
                 import_item = row_data.get("import_item")
-                if import_item and import_item.sion_norm_class_id != sion.id:
+                if import_item and not (import_item.norms.filter(pk=sion.id).exists() or import_item.sion_norm_class_id == sion.id):
                     raise serializers.ValidationError(
                         {"percentage_rows": f"Import item '{import_item.name}' does not belong to this SION."},
                         code="IMPORT_ITEM_NOT_ALLOWED_FOR_SION",

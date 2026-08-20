@@ -170,6 +170,15 @@ export async function planSavedSionRules(sionId: number, mode: SionPlanningMode 
 export async function previewSavedSionRules(sionId: number, mode: SionPlanningMode = "NEW", licenseIds?: number[]): Promise<SionPlanningPreview> {
     return (await api.post("sion-planning-rules/preview-sion/", planningPayload(sionId, mode, licenseIds))).data;
 }
+
+/** Exact URL-scoped planning contract.  Values are calculated only on the server. */
+export type ScopedPlanPreview = { licence_number: string; licence_id: number; SION: string; lines: any[]; unresolved_rows: any[]; save_allowed: boolean; preview_version: string; grand_totals: Record<string, string>; balance_cif?: string };
+export async function previewScopedSionPlan(license_number: string, sion: string): Promise<ScopedPlanPreview> {
+    return (await api.post("sion-planning-rules/preview-scoped/", { license_number, sion })).data;
+}
+export async function saveScopedSionPlan(license_number: string, sion: string, preview_version: string): Promise<ScopedPlanPreview> {
+    return (await api.post("sion-planning-rules/save-scoped/", { license_number, sion, preview_version })).data;
+}
 export async function reorderSionPlanningRules(sionId: number, ruleOrder: number[]): Promise<SionPlanningRule[]> {
     return (await api.post("sion-planning-rules/reorder/", { sion_id: sionId, rule_order: ruleOrder })).data;
 }

@@ -408,6 +408,7 @@ class LicenseBalanceCalculator:
         rows = RowDetails.objects.filter(
             sr_number__license=license_obj,
             transaction_type=DEBIT,
+            bill_of_entry__isnull=False,
         )
         if not include_hidden:
             rows = exclude_hidden(rows)

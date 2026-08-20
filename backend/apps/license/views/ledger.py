@@ -14,11 +14,8 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
     Unified ledger view for both DFIA and Incentive licenses.
     Shows available balance for selling licenses.
 
-    SECURITY: ALL endpoints are company-scoped:
-    - User must have user.company set
-    - List/summary/aggregation endpoints return only user's company data
-    - Single-license retrieval validates user can access that license
-    - Company-specific endpoints validate user.company == requested company
+    SECURITY: access is role-based.  Ledger access does not depend on a user
+    company assignment.
 
     Returns:
     - DFIA licenses: balance_cif (available CIF $ balance)
@@ -35,30 +32,23 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         return self.ledger_detail(request, pk=pk)
 
     def _scope_company_id(self, request):
-        if request.user.is_superuser:
-            return None
-        if not getattr(request.user, 'company', None):
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied(detail='User has no company assignment for ledger access.')
-        return request.user.company.id
+        # ``None`` is the established shared-ledger scope.  Authorization is
+        # provided by ``LicenseLedgerViewPermission``.
+        return None
 
     def _validate_filter_company(self, request):
-        """Prevent a company filter from expanding a non-admin user's scope."""
+        """Validate an optional company filter."""
         selected = request.query_params.get('buying_company_id')
         if selected:
-            from rest_framework.exceptions import PermissionDenied, ValidationError
+            from rest_framework.exceptions import ValidationError
             try:
-                selected_id = int(selected)
+                int(selected)
             except (TypeError, ValueError):
                 raise ValidationError(detail='Invalid company parameter.')
-            if not request.user.is_superuser and selected_id != self._scope_company_id(request):
-                raise PermissionDenied(detail='You can only filter your assigned company.')
 
     def _authorized_license(self, request, license_ref, license_type='AUTO'):
         """Resolve a license and apply the same object authorization everywhere."""
-        from django.db.models import Q
-        from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
-        from apps.trade.models import LicenseTrade
+        from rest_framework.exceptions import APIException, ValidationError
 
         requested_type = str(license_type or 'AUTO').strip().upper()
         allowed_types = {'AUTO', 'DFIA', 'INCENTIVE', 'ALL_INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'}
@@ -80,22 +70,6 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
                 default_code = 'not_found'
             raise LicenseNotFound(detail={'error': f'License not found: {license_ref}'})
 
-        if not request.user.is_superuser:
-            company = getattr(request.user, 'company', None)
-            if not company:
-                raise PermissionDenied(detail='User has no company assignment for ledger access.')
-            filters = {
-                'lines__sr_number__license_id': license_obj.id
-            } if found_type == 'DFIA' else {
-                'incentive_lines__incentive_license_id': license_obj.id
-            }
-            allowed = LicenseTrade.objects.filter(
-                Q(from_company_id=company.id) | Q(to_company_id=company.id),
-                license_type='DFIA' if found_type == 'DFIA' else 'INCENTIVE',
-                **filters,
-            ).exists()
-            if not allowed:
-                raise PermissionDenied(detail='You do not have access to this license.')
         return found_type, license_obj
 
     def _find_license_by_id_or_number(self, pk, search_dfia=True, search_incentive=True):
@@ -177,38 +151,13 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         Accepts either ID (integer) or license_number (string) as pk parameter.
         Auto-searches both tables if license_type not specified.
 
-        Optional company parameter: If provided, only shows transactions involving that company.
-        SECURITY: If company parameter is provided, it must match user's assigned company.
-        User's company must have traded this license (P0 IDOR fix).
-
         **Phase 4C:** API consumes CanonicalLedgerService as the single source of truth.
         All financial calculations are performed by CanonicalLedgerService; the API layer
         is a transparent serialization layer with no business logic.
         """
         from apps.license.services.canonical_ledger_service import CanonicalLedgerService
         from apps.license.serializers import CanonicalLedgerSerializer
-        from rest_framework.exceptions import PermissionDenied
-
         license_type = request.query_params.get('license_type', 'AUTO')
-        company_id = request.query_params.get('company')  # Optional company filter
-
-        # SECURITY: Validate company parameter if provided
-        if company_id:
-            try:
-                company_id_int = int(company_id)
-                if not request.user.is_superuser:
-                    if not hasattr(request.user, 'company') or not request.user.company:
-                        raise PermissionDenied(
-                            detail='User has no company assignment for ledger access.'
-                        )
-                    if company_id_int != request.user.company.id:
-                        raise PermissionDenied(
-                            detail='You can only access ledger data for your assigned company.'
-                        )
-            except (ValueError, TypeError):
-                from rest_framework.exceptions import ValidationError
-                raise ValidationError(detail='Invalid company parameter.')
-
         found_type, license = self._authorized_license(request, pk, license_type)
 
         # Delegate all calculation to CanonicalLedgerService (single source of truth).
@@ -234,7 +183,7 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         Returns trades grouped by license, then by company within each license.
         Structure: license → [company → purchases/sales/totals]
 
-        The collection is authorization-scoped, with no optional filter parameters.
+        The collection is role-authorized, with no optional filter parameters.
         """
         from apps.license.services.license_ledger_export import build_license_ledger_data
         self._validate_filter_company(request)

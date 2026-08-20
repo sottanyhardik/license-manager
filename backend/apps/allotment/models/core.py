@@ -44,6 +44,9 @@ from apps.core.models import AuditModel
 
 
 class AllotmentModel(AuditModel):
+    planning_target_item = models.ForeignKey("core.ItemNameModel", on_delete=models.PROTECT, null=True, blank=True, related_name="allotment_planning_targets", db_index=True)
+    planning_mapping_status = models.CharField(max_length=32, default="UNMAPPED_AMBIGUOUS", db_index=True)
+    planning_mapping_source = models.CharField(max_length=32, blank=True, default="")
     company = models.ForeignKey(
         "core.CompanyModel",
         related_name="company_allotments",

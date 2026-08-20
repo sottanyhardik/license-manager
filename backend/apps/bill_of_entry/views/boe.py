@@ -38,6 +38,7 @@ BOE_VIEWSET_CONFIG = {
         "bill_of_entry_number",
         "invoice_no",
         "product_name",
+        "planning_target_item",
         "item_details__sr_number__license__license_number",
     ],
     "inline_editable": ["invoice_no"],
@@ -69,6 +70,7 @@ BOE_VIEWSET_CONFIG = {
         "company",
         "exchange_rate",
         "product_name",
+        "planning_target_item",
         "invoice_no",
         "invoice_date",
         "appraisement",
@@ -92,6 +94,7 @@ BOE_VIEWSET_CONFIG = {
         "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
         "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
         "allotment": {"type": "m2m", "fk_endpoint": "/allotments/?is_boe=false", "label_field": "display_label"},
+        "planning_target_item": {"type": "fk", "fk_endpoint": "/masters/item-names/?is_active=true", "label_field": "name"},
         "row_type": {"type": "select", "choices": list(ROW_TYPE_CHOICES)},
         "transaction_type": {"type": "select", "choices": list(TYPE_CHOICES)},
     }

@@ -1417,10 +1417,14 @@ class SionPlanningUnitValueRow(AuditModel):
                 condition=models.Q(max_unit_price__gte=models.F("min_unit_price")),
                 name="unit_value_max_gte_min",
             ),
+            # Preferred price is an optional planning/output value.  Zero is
+            # the established explicit sentinel for "no preferred price" and
+            # is valid even where the row's matching price band starts above
+            # zero.  Band membership applies to the input price, not this
+            # optional output value.
             models.CheckConstraint(
-                condition=models.Q(preferred_unit_price__gte=models.F("min_unit_price"))
-                & models.Q(preferred_unit_price__lte=models.F("max_unit_price")),
-                name="unit_value_preferred_in_range",
+                condition=models.Q(preferred_unit_price__gte=DEC_0),
+                name="unit_value_preferred_non_negative",
             ),
         ]
 

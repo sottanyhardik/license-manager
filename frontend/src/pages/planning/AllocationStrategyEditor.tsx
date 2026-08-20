@@ -98,6 +98,9 @@ export function AllocationStrategyEditor({
           errors={errors}
         />
       )}
+      {strategy === "SPLIT_BY_UNIT_VALUE" && errors.unit_value_rows && (
+        <p role="alert" className="text-sm text-red-600">{errors.unit_value_rows}</p>
+      )}
 
       {strategy === "SPLIT_BY_PERCENT" && (
         <PercentageStrategySection

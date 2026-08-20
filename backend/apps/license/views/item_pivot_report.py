@@ -557,6 +557,14 @@ class ItemPivotReportView(APIView):
         all_items = {}  # Changed to dict to store item object for sorting
         valid_licenses = list(licenses)  # Licenses already filtered by LIVE balance above
 
+        # The legacy report below derives cells from a first attached item and
+        # cached per-item ledger columns.  That is not a safe representation
+        # for canonical percentage children.  The pivot now has a dedicated
+        # report projection built from persisted effective plans plus the
+        # item-linked BOE/allotment population.
+        from apps.license.services.item_pivot_service import ItemPivotService
+        return ItemPivotService.build(valid_licenses)
+
         for license_obj in valid_licenses:
             for import_item in license_obj.import_license.all():
                 for item in import_item.items.all():
@@ -1633,6 +1641,37 @@ class ItemPivotReportView(APIView):
         try:
             # Use the working generate_report method
             report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status, expiry_date_from, expiry_date_to, purchase_status)
+
+            # Export the exact canonical matrix used by the React pivot.  Do
+            # not re-run any plan/usage arithmetic in the spreadsheet path.
+            if "groups" in report_data:
+                workbook = openpyxl.Workbook(write_only=True)
+                fixed = ["SR NO", "DFIA NO", "EXPIRY DT", "EXPORTER", "TOTAL CIF", "DEBITED CIF", "ALLOTTED CIF", "PLANNED CIF", "BALANCE CIF"]
+                fields = ["HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "DEBITED QTY", "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF"]
+                for group_index, group in enumerate(report_data["groups"], 1):
+                    sheet = workbook.create_sheet(title=f"{(group['notification_number'] or 'Pivot')[:24]}-{group_index}")
+                    sheet.append([f"Notification Number: {group['notification_number']}", group["purchase_status"]["name"], f"{group['license_count']} Licences"])
+                    sheet.append(fixed + [field for item in group["item_groups"] for field in fields])
+                    for index, license_row in enumerate(group["licenses"], 1):
+                        row = [index, license_row["license_number"], license_row["expiry_date"], license_row["exporter"], license_row["total_cif"], license_row["debited_cif"], license_row["allotted_cif"], license_row["planned_cif"], license_row["balance_cif"]]
+                        for item in group["item_groups"]:
+                            cell = license_row["items"].get(item["key"])
+                            row.extend([cell.get(key) if cell else None for key in ("hsn_code", "description", "total_qty", "allotted_qty", "debited_qty", "balance_qty", "restriction_percent", "restriction_value", "plan_qty", "planned_cif")])
+                        sheet.append(row)
+                    totals = group["totals"]
+                    total_row = [f"TOTAL — {group['license_count']} LICENCES", None, None, None, totals["total_cif"], totals["debited_cif"], totals["allotted_cif"], totals["planned_cif"], totals["balance_cif"]]
+                    for item in group["item_groups"]:
+                        cell = totals["items"][item["key"]]
+                        total_row.extend([None, None, cell["total_qty"], cell["allotted_qty"], cell["debited_qty"], cell["balance_qty"], None, cell["restriction_value"], cell["plan_qty"], cell["planned_cif"]])
+                    sheet.append(total_row)
+                workbook.save(temp_file.name)
+                def canonical_stream():
+                    with open(temp_file.name, 'rb') as generated:
+                        yield from iter(lambda: generated.read(8192), b'')
+                    os.unlink(temp_file.name)
+                response = StreamingHttpResponse(canonical_stream(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                response['Content-Disposition'] = 'attachment; filename="item_pivot_report.xlsx"'
+                return response
 
             workbook = openpyxl.Workbook(write_only=True)
             licenses_by_norm_notif = report_data.get('licenses_by_norm_notification', {})

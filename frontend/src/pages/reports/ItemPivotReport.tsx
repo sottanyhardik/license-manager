@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useCallback, useRef, useLayoutEffect} from "react";
-import {useNavigate} from "react-router-dom";
+import {Link, useNavigate, useSearchParams} from "react-router-dom";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
@@ -201,9 +201,65 @@ function PurchaseStatusBadge({ code, label }) {
     );
 }
 
+function pivotNumber(value: unknown, digits: number) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    const text = Math.abs(n).toLocaleString('en-IN', {minimumFractionDigits: digits, maximumFractionDigits: digits});
+    return n < 0 ? `(${text})` : text;
+}
+
+function PivotTotalCells({ group }: { group: any }) {
+    return <>{group.item_groups.flatMap((item, itemIndex) => {
+        const total = group.totals?.items?.[item.key];
+        const bg = {backgroundColor: itemBgColor(itemIndex)};
+        return ['hsn','description','total_qty','allotted_qty','debited_qty','balance_qty','restriction_percent','restriction_value','plan_qty','planned_cif'].map(key => {
+            const text = ['hsn','description','restriction_percent'].includes(key) ? '—' : pivotNumber(total?.[key], key.includes('cif') || key.includes('value') ? 2 : 3);
+            return <td key={`${item.key}-total-${key}`} className={cn('border p-2', ['total_qty','allotted_qty','debited_qty','balance_qty','restriction_value','plan_qty','planned_cif'].includes(key) && 'text-right')} style={bg}>{text}</td>;
+        });
+    })}</>;
+}
+
+function FioriSummary({ summary, items, onException }: { summary: any; items: any[]; onException: (item: any) => void }) {
+    const cards = [
+        ['Total Licences', summary?.license_count, 0, 'text-blue-700'], ['Total Licence CIF', summary?.total_cif, 2, 'text-blue-700'],
+        ['Actual BOE CIF', summary?.actual_boe_cif, 2, 'text-amber-700'], ['Actual Allotment CIF', summary?.actual_allotment_cif, 2, 'text-amber-700'],
+        ['Actual Balance CIF', summary?.actual_balance_cif, 2, 'text-green-700'], ['Effective Planned CIF', summary?.effective_planned_cif, 2, 'text-blue-700'],
+        ['Final Balance CIF', summary?.final_balance_cif, 2, 'text-green-700'], ['Coverage %', summary?.planning_coverage_percent, 2, 'text-green-700'],
+    ];
+    return <><div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">{cards.map(([label, value, digits, color]) => <Card key={String(label)} className="rounded-md shadow-none"><CardContent className="p-3"><div className="text-[11px] font-medium text-muted-foreground">{label}</div><div className={cn('mt-1 text-sm font-bold tabular-nums', color as string)}>{pivotNumber(value, digits as number)}</div></CardContent></Card>)}</div>
+        <Card className="mt-4 rounded-md shadow-none"><CardHeader className="border-b bg-muted/40 py-3"><div><h2 className="text-base font-semibold">Item Summary</h2><p className="text-xs text-muted-foreground">Canonical item and SION reconciliation</p></div></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="min-w-full border-collapse text-xs"><thead className="bg-muted"><tr><th rowSpan={2} className="border p-2 text-left">ITEM</th><th rowSpan={2} className="border p-2">SION</th><th rowSpan={2} className="border p-2">LICENCES</th><th colSpan={7} className="border p-2 text-center">QUANTITY POSITION</th><th colSpan={5} className="border p-2 text-center">CIF POSITION</th><th rowSpan={2} className="border p-2">STATUS</th></tr><tr>{['TOTAL QTY','BOE QTY','ALLOTTED QTY','USED QTY','AVAILABLE QTY','PLANNED QTY','BALANCE QTY','USED CIF','PLANNED CIF','AVG PRICE','AVAILABLE CIF','BALANCE CIF'].map(name => <th key={name} className="border p-2 text-right whitespace-nowrap">{name}</th>)}</tr></thead><tbody>{items.map(item => <tr key={item.key} className="hover:bg-muted/30"><td className="border p-2 font-semibold">{item.item_name}</td><td className="border p-2 text-center">{item.sion}</td><td className="border p-2 text-right">{item.license_count}</td>{['total_qty','boe_used_qty','allotted_qty','actual_used_qty','available_qty','planned_qty','balance_qty_after_plan'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(item[key], 3)}</td>)}{['actual_used_cif','planned_cif','average_planned_unit_price','available_cif_before_plan','balance_cif_after_plan'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{item[key] == null ? '—' : pivotNumber(item[key], 2)}</td>)}<td className="border p-2">{item.status.startsWith('over_') ? <button type="button" onClick={() => onException(item)} className="rounded focus-visible:outline focus-visible:outline-2"><Badge variant="destructive">{item.status === 'over_planned' ? `Over Planned by ${pivotNumber(item.planned_excess_qty, 3)}` : `Over Utilized by ${pivotNumber(item.actual_excess_qty, 3)}`}</Badge></button> : <Badge variant="secondary">{item.status.replace('_', ' ')}</Badge>}</td></tr>)}</tbody></table></div></CardContent></Card></>;
+}
+
+/** Backend-owned canonical pivot DTO.  This component formats only. */
+function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, selectedItem, exceptionOnly }: { groups: any[]; onCondition: (license: any) => void; onTransfer: (license: any) => void; onReplan: (license: any) => void; onIssue: (license: any) => void; selectedItem?: string | null; exceptionOnly?: boolean }) {
+    const fixed = ['SR NO', 'DFIA NO', 'EXPIRY DT', 'EXPORTER', 'TOTAL CIF', 'DEBITED CIF', 'ALLOTTED CIF', 'PLANNED CIF', 'BALANCE CIF', 'ISSUES'];
+    return <div className="space-y-5">
+        {groups.map((group) => { const visibleLicenses = group.licenses.filter((license) => !exceptionOnly || license.issues?.some((issue) => !selectedItem || issue.item_key === selectedItem)); return visibleLicenses.length ? <Card key={`${group.notification_number}-${group.purchase_status?.id ?? group.purchase_status?.name}`}>
+            <CardHeader className="flex-row items-center justify-between text-primary-foreground" style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
+                <div><div className="flex items-center gap-2 font-semibold"><Bell className="size-4" /> Notification Number: {group.notification_number}<Badge variant="secondary">{group.purchase_status?.name || 'UNASSIGNED'}</Badge></div><div className="mt-1 text-xs opacity-90">{group.license_count} Licences</div></div>
+                <span className="flex size-9 items-center justify-center rounded-full bg-white/20 font-bold">{group.license_count}</span>
+            </CardHeader>
+            <CardContent className="p-0"><div className="overflow-x-auto"><table className="w-max min-w-full border-collapse text-sm"><thead className="sticky top-0 z-20 bg-muted"><tr>{fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}{group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={10} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}</tr><tr>{group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','DEBITED QTY','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}</tr></thead>
+                <tbody>{visibleLicenses.map((license, index) => {
+                    const pivotCells = group.item_groups.flatMap((item, itemIndex) => {
+                        const cell = license.items?.[item.key];
+                        const bg = {backgroundColor: itemBgColor(itemIndex)};
+                        return ['hsn_code','description','total_qty','allotted_qty','debited_qty','balance_qty','restriction_percent','restriction_value','plan_qty','planned_cif'].map(key => {
+                            const display = !cell ? '—' : (key === 'description' || key === 'hsn_code' ? (cell[key] || '—') : key === 'restriction_percent' && cell[key] != null ? <Badge>{cell[key]}%</Badge> : pivotNumber(cell[key], key.includes('cif') || key.includes('value') ? 2 : 3));
+                            return <td key={`${item.key}-${key}`} className={cn('border p-2', ['total_qty','allotted_qty','debited_qty','balance_qty','restriction_value','plan_qty','planned_cif'].includes(key) && 'text-right', key === 'debited_qty' && 'text-orange-700', key === 'allotted_qty' && 'text-blue-700', key === 'balance_qty' && 'text-green-700')} style={bg}>{display}</td>;
+                        });
+                    });
+                    return <tr key={license.license_id} className={cn('align-middle hover:bg-muted/40', license.issue_count && 'border-l-4 border-l-red-600')}><td className="sticky left-0 z-10 border bg-background p-2 text-right">{index + 1}</td><td className="dfia-sticky-cell sticky z-20 border bg-background p-2" style={{left: 58, pointerEvents: 'auto'}}><Link to={`/licenses/${license.license_id}/overview`} className="font-semibold text-primary underline hover:text-primary/80 focus-visible:outline focus-visible:outline-2">{license.license_number}</Link>{license.highest_issue && <Badge variant="destructive" className="ml-1 text-[10px]">{license.highest_issue.replace('_', ' ')}</Badge>}<div className="mt-1 flex flex-col gap-1 text-[11px]">{license.condition_available ? <button type="button" onClick={(event) => { event.stopPropagation(); onCondition(license); }} style={{...ACTION_PILL_BASE, color: '#92610a', backgroundColor: 'rgba(234,179,8,0.13)', border: '1px solid rgba(234,179,8,0.45)'}}><FileText className="size-3.5" />Condition</button> : <button type="button" disabled title="No condition sheet is available" style={{...ACTION_PILL_BASE, opacity: .5}}>Condition</button>}{license.transfer_available ? <button type="button" onClick={(event) => { event.stopPropagation(); onTransfer(license); }} style={{...ACTION_PILL_BASE, color: '#1d4ed8', backgroundColor: 'rgba(59,130,246,0.13)', border: '1px solid rgba(59,130,246,0.45)'}}><ArrowLeftRight className="size-3.5" />Transfer</button> : <button type="button" disabled title="No transfer status is available" style={{...ACTION_PILL_BASE, opacity: .5}}>Transfer</button>}<button type="button" onClick={(event) => { event.stopPropagation(); onReplan(license); }} style={{...ACTION_PILL_BASE, color: 'var(--tb-brand-active)', backgroundColor: 'var(--tb-brand-50)', border: '1px solid #a5b4fc'}}><Target className="size-3.5" />Re Plan me</button></div></td><td className="border p-2 whitespace-nowrap">{license.expiry_date || '—'}</td><td className="border p-2 min-w-48 whitespace-normal">{license.exporter || '—'}</td>{['total_cif','debited_cif','allotted_cif','planned_cif','balance_cif'].map(key => <td key={key} className={cn('border p-2 text-right whitespace-nowrap', key === 'debited_cif' && 'text-orange-700', key === 'allotted_cif' && 'text-blue-700', key === 'balance_cif' && 'text-green-700')}>{pivotNumber(license[key], 2)}</td>)}<td className="border p-2 text-center">{license.issue_count ? <button type="button" onClick={() => onIssue(license)}><Badge variant="destructive">{license.issue_count} Issues</Badge></button> : <Badge variant="secondary" className="text-green-700">OK</Badge>}</td>{pivotCells}</tr>;
+                })}<tr className="border-t-4 border-double border-slate-400 bg-slate-200 font-bold"><td className="sticky left-0 z-10 border bg-slate-200 p-2 text-right" colSpan={2}>TOTAL — {group.license_count} LICENCES</td><td className="border bg-slate-200 p-2">—</td><td className="border bg-slate-200 p-2">—</td>{['total_cif','debited_cif','allotted_cif','planned_cif','balance_cif'].map(key => <td key={key} className="border bg-slate-200 p-2 text-right whitespace-nowrap">{pivotNumber(group.totals?.[key], 2)}</td>)}<td className="border bg-slate-200 p-2">{group.issue_license_count || 'OK'}</td><PivotTotalCells group={group} /></tr></tbody></table></div></CardContent>
+        </Card> : null})}
+    </div>;
+}
+
 export default function ItemPivotReport() {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [reportData, setReportData] = useState<Record<string, any> | null>(null);
+    const [reportView, setReportView] = useState<'summary' | 'matrix'>(searchParams.get('view') === 'license-matrix' ? 'matrix' : 'summary');
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
 
@@ -233,6 +289,7 @@ export default function ItemPivotReport() {
     }, [purchaseStatusOptions]);
     const [conditionModal, setConditionModal] = useState(null); // { licenseNumber, content }
     const [transferModal, setTransferModal] = useState(null); // { licenseNumber, content }
+    const [issueModal, setIssueModal] = useState(null);
     const [noteModal, setNoteModal] = useState(null); // { licenseNumber, content }
     // Utilization planning panel (same component the licenses page uses).
     const [showPlanModal, setShowPlanModal] = useState(false);
@@ -414,6 +471,28 @@ export default function ItemPivotReport() {
             setDownloading(false);
         }
     };
+
+    const handleCanonicalReplan = (license) => {
+        // Reuse the established planning panel: it owns the corrected Auto
+        // Plan mutation, loading state, cache refresh, and error handling.
+        setPlanLicense({ id: license.license_id, number: license.license_number, balance: Number(license.balance_cif || 0) });
+        setShowPlanModal(true);
+    };
+    const handleCanonicalCondition = (license) => setConditionModal({ licenseNumber: license.license_number, content: license.condition_sheet });
+    const handleCanonicalTransfer = (license) => setTransferModal({ licenseNumber: license.license_number, content: license.latest_transfer });
+    const handleCanonicalIssue = (license) => setIssueModal(license);
+    const handleSummaryException = (item) => {
+        setReportView('matrix');
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.set('view', 'license-matrix'); next.set('item', item.key); next.set('exception', item.status); next.set('exceptions_only', '1');
+            return next;
+        });
+    };
+    const clearExceptionFilter = () => setSearchParams((current) => { const next = new URLSearchParams(current); ['item', 'exception', 'exceptions_only'].forEach(key => next.delete(key)); return next; });
+    useEffect(() => {
+        if (reportView === 'matrix' && searchParams.get('item')) document.getElementById(`pivot-item-${searchParams.get('item')}`)?.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
+    }, [reportView, searchParams]);
 
     const handleCompanyChange = (values) => {
         setSelectedCompanies(values || []);
@@ -611,8 +690,14 @@ export default function ItemPivotReport() {
                         </div>
                     )}
 
+                    {!loading && activeNormTab && Array.isArray(reportData?.groups) && (
+                        reportData.groups.length ? <><div className="mb-3 flex gap-1 border-b"><Button variant={reportView === 'summary' ? 'default' : 'ghost'} size="sm" onClick={() => setReportView('summary')}>Item Summary</Button><Button variant={reportView === 'matrix' ? 'default' : 'ghost'} size="sm" onClick={() => setReportView('matrix')}>Licence Matrix</Button>{searchParams.get('exceptions_only') && <Button variant="outline" size="sm" onClick={clearExceptionFilter}>Clear Exception Filter</Button>}</div>{reportView === 'summary' ? <FioriSummary summary={reportData.summary} items={reportData.items || []} onException={handleSummaryException} /> : <CanonicalPivot groups={reportData.groups} onCondition={handleCanonicalCondition} onTransfer={handleCanonicalTransfer} onReplan={handleCanonicalReplan} onIssue={handleCanonicalIssue} selectedItem={searchParams.get('item')} exceptionOnly={searchParams.get('exceptions_only') === '1'} />}</> : (
+                            <div className="rounded-xl border border-border bg-card py-12 text-center text-muted-foreground">No licences match the selected filters.</div>
+                        )
+                    )}
+
                     {/* Show report data */}
-                    {!loading && activeNormTab && reportData?.licenses_by_norm_notification?.[activeNormTab] && Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length > 0 && (
+                    {!loading && activeNormTab && !Array.isArray(reportData?.groups) && reportData?.licenses_by_norm_notification?.[activeNormTab] && Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length > 0 && (
                         <div>
                             {/* Notifications within active norm */}
                             {(Object.entries(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}) as [string, any][]).sort().map(([groupKey, licenses]: [string, any]) => {
@@ -1553,6 +1638,15 @@ export default function ItemPivotReport() {
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setTransferModal(null)}>Close</Button>
                         </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {issueModal && (
+                <Dialog open={!!issueModal} onOpenChange={(open) => !open && setIssueModal(null)}>
+                    <DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Issues — {issueModal.license_number}</DialogTitle></DialogHeader>
+                        <div className="space-y-2">{issueModal.issues.map((issue) => <div key={`${issue.item_key}-${issue.type}`} className="rounded border border-red-200 bg-red-50 p-3 text-sm"><div className="font-semibold text-red-800">{issue.type.replace('_', ' ')}</div><div>{issue.item_key}</div><div>Available Qty: {pivotNumber(issue.available_qty, 3)} · Planned Qty: {pivotNumber(issue.planned_qty, 3)} · Excess: {pivotNumber(issue.type === 'over_planned' ? issue.planned_excess_qty : issue.actual_excess_qty, 3)}</div></div>)}</div>
+                        <DialogFooter><Button variant="outline" onClick={() => setIssueModal(null)}>Close</Button><Button onClick={() => handleCanonicalReplan(issueModal)}>Re Plan me</Button><Button onClick={() => navigate(`/licenses/${issueModal.license_id}/overview`)}>Open Licence</Button></DialogFooter>
                     </DialogContent>
                 </Dialog>
             )}

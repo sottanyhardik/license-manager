@@ -7,7 +7,7 @@ planning engine, eliminating norm-specific dispatch.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from typing import Any
 
 from django.db import transaction
@@ -23,6 +23,110 @@ class PlannerConfigurationError(ValueError):
 PLAN_MODE_NEW = "NEW"
 PLAN_MODE_ALL = "ALL"
 PLAN_MODES = frozenset((PLAN_MODE_NEW, PLAN_MODE_ALL))
+
+
+def source_unit_value(import_item) -> Decimal | None:
+    """Return the immutable source-item unit value used for band matching.
+
+    Unit-value rules classify the imported entitlement, not a previous plan,
+    its remaining balance, or a configured output price.  The authoritative
+    value is therefore the original per-item CIF divided by original quantity.
+    A zero CIF is an explicit zero unit value and belongs to a lower band when
+    configured; only a non-positive source quantity is unclassifiable.
+    """
+    quantity = Decimal(str(import_item.quantity or 0))
+    cif = Decimal(str(import_item.cif_fc or 0))
+    if quantity <= 0:
+        return None
+    return cif / quantity
+
+
+def select_unit_value_row(rows, unit_value: Decimal):
+    """Select exactly one non-overlapping unit-value row using Decimal.
+
+    Rows are sorted on a copy, so UI order is irrelevant.  Touching bands are
+    deliberately deterministic: the lower band owns its maximum and every
+    later band is open at the previous maximum.
+    """
+    ordered = sorted(rows, key=lambda row: (
+        Decimal(str(row.min_unit_price)),
+        Decimal(str(row.max_unit_price)),
+        row.priority,
+        row.pk,
+    ))
+    previous_max = None
+    for row in ordered:
+        minimum = Decimal(str(row.min_unit_price))
+        maximum = Decimal(str(row.max_unit_price))
+        lower_bound = minimum if previous_max is None else max(minimum, previous_max)
+        matches = (
+            minimum <= unit_value <= maximum
+            if previous_max is None
+            else lower_bound < unit_value <= maximum
+        )
+        if matches:
+            return row
+        previous_max = maximum
+    return None
+
+
+def ordered_unit_value_rows(rows):
+    """Return allocation tiers in persisted priority order.
+
+    Existing E1 rows both have priority zero; their higher configured maximum
+    is the deterministic first tier (DWP before SWP). Explicit priorities
+    always take precedence over this compatibility tie-break.
+    """
+    return sorted(rows, key=lambda row: (
+        row.priority,
+        -Decimal(str(row.max_unit_price)),
+        row.pk,
+    ))
+
+
+def solve_unit_value_mix(rows, quantity: Decimal, available_cif: Decimal):
+    """Return deterministic Decimal quantities for configured price rows.
+
+    The solver preserves total eligible quantity.  For a two-price range it
+    solves the exact linear mix; for more rows it fills deterministically from
+    the lowest price upward, then moves quantity to higher prices until the
+    available CIF is consumed as closely as possible.
+    """
+    quantity = Decimal(str(quantity))
+    available_cif = Decimal(str(available_cif))
+    # The configured rows are *prices*, not source-CIF bands.  Sort by price
+    # first and persisted row order second so a database's incidental order
+    # can never affect a rebuild.  A two-extreme mix spans every value between
+    # the lowest and highest configured price, including when there are >2
+    # rows, and is therefore the deterministic bounded N-row solution.
+    ordered = sorted(rows, key=lambda row: (
+        Decimal(str(row.preferred_unit_price if row.preferred_unit_price > 0 else row.max_unit_price)),
+        row.priority, row.pk,
+    ))
+    if not ordered or quantity <= 0:
+        return []
+    prices = [Decimal(str(row.preferred_unit_price if row.preferred_unit_price > 0 else row.max_unit_price)) for row in ordered]
+    result = [Decimal("0")] * len(ordered)
+    result[0] = quantity
+    minimum = quantity * prices[0]
+    maximum = quantity * prices[-1]
+    # Underfunding intentionally retains the valid full quantity at its
+    # lowest configured price.  The caller caps financial consumption and
+    # records the diagnostic; negative quantities are never manufactured.
+    if available_cif <= minimum:
+        return list(zip(ordered, result))
+    if available_cif >= maximum:
+        result[0] = Decimal("0")
+        result[-1] = quantity
+        return list(zip(ordered, result))
+
+    high_index = len(ordered) - 1
+    spread = prices[high_index] - prices[0]
+    if spread > 0:
+        high_quantity = (available_cif - minimum) / spread
+        result[0] = quantity - high_quantity
+        result[high_index] = high_quantity
+    return list(zip(ordered, result))
 
 
 def normalize_plan_mode(mode: str | None) -> str:
@@ -115,6 +219,25 @@ class ResolvedPlannerConfiguration:
         return None
 
 
+@dataclass(frozen=True)
+class PlanningContext:
+    """Immutable input snapshot for one canonical license planning run.
+
+    It deliberately keeps the opening planning ceiling separate from the live
+    financial-balance audit figure.  Every strategy receives the carried
+    ``remaining_planning_cif`` from the single execution loop; no strategy is
+    allowed to create an alternative opening balance.
+    """
+    license_id: int
+    sion_id: int
+    license_total_cif: Decimal
+    planning_cif_ceiling: Decimal
+    live_financial_balance_cif: Decimal
+    source_items: tuple[Any, ...]
+    actual_usage: dict[str, Any]
+    ordered_rules: tuple[Any, ...]
+
+
 class SionPlanningExecutionService:
     """Generic database-driven planning orchestration for all SIONs."""
 
@@ -122,9 +245,20 @@ class SionPlanningExecutionService:
     def resolve_configuration(cls, sion) -> ResolvedPlannerConfiguration:
         from apps.license.models import SionPlanningProfile, SionPlanningRule
 
-        rules = tuple(SionPlanningRule.objects.filter(
+        active_rules = list(SionPlanningRule.objects.filter(
             sion=sion, is_active=True,
-        ).order_by("priority", "pk"))
+        ).order_by("priority", "-version", "-pk"))
+        # A rule edit is version-appended.  Legacy/manual data can contain
+        # more than one active revision, but a plan must never mix their
+        # percentage rows. Select the newest active revision per stable key.
+        selected = {}
+        unversioned = []
+        for rule in active_rules:
+            if rule.stable_key:
+                selected.setdefault(rule.stable_key, rule)
+            else:
+                unversioned.append(rule)
+        rules = tuple(sorted([*selected.values(), *unversioned], key=lambda rule: (rule.priority, rule.pk)))
         if not rules:
             raise PlannerConfigurationError(
                 f"The selected SION {sion.norm_class} has no active saved rules. "
@@ -199,19 +333,17 @@ class SionPlanningExecutionService:
         live_balances = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
             [row.pk for row in licenses]
         )
-        # When force_plan=True, don't filter out licenses with zero balance_cif
-        # They can still be planned; balance_cif becomes informational
-        if not force_plan:
-            from apps.license.services.planning_tolerances import effective_planning_balance_cif
-            licenses = [
-                row for row in licenses
-                if effective_planning_balance_cif(live_balances.get(row.pk, Decimal("0"))) > 0
-            ]
+        # Live financial balance is audit data, never an eligibility gate or
+        # an opening planning ceiling.  Actual utilisation is reconciled from
+        # BOE/allotment history inside the canonical run.
         return licenses, live_balances
 
     @classmethod
-    def _compute_license_new_architecture(cls, license_obj, sion, strategy_rules, *, preview, force_plan=False):
-        """Build the full theoretical plan directly from strategy configuration."""
+    def _compute_license_new_architecture(
+        cls, license_obj, sion, strategy_rules, *, preview, force_plan=False,
+        operational_balance_cif=None,
+    ):
+        """Build a priority-waterfall strategy plan from saved configuration."""
         from apps.license.models import LicenseImportItemsModel, LicenseExportItemModel
         from apps.license.services.canonical_planning_service import (
             SplitPercentIncompleteError,
@@ -229,12 +361,56 @@ class SionPlanningExecutionService:
             ).values_list("cif_fc", flat=True)),
             Decimal("0"),
         )
+        # Source ``available_quantity`` is a legacy operational cache with
+        # whole-unit precision in some imports.  Planning must retain the
+        # canonical three-decimal entitlement and deduct actual rows only
+        # after aggregating them, never truncate every matched item first.
+        from apps.license.services.planning_usage_reconciliation import aggregate_license_usage
+        actual_usage = aggregate_license_usage(license_obj.pk)
+        original_import_qty = sum((Decimal(str(item.quantity or 0)) for item in import_items), Decimal("0"))
+        actual_import_qty = sum((
+            values["boe_used_quantity"] + values["unlinked_allotment_quantity"]
+            for values in actual_usage["mapped"].values()
+        ), Decimal("0")) + sum((
+            values["boe_used_quantity"] + values["unlinked_allotment_quantity"]
+            for values in actual_usage["unmapped_by_source"].values()
+        ), Decimal("0"))
+        remaining_waterfall_qty = max(original_import_qty - actual_import_qty, Decimal("0")).quantize(
+            Decimal("0.001"), rounding=ROUND_DOWN,
+        )
+        # ``operational_balance_cif`` is the gross export entitlement less
+        # authoritative BOE/allotment CIF.  It is calculated once by
+        # ``plan_sion`` and is the opening CIF for *new* planning.  Starting
+        # again from ``total_cif`` here both double-counts the historical
+        # capacity and makes a balancing effective price impossible (the
+        # residual can exceed the member's configured maximum rate).
+        planning_cif_ceiling = (
+            Decimal(str(operational_balance_cif))
+            if operational_balance_cif is not None
+            else total_cif
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        remaining_waterfall_cif = planning_cif_ceiling
+        # Snapshot all legitimate inputs once.  Actual usage is loaded before
+        # any strategy runs and is retained in provenance for reconciliation;
+        # it is never inferred from an old generated plan.
+        context = PlanningContext(
+            license_id=license_obj.pk,
+            sion_id=sion.pk,
+            license_total_cif=planning_cif_ceiling,
+            planning_cif_ceiling=planning_cif_ceiling,
+            live_financial_balance_cif=Decimal(str(operational_balance_cif or 0)),
+            source_items=tuple(import_items),
+            actual_usage=actual_usage,
+            ordered_rules=tuple(sorted(strategy_rules, key=lambda value: (value.priority, value.pk))),
+        )
 
         def matching_group(item_name_id):
             matched = [item for item in import_items if item_name_id in item_name_ids[item.pk]]
             # A single physical entitlement row is unambiguous even when an
             # older import did not populate its item-name M2M classification.
             return matched or (import_items if len(import_items) == 1 else [])
+
+        claimed_source_item_ids: set[int] = set()
 
         def source_group(rule, fallback_item_name_id=None):
             expression = rule.expression if isinstance(rule.expression, dict) else {}
@@ -255,32 +431,93 @@ class SionPlanningExecutionService:
                     }
                     if evaluate_expression(expression, record):
                         matched.append(item)
-                return matched
+                return [item for item in matched if item.pk not in claimed_source_item_ids]
             # Compatibility for pre-redesign strategy records created with an
             # empty expression. Newly edited rules use explicit match logic.
-            return matching_group(fallback_item_name_id) if fallback_item_name_id else []
+            return [
+                item for item in (matching_group(fallback_item_name_id) if fallback_item_name_id else [])
+                if item.pk not in claimed_source_item_ids
+            ]
 
-        def original_group_quantity(group):
-            # Entitlements are recorded at 3dp, while this SION plans whole kg.
-            return sum((Decimal(str(item.quantity or 0)) for item in group), Decimal("0")).quantize(
-                Decimal("1"), rounding=ROUND_DOWN,
+        def available_group_quantity(group):
+            """Return the operationally available source quantity for a rule.
+
+            The priority waterfall plans future capacity after BOE/allotment
+            commitments, so it must never re-offer an import item's original
+            quantity once a portion has been consumed.  Older imports without
+            an availability value retain their original quantity as a
+            compatibility fallback.
+            """
+            source_ids = {item.pk for item in group}
+            original = sum((Decimal(str(item.quantity or 0)) for item in group), Decimal("0"))
+            actual = sum((
+                values["boe_used_quantity"] + values["unlinked_allotment_quantity"]
+                for (source_id, _target_id), values in context.actual_usage["mapped"].items()
+                if source_id in source_ids
+            ), Decimal("0")) + sum((
+                values["boe_used_quantity"] + values["unlinked_allotment_quantity"]
+                for source_id, values in context.actual_usage["unmapped_by_source"].items()
+                if source_id in source_ids
+            ), Decimal("0"))
+            return max(original - actual, Decimal("0")).quantize(Decimal("0.001"), rounding=ROUND_DOWN)
+
+        def add_line(rule, item_name, group, quantity, price, provenance, *, emit_zero=False):
+            nonlocal remaining_waterfall_qty, remaining_waterfall_cif
+            if not group or (quantity <= 0 and not emit_zero):
+                return Decimal("0")
+            price = Decimal(str(price or 0))
+            # Quantity ownership and CIF funding are intentionally separate.
+            # A valid source quantity belongs to its highest-priority rule
+            # even where the licence cannot fund its whole theoretical CIF.
+            allocated_quantity = min(max(Decimal(str(quantity)), Decimal("0")), remaining_waterfall_qty)
+            if price > 0 and remaining_waterfall_cif.is_finite():
+                affordable_quantity = (remaining_waterfall_cif / price).quantize(
+                    Decimal("0.001"), rounding=ROUND_DOWN,
+                )
+                allocated_quantity = min(allocated_quantity, affordable_quantity)
+            allocated_quantity = allocated_quantity.quantize(Decimal("0.001"), rounding=ROUND_DOWN)
+            if allocated_quantity <= 0 and not emit_zero:
+                return Decimal("0")
+            # A percentage target is an immutable *cap*, while the persisted
+            # line is the balance-aware new plan.  Keep both values so a
+            # report can never accidentally present the target as a plan.
+            theoretical_quantity = Decimal(str(
+                provenance.get("theoretical_target_qty", allocated_quantity)
+            )).quantize(Decimal("0.001"), rounding=ROUND_DOWN)
+            theoretical_cif = (theoretical_quantity * price).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP,
             )
-
-        def add_line(rule, item_name, group, quantity, price, provenance):
-            if not group or quantity <= 0:
-                return False
+            new_planned_cif = (allocated_quantity * price).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP,
+            )
+            # Persisted plan CIF is the operational/reconciled financial
+            # commitment. The configured price and uncapped theoretical CIF
+            # remain explicit provenance rather than being faked by changing
+            # the rule price or shrinking the valid quantity.
+            allocated_cif = new_planned_cif
+            provenance = {
+                **provenance,
+                "source_item_ids": [item.pk for item in group],
+                "theoretical_quantity": str(theoretical_quantity),
+                "theoretical_cif": str(theoretical_cif),
+                "operational_planned_quantity": str(allocated_quantity),
+                "operational_planned_cif": str(allocated_cif),
+                "cif_status": "CAPPED" if allocated_cif < new_planned_cif else "FULLY_FUNDED",
+            }
             all_lines.append({
                 "import_item": group[0].pk,
                 "item_name": item_name.pk,
-                "planned_quantity": quantity,
+                "planned_quantity": allocated_quantity,
                 "unit_price": price,
-                "planned_cif": quantity * price,
+                "planned_cif": allocated_cif,
                 "planning_rule_id": rule.pk,
                 "planning_rule_version": rule.version,
                 "planning_rule_priority": rule.priority,
                 "allocation_provenance": provenance,
             })
-            return True
+            remaining_waterfall_qty = max(remaining_waterfall_qty - allocated_quantity, Decimal("0"))
+            remaining_waterfall_cif = max(remaining_waterfall_cif - allocated_cif, Decimal("0"))
+            return allocated_quantity
 
         all_lines = []
         diagnostics = []
@@ -292,40 +529,218 @@ class SionPlanningExecutionService:
         global_percent_total = sum((row.percentage for row in percent_rows_flat), Decimal("0"))
         global_percent_index = 0
         global_assigned_nominal = Decimal("0")
-        for rule in strategy_rules:
-            if rule.strategy == "STANDARD":
+        waterfall_diagnostics = []
+        for rule in context.ordered_rules:
+            stage_qty_before = remaining_waterfall_qty
+            stage_cif_before = remaining_waterfall_cif
+            strategy = rule.strategy or "STANDARD"
+            # Keep evaluating rules after capacity is exhausted so Auto Plan
+            # can distinguish an unmatched source from a matched source that
+            # correctly received nothing under the global waterfall cap.
+            # This is diagnostic-only; it never claims or mutates a source.
+            if remaining_waterfall_qty <= 0 or remaining_waterfall_cif <= 0:
+                if strategy == "SPLIT_BY_UNIT_VALUE":
+                    configured_rows = ordered_unit_value_rows(rule.unit_value_rows.all())
+                    group = source_group(
+                        rule, configured_rows[0].import_item_id if configured_rows else None,
+                    )
+                    requested_quantity = available_group_quantity(group)
+                    requested_cif = sum((
+                        requested_quantity * (
+                            Decimal(str(row.preferred_unit_price))
+                            if Decimal(str(row.preferred_unit_price)) > 0
+                            else Decimal(str(row.max_unit_price))
+                        )
+                        for row in configured_rows
+                    ), Decimal("0"))
+                elif strategy == "SPLIT_BY_PERCENT":
+                    configured_rows = list(rule.percentage_rows.all().order_by("priority", "pk"))
+                    group = source_group(rule, configured_rows[0].import_item_id if configured_rows else None)
+                    requested_quantity = available_group_quantity(group)
+                    requested_cif = sum((
+                        requested_quantity * row.percentage / Decimal("100") * row.unit_price
+                        for row in configured_rows
+                    ), Decimal("0"))
+                else:
+                    group = source_group(rule, rule.import_item_id) if rule.import_item_id else []
+                    requested_quantity = available_group_quantity(group)
+                    requested_cif = requested_quantity * Decimal(str(rule.max_unit_price or 0))
+                waterfall_diagnostics.append({
+                    "priority": rule.priority,
+                    "rule_id": rule.pk,
+                    "rule_version": rule.version,
+                    "rule_name": rule.name,
+                    "strategy": strategy,
+                    "matched_source_item_ids": [item.pk for item in group],
+                    "requested_qty": str(requested_quantity),
+                    "requested_cif": str(requested_cif),
+                    "allocated_qty": "0",
+                    "allocated_cif": "0",
+                    "remaining_qty_before": str(stage_qty_before),
+                    "remaining_cif_before": str(stage_cif_before),
+                    "remaining_qty": str(remaining_waterfall_qty),
+                    "remaining_cif": str(remaining_waterfall_cif),
+                    "skip_reason": (
+                        "WATERFALL_QTY_EXHAUSTED"
+                        if remaining_waterfall_qty <= 0
+                        else "WATERFALL_CIF_EXHAUSTED"
+                    ),
+                })
+                continue
+            if strategy == "STANDARD":
                 group = source_group(rule, rule.import_item_id) if rule.import_item_id else []
-                quantity = original_group_quantity(group)
-                add_line(rule, rule.import_item, group, quantity, rule.max_unit_price, {
-                    "strategy": "STANDARD", "quantity_source": "original_import_group_quantity",
+                # A source entitlement has exactly one highest-priority SION
+                # rule owner.  This matters for legacy descriptions/HSNs that
+                # happen to satisfy more than one configured rule (for
+                # example a milk-solid source carrying an old fruit-juice
+                # HSN).  Later rules must not create a second target row.
+                # Standard rules use the persisted operational balance for
+                # each source item. Percentage rules below calculate their
+                # own original-target minus actual reconciliation.
+                quantity = sum((
+                    Decimal(str(item.available_quantity if item.available_quantity is not None else (item.quantity or 0)))
+                    for item in group
+                ), Decimal("0")).quantize(Decimal("0.001"), rounding=ROUND_DOWN)
+                allocated = add_line(rule, rule.import_item, group, quantity, rule.max_unit_price, {
+                    "strategy": "STANDARD", "quantity_source": "available_import_group_quantity",
+                })
+                if allocated > 0:
+                    claimed_source_item_ids.update(item.pk for item in group)
+                waterfall_diagnostics.append({
+                    "priority": rule.priority, "rule_id": rule.pk,
+                    "rule_version": rule.version, "rule_name": rule.name, "strategy": strategy,
+                    "matched_source_item_ids": [item.pk for item in group],
+                    "requested_qty": str(quantity),
+                    "requested_cif": str(quantity * Decimal(str(rule.max_unit_price or 0))),
+                    "allocated_qty": str(stage_qty_before - remaining_waterfall_qty),
+                    "allocated_cif": str(stage_cif_before - remaining_waterfall_cif)
+                    if remaining_waterfall_cif.is_finite() else "0",
+                    "remaining_qty_before": str(stage_qty_before),
+                    "remaining_cif_before": str(stage_cif_before),
+                    "remaining_qty": str(remaining_waterfall_qty),
+                    "remaining_cif": str(remaining_waterfall_cif), "matched": bool(group),
+                    "skip_reason": None if group else "NO_MATCH",
                 })
                 continue
 
-            if rule.strategy == "SPLIT_BY_UNIT_VALUE":
-                for row in rule.unit_value_rows.all().order_by("priority", "pk"):
-                    group = source_group(rule, row.import_item_id)
-                    quantity = original_group_quantity(group)
-                    add_line(rule, row.import_item, group, quantity, row.preferred_unit_price, {
-                        "strategy": "SPLIT_BY_UNIT_VALUE",
-                        "quantity_source": "original_import_group_quantity",
-                        "min_unit_price": str(row.min_unit_price),
-                        "max_unit_price": str(row.max_unit_price),
-                    })
+            if strategy == "SPLIT_BY_UNIT_VALUE":
+                # Configured Unit Value rows are allocation instruments.  The
+                # current waterfall CIF, not source average CIF, determines
+                # the mathematical mix.
+                configured_rows = ordered_unit_value_rows(rule.unit_value_rows.all())
+                matched_source = source_group(
+                    rule, configured_rows[0].import_item_id if configured_rows else None,
+                )
+                for source_item in matched_source:
+                    if remaining_waterfall_qty <= 0:
+                        break
+                    source_remaining_qty = available_group_quantity([source_item])
+                    mix = solve_unit_value_mix(configured_rows, source_remaining_qty, remaining_waterfall_cif)
+                    for row, split_quantity in mix:
+                        if split_quantity <= 0:
+                            continue
+                        planning_price = Decimal(str(row.preferred_unit_price if row.preferred_unit_price > 0 else row.max_unit_price))
+                        add_line(rule, row.import_item, [source_item], split_quantity, planning_price, {
+                            "strategy": "SPLIT_BY_UNIT_VALUE",
+                            "quantity_source": "available_import_item_quantity",
+                            "min_unit_price": str(row.min_unit_price),
+                            "max_unit_price": str(row.max_unit_price),
+                            "unit_value_row_priority": row.priority,
+                            "price_source": (
+                                "preferred_unit_price"
+                                if Decimal(str(row.preferred_unit_price)) > 0
+                                else "row_max_unit_price"
+                            ),
+                            "opening_operational_cif": str(stage_cif_before),
+                            "unit_value_solver": "DECIMAL_BOUNDED_MIX",
+                        })
+                if any(line["planning_rule_id"] == rule.pk for line in all_lines):
+                    claimed_source_item_ids.update(item.pk for item in matched_source)
+                waterfall_diagnostics.append({
+                    "priority": rule.priority, "rule_id": rule.pk,
+                    "rule_version": rule.version, "rule_name": rule.name, "strategy": strategy,
+                    "matched_source_item_ids": [item.pk for item in matched_source],
+                    "requested_qty": str(sum((available_group_quantity([item]) for item in matched_source), Decimal("0"))),
+                    "requested_cif": None,
+                    "allocated_qty": str(stage_qty_before - remaining_waterfall_qty),
+                    "allocated_cif": str(stage_cif_before - remaining_waterfall_cif)
+                    if remaining_waterfall_cif.is_finite() else "0",
+                    "remaining_qty_before": str(stage_qty_before),
+                    "remaining_cif_before": str(stage_cif_before),
+                    "remaining_qty": str(remaining_waterfall_qty),
+                    "remaining_cif": str(remaining_waterfall_cif), "matched": bool(matched_source),
+                    "skip_reason": None if matched_source else "NO_MATCH",
+                })
                 continue
 
-            if rule.strategy == "SPLIT_BY_PERCENT":
+            if strategy == "SPLIT_BY_PERCENT":
                 configured = list(rule.percentage_rows.all().order_by("priority", "pk"))
                 # All rows in one percentage rule describe alternate labels for the
                 # same entitlement group. Count each physical import row once.
                 matched_source = source_group(rule, configured[0].import_item_id if configured else None)
                 matched_by_row = {row.pk: matched_source for row in configured}
-                total_planning_quantity = original_group_quantity(matched_source)
+                # Percentage theory is based on original source quantity.  A
+                # parent BOE/allotment target reserves historical use first;
+                # only the real source balance can become future plan qty.
+                total_planning_quantity = sum((Decimal(str(item.quantity or 0)) for item in matched_source), Decimal("0"))
+                source_ids = [item.pk for item in matched_source]
+                actual_by_target = {}
+                actual_cif_by_target = {}
+                total_actual_qty = Decimal("0")
+                for source_id in source_ids:
+                    for (usage_source_id, target_id), values in context.actual_usage["mapped"].items():
+                        if usage_source_id == source_id:
+                            qty = values["boe_used_quantity"] + values["unlinked_allotment_quantity"]
+                            cif = values["boe_used_cif"] + values["unlinked_allotment_cif"]
+                            actual_by_target[target_id] = actual_by_target.get(target_id, Decimal("0")) + qty
+                            actual_cif_by_target[target_id] = actual_cif_by_target.get(target_id, Decimal("0")) + cif
+                            total_actual_qty += qty
+                    unknown = context.actual_usage["unmapped_by_source"].get(source_id, {})
+                    total_actual_qty += unknown.get("boe_used_quantity", Decimal("0")) + unknown.get("unlinked_allotment_quantity", Decimal("0"))
+                # ``available_quantity`` is the authoritative current/net
+                # operational balance.  It is a hard cap and must not be
+                # replaced by the theoretical percentage target.  Historical
+                # usage is only subtracted from the original entitlement when
+                # a legacy source lacks that net field.
+                authoritative_balance_qty = available_group_quantity(matched_source)
+                future_source_balance = min(
+                    max(total_planning_quantity - total_actual_qty, Decimal("0")),
+                    authoritative_balance_qty,
+                )
                 generated = 0
                 assigned_nominal = Decimal("0")
                 generated_quantity_total = Decimal("0")
                 rule_percent_total = sum((row.percentage for row in configured), Decimal("0"))
                 use_global_split = rule_percent_total != Decimal("100") and global_percent_total == Decimal("100")
+                # Percentage siblings are one atomic priority unit.  Solve the
+                # common final group scale before writing either child; a
+                # sequential Olive-then-PKO waterfall destroys 70/30 (or
+                # 50/50) proportions whenever CIF is constrained.
+                from apps.license.services.percentage_group_solver import solve_balancing_price_group
+                solved = solve_balancing_price_group(
+                    base_qty=total_planning_quantity,
+                    group_available_cif=remaining_waterfall_cif,
+                    group_available_qty=future_source_balance,
+                    # Target CIF is the gross entitlement left after prior
+                    # rule targets. It is distinct from the actual-balance
+                    # waterfall budget passed above.
+                    group_target_cif=total_cif - (planning_cif_ceiling - stage_cif_before),
+                    members=[{
+                        "row": row,
+                        "percentage": row.percentage,
+                        "configured_max_unit_price": row.unit_price,
+                        "actual_used_qty": actual_by_target.get(row.import_item_id, Decimal("0")),
+                        "actual_used_cif": actual_cif_by_target.get(row.import_item_id, Decimal("0")),
+                        "member_sequence": row.priority,
+                    } for row in configured],
+                )
+                solved_by_row = {entry["row"].pk: entry for entry in solved["members"]}
                 for row_index, row in enumerate(configured):
+                    # Percent rows are one already-owned source allocation.
+                    # Emit every configured percentage quantity even when an
+                    # earlier sibling consumes the last operational CIF.
+                    if remaining_waterfall_qty <= 0:
+                        break
                     raw_nominal = total_planning_quantity * row.percentage / Decimal("100")
                     # Plan quantities are Decimal(_, 3), not whole kilograms.
                     # Allocate any sub-milligram rounding remainder to the final
@@ -348,50 +763,115 @@ class SionPlanningExecutionService:
                     # ``max_quantity`` is retained for legacy data/audit only.
                     # Percentage is authoritative for SPLIT_BY_PERCENT; no cap
                     # is enforced without a future explicit opt-in flag.
-                    final_quantity = nominal
+                    # Historical use attributed by the authoritative parent
+                    # document mapping consumes this child's theoretical
+                    # capacity. Persisted row order decides the deterministic
+                    # allocation of any remaining source balance.
+                    solved_member = solved_by_row[row.pk]
+                    remaining_capacity = max(nominal - actual_by_target.get(row.import_item_id, Decimal("0")), Decimal("0"))
+                    final_quantity = solved_member["remaining_qty"]
                     generated_quantity_total += final_quantity
-                    generated += int(add_line(rule, row.import_item, matched_by_row[row.pk], final_quantity,
-                                              row.unit_price, {
+                    generated += bool(add_line(rule, row.import_item, matched_by_row[row.pk], final_quantity,
+                                              solved_member["effective_unit_price"], {
                         "strategy": "SPLIT_BY_PERCENT",
                         "percentage": str(row.percentage),
                         "total_planning_quantity": str(total_planning_quantity),
                         "raw_nominal_quantity": str(raw_nominal),
                         "nominal_quantity": str(nominal),
+                        "theoretical_target_qty": str(nominal),
+                        "percentage_base_qty": str(total_planning_quantity),
+                        "actual_target_quantity": str(actual_by_target.get(row.import_item_id, Decimal("0"))),
+                        "actual_target_cif": str(actual_cif_by_target.get(row.import_item_id, Decimal("0"))),
+                        "excess_other_item_quantity": str(solved_member.get("excess_other_item_qty", Decimal("0"))),
+                        "excess_other_item_cif": str(solved_member.get("excess_other_item_cif", Decimal("0"))),
+                        "audit_remaining_quantity": str(solved_member.get("audit_remaining_qty", final_quantity)),
+                        "audit_remaining_cif": str(solved_member.get("audit_remaining_cif", solved_member["remaining_cif"])),
+                        "future_source_balance": str(future_source_balance),
+                        "authoritative_balance_qty": str(authoritative_balance_qty),
+                        "remaining_percentage_capacity": str(remaining_capacity),
+                        "final_accounted_quantity": str(solved_member["actual_used_qty"] + solved_member["remaining_qty"]),
+                        "effective_unit_price": str(solved_member["effective_unit_price"]),
+                        "configured_max_unit_price": str(row.unit_price),
+                        # Candidate is the configured-max-price projection;
+                        # the effective fields are the plan actually funded by
+                        # this rule's waterfall share.  Keeping both removes
+                        # any ambiguity for the API/UI and audit export.
+                        "candidate_planned_quantity": str(solved_member["remaining_qty"]),
+                        "candidate_planned_cif": str((
+                            solved_member["remaining_qty"] * Decimal(str(row.unit_price))
+                        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                        "effective_planned_quantity": str(solved_member["remaining_qty"]),
+                        "effective_planned_cif": str(solved_member["remaining_cif"]),
+                        "cif_cap_adjustment": str((
+                            (solved_member["remaining_qty"] * Decimal(str(row.unit_price))
+                            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                            - solved_member["remaining_cif"]
+                        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                        "percentage_target_cif": str(solved_member["percentage_target_cif"]),
+                        "remaining_cif": str(solved_member["remaining_cif"]),
                         "legacy_max_quantity_ignored": (
                             str(row.max_quantity) if row.max_quantity is not None else None
                         ),
-                        "quantity_source": "original_import_group_quantity",
-                    }))
+                        "quantity_source": "available_import_group_quantity",
+                    }, emit_zero=True))
                     diagnostics.append({
                         "rule_id": rule.pk, "row_id": row.pk, "item_name": row.import_item.name,
                         "raw_nominal_quantity": str(raw_nominal),
                         "nominal_quantity": str(nominal), "max_quantity": str(row.max_quantity),
                         "generated": bool(matched_by_row[row.pk] and final_quantity > 0),
                     })
-                if configured and total_planning_quantity > 0 and generated != len(configured):
-                    raise SplitPercentIncompleteError(
-                        "Not every configured SPLIT_BY_PERCENT row produced a plan line.",
-                        rule_id=rule.pk, configured_rows=len(configured), generated_rows=generated,
-                        rows=diagnostics,
-                    )
-                if (
-                    configured
-                    and total_planning_quantity > 0
-                    and rule_percent_total == Decimal("100")
-                    and abs(generated_quantity_total - total_planning_quantity) > Decimal("0.001")
-                ):
-                    raise SplitPercentQuantityMismatchError(
-                        "A 100% SPLIT_BY_PERCENT rule did not allocate the full source quantity.",
-                        rule_id=rule.pk,
-                        source_quantity=str(total_planning_quantity),
-                        generated_quantity=str(generated_quantity_total),
-                        percentage_total=str(rule_percent_total),
-                    )
+                waterfall_diagnostics.append({
+                    "priority": rule.priority, "rule_id": rule.pk,
+                    "rule_version": rule.version, "rule_name": rule.name, "strategy": strategy,
+                    "matched_source_item_ids": [item.pk for item in matched_source],
+                    "requested_qty": str(total_planning_quantity),
+                    "requested_cif": None,
+                    "allocated_qty": str(stage_qty_before - remaining_waterfall_qty),
+                    "allocated_cif": str(stage_cif_before - remaining_waterfall_cif)
+                    if remaining_waterfall_cif.is_finite() else "0",
+                    "remaining_qty_before": str(stage_qty_before),
+                    "remaining_cif_before": str(stage_cif_before),
+                    "remaining_qty": str(remaining_waterfall_qty),
+                    "remaining_cif": str(remaining_waterfall_cif), "matched": bool(matched_source),
+                    "skip_reason": None if matched_source else "NO_MATCH",
+                })
+                # A target exhausted by mapped history legitimately has no
+                # future row.  This is not a configuration failure.
+                # A 100% configuration defines the target distribution, not
+                # an entitlement to exceed the authoritative current quantity
+                # or CIF caps.  Record the shortage for audit; do not reject a
+                # valid balance-capped rebuild (e.g. the live 1.130kg gap).
+                if configured and total_planning_quantity > 0 and rule_percent_total == Decimal("100") and abs(generated_quantity_total - future_source_balance) > Decimal("0.001"):
+                    diagnostics.append({
+                        "rule_id": rule.pk, "shortage_reason": "BALANCE_OR_CIF_CAP",
+                        "source_quantity": str(future_source_balance),
+                        "generated_quantity": str(generated_quantity_total),
+                    })
+                if generated:
+                    claimed_source_item_ids.update(item.pk for item in matched_source)
 
         planned_cif = sum((line["planned_cif"] for line in all_lines), Decimal("0"))
+        # Persist the one run-level capacity snapshot with every generated
+        # strategy row. Downstream reconciliation must not substitute a
+        # different live-balance ceiling and silently re-cap these rows.
+        for line in all_lines:
+            line["allocation_provenance"].update({
+                "planning_cif_ceiling": str(planning_cif_ceiling),
+                "remaining_planning_cif_after_run": str(remaining_waterfall_cif),
+                # Compatibility fields for records/projections deployed
+                # before the canonical names. They mean the same planning
+                # snapshot, never the live financial balance.
+                "opening_operational_cif": str(planning_cif_ceiling),
+                "remaining_operational_cif_after_run": str(remaining_waterfall_cif),
+            })
         return all_lines, total_cif - planned_cif, {
-            "architecture": "strategy", "total_cif": total_cif,
+            "architecture": "strategy", "total_cif": planning_cif_ceiling,
+            "planning_cif_ceiling": planning_cif_ceiling,
             "total_planned_cif": planned_cif, "percentage_rows": diagnostics,
+            "waterfall": waterfall_diagnostics,
+            "remaining_waterfall_qty": remaining_waterfall_qty,
+            "remaining_waterfall_cif": remaining_waterfall_cif,
+            "context": context,
         }
 
     @classmethod
@@ -428,7 +908,7 @@ class SionPlanningExecutionService:
         return result
 
     @classmethod
-    def _compute_license(cls, license_obj, sion, *, preview, force_plan=False):
+    def _compute_license(cls, license_obj, sion, *, preview, force_plan=False, operational_balance_cif=None):
         """Compute planned lines using database-driven rules and generic planner.
 
         Args:
@@ -442,15 +922,23 @@ class SionPlanningExecutionService:
 
         # NEW ARCHITECTURE: Check for rules with strategy set (new dispatch path)
         active_rules = list(SionPlanningRule.objects.filter(sion=sion, is_active=True).order_by("priority"))
-        strategy_rules = [r for r in active_rules if r.strategy]
-
-        if strategy_rules:
-            # New architecture: dispatch by strategy
+        if active_rules:
+            # A blank persisted strategy is the backwards-compatible spelling
+            # of STANDARD, never permission to dispatch to a second planner.
+            # This keeps every active SION in the same priority waterfall.
             return cls._compute_license_new_architecture(
-                license_obj, sion, strategy_rules, preview=preview, force_plan=force_plan
+                license_obj, sion, active_rules, preview=preview, force_plan=force_plan,
+                operational_balance_cif=operational_balance_cif,
             )
 
-        # LEGACY ARCHITECTURE: fallback to old dispatch path (strategy=None rules)
+        # No active rules is a configuration error, not a reason to revive a
+        # historical planner.  Callers surface this rather than guessing.
+        raise PlannerConfigurationError(
+            f"The selected SION {getattr(sion, 'norm_class', sion)!r} has no active planning rules."
+        )
+
+        # Historical implementation retained below temporarily for migration
+        # archaeology; it is unreachable from production dispatch.
         # Check if all active rules use SPLIT_BY_PERCENTAGE strategy
         if active_rules and all(r.rule_type == 'SPLIT_BY_PERCENTAGE' for r in active_rules):
             split_result = cls._compute_license_split_by_percentage(license_obj, sion, active_rules, preview=preview)
@@ -933,9 +1421,7 @@ class SionPlanningExecutionService:
             force_plan: If True, bypass balance_cif > 0 filter and availability caps
         """
         from django.db import transaction
-        from apps.license.services.canonical_planning_service import (
-            ALREADY_PLANNED_THRESHOLD, CanonicalPlanningService,
-        )
+        from apps.license.services.canonical_planning_service import CanonicalPlanningService
 
         mode = normalize_plan_mode(mode)
         results = []
@@ -948,48 +1434,36 @@ class SionPlanningExecutionService:
             licenses, live_balances = cls._eligible_licenses(
                 sion, license_ids, company_id=company_id, force_plan=force_plan,
             )
-            planned_cif_by_license = {}
-            if mode == PLAN_MODE_NEW:
-                from django.db.models import Sum
-                from apps.license.models import LicenseItemPlan
-                planned_cif_by_license = {
-                    row["license_id"]: cls._decimal(row["total"])
-                    for row in LicenseItemPlan.objects.filter(
-                        license_id__in=[license_obj.pk for license_obj in licenses],
-                    ).values("license_id").annotate(total=Sum("planned_cif_fc"))
-                }
             for license_obj in licenses:
                 from apps.license.services.planning_tolerances import effective_planning_balance_cif
                 raw_balance_cif = cls._decimal(live_balances[license_obj.pk])
                 effective_balance_cif = effective_planning_balance_cif(raw_balance_cif)
-                if (
-                    # Only skip ALREADY_PLANNED check when force_plan is True
-                    # force_plan means rebuild everything, not "add only new"
-                    not force_plan
-                    and mode == PLAN_MODE_NEW
-                    and planned_cif_by_license.get(license_obj.pk, Decimal("0")) > 0
-                    and planned_cif_by_license[license_obj.pk] >= (
-                        effective_balance_cif * ALREADY_PLANNED_THRESHOLD
-                    )
-                ):
-                    results.append({
-                        "license_id": license_obj.pk,
-                        "license_number": license_obj.license_number,
-                        "lines": [],
-                        "status": "SKIPPED_ALREADY_PLANNED",
-                        "raw_balance_cif": raw_balance_cif,
-                        "effective_balance_cif": effective_balance_cif,
-                        "balance_cif_ignored_by_tolerance": raw_balance_cif != effective_balance_cif,
-                        **({
-                            "write_result": {
-                                "license_id": license_obj.pk,
-                                "status": "SKIPPED_ALREADY_PLANNED",
-                            },
-                        } if persist else {}),
-                    })
-                    continue
+                # Strategy plans are complete rebuilds. Their opening capacity
+                # is the authoritative SION export CIF, not the current sum of
+                # rebuildable generated plan rows / financial-balance display.
+                # The same value is carried through execution, persistence and
+                # the returned run result.
+                from apps.license.models import LicenseExportItemModel
+                opening_operational_cif = sum((
+                    cls._decimal(value) for value in LicenseExportItemModel.objects.filter(
+                        license=license_obj, norm_class=sion,
+                    ).values_list("cif_fc", flat=True)
+                ), Decimal("0"))
+                # Export-manifest CIF is a gross entitlement.  Historical
+                # BOE/unlinked-allotment CIF is authoritative and consumes it
+                # exactly once before the new-plan waterfall begins.
+                from apps.license.services.planning_usage_reconciliation import aggregate_license_usage
+                historical_usage = aggregate_license_usage(license_obj.pk)
+                actual_debited_cif = sum((
+                    bucket["boe_used_cif"] + bucket["unlinked_allotment_cif"]
+                    for bucket in historical_usage["mapped"].values()
+                ), Decimal("0")) + sum((
+                    row["cif_fc"] for row in historical_usage["unmapped_usage"]
+                ), Decimal("0"))
+                new_plan_cif_ceiling = max(opening_operational_cif - actual_debited_cif, Decimal("0"))
                 lines, remaining, planning_metadata = cls._compute_license(
                     license_obj, sion, preview=not persist, force_plan=force_plan,
+                    operational_balance_cif=new_plan_cif_ceiling,
                 )
                 canonical_lines = [{
                     "import_item_id": row["import_item"],
@@ -1011,7 +1485,17 @@ class SionPlanningExecutionService:
                     "status": "PLANNED" if persist else "PREVIEWED",
                     "raw_balance_cif": raw_balance_cif,
                     "effective_balance_cif": effective_balance_cif,
+                    "planning_cif_ceiling": planning_metadata.get("planning_cif_ceiling", opening_operational_cif),
+                    "remaining_planning_cif": planning_metadata.get("remaining_waterfall_cif", remaining),
+                    "opening_operational_cif": opening_operational_cif,
+                    "actual_debited_cif": actual_debited_cif,
+                    "new_plan_cif_ceiling": new_plan_cif_ceiling,
+                    "remaining_operational_cif": planning_metadata.get("remaining_waterfall_cif", remaining),
                     "balance_cif_ignored_by_tolerance": raw_balance_cif != effective_balance_cif,
+                    # Development/API-safe explanation of every persisted-rule
+                    # stage, including matched sources skipped solely because
+                    # an earlier priority exhausted operational capacity.
+                    "waterfall_trace": planning_metadata.get("waterfall", []),
                 }
                 if not canonical_lines:
                     # A license-level Planned badge is canonically derived from

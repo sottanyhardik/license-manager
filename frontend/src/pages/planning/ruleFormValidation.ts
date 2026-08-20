@@ -12,6 +12,23 @@ export interface RuleFormErrors extends Record<string, any> {
     residual_policy?: string;
 }
 
+const decimalPattern = /^\d+(?:\.\d+)?$/;
+
+/** Compare two non-negative decimal strings without IEEE-754 conversion. */
+function compareDecimalStrings(left: string, right: string): number | null {
+    if (!decimalPattern.test(left) || !decimalPattern.test(right)) return null;
+    const [leftWholeRaw, leftFractionRaw = ""] = left.split(".");
+    const [rightWholeRaw, rightFractionRaw = ""] = right.split(".");
+    const leftWhole = leftWholeRaw.replace(/^0+(?=\d)/, "");
+    const rightWhole = rightWholeRaw.replace(/^0+(?=\d)/, "");
+    if (leftWhole.length !== rightWhole.length) return leftWhole.length > rightWhole.length ? 1 : -1;
+    if (leftWhole !== rightWhole) return leftWhole > rightWhole ? 1 : -1;
+    const width = Math.max(leftFractionRaw.length, rightFractionRaw.length);
+    const leftFraction = leftFractionRaw.padEnd(width, "0");
+    const rightFraction = rightFractionRaw.padEnd(width, "0");
+    return leftFraction === rightFraction ? 0 : leftFraction > rightFraction ? 1 : -1;
+}
+
 /**
  * Validates planning rule form before submission.
  * Returns an object with field-level error messages.
@@ -47,6 +64,44 @@ export function validatePlanningRule(
     }
     if (strategy === "SPLIT_BY_UNIT_VALUE" && !allocation?.unit_value_rows?.length) {
         errors.unit_value_rows = "Add at least one import item";
+    } else if (strategy === "SPLIT_BY_UNIT_VALUE") {
+        const rows = allocation?.unit_value_rows ?? [];
+        const seenItems = new Set<number>();
+        const parsedRows: Array<{ index: number; min: string; max: string }> = [];
+        for (const [index, row] of rows.entries()) {
+            const rowLabel = `Row ${index + 1}`;
+            if (!row.import_item) {
+                errors.unit_value_rows = `${rowLabel}: Import item is required`;
+                break;
+            }
+            if (seenItems.has(row.import_item)) {
+                errors.unit_value_rows = "Each import item may only be selected once";
+                break;
+            }
+            seenItems.add(row.import_item);
+            if (!decimalPattern.test(row.min_unit_price) || !decimalPattern.test(row.max_unit_price)) {
+                errors.unit_value_rows = `${rowLabel}: Min and Max Unit Price must be valid decimals`;
+                break;
+            }
+            if (row.preferred_unit_price !== "" && !decimalPattern.test(row.preferred_unit_price)) {
+                errors.unit_value_rows = `${rowLabel}: Preferred Unit Price must be a valid decimal`;
+                break;
+            }
+            if (compareDecimalStrings(row.max_unit_price, row.min_unit_price)! <= 0) {
+                errors.unit_value_rows = `${rowLabel}: Max Unit Price must be greater than Min Unit Price`;
+                break;
+            }
+            parsedRows.push({ index, min: row.min_unit_price, max: row.max_unit_price });
+        }
+        if (!errors.unit_value_rows) {
+            const ordered = [...parsedRows].sort((left, right) => compareDecimalStrings(left.min, right.min)!);
+            for (let index = 1; index < ordered.length; index += 1) {
+                if (compareDecimalStrings(ordered[index].min, ordered[index - 1].max)! < 0) {
+                    errors.unit_value_rows = "Price ranges overlap";
+                    break;
+                }
+            }
+        }
     }
     if (strategy === "SPLIT_BY_PERCENT") {
         const rows = allocation?.percentage_rows ?? [];

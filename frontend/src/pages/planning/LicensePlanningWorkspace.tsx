@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { createSionPlanningRule, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, reorderSionPlanningRules, testSionPlanningRule, updateSionPlanningRule, type RuleAllocationStrategy, type SionPlanningMode, type SionPlanningPreview, type SionPlanningPreviewLicense, type SionPlanningRule } from "@/services/api/planningRuleApi";
+import { createSionPlanningRule, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, reorderSionPlanningRules, testSionPlanningRule, updateSionPlanningRule, previewScopedSionPlan, saveScopedSionPlan, type RuleAllocationStrategy, type SionPlanningMode, type SionPlanningPreview, type SionPlanningPreviewLicense, type SionPlanningRule, type ScopedPlanPreview } from "@/services/api/planningRuleApi";
 import { SplitAllocationPreview } from "./SplitAllocationPreview";
 import { AllocationStrategyEditor } from "./AllocationStrategyEditor";
 import { validatePlanningRule, hasValidationErrors, type RuleFormErrors } from "./ruleFormValidation";
@@ -22,6 +22,18 @@ const Button = (props: ComponentProps<typeof UiButton>) => <UiButton type="butto
 
 export function planningPath(licenseId?: string | number | null, origin?: string): string { const p = new URLSearchParams(); if (licenseId) p.set("license_id", String(licenseId)); if (origin) p.set("origin", origin); return `/planning${p.size ? `?${p}` : ""}`; }
 const emptyRule = (sion: number): SionPlanningRule => ({ sion, name: "", expression: { operator: "AND", conditions: [emptyRuleCondition()] }, max_unit_price: "", unit: "KG", priority: 0, is_active: true });
+
+function saveErrorMessage(reason: unknown): string {
+    const data = (reason as { response?: { data?: unknown } })?.response?.data;
+    if (typeof data === "string") return data;
+    if (data && typeof data === "object") {
+        const messages = Object.values(data as Record<string, unknown>).flatMap((value) =>
+            Array.isArray(value) ? value.map(String) : typeof value === "string" ? [value] : [],
+        );
+        if (messages.length) return messages.join(" ");
+    }
+    return "Unable to save rule";
+}
 
 const planSummary = (license: SionPlanningPreviewLicense, which: "existing" | "proposed") => {
     const explicit = which === "existing" ? license.existing_plan_summary : license.proposed_plan_summary;
@@ -58,11 +70,24 @@ function AllocationStrategySummary({ rule }: { rule?: SionPlanningRule }) {
     return <div><h3 className="text-sm font-semibold">Planning Strategy</h3><p className="mt-1 text-sm">{strategyLabel}</p></div>;
 }
 
+function ScopedPreview({ preview }: { preview: ScopedPlanPreview }) {
+    return <section aria-label="Exact licence planning preview" className="rounded-lg border bg-muted/20 p-3">
+        <h2 className="font-semibold">{preview.licence_number} · {preview.SION}</h2>
+        <p className="mt-1 text-sm">Authoritative balance CIF: {preview.balance_cif ?? "—"}</p>
+        {!!preview.unresolved_rows.length && <p role="alert" className="mt-2 text-sm text-destructive">Unresolved mappings: {preview.unresolved_rows.map(x => x.reason).join("; ")}</p>}
+        <div className="mt-3 overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left"><th className="p-2">Input</th><th>Priority</th><th>Target</th><th>Actual Qty/CIF</th><th>Excess Qty/CIF</th><th>New Qty/CIF</th><th>Final Qty/CIF</th><th>Closing CIF</th><th>Status</th></tr></thead><tbody>{preview.lines.map((line, i) => <tr key={`${line.licence_item}-${line.SION_input}-${i}`} className="border-b"><td className="p-2">{line.SION_input}</td><td>{line.priority}.{line.priority_sequence}</td><td>{line.percentage_target_quantity}</td><td>{line.actual_debited_quantity} / {line.actual_debited_cif}</td><td>{line.excess_debited_quantity} / {line.excess_debited_cif}</td><td>{line.new_planned_quantity} / {line.new_planned_cif}</td><td>{line.final_accounted_quantity} / {line.final_accounted_cif}</td><td>{line.closing_balance_cif}</td><td>{line.priority_status}</td></tr>)}</tbody></table></div>
+        <p className="mt-2 text-sm">New planned CIF: {preview.grand_totals.new_planned_cif} · Remaining CIF: {preview.grand_totals.remaining_cif} · Reconciliation difference: {preview.grand_totals.reconciliation_difference}</p>
+    </section>;
+}
+
 export default function LicensePlanningWorkspace() {
     const [params, setParams] = useSearchParams(); const navigate = useNavigate(); const location = useLocation();
     const origin = params.get("origin") || "/licenses";
     const [sions, setSions] = useState<any[]>([]); const [sion, setSion] = useState<number | null>(null); const [rules, setRules] = useState<SionPlanningRule[]>([]); const [draft, setDraft] = useState<SionPlanningRule | null>(null); const [selectedRuleId, setSelectedRuleId] = useState<number | null>(null); const [activeTab, setActiveTab] = useState("rules"); const [ruleSearch, setRuleSearch] = useState(""); const [pendingSion, setPendingSion] = useState<number | null | undefined>(undefined); const [confirmForceAll, setConfirmForceAll] = useState(false); const [busy, setBusy] = useState<"save" | "test" | "preview" | "plan-new" | "plan-all" | "deactivate" | "reorder" | null>(null); const [preview, setPreview] = useState<SionPlanningPreview | null>(null); const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
     const [allocationDraft, setAllocationDraft] = useState<RuleAllocationStrategy | null>(null);
+    const requestedLicenseNumber = params.get("license");
+    const requestedSion = params.get("sion");
+    const [scopedPreview, setScopedPreview] = useState<ScopedPlanPreview | null>(null);
     const [savedAllocation, setSavedAllocation] = useState<RuleAllocationStrategy | null>(null);
     const [formErrors, setFormErrors] = useState<RuleFormErrors>({});
     const preserveScroll = () => {
@@ -74,6 +99,7 @@ export default function LicensePlanningWorkspace() {
         }));
     };
     useEffect(() => { setLoading(true); api.get("masters/sion-classes/", { params: { is_active: true, page_size: 500, ordering: "norm_class" } }).then(({ data }) => { const rows = data?.results ?? data ?? []; setSions(rows); const requested = params.get("sion"); if (requested) { const match = rows.find((row: any) => String(row.id) === requested || String(row.norm_class).toUpperCase() === requested.toUpperCase()); if (match) setSion(match.id); } }).catch(() => setError("Unable to load SION norms.")).finally(() => setLoading(false)); }, []);
+    useEffect(() => { if (!requestedLicenseNumber || !requestedSion) return; setLoading(true); previewScopedSionPlan(requestedLicenseNumber, requestedSion).then(setScopedPreview).catch((e) => setError(e?.response?.data?.error || "Unable to preview the exact licence/SION selection.")).finally(() => setLoading(false)); }, [requestedLicenseNumber, requestedSion]);
     useEffect(() => { if (!sion) { setRules([]); setDraft(null); setSelectedRuleId(null); setPreview(null); return; } setLoading(true); setError(""); setDraft(null); setPreview(null); fetchSionPlanningRules(sion).then((rows) => { const ordered = [...rows].sort((a, b) => a.priority - b.priority); setRules(ordered); setSelectedRuleId(ordered[0]?.id ?? null); }).catch(() => setError("Unable to load planning rules.")).finally(() => setLoading(false)); }, [sion]);
     const savedDraft = draft?.id ? rules.find((rule) => rule.id === draft.id) : null;
     useEffect(() => {
@@ -165,13 +191,14 @@ export default function LicensePlanningWorkspace() {
                 <Button variant="ghost" size="sm" onClick={() => navigate(origin, { state: { fromPlanning: location.pathname + location.search } })}><ArrowLeft className="size-4" />Back</Button>
                 <div className="mr-auto"><h1 className="text-lg font-semibold">SION Planning</h1><p className="text-xs text-muted-foreground">{sion ? `${sionLabel} · ${rules.length} rules · ${activeSavedRules.length} active · Database rules` : "Select a norm to begin"}</p></div>
                 <label className="w-48 text-xs font-medium">SION Norm<Select aria-label="SION Norm" options={sions.map((row) => ({ value: row.id, label: row.norm_class }))} value={sions.filter((row) => row.id === sion).map((row) => ({ value: row.id, label: row.norm_class }))[0] ?? null} onChange={(option) => selectSion(option?.value ?? null)} className="mt-1 font-normal" /></label>
-                <Button variant="outline" onClick={previewSion} disabled={!!busy || !canExecuteSion}>{busy === "preview" ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}Preview</Button>
-                <Button onClick={() => planSion("NEW")} disabled={!!busy || !canExecuteSion}>{busy === "plan-new" ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}New Only</Button>
+                <Button variant="outline" onClick={() => requestedLicenseNumber && requestedSion ? previewScopedSionPlan(requestedLicenseNumber, requestedSion).then(setScopedPreview) : previewSion()} disabled={!!busy || (!requestedLicenseNumber && !canExecuteSion)}>{busy === "preview" ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}Preview</Button>
+                <Button onClick={() => requestedLicenseNumber && requestedSion && scopedPreview ? saveScopedSionPlan(requestedLicenseNumber, requestedSion, scopedPreview.preview_version).then(setScopedPreview).catch((e) => setError(e?.response?.data?.error || "Save rejected")) : planSion("NEW")} disabled={!!busy || (requestedLicenseNumber ? !scopedPreview?.save_allowed : !canExecuteSion)}>{busy === "plan-new" ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}{requestedLicenseNumber ? "Save Plan" : "New Only"}</Button>
                 <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" aria-label="More planning actions"><MoreHorizontal className="size-4" />More</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem className="text-destructive" disabled={!!busy || !canExecuteSion} onSelect={() => setConfirmForceAll(true)}>Force All</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
             </div>
         </div>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {loading && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Loading…</p>}
+        {requestedLicenseNumber && requestedSion && scopedPreview && <ScopedPreview preview={scopedPreview} />}
         {!sion ? <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">Select a SION norm to load its saved planning rules.</div> :
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
             <TabsList><TabsTrigger value="rules">Rules ({rules.length})</TabsTrigger><TabsTrigger value="preview">Plan Preview {preview?.licenses?.length ? `(${preview.licenses.length})` : ""}</TabsTrigger></TabsList>
@@ -218,7 +245,7 @@ export default function LicensePlanningWorkspace() {
                                 </span>
                                 <Button variant="outline" onClick={() => setDraft(null)}>Discard</Button>
                                 {draft.id && <Button variant="outline" onClick={testRule} disabled={!!busy || hasUnsavedChanges}>{busy === "test" ? <Loader2 className="size-4 animate-spin" /> : <TestTube2 className="size-4" />}Test Rule</Button>}
-                                <Button onClick={async () => { if (busy) return; const restore = preserveScroll(); setBusy("save"); try { await save(); } catch { toast.error("Unable to save rule"); } finally { setBusy(null); restore(); } }} disabled={!!busy || hasValidationErrors(formErrors) || !hasUnsavedChanges}>
+                                <Button onClick={async () => { if (busy) return; const restore = preserveScroll(); setBusy("save"); setError(""); try { await save(); } catch (reason) { const message = saveErrorMessage(reason); setError(message); toast.error(message); } finally { setBusy(null); restore(); } }} disabled={!!busy || hasValidationErrors(formErrors) || !hasUnsavedChanges}>
                                     {busy === "save" && <Loader2 className="size-4 animate-spin" />}Save Changes
                                 </Button>
                             </div>

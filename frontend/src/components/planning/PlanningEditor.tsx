@@ -144,6 +144,16 @@ interface Split {
     theoretical_cif?: string;
     reconciled_planned_quantity?: string;
     reconciled_planned_cif?: string;
+    adjusted_planned_cif?: string;
+    effective_unit_price?: string;
+    effective_planned_cif?: string;
+    candidate_planned_cif?: string;
+    cif_cap_adjustment?: string;
+    split_percentage?: string | null;
+    excess_other_item_qty?: string;
+    excess_other_item_cif?: string;
+    remaining_entitlement_qty?: string;
+    percentage_target_qty?: string;
     remaining_quantity?: string;
     remaining_cif?: string;
     excess_quantity?: string;
@@ -292,14 +302,15 @@ function StatusBadge({ status }: { status: PlanStatus }) {
 // SummaryCard
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SummaryCard({ label, value, variant = "default" }: {
+function SummaryCard({ label, value, variant = "default", tooltip }: {
     label: string; value: string;
     variant?: "default" | "primary" | "success" | "danger" | "muted";
+    tooltip?: string;
 }) {
     const cls = { default: "text-foreground", primary: "text-primary", success: "text-emerald-700", danger: "text-destructive", muted: "text-muted-foreground" }[variant];
     const bg  = { default: "bg-card", primary: "bg-primary/5", success: "bg-emerald-50/50", danger: "bg-destructive/5", muted: "bg-muted/40" }[variant];
     return (
-        <div className={cn("flex flex-col rounded-xl border border-border/60 px-3.5 py-3", bg)}>
+        <div title={tooltip} className={cn("flex flex-col rounded-xl border border-border/60 px-3.5 py-3", bg)}>
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
             <div className={cn("mt-0.5 text-base font-bold tabular-nums leading-tight", cls)}>{value}</div>
         </div>
@@ -508,6 +519,7 @@ export default function PlanningEditor({
     const [savedGroups, setSavedGroups]   = useState<Group[]>([]);
     const [poolBalance, setPoolBalance]   = useState(Number(balanceCif) || 0);
     const [licenseTotalCif, setLicenseTotalCif] = useState(Number(balanceCif) || 0);
+    const [operational, setOperational] = useState<Record<string, number> | null>(null);
 
     const [editingGroupId, setEditingGroupId]   = useState<number | null>(null);
     const [savingGroupId, setSavingGroupId]     = useState<number | null>(null);
@@ -532,6 +544,12 @@ export default function PlanningEditor({
                 fetchLicense(licenseId),
                 fetchItemPlans(licenseId),
             ]);
+            const reconciliation = (license as { operational_reconciliation?: Record<string, string | number> }).operational_reconciliation;
+            if (reconciliation) {
+                const numeric = Object.fromEntries(Object.entries(reconciliation).map(([key, value]) => [key, num(value)]));
+                setOperational(numeric);
+                setLicenseTotalCif(numeric.license_total_cif || 0);
+            }
             const planList: {
                 id: number; import_item: number; item_name?: number | null;
                 planning_item_name?: string | null; item_name_label?: string | null;
@@ -544,6 +562,11 @@ export default function PlanningEditor({
                 percentage_theoretical_quantity?: string; percentage_theoretical_cif?: string;
                 theoretical_quantity?: string; theoretical_cif?: string;
                 reconciled_planned_quantity?: string; reconciled_planned_cif?: string;
+                adjusted_planned_cif?: string; effective_unit_price?: string;
+                effective_planned_cif?: string; candidate_planned_cif?: string; cif_cap_adjustment?: string;
+                split_percentage?: string | null;
+                excess_other_item_qty?: string; excess_other_item_cif?: string;
+                remaining_entitlement_qty?: string; percentage_target_qty?: string;
                 remaining_quantity?: string; remaining_cif?: string;
                 excess_quantity?: string; excess_cif?: string;
                 reconciliation_status?: Split["reconciliation_status"];
@@ -574,6 +597,16 @@ export default function PlanningEditor({
                     theoretical_cif: p.theoretical_cif,
                     reconciled_planned_quantity: p.reconciled_planned_quantity,
                     reconciled_planned_cif: p.reconciled_planned_cif,
+                    adjusted_planned_cif: p.adjusted_planned_cif,
+                    effective_unit_price: p.effective_unit_price,
+                    effective_planned_cif: p.effective_planned_cif,
+                    candidate_planned_cif: p.candidate_planned_cif,
+                    cif_cap_adjustment: p.cif_cap_adjustment,
+                    split_percentage: p.split_percentage,
+                    excess_other_item_qty: p.excess_other_item_qty,
+                    excess_other_item_cif: p.excess_other_item_cif,
+                    remaining_entitlement_qty: p.remaining_entitlement_qty,
+                    percentage_target_qty: p.percentage_target_qty,
                     remaining_quantity: p.remaining_quantity,
                     remaining_cif: p.remaining_cif,
                     excess_quantity: p.excess_quantity,
@@ -1029,16 +1062,17 @@ export default function PlanningEditor({
                 </DialogContent>
             </Dialog>
 
-            {/* ── Summary cards (CIF only) ──────────────────────────── */}
+            {/* Backend reconciliation is the sole source for these values. */}
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                <SummaryCard label="License Total CIF" value={fmtUsd(licenseTotalCif)} variant="muted" />
-                <SummaryCard label="Theoretical Planned CIF" value={fmtUsd(totals.theoreticalCif)} variant={totals.theoreticalCif > 0 ? "primary" : "muted"} />
-                <SummaryCard label="Reconciled Planned CIF" value={fmtUsd(totals.effectiveCif)} variant={totals.effectiveCif > 0 ? "primary" : "muted"} />
-                <SummaryCard
-                    label={totals.cifRemaining < -1e-6 ? "Operational Excess CIF" : "Operational Available CIF"}
-                    value={fmtUsd(Math.abs(totals.cifRemaining))}
-                    variant={totals.cifRemaining < -1e-6 ? "danger" : totals.effectiveCif > 0 ? "success" : "muted"}
-                />
+                <SummaryCard label="License Total CIF" value={fmtUsd(operational?.license_total_cif ?? licenseTotalCif)} variant="muted" />
+                <SummaryCard label="Actual BOE CIF" value={fmtUsd(operational?.actual_boe_cif ?? 0)} variant="muted" />
+                <SummaryCard label="Actual Allotment CIF" value={fmtUsd(operational?.actual_allotment_cif ?? 0)} variant="muted" />
+                <SummaryCard label="Total Actual Used CIF" value={fmtUsd(operational?.total_actual_cif ?? 0)} variant="muted" />
+                <SummaryCard label="Actual Balance CIF" value={fmtUsd(operational?.actual_balance_cif ?? 0)} variant="success" tooltip="Licence Total CIF minus actual BOE and allotment CIF. This is the CIF available before new planning." />
+                <SummaryCard label="New Planned CIF" value={fmtUsd(operational?.new_planned_cif ?? totals.effectiveCif)} variant="primary" />
+                <SummaryCard label="Total Accounted CIF" value={fmtUsd(operational?.total_accounted_cif ?? 0)} variant="primary" />
+                <SummaryCard label="Final Balance CIF" value={fmtUsd(operational?.final_balance_cif ?? operational?.balance_cif ?? 0)} variant="success" />
+                <SummaryCard label="Overdrawn CIF" value={fmtUsd(operational?.overdrawn_cif ?? 0)} variant={(operational?.overdrawn_cif ?? 0) > 0 ? "danger" : "muted"} />
             </div>
             {totals.cifRemaining < -1e-6 && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
@@ -1085,7 +1119,7 @@ export default function PlanningEditor({
                             {groups.map((g) => {
                                 const status     = groupStatus(g);
                                 const planned    = g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
-                                const plannedCif = g.splits.reduce((s, sp) => s + num(sp.planned_cif_fc), 0);
+                                const plannedCif = g.splits.reduce((s, sp) => s + num(sp.effective_planned_cif), 0);
                                 const rem        = g.available_quantity - planned;
                                 const isEditing  = editingGroupId === g.id;
                                 const isSaving   = savingGroupId === g.id;
@@ -1099,8 +1133,11 @@ export default function PlanningEditor({
                                 // derives from the backend-toleranced remaining values.
                                 const showRemaining  = g.has_plan === true && g.remaining_planned_quantity != null;
                                 const showRemainingCif = g.has_plan === true && g.remaining_planned_cif_fc != null;
-                                const displayQty      = g.original_planned_quantity ?? planned;
-                                const displayCif      = g.original_planned_cif_fc ?? plannedCif;
+                                // Main table is the actual saved plan. Targets
+                                // remain in expanded detail and never replace
+                                // this quantity/CIF pair.
+                                const displayQty      = planned;
+                                const displayCif      = plannedCif;
 
                                 return (
                                     <Fragment key={g.id}>
@@ -1225,22 +1262,34 @@ export default function PlanningEditor({
                                                         {sp.needs_rebuild && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9.5px] font-semibold text-amber-800">Needs Rebuild</span>}
                                                     </div>
                                                     <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-5">
-                                                        {[
-                                                            ["Original Percentage Qty", fmtQty(num(sp.percentage_theoretical_quantity ?? sp.planned_quantity))],
-                                                            ["Original Percentage CIF", fmtUsd(num(sp.percentage_theoretical_cif ?? sp.planned_cif_fc))],
-                                                            ["Theoretical Qty", fmtQty(num(sp.theoretical_quantity ?? sp.reconciled_planned_quantity ?? sp.planned_quantity))],
-                                                            ["Theoretical CIF", fmtUsd(num(sp.theoretical_cif ?? sp.reconciled_planned_cif ?? sp.planned_cif_fc))],
-                                                            ["BOE Used Qty", fmtQty(num(sp.boe_used_quantity))],
-                                                            ["BOE Used CIF", fmtUsd(num(sp.boe_used_cif))],
-                                                            ["Unlinked Allotment Qty", fmtQty(num(sp.unlinked_allotment_quantity))],
-                                                            ["Unlinked Allotment CIF", fmtUsd(num(sp.unlinked_allotment_cif))],
-                                                            ["Reconciled Planned Qty", fmtQty(num(sp.reconciled_planned_quantity ?? sp.planned_quantity))],
-                                                            ["Reconciled Planned CIF", fmtUsd(num(sp.reconciled_planned_cif ?? sp.planned_cif_fc))],
-                                                            ["Remaining Qty", fmtQty(num(sp.remaining_quantity))],
-                                                            ["Remaining CIF", fmtUsd(num(sp.remaining_cif))],
-                                                            ["Excess Qty", fmtQty(num(sp.excess_quantity))],
-                                                            ["Excess CIF", fmtUsd(num(sp.excess_cif))],
-                                                        ].map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="font-medium tabular-nums">{value}</dd></div>)}
+                                                        {(() => {
+                                                            const isPercentageSplit = sp.split_percentage != null;
+                                                            const auditQty = (value: number) => value < 0 ? `(${fmtQty(Math.abs(value))})` : fmtQty(value);
+                                                            const auditCif = (value: number) => value < 0 ? `(${fmtUsd(Math.abs(value))})` : fmtUsd(value);
+                                                            const fields: [string, string][] = [];
+                                                            if (isPercentageSplit) {
+                                                                fields.push(
+                                                                    ["Percentage Target Qty", fmtQty(num(sp.percentage_theoretical_quantity ?? sp.theoretical_quantity ?? sp.planned_quantity))],
+                                                                    ["Percentage Target CIF", fmtUsd(num(sp.percentage_theoretical_cif ?? sp.theoretical_cif ?? sp.planned_cif_fc))],
+                                                                );
+                                                            }
+                                                            if (isPercentageSplit) fields.push(
+                                                                ["BOE Used Qty", fmtQty(num(sp.boe_used_quantity))],
+                                                                ["BOE Used CIF", fmtUsd(num(sp.boe_used_cif))],
+                                                            );
+                                                            if (isPercentageSplit) fields.push(
+                                                                ["Unlinked Allotment Qty", fmtQty(num(sp.unlinked_allotment_quantity))],
+                                                                ["Unlinked Allotment CIF", fmtUsd(num(sp.unlinked_allotment_cif))],
+                                                                ["Excess Other Item Qty", fmtQty(num(sp.excess_other_item_qty))],
+                                                                ["Excess Other Item CIF", fmtUsd(num(sp.excess_other_item_cif))],
+                                                            );
+                                                            fields.push(
+                                                                ["Remaining Qty", sp.remaining_entitlement_qty == null ? "Calculation contract error" : auditQty(num(sp.remaining_entitlement_qty))],
+                                                                ["Unit Price", fmtUsd(num(sp.effective_unit_price ?? sp.unit_price))],
+                                                                ["Remaining CIF", sp.effective_planned_cif == null ? "Calculation contract error" : (isPercentageSplit && num(sp.remaining_entitlement_qty) < 0 ? auditCif(-num(sp.excess_other_item_cif)) : fmtUsd(num(sp.effective_planned_cif)))],
+                                                            );
+                                                            return fields.map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="font-medium tabular-nums">{value}</dd></div>);
+                                                        })()}
                                                     </dl>
                                                 </td>
                                             </tr>

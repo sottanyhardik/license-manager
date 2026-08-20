@@ -30,6 +30,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     current_owner = serializers.SerializerMethodField()
     file_transfer_status = serializers.SerializerMethodField()
     condition_type = serializers.SerializerMethodField()
+    id = serializers.IntegerField(required=False)
 
     # Planning options from the related import item — all LicenseItemPlan rows split
     # across this item, each with its own remaining availability after allocations.
@@ -105,18 +106,23 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AllotmentItems
+        # Nested updates are resolved explicitly by ID in AllotmentSerializer;
+        # running ModelSerializer's create-oriented unique-together validator
+        # here would incorrectly reject an unchanged existing allocation.
+        validators = []
         fields = [
             'id', 'item', 'allotment', 'cif_inr', 'cif_fc', 'qty', 'is_boe',
             'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number', 'license_id',
             'license_date', 'exporter', 'license_expiry', 'registration_number',
             'registration_date', 'notification_number', 'file_number', 'port_code',
-            'purchase_status', 'current_owner', 'file_transfer_status', 'condition_type', 'planning_options'
+            'purchase_status', 'current_owner', 'file_transfer_status', 'condition_type', 'planning_options',
         ]
 
 
 class AllotmentSerializer(serializers.ModelSerializer):
-    # Nested serializer for read operations
-    allotment_details_read = AllotmentItemSerializer(source='allotment_details', many=True, read_only=True)
+    # Nested rows are source/allocation read-only in the edit form.  The one
+    # writable field is planning_target_item, persisted by update() below.
+    allotment_details = AllotmentItemSerializer(many=True, required=False)
 
     # Date field handling
     estimated_arrival_date = IndianDateField(required=False, allow_null=True)
@@ -211,16 +217,21 @@ class AllotmentSerializer(serializers.ModelSerializer):
             'id', 'company', 'type', 'required_quantity', 'unit_value_per_unit',
             'cif_fc', 'cif_inr', 'exchange_rate',
             'item_name', 'contact_person', 'contact_number', 'invoice',
+            'planning_target_item', 'planning_mapping_status', 'planning_mapping_source',
             'estimated_arrival_date', 'bl_detail', 'port', 'related_company',
             'is_boe', 'is_approved', 'created_on', 'modified_on', 'created_by', 'modified_by',
             'required_value', 'dfia_list', 'balanced_quantity',
             'alloted_quantity', 'allotted_value', 'company_name', 'port_name',
-            'related_company_name', 'display_label', 'allotment_details_read',
+            'related_company_name', 'display_label', 'allotment_details',
             'allotted_items_count', 'allocated_licenses_count'
         ]
 
     def create(self, validated_data):
         """Set default values for type and exchange_rate if not provided"""
+        # Detail rows are allocated through the allocation workflow.  They
+        # are not created from the master edit form (which only maps existing
+        # rows), so do not pass a reverse relation to ModelSerializer.create.
+        validated_data.pop("allotment_details", None)
         # Set default type to 'AT' (Allotment) if not provided
         if 'type' not in validated_data or not validated_data['type']:
             validated_data['type'] = 'AT'  # ALLOTMENT
@@ -238,9 +249,29 @@ class AllotmentSerializer(serializers.ModelSerializer):
 
         return super().create(validated_data)
 
+    def update(self, instance, validated_data):
+        """Persist mapping changes only; never mutate allocation economics here."""
+        allotment_details_data = validated_data.pop("allotment_details", None)
+        instance = super().update(instance, validated_data)
+
+        if allotment_details_data is not None:
+            existing_by_id = {
+                detail.id: detail
+                for detail in instance.allotment_details.select_related("item").all()
+            }
+            for detail_data in allotment_details_data:
+                detail_id = detail_data.get("id")
+                if not detail_id or detail_id not in existing_by_id:
+                    raise serializers.ValidationError({
+                        "allotment_details": "Only existing allotment rows may be mapped from this screen."
+                    })
+                detail = existing_by_id[detail_id]
+                # Allocation details are source/quantity records only. Parent
+                # AllotmentModel owns the planning target mapping.
+                continue
+
+        return instance
+
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        # Rename nested field for frontend compatibility
-        if 'allotment_details_read' in representation:
-            representation['allotment_details'] = representation.pop('allotment_details_read')
         return representation

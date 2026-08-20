@@ -183,6 +183,9 @@ def genuinely_hidden_boe_ids(boe_ids=None) -> set:
 
 
 class BillOfEntryModel(AuditModel):
+    planning_target_item = models.ForeignKey("core.ItemNameModel", on_delete=models.PROTECT, null=True, blank=True, related_name="boe_planning_targets", db_index=True)
+    planning_mapping_status = models.CharField(max_length=32, default="UNMAPPED_AMBIGUOUS", db_index=True)
+    planning_mapping_source = models.CharField(max_length=32, blank=True, default="")
     company = models.ForeignKey(
         CompanyModel,
         related_name="bill_of_entry",

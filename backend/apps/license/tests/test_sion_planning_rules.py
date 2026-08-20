@@ -7,12 +7,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 
-from apps.core.models import CompanyModel, HeadSIONNormsModel, HSCodeModel, SionNormClassModel
+from apps.core.models import CompanyModel, HeadSIONNormsModel, HSCodeModel, ItemNameModel, SionNormClassModel
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
     LicenseItemPlan, SionPlanningAction, SionPlanningProfile, SionPlanningRule,
 )
 from apps.license.services.canonical_planning_service import CanonicalPlanningService
+from apps.license.services.sion_planning_execution import SionPlanningExecutionService
 from apps.license.services.sion_rule_engine import (
     SionRulePlanningService, evaluate_expression, validate_expression,
 )
@@ -82,6 +83,405 @@ def _split_action(sion, rule):
             ],
         },
     )
+
+
+def _unit_value_rule_payload(rule, dwp, swp):
+    return {
+        "sion": rule.sion_id,
+        "name": "003 MILK PRODUCTS",
+        "expression": rule.expression,
+        "max_unit_price": "6.50",
+        "unit": "KG",
+        "is_active": True,
+        "strategy": "SPLIT_BY_UNIT_VALUE",
+        "import_item": None,
+        # Deliberately reverse the price ordering: save validation must sort a
+        # copy rather than requiring the React editor's visible order.
+        "unit_value_rows": [
+            {"import_item": dwp.pk, "min_unit_price": "1.5", "max_unit_price": "6.50", "preferred_unit_price": "0"},
+            {"import_item": swp.pk, "min_unit_price": "0", "max_unit_price": "1.5", "preferred_unit_price": "0"},
+        ],
+        "percentage_rows": [],
+    }
+
+
+def test_unit_value_rule_saves_zero_preferred_price_and_touching_boundary(rule_world):
+    company, sion, _license_obj, _item, rule = rule_world
+    dwp = ItemNameModel.objects.create(name="DWP - E1", sion_norm_class=sion)
+    swp = ItemNameModel.objects.create(name="SWP - E1", sion_norm_class=sion)
+    client, _user = _client(company)
+
+    response = client.patch(
+        f"/api/sion-planning-rules/{rule.pk}/", _unit_value_rule_payload(rule, dwp, swp), format="json",
+    )
+
+    assert response.status_code == 200, response.data
+    saved = SionPlanningRule.objects.get(pk=response.data["id"])
+    assert saved.strategy == "SPLIT_BY_UNIT_VALUE"
+    assert saved.max_unit_price == Decimal("6.50")
+    rows = {row.import_item.name: row for row in saved.unit_value_rows.all()}
+    assert rows["DWP - E1"].min_unit_price == Decimal("1.50")
+    assert rows["DWP - E1"].max_unit_price == Decimal("6.50")
+    assert rows["DWP - E1"].preferred_unit_price == Decimal("0.00")
+    assert rows["SWP - E1"].min_unit_price == Decimal("0.00")
+    assert rows["SWP - E1"].max_unit_price == Decimal("1.50")
+    assert rows["SWP - E1"].preferred_unit_price == Decimal("0.00")
+
+    # API reload uses the persisted canonical response, not stale draft rows.
+    reloaded = client.get(f"/api/sion-planning-rules/{saved.pk}/")
+    assert reloaded.status_code == 200
+    assert {row["import_item"] for row in reloaded.data["unit_value_rows"]} == {dwp.pk, swp.pk}
+
+
+def test_unit_value_rule_rejects_true_overlap_but_not_touching_boundary(rule_world):
+    company, sion, _license_obj, _item, rule = rule_world
+    dwp = ItemNameModel.objects.create(name="DWP - E1", sion_norm_class=sion)
+    swp = ItemNameModel.objects.create(name="SWP - E1", sion_norm_class=sion)
+    payload = _unit_value_rule_payload(rule, dwp, swp)
+    payload["unit_value_rows"][1]["max_unit_price"] = "2.00"
+    client, _user = _client(company)
+
+    response = client.patch(f"/api/sion-planning-rules/{rule.pk}/", payload, format="json")
+
+    assert response.status_code == 400
+    assert response.data["unit_value_rows"] == ["Price ranges overlap."]
+
+
+def test_unit_value_execution_assigns_each_source_item_to_one_decimal_bucket(rule_world):
+    """Touching bands are deterministic and never duplicate source quantity."""
+    _company, sion, license_obj, _item, rule = rule_world
+    swp = ItemNameModel.objects.create(name="SWP output", sion_norm_class=sion)
+    dwp = ItemNameModel.objects.create(name="DWP output", sion_norm_class=sion)
+    rule.strategy = "SPLIT_BY_UNIT_VALUE"
+    rule.expression = {"field": "HSN", "comparator": "CONTAINS", "value": "1701"}
+    rule.save(update_fields=("strategy", "expression"))
+    rule.unit_value_rows.create(
+        import_item=dwp, min_unit_price=Decimal("1.50"),
+        max_unit_price=Decimal("6.50"), preferred_unit_price=Decimal("0"), priority=2,
+    )
+    rule.unit_value_rows.create(
+        import_item=swp, min_unit_price=Decimal("0"),
+        max_unit_price=Decimal("1.50"), preferred_unit_price=Decimal("0"), priority=1,
+    )
+
+    # Existing fixture source: 10 units / CIF 22.50 => 2.25 (DWP).
+    _item.cif_fc = Decimal("22.50")
+    _item.save(update_fields=("cif_fc",))
+    hs = HSCodeModel.objects.create(hs_code="170199", product_description="Low sugar", unit="kg")
+    LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=2, hs_code=hs, description="Low sugar",
+        unit="kg", quantity=Decimal("1000"), available_quantity=Decimal("1000"),
+        cif_fc=Decimal("1500"),  # 1.50 belongs to the lower/SWP band.
+    )
+    hs_high = HSCodeModel.objects.create(hs_code="170198", product_description="High sugar", unit="kg")
+    LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=3, hs_code=hs_high, description="High sugar",
+        unit="kg", quantity=Decimal("700"), available_quantity=Decimal("700"),
+        cif_fc=Decimal("1260"),  # 1.80 belongs to DWP.
+    )
+
+    lines, _remaining, metadata = SionPlanningExecutionService._compute_license_new_architecture(
+        license_obj, sion, [rule], preview=True,
+    )
+    by_output = {}
+    for line in lines:
+        by_output[line["item_name"]] = by_output.get(line["item_name"], Decimal("0")) + line["planned_quantity"]
+
+    # 10 @ 2.25 plus 700 @ 1.80 go only to DWP; 1000 @ 1.50 goes only to SWP.
+    assert by_output == {dwp.pk: Decimal("710"), swp.pk: Decimal("1000")}
+    assert sum(by_output.values()) == Decimal("1710")
+    assert all(line["unit_price"] > 0 and line["planned_cif"] > 0 for line in lines)
+    assert metadata["architecture"] == "strategy"
+
+
+@pytest.mark.parametrize(("source_cif", "expected_output"), [
+    ("0", "SWP"),          # 1000 @ 0
+    ("1200", "SWP"),       # 1000 @ 1.20
+    ("1500", "SWP"),       # 1000 @ 1.50
+    ("1500.10", "DWP"),    # 1000 @ 1.5001
+    ("1800", "DWP"),       # 1000 @ 1.80
+    ("6500", "DWP"),       # 1000 @ 6.50
+    ("6501", None),         # 1000 @ 6.501 is unmatched/manual.
+])
+def test_unit_value_execution_decimal_boundaries(rule_world, source_cif, expected_output):
+    _company, sion, license_obj, item, rule = rule_world
+    swp = ItemNameModel.objects.create(name="SWP boundary", sion_norm_class=sion)
+    dwp = ItemNameModel.objects.create(name="DWP boundary", sion_norm_class=sion)
+    rule.strategy = "SPLIT_BY_UNIT_VALUE"
+    rule.expression = {"field": "HSN", "comparator": "CONTAINS", "value": "1701"}
+    rule.save(update_fields=("strategy", "expression"))
+    rule.unit_value_rows.create(import_item=swp, min_unit_price=Decimal("0"), max_unit_price=Decimal("1.50"), preferred_unit_price=Decimal("0"))
+    rule.unit_value_rows.create(import_item=dwp, min_unit_price=Decimal("1.50"), max_unit_price=Decimal("6.50"), preferred_unit_price=Decimal("0"))
+    item.quantity = Decimal("1000")
+    item.cif_fc = Decimal(source_cif)
+    item.save(update_fields=("quantity", "cif_fc"))
+
+    lines, _remaining, _metadata = SionPlanningExecutionService._compute_license_new_architecture(
+        license_obj, sion, [rule], preview=True,
+    )
+    if expected_output is None:
+        assert lines == []
+    else:
+        assert [(line["item_name"], line["planned_quantity"]) for line in lines] == [
+            (swp.pk if expected_output == "SWP" else dwp.pk, Decimal("1000")),
+        ]
+
+
+def test_unit_value_auto_plan_is_idempotent_and_persists_one_bucket(rule_world):
+    _company, sion, license_obj, item, rule = rule_world
+    swp = ItemNameModel.objects.create(name="SWP idempotent", sion_norm_class=sion)
+    dwp = ItemNameModel.objects.create(name="DWP idempotent", sion_norm_class=sion)
+    rule.strategy = "SPLIT_BY_UNIT_VALUE"
+    rule.expression = {"field": "HSN", "comparator": "CONTAINS", "value": "1701"}
+    rule.save(update_fields=("strategy", "expression"))
+    rule.unit_value_rows.create(import_item=swp, min_unit_price=Decimal("0"), max_unit_price=Decimal("1.50"), preferred_unit_price=Decimal("0"))
+    rule.unit_value_rows.create(import_item=dwp, min_unit_price=Decimal("1.50"), max_unit_price=Decimal("6.50"), preferred_unit_price=Decimal("0"))
+    item.quantity = Decimal("1000")
+    item.cif_fc = Decimal("1200")
+    item.available_quantity = Decimal("1000")
+    item.save(update_fields=("quantity", "cif_fc", "available_quantity"))
+    LicenseExportItemModel.objects.filter(license=license_obj, norm_class=sion).update(cif_fc=Decimal("1200"))
+
+    first = SionPlanningExecutionService.plan_sion(sion, license_ids=[license_obj.pk], mode="ALL")
+    first_rows = list(LicenseItemPlan.objects.filter(license=license_obj).values_list(
+        "item_name_id", "planned_quantity", "unit_price", "planned_cif_fc",
+    ))
+    second = SionPlanningExecutionService.plan_sion(sion, license_ids=[license_obj.pk], mode="ALL")
+    second_rows = list(LicenseItemPlan.objects.filter(license=license_obj).values_list(
+        "item_name_id", "planned_quantity", "unit_price", "planned_cif_fc",
+    ))
+
+    assert first["write_results"][0]["status"] == "PLANNED"
+    assert second["write_results"][0]["status"] == "PLANNED"
+    assert first_rows == second_rows == [(dwp.pk, Decimal("1000.000"), Decimal("6.50"), Decimal("1200.00"))]
+    persisted = LicenseItemPlan.objects.get(license=license_obj, item_name=dwp)
+    assert persisted.allocation_provenance["theoretical_cif"] == "6500.00"
+    assert persisted.allocation_provenance["operational_planned_cif"] == "1200.00"
+    assert persisted.allocation_provenance["cif_status"] == "CAPPED"
+
+
+def test_unit_value_rule_priority_prevents_overlapping_fruit_juice_target(rule_world):
+    """A Milk source matching an old fruit HSN must retain its Milk target."""
+    _company, sion, license_obj, source, milk_rule = rule_world
+    swp = ItemNameModel.objects.create(name="SWP mapping", sion_norm_class=sion)
+    dwp = ItemNameModel.objects.create(name="DWP mapping", sion_norm_class=sion)
+    fruit_juice = ItemNameModel.objects.create(name="FRUIT JUICE mapping", sion_norm_class=sion)
+    milk_rule.strategy = "SPLIT_BY_UNIT_VALUE"
+    milk_rule.priority = 1
+    milk_rule.expression = {"field": "PRODUCT_DESCRIPTION", "comparator": "CONTAINS", "value": "milk"}
+    milk_rule.save(update_fields=("strategy", "priority", "expression"))
+    milk_rule.unit_value_rows.create(import_item=swp, min_unit_price=Decimal("0"), max_unit_price=Decimal("1.50"), preferred_unit_price=Decimal("0"))
+    milk_rule.unit_value_rows.create(import_item=dwp, min_unit_price=Decimal("1.50"), max_unit_price=Decimal("6.50"), preferred_unit_price=Decimal("0"))
+    SionPlanningRule.objects.create(
+        sion=sion, name="Fruit Juice fallback", import_item=fruit_juice,
+        max_unit_price=Decimal("2.50"), unit="kg", priority=2, strategy="STANDARD",
+        expression={"field": "HSN", "comparator": "STARTS_WITH", "value": "2009"},
+    )
+    source.hs_code = HSCodeModel.objects.create(hs_code="20091100", product_description="Fruit HSN", unit="kg")
+    source.description = "Milk and Milk Products / Milk solids (04041020)"
+    source.quantity = Decimal("31513")
+    source.cif_fc = Decimal("39391.25")  # unit value 1.25 -> SWP
+    source.save(update_fields=("hs_code", "description", "quantity", "cif_fc"))
+
+    lines, _remaining, _metadata = SionPlanningExecutionService._compute_license_new_architecture(
+        license_obj, sion,
+        list(SionPlanningRule.objects.filter(sion=sion, is_active=True).order_by("priority", "pk")),
+        preview=True,
+    )
+
+    assert [(line["item_name"], line["planned_quantity"], line["planned_cif"] ) for line in lines] == [
+        (swp.pk, Decimal("31513"), Decimal("39391.25")),
+    ]
+    assert all(line["item_name"] != fruit_juice.pk for line in lines)
+
+
+def test_strategy_rules_use_persisted_priority_waterfall_capacity(rule_world):
+    """Later rules see only quantity and CIF left by earlier rules."""
+    _company, sion, license_obj, first_source, first_rule = rule_world
+    first_output = ItemNameModel.objects.create(name="Waterfall first", sion_norm_class=sion)
+    second_output = ItemNameModel.objects.create(name="Waterfall second", sion_norm_class=sion)
+    third_output = ItemNameModel.objects.create(name="Waterfall third", sion_norm_class=sion)
+    first_rule.import_item = first_output
+    first_rule.strategy = "STANDARD"
+    first_rule.priority = 1
+    first_rule.max_unit_price = Decimal("3")
+    first_rule.expression = {"field": "HSN", "comparator": "STARTS_WITH", "value": "1001"}
+    first_rule.save(update_fields=("import_item", "strategy", "priority", "max_unit_price", "expression"))
+    first_source.hs_code = HSCodeModel.objects.create(hs_code="10010000", product_description="First", unit="kg")
+    first_source.quantity = Decimal("24830")
+    first_source.save(update_fields=("hs_code", "quantity"))
+    def source(serial, hsn, quantity):
+        return LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=serial,
+            hs_code=HSCodeModel.objects.create(hs_code=hsn, product_description=hsn, unit="kg"),
+            description=hsn, unit="kg", quantity=Decimal(quantity), available_quantity=Decimal(quantity),
+        )
+    source(2, "10020000", "31513")
+    source(3, "10030000", "43657")
+    second_rule = SionPlanningRule.objects.create(
+        sion=sion, name="Waterfall second", import_item=second_output, strategy="STANDARD",
+        priority=2, max_unit_price=Decimal("6.50"), unit="kg",
+        expression={"field": "HSN", "comparator": "STARTS_WITH", "value": "1002"},
+    )
+    third_rule = SionPlanningRule.objects.create(
+        sion=sion, name="Waterfall third", import_item=third_output, strategy="STANDARD",
+        priority=3, max_unit_price=Decimal("1"), unit="kg",
+        expression={"field": "HSN", "comparator": "STARTS_WITH", "value": "1003"},
+    )
+
+    lines, _remaining, metadata = SionPlanningExecutionService._compute_license_new_architecture(
+        license_obj, sion, [third_rule, second_rule, first_rule], preview=True,
+        operational_balance_cif=Decimal("500000"),
+    )
+    assert [(line["item_name"], line["planned_quantity"], line["planned_cif"]) for line in lines] == [
+        (first_output.pk, Decimal("24830.000"), Decimal("74490.000")),
+        (second_output.pk, Decimal("31513.000"), Decimal("204834.500")),
+        (third_output.pk, Decimal("43657.000"), Decimal("43657.000")),
+    ]
+    assert metadata["waterfall"][0]["priority"] == 1
+    assert Decimal(metadata["waterfall"][1]["remaining_cif"]) == Decimal("220675.500")
+
+
+def test_mixed_legacy_and_strategy_rules_share_one_available_quantity_waterfall(rule_world):
+    """A blank legacy strategy is a STANDARD stage, never a skipped rule.
+
+    This guards SIONs such as E5 where persisted rules were created before
+    strategy was mandatory but later rules use the strategy editor.
+    """
+    _company, sion, license_obj, dietary_source, dietary_rule = rule_world
+    dietary_output = ItemNameModel.objects.create(name="Dietary target", sion_norm_class=sion)
+    wpc_output = ItemNameModel.objects.create(name="WPC target", sion_norm_class=sion)
+    dietary_rule.import_item = dietary_output
+    dietary_rule.priority = 1
+    dietary_rule.strategy = None
+    dietary_rule.max_unit_price = Decimal("2.70")
+    dietary_rule.save(update_fields=("import_item", "priority", "strategy", "max_unit_price"))
+    dietary_source.available_quantity = Decimal("8.000")
+    dietary_source.save(update_fields=("available_quantity",))
+    wpc_source = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=2,
+        hs_code=HSCodeModel.objects.create(hs_code="35020000", product_description="WPC", unit="kg"),
+        description="WPC", unit="kg", quantity=Decimal("10.000"), available_quantity=Decimal("10.000"),
+    )
+    wpc_rule = SionPlanningRule.objects.create(
+        sion=sion, name="WPC", import_item=wpc_output, strategy="STANDARD",
+        priority=2, max_unit_price=Decimal("25.00"), unit="kg",
+        expression={"field": "HSN", "comparator": "STARTS_WITH", "value": "3502"},
+    )
+
+    lines, _remaining, metadata = SionPlanningExecutionService._compute_license(
+        license_obj, sion, preview=True, operational_balance_cif=Decimal("1000.00"),
+    )
+
+    assert [(line["item_name"], line["planned_quantity"], line["planned_cif"])
+            for line in lines] == [
+        (dietary_output.pk, Decimal("8.000"), Decimal("21.60")),
+        (wpc_output.pk, Decimal("10.000"), Decimal("250.00")),
+    ]
+    assert [stage["priority"] for stage in metadata["waterfall"]] == [1, 2]
+    assert all(line["import_item"] != dietary_source.pk or line["planned_quantity"] <= Decimal("8") for line in lines)
+
+
+def test_standard_waterfall_keeps_full_quantity_when_operational_cif_is_capped(rule_world):
+    _company, sion, license_obj, source, rule = rule_world
+    target = ItemNameModel.objects.create(name="Capped standard", sion_norm_class=sion)
+    rule.import_item = target
+    rule.strategy = "STANDARD"
+    rule.max_unit_price = Decimal("25.00")
+    rule.expression = {"field": "HSN", "comparator": "STARTS_WITH", "value": "3502"}
+    rule.save(update_fields=("import_item", "strategy", "max_unit_price", "expression"))
+    source.hs_code = HSCodeModel.objects.create(hs_code="35022000", product_description="Milk", unit="kg")
+    source.quantity = source.available_quantity = Decimal("35843.000")
+    source.save(update_fields=("hs_code", "quantity", "available_quantity"))
+
+    lines, _remaining, metadata = SionPlanningExecutionService._compute_license_new_architecture(
+        license_obj, sion, [rule], preview=True, operational_balance_cif=Decimal("264107.07"),
+    )
+
+    assert [(line["planned_quantity"], line["unit_price"], line["planned_cif"]) for line in lines] == [
+        (Decimal("35843.000"), Decimal("25.00"), Decimal("264107.07")),
+    ]
+    assert lines[0]["allocation_provenance"]["theoretical_cif"] == "896075.00"
+    assert lines[0]["allocation_provenance"]["cif_status"] == "CAPPED"
+    assert metadata["remaining_waterfall_cif"] == Decimal("0.00")
+
+
+def test_generic_waterfall_allocates_e5_style_pko_dietary_and_wpc_by_priority(rule_world):
+    """The shared engine needs no SION-specific branch for E5-style rules."""
+    _company, sion, license_obj, dietary_source, dietary_rule = rule_world
+    dietary_output = ItemNameModel.objects.create(name="DIETARY FIBRE - test", sion_norm_class=sion)
+    pko_output = ItemNameModel.objects.create(name="PALM KERNEL OIL - test", sion_norm_class=sion)
+    wpc_output = ItemNameModel.objects.create(name="WPC - test", sion_norm_class=sion)
+    dietary_rule.import_item = dietary_output
+    dietary_rule.priority = 1
+    dietary_rule.strategy = None
+    dietary_rule.max_unit_price = Decimal("2.70")
+    dietary_rule.expression = {"field": "PRODUCT_DESCRIPTION", "comparator": "CONTAINS", "value": "dietary"}
+    dietary_rule.save(update_fields=("import_item", "priority", "strategy", "max_unit_price", "expression"))
+    dietary_source.description = "Dietary Fibre"
+    dietary_source.quantity = dietary_source.available_quantity = Decimal("3819.000")
+    dietary_source.save(update_fields=("description", "quantity", "available_quantity"))
+    pko_source = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=2,
+        hs_code=HSCodeModel.objects.create(hs_code="15132110", product_description="PKO", unit="kg"),
+        description="Vegetable oil", unit="kg", quantity=Decimal("48759.000"), available_quantity=Decimal("48759.000"),
+    )
+    wpc_source = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=3,
+        hs_code=HSCodeModel.objects.create(hs_code="35022000", product_description="WPC", unit="kg"),
+        description="Milk solids", unit="kg", quantity=Decimal("35843.000"), available_quantity=Decimal("35843.000"),
+    )
+    pko_rule = SionPlanningRule.objects.create(
+        sion=sion, name="PKO", import_item=pko_output, priority=2,
+        max_unit_price=Decimal("1.80"), unit="kg",
+        expression={"field": "HSN", "comparator": "STARTS_WITH", "value": "1513"},
+    )
+    wpc_rule = SionPlanningRule.objects.create(
+        sion=sion, name="WPC", import_item=wpc_output, strategy="STANDARD", priority=3,
+        max_unit_price=Decimal("25.00"), unit="kg",
+        expression={"operator": "AND", "conditions": [
+            {"field": "PRODUCT_DESCRIPTION", "comparator": "CONTAINS", "value": "milk"},
+            {"field": "HSN", "comparator": "STARTS_WITH", "value": "3502"},
+            {"field": "HSN", "comparator": "NOT_STARTS_WITH", "value": "0404"},
+        ]},
+    )
+
+    assert evaluate_expression(wpc_rule.expression, {
+        "hs_code": "35022000", "description": "Milk & Milk Products - Milk Solids",
+    })
+    assert evaluate_expression(wpc_rule.expression, {
+        "hs_code": "35021000", "description": "Milk protein concentrate",
+    })
+    assert not evaluate_expression(wpc_rule.expression, {
+        "hs_code": "04041020", "description": "Milk solids",
+    })
+
+    lines, _remaining, metadata = SionPlanningExecutionService._compute_license(
+        license_obj, sion, preview=True, operational_balance_cif=Decimal("1000000.00"),
+    )
+
+    assert [(line["planning_rule_id"], line["item_name"], line["planned_quantity"], line["unit_price"], line["planned_cif"])
+            for line in lines] == [
+        (dietary_rule.pk, dietary_output.pk, Decimal("3819.000"), Decimal("2.70"), Decimal("10311.30")),
+        (pko_rule.pk, pko_output.pk, Decimal("48759.000"), Decimal("1.80"), Decimal("87766.20")),
+        (wpc_rule.pk, wpc_output.pk, Decimal("35843.000"), Decimal("25.00"), Decimal("896075.00")),
+    ]
+    assert sum(line["planned_quantity"] for line in lines) == Decimal("88421.000")
+    assert sum(line["planned_cif"] for line in lines) == Decimal("994152.50")
+    assert [stage["priority"] for stage in metadata["waterfall"]] == [1, 2, 3]
+    assert {line["import_item"] for line in lines} == {dietary_source.pk, pko_source.pk, wpc_source.pk}
+
+    # A matched later rule is explicitly explained when an earlier priority
+    # consumes the operational CIF ceiling; it must not look like a matcher
+    # failure or a silently stale plan.
+    _capped_lines, _remaining, capped_metadata = SionPlanningExecutionService._compute_license(
+        license_obj, sion, preview=True, operational_balance_cif=Decimal("70923.47"),
+    )
+    wpc_trace = next(stage for stage in capped_metadata["waterfall"] if stage["rule_id"] == wpc_rule.pk)
+    assert wpc_trace["matched_source_item_ids"] == [wpc_source.pk]
+    assert Decimal(wpc_trace["requested_qty"]) == Decimal("35843.000")
+    assert wpc_trace["allocated_qty"] == "0"
+    assert wpc_trace["skip_reason"] == "WATERFALL_CIF_EXHAUSTED"
 
 
 def test_allocation_strategy_api_reads_and_updates_canonical_action(rule_world):

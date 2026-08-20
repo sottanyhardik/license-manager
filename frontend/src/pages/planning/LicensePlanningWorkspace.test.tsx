@@ -51,14 +51,14 @@ describe("SION-first planning workspace", () => {
     });
     it("renders a mixed ANY expression exactly as returned and keeps edit semantics identical", async () => {
         vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...existing, priority: 2, expression: { operator: "OR", conditions: [
-            { field: "HSN", operator: "CONTAINS", value: "1803" },
+            { field: "HSN", operator: "STARTS_WITH", value: "1803" },
             { field: "PRODUCT_DESCRIPTION", operator: "CONTAINS", value: "1803" },
         ] } }]);
         render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
         fireEvent.click(await screen.findByRole("button", { name: /Edit/ }));
         expect(screen.getByLabelText("Rule logic")).toHaveValue("OR");
         expect(screen.getByLabelText("Condition 1 field")).toHaveValue("HSN");
-        expect(screen.getByLabelText("Condition 1 comparator")).toHaveValue("CONTAINS");
+        expect(screen.getByLabelText("Condition 1 comparator")).toHaveValue("STARTS_WITH");
         expect(screen.getByLabelText("Condition 2 field")).toHaveValue("PRODUCT_DESCRIPTION");
         expect(screen.getByLabelText("Condition 2 comparator")).toHaveValue("CONTAINS");
     });
@@ -212,6 +212,18 @@ describe("SION-first planning workspace", () => {
         expect(screen.getByText(/E5 · 1 rules · 1 active/)).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Collapse ALL group" })).toHaveAttribute("aria-expanded", "true");
         expect(screen.getByText("✓ Saved")).toBeInTheDocument();
+    });
+    it("shows the backend validation message when a save is rejected", async () => {
+        vi.mocked(rulesApi.updateSionPlanningRule).mockRejectedValue({
+            response: { data: { unit_value_rows: ["Price ranges overlap."] } },
+        });
+        render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><LicensePlanningWorkspace /></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+        fireEvent.change(screen.getByLabelText("Rule name"), { target: { value: "Rejected rule" } });
+        fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+
+        expect(await screen.findByRole("alert")).toHaveTextContent("Price ranges overlap.");
+        expect(screen.getByText(/Unsaved changes/)).toBeInTheDocument();
     });
     it("saves the visible 40/60 percentage draft, survives blur, and hydrates the new version", async () => {
         const percentRule = {

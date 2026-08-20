@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.permissions import LicensePermission
-from apps.core.models import ItemNameModel
+from apps.core.models import ItemNameModel, SionNormClassModel
 from apps.license.models import LicenseDetailsModel, SionInputAliasConfig, SionPlanningAction, SionPlanningProfile, SionPlanningRule
 from apps.license.serializers import SionPlanningRuleSerializer
 from apps.license.serializers.incentive import (
@@ -21,6 +21,7 @@ from apps.license.services.canonical_planning_service import (
 from apps.license.services.sion_rule_engine import (
     SionRulePlanningService, SionRulePriorityService,
 )
+from apps.license.services.scoped_sion_planning import ScopedPlanningError, ScopedSionPlanningService
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,13 @@ class LicensePlanRequestSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(
         choices=("NEW", "ALL"), required=False, default="NEW",
     )
+
+
+class ScopedSionPlanSerializer(serializers.Serializer):
+    """Exact external identifiers; IDs are intentionally not accepted here."""
+    license_number = serializers.CharField(required=True, trim_whitespace=True)
+    sion = serializers.CharField(required=True, trim_whitespace=True)
+    preview_version = serializers.CharField(required=False)
 
 
 class RuleAllocationStrategySerializer(serializers.Serializer):
@@ -226,11 +234,14 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 {"sion_id": "A valid SION id is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        sion = SionNormClassModel.objects.filter(pk=sion_id).first()
+        if sion is None:
+            return Response({"sion_id": "SION norm was not found."}, status=status.HTTP_404_NOT_FOUND)
 
         items = ItemNameModel.objects.filter(
-            sion_norm_class_id=sion_id,
+            norms=sion_id,
             is_active=True,
-        ).select_related("sion_norm_class")
+        ).prefetch_related("norms")
         search = request.query_params.get("search", "").strip()
         if search:
             search_filter = Q(name__icontains=search) | Q(group__name__icontains=search)
@@ -271,7 +282,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             {
                 "id": item.pk,
                 "name": item.name,
-                "sion_code": item.sion_norm_class.norm_class,
+                "sion_code": sion.norm_class,
             }
             for item in source
         ]
@@ -492,6 +503,27 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             payload = exc.as_dict() if isinstance(exc, PlanningError) else {"error": str(exc)}
             return Response(payload, status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
+
+    @action(detail=False, methods=("post",), url_path="preview-scoped")
+    def preview_scoped(self, request):
+        """Preview precisely the licence/SION named by the planning URL."""
+        payload = ScopedSionPlanSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        try:
+            return Response(ScopedSionPlanningService.preview(**payload.validated_data))
+        except ScopedPlanningError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=("post",), url_path="save-scoped")
+    def save_scoped(self, request):
+        payload = ScopedSionPlanSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        if not payload.validated_data.get("preview_version"):
+            return Response({"error": "preview_version is required for save."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            return Response(ScopedSionPlanningService.save(**payload.validated_data))
+        except ScopedPlanningError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_409_CONFLICT)
 
 
     @staticmethod

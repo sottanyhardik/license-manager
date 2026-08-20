@@ -9,7 +9,10 @@ ValueError (or subclasses) so the view layer can map them to HTTP status codes.
 """
 
 from datetime import datetime, date
+from uuid import uuid4
 from typing import Optional
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +189,125 @@ def link_trades(trade_pk: int, partner_pk: Optional[int]):
 
 class PartnerTradeNotFound(LookupError):
     """Raised when the partner trade PK cannot be resolved."""
+
+
+# ---------------------------------------------------------------------------
+# Canonical Sale <-> Purchase counterpart conversion
+# ---------------------------------------------------------------------------
+
+class CounterpartValidationError(ValueError):
+    """A source trade cannot safely be mirrored into a counterpart."""
+
+
+def copy_sale_to_purchase(sale_id: int, user=None):
+    return _copy_to_counterpart(sale_id, source_direction='SALE', user=user)
+
+
+def copy_purchase_to_sale(purchase_id: int, user=None):
+    return _copy_to_counterpart(purchase_id, source_direction='PURCHASE', user=user)
+
+
+def _copy_to_counterpart(source_id: int, *, source_direction: str, user=None):
+    """Create exactly one mirrored commercial document under a row lock.
+
+    The pair is deliberately made from distinct header/line rows: linked edits
+    can be synchronized later without sharing mutable accounting records.
+    """
+    from apps.trade.models import LicenseTrade, LicenseTradeLine, IncentiveTradeLine, LicenseTradePayment, TradePairAudit, get_next_invoice_number
+
+    destination_direction = 'PURCHASE' if source_direction == 'SALE' else 'SALE'
+    with transaction.atomic():
+        source = (LicenseTrade.objects.select_for_update(of=('self',))
+                  .select_related('from_company', 'to_company', 'counterpart')
+                  .prefetch_related('lines', 'incentive_lines', 'payments', 'boes')
+                  .get(pk=source_id))
+        if source.direction != source_direction:
+            raise CounterpartValidationError(f'Only a {source_direction.lower()} can be copied by this action.')
+        if source.counterpart_id:
+            return source, source.counterpart, False
+        if not source.from_company_id or not source.to_company_id:
+            raise CounterpartValidationError('Both seller/supplier and buyer/purchasing company are required.')
+        lines = list(source.lines.all())
+        incentive_lines = list(source.incentive_lines.all())
+        if not lines and not incentive_lines:
+            raise CounterpartValidationError('At least one licence line is required before copying.')
+        if any(not line.sr_number_id for line in lines) or any(not line.incentive_license_id for line in incentive_lines):
+            raise CounterpartValidationError('Every copied line must reference its canonical licence item or licence.')
+
+        pair_uuid = uuid4()
+        # The destination owns its normal number sequence.  A sale number is
+        # retained only as an auditable source-document reference.
+        destination_number = get_next_invoice_number(
+            direction=destination_direction,
+            company_name=source.to_company.name,
+            invoice_date=source.invoice_date,
+        )
+        try:
+            destination = LicenseTrade.objects.create(
+                direction=destination_direction, license_type=source.license_type,
+                incentive_license=source.incentive_license,
+                # This is the same commercial transfer viewed as the other
+                # document type: the supplier/seller remains `from_company`
+                # and the purchasing/buying company remains `to_company`.
+                # Only direction, document number and payment semantics vary.
+                from_company=source.from_company, to_company=source.to_company,
+                invoice_number=destination_number, invoice_date=source.invoice_date,
+                remarks=source.remarks, transaction_pair_uuid=pair_uuid,
+                copied_from=source, copied_from_type=source.direction,
+                source_document_number=source.invoice_number,
+                created_by=user if getattr(user, 'is_authenticated', False) else source.created_by,
+            )
+        except IntegrityError:
+            # Unique counterpart races are resolved by returning the pair that
+            # committed first; no second document is exposed.
+            source.refresh_from_db(fields=['counterpart'])
+            if source.counterpart_id:
+                return source, source.counterpart, False
+            raise
+
+        for line in lines:
+            clone = LicenseTradeLine.objects.create(
+                trade=destination, sr_number=line.sr_number, description=line.description,
+                hsn_code=line.hsn_code, mode=line.mode, qty_kg=line.qty_kg,
+                rate_inr_per_kg=line.rate_inr_per_kg, cif_fc=line.cif_fc,
+                exc_rate=line.exc_rate, cif_inr=line.cif_inr, fob_inr=line.fob_inr,
+                pct=line.pct, amount_inr=line.amount_inr, transaction_pair_uuid=pair_uuid,
+            )
+            line.counterpart_line = clone
+            line.transaction_pair_uuid = pair_uuid
+            line.save(update_fields=['counterpart_line', 'transaction_pair_uuid'])
+            clone.counterpart_line = line
+            clone.save(update_fields=['counterpart_line'])
+        for line in incentive_lines:
+            IncentiveTradeLine.objects.create(
+                trade=destination, incentive_license=line.incentive_license,
+                license_value=line.license_value, rate_pct=line.rate_pct,
+                amount_inr=line.amount_inr,
+            )
+        # Payment amount remains the same commercial settlement: it means
+        # received on the sale and paid on the purchase.
+        for payment in source.payments.all():
+            LicenseTradePayment.objects.create(
+                trade=destination, date=payment.date, amount=payment.amount,
+                note=f'Copied from {source.invoice_number}: {payment.note}'.strip(),
+            )
+        destination.recompute_totals()
+        destination.refresh_from_db()
+        source.recompute_totals()
+        source.refresh_from_db()
+        if source.total_amount != destination.total_amount:
+            raise CounterpartValidationError('Counterpart total differs from source; conversion was rolled back.')
+        source.counterpart = destination
+        source.transaction_pair_uuid = pair_uuid
+        source.save(update_fields=['counterpart', 'transaction_pair_uuid', 'modified_on'])
+        destination.counterpart = source
+        destination.save(update_fields=['counterpart', 'modified_on'])
+        TradePairAudit.objects.create(
+            pair_uuid=pair_uuid, source=source, counterpart=destination,
+            action='COPIED', user=user if getattr(user, 'is_authenticated', False) else None,
+            occurred_at=timezone.now(),
+        )
+        return source, destination, True
 
 
 # ---------------------------------------------------------------------------

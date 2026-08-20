@@ -97,6 +97,18 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     # Linked trade fields
     auto_create_paired = serializers.BooleanField(write_only=True, required=False, default=False)
     linked_trade_info = serializers.SerializerMethodField(read_only=True)
+    counterpart_info = serializers.SerializerMethodField(read_only=True)
+
+    def get_counterpart_info(self, obj):
+        counterpart = obj.counterpart
+        if not counterpart:
+            return None
+        return {
+            'id': counterpart.id,
+            'type': counterpart.direction.lower(),
+            'number': counterpart.invoice_number,
+            'url': f'/api/trade/trades/{counterpart.id}/',
+        }
 
     def get_linked_trade_info(self, obj):
         lt = obj.linked_trade
@@ -346,70 +358,14 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                 boe.invoice_date = trade.invoice_date
                 boe.save(update_fields=['invoice_no', 'invoice_date'])
 
-        # Auto-create the paired counterpart trade (Sale↔Purchase)
-        if auto_create_paired and trade.direction in ('PURCHASE', 'SALE', 'COMMISSION_PURCHASE', 'COMMISSION_SALE'):
-            from apps.trade.models import get_next_invoice_number
-            direction_map = {
-                'PURCHASE': 'SALE', 'SALE': 'PURCHASE',
-                'COMMISSION_PURCHASE': 'COMMISSION_SALE', 'COMMISSION_SALE': 'COMMISSION_PURCHASE',
-            }
-            paired_direction = direction_map[trade.direction]
-            paired_from = trade.to_company
-            paired_to = trade.from_company
-
-            paired_invoice = get_next_invoice_number(
-                direction=paired_direction,
-                company_name=paired_from.name if paired_from else '',
-                invoice_date=trade.invoice_date,
-            )
-
-            paired_trade = LicenseTrade.objects.create(
-                direction=paired_direction,
-                license_type=trade.license_type,
-                incentive_license=trade.incentive_license,
-                from_company=paired_from,
-                to_company=paired_to,
-                invoice_number=paired_invoice,
-                invoice_date=trade.invoice_date,
-                remarks=trade.remarks,
-                linked_trade=trade,
-                created_by=trade.created_by,
-            )
-            paired_trade.boes.set(trade.boes.all())
-            paired_trade.snapshot_parties()
-
-            for line in trade.lines.all():
-                LicenseTradeLine.objects.create(
-                    trade=paired_trade,
-                    sr_number=line.sr_number,
-                    description=line.description,
-                    hsn_code=line.hsn_code,
-                    mode=line.mode,
-                    qty_kg=line.qty_kg,
-                    rate_inr_per_kg=line.rate_inr_per_kg,
-                    cif_fc=line.cif_fc,
-                    exc_rate=line.exc_rate,
-                    cif_inr=line.cif_inr,
-                    fob_inr=line.fob_inr,
-                    pct=line.pct,
-                    amount_inr=line.amount_inr,
-                )
-
-            for line in trade.incentive_lines.all():
-                IncentiveTradeLine.objects.create(
-                    trade=paired_trade,
-                    incentive_license=line.incentive_license,
-                    license_value=line.license_value,
-                    rate_pct=line.rate_pct,
-                    amount_inr=line.amount_inr,
-                )
-
-            paired_trade.recompute_totals()
-            paired_trade.refresh_from_db()
-
-            # Link primary trade back to the paired trade
-            LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=paired_trade)
-            trade.refresh_from_db()
+        # Legacy form compatibility: route this flag through the same locked,
+        # idempotent domain service as the explicit copy endpoints.
+        if auto_create_paired:
+            from .services.trade_service import copy_purchase_to_sale, copy_sale_to_purchase
+            if trade.direction == LicenseTrade.DIR_SALE:
+                copy_sale_to_purchase(trade.pk, getattr(self.context.get('request'), 'user', None))
+            elif trade.direction == LicenseTrade.DIR_PURCHASE:
+                copy_purchase_to_sale(trade.pk, getattr(self.context.get('request'), 'user', None))
 
         return trade
 

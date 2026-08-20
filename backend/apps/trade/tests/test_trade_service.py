@@ -29,7 +29,54 @@ from apps.trade.services.trade_service import (
     link_trades,
     stamp_boe_invoice_from_trade,
     PartnerTradeNotFound,
+    copy_sale_to_purchase,
+    copy_purchase_to_sale,
 )
+
+
+class CounterpartCopyTests(TestCase):
+    def setUp(self):
+        from apps.core.models import CompanyModel
+        from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+        self.seller = CompanyModel.objects.create(name='Labdhi Mercantile LLP', iec=_unique_iec())
+        self.buyer = CompanyModel.objects.create(name='Labdhi Global LLP', iec=_unique_iec())
+        self.license = LicenseDetailsModel.objects.create(
+            license_number='0311049585', exporter=self.seller,
+            license_date=date(2026, 8, 3), license_expiry_date=date(2027, 8, 3),
+        )
+        self.item = LicenseImportItemsModel.objects.create(license=self.license, serial_number=1, description='DFIA item')
+        self.sale = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_SALE, from_company=self.seller, to_company=self.buyer,
+            invoice_number='LML/2026-27/0023', invoice_date=date(2026, 8, 3),
+        )
+        LicenseTradeLine.objects.create(
+            trade=self.sale, sr_number=self.item, description='DFIA item', mode=LicenseTradeLine.MODE_CIF_INR,
+            qty_kg=Decimal('2.0000'), cif_fc=Decimal('218076.00'), exc_rate=Decimal('1.0000'),
+            cif_inr=Decimal('218076.00'), pct=Decimal('100.000'), amount_inr=Decimal('218076.00'),
+        )
+
+    def test_sale_to_purchase_is_idempotent_and_reciprocal(self):
+        source, purchase, created = copy_sale_to_purchase(self.sale.id)
+        self.assertTrue(created)
+        self.assertEqual(purchase.direction, 'PURCHASE')
+        self.assertEqual(purchase.from_company_id, self.seller.id)
+        self.assertEqual(purchase.to_company_id, self.buyer.id)
+        self.assertEqual(purchase.total_amount, Decimal('218076.00'))
+        self.assertEqual(purchase.lines.count(), 1)
+        source.refresh_from_db(); purchase.refresh_from_db()
+        self.assertEqual(source.counterpart_id, purchase.id)
+        self.assertEqual(purchase.counterpart_id, source.id)
+        _, repeated, created_again = copy_sale_to_purchase(self.sale.id)
+        self.assertFalse(created_again)
+        self.assertEqual(repeated.id, purchase.id)
+
+    def test_purchase_to_sale_returns_existing_pair(self):
+        _, purchase, _ = copy_sale_to_purchase(self.sale.id)
+        source, sale, created = copy_purchase_to_sale(purchase.id)
+        self.assertFalse(created)
+        self.assertEqual(source.id, purchase.id)
+        self.assertEqual(sale.id, self.sale.id)
 
 
 # ---------------------------------------------------------------------------

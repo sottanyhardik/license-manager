@@ -6,6 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Sum, Q, F
+from django.core.exceptions import ValidationError
 from django.db.models.signals import pre_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
@@ -238,6 +239,21 @@ class LicenseTrade(AuditModel):
         related_name='paired_trades',
         help_text="Links this trade to its paired counterpart (Sale↔Purchase)"
     )
+    # `linked_trade` predates enforced paired-copy semantics and remains for
+    # backwards-compatible manual links.  Counterpart pairs created by the
+    # domain service use these fields exclusively.
+    transaction_pair_uuid = models.UUIDField(null=True, blank=True, db_index=True, editable=False)
+    counterpart = models.OneToOneField(
+        'self', null=True, blank=True, on_delete=models.PROTECT,
+        related_name='counterpart_of', editable=False,
+        help_text='Reciprocal immutable Sale↔Purchase counterpart.',
+    )
+    copied_from = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.PROTECT,
+        related_name='copies_created', editable=False,
+    )
+    copied_from_type = models.CharField(max_length=20, blank=True, default='', editable=False)
+    source_document_number = models.CharField(max_length=128, blank=True, default='', editable=False)
 
     class Meta:
         ordering = ["-invoice_date", "-invoice_number", "-created_on"]
@@ -422,6 +438,11 @@ class LicenseTradeLine(models.Model):
     trade = models.ForeignKey(
         LicenseTrade, on_delete=models.CASCADE, related_name="lines", db_index=True
     )
+    counterpart_line = models.OneToOneField(
+        'self', null=True, blank=True, on_delete=models.PROTECT,
+        related_name='counterpart_of_line', editable=False,
+    )
+    transaction_pair_uuid = models.UUIDField(null=True, blank=True, db_index=True, editable=False)
     # Billed SR (carries the license context)
     sr_number = models.ForeignKey(
         LicenseImportItemsModel,
@@ -566,6 +587,19 @@ class LicenseTradePayment(models.Model):
         return f"Payment[{self.id}] Trade#{self.trade_id} ₹{q2(self.amount)} on {self.date}"
 
 
+class TradePairAudit(models.Model):
+    """Append-only audit record for paired commercial-document operations."""
+    pair_uuid = models.UUIDField(db_index=True)
+    source = models.ForeignKey(LicenseTrade, on_delete=models.PROTECT, related_name='pair_audit_as_source')
+    counterpart = models.ForeignKey(LicenseTrade, on_delete=models.PROTECT, related_name='pair_audit_as_counterpart')
+    action = models.CharField(max_length=32)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-occurred_at', '-id']
+
+
 class TradeInvoiceDocument(models.Model):
     """Immutable generated SALE-invoice version.
 
@@ -664,6 +698,13 @@ def clear_boe_invoice_on_trade_delete(sender, instance, **kwargs):
                 boe.invoice_no = None
                 boe.invoice_date = None
                 boe.save(update_fields=['invoice_no', 'invoice_date'])
+
+
+@receiver(pre_delete, sender=LicenseTrade)
+def prevent_single_counterpart_delete(sender, instance, **kwargs):
+    """A paired transfer is an audited unit; it cannot be deleted one-sided."""
+    if instance.counterpart_id:
+        raise ValidationError('This trade has a linked counterpart. Use the audited pair-deletion workflow.')
 
 
 @receiver(post_save, sender=IncentiveTradeLine)

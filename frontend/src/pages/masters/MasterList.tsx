@@ -1002,7 +1002,25 @@ export default function MasterList() {
                                   : item.direction === 'PURCHASE'         ? 'info'
                                   : item.direction === 'COMMISSION_SALE'  ? 'warning'
                                   :                                          'primary';
-                                const isLinked = !!(item.linked_trade_id || item.linked_trade_info);
+                                const counterpart = item.counterpart_info || item.linked_trade_info;
+                                const isLinked = !!(item.counterpart_id || counterpart);
+                                const copyToCounterpart = async () => {
+                                    const destination = item.direction === 'SALE' ? 'Purchase' : 'Sale';
+                                    const confirmed = await confirmDangerousAction(
+                                        `Copy to ${destination}`,
+                                        `Create the linked ${destination} with the same companies, licence lines and commercial amounts?`,
+                                    );
+                                    if (!confirmed) return;
+                                    try {
+                                        const endpoint = item.direction === 'SALE' ? 'copy-to-purchase' : 'copy-to-sale';
+                                        const response = await api.post(`trades/${item.id}/${endpoint}/`);
+                                        toast.success(response.data.created ? `Linked ${destination} created` : `Linked ${destination} already exists`);
+                                        invalidateList();
+                                        navigate(`/trades/${response.data.counterpart.id}/edit`);
+                                    } catch (err) {
+                                        toast.error(err.response?.data?.error || `Failed to copy to ${destination}`);
+                                    }
+                                };
                                 const detailRows = item.lines || [];
                                 return (
                                     <EntityCard
@@ -1043,22 +1061,15 @@ export default function MasterList() {
                                                         } catch { toast.error('Failed to generate invoice'); }
                                                     } },
                                             ] : []),
-                                            canWrite && item.direction === 'PURCHASE' && !isLinked && {
-                                                icon: 'arrow-left-right', title: 'Copy to Sale', tone: 'info',
-                                                onClick: async () => {
-                                                    const confirmed = await confirmDangerousAction('Copy to Sale', 'Create a SALE trade from this PURCHASE trade?');
-                                                    if (!confirmed) return;
-                                                    try {
-                                                        const resp = await api.get(`trades/${item.id}/`);
-                                                        const p = resp.data;
-                                                        const saleData = { direction: 'SALE', license_type: p.license_type || 'DFIA', from_company: p.to_company?.id || p.to_company, to_company: p.from_company?.id || p.from_company, boes: (p.boes || []).map(b => b?.id || b), invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], remarks: p.remarks || '', from_pan: p.to_pan, from_gst: p.to_gst, from_addr_line_1: p.to_addr_line_1, from_addr_line_2: p.to_addr_line_2, to_pan: p.from_pan, to_gst: p.from_gst, to_addr_line_1: p.from_addr_line_1, to_addr_line_2: p.from_addr_line_2, lines: (p.lines || []).map(l => ({ sr_number: l.sr_number, description: l.description, hsn_code: l.hsn_code, mode: l.mode, qty_kg: l.qty_kg, rate_inr_per_kg: l.rate_inr_per_kg, cif_fc: l.cif_fc, exc_rate: l.exc_rate, cif_inr: l.cif_inr, fob_inr: l.fob_inr, pct: l.pct, amount_inr: l.amount_inr })), incentive_lines: [], payments: [] };
-                                                        const nr = await api.post('trades/', saleData);
-                                                        toast.success('SALE trade created. Opening in edit mode...');
-                                                        saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
-                                                        navigate(`/trades/${nr.data.id}/edit`);
-                                                    } catch (err) { toast.error(err.response?.data?.non_field_errors?.[0] || 'Failed to copy trade'); }
-                                                }
+                                            canWrite && !isLinked && (item.direction === 'PURCHASE' || item.direction === 'SALE') && {
+                                                icon: 'copy',
+                                                label: item.direction === 'SALE' ? 'Copy to Purchase' : 'Copy to Sale',
+                                                title: item.direction === 'SALE' ? 'Copy this Sale to a linked Purchase' : 'Copy this Purchase to a linked Sale',
+                                                tone: 'info', onClick: copyToCounterpart,
                                             },
+                                            isLinked && { icon: 'link-45deg', title: `View Linked ${counterpart?.type === 'purchase' ? 'Purchase' : 'Sale'}`, tone: 'success',
+                                                label: `Linked ${counterpart?.type === 'purchase' ? 'Purchase' : 'Sale'}`,
+                                                onClick: () => navigate(`/trades/${counterpart.id}/edit`) },
                                             canWrite && !isLinked && { icon: 'link-45deg', title: 'Link to existing trade', tone: 'primary',
                                                 onClick: () => openLinkModal(item) },
                                             canWrite && { icon: 'pencil-fill', title: 'Edit', tone: 'primary',

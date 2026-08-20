@@ -18,6 +18,9 @@ from .services.trade_service import (
     build_trade_summary,
     link_trades,
     PartnerTradeNotFound,
+    copy_sale_to_purchase,
+    copy_purchase_to_sale,
+    CounterpartValidationError,
 )
 
 
@@ -478,6 +481,47 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(LicenseTradeSerializer(updated_trade, context={'request': request}).data)
+
+    def _counterpart_payload(self, source, counterpart, created):
+        return {
+            'created': created,
+            'source': {'id': source.id, 'type': source.direction.lower(), 'number': source.invoice_number},
+            'counterpart': {
+                'id': counterpart.id, 'type': counterpart.direction.lower(),
+                'number': counterpart.invoice_number,
+                'url': f'/api/trade/trades/{counterpart.id}/',
+            },
+            'pair_uuid': str(source.transaction_pair_uuid or counterpart.transaction_pair_uuid),
+            'totals_match': source.total_amount == counterpart.total_amount,
+            'lines_match': source.lines.count() == counterpart.lines.count() and source.incentive_lines.count() == counterpart.incentive_lines.count(),
+        }
+
+    @action(detail=True, methods=['post'], url_path='copy-to-purchase')
+    def copy_to_purchase(self, request, pk=None):
+        try:
+            source, counterpart, created = copy_sale_to_purchase(int(pk), request.user)
+        except LicenseTrade.DoesNotExist:
+            return Response({'error': 'Sale not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except CounterpartValidationError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._counterpart_payload(source, counterpart, created), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='copy-to-sale')
+    def copy_to_sale(self, request, pk=None):
+        try:
+            source, counterpart, created = copy_purchase_to_sale(int(pk), request.user)
+        except LicenseTrade.DoesNotExist:
+            return Response({'error': 'Purchase not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except CounterpartValidationError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._counterpart_payload(source, counterpart, created), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'])
+    def counterpart(self, request, pk=None):
+        trade = self.get_object()
+        if not trade.counterpart_id:
+            return Response({'error': 'No counterpart has been created.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self._counterpart_payload(trade, trade.counterpart, False))
 
     @action(detail=True, methods=['post'], url_path='generate-transfer-letter')
     def generate_transfer_letter(self, request, pk=None):

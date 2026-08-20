@@ -42,6 +42,7 @@ export default function TradeForm() {
     const [billingMode, setBillingMode] = useState("CIF_INR");
     const [autoCreatePaired, setAutoCreatePaired] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [copyingCounterpart, setCopyingCounterpart] = useState(false);
     const [error, setError] = useState("");
     const [fieldErrors, setFieldErrors] = useState<Record<string, any>>({});
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
@@ -53,6 +54,25 @@ export default function TradeForm() {
     const hasAutoPrefilledRef = useRef(false);
     const [initialFormData, setInitialFormData] = useState(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    const handleCopyToCounterpart = async () => {
+        const target = formData.direction === 'SALE' ? 'Purchase' : 'Sale';
+        const sourceParty = formData.from_company?.name || 'the source company';
+        const destinationParty = formData.to_company?.name || 'the destination company';
+        if (!window.confirm(`Create linked ${target}?\n${sourceParty} → ${destinationParty}\nAll licence lines and commercial amounts will be copied.`)) return;
+        setCopyingCounterpart(true);
+        try {
+            const action = formData.direction === 'SALE' ? 'copy-to-purchase' : 'copy-to-sale';
+            const { data } = await api.post(`trades/${id}/${action}/`);
+            toast.success(data.created ? `Linked ${target} created` : `Existing linked ${target} opened`);
+            setFormData((current) => ({ ...current, counterpart_info: data.counterpart }));
+            navigate(`/trades/${data.counterpart.id}/edit`);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || `Unable to create linked ${target}`);
+        } finally {
+            setCopyingCounterpart(false);
+        }
+    };
 
     // Enable browser back button support with filter preservation
     useBackButton('trades');
@@ -1552,6 +1572,15 @@ export default function TradeForm() {
                             <button type="button" className="flex items-center gap-1.5 rounded-xl border border-info/30 bg-info/10 px-4 py-2.5 text-xs font-medium text-info cursor-pointer hover:bg-info/20" onClick={() => setShowTransferLetterModal(true)}>
                                 <FileText className="size-4" aria-hidden="true" />Transfer Letter
                             </button>
+                            {formData.counterpart_info ? (
+                                <button type="button" className="flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-4 py-2.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20" onClick={() => navigate(`/trades/${formData.counterpart_info.id}/edit`)}>
+                                    <Link className="size-4" aria-hidden="true" />Linked · View {formData.counterpart_info.type === 'purchase' ? 'Purchase' : 'Sale'}
+                                </button>
+                            ) : (formData.direction === 'SALE' || formData.direction === 'PURCHASE') && (
+                                <button type="button" disabled={copyingCounterpart || saving} className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-2.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/20 disabled:opacity-50" onClick={handleCopyToCounterpart}>
+                                    <ArrowLeftRight className="size-4" aria-hidden="true" />{copyingCounterpart ? 'Creating linked record…' : `Copy to ${formData.direction === 'SALE' ? 'Purchase' : 'Sale'}`}
+                                </button>
+                            )}
                             {formData.direction === 'SALE' && (
                                 <div className="flex items-center gap-1">
                                     <button type="button" className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(true)} title="Download Bill of Supply with signature & stamp">

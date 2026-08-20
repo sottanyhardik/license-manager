@@ -557,6 +557,17 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         request_serializer = SionPlanRequestSerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
         identifiers = request_serializer.validated_data
+        sion = SionNormClassModel.objects.filter(
+            pk=identifiers["sion_id"], is_active=True,
+        ).only("pk").first()
+        if not sion:
+            return Response(
+                {
+                    "code": "SION_NOT_FOUND_OR_INACTIVE",
+                    "detail": "sion_id must reference an active SION norm.",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
         requested_ids = identifiers.get("license_ids") or []
         queryset = LicenseDetailsModel.objects.all()
         company_id = self._company_id()

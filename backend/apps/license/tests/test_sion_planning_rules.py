@@ -872,6 +872,25 @@ def test_rule_api_permissions_and_company_isolation(rule_world):
     assert response.status_code == 403
 
 
+def test_plan_sion_rejects_an_inactive_sion_with_structured_error(rule_world):
+    company, sion, _license_obj, _item, _rule = rule_world
+    client, _user = _client(company)
+    sion.is_active = False
+    sion.save(update_fields=["is_active"])
+
+    response = client.post(
+        "/api/sion-planning-rules/plan-sion/",
+        {"sion_id": sion.pk, "mode": "ALL"},
+        format="json",
+    )
+
+    assert response.status_code == 404
+    assert response.data == {
+        "code": "SION_NOT_FOUND_OR_INACTIVE",
+        "detail": "sion_id must reference an active SION norm.",
+    }
+
+
 def test_crud_versions_and_delete_retires_history(rule_world):
     company, sion, _license_obj, _item, _rule = rule_world
     client, user = _client(company)

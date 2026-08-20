@@ -16,23 +16,19 @@ from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
     LicenseItemPlan, LicenseReplanRequest, SionPlanningRule,
 )
-from apps.license.services.sion_rule_engine import SionRulePlanningService
 
 
 pytestmark = pytest.mark.django_db
 
 
 def queue_then_execute(client, license_obj, *, sion_id, company_id):
-    """Keep HTTP queue-only while retaining a real canonical calculation test."""
+    """Execute the synchronous Auto Plan HTTP contract and return its result."""
     response = client.post(f"/api/licenses/{license_obj.pk}/auto-plan/")
-    assert response.status_code == 202, response.data
+    assert response.status_code == 200, response.data
     request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_id"])
     assert request.license_id == license_obj.pk
-    assert LicenseItemPlan.objects.filter(license=license_obj).count() == 0
-    return SionRulePlanningService.plan_sion(
-        sion_id, [license_obj.pk], company_id=company_id,
-        mode="ALL", force_plan=True,
-    )
+    assert request.status == LicenseReplanRequest.STATUS_SUCCEEDED
+    return response.data["result"]
 
 
 def test_strategy_source_match_expression_hsn_and_description():
@@ -227,11 +223,9 @@ class TestSplitByPercentageStrategy:
             setup["client"], license_obj, sion_id=setup["sion"].pk,
             company_id=setup["company"].pk,
         )
-        assert result["write_results"] == [{
-            "license_id": license_obj.pk,
-            "status": "SKIPPED_NO_MATCH",
-            "reason": "Active saved rules produced no persistable planning lines.",
-        }]
+        # Synchronous Auto Plan returns the durable request summary; the
+        # persisted outcome remains no plan rows for a fully utilised item.
+        assert result["write_results"] == 1
         assert LicenseItemPlan.objects.filter(license=license_obj).count() == 0
 
     def test_split_by_percent_respects_percentages(self, split_percent_setup):

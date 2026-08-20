@@ -197,6 +197,11 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
             "planned_quantity": row["allocated_quantity"],
             "unit_price": row["unit_price"],
             "planned_cif_fc": row["planned_cif_fc"],
+            "requested_planned_qty": row.get("requested_planned_qty", row["requested_quantity"]),
+            "effective_planned_qty": row.get("effective_planned_qty", row["allocated_quantity"]),
+            "capped_qty": row.get("capped_qty", 0),
+            "was_quantity_capped": row.get("was_quantity_capped", False),
+            "balance_qty": row.get("balance_qty", 0),
             "note": row.get("note", ""),
         } for row in result["allocated_items"] if row.get("allocated_quantity", 0) > 0]
         return Response(

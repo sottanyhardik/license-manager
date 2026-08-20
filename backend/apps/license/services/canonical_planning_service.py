@@ -1174,7 +1174,11 @@ class CanonicalPlanningService:
             # For Split-by-% and other strategies, if requested > capacity,
             # allocate the maximum valid amount (capacity) and continue.
             # Do not raise an error. Status will indicate the constraint.
-            allocatable = min(requested, capacity)
+            from apps.license.services.plan_normalization import normalize_requested_plan
+            quantity_position = normalize_requested_plan(
+                requested_qty=requested, available_qty=capacity,
+            )
+            allocatable = quantity_position["effective_planned_qty"]
 
             allocated_qty, unit_price, planned_cif, line_status = (
                 CanonicalPlanningService._allocate_one(
@@ -1196,6 +1200,7 @@ class CanonicalPlanningService:
                 "unit_price": unit_price,
                 "planned_cif_fc": planned_cif,
                 "available_capacity": capacity,
+                **quantity_position,
                 "status": line_status,
                 "note": row["note"],
                 "planning_rule_id": row["planning_rule_id"],

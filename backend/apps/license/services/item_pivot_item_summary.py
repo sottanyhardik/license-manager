@@ -8,6 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 ZERO_QTY = Decimal("0.000")
 ZERO_CIF = Decimal("0.00")
+PLANNING_QTY_TOLERANCE = Decimal("10.000")
 QTY_FIELDS = ("total_qty", "boe_used_qty", "allotted_qty", "actual_used_qty", "available_qty", "planned_qty", "balance_qty", "over_utilized_qty", "over_planned_qty")
 CIF_FIELDS = ("boe_used_cif", "allotted_cif", "actual_used_cif", "available_cif", "planned_cif", "balance_cif", "over_utilized_cif", "over_planned_cif")
 
@@ -16,22 +17,26 @@ def _d(value, default=Decimal("0")):
     return Decimal(str(value if value is not None else default))
 
 
+def decimal_or_zero(value, zero):
+    return zero if value is None or value == "" else Decimal(str(value))
+
+
+def determine_planning_status(*, planned_qty, available_qty, over_utilized_qty,
+                              over_utilized_cif, over_planned_qty, over_planned_cif):
+    if over_utilized_qty > ZERO_QTY or over_utilized_cif > ZERO_CIF:
+        return "over_utilized"
+    if over_planned_qty > ZERO_QTY or over_planned_cif > ZERO_CIF:
+        return "over_planned"
+    remaining_qty = max(available_qty - planned_qty, ZERO_QTY)
+    if planned_qty > ZERO_QTY and remaining_qty <= PLANNING_QTY_TOLERANCE:
+        return "planned"
+    if planned_qty > ZERO_QTY:
+        return "partially_planned"
+    return "not_planned"
+
+
 def _out(value, places):
     return str(_d(value).quantize(places, rounding=ROUND_HALF_UP))
-
-
-def _status(row):
-    if row["over_utilized_qty"] > ZERO_QTY or row["over_utilized_cif"] > ZERO_CIF:
-        return "Over Utilized"
-    if row["over_planned_qty"] > ZERO_QTY or row["over_planned_cif"] > ZERO_CIF:
-        return "Over Planned"
-    if row["planned_qty"] > ZERO_QTY and row["balance_qty"] > ZERO_QTY:
-        return "Partially Planned"
-    if row["planned_qty"] > ZERO_QTY:
-        return "Planned"
-    if row["available_qty"] <= ZERO_QTY or row["available_cif"] <= ZERO_CIF:
-        return "No Available Balance"
-    return "Not Planned"
 
 
 def project_item_summary(licenses):
@@ -96,7 +101,14 @@ def project_item_summary(licenses):
             "exception_count": bucket["exception_count"],
             "affected_license_ids": sorted(value for value in bucket["affected_license_ids"] if value is not None),
         }
-        row["status"] = _status({name: _d(row[name]) for name in QTY_FIELDS + CIF_FIELDS})
+        values = {name: _d(row[name]) for name in QTY_FIELDS + CIF_FIELDS}
+        row["remaining_qty"] = _out(max(values["available_qty"] - values["planned_qty"], ZERO_QTY), Decimal("0.000"))
+        row["remaining_cif"] = _out(max(values["available_cif"] - values["planned_cif"], ZERO_CIF), Decimal("0.00"))
+        row["planning_qty_tolerance"] = _out(PLANNING_QTY_TOLERANCE, Decimal("0.000"))
+        row["is_within_planning_tolerance"] = values["planned_qty"] > ZERO_QTY and _d(row["remaining_qty"]) <= PLANNING_QTY_TOLERANCE
+        row["is_over_utilized"] = values["over_utilized_qty"] > ZERO_QTY or values["over_utilized_cif"] > ZERO_CIF
+        row["is_over_planned"] = values["over_planned_qty"] > ZERO_QTY or values["over_planned_cif"] > ZERO_CIF
+        row["status"] = determine_planning_status(planned_qty=values["planned_qty"], available_qty=values["available_qty"], over_utilized_qty=values["over_utilized_qty"], over_utilized_cif=values["over_utilized_cif"], over_planned_qty=values["over_planned_qty"], over_planned_cif=values["over_planned_cif"])
         rows.append(row)
     rows.sort(key=lambda row: (row["sion"], row["item_name"], row["canonical_item_id"] or -1))
     totals = {field: sum((_d(row[field]) for row in rows), ZERO_QTY if field in QTY_FIELDS else ZERO_CIF) for field in QTY_FIELDS + CIF_FIELDS}

@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from apps.license.services.item_pivot_item_summary import project_item_summary
+from apps.license.services.item_pivot_item_summary import determine_planning_status, project_item_summary
 
 
 def test_item_summary_is_populated_and_merges_only_same_canonical_item_and_sion():
@@ -41,7 +41,17 @@ def test_negative_positions_are_clamped_and_exceptions_are_positive():
     assert row["over_utilized_cif"] == "20.00"
     assert row["over_planned_qty"] == "15.000"
     assert row["over_planned_cif"] == "150.00"
-    assert row["status"] == "Over Utilized"
+    assert row["status"] == "over_utilized"
     for value in result["item_summary_totals"].values():
         if isinstance(value, str):
             assert Decimal(value) >= 0
+
+
+def test_status_uses_decimal_zero_and_ten_unit_completion_tolerance():
+    zero = Decimal("0.000")
+    common = {"over_utilized_qty": zero, "over_utilized_cif": Decimal("0.00"), "over_planned_qty": zero, "over_planned_cif": Decimal("0.00")}
+    assert determine_planning_status(planned_qty=Decimal("613.180"), available_qty=Decimal("613.180"), **common) == "planned"
+    assert determine_planning_status(planned_qty=Decimal("2847.000"), available_qty=Decimal("2847.920"), **common) == "planned"
+    assert determine_planning_status(planned_qty=Decimal("90.000"), available_qty=Decimal("100.000"), **common) == "planned"
+    assert determine_planning_status(planned_qty=Decimal("89.999"), available_qty=Decimal("100.000"), **common) == "partially_planned"
+    assert determine_planning_status(planned_qty=Decimal("101.000"), available_qty=Decimal("100.000"), **{**common, "over_planned_qty": Decimal("1.000")}) == "over_planned"

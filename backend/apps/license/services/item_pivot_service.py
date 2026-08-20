@@ -258,4 +258,11 @@ class ItemPivotService:
                 "contributing_licenses": contributing,
                 "licenses": cells,
             })
-        return {"groups": groups, "summary": {key: _text(value) if isinstance(value, Decimal) else value for key, value in summary.items()}, "items": sorted(items, key=lambda row: (row["sion"], row["priority"], row["sequence"], row["item_name"])), "report_version": "canonical-item-pivot-v1"}
+        items = sorted(items, key=lambda row: (row["sion"], row["priority"], row["sequence"], row["item_name"]))
+        global_summary = {key: _text(value) if isinstance(value, Decimal) else value for key, value in summary.items()}
+        # Aliases make the report contract explicit while preserving the
+        # existing consumers during the presentation-only migration.
+        return {"groups": groups, "notification_groups": groups, "summary": global_summary,
+                "global_summary": global_summary, "items": items, "item_columns": [{"key": row["key"], "name": row["item_name"], "sion": row["sion"]} for row in items],
+                "grand_total": {"notification_count": len(groups), "license_count": global_summary["license_count"], "summary": global_summary, "item_summary": items},
+                "report_version": "canonical-item-pivot-v1"}

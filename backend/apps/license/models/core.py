@@ -1211,12 +1211,19 @@ class LicenseReplanRequest(models.Model):
         (STATUS_FAILED, "Failed"),
         (STATUS_SUPERSEDED, "Superseded"),
     )
+    SCOPE_LICENSE = "LICENSE"
+    SCOPE_SION = "SION"
+    SCOPE_CHOICES = ((SCOPE_LICENSE, "Licence"), (SCOPE_SION, "SION"))
 
     license = models.ForeignKey(
         "license.LicenseDetailsModel", on_delete=models.CASCADE,
         related_name="replan_requests", db_index=True,
     )
     reason = models.CharField(max_length=100)
+    # The worker command scope is explicit.  ``license`` remains the durable
+    # per-licence work item used by the sequential SION batch.
+    scope = models.CharField(max_length=16, choices=SCOPE_CHOICES, default=SCOPE_LICENSE)
+    sion_id = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
     source_model = models.CharField(max_length=128, blank=True, default="")
     source_pk = models.CharField(max_length=128, blank=True, default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)

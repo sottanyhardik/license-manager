@@ -46,6 +46,15 @@ def dispatch_replan_requests(request_ids: list[int]):
     return {"dispatched": dispatched}
 
 
+@shared_task(name="planning.replan_sion_batch", queue=QUEUE, acks_late=True, reject_on_worker_lost=True)
+def replan_sion_batch(request_ids: list[int]):
+    """Run one SION-wide user request serially, in the supplied licence order."""
+    results = []
+    for request_id in tuple(dict.fromkeys(int(pk) for pk in request_ids)):
+        results.append(replan_license_task.run(request_id))
+    return {"processed": len(results), "results": results}
+
+
 @shared_task(bind=True, name="planning.replan_license", queue=QUEUE, acks_late=True, reject_on_worker_lost=True)
 def replan_license_task(self, request_id: int):
     """Atomically REPLACE a single licence's generated plan under a row lock."""
@@ -69,15 +78,36 @@ def replan_license_task(self, request_id: int):
             # A licence can legitimately carry several SIONs.  The worker
             # owns their complete REPLACE calculation; rejecting it as a
             # single-SION HTTP shortcut would strand a durable request.
-            _, sion_ids = SionPlanningRuleViewSet._resolve_sions_for_license(request.license_id)
-            results = [
-                SionRulePlanningService.plan_sion(sion_id, license_ids=[request.license_id], mode="ALL", force_plan=True)
-                for sion_id in sion_ids
-            ]
+            if request.scope == LicenseReplanRequest.SCOPE_SION:
+                # A SION-wide batch has already selected and scoped the
+                # licence universe.  Re-resolving every SION attached to a
+                # licence broadens the request and can fail on an unrelated
+                # norm configuration.
+                if request.sion_id is None:
+                    raise ValueError("SION scope requires sion_id")
+                sion_ids = [request.sion_id]
+            else:
+                if request.sion_id is not None:
+                    raise ValueError("LICENSE scope must not include sion_id")
+                _, sion_ids = SionPlanningRuleViewSet._resolve_sions_for_license(request.license_id)
+            results = []
+            failures = []
+            for sion_id in sion_ids:
+                try:
+                    results.append(SionRulePlanningService.plan_sion(
+                        sion_id, license_ids=[request.license_id], mode="ALL", force_plan=True,
+                    ))
+                except Exception as exc:
+                    # Licence scope is intentionally best-effort per norm: an
+                    # invalid unrelated norm must not suppress a valid one.
+                    if request.scope == LicenseReplanRequest.SCOPE_SION:
+                        raise
+                    failures.append({"sion_id": sion_id, "error": str(exc), "error_code": type(exc).__name__})
             summary = {
                 "sion_ids": sion_ids,
                 "write_results": sum(len(result.get("write_results", [])) for result in results),
                 "rules_executed": [rule for result in results for rule in result.get("rules_executed", [])],
+                "failures": failures,
             }
 
             # Do not acknowledge a calculation for an obsolete source

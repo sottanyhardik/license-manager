@@ -50,6 +50,22 @@ class TestLicenseReplanRequests(LicenseBalanceLedgerFixtureMixin, TestCase):
         result = run_license_replan.run(request.pk)
         assert result == {"status": "succeeded", "request_id": request.pk, "idempotent": True}
 
+    @patch("apps.license.tasks.replan_license_task.run")
+    def test_sion_batch_processes_requests_one_by_one_in_request_order(self, run):
+        first = LicenseReplanRequest.objects.create(license=self.license, reason="manual")
+        second_license = LicenseDetailsModel.objects.create(license_number="ASYNC-REPLAN-2")
+        second = LicenseReplanRequest.objects.create(license=second_license, reason="manual")
+        run.side_effect = [
+            {"status": "succeeded", "request_id": first.pk},
+            {"status": "succeeded", "request_id": second.pk},
+        ]
+
+        from apps.license.tasks import replan_sion_batch
+        result = replan_sion_batch.run([first.pk, second.pk])
+
+        assert result["processed"] == 2
+        assert [call.args[0] for call in run.call_args_list] == [first.pk, second.pk]
+
     def test_status_endpoint_exposes_failed_worker_detail_and_retry_state(self):
         LicenseReplanRequest.objects.create(
             license=self.license,
@@ -294,6 +310,50 @@ class TestLicenseReplanRequests(LicenseBalanceLedgerFixtureMixin, TestCase):
         assert result["status"] == LicenseReplanRequest.STATUS_SUCCEEDED
         assert [call.args[0] for call in planner.call_args_list] == [11, 22]
         assert all(call.kwargs["mode"] == "ALL" and call.kwargs["force_plan"] is True for call in planner.call_args_list)
+
+    def test_sion_scoped_worker_does_not_expand_to_other_license_sions(self):
+        """A plan-sion batch must retain its selected norm in the worker."""
+        request = LicenseReplanRequest.objects.create(
+            license=self.license,
+            reason="manual_plan_sion",
+            scope=LicenseReplanRequest.SCOPE_SION,
+            sion_id=17,
+            source_model="sion_planning_rule.plan_sion",
+            source_pk="17",
+            status=LicenseReplanRequest.STATUS_QUEUED,
+        )
+
+        from apps.license.tasks import replan_license_task
+        with patch(
+            "apps.license.views.sion_planning_rule.SionPlanningRuleViewSet._resolve_sions_for_license",
+            side_effect=AssertionError("SION-scoped requests must not be expanded"),
+        ), patch(
+            "apps.license.services.sion_rule_engine.SionRulePlanningService.plan_sion",
+            return_value={"write_results": [], "rules_executed": []},
+        ) as planner:
+            result = replan_license_task.run(request.pk)
+
+        assert result["status"] == LicenseReplanRequest.STATUS_SUCCEEDED
+        planner.assert_called_once_with(17, license_ids=[self.license.pk], mode="ALL", force_plan=True)
+
+    def test_license_scope_continues_after_one_norm_fails(self):
+        request = LicenseReplanRequest.objects.create(
+            license=self.license, reason="manual", status=LicenseReplanRequest.STATUS_QUEUED,
+            scope=LicenseReplanRequest.SCOPE_LICENSE,
+        )
+        from apps.license.tasks import replan_license_task
+        with patch(
+            "apps.license.views.sion_planning_rule.SionPlanningRuleViewSet._resolve_sions_for_license",
+            return_value=(self.license, [11, 22]),
+        ), patch(
+            "apps.license.services.sion_rule_engine.SionRulePlanningService.plan_sion",
+            side_effect=[RuntimeError("invalid norm"), {"write_results": [], "rules_executed": []}],
+        ) as planner:
+            result = replan_license_task.run(request.pk)
+
+        assert result["status"] == LicenseReplanRequest.STATUS_SUCCEEDED
+        assert [call.args[0] for call in planner.call_args_list] == [11, 22]
+        assert result["failures"] == [{"sion_id": 11, "error": "invalid norm", "error_code": "RuntimeError"}]
 
     def test_allotment_and_boe_changes_enqueue_without_inline_planning(self):
         from decimal import Decimal

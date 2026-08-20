@@ -10,7 +10,7 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import LicensePermission
 from apps.core.models import ItemNameModel, SionNormClassModel
-from apps.license.models import LicenseDetailsModel, SionInputAliasConfig, SionPlanningAction, SionPlanningProfile, SionPlanningRule
+from apps.license.models import LicenseDetailsModel, LicenseReplanRequest, SionInputAliasConfig, SionPlanningAction, SionPlanningProfile, SionPlanningRule
 from apps.license.serializers import SionPlanningRuleSerializer
 from apps.license.serializers.incentive import (
     BulkLicensePlanningSerializer, LicenseIdOnlySerializer,
@@ -589,18 +589,23 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             request_license_replan(
                 license_id=license_obj.pk,
                 reason="manual_plan_sion",
+                scope=LicenseReplanRequest.SCOPE_SION,
+                sion_id=identifiers["sion_id"],
                 source_model="sion_planning_rule.plan_sion",
                 source_pk=identifiers["sion_id"],
+                dispatch=False,
             )
             for license_obj in licenses
         ]
+        from apps.license.tasks import replan_sion_batch
+        transaction.on_commit(lambda request_ids=[row.pk for row in requests]: replan_sion_batch.delay(request_ids))
         self._audit("SION_REPLAN_QUEUED", sion_id=identifiers["sion_id"], extra={"license_ids": [row.pk for row in licenses], "request_ids": [row.pk for row in requests]})
         return Response({
             "sion_id": identifiers["sion_id"],
             "mode": identifiers["mode"],
             "planning_state": "REPLAN_PENDING",
             "replan_request_ids": [row.pk for row in requests],
-            "message": "Licence replanning has been queued.",
+            "message": "Licence replanning has been queued for sequential processing.",
         }, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=False, methods=("post",), url_path="preview-sion")
@@ -768,6 +773,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         durable_request = request_license_replan(
             license_id=license_obj.pk,
             reason="manual_plan_license",
+            scope=LicenseReplanRequest.SCOPE_LICENSE,
             source_model="sion_planning_rule.plan_license",
             source_pk=license_obj.pk,
         )

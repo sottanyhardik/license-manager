@@ -111,11 +111,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         item_names: "",
         expiry_date_from: "",
         expiry_date_to: "",
-        // "Debit Based On" — 'actual' (default, today's behavior, unchanged)
+        // Plan balances are the safe default; Actual is an explicit override.
         // or 'plan' (one row per LicenseItemPlan line — see AvailableItem's
         // planned_item_name/import_item_id fields).
-        debit_based_on: "actual",
-        planned_item_names: ""
+        debit_based_on: "PLAN"
     });
     // Purchase Status options + default selection both come from the
     // Purchase Status master (never hardcoded) — see useMasterOptions.ts.
@@ -179,8 +178,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             ),
         staleTime: Infinity,
     });
-    const plannedItemNameOptions = rawPlannedItemNames;
-    const isPlanMode = filters.debit_based_on === "plan";
+    const isPlanMode = filters.debit_based_on === "PLAN";
+    const itemFilterOptions = isPlanMode ? rawPlannedItemNames : availableItemNames;
 
     // Allotment header info (details, progress, allotted items)
     const {
@@ -1003,10 +1002,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     <AllotmentFilters
                         filters={filters}
                         setFilters={setFilters}
-                        availableItemNames={availableItemNames}
+                        availableItemNames={itemFilterOptions}
                         notificationOptions={notificationOptions}
                         purchaseStatusOptions={purchaseStatusOptions}
-                        plannedItemNameOptions={plannedItemNameOptions}
                     />
 
                     <div className="max-h-[650px] overflow-y-auto pr-px">

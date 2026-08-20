@@ -79,7 +79,7 @@ class AllotmentActionViewSet(ViewSet):
         # this well-tested Actual-mode path completely untouched, which is the
         # strongest guarantee that "Debit Based On = Actual" behaves exactly as
         # it always has.
-        debit_based_on = (request.query_params.get('debit_based_on') or 'actual').strip().lower()
+        debit_based_on = (request.query_params.get('debit_based_on') or 'PLAN').strip().lower()
         if debit_based_on == 'plan':
             return self._available_licenses_plan_mode(request, allotment)
 
@@ -437,12 +437,15 @@ class AllotmentActionViewSet(ViewSet):
         purchase_status = request.query_params.get('purchase_status', '')
         license_status = request.query_params.get('license_status', '')
         item_names = request.query_params.get('item_names', '')
+        # Deprecated alias: normalize external callers into the sole item filter.
         planned_item_names = request.query_params.get('planned_item_names', '')
+        if not item_names and planned_item_names:
+            item_names = planned_item_names
         expiry_date_from = request.query_params.get('expiry_date_from', '')
         expiry_date_to = request.query_params.get('expiry_date_to', '')
 
         queryset = LicenseItemPlan.objects.filter(
-            remaining_quantity__gte=0, remaining_cif_fc__gte=0,
+            remaining_quantity__gt=0, remaining_cif_fc__gt=0,
         ).select_related(
             'import_item',
             'import_item__license',
@@ -556,15 +559,11 @@ class AllotmentActionViewSet(ViewSet):
         if item_names:
             item_name_list = [int(i.strip()) for i in item_names.split(',') if i.strip().isdigit()]
             if item_name_list:
-                queryset = queryset.filter(import_item__items__id__in=item_name_list).distinct()
+                queryset = queryset.filter(item_name_id__in=item_name_list)
 
         # Planned Item Name filter — the new filter this Plan-mode branch
         # exists for: narrows to plan lines tagged with one of the selected
         # planning items (e.g. only the Palm Kernel Oil split rows).
-        if planned_item_names:
-            planned_item_name_list = [int(i.strip()) for i in planned_item_names.split(',') if i.strip().isdigit()]
-            if planned_item_name_list:
-                queryset = queryset.filter(item_name_id__in=planned_item_name_list)
 
         if planned_cif_gte:
             try:

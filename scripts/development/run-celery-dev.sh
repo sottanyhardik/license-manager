@@ -16,4 +16,7 @@ export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT/backend" || exit 1
-exec celery -A lmanagement worker --pool=solo -l info "$@"
+# Auto Plan runs on its dedicated queue.  A worker that consumes only Celery's
+# default queue will accept the HTTP request but leave durable plan requests
+# pending forever.
+exec celery -A lmanagement worker --pool=solo -Q celery,license_planning -l info "$@"

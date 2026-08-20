@@ -1143,8 +1143,6 @@ export default function PlanningEditor({
                                 // Planned Qty/CIF are the license-specific actual-first
                                 // allocation. Remaining is explicit beneath it; status still
                                 // derives from the backend-toleranced remaining values.
-                                const showRemaining  = g.has_plan === true && g.remaining_planned_quantity != null;
-                                const showRemainingCif = g.has_plan === true && g.remaining_planned_cif_fc != null;
                                 // Main table is the actual saved plan. Targets
                                 // remain in expanded detail and never replace
                                 // this quantity/CIF pair.
@@ -1196,12 +1194,7 @@ export default function PlanningEditor({
                                             <td className="px-4 py-3 text-right tabular-nums">{fmtQty(g.available_quantity)}</td>
                                             <td className="px-4 py-3 text-right tabular-nums font-semibold">
                                                 {planned > 0 ? (
-                                                    <>
-                                                        <span className={displayQty < -1e-6 ? "text-destructive" : undefined}>{fmtQty(displayQty)}</span>
-                                                        {showRemaining && (
-                                                            <div className="text-[10px] font-normal text-muted-foreground">{fmtQty(g.remaining_planned_quantity)} remaining</div>
-                                                        )}
-                                                    </>
+                                                    <span className={displayQty < -1e-6 ? "text-destructive" : undefined}>{fmtQty(displayQty)}</span>
                                                 ) : <span className="font-normal text-muted-foreground">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums">{fmtQty(balanceQty)}</td>
@@ -1212,12 +1205,7 @@ export default function PlanningEditor({
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums">
                                                 {plannedCif > 0 ? (
-                                                    <>
-                                                        <span className={cn("font-semibold", displayCif < -1e-6 ? "text-destructive" : "text-primary")}>{fmtUsd(displayCif)}</span>
-                                                        {showRemainingCif && (
-                                                            <div className="text-[10px] font-normal text-muted-foreground">{fmtUsd(g.remaining_planned_cif_fc)} remaining</div>
-                                                        )}
-                                                    </>
+                                                    <span className={cn("font-semibold", displayCif < -1e-6 ? "text-destructive" : "text-primary")}>{fmtUsd(displayCif)}</span>
                                                 ) : <span className="text-muted-foreground">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-center">

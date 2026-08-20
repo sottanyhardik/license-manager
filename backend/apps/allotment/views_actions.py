@@ -375,6 +375,8 @@ class AllotmentActionViewSet(ViewSet):
                 row['display_plan_cif'] = row['remaining_planned_cif_fc']
                 row['max_allotment_qty'] = row['remaining_planned_quantity']
                 row['max_allotment_cif'] = row['remaining_planned_cif_fc']
+                row['row_max_allotment_qty'] = str(min(Decimal(row['raw_available_qty']), status['remaining_quantity']))
+                row['row_max_allotment_cif'] = str(min(Decimal(row['raw_available_cif']), status['remaining_cif_fc']))
                 row['can_create_allotment'] = status['remaining_quantity'] > 0 and status['remaining_cif_fc'] > 0
                 row['reason_code'] = None if row['can_create_allotment'] else 'NO_PLANNED_BALANCE'
                 row['message'] = None if row['can_create_allotment'] else 'No planned quantity or value is available for the selected item.'
@@ -383,6 +385,7 @@ class AllotmentActionViewSet(ViewSet):
                     'remaining_planned_qty': '0.000', 'remaining_planned_cif': '0.00',
                     'display_plan_qty': '0.000', 'display_plan_cif': '0.00',
                     'max_allotment_qty': '0.000', 'max_allotment_cif': '0.00',
+                    'row_max_allotment_qty': '0.000', 'row_max_allotment_cif': '0.00',
                     'can_create_allotment': False, 'reason_code': 'NO_PLANNED_BALANCE',
                     'message': 'No active plan is available for the selected item.',
                 })
@@ -644,6 +647,8 @@ class AllotmentActionViewSet(ViewSet):
             row['display_plan_cif'] = str(remaining_cif)
             row['max_allotment_qty'] = str(max(remaining_qty, Decimal('0.000')))
             row['max_allotment_cif'] = str(max(remaining_cif, Decimal('0.00')))
+            row['row_max_allotment_qty'] = str(min(max(remaining_qty, Decimal('0.000')), Decimal(str(plan.import_item.available_quantity or 0))))
+            row['row_max_allotment_cif'] = str(min(max(remaining_cif, Decimal('0.00')), Decimal(str(available_value_map.get(plan.import_item_id) or 0))))
             row['can_create_allotment'] = remaining_qty > 0 and remaining_cif > 0
             row['reason_code'] = None if row['can_create_allotment'] else 'NO_PLANNED_BALANCE'
             row['message'] = None if row['can_create_allotment'] else f'No planned quantity or value is available for {row["planned_item_name"] or row["description"]}.'

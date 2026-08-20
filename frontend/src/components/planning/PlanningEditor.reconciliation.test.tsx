@@ -31,6 +31,13 @@ vi.mock("../../services/api/licenseApi", () => ({
             status: "FEASIBLE",
         }],
     }),
+    fetchPlanUtilization: vi.fn().mockResolvedValue({ rows: [{
+        group_id: 10, description: "Fats and oils", serials: [1], member_ids: [10],
+        item_names: [{ id: 126, name: "PALM KERNEL OIL - E126" }],
+        total_qty: "642277.000", total_utilized_qty: "0.000", available_qty: "642277.000",
+        effective_planned_qty: "642277.000", balance_qty: "0.000",
+        unit_price: "1.80", effective_planned_cif: "2183743.40", status: "Planned",
+    }] }),
     fetchItemPlans: vi.fn().mockResolvedValue([{
         id: 99,
         import_item: 10,
@@ -104,10 +111,10 @@ describe("PlanningEditor reconciliation", () => {
         expect(screen.getByText("PARTIALLY UTILIZED")).toBeInTheDocument();
         expect(screen.getAllByText("Percentage Target Qty")).toHaveLength(2);
         expect(screen.getAllByText("Percentage Target CIF")).toHaveLength(2);
-        expect(screen.getAllByText("BOE Used Qty")).toHaveLength(1);
-        expect(screen.getAllByText("BOE Used CIF")).toHaveLength(1);
-        expect(screen.getAllByText("Unlinked Allotment Qty")).toHaveLength(1);
-        expect(screen.getAllByText("Unlinked Allotment CIF")).toHaveLength(1);
+        expect(screen.getAllByText("BOE Used Qty")).toHaveLength(2);
+        expect(screen.getAllByText("BOE Used CIF")).toHaveLength(2);
+        expect(screen.getAllByText("Unlinked Allotment Qty")).toHaveLength(2);
+        expect(screen.getAllByText("Unlinked Allotment CIF")).toHaveLength(2);
         expect(screen.getAllByText("Remaining Qty")).toHaveLength(2);
         expect(screen.getAllByText("Unit Price")).toHaveLength(3); // plus table header
         expect(screen.getAllByText("Remaining CIF")).toHaveLength(2);
@@ -123,9 +130,8 @@ describe("PlanningEditor reconciliation", () => {
         const parentRow = screen.getByText("Fats and oils").closest("tr");
         expect(parentRow).not.toBeNull();
         const parent = within(parentRow!);
-        expect(parent.getAllByText("642,277.000")).toHaveLength(2);
-        expect(parent.getByText("$1,747,118.61")).toBeInTheDocument();
-        expect(parent.getByText("77,997.840")).toBeInTheDocument();
+        expect(parent.getAllByText("642,277.000")).toHaveLength(3);
+        expect(parent.getByText("$2,183,743.40")).toBeInTheDocument();
         expect(parent.queryByText("Over Planned")).not.toBeInTheDocument();
         expect(parent.getByText("Planned")).toBeInTheDocument();
 

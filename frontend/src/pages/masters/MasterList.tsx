@@ -25,7 +25,8 @@ import AllotmentsTable from "./tables/AllotmentsTable";
 import GenericMasterCards from "./tables/GenericMasterCards";
 import LicensesTable from "./tables/LicensesTable";
 import {getDefaultFilters} from "./masterListConfig";
-import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
+import PlanningEditor from "@/components/planning/PlanningEditor";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -1573,13 +1574,11 @@ export default function MasterList() {
 
             {/* Utilization Planning Panel */}
             {entityName === 'licenses' && (
-                <LicensePlanningPanel
-                    show={showPlanModal}
-                    onHide={() => { setShowPlanModal(false); setPlanLicense(null); }}
-                    licenseId={planLicense?.id}
-                    licenseNumber={planLicense?.number}
-                    balanceCif={planLicense?.balance || 0}
-                />
+                <Dialog open={showPlanModal} onOpenChange={(open) => { if (!open) { setShowPlanModal(false); setPlanLicense(null); } }}>
+                    <DialogContent className="w-[98vw] max-w-[1800px] max-h-[95vh] overflow-y-auto">
+                        {planLicense?.id && <PlanningEditor licenseId={planLicense.id} licenseNumber={planLicense.number} balanceCif={planLicense.balance || 0} canWrite />}
+                    </DialogContent>
+                </Dialog>
             )}
 
             {/* Transfer Letter Modal (for BOE and Trades) */}

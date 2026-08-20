@@ -10,7 +10,8 @@ import {openPdfPreview} from "../utils/pdfPreview";
 import {useBackButton} from "../hooks/useBackButton";
 import {usePurchaseStatusOptions} from "../hooks/useMasterOptions";
 import AllotmentFilters from "./AllotmentFilters";
-import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
+import PlanningEditor from "@/components/planning/PlanningEditor";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -1308,18 +1309,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
             {/* Plan gate: when an allot exceeds the item's plan, open the license
                 planner so the user can adjust splits, then retry the allot. */}
-            <LicensePlanningPanel
-                show={!!planModal}
-                licenseId={planModal?.item?.license}
-                licenseNumber={planModal?.item?.license_number}
-                balanceCif={Number(planModal?.item?.balance_cif_fc || 0)}
-                onHide={() => setPlanModal(null)}
-                onSaved={() => {
-                    const item = planModal?.item;
-                    setPlanModal(null);
-                    if (item) handleConfirmAllot(item);
-                }}
-            />
+            <Dialog open={!!planModal} onOpenChange={(open) => { if (!open) setPlanModal(null); }}>
+                <DialogContent className="w-[98vw] max-w-[1800px] max-h-[95vh] overflow-y-auto">
+                    {planModal?.item?.license && <PlanningEditor licenseId={planModal.item.license} licenseNumber={planModal.item.license_number} balanceCif={Number(planModal.item.balance_cif_fc || 0)} canWrite onSaved={() => { const item = planModal?.item; setPlanModal(null); if (item) handleConfirmAllot(item); }} />}
+                </DialogContent>
+            </Dialog>
 
             {/* Delete allocation confirm dialog */}
             <ConfirmDialog

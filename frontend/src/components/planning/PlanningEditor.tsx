@@ -949,8 +949,10 @@ export default function PlanningEditor({
             );
             theoreticalPlanned += groupTheoreticalQty;
             theoreticalCif += groupTheoreticalCif;
-            effectivePlanned += g.has_reconciliation ? (g.remaining_planned_quantity ?? 0) : groupTheoreticalQty;
-            effectiveCif += g.has_reconciliation ? (g.remaining_planned_cif_fc ?? 0) : groupTheoreticalCif;
+            // The table and KPI must use the persisted effective plan, never
+            // the reconciliation "remaining" audit field.
+            effectivePlanned += groupTheoreticalQty;
+            effectiveCif += groupTheoreticalCif;
             usedQuantity += g.has_reconciliation ? (g.used_planned_quantity ?? 0) : 0;
             usedCif += g.has_reconciliation ? (g.used_planned_cif_fc ?? 0) : 0;
             g.splits.forEach((sp) => {

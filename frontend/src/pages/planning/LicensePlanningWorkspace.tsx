@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, ChevronRight, Eye, Loader2, MoreHorizontal, Pencil, Plus, Search, TestTube2, Zap, CheckCircle2, AlertTriangle, History, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -108,7 +108,7 @@ function matchLogicCounts(group?: SionPlanningRule["expression"]): { conditions:
 export default function LicensePlanningWorkspace() {
     const [params, setParams] = useSearchParams(); const navigate = useNavigate(); const location = useLocation();
     const origin = params.get("origin") || "/licenses";
-    const [sions, setSions] = useState<any[]>([]); const [sion, setSion] = useState<number | null>(null); const [rules, setRules] = useState<SionPlanningRule[]>([]); const [draft, setDraft] = useState<SionPlanningRule | null>(null); const [selectedRuleId, setSelectedRuleId] = useState<number | null>(Number(params.get("rule")) || null); const [activeTab, setActiveTab] = useState(params.get("view") || params.get("tab") || "rules"); const [ruleSearch, setRuleSearch] = useState(""); const [normSearch, setNormSearch] = useState(""); const [strategyFilter, setStrategyFilter] = useState("all"); const [statusFilter, setStatusFilter] = useState("all"); const [pendingSion, setPendingSion] = useState<number | null | undefined>(undefined); const [confirmForceAll, setConfirmForceAll] = useState(false); const [busy, setBusy] = useState<"save" | "test" | "preview" | "plan-new" | "plan-all" | "deactivate" | "reorder" | null>(null); const [preview, setPreview] = useState<SionPlanningPreview | null>(null); const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
+    const [sions, setSions] = useState<any[]>([]); const [sion, setSion] = useState<number | null>(null); const [rules, setRules] = useState<SionPlanningRule[]>([]); const [draft, setDraft] = useState<SionPlanningRule | null>(null); const [selectedRuleId, setSelectedRuleId] = useState<number | null>(Number(params.get("rule")) || null); const [activeTab, setActiveTab] = useState(params.get("view") || params.get("tab") || "rules"); const [ruleSearch, setRuleSearch] = useState(""); const [normSearch, setNormSearch] = useState(""); const [strategyFilter, setStrategyFilter] = useState("all"); const [statusFilter, setStatusFilter] = useState("all"); const [pendingSion, setPendingSion] = useState<number | null | undefined>(undefined); const [confirmForceAll, setConfirmForceAll] = useState(false); const [busy, setBusy] = useState<"save" | "test" | "preview" | "plan-new" | "plan-all" | "deactivate" | "reorder" | null>(null); const [preview, setPreview] = useState<SionPlanningPreview | null>(null); const [error, setError] = useState(""); const [loading, setLoading] = useState(true); const [draggedRuleId, setDraggedRuleId] = useState<number | null>(null);
     const [allocationDraft, setAllocationDraft] = useState<RuleAllocationStrategy | null>(null);
     const requestedLicenseNumber = params.get("license");
     const requestedSion = params.get("sion");
@@ -232,6 +232,7 @@ export default function LicensePlanningWorkspace() {
     const applySion = (next: number | null) => { setSion(next); setPendingSion(undefined); const nextParams = new URLSearchParams(params); if (next) { const row = sions.find((item) => item.id === next); nextParams.set("sion", row?.norm_class ?? String(next)); } else nextParams.delete("sion"); setParams(nextParams, { replace: true }); };
     const previewSion = async () => { if (!sion || busy || !canExecuteSion) return; const restore = preserveScroll(); setBusy("preview"); setError(""); try { setPreview(await previewSavedSionRules(sion, "NEW")); setWorkbenchTab("simulation"); toast.success(`${sionLabel} preview updated`); } catch { toast.error("Plan preview failed"); } finally { setBusy(null); restore(); } };
     const reorder = async (index: number, offset: number) => { if (!sion || busy) return; const next = [...rules]; const target = index + offset; if (target < 0 || target >= next.length) return; const restore = preserveScroll(); [next[index], next[target]] = [next[target], next[index]]; setBusy("reorder"); setError(""); try { const fresh = await reorderSionPlanningRules(sion, next.map((rule) => rule.id!)); setRules([...fresh].sort((a, b) => a.priority - b.priority)); toast.success("Priority updated"); } catch { toast.error("Unable to reorder rules"); } finally { setBusy(null); restore(); } };
+    const reorderByDrag = useCallback(async (sourceId: number, targetId: number) => { if (!sion || busy || sourceId === targetId) return; const next = [...rules]; const source = next.findIndex((rule) => rule.id === sourceId); const target = next.findIndex((rule) => rule.id === targetId); if (source < 0 || target < 0) return; const [moved] = next.splice(source, 1); next.splice(target, 0, moved); setBusy("reorder"); setError(""); try { const fresh = await reorderSionPlanningRules(sion, next.map((rule) => rule.id!)); setRules([...fresh].sort((a, b) => a.priority - b.priority)); toast.success("Priority updated"); } catch { toast.error("Unable to reorder rules"); } finally { setDraggedRuleId(null); setBusy(null); } }, [sion, busy, rules]);
     const selectedRule = rules.find((rule) => rule.id === selectedRuleId) ?? null;
     const filteredRules = rules.filter((rule) =>
         rule.name.toLowerCase().includes(ruleSearch.trim().toLowerCase())
@@ -244,6 +245,22 @@ export default function LicensePlanningWorkspace() {
     const selectRule = (id: number | null) => { setSelectedRuleId(id); const next = new URLSearchParams(params); if (id) next.set("rule", String(id)); else next.delete("rule"); setParams(next, { replace: true }); };
     const beginEdit = (rule: SionPlanningRule) => { selectRule(rule.id ?? null); setDraft(rule); };
     const runSelectedTest = async () => { if (!selectedRule?.id || busy) return; setBusy("test"); try { setPreview(await testSionPlanningRule(selectedRule.id)); setWorkbenchTab("simulation"); toast.success("Rule test completed"); } catch { toast.error("Rule test failed"); } finally { setBusy(null); } };
+    useEffect(() => {
+        const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>("[aria-label='Rule workspace'] tbody tr"));
+        const cleanups = rows.flatMap((row, index) => {
+            const rule = filteredRules[index];
+            if (!rule?.id) return [];
+            row.draggable = !busy;
+            row.title = "Drag to change rule priority";
+            const start = (event: DragEvent) => { if (busy) return; event.dataTransfer?.setData("text/plain", String(rule.id)); setDraggedRuleId(rule.id!); };
+            const over = (event: DragEvent) => { if (draggedRuleId != null) event.preventDefault(); };
+            const drop = (event: DragEvent) => { event.preventDefault(); if (draggedRuleId != null) void reorderByDrag(draggedRuleId, rule.id!); };
+            const end = () => setDraggedRuleId(null);
+            row.addEventListener("dragstart", start); row.addEventListener("dragover", over); row.addEventListener("drop", drop); row.addEventListener("dragend", end);
+            return [() => { row.draggable = false; row.removeEventListener("dragstart", start); row.removeEventListener("dragover", over); row.removeEventListener("drop", drop); row.removeEventListener("dragend", end); }];
+        });
+        return () => cleanups.forEach((cleanup) => cleanup());
+    }, [filteredRules, busy, draggedRuleId, reorderByDrag]);
     return <div className="space-y-4 bg-muted/20 p-1" aria-label="SION Planning Workbench">
         <div className="sticky top-0 z-30 -mx-2 border-b bg-background/95 px-2 py-2 backdrop-blur">
             <div className="flex flex-wrap items-center gap-3">

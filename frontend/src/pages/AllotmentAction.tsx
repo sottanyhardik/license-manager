@@ -395,10 +395,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         // item has no plan (has_plan false) — unconstrained, as before.
         // Same recompute-both-together pattern as the clamps above, so
         // maxQty and maxValue never end up inconsistent with each other.
+        const selectedPlanId = selectedPlanningByItem[item.id];
+        const selectedPlan = selectedPlanId ? item.planning_options?.find(plan => plan.plan_line_id === selectedPlanId) : null;
         let remainingPlanValue = Infinity;
         if (item.import_item_id || item.has_active_plan || item.has_plan) {
-            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_qty ?? item.remaining_planned_quantity ?? item.remaining_quantity ?? "0")));
-            remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif ?? item.remaining_planned_cif_fc ?? item.remaining_cif_fc ?? "0"));
+            // `??` deliberately preserves an authoritative decimal zero.
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(selectedPlan?.remaining_quantity ?? item.remaining_planned_qty ?? item.remaining_planned_quantity ?? item.remaining_quantity ?? "0")));
+            remainingPlanValue = Math.max(0, parseFloat(selectedPlan?.remaining_cif_fc ?? item.remaining_planned_cif ?? item.remaining_planned_cif_fc ?? item.remaining_cif_fc ?? "0"));
             if (maxQty > remainingPlanQty) {
                 maxQty = remainingPlanQty;
                 maxValue = maxQty * unitPrice;
@@ -1150,10 +1153,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                                 <span>CIF: <span className="font-semibold text-foreground">₹{cifFc.toFixed(2)}</span></span>
                                                                 <span>Avg: <span className="font-semibold text-foreground">{average}</span></span>
                                                                 {!isPlanMode && item.has_plan && (() => {
-                                                                    const remQty = Number(item.remaining_planned_quantity ?? 0);
-                                                                    const remVal = Number(item.remaining_planned_cif_fc ?? 0);
+                                                                    const remQty = Number(selectedPlan?.remaining_quantity ?? item.remaining_planned_quantity ?? 0);
+                                                                    const remVal = Number(selectedPlan?.remaining_cif_fc ?? item.remaining_planned_cif_fc ?? 0);
                                                                     return (
-                                                                        <span>Plan: <span className="font-semibold text-foreground">{remQty.toFixed(3)} / ₹{remVal.toFixed(2)}</span></span>
+                                                                        <span>Plan: <span className="font-semibold text-foreground">{remQty.toFixed(3)} / ${remVal.toFixed(2)}</span></span>
                                                                     );
                                                                 })()}
                                                             </div>

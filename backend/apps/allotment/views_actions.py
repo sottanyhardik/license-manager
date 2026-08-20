@@ -358,6 +358,8 @@ class AllotmentActionViewSet(ViewSet):
         for row, item in zip(available_items_data, paginated_items):
             status = plan_status_map.get(item.id)
             row['has_plan'] = status is not None
+            row['raw_available_qty'] = str(item.available_quantity or Decimal('0.000'))
+            row['raw_available_cif'] = str(available_value_map.get(item.id) or Decimal('0.00'))
             if status is not None:
                 row['original_planned_quantity'] = str(status['original_quantity'])
                 row['used_planned_quantity'] = str(status['used_quantity'])
@@ -365,6 +367,25 @@ class AllotmentActionViewSet(ViewSet):
                 row['original_planned_cif_fc'] = str(status['original_cif_fc'])
                 row['used_planned_cif_fc'] = str(status['used_cif_fc'])
                 row['remaining_planned_cif_fc'] = str(status['remaining_cif_fc'])
+                row['original_planned_qty'] = row['original_planned_quantity']
+                row['original_planned_cif'] = row['original_planned_cif_fc']
+                row['remaining_planned_qty'] = row['remaining_planned_quantity']
+                row['remaining_planned_cif'] = row['remaining_planned_cif_fc']
+                row['display_plan_qty'] = row['remaining_planned_quantity']
+                row['display_plan_cif'] = row['remaining_planned_cif_fc']
+                row['max_allotment_qty'] = row['remaining_planned_quantity']
+                row['max_allotment_cif'] = row['remaining_planned_cif_fc']
+                row['can_create_allotment'] = status['remaining_quantity'] > 0 and status['remaining_cif_fc'] > 0
+                row['reason_code'] = None if row['can_create_allotment'] else 'NO_PLANNED_BALANCE'
+                row['message'] = None if row['can_create_allotment'] else 'No planned quantity or value is available for the selected item.'
+            else:
+                row.update({
+                    'remaining_planned_qty': '0.000', 'remaining_planned_cif': '0.00',
+                    'display_plan_qty': '0.000', 'display_plan_cif': '0.00',
+                    'max_allotment_qty': '0.000', 'max_allotment_cif': '0.00',
+                    'can_create_allotment': False, 'reason_code': 'NO_PLANNED_BALANCE',
+                    'message': 'No active plan is available for the selected item.',
+                })
 
         return Response({
             'allotment': allotment_data,
@@ -617,6 +638,10 @@ class AllotmentActionViewSet(ViewSet):
             row['has_active_plan'] = True
             row['remaining_planned_qty'] = str(remaining_qty)
             row['remaining_planned_cif'] = str(remaining_cif)
+            row['original_planned_qty'] = str(plan.planned_quantity)
+            row['original_planned_cif'] = str(plan.planned_cif_fc)
+            row['display_plan_qty'] = str(remaining_qty)
+            row['display_plan_cif'] = str(remaining_cif)
             row['max_allotment_qty'] = str(max(remaining_qty, Decimal('0.000')))
             row['max_allotment_cif'] = str(max(remaining_cif, Decimal('0.00')))
             row['can_create_allotment'] = remaining_qty > 0 and remaining_cif > 0

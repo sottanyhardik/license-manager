@@ -157,6 +157,9 @@ class TestPlanModeSplitRows:
         assert by_id[veg_oil_split["pko_line"].id]["can_create_allotment"] is False
         assert by_id[veg_oil_split["pko_line"].id]["reason_code"] == "NO_PLANNED_BALANCE"
         assert Decimal(by_id[veg_oil_split["pko_line"].id]["max_allotment_qty"]) == Decimal("0")
+        assert Decimal(by_id[veg_oil_split["pko_line"].id]["remaining_planned_qty"]) == Decimal("0")
+        assert Decimal(by_id[veg_oil_split["pko_line"].id]["display_plan_qty"]) == Decimal("0")
+        assert Decimal(by_id[veg_oil_split["pko_line"].id]["display_plan_cif"]) == Decimal("0")
         assert veg_oil_split["cheese_line"].id in by_id
 
 
